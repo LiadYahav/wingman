@@ -12,12 +12,48 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  UV_CACHE_DIR: /tmp/.uv-cache
 
 jobs:
-  # ── Python Linting ──────────────────────────────────────────────────────────
-  lint-python:
-    name: Lint Python
+  # ── Detect Changes ──────────────────────────────────────────────────────────
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.filter.outputs.shared }}
+      day1: ${{ steps.filter.outputs.day1 }}
+      day2: ${{ steps.filter.outputs.day2 }}
+      web: ${{ steps.filter.outputs.web }}
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'packages/shared-python/**'
+            day1:
+              - 'apps/day1-service/**'
+              - 'packages/shared-python/**'
+            day2:
+              - 'apps/day2-service/**'
+              - 'packages/shared-python/**'
+            web:
+              - 'apps/web/**'
+              - 'package.json'
+              - 'package-lock.json'
+            python:
+              - 'packages/shared-python/**'
+              - 'apps/day1-service/**'
+              - 'apps/day2-service/**'
+
+  # ── Shared Python ───────────────────────────────────────────────────────────
+  check-shared:
+    name: Check shared-python
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.shared == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -26,31 +62,45 @@ jobs:
         with:
           version: "latest"
 
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-shared-${{ runner.os }}-${{ hashFiles('packages/shared-python/pyproject.toml') }}
+          restore-keys: uv-shared-${{ runner.os }}-
+
       - name: Set up Python
         run: uv python install 3.13
 
-      - name: Lint shared-python
+      - name: Install dependencies
         working-directory: packages/shared-python
-        run: |
-          uv sync --extra dev
-          uv run ruff check src/
+        run: uv sync --extra dev
 
-      - name: Lint day1-service
-        working-directory: apps/day1-service
-        run: |
-          uv sync --extra dev
-          uv run ruff check src/
+      - name: Lint
+        working-directory: packages/shared-python
+        run: uv run ruff check src/
 
-      - name: Lint day2-service
-        working-directory: apps/day2-service
-        run: |
-          uv sync --extra dev
-          uv run ruff check src/
+      - name: Type check
+        working-directory: packages/shared-python
+        run: uv run mypy src/wingman_shared --ignore-missing-imports
 
-  # ── Python Type Checking ──────────────────────────────────────────────────────
-  typecheck-python:
-    name: Type Check Python
+      - name: Test
+        working-directory: packages/shared-python
+        run: uv run pytest tests/ -v --tb=short || echo "No tests found"
+
+      - name: Save uv cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-shared-${{ runner.os }}-${{ hashFiles('packages/shared-python/pyproject.toml') }}
+
+  # ── Day1 Service ────────────────────────────────────────────────────────────
+  check-day1:
+    name: Check day1-service
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.day1 == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -59,31 +109,45 @@ jobs:
         with:
           version: "latest"
 
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-day1-${{ runner.os }}-${{ hashFiles('apps/day1-service/pyproject.toml', 'packages/shared-python/pyproject.toml') }}
+          restore-keys: uv-day1-${{ runner.os }}-
+
       - name: Set up Python
         run: uv python install 3.13
 
-      - name: Type check shared-python
-        working-directory: packages/shared-python
-        run: |
-          uv sync --extra dev
-          uv run mypy src/wingman_shared --ignore-missing-imports
-
-      - name: Type check day1-service
+      - name: Install dependencies
         working-directory: apps/day1-service
-        run: |
-          uv sync --extra dev
-          uv run mypy src --ignore-missing-imports
+        run: uv sync --extra dev
 
-      - name: Type check day2-service
-        working-directory: apps/day2-service
-        run: |
-          uv sync --extra dev
-          uv run mypy src --ignore-missing-imports
+      - name: Lint
+        working-directory: apps/day1-service
+        run: uv run ruff check src/
 
-  # ── Python Tests ────────────────────────────────────────────────────────────
-  test-python:
-    name: Test Python
+      - name: Type check
+        working-directory: apps/day1-service
+        run: uv run mypy src --ignore-missing-imports
+
+      - name: Test
+        working-directory: apps/day1-service
+        run: uv run pytest tests/ -v --tb=short || echo "No tests found"
+
+      - name: Save uv cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-day1-${{ runner.os }}-${{ hashFiles('apps/day1-service/pyproject.toml', 'packages/shared-python/pyproject.toml') }}
+
+  # ── Day2 Service ────────────────────────────────────────────────────────────
+  check-day2:
+    name: Check day2-service
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.day2 == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -92,31 +156,45 @@ jobs:
         with:
           version: "latest"
 
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-day2-${{ runner.os }}-${{ hashFiles('apps/day2-service/pyproject.toml', 'packages/shared-python/pyproject.toml') }}
+          restore-keys: uv-day2-${{ runner.os }}-
+
       - name: Set up Python
         run: uv python install 3.13
 
-      - name: Test shared-python
-        working-directory: packages/shared-python
-        run: |
-          uv sync --extra dev
-          uv run pytest tests/ -v --tb=short || echo "No tests found"
-
-      - name: Test day1-service
-        working-directory: apps/day1-service
-        run: |
-          uv sync --extra dev
-          uv run pytest tests/ -v --tb=short || echo "No tests found"
-
-      - name: Test day2-service
+      - name: Install dependencies
         working-directory: apps/day2-service
-        run: |
-          uv sync --extra dev
-          uv run pytest tests/ -v --tb=short || echo "No tests found"
+        run: uv sync --extra dev
 
-  # ── Frontend Linting ────────────────────────────────────────────────────────
-  lint-frontend:
-    name: Lint Frontend
+      - name: Lint
+        working-directory: apps/day2-service
+        run: uv run ruff check src/
+
+      - name: Type check
+        working-directory: apps/day2-service
+        run: uv run mypy src --ignore-missing-imports
+
+      - name: Test
+        working-directory: apps/day2-service
+        run: uv run pytest tests/ -v --tb=short || echo "No tests found"
+
+      - name: Save uv cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-day2-${{ runner.os }}-${{ hashFiles('apps/day2-service/pyproject.toml', 'packages/shared-python/pyproject.toml') }}
+
+  # ── Frontend ────────────────────────────────────────────────────────────────
+  check-web:
+    name: Check web
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -130,70 +208,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
+      - name: Lint
         working-directory: apps/web
         run: npm run lint
 
-  # ── Frontend Type Checking ──────────────────────────────────────────────────
-  typecheck-frontend:
-    name: Type Check Frontend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: "npm"
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run TypeScript
+      - name: Type check
         working-directory: apps/web
         run: npx tsc --noEmit
-
-  # ── Frontend Build ──────────────────────────────────────────────────────────
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    needs: [lint-frontend, typecheck-frontend]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: "npm"
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Build
         working-directory: apps/web
         run: npm run build
 
-  # ── Docker Build ────────────────────────────────────────────────────────────
-  build-docker:
-    name: Build Docker Images
+  # ── Docker Builds (only when source changes) ────────────────────────────────
+  build-day1-image:
+    name: Build day1 Docker
     runs-on: ubuntu-latest
-    needs: [lint-python, typecheck-python, test-python, build-frontend]
-    strategy:
-      matrix:
-        service:
-          - name: web
-            context: apps/web
-            dockerfile: apps/web/Dockerfile
-          - name: day1-service
-            context: .
-            dockerfile: apps/day1-service/Dockerfile
-          - name: day2-service
-            context: .
-            dockerfile: apps/day2-service/Dockerfile
+    needs: [changes, check-shared, check-day1]
+    if: |
+      always() &&
+      needs.changes.outputs.day1 == 'true' &&
+      (needs.check-shared.result == 'success' || needs.check-shared.result == 'skipped') &&
+      (needs.check-day1.result == 'success' || needs.check-day1.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
 
@@ -203,24 +239,80 @@ jobs:
       - name: Build image
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.service.context }}
-          file: ${{ matrix.service.dockerfile }}
+          context: .
+          file: apps/day1-service/Dockerfile
           push: false
-          tags: wingman-${{ matrix.service.name }}:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: wingman-day1:ci
+          cache-from: type=gha,scope=day1
+          cache-to: type=gha,mode=max,scope=day1
 
-  # ── Final Check ─────────────────────────────────────────────────────────────
+  build-day2-image:
+    name: Build day2 Docker
+    runs-on: ubuntu-latest
+    needs: [changes, check-shared, check-day2]
+    if: |
+      always() &&
+      needs.changes.outputs.day2 == 'true' &&
+      (needs.check-shared.result == 'success' || needs.check-shared.result == 'skipped') &&
+      (needs.check-day2.result == 'success' || needs.check-day2.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/day2-service/Dockerfile
+          push: false
+          tags: wingman-day2:ci
+          cache-from: type=gha,scope=day2
+          cache-to: type=gha,mode=max,scope=day2
+
+  build-web-image:
+    name: Build web Docker
+    runs-on: ubuntu-latest
+    needs: [changes, check-web]
+    if: |
+      always() &&
+      needs.changes.outputs.web == 'true' &&
+      (needs.check-web.result == 'success' || needs.check-web.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          file: apps/web/Dockerfile
+          push: false
+          tags: wingman-web:ci
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  # ── Final Status ────────────────────────────────────────────────────────────
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [build-docker]
+    needs: [changes, check-shared, check-day1, check-day2, check-web, build-day1-image, build-day2-image, build-web-image]
     if: always()
     steps:
-      - name: Check all jobs passed
+      - name: Check results
         run: |
-          if [ "${{ needs.build-docker.result }}" != "success" ]; then
-            echo "CI failed"
-            exit 1
-          fi
+          # Collect results
+          results="${{ needs.check-shared.result }} ${{ needs.check-day1.result }} ${{ needs.check-day2.result }} ${{ needs.check-web.result }} ${{ needs.build-day1-image.result }} ${{ needs.build-day2-image.result }} ${{ needs.build-web-image.result }}"
+
+          # Check for failures (skipped is OK)
+          for r in $results; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "CI failed: found $r"
+              exit 1
+            fi
+          done
+
           echo "All CI checks passed!"
