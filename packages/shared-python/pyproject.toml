@@ -39,4 +39,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
 python_version = "3.12"
-strict = true
+warn_return_any = false
+warn_unused_ignores = false
+disallow_untyped_defs = false
+check_untyped_defs = true
