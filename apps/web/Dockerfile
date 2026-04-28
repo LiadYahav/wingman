@@ -1,7 +1,7 @@
 # Build context: should be apps/web/ (not monorepo root)
 # Build with: docker build -t wingman-web apps/web/
 
-FROM node:22-alpine AS base
+FROM node:24-alpine AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # ── Dependency install stage ───────────────────────────────────────────────────

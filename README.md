@@ -33,9 +33,9 @@ Wingman is an Internal Developer Platform (IDP) for managing OpenShift HostedCon
 | Component | Description | Tech Stack |
 |-----------|-------------|------------|
 | **web** | Frontend UI | Next.js 16, React 19, TailwindCSS, React Query |
-| **day1-service** | Cluster provisioning, specs, approvals | Python 3.12, FastAPI, python-gitlab |
-| **day2-service** | Addon management, operator lifecycle | Python 3.12, FastAPI, python-gitlab |
-| **shared-python** | Common utilities, models, GitLab client | Python 3.12, Pydantic |
+| **day1-service** | Cluster provisioning, specs, approvals | Python 3.13, FastAPI, python-gitlab |
+| **day2-service** | Addon management, operator lifecycle | Python 3.13, FastAPI, python-gitlab |
+| **shared-python** | Common utilities, models, GitLab client | Python 3.13, Pydantic |
 
 ### GitOps Flow
 
@@ -231,8 +231,8 @@ NEXT_PUBLIC_AUTH_API_URL=/api/auth
 
 ### Prerequisites
 
-- Node.js 20+
-- Python 3.12+
+- Node.js 24+
+- Python 3.13+
 - Docker (for containerized deployment)
 - Access to GitLab instance
 - Access to OpenShift cluster (for OAuth)

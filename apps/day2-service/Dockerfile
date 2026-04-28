@@ -1,7 +1,7 @@
 # Build context: repo root (cluster-platform/)
 # Build with: docker build -f apps/day2-service/Dockerfile -t wingman-day2 .
 
-FROM python:3.12-slim AS base
+FROM python:3.13-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir \
 FROM base AS runtime
 WORKDIR /app
 
-COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=deps /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=deps /usr/local/bin/uvicorn /usr/local/bin/uvicorn
 
 COPY apps/day2-service/src /app/src
