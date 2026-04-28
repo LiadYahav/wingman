@@ -27,7 +27,11 @@ function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
   const [openFiles, setOpenFiles] = useState<Set<number>>(new Set());
   const toggle = (i: number) => setOpenFiles((s) => {
     const n = new Set(s);
-    n.has(i) ? n.delete(i) : n.add(i);
+    if (n.has(i)) {
+      n.delete(i);
+    } else {
+      n.add(i);
+    }
     return n;
   });
 

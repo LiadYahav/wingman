@@ -13,7 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StatusBadge } from "@/components/clusters/status-badge";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { computeLineDiff } from "@/lib/diff";
@@ -129,7 +128,7 @@ function ClusterDetailContent() {
         ? api.post<MRDetail>(base, payload)
         : api.put<MRDetail>(base, payload);
     },
-    onSuccess: (mr, entry) => {
+    onSuccess: (mr) => {
       toast.success(`Fix MR #${mr.iid} created: ${mr.title}`);
       setFixingAddon(null);
       queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });

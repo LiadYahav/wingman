@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import jsYaml from "js-yaml";
 import { ReviewDialog as SharedReviewDialog } from "@/components/common/review-dialog";
-import { computeLineDiff, asNewFile } from "@/lib/diff";
+import { computeLineDiff } from "@/lib/diff";
 import type { AddonCatalogEntry, InstalledAddon, MergedAddonValues, MRDetail, ClusterStatus } from "@/types";
 
 // ── Value helpers ──────────────────────────────────────────────────────────────
@@ -1562,7 +1562,7 @@ function BulkInstallDialog({
     let totalDone = 0;
 
     // Create one MR per team
-    for (const [team, teamItems] of itemsByTeam) {
+    for (const teamItems of itemsByTeam.values()) {
       try {
         const payload = {
           addons: teamItems.map(({ addon, selectedVersion, overrides }) => ({
@@ -1643,7 +1643,7 @@ function BulkInstallDialog({
         confirmLabel="Review & Install →"
       >
         <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-          {items.map((item, index) => {
+          {items.map((item) => {
             const addonKey = `${item.addon.team}/${item.addon.name}`;
             const overrideCount = Object.keys(item.overrides).length;
             const isConfigured = overrideCount > 0;

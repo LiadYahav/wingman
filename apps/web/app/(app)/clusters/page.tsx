@@ -130,7 +130,10 @@ export default function ClustersPage() {
     refetchOnWindowFocus: false, // Don't refetch on focus to avoid blocking
   });
 
-  const driftMap = new Map(driftSummary?.map((d) => [d.name, d.is_drifted]) ?? []);
+  const driftMap = useMemo(
+    () => new Map(driftSummary?.map((d) => [d.name, d.is_drifted]) ?? []),
+    [driftSummary]
+  );
 
   // Prefetch cluster detail and addons on row hover for faster navigation
   // Uses debouncing and requestIdleCallback to ensure it never blocks the UI
