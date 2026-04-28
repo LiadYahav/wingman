@@ -202,7 +202,7 @@ def get_cluster_status_service() -> ClusterStatusService | None:
 
     import logging  # noqa: PLC0415
 
-    import yaml  # noqa: PLC0415
+    import yaml  # type: ignore[import-untyped]  # noqa: PLC0415
 
     _logger = logging.getLogger(__name__)
     try:

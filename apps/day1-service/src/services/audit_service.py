@@ -49,11 +49,10 @@ class AuditService:
             results: list[CommitRecord] = []
             for gl in (self.gl_day1, self.gl_specs):
                 try:
-                    _gl, _per_page, _page = gl, per_page, page
-                    raws = await loop.run_in_executor(
-                        None,
-                        lambda g=_gl, p=_per_page, pg=_page: g.list_commits(per_page=p, page=pg),
-                    )
+                    def fetch_commits(g: GitLabClient = gl, p: int = per_page, pg: int = page) -> list[Any]:
+                        return g.list_commits(per_page=p, page=pg)
+
+                    raws = await loop.run_in_executor(None, fetch_commits)
                     results.extend(_parse_commit(r) for r in raws)
                 except GitLabError as exc:
                     logger.warning("Failed to fetch commits: %s", exc)
@@ -68,13 +67,10 @@ class AuditService:
             results: list[MRDetail] = []
             for gl in (self.gl_day1, self.gl_specs):
                 try:
-                    _gl, _per_page, _page = gl, per_page, page
-                    raws = await loop.run_in_executor(
-                        None,
-                        lambda g=_gl, p=_per_page, pg=_page: g.list_mrs(
-                            state="all", per_page=p, page=pg
-                        ),
-                    )
+                    def fetch_mrs(g: GitLabClient = gl, p: int = per_page, pg: int = page) -> list[Any]:
+                        return g.list_mrs(state="all", per_page=p, page=pg)
+
+                    raws = await loop.run_in_executor(None, fetch_mrs)
                     results.extend(
                         parse_mr_to_detail(r, extract_platform_author=False) for r in raws
                     )

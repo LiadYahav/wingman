@@ -8,7 +8,7 @@ from typing import Any
 
 from wingman_shared.cache import CacheManager
 from wingman_shared.exceptions import GitLabError, NotFoundError
-from wingman_shared.gitlab_client import GitLabGroupClient
+from wingman_shared.gitlab_client import GitLabClient, GitLabGroupClient
 from wingman_shared.models import CommitRecord, FileDiff, MRDetail
 from wingman_shared.mr_conventions import parse_mr_to_detail
 
@@ -53,11 +53,10 @@ class AuditService:
             for team in self._teams():
                 gl = self.group_client.get_project_client(team)
                 try:
-                    _gl, _per_page, _page = gl, per_page, page
-                    raws = await loop.run_in_executor(
-                        None,
-                        lambda g=_gl, p=_per_page, pg=_page: g.list_commits(per_page=p, page=pg),
-                    )
+                    def fetch_commits(g: GitLabClient = gl, p: int = per_page, pg: int = page) -> list[Any]:
+                        return g.list_commits(per_page=p, page=pg)
+
+                    raws = await loop.run_in_executor(None, fetch_commits)
                     all_commits.extend(_parse_commit(r) for r in raws)
                 except GitLabError as exc:
                     logger.warning("Failed to fetch commits from team %s: %s", team, exc)
@@ -73,13 +72,10 @@ class AuditService:
             for team in self._teams():
                 gl = self.group_client.get_project_client(team)
                 try:
-                    _gl, _per_page, _page = gl, per_page, page
-                    raws = await loop.run_in_executor(
-                        None,
-                        lambda g=_gl, p=_per_page, pg=_page: g.list_mrs(
-                            state="all", per_page=p, page=pg
-                        ),
-                    )
+                    def fetch_mrs(g: GitLabClient = gl, p: int = per_page, pg: int = page) -> list[Any]:
+                        return g.list_mrs(state="all", per_page=p, page=pg)
+
+                    raws = await loop.run_in_executor(None, fetch_mrs)
                     all_mrs.extend(
                         parse_mr_to_detail(r, extract_platform_author=False) for r in raws
                     )

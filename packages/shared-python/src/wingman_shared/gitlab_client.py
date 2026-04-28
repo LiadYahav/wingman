@@ -54,7 +54,7 @@ class GitLabClient:
         )
         self._project_id = project_id
         self.default_branch = default_branch
-        self._project = None  # lazy-loaded
+        self._project: Any = None  # lazy-loaded
 
     @property
     def project(self) -> Any:
@@ -460,7 +460,7 @@ class GitLabGroupClient:
         self._gitlab_url = gitlab_url
         self._access_token = access_token
         self._ssl_verify = ssl_verify
-        self._group = None
+        self._group: Any = None
         self._team_clients: dict[str, GitLabClient] = {}
 
     @property

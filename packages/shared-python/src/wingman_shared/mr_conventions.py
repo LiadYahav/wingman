@@ -201,7 +201,7 @@ def parse_mr_to_detail(raw: dict[str, Any], extract_platform_author: bool = True
     Returns:
         MRDetail instance with all fields populated.
     """
-    from .models import MRDetail  # noqa: PLC0415 - avoid circular import
+    from .models import MRAuthor, MRDetail  # noqa: PLC0415 - avoid circular import
 
     author_raw = raw.get("author", {})
     description = raw.get("description", "") or ""
@@ -219,11 +219,11 @@ def parse_mr_to_detail(raw: dict[str, Any], extract_platform_author: bool = True
         iid=raw["iid"],
         title=raw.get("title", ""),
         description=description,
-        author={
-            "username": display_username,
-            "name": display_username,
-            "avatar_url": author_raw.get("avatar_url", ""),
-        },
+        author=MRAuthor(
+            username=display_username,
+            name=display_username,
+            avatar_url=author_raw.get("avatar_url", ""),
+        ),
         state=raw.get("state", "opened"),
         created_at=raw.get("created_at", ""),
         updated_at=raw.get("updated_at", ""),

@@ -12,13 +12,17 @@ Usage in route handlers:
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from ..exceptions import AuthError
 from ..models import UserInfo
+
+if TYPE_CHECKING:
+    from .jwt import JWTManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +31,9 @@ logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/callback")
 
 
-def make_auth_dependency(jwt_manager: object) -> object:
+def make_auth_dependency(
+    jwt_manager: JWTManager,
+) -> Callable[[str], Coroutine[None, None, UserInfo]]:
     """Factory that creates a get_current_user dependency bound to a JWTManager.
 
     Called once during service startup, not per-request.
@@ -48,7 +54,7 @@ def make_auth_dependency(jwt_manager: object) -> object:
             headers={"WWW-Authenticate": "Bearer"},
         )
         try:
-            payload = jwt_manager.validate_token(token)  # type: ignore[union-attr]
+            payload = jwt_manager.validate_token(token)
             username: str = payload.get("sub", "")
             groups: list[str] = payload.get("groups", [])
             uid: str = payload.get("uid", "")

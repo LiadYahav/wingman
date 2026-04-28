@@ -19,8 +19,8 @@ def _make_yaml() -> YAML:
     y = YAML()
     y.preserve_quotes = True
     y.width = 4096  # prevent unwanted line wrapping
-    y.best_sequence_indent = 2
-    y.best_map_flow_style = False
+    y.indent(sequence=4, offset=2)  # standard YAML list indentation
+    y.default_flow_style = False  # always use block style, not inline
     y.allow_duplicate_keys = True  # silently keep last value; avoids crash on real-world Helm files
     return y
 
