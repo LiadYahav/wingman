@@ -31,14 +31,23 @@ def parse_multi_document(content: str) -> list[Any]:
     Handles both single-document (no ---) and multi-document (--- separated) files.
     ruamel's load_all raises ComposerError on plain YAML files without --- markers,
     so we detect which format is in use and dispatch accordingly.
+
+    Returns empty list on invalid YAML rather than raising - callers can check
+    if len(result) == 0 and log warnings as needed.
     """
-    y = _make_yaml()
-    stripped = content.strip()
-    if "---" not in stripped:
-        # Single document — load_all would raise ComposerError here
-        result = y.load(stripped)
-        return [result] if result is not None else []
-    return [d for d in y.load_all(stripped) if d is not None]
+    try:
+        y = _make_yaml()
+        stripped = content.strip()
+        if not stripped:
+            return []
+        if "---" not in stripped:
+            # Single document — load_all would raise ComposerError here
+            result = y.load(stripped)
+            return [result] if result is not None else []
+        return [d for d in y.load_all(stripped) if d is not None]
+    except Exception:
+        # Invalid YAML - return empty list, let callers handle
+        return []
 
 
 def dump_multi_document(docs: list[Any]) -> str:
@@ -51,9 +60,12 @@ def dump_multi_document(docs: list[Any]) -> str:
 
 
 def parse_single(content: str) -> Any:
-    """Parse a single-document YAML string."""
-    y = _make_yaml()
-    return y.load(content)
+    """Parse a single-document YAML string. Returns None on invalid YAML."""
+    try:
+        y = _make_yaml()
+        return y.load(content)
+    except Exception:
+        return None
 
 
 def dump_single(data: Any) -> str:

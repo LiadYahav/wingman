@@ -95,9 +95,13 @@ class AddonService:
 
     async def _list_team_addons(self, team: str) -> list[AddonCatalogEntry]:
         async def _fetch() -> list[AddonCatalogEntry]:
-            gl = self._team_gl(team)
-            operators_path = self.pr.day2_addon_def_dir(addon="").rstrip("/")
-            addon_names = gl.list_directories(path=operators_path, ref=self._default_branch)
+            try:
+                gl = self._team_gl(team)
+                operators_path = self.pr.day2_addon_def_dir(addon="").rstrip("/")
+                addon_names = gl.list_directories(path=operators_path, ref=self._default_branch)
+            except Exception as exc:
+                logger.warning("Failed to list addons for team %s: %s", team, exc)
+                return []
 
             entries: list[AddonCatalogEntry] = []
             for addon_name in addon_names:
@@ -238,13 +242,23 @@ class AddonService:
         self, cluster_name: str, mce: str, team: str | None
     ) -> dict[str, Any]:
         """Fetch installed addons for a cluster (internal, uncached)."""
-        teams = [team] if team else await self.list_teams()
+        try:
+            teams = [team] if team else await self.list_teams()
+        except Exception as exc:
+            logger.warning("Failed to list teams for cluster addons: %s", exc)
+            return {"cluster": cluster_name, "mce": mce, "installed": []}
+
         installed: list[dict] = []
 
         for t in teams:
-            gl = self._team_gl(t)
-            addons_dir = self.pr.day2_cluster_addons_dir(mce=mce, cluster=cluster_name)
-            addon_names = gl.list_directories(path=addons_dir, ref=self._default_branch)
+            try:
+                gl = self._team_gl(t)
+                addons_dir = self.pr.day2_cluster_addons_dir(mce=mce, cluster=cluster_name)
+                addon_names = gl.list_directories(path=addons_dir, ref=self._default_branch)
+            except Exception as exc:
+                logger.warning("Failed to list addons for team %s cluster %s: %s", t, cluster_name, exc)
+                continue
+
             for addon_name in addon_names:
                 override_values_path = self.pr.day2_override_values(
                     mce=mce, cluster=cluster_name, addon=addon_name
