@@ -13,7 +13,7 @@ Manages the day2 GitLab repo structure:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -34,7 +34,11 @@ from wingman_shared.mr_conventions import (
     parse_mr_to_detail,
 )
 from wingman_shared.path_resolver import PathResolver
-from wingman_shared.yaml_utils import dump_multi_document, parse_multi_document
+from wingman_shared.yaml_utils import (
+    YamlParseResult,
+    dump_multi_document,
+    parse_multi_document,
+)
 
 from .helm_values_fetcher import HelmValuesFetcher
 
@@ -273,7 +277,7 @@ class AddonService:
 
                 try:
                     content, _ = gl.read_file(override_values_path, ref=self._default_branch)
-                    result = parse_multi_document(content, return_error=True)
+                    result = cast(YamlParseResult, parse_multi_document(content, return_error=True))
                     if result.error:
                         parse_errors.append({
                             "file": "values.yaml",
@@ -295,7 +299,7 @@ class AddonService:
 
                 try:
                     meta_content, _ = gl.read_file(override_meta_path, ref=self._default_branch)
-                    result = parse_multi_document(meta_content, return_error=True)
+                    result = cast(YamlParseResult, parse_multi_document(meta_content, return_error=True))
                     if result.error:
                         parse_errors.append({
                             "file": f"{addon_name}.yaml",

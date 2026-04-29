@@ -89,6 +89,14 @@ export interface ClusterMetadata {
 
 // ── Addon ─────────────────────────────────────────────────────────────────────
 
+export interface YamlParseError {
+  message: string;
+  line: number | null;
+  column: number | null;
+  context: string | null; // The problematic line
+  snippet: string | null; // Multi-line snippet with error highlighted
+}
+
 export interface AddonArgoMetadata {
   projectNamespace: string;
   repourl: string;
@@ -111,6 +119,7 @@ export interface InstalledAddon {
   version: string;
   override_values: Record<string, unknown>;
   available_versions?: string[]; // branches available for version upgrade
+  parse_errors?: YamlParseError[]; // YAML parsing errors if addon has faulty config
 }
 
 export interface MergedAddonValues {

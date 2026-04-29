@@ -613,9 +613,16 @@ function InstalledAddonCard({
             <span className="rounded-full px-2 py-0.5 text-xs font-mono font-medium bg-primary/8 text-primary">
               {addon.version || "main"}
             </span>
-            <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-[#00c875]/10 text-[#007038] dark:text-[#00c875]">
-              Installed
-            </span>
+            {addon.parse_errors && addon.parse_errors.length > 0 ? (
+              <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-destructive/10 text-destructive flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                YAML Error
+              </span>
+            ) : (
+              <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-[#00c875]/10 text-[#007038] dark:text-[#00c875]">
+                Installed
+              </span>
+            )}
             <button onClick={() => setExpanded((v) => !v)} className="p-1 hover:bg-muted rounded transition-colors">
               {expanded
                 ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -651,6 +658,32 @@ function InstalledAddonCard({
         {/* Expanded body */}
         {expanded && (
           <div className="border-t bg-muted/10 p-4 space-y-4">
+            {/* Parse errors warning */}
+            {addon.parse_errors && addon.parse_errors.length > 0 && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span className="text-sm font-semibold">YAML Configuration Error</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This addon has invalid YAML configuration. Fix the errors in GitLab before updating.
+                </p>
+                {addon.parse_errors.map((err, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <p className="text-xs text-destructive font-medium">
+                      {err.line ? `Line ${err.line}${err.column ? `, Column ${err.column}` : ""}: ` : ""}
+                      {err.message}
+                    </p>
+                    {err.snippet && (
+                      <pre className="rounded bg-muted/50 p-2 text-[10px] font-mono overflow-x-auto whitespace-pre leading-relaxed">
+                        {err.snippet}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Version selector */}
             {isAdmin && addon.available_versions && addon.available_versions.length > 0 && (
               <div className="space-y-1.5">
@@ -715,8 +748,16 @@ function InstalledAddonCard({
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => setUpdateReviewOpen(true)}
-                  disabled={mergedLoading || !hasChanges || Boolean(yamlError)}
-                  title={!hasChanges ? "No changes to submit" : yamlError ? "Fix YAML errors first" : undefined}
+                  disabled={mergedLoading || !hasChanges || Boolean(yamlError) || (addon.parse_errors && addon.parse_errors.length > 0)}
+                  title={
+                    addon.parse_errors && addon.parse_errors.length > 0
+                      ? "Fix YAML errors in GitLab first"
+                      : !hasChanges
+                        ? "No changes to submit"
+                        : yamlError
+                          ? "Fix YAML errors first"
+                          : undefined
+                  }
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Eye className="h-3.5 w-3.5" />
