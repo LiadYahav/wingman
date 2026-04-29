@@ -73,11 +73,15 @@ class SpecService:
     async def _load_spec(self, name: str) -> ClusterSpec:
         async def _fetch() -> ClusterSpec:
             path = self.pr.spec_file(spec_name=name)
-            content, _ = self.gl.read_file(path, ref=self.default_branch)
-            docs = parse_multi_document(content)
-            if not docs:
-                raise ValueError(f"Empty spec file: {path}")
-            return ClusterSpec.model_validate(docs[0])
+            try:
+                content, _ = self.gl.read_file(path, ref=self.default_branch)
+                docs = parse_multi_document(content)
+                if not docs:
+                    raise ValueError(f"Empty spec file: {path}")
+                return ClusterSpec.model_validate(docs[0])
+            except Exception as exc:
+                logger.warning("Failed to load spec %s: %s", name, exc)
+                raise
 
         return await self.cache.get_or_fetch(f"specs:detail:{name}", _fetch, ttl=60.0)
 

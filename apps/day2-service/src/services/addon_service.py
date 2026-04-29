@@ -129,6 +129,8 @@ class AddonService:
                 team_values = docs[0] if docs else {}
             except NotFoundError:
                 pass
+            except Exception as exc:
+                logger.warning("Failed to parse team values %s: %s", values_path, exc)
 
             try:
                 meta_content, _ = gl.read_file(metadata_path, ref=self._default_branch)
@@ -147,6 +149,8 @@ class AddonService:
                         current_version = "main"
             except (NotFoundError, ValidationError):
                 pass
+            except Exception as exc:
+                logger.warning("Failed to parse addon metadata %s: %s", metadata_path, exc)
 
             return AddonCatalogEntry(
                 team=team,
@@ -179,12 +183,61 @@ class AddonService:
             return {}
         return await self.helm_fetcher.fetch_values(entry.argocd_metadata.repourl, version)
 
+    # ── Cluster discovery (for pre-warming) ─────────────────────────────────────
+
+    async def list_all_clusters(self) -> list[dict[str, str]]:
+        """Discover all clusters across all teams by walking mces/{mce}/{cluster}/ directories.
+
+        Returns list of {"mce": ..., "cluster": ...} dicts.
+        Used by the background cache warmer to pre-warm cluster addon data.
+        """
+        async def _fetch() -> list[dict[str, str]]:
+            clusters: list[dict[str, str]] = []
+            teams = await self.list_teams()
+            for team in teams:
+                try:
+                    gl = self._team_gl(team)
+                    # List MCEs: mces/
+                    mces_path = self.pr.day2_mces_root()
+                    mces = gl.list_directories(path=mces_path, ref=self._default_branch)
+                    for mce in mces:
+                        # List clusters under each MCE: mces/{mce}/
+                        mce_path = f"{mces_path}/{mce}"
+                        cluster_names = gl.list_directories(path=mce_path, ref=self._default_branch)
+                        for cluster in cluster_names:
+                            # Avoid duplicates (same cluster may exist in multiple team repos)
+                            entry = {"mce": mce, "cluster": cluster}
+                            if entry not in clusters:
+                                clusters.append(entry)
+                except Exception as exc:
+                    logger.warning("Failed to list clusters for team %s: %s", team, exc)
+            return clusters
+
+        return await self.cache.get_or_fetch(
+            "day2:clusters:all", _fetch, ttl=self.settings.CACHE_ADDON_CATALOG_TTL
+        )
+
     # ── Cluster addons ─────────────────────────────────────────────────────────
 
     async def list_cluster_addons(
         self, cluster_name: str, mce: str, team: str | None = None
     ) -> dict[str, Any]:
         """List installed addons for a cluster (all teams, or filtered)."""
+        # Use cache for full cluster listing (no team filter)
+        if team is None:
+            cache_key = f"day2:cluster_addons:{mce}:{cluster_name}"
+            return await self.cache.get_or_fetch(
+                cache_key,
+                lambda: self._fetch_cluster_addons(cluster_name, mce, None),
+                ttl=self.settings.CACHE_ADDON_CATALOG_TTL,
+            )
+        # Team-filtered requests bypass cache (less common)
+        return await self._fetch_cluster_addons(cluster_name, mce, team)
+
+    async def _fetch_cluster_addons(
+        self, cluster_name: str, mce: str, team: str | None
+    ) -> dict[str, Any]:
+        """Fetch installed addons for a cluster (internal, uncached)."""
         teams = [team] if team else await self.list_teams()
         installed: list[dict] = []
 
@@ -208,6 +261,9 @@ class AddonService:
                     override_values = docs[0] if docs else {}
                 except NotFoundError:
                     pass
+                except Exception as exc:
+                    # Log but don't fail on YAML parsing errors
+                    logger.warning("Failed to parse override values %s: %s", override_values_path, exc)
 
                 try:
                     meta_content, _ = gl.read_file(override_meta_path, ref=self._default_branch)
@@ -272,6 +328,8 @@ class AddonService:
             cluster_values = docs[0] if docs else {}
         except NotFoundError:
             pass
+        except Exception as exc:
+            logger.warning("Failed to parse cluster override values %s: %s", override_path, exc)
 
         merged = merge_three_layers(chart_values, team_values, cluster_values)
         provenance = compute_provenance(chart_values, team_values, cluster_values)
@@ -695,6 +753,8 @@ class AddonService:
                 current_version = AddonArgoMetadata.model_validate(docs[0]).target_revision
         except NotFoundError:
             pass
+        except Exception as exc:
+            logger.warning("Failed to parse addon metadata for removal %s: %s", override_meta_path, exc)
 
         branch = make_branch_name(current_user.username, f"remove-{addon_name}", cluster_name)
         mr_title = make_mr_title(

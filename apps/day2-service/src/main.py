@@ -68,6 +68,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 for i, result in enumerate(results):
                     if isinstance(result, Exception):
                         logger.warning("Day2 cache pre-warm task %d failed: %s", i, result)
+
+                # Pre-warm cluster addon data for all discovered clusters
+                try:
+                    clusters = await addon_svc.list_all_clusters()
+                    logger.info("Day2 cache pre-warm: warming %d clusters", len(clusters))
+                    cluster_tasks = [
+                        addon_svc.list_cluster_addons(
+                            cluster_name=c["cluster"], mce=c["mce"]
+                        )
+                        for c in clusters
+                    ]
+                    cluster_results = await asyncio.gather(
+                        *cluster_tasks, return_exceptions=True
+                    )
+                    failures = sum(
+                        1 for r in cluster_results if isinstance(r, Exception)
+                    )
+                    if failures:
+                        logger.warning(
+                            "Day2 cache pre-warm: %d/%d cluster warmups failed",
+                            failures,
+                            len(clusters),
+                        )
+                except Exception as exc:
+                    logger.warning("Day2 cache pre-warm clusters failed: %s", exc)
+
                 logger.info("Day2 cache pre-warm complete")
             except Exception as exc:
                 logger.warning("Cache pre-warm error: %s", exc)

@@ -115,6 +115,9 @@ class HelmValuesFetcher:
             except GitLabError as exc:
                 logger.warning("Failed to fetch values from %s@%s: %s", repourl, version, exc)
                 return {}
+            except Exception as exc:
+                logger.warning("Failed to parse values.yaml from %s@%s: %s", repourl, version, exc)
+                return {}
 
         return await self._cache.get_or_fetch(
             f"day2:helm:values:{project_path}:{version}",

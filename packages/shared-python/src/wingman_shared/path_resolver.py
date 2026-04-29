@@ -80,6 +80,13 @@ class PathResolver:
         """Parent directory listing all addons installed on a cluster (for a given team)."""
         return self._day2_overrides.format(mce=mce, cluster=cluster, addon="").rstrip("/")
 
+    def day2_mces_root(self) -> str:
+        """Root directory for all MCEs (for enumerating clusters)."""
+        # Extract the base path before {mce} placeholder
+        # e.g., "mces/{mce}/{cluster}/{addon}" -> "mces"
+        base = self._day2_overrides.split("{mce}")[0].rstrip("/")
+        return base if base else "mces"
+
     # ── Specs paths ───────────────────────────────────────────────────────────
 
     def spec_file(self, *, spec_name: str) -> str:
