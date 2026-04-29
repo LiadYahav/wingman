@@ -4,7 +4,7 @@ import { useState, useMemo, Suspense, useCallback, useRef, useEffect } from "rea
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Package, Plus, Trash2, ChevronDown, ChevronUp, Eye, Users, AlignJustify, Code2, RefreshCw, X, CheckCircle2, Loader2, MoreVertical, AlertTriangle, GripVertical, Copy } from "lucide-react";
+import { ArrowLeft, Package, Plus, Trash2, ChevronDown, ChevronUp, Eye, Users, AlignJustify, Code2, RefreshCw, X, CheckCircle2, Loader2, MoreVertical, AlertTriangle, GripVertical, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
@@ -1987,6 +1987,12 @@ function ClusterAddonsContent() {
     staleTime: 120_000,
   });
 
+  const { data: gitlabInfo } = useQuery<{ sigs_group_url: string }>({
+    queryKey: ["day2", "gitlab-info"],
+    queryFn: () => api.get<{ sigs_group_url: string }>("/api/day2/gitlab-info"),
+    staleTime: 300_000, // 5 min - rarely changes
+  });
+
   const isFetching = fetchingInstalled || fetchingCatalog;
 
   const installed = installedData?.installed ?? [];
@@ -2023,18 +2029,32 @@ function ClusterAddonsContent() {
               : "Manage installed and available addons for this cluster"}
           </p>
         </div>
-        <button
-          onClick={() => {
-            queryClient.invalidateQueries({ queryKey: ["clusters", clusterName, "addons"] });
-            queryClient.invalidateQueries({ queryKey: ["addons", "catalog"] });
-          }}
-          disabled={isFetching}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-          title="Refresh addons"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {gitlabInfo?.sigs_group_url && (
+            <a
+              href={gitlabInfo.sigs_group_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+              title="View SIGs group in GitLab"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              GitLab
+            </a>
+          )}
+          <button
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["clusters", clusterName, "addons"] });
+              queryClient.invalidateQueries({ queryKey: ["addons", "catalog"] });
+            }}
+            disabled={isFetching}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+            title="Refresh addons"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error ? (

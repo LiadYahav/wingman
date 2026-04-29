@@ -8,9 +8,28 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from wingman_shared.models import AddonCatalogEntry, MergedAddonValues, MRDetail
 
+from ..config import get_settings
 from ..dependencies import AddonServiceDep, AdminUser, CurrentUser
 
 router = APIRouter(prefix="/api/day2", tags=["addons"])
+
+
+class GitLabInfo(BaseModel):
+    """GitLab SIGs group information for external links."""
+    gitlab_url: str
+    sigs_group_path: str
+    sigs_group_url: str
+
+
+@router.get("/gitlab-info", response_model=GitLabInfo)
+async def get_gitlab_info(user: CurrentUser) -> GitLabInfo:
+    """Get GitLab SIGs group URL for external navigation."""
+    settings = get_settings()
+    return GitLabInfo(
+        gitlab_url=settings.GITLAB_URL.rstrip("/"),
+        sigs_group_path=settings.DAY2_SIGS_GROUP_PATH,
+        sigs_group_url=f"{settings.GITLAB_URL.rstrip('/')}/groups/{settings.DAY2_SIGS_GROUP_PATH}",
+    )
 
 
 class InstallAddonRequest(BaseModel):
