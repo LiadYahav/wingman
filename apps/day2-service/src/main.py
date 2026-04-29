@@ -33,10 +33,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     logger.info("Day2 Service starting on port %d", settings.SERVICE_PORT)
 
     # Background cache pre-warmer: keeps addon catalog and approvals warm
+    # GitLab client now uses asyncio.to_thread() internally, so these calls
+    # don't block the event loop and health checks will respond properly.
     async def cache_warmer() -> None:
         # Wait a bit on startup before first warm
-        logger.info("Day2 cache warmer starting in 5 seconds...")
-        await asyncio.sleep(5)
+        logger.info("Day2 cache warmer starting in 10 seconds...")
+        await asyncio.sleep(10)
         while True:
             try:
                 logger.info("Day2 cache pre-warm: refreshing addon catalog, approvals")
@@ -58,33 +60,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     cache_ttl=settings.CACHE_APPROVALS_TTL,
                 )
 
-                # Pre-warm main data (fire and forget)
-                results = await asyncio.gather(
-                    addon_svc.list_addons(),
-                    approval_svc.list_open_mrs(),
-                    return_exceptions=True,
-                )
-                # Log any errors from the gather
-                for i, result in enumerate(results):
-                    if isinstance(result, Exception):
-                        logger.warning("Day2 cache pre-warm task %d failed: %s", i, result)
+                # Pre-warm main data
+                try:
+                    await addon_svc.list_addons()
+                except Exception as exc:
+                    logger.warning("Day2 cache pre-warm addons failed: %s", exc)
 
-                # Pre-warm cluster addon data for all discovered clusters
+                try:
+                    await approval_svc.list_open_mrs()
+                except Exception as exc:
+                    logger.warning("Day2 cache pre-warm approvals failed: %s", exc)
+
+                # Pre-warm cluster addon data
                 try:
                     clusters = await addon_svc.list_all_clusters()
                     logger.info("Day2 cache pre-warm: warming %d clusters", len(clusters))
-                    cluster_tasks = [
-                        addon_svc.list_cluster_addons(
-                            cluster_name=c["cluster"], mce=c["mce"]
-                        )
-                        for c in clusters
-                    ]
-                    cluster_results = await asyncio.gather(
-                        *cluster_tasks, return_exceptions=True
-                    )
-                    failures = sum(
-                        1 for r in cluster_results if isinstance(r, Exception)
-                    )
+
+                    failures = 0
+                    for c in clusters:
+                        try:
+                            await addon_svc.list_cluster_addons(
+                                cluster_name=c["cluster"], mce=c["mce"]
+                            )
+                        except Exception:
+                            failures += 1
+
                     if failures:
                         logger.warning(
                             "Day2 cache pre-warm: %d/%d cluster warmups failed",

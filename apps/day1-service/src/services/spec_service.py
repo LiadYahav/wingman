@@ -42,7 +42,7 @@ class SpecService:
     async def list_specs(self) -> list[ClusterSpec]:
         async def _fetch() -> list[ClusterSpec]:
             try:
-                files = self.gl.list_files(path=self.pr.specs_root, ref=self.default_branch)
+                files = await self.gl.alist_files(path=self.pr.specs_root, ref=self.default_branch)
             except NotFoundError:
                 return []
             except GitLabError as exc:
@@ -74,7 +74,7 @@ class SpecService:
         async def _fetch() -> ClusterSpec:
             path = self.pr.spec_file(spec_name=name)
             try:
-                content, _ = self.gl.read_file(path, ref=self.default_branch)
+                content, _ = await self.gl.aread_file(path, ref=self.default_branch)
                 docs = parse_multi_document(content)
                 if not docs:
                     raise ValueError(f"Empty spec file: {path}")
@@ -143,7 +143,7 @@ class SpecService:
         path = self.pr.spec_file(spec_name=name)
 
         try:
-            _, last_commit_id = self.gl.read_file(path, ref=self.default_branch)
+            _, last_commit_id = await self.gl.aread_file(path, ref=self.default_branch)
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=f"Spec '{name}' not found") from exc
 
@@ -198,7 +198,7 @@ class SpecService:
         path = self.pr.spec_file(spec_name=name)
 
         try:
-            self.gl.read_file(path, ref=self.default_branch)
+            await self.gl.aread_file(path, ref=self.default_branch)
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=f"Spec '{name}' not found") from exc
 

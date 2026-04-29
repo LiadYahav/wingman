@@ -102,7 +102,7 @@ class AddonService:
             try:
                 gl = self._team_gl(team)
                 operators_path = self.pr.day2_addon_def_dir(addon="").rstrip("/")
-                addon_names = gl.list_directories(path=operators_path, ref=self._default_branch)
+                addon_names = await gl.alist_directories(path=operators_path, ref=self._default_branch)
             except Exception as exc:
                 logger.warning("Failed to list addons for team %s: %s", team, exc)
                 return []
@@ -132,7 +132,7 @@ class AddonService:
             current_version: str = ""
 
             try:
-                values_content, _ = gl.read_file(values_path, ref=self._default_branch)
+                values_content, _ = await gl.aread_file(values_path, ref=self._default_branch)
                 docs = parse_multi_document(values_content)
                 team_values = docs[0] if docs else {}
             except NotFoundError:
@@ -141,7 +141,7 @@ class AddonService:
                 logger.warning("Failed to parse team values %s: %s", values_path, exc)
 
             try:
-                meta_content, _ = gl.read_file(metadata_path, ref=self._default_branch)
+                meta_content, _ = await gl.aread_file(metadata_path, ref=self._default_branch)
                 docs = parse_multi_document(meta_content)
                 if docs:
                     argocd_meta = AddonArgoMetadata.model_validate(docs[0])
@@ -207,11 +207,11 @@ class AddonService:
                     gl = self._team_gl(team)
                     # List MCEs: mces/
                     mces_path = self.pr.day2_mces_root()
-                    mces = gl.list_directories(path=mces_path, ref=self._default_branch)
+                    mces = await gl.alist_directories(path=mces_path, ref=self._default_branch)
                     for mce in mces:
                         # List clusters under each MCE: mces/{mce}/
                         mce_path = f"{mces_path}/{mce}"
-                        cluster_names = gl.list_directories(path=mce_path, ref=self._default_branch)
+                        cluster_names = await gl.alist_directories(path=mce_path, ref=self._default_branch)
                         for cluster in cluster_names:
                             # Avoid duplicates (same cluster may exist in multiple team repos)
                             entry = {"mce": mce, "cluster": cluster}
@@ -258,7 +258,7 @@ class AddonService:
             try:
                 gl = self._team_gl(t)
                 addons_dir = self.pr.day2_cluster_addons_dir(mce=mce, cluster=cluster_name)
-                addon_names = gl.list_directories(path=addons_dir, ref=self._default_branch)
+                addon_names = await gl.alist_directories(path=addons_dir, ref=self._default_branch)
             except Exception as exc:
                 logger.warning("Failed to list addons for team %s cluster %s: %s", t, cluster_name, exc)
                 continue
@@ -276,7 +276,7 @@ class AddonService:
                 parse_errors: list[dict[str, Any]] = []
 
                 try:
-                    content, _ = gl.read_file(override_values_path, ref=self._default_branch)
+                    content, _ = await gl.aread_file(override_values_path, ref=self._default_branch)
                     result = cast(YamlParseResult, parse_multi_document(content, return_error=True))
                     if result.error:
                         parse_errors.append({
@@ -298,7 +298,7 @@ class AddonService:
                     logger.warning("Failed to read %s: %s", override_values_path, exc)
 
                 try:
-                    meta_content, _ = gl.read_file(override_meta_path, ref=self._default_branch)
+                    meta_content, _ = await gl.aread_file(override_meta_path, ref=self._default_branch)
                     result = cast(YamlParseResult, parse_multi_document(meta_content, return_error=True))
                     if result.error:
                         parse_errors.append({
@@ -797,7 +797,7 @@ class AddonService:
         # Try to get current version for the commit message
         current_version = ""
         try:
-            override_meta_content, _ = gl.read_file(override_meta_path, ref=self._default_branch)
+            override_meta_content, _ = await gl.aread_file(override_meta_path, ref=self._default_branch)
             docs = parse_multi_document(override_meta_content)
             if docs:
                 current_version = AddonArgoMetadata.model_validate(docs[0]).target_revision

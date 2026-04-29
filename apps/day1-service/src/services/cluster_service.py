@@ -91,7 +91,7 @@ class ClusterService:
     async def _scan_clusters(self) -> list[ClusterStatus]:
         """Scan tree for all cluster YAML files inside hostedClusters/ directories."""
         try:
-            items = self.gl.list_tree(path="", ref=self.default_branch, recursive=True)
+            items = await self.gl.alist_tree(path="", ref=self.default_branch, recursive=True)
         except NotFoundError:
             return []
         except GitLabError as exc:
@@ -164,7 +164,7 @@ class ClusterService:
             spec_name = ""
             spec_version = ""
             try:
-                content, commit_sha = self.gl.read_file(cluster_path, ref=self.default_branch)
+                content, commit_sha = await self.gl.aread_file(cluster_path, ref=self.default_branch)
                 spec_name, spec_version = _parse_spec_comments(content)
                 commit = self.gl.get_commit(commit_sha)
                 created_by = commit.get("author_name", "")
@@ -195,7 +195,7 @@ class ClusterService:
 
         async def _fetch() -> dict[str, Any]:
             try:
-                yaml_content, commit_sha = self.gl.read_file(cluster_path, ref=self.default_branch)
+                yaml_content, commit_sha = await self.gl.aread_file(cluster_path, ref=self.default_branch)
             except NotFoundError as exc:
                 raise HTTPException(status_code=404, detail=f"Cluster '{name}' not found") from exc
 
@@ -335,7 +335,7 @@ class ClusterService:
         cluster_path = self.pr.day1_cluster_file(site=site, mce=mce, cluster=name)
 
         try:
-            _, last_commit_id = self.gl.read_file(cluster_path, ref=self.default_branch)
+            _, last_commit_id = await self.gl.aread_file(cluster_path, ref=self.default_branch)
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=f"Cluster '{name}' not found") from exc
 
@@ -397,7 +397,7 @@ class ClusterService:
         cluster_path = self.pr.day1_cluster_file(site=site, mce=mce, cluster=name)
 
         try:
-            _, cluster_commit_id = self.gl.read_file(cluster_path, ref=self.default_branch)
+            _, cluster_commit_id = await self.gl.aread_file(cluster_path, ref=self.default_branch)
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=f"Cluster '{name}' not found") from exc
 

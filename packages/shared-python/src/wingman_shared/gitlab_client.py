@@ -13,10 +13,16 @@ IMPORTANT CONVENTIONS:
 - Project ID accepts str ("group/subgroup/project") or int (numeric) — python-gitlab
   handles both transparently
 - All reads should go through the CacheManager in services, not directly here
+
+ASYNC SUPPORT:
+- All methods have async variants prefixed with 'a' (e.g., read_file -> aread_file)
+- Async methods use asyncio.to_thread() to run blocking GitLab calls in thread pool
+- Use async variants in FastAPI routes to avoid blocking the event loop
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -406,6 +412,126 @@ class GitLabClient:
         except GitlabError as exc:
             raise GitLabError(f"Failed to get commit: {exc}") from exc
 
+    # ── Async methods (run blocking calls in thread pool) ─────────────────────
+
+    async def aread_file(self, file_path: str, ref: str = "main") -> tuple[str, str]:
+        """Async version of read_file."""
+        return await asyncio.to_thread(self.read_file, file_path, ref)
+
+    async def afile_exists(self, file_path: str, ref: str = "main") -> bool:
+        """Async version of file_exists."""
+        return await asyncio.to_thread(self.file_exists, file_path, ref)
+
+    async def alist_tree(
+        self, path: str = "", ref: str = "main", recursive: bool = False
+    ) -> list[dict[str, Any]]:
+        """Async version of list_tree."""
+        return await asyncio.to_thread(self.list_tree, path, ref, recursive)
+
+    async def alist_directories(self, path: str = "", ref: str = "main") -> list[str]:
+        """Async version of list_directories."""
+        return await asyncio.to_thread(self.list_directories, path, ref)
+
+    async def alist_files(self, path: str = "", ref: str = "main") -> list[str]:
+        """Async version of list_files."""
+        return await asyncio.to_thread(self.list_files, path, ref)
+
+    async def alist_branches(self) -> list[str]:
+        """Async version of list_branches."""
+        return await asyncio.to_thread(self.list_branches)
+
+    async def acommit_files(
+        self,
+        branch: str,
+        message: str,
+        actions: list[dict[str, str]],
+        start_branch: str = "main",
+        author_name: str | None = None,
+        author_email: str | None = None,
+    ) -> dict[str, Any]:
+        """Async version of commit_files."""
+        return await asyncio.to_thread(
+            self.commit_files, branch, message, actions, start_branch, author_name, author_email
+        )
+
+    async def acreate_mr(
+        self,
+        source_branch: str,
+        title: str,
+        description: str = "",
+        target_branch: str | None = None,
+        labels: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Async version of create_mr."""
+        return await asyncio.to_thread(
+            self.create_mr, source_branch, title, description, target_branch, labels
+        )
+
+    async def aget_mr(self, mr_iid: int) -> dict[str, Any]:
+        """Async version of get_mr."""
+        return await asyncio.to_thread(self.get_mr, mr_iid)
+
+    async def alist_open_mrs(self, target_branch: str = "main") -> list[dict[str, Any]]:
+        """Async version of list_open_mrs."""
+        return await asyncio.to_thread(self.list_open_mrs, target_branch)
+
+    async def alist_mrs(
+        self,
+        state: str = "all",
+        labels: list[str] | None = None,
+        per_page: int = 50,
+        page: int = 1,
+    ) -> list[dict[str, Any]]:
+        """Async version of list_mrs."""
+        return await asyncio.to_thread(self.list_mrs, state, labels, per_page, page)
+
+    async def aget_mr_diff(self, mr_iid: int) -> list[dict[str, Any]]:
+        """Async version of get_mr_diff."""
+        return await asyncio.to_thread(self.get_mr_diff, mr_iid)
+
+    async def aapprove_mr(self, mr_iid: int) -> None:
+        """Async version of approve_mr."""
+        return await asyncio.to_thread(self.approve_mr, mr_iid)
+
+    async def amerge_mr(self, mr_iid: int) -> None:
+        """Async version of merge_mr."""
+        return await asyncio.to_thread(self.merge_mr, mr_iid)
+
+    async def aclose_mr(self, mr_iid: int) -> None:
+        """Async version of close_mr."""
+        return await asyncio.to_thread(self.close_mr, mr_iid)
+
+    async def alist_commits(
+        self,
+        ref_name: str = "main",
+        path: str | None = None,
+        per_page: int = 50,
+        page: int = 1,
+    ) -> list[dict[str, Any]]:
+        """Async version of list_commits."""
+        return await asyncio.to_thread(self.list_commits, ref_name, path, per_page, page)
+
+    async def aget_commit_diff(self, sha: str) -> list[dict[str, Any]]:
+        """Async version of get_commit_diff."""
+        return await asyncio.to_thread(self.get_commit_diff, sha)
+
+    async def aget_commit(self, sha: str) -> dict:
+        """Async version of get_commit."""
+        return await asyncio.to_thread(self.get_commit, sha)
+
+    async def acommit_to_branch(
+        self,
+        branch: str,
+        message: str,
+        actions: list[dict[str, str]],
+        author_name: str | None = None,
+        author_email: str | None = None,
+    ) -> dict[str, Any]:
+        """Async version of commit_to_branch."""
+        return await asyncio.to_thread(
+            self.commit_to_branch, branch, message, actions, author_name, author_email
+        )
+
     def commit_to_branch(
         self,
         branch: str,
@@ -483,6 +609,10 @@ class GitLabGroupClient:
             raise GitLabError(
                 f"Failed to list group projects in '{self._group_path}': {exc}"
             ) from exc
+
+    async def alist_project_paths(self) -> list[str]:
+        """Async version of list_project_paths."""
+        return await asyncio.to_thread(self.list_project_paths)
 
     def get_project_client(self, team: str) -> GitLabClient:
         """Return (or create) a GitLabClient scoped to the given team's project."""
