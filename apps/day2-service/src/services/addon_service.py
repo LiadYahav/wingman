@@ -269,37 +269,69 @@ class AddonService:
 
                 override_values: dict = {}
                 version = ""
+                parse_errors: list[dict[str, Any]] = []
+
                 try:
                     content, _ = gl.read_file(override_values_path, ref=self._default_branch)
-                    docs = parse_multi_document(content)
-                    override_values = docs[0] if docs else {}
+                    result = parse_multi_document(content, return_error=True)
+                    if result.error:
+                        parse_errors.append({
+                            "file": "values.yaml",
+                            "path": override_values_path,
+                            **result.error.to_dict(),
+                        })
+                        logger.warning("Failed to parse %s: %s", override_values_path, result.error)
+                    elif result.docs:
+                        override_values = result.docs[0]
                 except NotFoundError:
                     pass
                 except Exception as exc:
-                    # Log but don't fail on YAML parsing errors
-                    logger.warning("Failed to parse override values %s: %s", override_values_path, exc)
+                    parse_errors.append({
+                        "file": "values.yaml",
+                        "path": override_values_path,
+                        "message": str(exc),
+                    })
+                    logger.warning("Failed to read %s: %s", override_values_path, exc)
 
                 try:
                     meta_content, _ = gl.read_file(override_meta_path, ref=self._default_branch)
-                    docs = parse_multi_document(meta_content)
-                    if docs and docs[0]:
-                        meta = AddonArgoMetadata.model_validate(docs[0])
+                    result = parse_multi_document(meta_content, return_error=True)
+                    if result.error:
+                        parse_errors.append({
+                            "file": f"{addon_name}.yaml",
+                            "path": override_meta_path,
+                            **result.error.to_dict(),
+                        })
+                        logger.warning("Failed to parse %s: %s", override_meta_path, result.error)
+                    elif result.docs and result.docs[0]:
+                        meta = AddonArgoMetadata.model_validate(result.docs[0])
                         version = meta.target_revision or ""
-                except (NotFoundError, ValidationError):
+                except NotFoundError:
                     pass
+                except ValidationError as exc:
+                    parse_errors.append({
+                        "file": f"{addon_name}.yaml",
+                        "path": override_meta_path,
+                        "message": f"Schema validation error: {exc}",
+                    })
                 except Exception as exc:
-                    # Log but don't fail on YAML parsing errors
-                    logger.warning("Failed to parse addon metadata %s: %s", override_meta_path, exc)
-                    pass
+                    parse_errors.append({
+                        "file": f"{addon_name}.yaml",
+                        "path": override_meta_path,
+                        "message": str(exc),
+                    })
+                    logger.warning("Failed to read %s: %s", override_meta_path, exc)
 
-                installed.append(
-                    {
-                        "team": t,
-                        "name": addon_name,
-                        "version": version,
-                        "override_values": override_values,
-                    }
-                )
+                addon_entry: dict[str, Any] = {
+                    "team": t,
+                    "name": addon_name,
+                    "version": version,
+                    "override_values": override_values,
+                }
+                if parse_errors:
+                    addon_entry["parse_errors"] = parse_errors
+
+                installed.append(addon_entry)
 
         return {"cluster": cluster_name, "mce": mce, "installed": installed}
 

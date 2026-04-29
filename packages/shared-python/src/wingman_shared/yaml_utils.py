@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 from ruamel.yaml import YAML
@@ -25,28 +26,144 @@ def _make_yaml() -> YAML:
     return y
 
 
-def parse_multi_document(content: str) -> list[Any]:
+@dataclass
+class YamlError:
+    """Structured YAML parsing error with location info."""
+    message: str
+    line: int | None = None
+    column: int | None = None
+    context: str | None = None  # The problematic line
+    snippet: str | None = None  # Multi-line snippet with error highlighted
+
+    def __str__(self) -> str:
+        loc = ""
+        if self.line is not None:
+            loc = f" at line {self.line}"
+            if self.column is not None:
+                loc += f", column {self.column}"
+        ctx = f"\n  → {self.context}" if self.context else ""
+        return f"{self.message}{loc}{ctx}"
+
+    def to_dict(self) -> dict:
+        """Convert to dict for JSON serialization."""
+        return {
+            "message": self.message,
+            "line": self.line,
+            "column": self.column,
+            "context": self.context,
+            "snippet": self.snippet,
+        }
+
+
+class YamlParseResult:
+    """Result of parsing YAML, includes error info if parsing failed."""
+
+    def __init__(
+        self, docs: list[Any], error: YamlError | None = None
+    ) -> None:
+        self.docs = docs
+        self.error = error
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+    def __iter__(self):
+        return iter(self.docs)
+
+    def __len__(self):
+        return len(self.docs)
+
+    def __getitem__(self, idx):
+        return self.docs[idx]
+
+
+def _extract_yaml_error(exc: Exception, content: str) -> YamlError:
+    """Extract structured error info from ruamel.yaml exceptions."""
+    import re
+
+    error_str = str(exc)
+    line: int | None = None
+    column: int | None = None
+    context: str | None = None
+    snippet: str | None = None
+
+    # Try to extract line number from error like "line 3, column 2"
+    line_match = re.search(r"line[:\s]+(\d+)", error_str, re.IGNORECASE)
+    col_match = re.search(r"column[:\s]+(\d+)", error_str, re.IGNORECASE)
+
+    if line_match:
+        line = int(line_match.group(1))
+    if col_match:
+        column = int(col_match.group(1))
+
+    # Extract snippet with surrounding lines and error indicator
+    if line is not None and content:
+        lines = content.splitlines()
+        if 0 < line <= len(lines):
+            context = lines[line - 1]
+
+            # Build snippet with 2 lines before and after
+            snippet_lines = []
+            start = max(0, line - 3)
+            end = min(len(lines), line + 2)
+
+            for i in range(start, end):
+                line_num = i + 1
+                prefix = ">> " if line_num == line else "   "
+                snippet_lines.append(f"{prefix}{line_num:3d} | {lines[i]}")
+
+                # Add error indicator on the error line
+                if line_num == line and column is not None:
+                    # Create pointer to the column
+                    pointer = " " * (len(prefix) + 6 + column - 1) + "^"
+                    snippet_lines.append(pointer)
+
+            snippet = "\n".join(snippet_lines)
+
+    # Clean up the error message
+    # Remove the "in <unicode string>" parts for cleaner display
+    message = re.sub(r'in "[^"]+", ', "", error_str)
+    message = re.sub(r"\s+\^.*$", "", message, flags=re.MULTILINE)
+    # Remove extra whitespace and newlines
+    message = " ".join(message.split())
+
+    return YamlError(
+        message=message, line=line, column=column, context=context, snippet=snippet
+    )
+
+
+def parse_multi_document(content: str, *, return_error: bool = False) -> list[Any] | YamlParseResult:
     """Parse a YAML string into a list of dicts.
 
     Handles both single-document (no ---) and multi-document (--- separated) files.
     ruamel's load_all raises ComposerError on plain YAML files without --- markers,
     so we detect which format is in use and dispatch accordingly.
 
-    Returns empty list on invalid YAML rather than raising - callers can check
-    if len(result) == 0 and log warnings as needed.
+    Args:
+        content: YAML string to parse
+        return_error: If True, returns YamlParseResult with error info instead of raising
+
+    Returns:
+        List of parsed documents, or YamlParseResult if return_error=True
     """
     try:
         y = _make_yaml()
         stripped = content.strip()
         if not stripped:
-            return []
+            return YamlParseResult([], None) if return_error else []
         if "---" not in stripped:
             # Single document — load_all would raise ComposerError here
             result = y.load(stripped)
-            return [result] if result is not None else []
-        return [d for d in y.load_all(stripped) if d is not None]
-    except Exception:
-        # Invalid YAML - return empty list, let callers handle
+            docs = [result] if result is not None else []
+            return YamlParseResult(docs, None) if return_error else docs
+        docs = [d for d in y.load_all(stripped) if d is not None]
+        return YamlParseResult(docs, None) if return_error else docs
+    except Exception as exc:
+        if return_error:
+            error = _extract_yaml_error(exc, content)
+            return YamlParseResult([], error)
+        # Return empty list for backwards compat, don't crash
         return []
 
 
