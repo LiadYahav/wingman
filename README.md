@@ -82,9 +82,45 @@ cluster-platform/
 │           ├── cache.py       # In-memory caching
 │           └── yaml_utils.py  # YAML handling
 │
-└── deploy/
-    ├── helm/                  # Helm charts
-    └── seed/                  # Seed data for development
+├── chart/                     # Helm chart for deployment
+│   ├── templates/             # Kubernetes manifests
+│   ├── values.yaml            # Production defaults
+│   └── values.minikube.yaml   # Local development overrides
+│
+└── scripts/                   # Development & build scripts
+    ├── minikube-dev-setup.sh  # Local GitLab + minikube setup
+    ├── build-images.sh        # Docker image builds
+    └── seed-test-data.py      # Seed GitLab with test data
+```
+
+## Deployment
+
+See **[chart/README.md](chart/README.md)** for full deployment instructions.
+
+### Quick Start (Minikube)
+
+```bash
+# Build images into minikube
+eval $(minikube docker-env)
+./scripts/build-images.sh
+
+# Deploy with Helm
+helm upgrade --install wingman ./chart \
+  --namespace wingman --create-namespace \
+  -f chart/values.minikube.yaml \
+  --set gitlab.accessToken=<your-token> \
+  --set auth.jwtSecret=$(openssl rand -hex 32)
+```
+
+### Production (OpenShift)
+
+```bash
+helm upgrade --install wingman ./chart \
+  --namespace wingman \
+  --set gitlab.url=https://gitlab.internal \
+  --set gitlab.accessToken=<token> \
+  --set auth.jwtSecret=<secret> \
+  --set auth.openshiftOAuthHost=https://oauth.openshift.local
 ```
 
 ## API Reference
