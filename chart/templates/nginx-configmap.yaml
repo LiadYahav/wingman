@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wingman-nginx
+  namespace: {{ include "wingman.namespace" . }}
+  labels:
+    {{- include "wingman.labels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    # Run as non-root in OpenShift: redirect all write paths to /tmp
+    pid /tmp/nginx.pid;
+
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      # Temp paths writable by any UID (required for OpenShift restricted-v2 SCC)
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path        /tmp/proxy_temp;
+      fastcgi_temp_path      /tmp/fastcgi_temp;
+      uwsgi_temp_path        /tmp/uwsgi_temp;
+      scgi_temp_path         /tmp/scgi_temp;
+
+
+      # Increase buffer sizes for large YAML payloads
+      client_max_body_size 10m;
+      proxy_buffer_size 16k;
+      proxy_buffers 8 16k;
+
+      upstream day1 {
+        server wingman-day1:8001;
+      }
+
+      upstream day2 {
+        server wingman-day2:8002;
+      }
+
+      upstream web {
+        server wingman-web:3000;
+      }
+
+      server {
+        listen 8080;
+        server_name _;
+
+        # Increase timeout for long GitLab API calls
+        proxy_read_timeout 60s;
+        proxy_connect_timeout 10s;
+
+        # Forward real client IP
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Auth and Day1 API
+        location /api/auth/ {
+          proxy_pass http://day1;
+        }
+
+        location /api/day1/ {
+          proxy_pass http://day1;
+        }
+
+        # GitLab webhook receiver
+        location /api/webhooks/ {
+          proxy_pass http://day1;
+        }
+
+        # Day2 API
+        location /api/day2/ {
+          proxy_pass http://day2;
+        }
+
+        # Frontend — catch-all
+        location / {
+          proxy_pass http://web;
+          # Support Next.js hot reload in dev (not needed in prod but harmless)
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+        }
+      }
+    }

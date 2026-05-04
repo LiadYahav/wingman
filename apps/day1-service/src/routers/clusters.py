@@ -124,6 +124,52 @@ async def list_clusters(
     return await cluster_svc.list_clusters()
 
 
+class BulkStatusRequest(BaseModel):
+    """Request for bulk cluster status fetch."""
+    clusters: list[dict[str, str]]  # [{name, mce}, ...]
+
+
+@router.post("/bulk-status", response_model=dict[str, ClusterLiveStatus])
+async def get_bulk_cluster_status(
+    body: BulkStatusRequest,
+    user: CurrentUser,
+) -> dict[str, ClusterLiveStatus]:
+    """
+    Fetch live status for multiple clusters in parallel.
+
+    Returns a dict mapping cluster name to its live status.
+    More efficient than N individual calls when loading cluster list.
+    """
+    status_svc = get_cluster_status_service()
+    if status_svc is None:
+        raise HTTPException(
+            status_code=501,
+            detail="Live cluster status is not enabled. Set CLUSTER_STATUS_ENABLED=true.",
+        )
+
+    async def fetch_one(cluster: dict[str, str]) -> tuple[str, ClusterLiveStatus]:
+        name = cluster["name"]
+        mce = cluster["mce"]
+        status = await asyncio.to_thread(status_svc.fetch_cluster_status, name, mce)
+        return name, status
+
+    # Fetch all in parallel
+    results = await asyncio.gather(
+        *[fetch_one(c) for c in body.clusters],
+        return_exceptions=True,
+    )
+
+    statuses: dict[str, ClusterLiveStatus] = {}
+    for result in results:
+        if isinstance(result, BaseException):
+            continue  # Skip failed fetches
+        # result is tuple[str, ClusterLiveStatus]
+        name, status = result
+        statuses[name] = status
+
+    return statuses
+
+
 @router.get("/{name}/status", response_model=ClusterLiveStatus)
 async def get_cluster_live_status(
     name: str,

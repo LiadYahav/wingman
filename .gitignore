@@ -45,9 +45,8 @@ coverage/
 .coverage
 htmlcov/
 
-# Helm
+# Helm dependencies (downloaded charts)
 charts/
-chart/
 
 # Claude files (session-specific)
 .claude/

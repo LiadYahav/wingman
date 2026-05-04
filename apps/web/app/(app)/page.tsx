@@ -139,8 +139,8 @@ export default function DashboardPage() {
   const { data: driftSummary } = useQuery<{ name: string; is_drifted: boolean }[]>({
     queryKey: ["clusters", "drift-summary"],
     queryFn: () => api.get("/api/day1/clusters/drift-summary"),
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 60_000,  // Cache for 1 minute - drift detection is expensive
+    gcTime: 5 * 60_000, // Keep in cache for 5 minutes
   });
 
   const driftedCount = driftSummary?.filter((d) => d.is_drifted).length ?? stats?.drifted ?? 0;

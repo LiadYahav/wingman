@@ -6,6 +6,7 @@ Every write creates a GitLab MR (never a direct commit to main).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any
@@ -109,16 +110,20 @@ class ClusterService:
             and not item["name"].endswith(".wingman.yaml")
         ]
 
-        clusters: list[ClusterStatus] = []
-        for file_item in cluster_files:
+        # Fetch all cluster statuses in parallel for better performance
+        async def safe_fetch(path: str) -> ClusterStatus | None:
             try:
-                status = await self._file_to_cluster_status(file_item["path"])
-                if status:
-                    clusters.append(status)
+                return await self._file_to_cluster_status(path)
             except Exception as exc:
-                logger.warning("Failed to load cluster from %s: %s", file_item["path"], exc)
+                logger.warning("Failed to load cluster from %s: %s", path, exc)
+                return None
 
-        return clusters
+        results = await asyncio.gather(
+            *[safe_fetch(item["path"]) for item in cluster_files],
+            return_exceptions=False,  # We handle exceptions in safe_fetch
+        )
+
+        return [status for status in results if status is not None]
 
     async def _file_to_cluster_status(self, cluster_path: str) -> ClusterStatus | None:
         """Parse a cluster YAML file path into a ClusterStatus.

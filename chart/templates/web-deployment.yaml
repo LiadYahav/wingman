@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wingman-web
+  namespace: {{ include "wingman.namespace" . }}
+  labels:
+    {{- include "wingman.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  replicas: {{ .Values.replicaCount.web }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wingman
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wingman
+        app.kubernetes.io/component: web
+    spec:
+      serviceAccountName: {{ include "wingman.serviceAccountName" . }}
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: web
+          image: {{ include "wingman.image" (dict "reg" .Values.image.registry "repo" .Values.image.web.repository "tag" .Values.image.web.tag) }}
+          imagePullPolicy: {{ .Values.image.web.pullPolicy }}
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+          # Next.js runtime env (API URLs proxied through nginx — relative paths work out of the box)
+          env:
+            - name: NODE_ENV
+              value: "production"
+          resources:
+            {{- toYaml .Values.resources.web | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10

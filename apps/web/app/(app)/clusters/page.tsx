@@ -42,8 +42,23 @@ function liveStatusToPhase(s: ClusterLiveStatus): "Ready" | "Error" | "Provision
   return "Provisioning";
 }
 
-function ClusterStatusCell({ name, mce, site }: { name: string; mce: string; site: string }) {
-  const { data: liveStatus, isLoading } = useQuery<ClusterLiveStatus | null>({
+function ClusterStatusCell({
+  name,
+  mce,
+  site,
+  bulkStatus,
+  isBulkLoading,
+}: {
+  name: string;
+  mce: string;
+  site: string;
+  bulkStatus?: ClusterLiveStatus | null;
+  isBulkLoading?: boolean;
+}) {
+  // Use bulk-fetched status if available, otherwise fall back to individual fetch
+  const shouldFetchIndividually = bulkStatus === undefined && !isBulkLoading;
+
+  const { data: individualStatus, isLoading: isIndividualLoading } = useQuery<ClusterLiveStatus | null>({
     queryKey: ["clusters", name, "live-status", mce],
     queryFn: async () => {
       try {
@@ -54,11 +69,14 @@ function ClusterStatusCell({ name, mce, site }: { name: string; mce: string; sit
         throw err;
       }
     },
-    staleTime: 2 * 60_000,   // 2 min — match global
-    refetchInterval: 2 * 60_000, // 2 min polling
+    staleTime: 2 * 60_000,
+    refetchInterval: 2 * 60_000,
     retry: false,
-    enabled: Boolean(mce),
+    enabled: shouldFetchIndividually && Boolean(mce),
   });
+
+  const liveStatus = bulkStatus ?? individualStatus;
+  const isLoading = isBulkLoading ?? isIndividualLoading;
 
   if (isLoading) {
     return (
@@ -121,6 +139,31 @@ export default function ClustersPage() {
     queryKey: ["clusters"],
     queryFn: () => api.get<ClusterStatus[]>("/api/day1/clusters"),
     staleTime: 30_000,
+  });
+
+  // Bulk fetch live status for all clusters (avoids N+1 API calls)
+  const clusterStatusInput = useMemo(() => {
+    if (!clusters) return [];
+    return clusters.map((c) => ({ name: c.name, mce: c.mce }));
+  }, [clusters]);
+
+  const { data: bulkStatuses, isLoading: bulkStatusLoading } = useQuery<Record<string, ClusterLiveStatus>>({
+    queryKey: ["clusters", "bulk-status", clusterStatusInput],
+    queryFn: async () => {
+      try {
+        return await api.post<Record<string, ClusterLiveStatus>>(
+          "/api/day1/clusters/bulk-status",
+          { clusters: clusterStatusInput }
+        );
+      } catch (err) {
+        // 501 = feature disabled
+        if (err instanceof Error && err.message.startsWith("API error 501")) return {};
+        throw err;
+      }
+    },
+    enabled: clusterStatusInput.length > 0,
+    staleTime: 2 * 60_000,
+    refetchInterval: 2 * 60_000,
   });
 
   const { data: driftSummary } = useQuery<{ name: string; is_drifted: boolean }[]>({
@@ -433,6 +476,8 @@ export default function ClustersPage() {
                             name={cluster.name}
                             mce={cluster.mce}
                             site={cluster.site}
+                            bulkStatus={bulkStatuses?.[cluster.name]}
+                            isBulkLoading={bulkStatusLoading}
                           />
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">

@@ -1,0 +1,246 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Wingman Helm Values
+#
+# AIR-GAPPED DEPLOYMENT CHECKLIST
+# ────────────────────────────────
+# Fields marked [AIR-GAPPED] must be changed for air-gapped / on-prem networks:
+#   1. image.registry      → your internal container registry
+#   2. gitlab.*            → your internal GitLab instance
+#   3. auth.*              → your OpenShift OAuth settings
+#   4. tls.caBundle        → your internal CA certificate (PEM)
+#   5. route.host          → your actual OpenShift cluster domain
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Container images ───────────────────────────────────────────────────────────
+image:
+  # [AIR-GAPPED] Replace with your internal registry
+  # Example: registry.internal/wingman
+  registry: ""   # if empty, images are pulled without a registry prefix
+
+  day1:
+    repository: wingman-day1
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  day2:
+    repository: wingman-day2
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  web:
+    repository: wingman-web
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  nginx:
+    # [AIR-GAPPED] Replace with mirror of nginx in your registry
+    repository: nginx
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+# ── GitLab connection ──────────────────────────────────────────────────────────
+gitlab:
+  # [AIR-GAPPED] Your internal GitLab URL
+  url: "https://gitlab.internal"
+
+  # [AIR-GAPPED] Personal or project access token with api + read_repository + write_repository scope
+  # Generate at: GitLab → User Settings → Access Tokens
+  # IMPORTANT: Set this via --set or a separate secrets file, never commit the token
+  accessToken: ""
+
+  # GitLab project IDs or "group/subgroup/project" path strings
+  # Find at: GitLab project → Settings → General → Project ID
+  day1ProjectId: ""         # e.g. "42" or "platform-team/day1-config"
+  day2SigsGroupPath: ""    # GitLab path to the sigs subgroup e.g. "platform-team/sigs"
+  specsProjectId: ""        # e.g. "44" or "platform-team/cluster-specs"
+
+  defaultBranch: "main"
+
+  # TLS verification for GitLab API calls
+  # "true"  → verify using system CAs
+  # "false" → skip verification (not recommended)
+  # "/etc/pki/tls/certs/ca.crt" → path to CA bundle mounted in the pod
+  sslVerify: "true"
+
+  # Webhook secret — GitLab will send this in X-Gitlab-Token header
+  # Set in GitLab: Project → Settings → Webhooks → Secret token
+  webhookSecret: ""
+
+# ── Path templates (directories inside each GitLab project) ──────────────────
+# These tell the platform where files live INSIDE each repo.
+# Placeholders: {site}, {mce}, {cluster}, {team}, {addon}
+paths:
+  day1ClustersTemplate: "sites/{site}/mces/{mce}/hostedClusters"
+  # Suffix for cluster YAML files inside hostedClusters/ (e.g. "ocp4-prod.yaml" → suffix ".yaml")
+  # Change this if your cluster files use a different suffix
+  clusterFileSuffix: ".yaml"
+  # Day2 paths are relative to each team's GitLab project root (team = project in sigs subgroup)
+  day2AddonDefsTemplate: "operators/{addon}"
+  day2AddonOverridesTemplate: "mces/{mce}/{cluster}/{addon}"
+  specsRoot: "specs"
+
+# ── OpenShift OAuth ────────────────────────────────────────────────────────────
+# [AIR-GAPPED] All values come from your OpenShift cluster
+auth:
+  # Hostname of your OpenShift OAuth server
+  # Find at: oc get route oauth-openshift -n openshift-authentication -o jsonpath='{.spec.host}'
+  openshiftOAuthHost: "oauth-openshift.apps.your-cluster.internal"
+
+  # Kubernetes API server (used to validate tokens via users/~ endpoint)
+  # Find at: oc whoami --show-server
+  openshiftApiHost: "api.your-cluster.internal:6443"
+
+  # OAuthClient name — must match the CR deployed by this chart
+  oauthClientId: "wingman-app"
+
+  # SSL verification for OpenShift OAuth/API calls
+  # "true" → verify using system CAs, "false" → skip (internal self-signed certs), or CA bundle path
+  sslVerify: "false"
+
+  # OAuthClient secret — generate a random string, e.g.: openssl rand -hex 32
+  # IMPORTANT: Set via --set or secrets file
+  oauthClientSecret: ""
+
+  # Full URL where OpenShift will redirect after login
+  # Must exactly match one of the OAuthClient's redirectURIs
+  # Format: https://{route.host}/login
+  oauthRedirectUri: ""  # auto-populated from route.host if left empty
+
+  # JWT signing secret — generate with: openssl rand -hex 32
+  # IMPORTANT: Set via --set or secrets file
+  jwtSecret: ""
+  jwtExpiryHours: 8
+
+  # ── Group-based access control ─────────────────────────────────────────────
+  # Comma-separated OpenShift group names
+  # Create groups: oc adm groups new wingman-admins && oc adm groups add-users wingman-admins <user>
+  adminGroups: "wingman-admins"
+  viewerGroups: ""   # leave empty to disable viewer role
+
+# ── Dev auth (minikube / local testing ONLY) ──────────────────────────────────
+# When enabled, replaces OpenShift OAuth with a simple secret-based login.
+# NEVER enable in production.
+devAuth:
+  enabled: false
+  secret: ""  # generate with: openssl rand -hex 16
+
+# ── Routing ────────────────────────────────────────────────────────────────────
+route:
+  # [AIR-GAPPED] Your OpenShift application domain
+  # Find at: oc get ingresses.config cluster -o jsonpath='{.spec.domain}'
+  host: "wingman.apps.your-cluster.internal"
+
+# OpenShift Route (set enabled: true on OpenShift)
+openshiftRoute:
+  enabled: true
+  tls:
+    termination: edge        # edge | passthrough | reencrypt
+    insecureEdgeTerminationPolicy: Redirect
+
+# Standard Kubernetes Ingress (set enabled: true on plain k8s / minikube)
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  host: "wingman.local"  # add to /etc/hosts pointing to minikube IP
+
+# ── TLS / CA bundle ────────────────────────────────────────────────────────────
+tls:
+  # [AIR-GAPPED] Paste your internal CA certificate (PEM format) here.
+  # This is mounted into all pods so they can verify internal TLS certs.
+  # Get it: oc get cm -n openshift-config-managed default-ingress-cert -o jsonpath='{.data.ca-bundle\.crt}'
+  # Or export from your PKI.
+  caBundle: ""   # paste multi-line PEM cert here (use | in YAML)
+  # When caBundle is set, this path is where it's mounted inside pods
+  caBundleMountPath: "/etc/pki/tls/certs/ca-bundle.crt"
+
+# ── Image pull secret ──────────────────────────────────────────────────────────
+# Name of an existing secret with registry credentials.
+# Create with: kubectl create secret docker-registry wingman-registry \
+#   --docker-server=<registry> --docker-username=<user> --docker-password=<token> \
+#   -n wingman
+imagePullSecret: ""   # leave empty if registry is unauthenticated
+
+# ── RBAC / Service account ─────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: "wingman"
+
+# ── Resource requests/limits ───────────────────────────────────────────────────
+resources:
+  day1:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  day2:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  web:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+  nginx:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+# ── Replica counts ─────────────────────────────────────────────────────────────
+replicaCount:
+  day1: 1
+  day2: 1
+  web: 1
+  nginx: 1
+
+# ── Cache TTLs (seconds) ───────────────────────────────────────────────────────
+cache:
+  clusterListTtl: 30
+  clusterDetailTtl: 30
+  specListTtl: 60
+  specDetailTtl: 60
+  addonCatalogTtl: 120
+  addonValuesTtl: 120
+  helmValuesTtl: 300
+  helmBranchesTtl: 120
+  approvalsTtl: 15
+  auditTtl: 30
+  backgroundRefreshSeconds: 60
+
+# ── Live cluster status (OpenShift/HyperShift only) ───────────────────────────
+# Disabled by default. Cannot be used on minikube — requires real MCE clusters.
+# When enabled, the day1-service queries each MCE's OpenShift API using SA tokens
+# stored in a Kubernetes secret.
+#
+# Secret format (key: tokens):
+#   mce-prod: <SA-token>
+#   mce-staging: <SA-token>
+#
+# API URL constructed as: https://api.{mce-name}.{mceDomain}:6443
+clusterStatus:
+  enabled: false
+  mceDomain: ""           # e.g. "openshift.example.com" → https://api.{mce}.openshift.example.com:6443
+  tokensSecretName: "mce-sa-tokens"  # name of the k8s secret holding SA tokens
+  sslVerify: "false"                 # set to "true" or CA bundle path for production
+  # Prefix in Wingman cluster names that is stripped when deriving the HC namespace.
+  # HC CR name  = full cluster name  (e.g. ocp4-prod-web)
+  # HC namespace = hcp-{name without prefix}  (e.g. hcp-prod-web)
+  clusterNamePrefix: "ocp4-"
+
+# ── Namespace ──────────────────────────────────────────────────────────────────
+# Override with --namespace on helm install
+namespace: ""  # defaults to .Release.Namespace

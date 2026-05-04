@@ -1,0 +1,88 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Minikube / local testing overrides
+#
+# Prerequisites:
+#   1. GitLab CE running locally (see scripts/minikube-dev-setup.sh)
+#   2. Images built into minikube: eval $(minikube docker-env) && ./scripts/build-images.sh
+#   3. minikube addons enable ingress
+#
+# Deploy:
+#   helm install wingman ./chart -f chart/values.minikube.yaml \
+#     --set gitlab.accessToken=<your-gitlab-token> \
+#     --set auth.jwtSecret=$(openssl rand -hex 32) \
+#     --set devAuth.secret=devpassword \
+#     -n wingman --create-namespace
+# ══════════════════════════════════════════════════════════════════════════════
+
+image:
+  registry: ""   # images loaded directly into minikube — no registry needed
+  day1:
+    pullPolicy: Never   # use locally loaded image
+  day2:
+    pullPolicy: Never
+  web:
+    pullPolicy: Never
+  nginx:
+    pullPolicy: IfNotPresent   # nginx:alpine pulled from Docker Hub (or mirror)
+
+# GitLab running as Docker container on host machine
+# minikube can reach it via host.minikube.internal
+gitlab:
+  url: "http://host.minikube.internal:8929"  # GitLab CE HTTP port
+  sslVerify: "false"                          # no TLS in local GitLab
+  day1ProjectId: "wingman-dev/day1-config"
+  day2SigsGroupPath: "wingman-dev/sigs"
+  specsProjectId: "wingman-dev/cluster-specs"
+  webhookSecret: "local-webhook-secret"
+
+# OpenShift OAuth not available on minikube — use dev auth instead
+auth:
+  openshiftOAuthHost: ""
+  openshiftApiHost: ""
+  oauthClientId: ""
+  oauthClientSecret: ""
+  oauthRedirectUri: ""
+  # jwtSecret set via --set at install time
+  adminGroups: "wingman-admins"
+  viewerGroups: "wingman-viewers"
+
+devAuth:
+  enabled: true
+  # secret set via --set at install time
+
+# Use Ingress instead of OpenShift Route
+openshiftRoute:
+  enabled: false
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "wingman.local"   # add "$(minikube ip) wingman.local" to /etc/hosts
+
+# No OAuthClient CR on plain k8s
+tls:
+  caBundle: ""
+
+# Lower resource usage for local dev
+resources:
+  day1:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "300m"
+      memory: "384Mi"
+  day2:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "300m"
+      memory: "384Mi"
+  web:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"

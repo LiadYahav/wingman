@@ -60,8 +60,8 @@ export default function SpecDetailPage() {
     queryKey: ["specs", specName, "clusters"],
     queryFn: () => api.get<SpecCluster[]>(`/api/day1/specs/${specName}/clusters`),
     enabled: activeTab === "clusters" || activeTab === "drift",
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 30_000,  // Cache for 30 seconds
+    gcTime: 2 * 60_000, // Keep in cache for 2 minutes
   });
 
   const { data: driftResults, isLoading: driftLoading } = useQuery<SpecDriftResult[]>({
