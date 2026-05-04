@@ -102,33 +102,7 @@ cluster-platform/
 
 ## Deployment
 
-See **[chart/README.md](chart/README.md)** for full deployment instructions.
-
-### Quick Start (Minikube)
-
-```bash
-# Build images into minikube
-eval $(minikube docker-env)
-./scripts/build-images.sh
-
-# Deploy with Helm
-helm upgrade --install wingman ./chart \
-  --namespace wingman --create-namespace \
-  -f chart/values.minikube.yaml \
-  --set gitlab.accessToken=<your-token> \
-  --set auth.jwtSecret=$(openssl rand -hex 32)
-```
-
-### Production (OpenShift)
-
-```bash
-helm upgrade --install wingman ./chart \
-  --namespace wingman \
-  --set gitlab.url=https://gitlab.internal \
-  --set gitlab.accessToken=<token> \
-  --set auth.jwtSecret=<secret> \
-  --set auth.openshiftOAuthHost=https://oauth.openshift.local
-```
+See **[chart/README.md](chart/README.md)** for Helm chart deployment instructions.
 
 ## API Reference
 
@@ -271,6 +245,8 @@ NEXT_PUBLIC_AUTH_API_URL=/api/auth
 ```
 
 ## Development Setup
+
+See **[DEVELOPMENT.md](DEVELOPMENT.md)** for detailed development guide, architecture details, and contribution guidelines.
 
 ### Prerequisites
 
