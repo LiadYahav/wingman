@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, CheckCircle2, Eye } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +13,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { ClusterSpec, MRDetail, SpecVariable } from "@/types";
+
+const CREATE_NEW = "__create_new__";
 
 // ── Variable field ─────────────────────────────────────────────────────────────
 
@@ -79,11 +81,14 @@ function VariableField({
 export default function NewClusterPage() {
   const isAdmin = useIsAdmin();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<"spec" | "vars">("spec");
   const [selectedSpec, setSelectedSpec] = useState<ClusterSpec | null>(null);
   const [clusterName, setClusterName] = useState("");
   const [site, setSite] = useState("");
+  const [newSiteName, setNewSiteName] = useState("");
   const [mce, setMce] = useState("");
+  const [newMceName, setNewMceName] = useState("");
   const [variables, setVariables] = useState<Record<string, unknown>>({});
   const [reviewOpen, setReviewOpen] = useState(false);
 
@@ -93,12 +98,44 @@ export default function NewClusterPage() {
     staleTime: 60_000,
   });
 
+  const { data: sites = [], isLoading: sitesLoading } = useQuery<string[]>({
+    queryKey: ["sites"],
+    queryFn: () => api.get<string[]>("/api/day1/sites"),
+    staleTime: 60_000,
+  });
+
+  const { data: mces = [], isLoading: mcesLoading } = useQuery<string[]>({
+    queryKey: ["sites", site, "mces"],
+    queryFn: () => api.get<string[]>(`/api/day1/sites/${site}/mces`),
+    enabled: Boolean(site) && site !== CREATE_NEW,
+    staleTime: 60_000,
+  });
+
+  const createSiteMutation = useMutation({
+    mutationFn: (name: string) => api.post<MRDetail>("/api/day1/sites", { name }),
+    onSuccess: (mr) => {
+      toast.success(`Site MR #${mr.iid} created. Site will be available after merge.`);
+      queryClient.invalidateQueries({ queryKey: ["sites"] });
+    },
+    onError: (err: Error) => toast.error(`Failed to create site: ${err.message}`),
+  });
+
+  const createMceMutation = useMutation({
+    mutationFn: ({ siteName, mceName }: { siteName: string; mceName: string }) =>
+      api.post<MRDetail>(`/api/day1/sites/${siteName}/mces`, { name: mceName }),
+    onSuccess: (mr) => {
+      toast.success(`MCE MR #${mr.iid} created. MCE will be available after merge.`);
+      queryClient.invalidateQueries({ queryKey: ["sites", site, "mces"] });
+    },
+    onError: (err: Error) => toast.error(`Failed to create MCE: ${err.message}`),
+  });
+
   const createMutation = useMutation({
     mutationFn: () =>
       api.post<MRDetail>("/api/day1/clusters", {
         name: clusterName.trim(),
-        site: site.trim(),
-        mce: mce.trim(),
+        site: site === CREATE_NEW ? newSiteName.trim() : site.trim(),
+        mce: mce === CREATE_NEW ? newMceName.trim() : mce.trim(),
         spec_name: selectedSpec!.metadata.name,
         spec_version: selectedSpec!.metadata.version,
         variables,
@@ -113,6 +150,9 @@ export default function NewClusterPage() {
       setReviewOpen(false);
     },
   });
+
+  const effectiveSite = site === CREATE_NEW ? newSiteName.trim() : site.trim();
+  const effectiveMce = mce === CREATE_NEW ? newMceName.trim() : mce.trim();
 
   if (!isAdmin) {
     return (
@@ -136,8 +176,8 @@ export default function NewClusterPage() {
 
   const handleReview = () => {
     if (!clusterName.trim()) { toast.error("Cluster name is required"); return; }
-    if (!site.trim()) { toast.error("Site is required"); return; }
-    if (!mce.trim()) { toast.error("MCE is required"); return; }
+    if (!effectiveSite) { toast.error("Site is required"); return; }
+    if (!effectiveMce) { toast.error("MCE is required"); return; }
     for (const v of selectedSpec!.spec.day1.variables) {
       if (v.required && !variables[v.name] && variables[v.name] !== 0 && variables[v.name] !== false) {
         toast.error(`Variable "${v.name}" is required`);
@@ -145,6 +185,12 @@ export default function NewClusterPage() {
       }
     }
     setReviewOpen(true);
+  };
+
+  const handleSiteChange = (value: string) => {
+    setSite(value);
+    setMce("");
+    setNewMceName("");
   };
 
   return (
@@ -247,25 +293,69 @@ export default function NewClusterPage() {
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Site <span className="text-destructive">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-                  placeholder="e.g. dc1"
                   value={site}
-                  onChange={(e) => setSite(e.target.value)}
-                />
+                  onChange={(e) => handleSiteChange(e.target.value)}
+                  disabled={sitesLoading}
+                >
+                  <option value="">Select site…</option>
+                  {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+                  <option value={CREATE_NEW}>+ Create new site</option>
+                </select>
+                {site === CREATE_NEW && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="text"
+                      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
+                      placeholder="New site name"
+                      value={newSiteName}
+                      onChange={(e) => setNewSiteName(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => newSiteName.trim() && createSiteMutation.mutate(newSiteName.trim())}
+                      disabled={!newSiteName.trim() || createSiteMutation.isPending}
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />Create
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   MCE <span className="text-destructive">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-                  placeholder="e.g. mce-prod"
                   value={mce}
                   onChange={(e) => setMce(e.target.value)}
-                />
+                  disabled={!site || site === CREATE_NEW || mcesLoading}
+                >
+                  <option value="">{!site ? "Select site first…" : "Select MCE…"}</option>
+                  {mces.map((m) => <option key={m} value={m}>{m}</option>)}
+                  {site && site !== CREATE_NEW && <option value={CREATE_NEW}>+ Create new MCE</option>}
+                </select>
+                {mce === CREATE_NEW && site && site !== CREATE_NEW && (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="text"
+                      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
+                      placeholder="New MCE name"
+                      value={newMceName}
+                      onChange={(e) => setNewMceName(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => newMceName.trim() && createMceMutation.mutate({ siteName: site, mceName: newMceName.trim() })}
+                      disabled={!newMceName.trim() || createMceMutation.isPending}
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />Create
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -349,11 +439,11 @@ export default function NewClusterPage() {
             </div>
             <div className="flex gap-3">
               <span className="text-muted-foreground w-28 shrink-0">site</span>
-              <span className="font-medium">{site}</span>
+              <span className="font-medium">{effectiveSite}</span>
             </div>
             <div className="flex gap-3">
               <span className="text-muted-foreground w-28 shrink-0">mce</span>
-              <span className="font-medium">{mce}</span>
+              <span className="font-medium">{effectiveMce}</span>
             </div>
           </div>
 

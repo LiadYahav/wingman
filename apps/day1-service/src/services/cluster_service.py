@@ -447,3 +447,112 @@ class ClusterService:
         self.cache.invalidate("approvals:day1:list")
 
         return parse_mr_to_detail(mr_raw)
+
+    # ── Site/MCE management ────────────────────────────────────────────────────
+
+    async def list_sites(self) -> list[str]:
+        """List all sites by scanning the sites/ directory."""
+
+        async def _fetch() -> list[str]:
+            try:
+                dirs = await self.gl.alist_directories("sites", ref=self.default_branch)
+                return sorted(dirs)
+            except NotFoundError:
+                return []
+            except GitLabError as exc:
+                logger.warning("Failed to list sites: %s", exc)
+                return []
+
+        return await self.cache.get_or_fetch("day1:sites:list", _fetch, ttl=60.0)
+
+    async def list_mces(self, site: str) -> list[str]:
+        """List all MCEs for a given site."""
+
+        async def _fetch() -> list[str]:
+            try:
+                dirs = await self.gl.alist_directories(f"sites/{site}/mces", ref=self.default_branch)
+                return sorted(dirs)
+            except NotFoundError:
+                return []
+            except GitLabError as exc:
+                logger.warning("Failed to list MCEs for site %s: %s", site, exc)
+                return []
+
+        return await self.cache.get_or_fetch(f"day1:sites:{site}:mces", _fetch, ttl=60.0)
+
+    async def create_site(self, site: str, current_user: UserInfo) -> MRDetail:
+        """Create a new site folder structure."""
+        gitkeep_path = f"sites/{site}/.gitkeep"
+
+        if self.gl.file_exists(f"sites/{site}", ref=self.default_branch):
+            raise HTTPException(status_code=409, detail=f"Site '{site}' already exists")
+
+        branch = make_branch_name(current_user.username, "create-site", site)
+        mr_title = make_mr_title("Day1", "Create", "site", site)
+        mr_description = make_mr_description(
+            f"Creating new site **{site}**.",
+            username=current_user.username,
+            action="create",
+            resource_type="site",
+            resource_name=site,
+            repo="Day1",
+        )
+
+        try:
+            self.gl.commit_files(
+                branch=branch,
+                message=f"Create site {site}",
+                actions=[{"action": "create", "file_path": gitkeep_path, "content": ""}],
+                start_branch=self.default_branch,
+                author_name=current_user.username,
+            )
+            mr_raw = self.gl.create_mr(
+                source_branch=branch,
+                title=mr_title,
+                description=mr_description,
+                labels=["wingman", "day1", "create", "site"],
+            )
+        except GitLabError as exc:
+            raise HTTPException(status_code=500, detail="Failed to create site") from exc
+
+        self.cache.invalidate("day1:sites:list")
+        return parse_mr_to_detail(mr_raw)
+
+    async def create_mce(self, site: str, mce: str, current_user: UserInfo) -> MRDetail:
+        """Create a new MCE folder structure within a site."""
+        gitkeep_path = f"sites/{site}/mces/{mce}/hostedClusters/.gitkeep"
+
+        if self.gl.file_exists(f"sites/{site}/mces/{mce}", ref=self.default_branch):
+            raise HTTPException(status_code=409, detail=f"MCE '{mce}' already exists in site '{site}'")
+
+        branch = make_branch_name(current_user.username, "create-mce", mce)
+        mr_title = make_mr_title("Day1", "Create", "mce", mce, f"in site {site}")
+        mr_description = make_mr_description(
+            f"Creating new MCE **{mce}** in site **{site}**.",
+            username=current_user.username,
+            action="create",
+            resource_type="mce",
+            resource_name=mce,
+            repo="Day1",
+        )
+
+        try:
+            self.gl.commit_files(
+                branch=branch,
+                message=f"Create MCE {mce} in site {site}",
+                actions=[{"action": "create", "file_path": gitkeep_path, "content": ""}],
+                start_branch=self.default_branch,
+                author_name=current_user.username,
+            )
+            mr_raw = self.gl.create_mr(
+                source_branch=branch,
+                title=mr_title,
+                description=mr_description,
+                labels=["wingman", "day1", "create", "mce"],
+            )
+        except GitLabError as exc:
+            raise HTTPException(status_code=500, detail="Failed to create MCE") from exc
+
+        self.cache.invalidate("day1:sites:list")
+        self.cache.invalidate(f"day1:sites:{site}:mces")
+        return parse_mr_to_detail(mr_raw)

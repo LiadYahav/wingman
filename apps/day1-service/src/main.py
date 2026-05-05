@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .dependencies import get_cache
-from .routers import approvals, audit, auth, clusters, specs, webhooks
+from .routers import approvals, audit, auth, clusters, sites, specs, webhooks
 
 logging.basicConfig(level=get_settings().LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -111,6 +111,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(clusters.router)
+app.include_router(sites.router)
 app.include_router(specs.router)
 app.include_router(approvals.router)
 app.include_router(audit.router)
