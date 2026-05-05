@@ -22,11 +22,18 @@ export interface SpecVariable {
   maximum?: number;
 }
 
+export interface OverrideableField {
+  path: string;
+  type: "string" | "integer" | "boolean" | "object" | "array";
+  default?: unknown;
+  description?: string;
+}
+
 export interface SpecAddon {
   team: string;
   name: string;
   version: string;
-  overrides: Record<string, unknown>;
+  overrideable: OverrideableField[];
 }
 
 export interface ClusterSpec {
@@ -85,6 +92,7 @@ export interface ClusterMetadata {
   site: string;
   mce: string;
   variables: Record<string, unknown>;
+  addonOverrides?: Record<string, Record<string, unknown>>;
 }
 
 // ── Addon ─────────────────────────────────────────────────────────────────────

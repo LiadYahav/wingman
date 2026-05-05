@@ -15,6 +15,7 @@ import {
   X,
   GripVertical,
   Tag,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsYaml from "js-yaml";
@@ -48,7 +49,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ClusterSpec, MRDetail, AddonCatalogEntry, SpecAddon } from "@/types";
+import { ConfigureOverrideableDialog } from "@/components/specs/configure-overrideable-dialog";
+import type { ClusterSpec, MRDetail, AddonCatalogEntry, SpecAddon, OverrideableField } from "@/types";
 
 // ── Sortable Addon Item ───────────────────────────────────────────────────────
 
@@ -57,12 +59,14 @@ function SortableAddonItem({
   index,
   onRemove,
   onVersionChange,
+  onConfigure,
   availableVersions,
 }: {
   addon: SpecAddon;
   index: number;
   onRemove: () => void;
   onVersionChange: (version: string) => void;
+  onConfigure: () => void;
   availableVersions: string[];
 }) {
   const {
@@ -79,10 +83,13 @@ function SortableAddonItem({
     transition,
   };
 
+  const overrideCount = addon.overrideable?.length ?? 0;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
+      data-testid={`selected-addon-${addon.team}-${addon.name}`}
       className={cn(
         "flex items-center gap-3 rounded-lg border bg-card p-3 transition-shadow",
         isDragging && "shadow-lg ring-2 ring-primary/50 z-10"
@@ -91,6 +98,7 @@ function SortableAddonItem({
       <button
         {...attributes}
         {...listeners}
+        data-testid="drag-handle"
         className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none"
       >
         <GripVertical className="h-4 w-4" />
@@ -100,8 +108,25 @@ function SortableAddonItem({
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{addon.name}</p>
-        <p className="text-xs text-muted-foreground">{addon.team}</p>
+        <p className="text-xs text-muted-foreground">
+          {addon.team}
+          {overrideCount > 0 && (
+            <span className="ml-2 text-primary">
+              · {overrideCount} overrideable
+            </span>
+          )}
+        </p>
       </div>
+      <button
+        onClick={onConfigure}
+        className={cn(
+          buttonVariants({ variant: "ghost", size: "sm" }),
+          "h-8 px-2"
+        )}
+        title="Configure overrideable fields"
+      >
+        <Settings2 className="h-4 w-4" />
+      </button>
       <Select
         value={addon.version}
         onValueChange={(v) => v && onVersionChange(v)}
@@ -142,6 +167,7 @@ function AddonCatalogCard({
 
   return (
     <div
+      data-testid={`addon-card-${addon.team}-${addon.name}`}
       className={cn(
         "rounded-xl border bg-card p-4 transition-all",
         isSelected
@@ -270,6 +296,10 @@ export default function EditSpecPage() {
   // UI state
   const [reviewOpen, setReviewOpen] = useState(false);
   const [addonSearch, setAddonSearch] = useState("");
+  const [configuringAddon, setConfiguringAddon] = useState<{
+    team: string;
+    name: string;
+  } | null>(null);
 
   // Fetch spec
   const { data: spec, isLoading: specLoading } = useQuery<ClusterSpec>({
@@ -355,7 +385,7 @@ export default function EditSpecPage() {
       team: addon.team,
       name: addon.name,
       version,
-      overrides: {},
+      overrideable: [],
     };
     setSelectedAddons([...effectiveAddons, newAddon]);
   };
@@ -373,6 +403,36 @@ export default function EditSpecPage() {
       )
     );
   };
+
+  // Configure addon overrideable fields
+  const handleConfigureAddon = (team: string, name: string) => {
+    setConfiguringAddon({ team, name });
+  };
+
+  // Save overrideable fields for an addon
+  const handleSaveOverrideable = (fields: OverrideableField[]) => {
+    if (!configuringAddon) return;
+    setSelectedAddons(
+      effectiveAddons.map((a) =>
+        a.team === configuringAddon.team && a.name === configuringAddon.name
+          ? { ...a, overrideable: fields }
+          : a
+      )
+    );
+    setConfiguringAddon(null);
+  };
+
+  // Get the addon being configured and its catalog entry
+  const configuringAddonData = configuringAddon
+    ? effectiveAddons.find(
+        (a) => a.team === configuringAddon.team && a.name === configuringAddon.name
+      )
+    : null;
+  const configuringCatalogEntry = configuringAddon
+    ? addonCatalog?.find(
+        (c) => c.team === configuringAddon.team && c.name === configuringAddon.name
+      )
+    : null;
 
   // Build final spec for save
   const buildFinalSpec = (): ClusterSpec => {
@@ -600,6 +660,9 @@ export default function EditSpecPage() {
                             onVersionChange={(v) =>
                               handleVersionChange(addon.team, addon.name, v)
                             }
+                            onConfigure={() =>
+                              handleConfigureAddon(addon.team, addon.name)
+                            }
                             availableVersions={
                               addonVersionsMap[`${addon.team}/${addon.name}`] ?? [
                                 addon.version,
@@ -655,6 +718,19 @@ export default function EditSpecPage() {
           </p>
         )}
       </ReviewDialog>
+
+      {/* Configure Overrideable Fields Dialog */}
+      {configuringAddon && (
+        <ConfigureOverrideableDialog
+          key={`${configuringAddon.team}/${configuringAddon.name}`}
+          open={true}
+          onOpenChange={(open) => !open && setConfiguringAddon(null)}
+          addonName={configuringAddon.name}
+          defaultValues={configuringCatalogEntry?.default_values ?? {}}
+          currentOverrideable={configuringAddonData?.overrideable ?? []}
+          onSave={handleSaveOverrideable}
+        />
+      )}
     </div>
   );
 }

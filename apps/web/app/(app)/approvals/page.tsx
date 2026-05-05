@@ -17,6 +17,8 @@ function RepoBadge({ repo }: { repo: string }) {
     ? "bg-[#0073ea]/10 text-[#0073ea] dark:bg-[#579bfc]/15 dark:text-[#579bfc]"
     : repo === "day2"
     ? "bg-[#00c875]/10 text-[#007038] dark:bg-[#00c875]/15 dark:text-[#00c875]"
+    : repo === "specs"
+    ? "bg-[#9b51e0]/10 text-[#9b51e0] dark:bg-[#9b51e0]/15 dark:text-[#c490f0]"
     : "bg-muted text-muted-foreground";
   return (
     <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", cls)}>
@@ -28,7 +30,7 @@ function RepoBadge({ repo }: { repo: string }) {
 export default function ApprovalsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [repoFilter, setRepoFilter] = useState<"all" | "day1" | "day2">("all");
+  const [repoFilter, setRepoFilter] = useState<"all" | "day1" | "day2" | "specs">("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -48,7 +50,7 @@ export default function ApprovalsPage() {
   const isFetching = fetchingDay1 || fetchingDay2;
 
   const allMrs: MRDetail[] = useMemo(() => [
-    ...(day1Mrs?.map((mr) => ({ ...mr, repo: "day1" as const })) ?? []),
+    ...(day1Mrs ?? []),  // day1 service returns both day1 and specs MRs with repo field set
     ...(day2Mrs?.map((mr) => ({ ...mr, repo: "day2" as const })) ?? []),
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
   [day1Mrs, day2Mrs]);
@@ -110,7 +112,7 @@ export default function ApprovalsPage() {
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground font-medium">Repo:</span>
-          {(["all", "day1", "day2"] as const).map((r) => (
+          {(["all", "day1", "day2", "specs"] as const).map((r) => (
             <button
               key={r}
               onClick={() => { setRepoFilter(r); setPage(1); }}

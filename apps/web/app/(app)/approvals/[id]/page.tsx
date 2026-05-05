@@ -75,10 +75,11 @@ function FileDiffCard({ diff }: { diff: FileDiff }) {
 // ── Edit MR panel ─────────────────────────────────────────────────────────────
 
 function EditMRPanel({
-  diffs, repo, mrIid, onDone,
+  diffs, repo, apiBase, mrIid, onDone,
 }: {
   diffs: FileDiff[];
   repo: string;
+  apiBase: string;
   mrIid: number;
   onDone: () => void;
 }) {
@@ -104,7 +105,7 @@ function EditMRPanel({
   const updateMutation = useMutation({
     mutationFn: () =>
       api.put<{ mr: MRDetail; diffs: FileDiff[] }>(
-        `/api/${repo}/approvals/${mrIid}`,
+        `/api/${apiBase}/approvals/${mrIid}?repo=${repo}`,
         {
           files: Object.entries(fileContents).map(([path, content]) => ({ path, content })),
           message: message || undefined,
@@ -205,19 +206,23 @@ function MRDetailContent() {
   const [approveReviewOpen, setApproveReviewOpen] = useState(false);
   const [rejectReviewOpen, setRejectReviewOpen] = useState(false);
 
-  const match = id.match(/^(day[12])-(\d+)$/);
+  // Parse repo-iid format: day1-123, day2-456, specs-789
+  const match = id.match(/^(day1|day2|specs)-(\d+)$/);
   const repo = match?.[1] ?? "";
   const mrIid = parseInt(match?.[2] ?? "0", 10);
 
+  // day1 and specs MRs go through day1 service, day2 MRs go through day2 service
+  const apiBase = repo === "day2" ? "day2" : "day1";
+
   const { data, isLoading, error, refetch } = useQuery<MRDetailResponse>({
     queryKey: ["approvals", repo, mrIid],
-    queryFn: () => api.get<MRDetailResponse>(`/api/${repo}/approvals/${mrIid}`),
+    queryFn: () => api.get<MRDetailResponse>(`/api/${apiBase}/approvals/${mrIid}?repo=${repo}`),
     enabled: Boolean(repo && mrIid),
     staleTime: 15_000,
   });
 
   const approveMutation = useMutation({
-    mutationFn: () => api.post(`/api/${repo}/approvals/${mrIid}/approve`, {}),
+    mutationFn: () => api.post(`/api/${apiBase}/approvals/${mrIid}/approve?repo=${repo}`, {}),
     onSuccess: () => {
       toast.success("MR approved and merged");
       setApproveReviewOpen(false);
@@ -228,7 +233,7 @@ function MRDetailContent() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: () => api.post(`/api/${repo}/approvals/${mrIid}/reject`, {}),
+    mutationFn: () => api.post(`/api/${apiBase}/approvals/${mrIid}/reject?repo=${repo}`, {}),
     onSuccess: () => {
       toast.success("MR rejected");
       setRejectReviewOpen(false);
@@ -242,7 +247,7 @@ function MRDetailContent() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Invalid MR ID format: <code>{id}</code>. Expected format: day1-123 or day2-456.
+          Invalid MR ID format: <code>{id}</code>. Expected format: day1-123, day2-456, or specs-789.
         </div>
       </div>
     );
@@ -259,6 +264,8 @@ function MRDetailContent() {
 
   const repoCls = repo === "day1"
     ? "bg-[#0073ea]/10 text-[#0073ea]"
+    : repo === "specs"
+    ? "bg-[#9b51e0]/10 text-[#9b51e0]"
     : "bg-[#00c875]/10 text-[#007038] dark:text-[#00c875]";
 
   return (
@@ -374,6 +381,7 @@ function MRDetailContent() {
               <EditMRPanel
                 diffs={diffs}
                 repo={repo}
+                apiBase={apiBase}
                 mrIid={mrIid}
                 onDone={() => { setEditing(false); refetch(); }}
               />

@@ -33,11 +33,20 @@ class SpecVariable(BaseModel):
     maximum: int | None = None
 
 
+class OverrideableField(BaseModel):
+    """A field that cluster creators can override when using a spec."""
+
+    path: str  # dot-notation path, e.g. "replicas" or "config.timeout"
+    type: Literal["string", "integer", "boolean", "object", "array"] = "string"
+    default: Any = None
+    description: str = ""
+
+
 class SpecAddon(BaseModel):
     team: str
     name: str
     version: str
-    overrides: dict[str, Any] = Field(default_factory=dict)
+    overrideable: list[OverrideableField] = Field(default_factory=list)
 
 
 class Day1Config(BaseModel):
@@ -83,6 +92,9 @@ class ClusterMetadata(BaseModel):
     site: str
     mce: str
     variables: dict[str, Any] = Field(default_factory=dict)
+    addon_overrides: dict[str, dict[str, Any]] = Field(
+        alias="addonOverrides", default_factory=dict
+    )
 
     model_config = {"populate_by_name": True}
 

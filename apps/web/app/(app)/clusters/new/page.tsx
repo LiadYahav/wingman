@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
-import type { ClusterSpec, MRDetail, SpecVariable } from "@/types";
+import type { ClusterSpec, MRDetail, SpecVariable, OverrideableField } from "@/types";
 
 const CREATE_NEW = "__create_new__";
 
@@ -105,6 +105,85 @@ function VariableField({
   );
 }
 
+// ── Override field ─────────────────────────────────────────────────────────────
+
+function OverrideField({
+  field,
+  value,
+  onChange,
+}: {
+  field: OverrideableField;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const base =
+    "w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow";
+
+  // Detect actual value type (may differ from field.type for backwards compat)
+  const isArrayValue = Array.isArray(value);
+  const isObjectValue = value !== null && typeof value === "object" && !isArrayValue;
+  const effectiveType = isArrayValue ? "array" : isObjectValue ? "object" : field.type;
+
+  if (effectiveType === "boolean") {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id={field.path}
+          checked={Boolean(value)}
+          onChange={(e) => onChange(e.target.checked)}
+          className="h-4 w-4 rounded border-border text-primary"
+        />
+        <label htmlFor={field.path} className="text-sm text-muted-foreground">
+          {field.description || field.path}
+        </label>
+      </div>
+    );
+  }
+
+  if (effectiveType === "integer") {
+    return (
+      <input
+        type="number"
+        className={base}
+        value={String(value ?? "")}
+        onChange={(e) =>
+          onChange(e.target.value === "" ? "" : Number(e.target.value))
+        }
+      />
+    );
+  }
+
+  if (effectiveType === "object" || effectiveType === "array") {
+    const jsonStr = typeof value === "string" ? value : JSON.stringify(value ?? (effectiveType === "array" ? [] : {}), null, 2);
+    return (
+      <textarea
+        className={cn(base, "font-mono text-xs min-h-[100px] resize-y")}
+        value={jsonStr}
+        placeholder={`Enter ${effectiveType} as JSON...`}
+        onChange={(e) => {
+          try {
+            const parsed = JSON.parse(e.target.value);
+            onChange(parsed);
+          } catch {
+            onChange(e.target.value);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      className={base}
+      value={String(value ?? "")}
+      placeholder={field.description || field.path}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function NewClusterPage() {
@@ -119,6 +198,9 @@ export default function NewClusterPage() {
   const [mce, setMce] = useState("");
   const [newMceName, setNewMceName] = useState("");
   const [variables, setVariables] = useState<Record<string, unknown>>({});
+  const [addonOverrides, setAddonOverrides] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
   const [reviewOpen, setReviewOpen] = useState(false);
 
   const { data: specs, isLoading } = useQuery<ClusterSpec[]>({
@@ -168,6 +250,7 @@ export default function NewClusterPage() {
         spec_name: selectedSpec!.metadata.name,
         spec_version: selectedSpec!.metadata.version,
         variables,
+        addon_overrides: addonOverrides,
       }),
     onSuccess: (mr) => {
       toast.success(`MR #${mr.iid} created: ${mr.title}`);
@@ -200,6 +283,21 @@ export default function NewClusterPage() {
       if (v.default !== undefined) defaults[v.name] = v.default;
     }
     setVariables(defaults);
+
+    // Initialize addon overrides with default values
+    const overrides: Record<string, Record<string, unknown>> = {};
+    for (const addon of spec.spec.day2.addons) {
+      const addonKey = `${addon.team}/${addon.name}`;
+      if (addon.overrideable && addon.overrideable.length > 0) {
+        overrides[addonKey] = {};
+        for (const field of addon.overrideable) {
+          if (field.default !== undefined) {
+            overrides[addonKey][field.path] = field.default;
+          }
+        }
+      }
+    }
+    setAddonOverrides(overrides);
     setStep("vars");
   };
 
@@ -436,20 +534,68 @@ export default function NewClusterPage() {
             </div>
           )}
 
-          {/* Addons preview */}
+          {/* Addons and overrides */}
           {selectedSpec.spec.day2.addons.length > 0 && (
-            <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
-              <h2 className="text-sm font-semibold">Addons (from spec)</h2>
-              <div className="flex flex-wrap gap-2">
-                {selectedSpec.spec.day2.addons.map((addon) => (
-                  <span
-                    key={`${addon.team}/${addon.name}`}
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-muted text-muted-foreground"
-                  >
-                    {addon.name}
-                    <span className="rounded-full bg-background px-1.5 py-0.5 text-xs">{addon.version}</span>
-                  </span>
-                ))}
+            <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
+              <h2 className="text-sm font-semibold">Addons</h2>
+              <div className="space-y-4">
+                {selectedSpec.spec.day2.addons.map((addon) => {
+                  const addonKey = `${addon.team}/${addon.name}`;
+                  const hasOverrides = addon.overrideable && addon.overrideable.length > 0;
+                  return (
+                    <div
+                      key={addonKey}
+                      className={cn(
+                        "rounded-lg border p-4",
+                        hasOverrides ? "bg-muted/20" : "bg-muted/10"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{addon.name}</span>
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                            {addon.version}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{addon.team}</span>
+                      </div>
+                      {hasOverrides && (
+                        <div className="mt-3 pt-3 border-t space-y-3">
+                          <p className="text-xs text-muted-foreground">
+                            Customize values for this addon:
+                          </p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {addon.overrideable!.map((field) => (
+                              <div key={field.path} className="space-y-1.5">
+                                <label className="text-xs font-medium text-muted-foreground">
+                                  {field.path}
+                                </label>
+                                <OverrideField
+                                  field={field}
+                                  value={addonOverrides[addonKey]?.[field.path] ?? field.default ?? ""}
+                                  onChange={(val) =>
+                                    setAddonOverrides((prev) => ({
+                                      ...prev,
+                                      [addonKey]: {
+                                        ...prev[addonKey],
+                                        [field.path]: val,
+                                      },
+                                    }))
+                                  }
+                                />
+                                {field.description && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {field.description}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -530,13 +676,30 @@ export default function NewClusterPage() {
               <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 Addons ({selectedSpec.spec.day2.addons.length})
               </p>
-              <div className="space-y-1">
-                {selectedSpec.spec.day2.addons.map((addon) => (
-                  <div key={`${addon.team}/${addon.name}`} className="flex gap-3">
-                    <span className="text-muted-foreground w-28 shrink-0 truncate">{addon.name}</span>
-                    <span className="font-medium">v{addon.version} · {addon.team}</span>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                {selectedSpec.spec.day2.addons.map((addon) => {
+                  const addonKey = `${addon.team}/${addon.name}`;
+                  const overrides = addonOverrides[addonKey] ?? {};
+                  const hasOverrides = Object.keys(overrides).length > 0;
+                  return (
+                    <div key={addonKey}>
+                      <div className="flex gap-3">
+                        <span className="text-muted-foreground w-28 shrink-0 truncate">{addon.name}</span>
+                        <span className="font-medium">v{addon.version} · {addon.team}</span>
+                      </div>
+                      {hasOverrides && (
+                        <div className="ml-28 mt-1 pl-3 border-l-2 border-primary/20 space-y-0.5">
+                          {Object.entries(overrides).map(([path, value]) => (
+                            <div key={path} className="flex gap-2 text-xs">
+                              <span className="text-primary/70">{path}:</span>
+                              <span className="font-medium">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

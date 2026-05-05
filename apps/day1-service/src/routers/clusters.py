@@ -44,6 +44,7 @@ class CreateClusterRequest(BaseModel):
     spec_name: str
     spec_version: str
     variables: dict[str, Any]
+    addon_overrides: dict[str, dict[str, Any]] | None = None
 
 
 class ModifyClusterRequest(BaseModel):
@@ -233,6 +234,7 @@ async def create_cluster(
         spec_name=body.spec_name,
         spec_version=body.spec_version,
         variables=variables_with_defaults,
+        addon_overrides=body.addon_overrides or {},
         current_user=user,
     )
 

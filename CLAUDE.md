@@ -131,9 +131,44 @@ uvx ruff check apps/day1-service apps/day2-service packages/shared-python
 uvx mypy apps/day1-service/src --ignore-missing-imports
 uvx mypy apps/day2-service/src --ignore-missing-imports
 
-# Frontend
+# Frontend lint and build
 cd apps/web && npm run lint && npm run build
+
+# Frontend E2E tests (Playwright)
+cd apps/web && npm run test:e2e          # Run all tests headless
+cd apps/web && npm run test:e2e:ui       # Interactive test UI
+cd apps/web && npm run test:e2e:headed   # Run tests in visible browser
 ```
+
+## E2E Testing with Playwright
+
+E2E tests are located in `apps/web/e2e/`:
+
+```
+e2e/
+├── fixtures/          # Mock data and API handlers
+│   ├── addons.ts      # Mock addon catalog data
+│   └── api-handlers.ts# Route mocking utilities
+├── pages/             # Page objects for test abstraction
+│   ├── spec-new.page.ts
+│   ├── spec-edit.page.ts
+│   ├── cluster-new.page.ts
+│   └── configure-dialog.page.ts
+└── tests/             # Test files
+    ├── spec-creation.spec.ts
+    ├── addon-configuration.spec.ts
+    ├── addon-reordering.spec.ts
+    └── field-type-handling.spec.ts
+```
+
+### data-testid Conventions
+
+Use `data-testid` attributes for E2E test selectors:
+- Addon cards: `data-testid="addon-card-{team}-{name}"`
+- Selected addons: `data-testid="selected-addon-{team}-{name}"`
+- Field rows: `data-testid="field-row-{path}"` (dots replaced with dashes)
+- Drag handles: `data-testid="drag-handle"`
+- Save buttons: `data-testid="save-config-button"`
 
 ## Building Docker Images
 
@@ -163,6 +198,8 @@ docker save wingman-day1:latest | gzip > wingman-day1.tar.gz
 | `apps/day1-service/src/services/cluster_service.py` | Cluster provisioning logic |
 | `apps/web/lib/api-client.ts` | Frontend API client |
 | `apps/web/types/index.ts` | TypeScript type definitions |
+| `apps/web/components/specs/configure-overrideable-dialog.tsx` | Day2 addon field configuration dialog |
+| `apps/web/e2e/` | Playwright E2E tests directory |
 
 ## Performance Guidelines
 

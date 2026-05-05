@@ -156,21 +156,43 @@ class ClusterService:
         )
 
     async def _get_cluster_metadata(self, *, site: str, mce: str, cluster: str) -> ClusterMetadata:
-        """Derive cluster metadata from the cluster YAML file.
+        """Derive cluster metadata from the cluster YAML file and .wingman.yaml metadata.
 
-        - specName / specVersion: parsed from leading # comments in the file
-        - created_by / created_at: read from the git commit that last touched the file
+        - specName / specVersion: from .wingman.yaml or leading # comments in cluster YAML
+        - created_by / created_at: read from the git commit that last touched the cluster file
+        - variables / addonOverrides: from .wingman.yaml if present
         """
         cluster_path = self.pr.day1_cluster_file(site=site, mce=mce, cluster=cluster)
+        metadata_path = self.pr.day1_cluster_metadata(site=site, mce=mce, cluster=cluster)
 
         async def _fetch() -> ClusterMetadata:
+            import yaml  # type: ignore[import-untyped]
+
             created_by = ""
             created_at = None
             spec_name = ""
             spec_version = ""
+            variables: dict[str, Any] = {}
+            addon_overrides: dict[str, dict[str, Any]] = {}
+
+            # Try reading .wingman.yaml metadata file first
+            try:
+                meta_content, _ = await self.gl.aread_file(metadata_path, ref=self.default_branch)
+                meta_data = yaml.safe_load(meta_content) or {}
+                spec_name = meta_data.get("specName", "")
+                spec_version = meta_data.get("specVersion", "")
+                variables = meta_data.get("variables", {})
+                addon_overrides = meta_data.get("addonOverrides", {})
+            except NotFoundError:
+                pass  # No metadata file, fall back to parsing comments
+            except Exception as exc:
+                logger.warning("Could not parse metadata file %s: %s", metadata_path, exc)
+
+            # Read cluster file for commit info and fallback spec parsing
             try:
                 content, commit_sha = await self.gl.aread_file(cluster_path, ref=self.default_branch)
-                spec_name, spec_version = _parse_spec_comments(content)
+                if not spec_name:  # Fall back to parsing comments if no .wingman.yaml
+                    spec_name, spec_version = _parse_spec_comments(content)
                 commit = self.gl.get_commit(commit_sha)
                 created_by = commit.get("author_name", "")
                 created_at = datetime.fromisoformat(commit["authored_date"])
@@ -184,6 +206,8 @@ class ClusterService:
                 spec_version=spec_version,
                 created_by=created_by,
                 created_at=created_at,
+                variables=variables,
+                addon_overrides=addon_overrides,
             )
 
         return await self.cache.get_or_fetch(
@@ -200,28 +224,12 @@ class ClusterService:
 
         async def _fetch() -> dict[str, Any]:
             try:
-                yaml_content, commit_sha = await self.gl.aread_file(cluster_path, ref=self.default_branch)
+                yaml_content, _ = await self.gl.aread_file(cluster_path, ref=self.default_branch)
             except NotFoundError as exc:
                 raise HTTPException(status_code=404, detail=f"Cluster '{name}' not found") from exc
 
-            spec_name, spec_version = _parse_spec_comments(yaml_content)
-            created_by = ""
-            created_at = None
-            try:
-                commit = self.gl.get_commit(commit_sha)
-                created_by = commit.get("author_name", "")
-                created_at = datetime.fromisoformat(commit["authored_date"])
-            except Exception as exc:
-                logger.warning("Could not read commit info for %s: %s", cluster_path, exc)
-
-            metadata = ClusterMetadata(
-                site=site,
-                mce=mce,
-                spec_name=spec_name or _NO_SPEC,
-                spec_version=spec_version,
-                created_by=created_by,
-                created_at=created_at,
-            )
+            # Use the shared metadata fetching logic
+            metadata = await self._get_cluster_metadata(site=site, mce=mce, cluster=name)
 
             return {
                 "name": name,
@@ -250,6 +258,7 @@ class ClusterService:
         spec_name: str,
         spec_version: str,
         variables: dict[str, Any],
+        addon_overrides: dict[str, dict[str, Any]] | None = None,
         current_user: UserInfo,
     ) -> MRDetail:
         """Create a new cluster by committing files and opening an MR.
@@ -262,12 +271,14 @@ class ClusterService:
             spec_name: Name of the spec used
             spec_version: Version of the spec used
             variables: Input variables for the metadata file
+            addon_overrides: Per-addon field overrides (team/name -> path -> value)
             current_user: The user creating the cluster
 
         Returns:
             MRDetail for the created merge request.
         """
         cluster_path = self.pr.day1_cluster_file(site=site, mce=mce, cluster=name)
+        metadata_path = self.pr.day1_cluster_metadata(site=site, mce=mce, cluster=name)
 
         # Check for name collision
         if self.gl.file_exists(cluster_path, ref=self.default_branch):
@@ -278,6 +289,20 @@ class ClusterService:
 
         # Embed spec metadata as comments at the top of the cluster YAML
         rendered_yaml = _prepend_spec_comments(rendered_yaml, spec_name, spec_version)
+
+        # Build .wingman.yaml metadata file (stored variables and addon overrides)
+        import yaml
+
+        metadata_content = yaml.safe_dump(
+            {
+                "specName": spec_name,
+                "specVersion": spec_version,
+                "variables": variables,
+                "addonOverrides": addon_overrides or {},
+            },
+            default_flow_style=False,
+            allow_unicode=True,
+        )
 
         branch = make_branch_name(current_user.username, "create-cluster", name)
         mr_title = make_mr_title("Day1", "Create", "cluster", name, f"from spec {spec_name}")
@@ -302,6 +327,7 @@ class ClusterService:
                 message=commit_message,
                 actions=[
                     {"action": "create", "file_path": cluster_path, "content": rendered_yaml},
+                    {"action": "create", "file_path": metadata_path, "content": metadata_content},
                 ],
                 start_branch=self.default_branch,
                 author_name=current_user.username,

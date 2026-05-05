@@ -69,33 +69,14 @@ class ApprovalService:
             "approvals:combined:list", _fetch, ttl=self._ttl
         )
 
-    def _determine_repo_from_mr(self, mr_iid: int) -> RepoType:
-        """Try to find which repo an MR belongs to by checking both."""
-        # Try day1 first
-        try:
-            self.gl_day1.get_mr(mr_iid)
-            return "day1"
-        except NotFoundError:
-            pass
-
-        # Try specs
-        try:
-            self.gl_specs.get_mr(mr_iid)
-            return "specs"
-        except NotFoundError:
-            pass
-
-        raise NotFoundError(f"MR !{mr_iid} not found in any repo")
-
-    async def get_mr_detail(self, mr_iid: int) -> dict[str, Any]:
+    async def get_mr_detail(self, mr_iid: int, repo: RepoType) -> dict[str, Any]:
         """Get MR metadata + file diffs."""
+        gl = self._get_client(repo)
         try:
-            repo = self._determine_repo_from_mr(mr_iid)
-            gl = self._get_client(repo)
             raw = gl.get_mr(mr_iid)
             diffs = gl.get_mr_diff(mr_iid)
         except NotFoundError as exc:
-            raise HTTPException(status_code=404, detail=f"MR !{mr_iid} not found") from exc
+            raise HTTPException(status_code=404, detail=f"MR !{mr_iid} not found in {repo}") from exc
         except GitLabError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -118,14 +99,13 @@ class ApprovalService:
             "diffs": [d.model_dump() for d in file_diffs],
         }
 
-    async def approve_mr(self, mr_iid: int, approver: UserInfo) -> MRDetail:
+    async def approve_mr(self, mr_iid: int, repo: RepoType, approver: UserInfo) -> MRDetail:
         """Approve and merge an MR. Enforces: approver != author."""
+        gl = self._get_client(repo)
         try:
-            repo = self._determine_repo_from_mr(mr_iid)
-            gl = self._get_client(repo)
             raw = gl.get_mr(mr_iid)
         except NotFoundError as exc:
-            raise HTTPException(status_code=404, detail=f"MR !{mr_iid} not found") from exc
+            raise HTTPException(status_code=404, detail=f"MR !{mr_iid} not found in {repo}") from exc
 
         mr = parse_mr_to_detail(raw)
         mr.repo = repo
@@ -171,14 +151,15 @@ class ApprovalService:
         except Exception:
             return mr
 
-    async def update_mr(self, mr_iid: int, req: UpdateMRRequest, updater: UserInfo) -> dict:
+    async def update_mr(
+        self, mr_iid: int, repo: RepoType, req: UpdateMRRequest, updater: UserInfo
+    ) -> dict:
         """Push new file content to an existing MR's source branch."""
+        gl = self._get_client(repo)
         try:
-            repo = self._determine_repo_from_mr(mr_iid)
-            gl = self._get_client(repo)
             raw = gl.get_mr(mr_iid)
         except NotFoundError as exc:
-            raise HTTPException(status_code=404, detail=f"MR !{mr_iid} not found") from exc
+            raise HTTPException(status_code=404, detail=f"MR !{mr_iid} not found in {repo}") from exc
 
         mr = parse_mr_to_detail(raw)
         if mr.state != "opened":
@@ -200,16 +181,15 @@ class ApprovalService:
             raise HTTPException(status_code=500, detail=f"Failed to update MR: {exc}") from exc
 
         self.cache.invalidate("approvals:combined:list")
-        return await self.get_mr_detail(mr_iid)
+        return await self.get_mr_detail(mr_iid, repo)
 
-    async def reject_mr(self, mr_iid: int, rejector: UserInfo) -> MRDetail:
+    async def reject_mr(self, mr_iid: int, repo: RepoType, rejector: UserInfo) -> MRDetail:
         """Close an MR without merging."""
+        gl = self._get_client(repo)
         try:
-            repo = self._determine_repo_from_mr(mr_iid)
-            gl = self._get_client(repo)
             raw = gl.get_mr(mr_iid)
         except NotFoundError as exc:
-            raise HTTPException(status_code=404, detail=f"MR !{mr_iid} not found") from exc
+            raise HTTPException(status_code=404, detail=f"MR !{mr_iid} not found in {repo}") from exc
 
         mr = parse_mr_to_detail(raw)
         mr.repo = repo
