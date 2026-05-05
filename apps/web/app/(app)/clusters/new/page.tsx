@@ -24,6 +24,12 @@ import type { ClusterSpec, MRDetail, SpecVariable } from "@/types";
 
 const CREATE_NEW = "__create_new__";
 
+function formatVariableName(name: string): string {
+  return name
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 // ── Variable field ─────────────────────────────────────────────────────────────
 
 function VariableField({
@@ -53,10 +59,16 @@ function VariableField({
 
   if (variable.enum) {
     return (
-      <select className={base} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Select…</option>
-        {variable.enum.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-      </select>
+      <Select value={String(value ?? "")} onValueChange={(v) => onChange(v ?? "")}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select…" />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false}>
+          {variable.enum.map((opt) => (
+            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     );
   }
 
@@ -309,7 +321,7 @@ export default function NewClusterPage() {
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select site…" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent alignItemWithTrigger={false}>
                     {sites.map((s) => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
@@ -352,7 +364,7 @@ export default function NewClusterPage() {
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder={!site ? "Select site first…" : "Select MCE…"} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent alignItemWithTrigger={false}>
                     {mces.map((m) => (
                       <SelectItem key={m} value={m}>{m}</SelectItem>
                     ))}
@@ -398,7 +410,7 @@ export default function NewClusterPage() {
                 {selectedSpec.spec.day1.variables.map((v) => (
                   <div key={v.name} className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {v.name}
+                      {formatVariableName(v.name)}
                       {v.required && <span className="text-destructive ml-0.5">*</span>}
                     </label>
                     <VariableField
