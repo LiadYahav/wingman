@@ -442,9 +442,7 @@ class AddonService:
         if version and version != team_default_version:
             meta_overrides["targetRevision"] = version
 
-        values_yaml = (
-            dump_multi_document([override_values]) if override_values else dump_multi_document([{}])
-        )
+        values_yaml = dump_multi_document([override_values]) if override_values else ""
         meta_yaml = dump_multi_document([meta_overrides])
 
         # Get repo URL with fallback
