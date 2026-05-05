@@ -152,6 +152,7 @@ class MRDetail(BaseModel):
     source_branch: str
     target_branch: str
     labels: list[str] = Field(default_factory=list)
+    repo: Literal["day1", "day2", "specs"] = "day1"  # which GitLab repo this MR belongs to
 
 
 class FileDiff(BaseModel):
