@@ -10,6 +10,14 @@ import { api } from "@/lib/api-client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { ClusterSpec, MRDetail, SpecVariable } from "@/types";
@@ -187,10 +195,14 @@ export default function NewClusterPage() {
     setReviewOpen(true);
   };
 
-  const handleSiteChange = (value: string) => {
-    setSite(value);
+  const handleSiteChange = (value: string | null) => {
+    setSite(value ?? "");
     setMce("");
     setNewMceName("");
+  };
+
+  const handleMceChange = (value: string | null) => {
+    setMce(value ?? "");
   };
 
   return (
@@ -293,16 +305,21 @@ export default function NewClusterPage() {
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Site <span className="text-destructive">*</span>
                 </label>
-                <select
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-                  value={site}
-                  onChange={(e) => handleSiteChange(e.target.value)}
-                  disabled={sitesLoading}
-                >
-                  <option value="">Select site…</option>
-                  {sites.map((s) => <option key={s} value={s}>{s}</option>)}
-                  <option value={CREATE_NEW}>+ Create new site</option>
-                </select>
+                <Select value={site} onValueChange={handleSiteChange} disabled={sitesLoading}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select site…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sites.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                    {sites.length > 0 && <SelectSeparator />}
+                    <SelectItem value={CREATE_NEW}>
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Create new site
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
                 {site === CREATE_NEW && (
                   <div className="flex gap-2 mt-2">
                     <input
@@ -327,16 +344,29 @@ export default function NewClusterPage() {
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   MCE <span className="text-destructive">*</span>
                 </label>
-                <select
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
+                <Select
                   value={mce}
-                  onChange={(e) => setMce(e.target.value)}
+                  onValueChange={handleMceChange}
                   disabled={!site || site === CREATE_NEW || mcesLoading}
                 >
-                  <option value="">{!site ? "Select site first…" : "Select MCE…"}</option>
-                  {mces.map((m) => <option key={m} value={m}>{m}</option>)}
-                  {site && site !== CREATE_NEW && <option value={CREATE_NEW}>+ Create new MCE</option>}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={!site ? "Select site first…" : "Select MCE…"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mces.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                    {site && site !== CREATE_NEW && (
+                      <>
+                        {mces.length > 0 && <SelectSeparator />}
+                        <SelectItem value={CREATE_NEW}>
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Create new MCE
+                        </SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
                 {mce === CREATE_NEW && site && site !== CREATE_NEW && (
                   <div className="flex gap-2 mt-2">
                     <input
