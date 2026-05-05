@@ -24,6 +24,15 @@ import type { ClusterSpec, MRDetail, SpecVariable } from "@/types";
 
 const CREATE_NEW = "__create_new__";
 
+// Variables handled by Cluster Identity section — filter from Spec Variables
+const IDENTITY_VARIABLES = new Set([
+  "cluster_name",
+  "site_name",
+  "site",
+  "mce_name",
+  "mce",
+]);
+
 function formatVariableName(name: string): string {
   return name
     .replace(/_/g, " ")
@@ -402,12 +411,12 @@ export default function NewClusterPage() {
             </div>
           </div>
 
-          {/* Spec variables */}
-          {selectedSpec.spec.day1.variables.length > 0 && (
+          {/* Spec variables (excluding identity fields already captured above) */}
+          {selectedSpec.spec.day1.variables.filter((v) => !IDENTITY_VARIABLES.has(v.name)).length > 0 && (
             <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
               <h2 className="text-sm font-semibold">Spec Variables</h2>
               <div className="grid gap-4 sm:grid-cols-2">
-                {selectedSpec.spec.day1.variables.map((v) => (
+                {selectedSpec.spec.day1.variables.filter((v) => !IDENTITY_VARIABLES.has(v.name)).map((v) => (
                   <div key={v.name} className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       {formatVariableName(v.name)}

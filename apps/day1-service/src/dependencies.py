@@ -168,13 +168,14 @@ def get_spec_service(
 
 def get_approval_service(
     gl_day1: Annotated[GitLabClient, Depends(get_gitlab_day1)],
+    gl_specs: Annotated[GitLabClient, Depends(get_gitlab_specs)],
     cache: Annotated[CacheManager, Depends(get_cache)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ApprovalService:
     return ApprovalService(
-        gitlab_client=gl_day1,
+        gitlab_day1=gl_day1,
+        gitlab_specs=gl_specs,
         cache=cache,
-        cache_key_prefix="day1",
         cache_ttl=settings.CACHE_APPROVALS_TTL,
     )
 

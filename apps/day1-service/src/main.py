@@ -63,9 +63,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     default_branch=settings.GITLAB_DEFAULT_BRANCH,
                 )
                 approval_svc = ApprovalService(
-                    gitlab_client=gl_day1,
+                    gitlab_day1=gl_day1,
+                    gitlab_specs=gl_specs,
                     cache=cache,
-                    cache_key_prefix="day1",
                     cache_ttl=settings.CACHE_APPROVALS_TTL,
                 )
 
