@@ -99,7 +99,7 @@ function SortableAddonItem({
         {...attributes}
         {...listeners}
         data-testid="drag-handle"
-        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none"
+        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none shrink-0"
       >
         <GripVertical className="h-4 w-4" />
       </button>
@@ -108,7 +108,7 @@ function SortableAddonItem({
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{addon.name}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground truncate">
           {addon.team}
           {overrideCount > 0 && (
             <span className="ml-2 text-primary">
@@ -121,30 +121,32 @@ function SortableAddonItem({
         onClick={onConfigure}
         className={cn(
           buttonVariants({ variant: "ghost", size: "sm" }),
-          "h-8 px-2"
+          "h-8 px-2 shrink-0"
         )}
         title="Configure overrideable fields"
       >
         <Settings2 className="h-4 w-4" />
       </button>
-      <Select
-        value={addon.version}
-        onValueChange={(v) => v && onVersionChange(v)}
-      >
-        <SelectTrigger className="w-24 h-8 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          {availableVersions.map((v) => (
-            <SelectItem key={v} value={v}>
-              {v}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="shrink-0">
+        <Select
+          value={addon.version}
+          onValueChange={(v) => v && onVersionChange(v)}
+        >
+          <SelectTrigger className="w-24 h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            {availableVersions.map((v) => (
+              <SelectItem key={v} value={v}>
+                {v}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <button
         onClick={onRemove}
-        className="text-muted-foreground hover:text-destructive transition-colors"
+        className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
       >
         <X className="h-4 w-4" />
       </button>
