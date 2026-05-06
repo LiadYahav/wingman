@@ -156,43 +156,22 @@ class ClusterService:
         )
 
     async def _get_cluster_metadata(self, *, site: str, mce: str, cluster: str) -> ClusterMetadata:
-        """Derive cluster metadata from the cluster YAML file and .wingman.yaml metadata.
+        """Derive cluster metadata from the cluster YAML file.
 
-        - specName / specVersion: from .wingman.yaml or leading # comments in cluster YAML
+        - specName / specVersion: parsed from leading # comments in the cluster YAML
         - created_by / created_at: read from the git commit that last touched the cluster file
-        - variables / addonOverrides: from .wingman.yaml if present
         """
         cluster_path = self.pr.day1_cluster_file(site=site, mce=mce, cluster=cluster)
-        metadata_path = self.pr.day1_cluster_metadata(site=site, mce=mce, cluster=cluster)
 
         async def _fetch() -> ClusterMetadata:
-            import yaml  # type: ignore[import-untyped]
-
             created_by = ""
             created_at = None
             spec_name = ""
             spec_version = ""
-            variables: dict[str, Any] = {}
-            addon_overrides: dict[str, dict[str, Any]] = {}
 
-            # Try reading .wingman.yaml metadata file first
-            try:
-                meta_content, _ = await self.gl.aread_file(metadata_path, ref=self.default_branch)
-                meta_data = yaml.safe_load(meta_content) or {}
-                spec_name = meta_data.get("specName", "")
-                spec_version = meta_data.get("specVersion", "")
-                variables = meta_data.get("variables", {})
-                addon_overrides = meta_data.get("addonOverrides", {})
-            except NotFoundError:
-                pass  # No metadata file, fall back to parsing comments
-            except Exception as exc:
-                logger.warning("Could not parse metadata file %s: %s", metadata_path, exc)
-
-            # Read cluster file for commit info and fallback spec parsing
             try:
                 content, commit_sha = await self.gl.aread_file(cluster_path, ref=self.default_branch)
-                if not spec_name:  # Fall back to parsing comments if no .wingman.yaml
-                    spec_name, spec_version = _parse_spec_comments(content)
+                spec_name, spec_version = _parse_spec_comments(content)
                 commit = self.gl.get_commit(commit_sha)
                 created_by = commit.get("author_name", "")
                 created_at = datetime.fromisoformat(commit["authored_date"])
@@ -206,8 +185,6 @@ class ClusterService:
                 spec_version=spec_version,
                 created_by=created_by,
                 created_at=created_at,
-                variables=variables,
-                addon_overrides=addon_overrides,
             )
 
         return await self.cache.get_or_fetch(
