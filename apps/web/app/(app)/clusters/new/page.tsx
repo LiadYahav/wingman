@@ -556,6 +556,7 @@ export default function NewClusterPage() {
     if (!effectiveSite) { toast.error("Site is required"); return; }
     if (!effectiveMce) { toast.error("MCE is required"); return; }
     for (const v of selectedSpec!.spec.day1.variables) {
+      if (IDENTITY_VARIABLES.has(v.name)) continue;
       if (v.required && !variables[v.name] && variables[v.name] !== 0 && variables[v.name] !== false) {
         toast.error(`Variable "${v.name}" is required`);
         return;
