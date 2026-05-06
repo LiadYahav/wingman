@@ -33,12 +33,17 @@ def render_spec(spec: ClusterSpec, variables: dict[str, Any]) -> str:
     Raises:
         RenderError: if a required variable is missing, undefined, or template is invalid.
     """
+    if not spec.spec.day1.template.strip():
+        raise RenderError("Spec has no template — add a .j2 template file or set day1.template in the spec YAML")
+
     _validate_variables(spec, variables)
 
     env = Environment(
         undefined=StrictUndefined,  # raise on any missing variable
         autoescape=False,  # YAML, not HTML
         keep_trailing_newline=True,
+        trim_blocks=True,   # remove newline after {% %} tags
+        lstrip_blocks=True, # strip leading whitespace before {% %} tags
     )
 
     try:

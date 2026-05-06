@@ -16,6 +16,7 @@ import {
   GripVertical,
   Tag,
   Settings2,
+  FileCode2,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsYaml from "js-yaml";
@@ -53,39 +54,6 @@ import {
 import { ConfigureOverrideableDialog } from "@/components/specs/configure-overrideable-dialog";
 import type { MRDetail, AddonCatalogEntry, SpecAddon, ClusterSpec, OverrideableField } from "@/types";
 
-const DAY1_TEMPLATE = `apiVersion: wingman.io/v1
-kind: ClusterSpec
-metadata:
-  name: my-spec
-  description: "Describe your cluster spec"
-  version: "1.0.0"
-  labels:
-    tier: production
-spec:
-  day1:
-    variables:
-      - name: cluster_name
-        type: string
-        required: true
-        description: "Name of the cluster"
-      - name: ocp_version
-        type: string
-        required: true
-        enum:
-          - "4.14.12"
-          - "4.15.3"
-          - "4.16.0"
-    template: |
-      ---
-      apiVersion: hypershift.openshift.io/v1beta1
-      kind: HostedCluster
-      metadata:
-        name: {{ cluster_name }}
-      spec:
-        release:
-          image: registry.internal/ocp-release:{{ ocp_version }}
-`;
-
 // ── Sortable Addon Item ───────────────────────────────────────────────────────
 
 function SortableAddonItem({
@@ -112,11 +80,7 @@ function SortableAddonItem({
     isDragging,
   } = useSortable({ id: `${addon.team}/${addon.name}` });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
+  const style = { transform: CSS.Transform.toString(transform), transition };
   const overrideCount = addon.overrideable?.length ?? 0;
 
   return (
@@ -145,35 +109,25 @@ function SortableAddonItem({
         <p className="text-xs text-muted-foreground truncate">
           {addon.team}
           {overrideCount > 0 && (
-            <span className="ml-2 text-primary">
-              · {overrideCount} overrideable
-            </span>
+            <span className="ml-2 text-primary">· {overrideCount} overrideable</span>
           )}
         </p>
       </div>
       <button
         onClick={onConfigure}
-        className={cn(
-          buttonVariants({ variant: "ghost", size: "sm" }),
-          "h-8 px-2 shrink-0"
-        )}
+        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-8 px-2 shrink-0")}
         title="Configure overrideable fields"
       >
         <Settings2 className="h-4 w-4" />
       </button>
       <div className="shrink-0">
-        <Select
-          value={addon.version}
-          onValueChange={(v) => v && onVersionChange(v)}
-        >
+        <Select value={addon.version} onValueChange={(v) => v && onVersionChange(v)}>
           <SelectTrigger className="w-24 h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
             {availableVersions.map((v) => (
-              <SelectItem key={v} value={v}>
-                {v}
-              </SelectItem>
+              <SelectItem key={v} value={v}>{v}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -206,9 +160,7 @@ function AddonCatalogCard({
       data-testid={`addon-card-${addon.team}-${addon.name}`}
       className={cn(
         "rounded-xl border bg-card p-4 transition-all",
-        isSelected
-          ? "border-primary/50 bg-primary/5 opacity-60"
-          : "hover:shadow-md hover:border-primary/30"
+        isSelected ? "border-primary/50 bg-primary/5 opacity-60" : "hover:shadow-md hover:border-primary/30"
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
@@ -227,7 +179,6 @@ function AddonCatalogCard({
           </span>
         )}
       </div>
-
       <div className="flex items-center gap-2">
         <Select
           value={selectedVersion}
@@ -240,9 +191,7 @@ function AddonCatalogCard({
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
             {addon.available_versions.map((v) => (
-              <SelectItem key={v} value={v}>
-                {v}
-              </SelectItem>
+              <SelectItem key={v} value={v}>{v}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -277,7 +226,6 @@ function TeamSection({
   onAdd: (addon: AddonCatalogEntry, version: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-
   const isAddonSelected = (addon: AddonCatalogEntry) =>
     selectedAddons.some((s) => s.team === addon.team && s.name === addon.name);
 
@@ -292,14 +240,11 @@ function TeamSection({
         ) : (
           <ChevronRight className="h-4 w-4 text-muted-foreground" />
         )}
-        <span className="text-sm font-semibold group-hover:text-primary transition-colors">
-          {team}
-        </span>
+        <span className="text-sm font-semibold group-hover:text-primary transition-colors">{team}</span>
         <span className="rounded-full px-2 py-0.5 text-xs bg-muted text-muted-foreground font-medium">
           {addons.length}
         </span>
       </button>
-
       {expanded && (
         <div className="grid gap-3 sm:grid-cols-2 pl-6">
           {addons.map((addon) => (
@@ -322,30 +267,20 @@ export default function NewSpecPage() {
   const isAdmin = useIsAdmin();
   const router = useRouter();
 
-  // Day1 YAML state
-  const [day1Yaml, setDay1Yaml] = useState(DAY1_TEMPLATE);
-
-  // Day2 addons state
+  const [specName, setSpecName] = useState("");
+  const [specVersion, setSpecVersion] = useState("1.0.0");
+  const [templateText, setTemplateText] = useState("");
   const [selectedAddons, setSelectedAddons] = useState<SpecAddon[]>([]);
-
-  // UI state
   const [reviewOpen, setReviewOpen] = useState(false);
   const [addonSearch, setAddonSearch] = useState("");
-  const [configuringAddon, setConfiguringAddon] = useState<{
-    team: string;
-    name: string;
-  } | null>(null);
+  const [configuringAddon, setConfiguringAddon] = useState<{ team: string; name: string } | null>(null);
 
-  // Fetch addon catalog
-  const { data: addonCatalog, isLoading: catalogLoading } = useQuery<
-    AddonCatalogEntry[]
-  >({
+  const { data: addonCatalog, isLoading: catalogLoading } = useQuery<AddonCatalogEntry[]>({
     queryKey: ["addons", "catalog"],
     queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
     staleTime: 120_000,
   });
 
-  // Build addon version lookup from catalog
   const addonVersionsMap = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const addon of addonCatalog ?? []) {
@@ -354,7 +289,6 @@ export default function NewSpecPage() {
     return map;
   }, [addonCatalog]);
 
-  // Filter and group addons
   const filteredCatalog = useMemo(() => {
     if (!addonCatalog) return {};
     const filtered = addonCatalog.filter(
@@ -370,128 +304,69 @@ export default function NewSpecPage() {
     }, {});
   }, [addonCatalog, addonSearch]);
 
-  // DnD sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // DnD handler
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = selectedAddons.findIndex(
-        (a) => `${a.team}/${a.name}` === active.id
-      );
-      const newIndex = selectedAddons.findIndex(
-        (a) => `${a.team}/${a.name}` === over.id
-      );
+      const oldIndex = selectedAddons.findIndex((a) => `${a.team}/${a.name}` === active.id);
+      const newIndex = selectedAddons.findIndex((a) => `${a.team}/${a.name}` === over.id);
       setSelectedAddons(arrayMove(selectedAddons, oldIndex, newIndex));
     }
   };
 
-  // Add addon
   const handleAddAddon = (addon: AddonCatalogEntry, version: string) => {
-    const newAddon: SpecAddon = {
-      team: addon.team,
-      name: addon.name,
-      version,
-      overrideable: [],
-    };
-    setSelectedAddons([...selectedAddons, newAddon]);
+    setSelectedAddons([...selectedAddons, { team: addon.team, name: addon.name, version, overrideable: [] }]);
   };
 
-  // Remove addon
   const handleRemoveAddon = (team: string, name: string) => {
     setSelectedAddons(selectedAddons.filter((a) => !(a.team === team && a.name === name)));
   };
 
-  // Change addon version
   const handleVersionChange = (team: string, name: string, version: string) => {
-    setSelectedAddons(
-      selectedAddons.map((a) =>
-        a.team === team && a.name === name ? { ...a, version } : a
-      )
-    );
+    setSelectedAddons(selectedAddons.map((a) => a.team === team && a.name === name ? { ...a, version } : a));
   };
 
-  // Configure addon overrideable fields
-  const handleConfigureAddon = (team: string, name: string) => {
-    setConfiguringAddon({ team, name });
-  };
-
-  // Save overrideable fields for an addon
   const handleSaveOverrideable = (fields: OverrideableField[]) => {
     if (!configuringAddon) return;
-    setSelectedAddons(
-      selectedAddons.map((a) =>
-        a.team === configuringAddon.team && a.name === configuringAddon.name
-          ? { ...a, overrideable: fields }
-          : a
-      )
-    );
+    setSelectedAddons(selectedAddons.map((a) =>
+      a.team === configuringAddon.team && a.name === configuringAddon.name ? { ...a, overrideable: fields } : a
+    ));
     setConfiguringAddon(null);
   };
 
-  // Get the addon being configured and its catalog entry
   const configuringAddonData = configuringAddon
-    ? selectedAddons.find(
-        (a) => a.team === configuringAddon.team && a.name === configuringAddon.name
-      )
+    ? selectedAddons.find((a) => a.team === configuringAddon.team && a.name === configuringAddon.name)
     : null;
   const configuringCatalogEntry = configuringAddon
-    ? addonCatalog?.find(
-        (c) => c.team === configuringAddon.team && c.name === configuringAddon.name
-      )
+    ? addonCatalog?.find((c) => c.team === configuringAddon.team && c.name === configuringAddon.name)
     : null;
 
-  // Build final spec for save
   const buildFinalSpec = (): ClusterSpec => {
-    let day1Parsed: unknown;
-    try {
-      day1Parsed = jsYaml.load(day1Yaml);
-    } catch (e) {
-      throw new Error(`Invalid Day1 YAML: ${(e as Error).message}`);
-    }
-
-    const day1Spec = day1Parsed as {
-      apiVersion: string;
-      kind: string;
-      metadata: ClusterSpec["metadata"];
-      spec: { day1: ClusterSpec["spec"]["day1"] };
-    };
-
+    if (!specName.trim()) throw new Error("Spec name is required");
+    if (!templateText.trim()) throw new Error("Cluster template is required");
     return {
-      apiVersion: day1Spec.apiVersion,
-      kind: day1Spec.kind,
-      metadata: day1Spec.metadata,
+      apiVersion: "wingman.io/v1",
+      kind: "ClusterSpec",
+      metadata: { name: specName.trim(), version: specVersion, labels: {} },
       spec: {
-        day1: day1Spec.spec.day1,
-        day2: {
-          addons: selectedAddons,
-        },
+        day1: { variables: [], template: templateText },
+        day2: { addons: selectedAddons },
       },
     };
   };
 
-  // Build YAML for review
   const finalYaml = useMemo(() => {
-    try {
-      return jsYaml.dump(buildFinalSpec(), { lineWidth: 120, quotingType: '"' });
-    } catch {
-      return "";
-    }
+    try { return jsYaml.dump(buildFinalSpec(), { lineWidth: 120, quotingType: '"' }); }
+    catch { return ""; }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day1Yaml, selectedAddons]);
+  }, [specName, specVersion, templateText, selectedAddons]);
 
-  // Save mutation
   const createMutation = useMutation({
-    mutationFn: async () => {
-      const finalSpec = buildFinalSpec();
-      return api.post<MRDetail>("/api/day1/specs", finalSpec);
-    },
+    mutationFn: async () => api.post<MRDetail>("/api/day1/specs", buildFinalSpec()),
     onSuccess: (mr) => {
       toast.success(`Spec MR #${mr.iid} created: ${mr.title}`);
       setReviewOpen(false);
@@ -504,12 +379,8 @@ export default function NewSpecPage() {
   });
 
   const handleReview = () => {
-    try {
-      buildFinalSpec();
-    } catch (e) {
-      toast.error((e as Error).message);
-      return;
-    }
+    try { buildFinalSpec(); }
+    catch (e) { toast.error((e as Error).message); return; }
     setReviewOpen(true);
   };
 
@@ -527,57 +398,71 @@ export default function NewSpecPage() {
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link
-          href="/specs"
-          className={buttonVariants({ variant: "ghost", size: "icon" })}
-        >
+        <Link href="/specs" className={buttonVariants({ variant: "ghost", size: "icon" })}>
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div>
-          <h1
-            className="text-2xl font-bold tracking-tight"
-            style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
-          >
+          <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
             New Spec
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Define a cluster template
-          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">Define a cluster template</p>
         </div>
       </div>
 
-      {/* Day1 Section */}
+      {/* Spec Metadata */}
+      <div className="bg-card rounded-xl border shadow-sm p-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Spec Name</label>
+            <input
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              placeholder="e.g. standard-ha, dok, compact-single"
+              value={specName}
+              onChange={(e) => setSpecName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Version</label>
+            <input
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              placeholder="1.0.0"
+              value={specVersion}
+              onChange={(e) => setSpecVersion(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Cluster Template */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
-          <span className="text-sm font-semibold">Day 1 — Cluster Template</span>
-          <span className="text-xs text-muted-foreground">
-            Metadata, variables, and template
+        <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/20">
+          <FileCode2 className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-sm font-semibold">Cluster Template</span>
+          <span className="ml-auto text-xs text-muted-foreground font-mono">
+            {specName.trim() || "spec-name"}.j2
           </span>
         </div>
         <textarea
-          className="w-full font-mono text-xs bg-zinc-950 text-zinc-200 p-4 min-h-[300px] focus:outline-none resize-y leading-5"
-          value={day1Yaml}
-          onChange={(e) => setDay1Yaml(e.target.value)}
+          className="w-full font-mono text-xs bg-zinc-950 text-zinc-200 p-4 min-h-[360px] focus:outline-none resize-y leading-5"
+          value={templateText}
+          onChange={(e) => setTemplateText(e.target.value)}
           spellCheck={false}
+          placeholder="Jinja2 template — rendered into {cluster_name}.yaml when a cluster is created from this spec"
         />
       </div>
 
-      {/* Day2 Section */}
+      {/* Day2 Addons */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b bg-muted/20">
           <span className="text-sm font-semibold">Day 2 — Addons</span>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Select addons and drag to set install order
-          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">Select addons and drag to set install order</p>
         </div>
 
         {catalogLoading ? (
-          <div className="p-4">
-            <Skeleton className="h-64" />
-          </div>
+          <div className="p-4"><Skeleton className="h-64" /></div>
         ) : (
           <div className="p-4 grid lg:grid-cols-2 gap-6">
-            {/* Left: Available Addons */}
+            {/* Left: Available */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold">Available Addons</h3>
@@ -592,7 +477,6 @@ export default function NewSpecPage() {
                   />
                 </div>
               </div>
-
               <div className="max-h-[500px] overflow-y-auto space-y-6 pr-2">
                 {Object.keys(filteredCatalog).length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
@@ -614,33 +498,20 @@ export default function NewSpecPage() {
               </div>
             </div>
 
-            {/* Right: Selected Addons */}
+            {/* Right: Selected */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">
-                  Selected Addons ({selectedAddons.length})
-                </h3>
-                <span className="text-xs text-muted-foreground">
-                  Drag to reorder
-                </span>
+                <h3 className="text-sm font-semibold">Selected Addons ({selectedAddons.length})</h3>
+                <span className="text-xs text-muted-foreground">Drag to reorder</span>
               </div>
-
               {selectedAddons.length === 0 ? (
                 <div className="rounded-xl border-2 border-dashed p-8 text-center">
                   <Package className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">
-                    No addons selected
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Click &ldquo;Add&rdquo; on an addon to include it
-                  </p>
+                  <p className="text-sm text-muted-foreground">No addons selected</p>
+                  <p className="text-xs text-muted-foreground mt-1">Click &ldquo;Add&rdquo; on an addon to include it</p>
                 </div>
               ) : (
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext
                     items={selectedAddons.map((a) => `${a.team}/${a.name}`)}
                     strategy={verticalListSortingStrategy}
@@ -652,17 +523,9 @@ export default function NewSpecPage() {
                           addon={addon}
                           index={index}
                           onRemove={() => handleRemoveAddon(addon.team, addon.name)}
-                          onVersionChange={(v) =>
-                            handleVersionChange(addon.team, addon.name, v)
-                          }
-                          onConfigure={() =>
-                            handleConfigureAddon(addon.team, addon.name)
-                          }
-                          availableVersions={
-                            addonVersionsMap[`${addon.team}/${addon.name}`] ?? [
-                              addon.version,
-                            ]
-                          }
+                          onVersionChange={(v) => handleVersionChange(addon.team, addon.name, v)}
+                          onConfigure={() => setConfiguringAddon({ team: addon.team, name: addon.name })}
+                          availableVersions={addonVersionsMap[`${addon.team}/${addon.name}`] ?? [addon.version]}
                         />
                       ))}
                     </div>
@@ -676,9 +539,7 @@ export default function NewSpecPage() {
 
       {/* Actions */}
       <div className="flex gap-3">
-        <Link href="/specs" className={buttonVariants({ variant: "outline" })}>
-          Cancel
-        </Link>
+        <Link href="/specs" className={buttonVariants({ variant: "outline" })}>Cancel</Link>
         <button
           onClick={handleReview}
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
@@ -688,7 +549,6 @@ export default function NewSpecPage() {
         </button>
       </div>
 
-      {/* Review Dialog */}
       <ReviewDialog
         open={reviewOpen}
         onOpenChange={setReviewOpen}
@@ -700,7 +560,6 @@ export default function NewSpecPage() {
         confirmLabel="Confirm — Create Spec MR"
       />
 
-      {/* Configure Overrideable Fields Dialog */}
       {configuringAddon && (
         <ConfigureOverrideableDialog
           key={`${configuringAddon.team}/${configuringAddon.name}`}

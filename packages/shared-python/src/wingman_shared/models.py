@@ -50,8 +50,8 @@ class SpecAddon(BaseModel):
 
 
 class Day1Config(BaseModel):
-    variables: list[SpecVariable]
-    template: str  # Jinja2 template string for the multi-document cluster YAML
+    variables: list[SpecVariable] = Field(default_factory=list)
+    template: str  # Jinja2 template — may be overridden by a {spec_name}.j2 file in the spec repo
 
 
 class Day2Config(BaseModel):

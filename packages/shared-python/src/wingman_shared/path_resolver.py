@@ -92,3 +92,7 @@ class PathResolver:
     def spec_file(self, *, spec_name: str) -> str:
         """YAML file for a cluster spec."""
         return f"{self.specs_root}/{spec_name}.yaml"
+
+    def spec_template_file(self, *, spec_name: str) -> str:
+        """Optional Jinja2 template file — overrides the inline template field when present."""
+        return f"{self.specs_root}/{spec_name}.j2"

@@ -33,6 +33,15 @@ async def list_specs(
     return await spec_svc.list_specs()
 
 
+@router.get("/versions/openshift", response_model=list[str])
+async def list_openshift_versions(
+    spec_svc: SpecServiceDep,
+    user: CurrentUser,
+) -> list[str]:
+    """List available OpenShift versions from openshift-versions.txt in the specs repo."""
+    return await spec_svc.list_openshift_versions()
+
+
 @router.get("/{name}", response_model=ClusterSpec)
 async def get_spec(
     name: str,

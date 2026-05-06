@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +34,13 @@ const IDENTITY_VARIABLES = new Set([
   "mce_name",
   "mce",
 ]);
+
+function extractTemplateVars(template: string): string[] {
+  const vars = new Set<string>();
+  for (const m of template.matchAll(/{{\s*([a-zA-Z_][\w.]*)/g)) vars.add(m[1].split(".")[0]);
+  for (const m of template.matchAll(/{%\s*for\s+\w+\s+in\s+([a-zA-Z_][\w.]*)/g)) vars.add(m[1].split(".")[0]);
+  return [...vars].filter((v) => !["loop", "range"].includes(v));
+}
 
 function formatVariableName(name: string): string {
   return name
@@ -455,6 +462,14 @@ export default function NewClusterPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [previewYaml, setPreviewYaml] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  // Track whether site/mce were auto-detected (so manual changes aren't overwritten)
+  const [siteAutoDetected, setSiteAutoDetected] = useState(false);
+  const [mceAutoDetected, setMceAutoDetected] = useState(false);
+  // OCP version (always a first-class field, sourced from openshift-versions.txt)
+  const [ocpVersion, setOcpVersion] = useState("");
+  // Free-form YAML editor for specs that have no declared variables
+  const [freeformVarsYaml, setFreeformVarsYaml] = useState("");
+  const [freeformVarsError, setFreeformVarsError] = useState<string | null>(null);
 
   const { data: specs, isLoading } = useQuery<ClusterSpec[]>({
     queryKey: ["specs"],
@@ -474,6 +489,47 @@ export default function NewClusterPage() {
     enabled: Boolean(site) && site !== CREATE_NEW,
     staleTime: 60_000,
   });
+
+  const { data: ocpVersions = [] } = useQuery<string[]>({
+    queryKey: ["openshift-versions"],
+    queryFn: () => api.get<string[]>("/api/day1/specs/versions/openshift"),
+    staleTime: 300_000,
+    enabled: step === "vars",
+  });
+
+  // Auto-detect site from cluster name — prefer longest match (most specific)
+  useEffect(() => {
+    if (!clusterName.trim() || !sites.length) return;
+    if (site && site !== CREATE_NEW && !siteAutoDetected) return; // don't override manual selection
+    const nameLower = clusterName.toLowerCase();
+    const matched = [...sites]
+      .filter((s) => nameLower.includes(s.toLowerCase()))
+      .sort((a, b) => b.length - a.length)[0];
+    if (matched && matched !== site) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSite(matched);
+      setSiteAutoDetected(true);
+      setMce("");
+      setMceAutoDetected(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clusterName, sites]);
+
+  // Auto-detect MCE from cluster name once site is known
+  useEffect(() => {
+    if (!clusterName.trim() || !site || site === CREATE_NEW || !mces.length) return;
+    if (mce && mce !== CREATE_NEW && !mceAutoDetected) return; // don't override manual selection
+    const nameLower = clusterName.toLowerCase();
+    const matched = [...mces]
+      .filter((m) => nameLower.includes(m.toLowerCase()))
+      .sort((a, b) => b.length - a.length)[0];
+    if (matched && matched !== mce) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMce(matched);
+      setMceAutoDetected(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clusterName, site, mces]);
 
   const createSiteMutation = useMutation({
     mutationFn: (name: string) => api.post<MRDetail>("/api/day1/sites", { name }),
@@ -518,10 +574,25 @@ export default function NewClusterPage() {
   const effectiveSite = site === CREATE_NEW ? newSiteName.trim() : site.trim();
   const effectiveMce = mce === CREATE_NEW ? newMceName.trim() : mce.trim();
 
+  // Parse free-form YAML vars (only used for specs with no declared variables)
+  const parsedFreeformVars = useMemo<Record<string, unknown>>(() => {
+    if (!freeformVarsYaml.trim()) return {};
+    try {
+      const parsed = jsYaml.load(freeformVarsYaml);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // ignore — error shown via freeformVarsError
+    }
+    return {};
+  }, [freeformVarsYaml]);
+
   // Merge identity inputs into variables so Jinja2 can resolve cluster_name, site*, mce* etc.
   // Identity values come AFTER the spread so they override any null spec defaults.
   const effectiveVariables = {
-    ...variables,
+    ...(selectedSpec?.spec.day1.variables.length ? variables : parsedFreeformVars),
+    ...(ocpVersion ? { openshift_release_version: ocpVersion } : {}),
     cluster_name: clusterName.trim(),
     site_name: effectiveSite,
     site: effectiveSite,
@@ -541,11 +612,32 @@ export default function NewClusterPage() {
 
   const handleSelectSpec = (spec: ClusterSpec) => {
     setSelectedSpec(spec);
-    const defaults: Record<string, unknown> = {};
-    for (const v of spec.spec.day1.variables) {
-      if (v.default !== undefined) defaults[v.name] = v.default;
+    setOcpVersion("");
+    setFreeformVarsError(null);
+
+    if (spec.spec.day1.variables.length > 0) {
+      // Legacy spec with declared variables — use typed form
+      const defaults: Record<string, unknown> = {};
+      for (const v of spec.spec.day1.variables) {
+        if (v.default !== undefined) defaults[v.name] = v.default;
+      }
+      setVariables(defaults);
+      setFreeformVarsYaml("");
+    } else {
+      // New-style spec: extract variable hints from the Jinja2 template
+      setVariables({});
+      const templateVars = spec.spec.day1.template
+        ? extractTemplateVars(spec.spec.day1.template)
+        : [];
+      const hintVars = templateVars.filter(
+        (v) => !IDENTITY_VARIABLES.has(v) && v !== "openshift_release_version"
+      );
+      setFreeformVarsYaml(
+        hintVars.length > 0
+          ? hintVars.map((v) => `${v}: `).join("\n") + "\n"
+          : ""
+      );
     }
-    setVariables(defaults);
 
     // Initialize addon overrides with default values
     const overrides: Record<string, Record<string, unknown>> = {};
@@ -568,10 +660,22 @@ export default function NewClusterPage() {
     if (!clusterName.trim()) { toast.error("Cluster name is required"); return; }
     if (!effectiveSite) { toast.error("Site is required"); return; }
     if (!effectiveMce) { toast.error("MCE is required"); return; }
-    for (const v of selectedSpec!.spec.day1.variables) {
-      if (IDENTITY_VARIABLES.has(v.name)) continue;
-      if (v.required && !variables[v.name] && variables[v.name] !== 0 && variables[v.name] !== false) {
-        toast.error(`Variable "${v.name}" is required`);
+    if (!ocpVersion) { toast.error("OpenShift version is required"); return; }
+    if (selectedSpec!.spec.day1.variables.length > 0) {
+      for (const v of selectedSpec!.spec.day1.variables) {
+        if (IDENTITY_VARIABLES.has(v.name)) continue;
+        if (v.required && !variables[v.name] && variables[v.name] !== 0 && variables[v.name] !== false) {
+          toast.error(`Variable "${v.name}" is required`);
+          return;
+        }
+      }
+    } else if (freeformVarsYaml.trim()) {
+      try {
+        jsYaml.load(freeformVarsYaml);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Invalid YAML";
+        setFreeformVarsError(msg);
+        toast.error(`Variables YAML error: ${msg}`);
         return;
       }
     }
@@ -596,12 +700,15 @@ export default function NewClusterPage() {
 
   const handleSiteChange = (value: string | null) => {
     setSite(value ?? "");
+    setSiteAutoDetected(false); // user manually chose — stop auto-detection
     setMce("");
+    setMceAutoDetected(false);
     setNewMceName("");
   };
 
   const handleMceChange = (value: string | null) => {
     setMce(value ?? "");
+    setMceAutoDetected(false); // user manually chose — stop auto-detection
   };
 
   return (
@@ -665,7 +772,7 @@ export default function NewClusterPage() {
                       <p className="text-sm text-muted-foreground mt-0.5">{spec.metadata.description}</p>
                     )}
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      {spec.spec.day1.variables.length} variables · {spec.spec.day2.addons.length} addons
+                      {spec.spec.day2.addons.length} addon{spec.spec.day2.addons.length !== 1 ? "s" : ""}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -789,28 +896,84 @@ export default function NewClusterPage() {
             </div>
           </div>
 
-          {/* Spec variables (excluding identity fields already captured above) */}
-          {selectedSpec.spec.day1.variables.filter((v) => !IDENTITY_VARIABLES.has(v.name)).length > 0 && (
+          {/* OpenShift version — always a first-class field */}
+          <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
+            <h2 className="text-sm font-semibold">OpenShift Version</h2>
+            {ocpVersions.length > 0 ? (
+              <Select value={ocpVersion} onValueChange={(v) => setOcpVersion(v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select OpenShift version…" />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  {ocpVersions.map((v) => (
+                    <SelectItem key={v} value={v}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <input
+                type="text"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
+                placeholder="e.g. 4.16.0"
+                value={ocpVersion}
+                onChange={(e) => setOcpVersion(e.target.value)}
+              />
+            )}
+          </div>
+
+          {/* Spec variables — typed form for legacy specs, free-form YAML for new-style specs */}
+          {selectedSpec.spec.day1.variables.filter((v) => !IDENTITY_VARIABLES.has(v.name) && v.name !== "openshift_release_version").length > 0 ? (
             <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
               <h2 className="text-sm font-semibold">Spec Variables</h2>
               <div className="space-y-4">
-                {selectedSpec.spec.day1.variables.filter((v) => !IDENTITY_VARIABLES.has(v.name)).map((v) => (
-                  <div key={v.name} className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {formatVariableName(v.name)}
-                      {v.required && <span className="text-destructive ml-0.5">*</span>}
-                    </label>
-                    <VariableField
-                      variable={v}
-                      value={variables[v.name] ?? ""}
-                      onChange={(val) => setVariables((prev) => ({ ...prev, [v.name]: val }))}
-                    />
-                    {v.description && (
-                      <p className="text-xs text-muted-foreground">{v.description}</p>
-                    )}
-                  </div>
-                ))}
+                {selectedSpec.spec.day1.variables
+                  .filter((v) => !IDENTITY_VARIABLES.has(v.name) && v.name !== "openshift_release_version")
+                  .map((v) => (
+                    <div key={v.name} className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        {formatVariableName(v.name)}
+                        {v.required && <span className="text-destructive ml-0.5">*</span>}
+                      </label>
+                      <VariableField
+                        variable={v}
+                        value={variables[v.name] ?? ""}
+                        onChange={(val) => setVariables((prev) => ({ ...prev, [v.name]: val }))}
+                      />
+                      {v.description && (
+                        <p className="text-xs text-muted-foreground">{v.description}</p>
+                      )}
+                    </div>
+                  ))}
               </div>
+            </div>
+          ) : (
+            <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold">Template Variables</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Fill in the YAML values that the cluster template expects.
+                  <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">cluster_name</code>,
+                  <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">site</code>, and
+                  <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">mce</code> are set automatically.
+                </p>
+              </div>
+              <textarea
+                className={cn(
+                  "w-full rounded-lg border font-mono text-xs p-3 min-h-[200px] resize-y bg-zinc-950 text-zinc-200 focus:outline-none focus:ring-2 transition-shadow",
+                  freeformVarsError ? "border-destructive focus:ring-destructive/50" : "focus:ring-primary/50"
+                )}
+                value={freeformVarsYaml}
+                placeholder={"nodepools:\n  - infra_env: dc1-nova\n    replicas: 3\nadditional_configs: []"}
+                onChange={(e) => {
+                  setFreeformVarsYaml(e.target.value);
+                  setFreeformVarsError(null);
+                  try { jsYaml.load(e.target.value); }
+                  catch (err) { setFreeformVarsError(err instanceof Error ? err.message : "Invalid YAML"); }
+                }}
+              />
+              {freeformVarsError && (
+                <p className="text-xs text-destructive">{freeformVarsError}</p>
+              )}
             </div>
           )}
 
