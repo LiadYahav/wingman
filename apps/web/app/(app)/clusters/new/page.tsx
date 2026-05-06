@@ -921,15 +921,15 @@ export default function NewClusterPage() {
           <div className="space-y-1">
             <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Identity</p>
             <div className="flex gap-3">
-              <span className="text-muted-foreground w-28 shrink-0">cluster_name</span>
+              <span className="text-muted-foreground w-32 shrink-0">Cluster Name</span>
               <span className="font-medium">{clusterName}</span>
             </div>
             <div className="flex gap-3">
-              <span className="text-muted-foreground w-28 shrink-0">site</span>
+              <span className="text-muted-foreground w-32 shrink-0">Site</span>
               <span className="font-medium">{effectiveSite}</span>
             </div>
             <div className="flex gap-3">
-              <span className="text-muted-foreground w-28 shrink-0">mce</span>
+              <span className="text-muted-foreground w-32 shrink-0">MCE</span>
               <span className="font-medium">{effectiveMce}</span>
             </div>
           </div>
@@ -938,25 +938,27 @@ export default function NewClusterPage() {
           <div className="border-t pt-3 space-y-1">
             <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Spec</p>
             <div className="flex gap-3">
-              <span className="text-muted-foreground w-28 shrink-0">name</span>
+              <span className="text-muted-foreground w-32 shrink-0">Name</span>
               <span className="font-medium">{selectedSpec?.metadata.name}</span>
             </div>
             <div className="flex gap-3">
-              <span className="text-muted-foreground w-28 shrink-0">version</span>
+              <span className="text-muted-foreground w-32 shrink-0">Version</span>
               <span className="font-medium">v{selectedSpec?.metadata.version}</span>
             </div>
           </div>
 
           {/* Variables */}
-          {Object.keys(variables).length > 0 && (
+          {Object.entries(variables).filter(([k]) => !IDENTITY_VARIABLES.has(k)).length > 0 && (
             <div className="border-t pt-3 space-y-1">
               <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Variables</p>
-              {Object.entries(variables).map(([k, v]) => (
-                <div key={k} className="flex gap-3">
-                  <span className="text-muted-foreground w-28 shrink-0 truncate">{k}</span>
-                  <span className="font-medium">{String(v ?? "—")}</span>
-                </div>
-              ))}
+              {Object.entries(variables)
+                .filter(([k]) => !IDENTITY_VARIABLES.has(k))
+                .map(([k, v]) => (
+                  <div key={k} className="flex gap-3">
+                    <span className="text-muted-foreground w-32 shrink-0">{formatVariableName(k)}</span>
+                    <span className="font-medium">{String(v ?? "—")}</span>
+                  </div>
+                ))}
             </div>
           )}
 
@@ -981,8 +983,8 @@ export default function NewClusterPage() {
                         <div className="ml-28 mt-1 pl-3 border-l-2 border-primary/20 space-y-0.5">
                           {Object.entries(overrides).map(([path, value]) => (
                             <div key={path} className="flex gap-2 text-xs">
-                              <span className="text-primary/70">{path}:</span>
-                              <span className="font-medium">{String(value)}</span>
+                              <span className="text-primary/70">{formatVariableName(path)}:</span>
+                              <span className="font-medium">{Array.isArray(value) ? `${(value as unknown[]).length} items` : typeof value === "object" && value !== null ? "configured" : String(value)}</span>
                             </div>
                           ))}
                         </div>
