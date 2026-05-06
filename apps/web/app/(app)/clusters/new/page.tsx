@@ -995,6 +995,19 @@ export default function NewClusterPage() {
               </div>
             </div>
           )}
+
+          {/* GitLab Files */}
+          <div className="border-t pt-3">
+            <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              File Created in GitLab
+            </p>
+            <div className="flex items-start gap-2">
+              <FileText className="h-3.5 w-3.5 text-primary/60 mt-0.5 shrink-0" />
+              <p className="text-xs break-all text-foreground/80">
+                {`sites/${effectiveSite}/mces/${effectiveMce}/hostedClusters/${clusterName.trim()}.yaml`}
+              </p>
+            </div>
+          </div>
         </div>
       </ReviewDialog>
     </div>

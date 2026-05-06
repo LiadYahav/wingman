@@ -258,10 +258,9 @@ class ClusterService:
         spec_name: str,
         spec_version: str,
         variables: dict[str, Any],
-        addon_overrides: dict[str, dict[str, Any]] | None = None,
         current_user: UserInfo,
     ) -> MRDetail:
-        """Create a new cluster by committing files and opening an MR.
+        """Create a new cluster by committing a single YAML file and opening an MR.
 
         Args:
             name: Cluster name (used as filename)
@@ -270,15 +269,13 @@ class ClusterService:
             rendered_yaml: Pre-rendered Jinja2 output (multi-doc YAML)
             spec_name: Name of the spec used
             spec_version: Version of the spec used
-            variables: Input variables for the metadata file
-            addon_overrides: Per-addon field overrides (team/name -> path -> value)
+            variables: Input variables (included in commit message for traceability)
             current_user: The user creating the cluster
 
         Returns:
             MRDetail for the created merge request.
         """
         cluster_path = self.pr.day1_cluster_file(site=site, mce=mce, cluster=name)
-        metadata_path = self.pr.day1_cluster_metadata(site=site, mce=mce, cluster=name)
 
         # Check for name collision
         if self.gl.file_exists(cluster_path, ref=self.default_branch):
@@ -289,20 +286,6 @@ class ClusterService:
 
         # Embed spec metadata as comments at the top of the cluster YAML
         rendered_yaml = _prepend_spec_comments(rendered_yaml, spec_name, spec_version)
-
-        # Build .wingman.yaml metadata file (stored variables and addon overrides)
-        import yaml
-
-        metadata_content = yaml.safe_dump(
-            {
-                "specName": spec_name,
-                "specVersion": spec_version,
-                "variables": variables,
-                "addonOverrides": addon_overrides or {},
-            },
-            default_flow_style=False,
-            allow_unicode=True,
-        )
 
         branch = make_branch_name(current_user.username, "create-cluster", name)
         mr_title = make_mr_title("Day1", "Create", "cluster", name, f"from spec {spec_name}")
@@ -327,7 +310,6 @@ class ClusterService:
                 message=commit_message,
                 actions=[
                     {"action": "create", "file_path": cluster_path, "content": rendered_yaml},
-                    {"action": "create", "file_path": metadata_path, "content": metadata_content},
                 ],
                 start_branch=self.default_branch,
                 author_name=current_user.username,

@@ -234,7 +234,6 @@ async def create_cluster(
         spec_name=body.spec_name,
         spec_version=body.spec_version,
         variables=variables_with_defaults,
-        addon_overrides=body.addon_overrides or {},
         current_user=user,
     )
 
