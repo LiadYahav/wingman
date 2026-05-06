@@ -4,8 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Plus, Trash2, Code, List, FileText } from "lucide-react";
 import { toast } from "sonner";
+import jsYaml from "js-yaml";
 import { api } from "@/lib/api-client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -105,6 +106,88 @@ function VariableField({
   );
 }
 
+// ── Array Item Editor ──────────────────────────────────────────────────────────
+
+function ArrayItemEditor({
+  item,
+  index,
+  onUpdate,
+  onRemove,
+}: {
+  item: unknown;
+  index: number;
+  onUpdate: (value: unknown) => void;
+  onRemove: () => void;
+}) {
+  const isObject = item !== null && typeof item === "object" && !Array.isArray(item);
+  const itemObj = isObject ? (item as Record<string, unknown>) : null;
+
+  if (itemObj) {
+    return (
+      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="text-muted-foreground hover:text-destructive transition-colors p-1"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="grid gap-2">
+          {Object.entries(itemObj).map(([key, val]) => (
+            <div key={key} className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground w-24 shrink-0 truncate">{key}</label>
+              {typeof val === "boolean" ? (
+                <input
+                  type="checkbox"
+                  checked={val}
+                  onChange={(e) => onUpdate({ ...itemObj, [key]: e.target.checked })}
+                  className="h-4 w-4 rounded border-border text-primary"
+                />
+              ) : Array.isArray(val) ? (
+                <input
+                  type="text"
+                  className="flex-1 rounded border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  value={val.join(", ")}
+                  onChange={(e) => onUpdate({ ...itemObj, [key]: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                  placeholder="comma-separated values"
+                />
+              ) : (
+                <input
+                  type={typeof val === "number" ? "number" : "text"}
+                  className="flex-1 rounded border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  value={String(val ?? "")}
+                  onChange={(e) => onUpdate({ ...itemObj, [key]: typeof val === "number" ? Number(e.target.value) : e.target.value })}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="text"
+        className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+        value={String(item ?? "")}
+        onChange={(e) => onUpdate(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-muted-foreground hover:text-destructive transition-colors p-2"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 // ── Override field ─────────────────────────────────────────────────────────────
 
 function OverrideField({
@@ -116,25 +199,25 @@ function OverrideField({
   value: unknown;
   onChange: (v: unknown) => void;
 }) {
+  const [mode, setMode] = useState<"form" | "yaml">("form");
   const base =
     "w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow";
 
-  // Detect actual value type (may differ from field.type for backwards compat)
   const isArrayValue = Array.isArray(value);
   const isObjectValue = value !== null && typeof value === "object" && !isArrayValue;
   const effectiveType = isArrayValue ? "array" : isObjectValue ? "object" : field.type;
 
   if (effectiveType === "boolean") {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
         <input
           type="checkbox"
           id={field.path}
           checked={Boolean(value)}
           onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-border text-primary"
+          className="h-5 w-5 rounded border-border text-primary cursor-pointer"
         />
-        <label htmlFor={field.path} className="text-sm text-muted-foreground">
+        <label htmlFor={field.path} className="text-sm cursor-pointer select-none">
           {field.description || field.path}
         </label>
       </div>
@@ -147,29 +230,196 @@ function OverrideField({
         type="number"
         className={base}
         value={String(value ?? "")}
-        onChange={(e) =>
-          onChange(e.target.value === "" ? "" : Number(e.target.value))
-        }
+        onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
       />
     );
   }
 
-  if (effectiveType === "object" || effectiveType === "array") {
-    const jsonStr = typeof value === "string" ? value : JSON.stringify(value ?? (effectiveType === "array" ? [] : {}), null, 2);
+  if (effectiveType === "array") {
+    const arrValue = Array.isArray(value) ? value : [];
+    const yamlStr = typeof value === "string" ? value : jsYaml.dump(arrValue, { indent: 2, lineWidth: 120 });
+
+    const getEmptyItem = () => {
+      if (arrValue.length > 0 && typeof arrValue[0] === "object" && arrValue[0] !== null) {
+        const template: Record<string, unknown> = {};
+        for (const key of Object.keys(arrValue[0] as Record<string, unknown>)) {
+          const sample = (arrValue[0] as Record<string, unknown>)[key];
+          if (typeof sample === "string") template[key] = "";
+          else if (typeof sample === "number") template[key] = 0;
+          else if (typeof sample === "boolean") template[key] = false;
+          else if (Array.isArray(sample)) template[key] = [];
+          else template[key] = "";
+        }
+        return template;
+      }
+      return "";
+    };
+
     return (
-      <textarea
-        className={cn(base, "font-mono text-xs min-h-[100px] resize-y")}
-        value={jsonStr}
-        placeholder={`Enter ${effectiveType} as JSON...`}
-        onChange={(e) => {
-          try {
-            const parsed = JSON.parse(e.target.value);
-            onChange(parsed);
-          } catch {
-            onChange(e.target.value);
-          }
-        }}
-      />
+      <div className="space-y-3">
+        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/50 w-fit">
+          <button
+            type="button"
+            onClick={() => setMode("form")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+              mode === "form" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <List className="h-3.5 w-3.5" />
+            Form
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("yaml")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+              mode === "yaml" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Code className="h-3.5 w-3.5" />
+            YAML
+          </button>
+        </div>
+
+        {mode === "form" ? (
+          <div className="space-y-2">
+            {arrValue.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed p-4 text-center text-sm text-muted-foreground">
+                No items yet
+              </div>
+            ) : (
+              arrValue.map((item, idx) => (
+                <ArrayItemEditor
+                  key={idx}
+                  item={item}
+                  index={idx}
+                  onUpdate={(newVal) => {
+                    const newArr = [...arrValue];
+                    newArr[idx] = newVal;
+                    onChange(newArr);
+                  }}
+                  onRemove={() => {
+                    const newArr = arrValue.filter((_, i) => i !== idx);
+                    onChange(newArr);
+                  }}
+                />
+              ))
+            )}
+            <button
+              type="button"
+              onClick={() => onChange([...arrValue, getEmptyItem()])}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full")}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Item
+            </button>
+          </div>
+        ) : (
+          <textarea
+            className="w-full rounded-lg border font-mono text-xs p-3 min-h-[150px] resize-y bg-zinc-950 text-zinc-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
+            value={yamlStr}
+            placeholder="# Enter array as YAML..."
+            onChange={(e) => {
+              try {
+                const parsed = jsYaml.load(e.target.value);
+                if (Array.isArray(parsed)) onChange(parsed);
+                else onChange(e.target.value);
+              } catch {
+                onChange(e.target.value);
+              }
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  if (effectiveType === "object") {
+    const objValue = (isObjectValue ? value : {}) as Record<string, unknown>;
+    const yamlStr = typeof value === "string" ? value : jsYaml.dump(objValue, { indent: 2, lineWidth: 120 });
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/50 w-fit">
+          <button
+            type="button"
+            onClick={() => setMode("form")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+              mode === "form" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Form
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("yaml")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+              mode === "yaml" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Code className="h-3.5 w-3.5" />
+            YAML
+          </button>
+        </div>
+
+        {mode === "form" ? (
+          <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+            {Object.keys(objValue).length === 0 ? (
+              <div className="text-center text-sm text-muted-foreground py-2">No properties</div>
+            ) : (
+              Object.entries(objValue).map(([key, val]) => (
+                <div key={key} className="flex items-center gap-3">
+                  <label className="text-xs font-medium text-muted-foreground w-32 shrink-0 truncate">{key}</label>
+                  {typeof val === "boolean" ? (
+                    <input
+                      type="checkbox"
+                      checked={val}
+                      onChange={(e) => onChange({ ...objValue, [key]: e.target.checked })}
+                      className="h-4 w-4 rounded border-border text-primary"
+                    />
+                  ) : Array.isArray(val) ? (
+                    <input
+                      type="text"
+                      className="flex-1 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      value={val.join(", ")}
+                      onChange={(e) => onChange({ ...objValue, [key]: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                      placeholder="comma-separated"
+                    />
+                  ) : typeof val === "object" && val !== null ? (
+                    <span className="text-xs text-muted-foreground italic">nested object (use YAML)</span>
+                  ) : (
+                    <input
+                      type={typeof val === "number" ? "number" : "text"}
+                      className="flex-1 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      value={String(val ?? "")}
+                      onChange={(e) => onChange({ ...objValue, [key]: typeof val === "number" ? Number(e.target.value) : e.target.value })}
+                    />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <textarea
+            className="w-full rounded-lg border font-mono text-xs p-3 min-h-[150px] resize-y bg-zinc-950 text-zinc-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
+            value={yamlStr}
+            placeholder="# Enter object as YAML..."
+            onChange={(e) => {
+              try {
+                const parsed = jsYaml.load(e.target.value);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) onChange(parsed);
+                else onChange(e.target.value);
+              } catch {
+                onChange(e.target.value);
+              }
+            }}
+          />
+        )}
+      </div>
     );
   }
 
@@ -536,61 +786,100 @@ export default function NewClusterPage() {
 
           {/* Addons and overrides */}
           {selectedSpec.spec.day2.addons.length > 0 && (
-            <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
-              <h2 className="text-sm font-semibold">Addons</h2>
-              <div className="space-y-4">
+            <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b bg-muted/30">
+                <h2 className="text-sm font-semibold">Addon Configuration</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Customize addon values for this cluster</p>
+              </div>
+              <div className="p-5 space-y-4">
                 {selectedSpec.spec.day2.addons.map((addon) => {
                   const addonKey = `${addon.team}/${addon.name}`;
                   const hasOverrides = addon.overrideable && addon.overrideable.length > 0;
+                  const simpleFields = addon.overrideable?.filter(f => f.type !== "array" && f.type !== "object" && !Array.isArray(addonOverrides[addonKey]?.[f.path] ?? f.default)) ?? [];
+                  const complexFields = addon.overrideable?.filter(f => f.type === "array" || f.type === "object" || Array.isArray(addonOverrides[addonKey]?.[f.path] ?? f.default)) ?? [];
+
                   return (
                     <div
                       key={addonKey}
-                      className={cn(
-                        "rounded-lg border p-4",
-                        hasOverrides ? "bg-muted/20" : "bg-muted/10"
-                      )}
+                      className="rounded-xl border bg-background overflow-hidden"
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{addon.name}</span>
-                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                            {addon.version}
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{addon.team}</span>
-                      </div>
-                      {hasOverrides && (
-                        <div className="mt-3 pt-3 border-t space-y-3">
-                          <p className="text-xs text-muted-foreground">
-                            Customize values for this addon:
-                          </p>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            {addon.overrideable!.map((field) => (
-                              <div key={field.path} className="space-y-1.5">
-                                <label className="text-xs font-medium text-muted-foreground">
-                                  {field.path}
-                                </label>
-                                <OverrideField
-                                  field={field}
-                                  value={addonOverrides[addonKey]?.[field.path] ?? field.default ?? ""}
-                                  onChange={(val) =>
-                                    setAddonOverrides((prev) => ({
-                                      ...prev,
-                                      [addonKey]: {
-                                        ...prev[addonKey],
-                                        [field.path]: val,
-                                      },
-                                    }))
-                                  }
-                                />
-                                {field.description && (
-                                  <p className="text-xs text-muted-foreground">
-                                    {field.description}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
+                      <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <span className="text-xs font-bold text-primary">{addon.name.charAt(0).toUpperCase()}</span>
                           </div>
+                          <div>
+                            <span className="font-semibold text-sm">{addon.name}</span>
+                            <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary font-medium">
+                              {addon.version}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{addon.team}</span>
+                      </div>
+
+                      {hasOverrides ? (
+                        <div className="p-4 space-y-4">
+                          {simpleFields.length > 0 && (
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              {simpleFields.map((field) => (
+                                <div key={field.path} className="space-y-1.5">
+                                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                    {field.path}
+                                  </label>
+                                  <OverrideField
+                                    field={field}
+                                    value={addonOverrides[addonKey]?.[field.path] ?? field.default ?? ""}
+                                    onChange={(val) =>
+                                      setAddonOverrides((prev) => ({
+                                        ...prev,
+                                        [addonKey]: {
+                                          ...prev[addonKey],
+                                          [field.path]: val,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  {field.description && (
+                                    <p className="text-xs text-muted-foreground">{field.description}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {complexFields.length > 0 && (
+                            <div className="space-y-4">
+                              {simpleFields.length > 0 && <div className="border-t" />}
+                              {complexFields.map((field) => (
+                                <div key={field.path} className="space-y-2">
+                                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                    {field.path}
+                                  </label>
+                                  <OverrideField
+                                    field={field}
+                                    value={addonOverrides[addonKey]?.[field.path] ?? field.default ?? ""}
+                                    onChange={(val) =>
+                                      setAddonOverrides((prev) => ({
+                                        ...prev,
+                                        [addonKey]: {
+                                          ...prev[addonKey],
+                                          [field.path]: val,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  {field.description && (
+                                    <p className="text-xs text-muted-foreground">{field.description}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="px-4 py-3 text-xs text-muted-foreground italic">
+                          No configurable fields for this addon
                         </div>
                       )}
                     </div>
