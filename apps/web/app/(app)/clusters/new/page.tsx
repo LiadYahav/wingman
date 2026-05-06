@@ -519,13 +519,14 @@ export default function NewClusterPage() {
   const effectiveMce = mce === CREATE_NEW ? newMceName.trim() : mce.trim();
 
   // Merge identity inputs into variables so Jinja2 can resolve cluster_name, site*, mce* etc.
+  // Identity values come AFTER the spread so they override any null spec defaults.
   const effectiveVariables = {
+    ...variables,
     cluster_name: clusterName.trim(),
     site_name: effectiveSite,
     site: effectiveSite,
     mce_name: effectiveMce,
     mce: effectiveMce,
-    ...variables,
   };
 
   if (!isAdmin) {
