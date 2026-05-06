@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ReviewDialog } from "@/components/common/review-dialog";
+import { GitLabFileList } from "@/components/common/gitlab-file-list";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { ClusterSpec, MRDetail, SpecVariable, OverrideableField } from "@/types";
 
@@ -997,49 +998,25 @@ export default function NewClusterPage() {
           )}
 
           {/* GitLab Files */}
-          <div className="border-t pt-3 space-y-3">
-            <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide">
-              Files Created in GitLab
-            </p>
-
-            {/* Day1 repo */}
-            <div className="space-y-1">
-              <p className="text-xs font-sans font-medium text-muted-foreground">Day 1 repo (cluster manifest)</p>
-              <div className="flex items-start gap-2 pl-2">
-                <FileText className="h-3.5 w-3.5 text-primary/60 mt-0.5 shrink-0" />
-                <p className="text-xs break-all text-foreground/80">
-                  {`sites/${effectiveSite}/mces/${effectiveMce}/hostedClusters/${clusterName.trim()}.yaml`}
-                </p>
-              </div>
-            </div>
-
-            {/* Day2 repo — one dir per addon */}
-            {selectedSpec && selectedSpec.spec.day2.addons.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-sans font-medium text-muted-foreground">
-                  Day 2 repo (addon configs, created when addons are deployed)
-                </p>
-                <div className="space-y-2 pl-2">
-                  {selectedSpec.spec.day2.addons.map((addon) => (
-                    <div key={`${addon.team}/${addon.name}`} className="space-y-0.5">
-                      <div className="flex items-start gap-2">
-                        <FileText className="h-3.5 w-3.5 text-primary/60 mt-0.5 shrink-0" />
-                        <p className="text-xs break-all text-foreground/80">
-                          {`mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/values.yaml`}
-                        </p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <FileText className="h-3.5 w-3.5 text-primary/60 mt-0.5 shrink-0" />
-                        <p className="text-xs break-all text-foreground/80">
-                          {`mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/${addon.name}.yaml`}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <GitLabFileList
+            groups={[
+              {
+                label: "Day 1 repo (cluster manifest)",
+                files: [
+                  `sites/${effectiveSite}/mces/${effectiveMce}/hostedClusters/${clusterName.trim()}.yaml`,
+                ],
+              },
+              ...(selectedSpec && selectedSpec.spec.day2.addons.length > 0
+                ? [{
+                    label: "Day 2 repo (addon configs, created when addons are deployed)",
+                    files: selectedSpec.spec.day2.addons.flatMap((addon) => [
+                      `mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/values.yaml`,
+                      `mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/${addon.name}.yaml`,
+                    ]),
+                  }]
+                : []),
+            ]}
+          />
         </div>
       </ReviewDialog>
     </div>
