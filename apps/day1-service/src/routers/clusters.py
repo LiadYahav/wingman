@@ -203,6 +203,32 @@ async def get_cluster(
     return await cluster_svc.get_cluster(name=name, site=site, mce=mce)
 
 
+@router.post("/preview", response_model=dict)
+async def preview_cluster(
+    body: CreateClusterRequest,
+    spec_svc: SpecServiceDep,
+    user: AdminUser,
+) -> dict:
+    """Render a cluster's YAML exactly as it would be committed, without creating an MR."""
+    spec = await spec_svc.get_spec(body.spec_name)
+    if spec.metadata.version != body.spec_version:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Spec version mismatch: requested {body.spec_version}, current is {spec.metadata.version}",
+        )
+    variables_with_defaults = apply_variable_defaults(spec, body.variables)
+    try:
+        rendered = render_spec(spec, variables_with_defaults)
+    except RenderError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    yaml_with_comments = (
+        f'# specName: "{body.spec_name}"\n'
+        f'# specVersion: "{body.spec_version}"\n'
+        f"{rendered}"
+    )
+    return {"yaml": yaml_with_comments}
+
+
 @router.post("", response_model=MRDetail, status_code=201)
 async def create_cluster(
     body: CreateClusterRequest,

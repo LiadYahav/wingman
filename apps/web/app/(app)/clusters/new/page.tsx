@@ -453,6 +453,8 @@ export default function NewClusterPage() {
     Record<string, Record<string, unknown>>
   >({});
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [previewYaml, setPreviewYaml] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const { data: specs, isLoading } = useQuery<ClusterSpec[]>({
     queryKey: ["specs"],
@@ -552,7 +554,7 @@ export default function NewClusterPage() {
     setStep("vars");
   };
 
-  const handleReview = () => {
+  const handleReview = async () => {
     if (!clusterName.trim()) { toast.error("Cluster name is required"); return; }
     if (!effectiveSite) { toast.error("Site is required"); return; }
     if (!effectiveMce) { toast.error("MCE is required"); return; }
@@ -562,6 +564,22 @@ export default function NewClusterPage() {
         toast.error(`Variable "${v.name}" is required`);
         return;
       }
+    }
+    setPreviewLoading(true);
+    try {
+      const result = await api.post<{ yaml: string }>("/api/day1/clusters/preview", {
+        name: clusterName.trim(),
+        site: effectiveSite,
+        mce: effectiveMce,
+        spec_name: selectedSpec!.metadata.name,
+        spec_version: selectedSpec!.metadata.version,
+        variables,
+      });
+      setPreviewYaml(result.yaml);
+    } catch {
+      setPreviewYaml("# Preview unavailable");
+    } finally {
+      setPreviewLoading(false);
     }
     setReviewOpen(true);
   };
@@ -898,10 +916,11 @@ export default function NewClusterPage() {
             </button>
             <button
               onClick={handleReview}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
+              disabled={previewLoading}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Eye className="h-4 w-4" />
-              Review & Create
+              {previewLoading ? "Generating preview…" : "Review & Create"}
             </button>
           </div>
         </div>
@@ -1003,16 +1022,32 @@ export default function NewClusterPage() {
               {
                 label: "Day 1 repo (cluster manifest)",
                 files: [
-                  `sites/${effectiveSite}/mces/${effectiveMce}/hostedClusters/${clusterName.trim()}.yaml`,
+                  {
+                    path: `sites/${effectiveSite}/mces/${effectiveMce}/hostedClusters/${clusterName.trim()}.yaml`,
+                    content: previewYaml || undefined,
+                  },
                 ],
               },
               ...(selectedSpec && selectedSpec.spec.day2.addons.length > 0
                 ? [{
                     label: "Day 2 repo (addon configs, created when addons are deployed)",
-                    files: selectedSpec.spec.day2.addons.flatMap((addon) => [
-                      `mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/values.yaml`,
-                      `mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/${addon.name}.yaml`,
-                    ]),
+                    files: selectedSpec.spec.day2.addons.flatMap((addon) => {
+                      const overrides = addonOverrides[`${addon.team}/${addon.name}`] ?? {};
+                      const valuesContent = Object.keys(overrides).length > 0
+                        ? jsYaml.dump(overrides, { lineWidth: 120 })
+                        : "# No overrides — using addon defaults\n";
+                      const metaContent = `targetRevision: "${addon.version}"\n`;
+                      return [
+                        {
+                          path: `mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/values.yaml`,
+                          content: valuesContent,
+                        },
+                        {
+                          path: `mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/${addon.name}.yaml`,
+                          content: metaContent,
+                        },
+                      ];
+                    }),
                   }]
                 : []),
             ]}
