@@ -498,12 +498,11 @@ export default function NewClusterPage() {
     mutationFn: () =>
       api.post<MRDetail>("/api/day1/clusters", {
         name: clusterName.trim(),
-        site: site === CREATE_NEW ? newSiteName.trim() : site.trim(),
-        mce: mce === CREATE_NEW ? newMceName.trim() : mce.trim(),
+        site: effectiveSite,
+        mce: effectiveMce,
         spec_name: selectedSpec!.metadata.name,
         spec_version: selectedSpec!.metadata.version,
-        variables,
-        addon_overrides: addonOverrides,
+        variables: effectiveVariables,
       }),
     onSuccess: (mr) => {
       toast.success(`MR #${mr.iid} created: ${mr.title}`);
@@ -518,6 +517,16 @@ export default function NewClusterPage() {
 
   const effectiveSite = site === CREATE_NEW ? newSiteName.trim() : site.trim();
   const effectiveMce = mce === CREATE_NEW ? newMceName.trim() : mce.trim();
+
+  // Merge identity inputs into variables so Jinja2 can resolve cluster_name, site*, mce* etc.
+  const effectiveVariables = {
+    cluster_name: clusterName.trim(),
+    site_name: effectiveSite,
+    site: effectiveSite,
+    mce_name: effectiveMce,
+    mce: effectiveMce,
+    ...variables,
+  };
 
   if (!isAdmin) {
     return (
@@ -573,7 +582,7 @@ export default function NewClusterPage() {
         mce: effectiveMce,
         spec_name: selectedSpec!.metadata.name,
         spec_version: selectedSpec!.metadata.version,
-        variables,
+        variables: effectiveVariables,
       });
       setPreviewYaml(result.yaml);
     } catch {
