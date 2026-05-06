@@ -657,7 +657,7 @@ export default function NewClusterPage() {
           {/* Cluster identity */}
           <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
             <h2 className="text-sm font-semibold">Cluster Identity</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Cluster Name <span className="text-destructive">*</span>
@@ -763,7 +763,7 @@ export default function NewClusterPage() {
           {selectedSpec.spec.day1.variables.filter((v) => !IDENTITY_VARIABLES.has(v.name)).length > 0 && (
             <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
               <h2 className="text-sm font-semibold">Spec Variables</h2>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-4">
                 {selectedSpec.spec.day1.variables.filter((v) => !IDENTITY_VARIABLES.has(v.name)).map((v) => (
                   <div key={v.name} className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -821,7 +821,7 @@ export default function NewClusterPage() {
                       {hasOverrides ? (
                         <div className="p-4 space-y-4">
                           {simpleFields.length > 0 && (
-                            <div className="grid gap-4 sm:grid-cols-2">
+                            <div className="space-y-4">
                               {simpleFields.map((field) => (
                                 <div key={field.path} className="space-y-1.5">
                                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
