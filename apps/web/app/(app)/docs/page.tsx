@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import {
   BookOpen,
   Layers,
@@ -82,13 +85,15 @@ function Step({ n, title, children }: { n: number; title?: string; children: Rea
   );
 }
 
-function NavLink({ href, label }: { href: string; label: string }) {
+function NavLink({ href, label, active }: { href: string; label: string; active?: boolean }) {
   return (
     <a
       href={href}
-      className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors group"
+      className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors group ${
+        active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
     >
-      <ChevronRight className="h-3 w-3 shrink-0 group-hover:text-primary transition-colors" />
+      <ChevronRight className={`h-3 w-3 shrink-0 transition-colors ${active ? "text-primary" : "group-hover:text-primary"}`} />
       {label}
     </a>
   );
@@ -135,7 +140,37 @@ function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementTy
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const NAV_SECTIONS = [
+  { id: "overview", label: "Platform Overview" },
+  { id: "concepts", label: "Core Concepts" },
+  { id: "roles", label: "Roles & Access" },
+  { id: "gitops", label: "GitOps Workflow" },
+  { id: "specs", label: "Specs" },
+  { id: "clusters", label: "Creating a Cluster" },
+  { id: "addons", label: "Day2 Addons" },
+  { id: "drift", label: "Drift Detection" },
+  { id: "approvals", label: "Approvals" },
+  { id: "audit", label: "Audit Log" },
+  { id: "troubleshooting", label: "Troubleshooting" },
+] as const;
+
 export default function DocsPage() {
+  const [activeSection, setActiveSection] = useState<string>("overview");
+
+  useEffect(() => {
+    const observers = NAV_SECTIONS.map(({ id }) => {
+      const el = document.getElementById(id);
+      if (!el) return null;
+      const obs = new IntersectionObserver(
+        ([entry]) => { if (entry.isIntersecting) setActiveSection(id); },
+        { rootMargin: "-10% 0px -80% 0px", threshold: 0 }
+      );
+      obs.observe(el);
+      return obs;
+    });
+    return () => observers.forEach((obs) => obs?.disconnect());
+  }, []);
+
   return (
     <div className="flex gap-10 max-w-7xl mx-auto px-6 py-8">
 
@@ -145,17 +180,9 @@ export default function DocsPage() {
           <div className="rounded-xl border bg-card p-3 shadow-sm">
             <p className="px-2 mb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Contents</p>
             <div className="space-y-0.5">
-              <NavLink href="#overview" label="Platform Overview" />
-              <NavLink href="#concepts" label="Core Concepts" />
-              <NavLink href="#roles" label="Roles & Access" />
-              <NavLink href="#gitops" label="GitOps Workflow" />
-              <NavLink href="#specs" label="Specs" />
-              <NavLink href="#clusters" label="Creating a Cluster" />
-              <NavLink href="#addons" label="Day2 Addons" />
-              <NavLink href="#drift" label="Drift Detection" />
-              <NavLink href="#approvals" label="Approvals" />
-              <NavLink href="#audit" label="Audit Log" />
-              <NavLink href="#troubleshooting" label="Troubleshooting" />
+              {NAV_SECTIONS.map(({ id, label }) => (
+                <NavLink key={id} href={`#${id}`} label={label} active={activeSection === id} />
+              ))}
             </div>
           </div>
         </div>
@@ -241,7 +268,7 @@ export default function DocsPage() {
                   <ArrowRight className="h-3 w-3" />
                   <span className="text-blue-500">Merge</span>
                   <ArrowRight className="h-3 w-3" />
-                  <span className="text-foreground">Cluster controller / ArgoCD</span>
+                  <span className="text-foreground">ArgoCD (Day1 + Day2)</span>
                 </div>
                 <div className="mt-3 pl-4 border-l-2 border-muted space-y-1">
                   <p><span className="text-primary">Day1 repo</span>  — cluster manifests (AgentCluster, NodePool, MachineConfig)</p>
@@ -271,16 +298,16 @@ export default function DocsPage() {
                 example: 'prod-dok-nova — built from prod-dok-ha spec, zone-a and zone-b nodepools, 9 total replicas',
               },
               {
-                term: "MCE",
-                color: "bg-emerald-500/10 text-emerald-500",
-                description: "Multi-Cluster Engine — the management plane that groups clusters. Corresponds to a GitLab group path. Each MCE is a top-level folder in the Day1 repository.",
-                example: 'prod-dok — manages all production dok clusters',
-              },
-              {
                 term: "Site",
                 color: "bg-amber-500/10 text-amber-500",
-                description: "A physical location identifier within an MCE. Corresponds to a sub-folder under the MCE in GitLab.",
-                example: 'nova — a datacenter site within prod-dok MCE',
+                description: "A physical location — a datacenter, room, or zone. Sites are the top-level geographic grouping; one site can host multiple MCEs. In the Day1 repository, sites live under site/{site}/.",
+                example: 'nova — a physical datacenter; its clusters are at site/nova/mces/.../hostedClusters/',
+              },
+              {
+                term: "MCE",
+                color: "bg-emerald-500/10 text-emerald-500",
+                description: "Multi-Cluster Engine — a logical management plane that lives within a Site. Groups clusters sharing the same management infrastructure. In the Day1 repository: site/{site}/mces/{mce}/hostedClusters/{cluster}.yaml.",
+                example: 'prod-dok — a logical MCE inside the nova site, at site/nova/mces/prod-dok/',
               },
               {
                 term: "Merge Request",
@@ -307,7 +334,7 @@ export default function DocsPage() {
 
         {/* Roles */}
         <section>
-          <SectionHeader id="roles" icon={Shield} title="Roles & Access" subtitle="Access is controlled by GitLab group membership" />
+          <SectionHeader id="roles" icon={Shield} title="Roles & Access" subtitle="Access is controlled by OpenShift group membership" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
             <div className="rounded-xl border bg-card p-5">
               <div className="flex items-center gap-2 mb-4">
@@ -361,9 +388,9 @@ export default function DocsPage() {
             </div>
           </div>
           <Callout type="info" title="How roles are assigned">
-            Your role is derived from your GitLab group membership and embedded in your login session.
-            If you need admin access, ask your platform team to add you to the appropriate GitLab group.
-            Your role updates on the next login — no restart required.
+            Your role is derived from your <strong>OpenShift group membership</strong> and embedded in
+            your login session at authentication time. If you need admin access, ask your platform team
+            to add you to the appropriate OpenShift group. Your role updates on your next login.
           </Callout>
         </section>
 
@@ -378,7 +405,7 @@ export default function DocsPage() {
             {[
               { icon: GitPullRequest, text: "Peer review is built in — a second admin can review the manifest diff before merging." },
               { icon: ClipboardList, text: "Full audit trail — every change is a git commit with author and timestamp." },
-              { icon: RefreshCw, text: "Rollback is trivial — revert the commit in GitLab and the cluster controller reconciles automatically." },
+              { icon: RefreshCw, text: "Rollback is trivial — revert the commit in GitLab and ArgoCD reconciles automatically on its next sync." },
               { icon: Shield, text: "No shadow changes — if something changed in your cluster and it is not in Git, Wingman will flag it as drift." },
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-start gap-3 rounded-lg border bg-card px-4 py-3">
@@ -388,9 +415,9 @@ export default function DocsPage() {
             ))}
           </div>
           <Callout type="warning" title="Changes are not immediate">
-            Merging an MR commits manifests to Git. Actual cluster provisioning or addon sync happens
-            asynchronously — the cluster controller (Hive/ACM for Day1) or ArgoCD (Day2) picks up
-            the change on its next reconcile loop.
+            Merging an MR commits manifests to Git. Actual cluster provisioning and addon sync both
+            happen asynchronously — ArgoCD handles both Day1 and Day2, picking up changes on its next
+            reconcile loop. You can trigger a manual sync from the ArgoCD dashboard if needed.
           </Callout>
         </section>
 
@@ -410,11 +437,11 @@ export default function DocsPage() {
             <InlineCode>prod-dok-nova</InlineCode> cluster.
           </p>
           <div className="space-y-4 mb-6">
-            <Step n={1} title="Name and OpenShift version">
-              Navigate to <strong>Specs</strong> → <strong>New Spec</strong>. Enter the name{" "}
-              <InlineCode>prod-dok-ha</InlineCode> and select OpenShift version{" "}
-              <InlineCode>4.14.0-x86_64</InlineCode> from the dropdown (versions are sourced from the
-              specs repository — not a hardcoded list).
+            <Step n={1} title="Name the spec">
+              Navigate to <strong>Specs</strong> → <strong>New Spec</strong>. Enter the spec name{" "}
+              <InlineCode>prod-dok-ha</InlineCode>. This names the template — not a cluster. Cluster-specific
+              fields like cluster name, site, MCE, and OpenShift version are set later when creating
+              a cluster from this spec.
             </Step>
             <Step n={2} title="Define the cluster structure">
               In the <strong>Cluster Structure</strong> section, add <strong>2 nodepools</strong> by clicking
@@ -424,9 +451,11 @@ export default function DocsPage() {
             </Step>
             <Step n={3} title="Mark fields as immutable">
               Click the <Lock className="inline h-3 w-3" /> toggle next to any field to mark it immutable.
-              Immutable fields cannot be edited after a cluster is created from this spec.
-              For <InlineCode>prod-dok-ha</InlineCode> we lock: <InlineCode>clusterName</InlineCode>,{" "}
-              <InlineCode>platform</InlineCode>, and <InlineCode>masterTag</InlineCode>.
+              Immutable fields cannot be edited after a cluster is created from this spec. Cluster identity
+              fields (<InlineCode>clusterName</InlineCode>, <InlineCode>site</InlineCode>,{" "}
+              <InlineCode>MCE</InlineCode>) are always immutable — they never appear here. For{" "}
+              <InlineCode>prod-dok-ha</InlineCode> we additionally lock:{" "}
+              <InlineCode>platform</InlineCode> and <InlineCode>masterTag</InlineCode>.
             </Step>
             <Step n={4} title="Pre-configure Day2 addons">
               In the <strong>Day2 Addons</strong> section, browse the marketplace and select addons.
@@ -444,7 +473,6 @@ export default function DocsPage() {
 spec:
   day1:
     immutable_paths:
-      - clusterName
       - platform
       - masterTag
     structure:
@@ -496,8 +524,10 @@ spec:
                 <li><InlineCode>Site</InlineCode> → select <InlineCode>nova</InlineCode> (or type to create)</li>
                 <li><InlineCode>MCE</InlineCode> → select <InlineCode>prod-dok</InlineCode> (or type to create)</li>
               </ul>
-              Site and MCE are selected from existing GitLab folder paths — if the site does not exist
-              yet, just type the new name and Wingman will create the folder.
+              Site and MCE are selected from existing GitLab folder paths. The cluster will be stored at{" "}
+              <InlineCode>site/nova/mces/prod-dok/hostedClusters/prod-dok-nova.yaml</InlineCode> in the
+              Day1 repository. If the site or MCE folder does not exist yet, type the new name and
+              Wingman creates it automatically.
             </Step>
             <Step n={3} title="Fill in global fields">
               <ul className="mt-1 space-y-1 list-none">
@@ -820,9 +850,9 @@ mcFiles:
                 q: "MR was merged but cluster is still not provisioned",
                 a: (
                   <>
-                    Day1 provisioning is asynchronous. The MR commits manifests to Git; the AgentCluster
-                    controller (Hive/ACM) picks them up on its next reconcile loop. Check the cluster&apos;s
-                    ArgoCD Application status and the Hive <InlineCode>ClusterDeployment</InlineCode> for errors.
+                    Day1 provisioning is asynchronous. The MR commits manifests to Git; ArgoCD picks them up on
+                    its next reconcile loop. Check the ArgoCD Application for the cluster and look for sync errors
+                    in the ArgoCD UI. You can also trigger a manual sync if you need the change applied immediately.
                   </>
                 ),
               },
@@ -893,7 +923,7 @@ mcFiles:
               <p className="text-sm font-semibold">For platform operators — key file locations</p>
             </div>
             <div className="font-mono text-xs text-muted-foreground space-y-1 pl-6 mt-2">
-              <p><span className="text-foreground">Day1 repo root</span>          — cluster manifest directories organised by MCE/site</p>
+              <p><span className="text-foreground">Day1 repo</span>               — <InlineCode>site/{'{site}'}/mces/{'{mce}'}/hostedClusters/{'{cluster}'}.yaml</InlineCode></p>
               <p><span className="text-foreground">Specs repo root</span>         — cluster-template.j2, openshift-versions.txt</p>
               <p><span className="text-foreground">Day2 repo / operators/</span>  — per-addon team defaults (values.yaml)</p>
               <p><span className="text-foreground">Day2 repo / mces/</span>       — per-cluster addon overrides</p>
