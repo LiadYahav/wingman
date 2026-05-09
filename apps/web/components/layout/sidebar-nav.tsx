@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers } from "lucide-react";
+import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { label: "Addons", href: "/addons", icon: Package },
   { label: "Approvals", href: "/approvals", icon: GitPullRequest },
   { label: "Audit", href: "/audit", icon: ClipboardList },
+  { label: "Documentation", href: "/docs", icon: BookOpen },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
