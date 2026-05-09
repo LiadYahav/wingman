@@ -62,3 +62,6 @@ claude.docs
 
 # Ruff cache
 .ruff_cache/
+
+# Dev screenshots in repo root (not committed)
+/*.png

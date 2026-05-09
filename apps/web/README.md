@@ -4,11 +4,15 @@ Next.js frontend for the Wingman Internal Developer Platform.
 
 ## Features
 
-- **Cluster Management**: Create, view, and manage OpenShift clusters
-- **Spec Templates**: Define cluster templates with Day1 provisioning and Day2 addons
-- **Addon Configuration**: Configure which addon fields can be overridden at cluster creation
-- **Approval Workflow**: Review and approve GitLab MRs for infrastructure changes
-- **Audit Trail**: Track all cluster lifecycle events
+- **Cluster Management**: Create, view, and manage OpenShift clusters with drift detection
+- **Spec Templates**: Define cluster templates with Day1 provisioning, Day2 addons, and immutable field flags
+- **Two-Phase Cluster Form**: Specs define structure; clusters fill values — nodepool count is locked by spec
+- **Marketplace Addon Picker**: Browse and select Day2 addons on spec creation/edit pages
+- **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
+- **Site/MCE from GitLab**: Dropdowns populated from GitLab folder paths; new names create folders
+- **Approval Workflow**: Aggregated view of open MRs from all platform repositories
+- **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
+- **In-App Documentation**: Full platform guide at `/docs`
 
 ## Getting Started
 
@@ -88,7 +92,9 @@ app/
 │   ├── specs/          # Spec template pages
 │   ├── addons/         # Addon catalog
 │   ├── approvals/      # MR approval workflow
-│   └── audit/          # Audit trail
+│   ├── audit/          # Audit trail
+│   ├── docs/           # In-app platform documentation
+│   └── settings/       # User settings
 ├── login/              # Authentication
 └── layout.tsx          # Root layout
 
@@ -108,10 +114,9 @@ types/
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_DAY1_API` | Day1 service URL | `/api/day1` |
-| `NEXT_PUBLIC_DAY2_API` | Day2 service URL | `/api/day2` |
+The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. API routes
+(`/api/day1`, `/api/day2`, `/api/auth`) are proxied at runtime by the ingress or, in local
+development, by `proxy.ts`.
 
 ## Docker
 

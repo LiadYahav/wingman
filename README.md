@@ -100,6 +100,20 @@ cluster-platform/
     └── seed-test-data.py      # Seed GitLab with test data
 ```
 
+## Recent Features
+
+| Feature | Description |
+|---------|-------------|
+| **Two-phase spec/cluster form** | Specs define structure + immutable flags; clusters fill values. The form adapts to the spec shape at cluster-creation time — nodepool count is locked by the spec. |
+| **Marketplace addon picker** | Browse and select Day2 addons from a marketplace UI on the spec creation/edit pages. Configure which fields are overrideable per cluster. |
+| **YAML fields everywhere** | Dynamic form fields accept plain YAML — no JSON syntax required. Scalars (`high-perf-tuned`), maps, and lists all work naturally. |
+| **Site/MCE from GitLab folders** | Site and MCE dropdowns are populated from existing GitLab folder paths; new names create new folders automatically. |
+| **OCP versions from repo** | OpenShift version dropdown is sourced from `openshift-versions.txt` in the specs repo — no hardcoded list. |
+| **Open in GitLab (addon)** | Each installed addon's kebab menu now includes an "Open in GitLab" link pointing to the per-cluster override directory. |
+| **In-app documentation** | `/docs` route with full platform guide, concept explanations, worked examples, and troubleshooting. |
+| **Aggregated approvals** | Approvals page aggregates open MRs from all repositories (Day1 + all Day2 team repos) in one view. |
+| **Identity variable handling** | `cluster_name`, `site`, `mce` are dedicated identity inputs — they are not part of the dynamic variable form and always override spec defaults in Jinja2 rendering. |
+
 ## Deployment
 
 See **[chart/README.md](chart/README.md)** for Helm chart deployment instructions.
@@ -237,12 +251,9 @@ SERVICE_PORT=8002
 
 ### Frontend
 
-```env
-# Build-time (baked into JS bundle)
-NEXT_PUBLIC_DAY1_API_URL=/api/day1
-NEXT_PUBLIC_DAY2_API_URL=/api/day2
-NEXT_PUBLIC_AUTH_API_URL=/api/auth
-```
+The web app uses relative API paths (`/api/day1`, `/api/day2`, `/api/auth`) — no build-time env vars
+are required. The Next.js server proxies those paths to the backend services at runtime via the
+ingress or the `apps/web/proxy.ts` dev proxy.
 
 ## Development Setup
 
@@ -259,18 +270,15 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for detailed development guide, archite
 ### Local Development
 
 ```bash
-# Install dependencies
-cd apps/web && npm install
-cd ../day1-service && pip install -e ../../packages/shared-python && pip install -r requirements.txt
-cd ../day2-service && pip install -e ../../packages/shared-python && pip install -r requirements.txt
+# Frontend
+cd apps/web && npm install && npm run dev
 
-# Start services
-cd apps/day1-service && uvicorn src.main:app --port 8001 --reload
-cd apps/day2-service && uvicorn src.main:app --port 8002 --reload
-cd apps/web && npm run dev
+# Backend services (uses uv — no virtualenv management needed)
+cd apps/day1-service && uv sync && uv run uvicorn src.main:app --port 8001 --reload
+cd apps/day2-service && uv sync && uv run uvicorn src.main:app --port 8002 --reload
 
-# Or use the development proxy
-cd apps/web && npx tsx proxy.ts  # Proxies /api/* to backend services
+# Or use the development proxy (proxies /api/* to running backend services)
+cd apps/web && npx tsx proxy.ts
 ```
 
 ### Docker Build
