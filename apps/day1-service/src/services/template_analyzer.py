@@ -16,7 +16,7 @@ Supported patterns:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from jinja2 import Environment
 from jinja2 import nodes as jnodes
@@ -100,7 +100,10 @@ def _strip_filters(expr: jnodes.Expr) -> tuple[jnodes.Expr, bool, Any]:
             d = _extract_default(node)
             if d is not None and default_val is None:
                 default_val = d
-        node = node.node
+        next_node = node.node
+        if next_node is None:
+            break
+        node = next_node
     return node, is_optional, default_val
 
 
@@ -187,7 +190,8 @@ def _walk_expr(
     elif isinstance(expr, jnodes.CondExpr):
         _walk_expr(expr.test, loop_ctx, top_level, internal)
         _walk_expr(expr.expr1, loop_ctx, top_level, internal)
-        _walk_expr(expr.expr2, loop_ctx, top_level, internal)
+        if expr.expr2 is not None:
+            _walk_expr(expr.expr2, loop_ctx, top_level, internal)
 
 
 def _walk_stmts(
@@ -206,11 +210,11 @@ def _walk_stmts(
             if isinstance(stmt.target, jnodes.Name):
                 internal.add(stmt.target.name)
             # Still walk the RHS to collect variable references
-            _walk_expr(stmt.node, loop_ctx, top_level, internal)
+            _walk_expr(cast(jnodes.Expr, stmt.node), loop_ctx, top_level, internal)
 
         elif isinstance(stmt, jnodes.For):
             # Determine the iterable: may be `list_var` or `loop_var.sub_field`
-            iter_inner, is_opt, default_val = _strip_filters(stmt.iter)
+            iter_inner, is_opt, default_val = _strip_filters(cast(jnodes.Expr, stmt.iter))
 
             if isinstance(stmt.target, jnodes.Name):
                 loop_var = stmt.target.name
@@ -247,7 +251,7 @@ def _walk_stmts(
                     _walk_stmts(list(stmt.body), loop_ctx, top_level, internal_copy)
 
         elif isinstance(stmt, jnodes.If):
-            _walk_expr(stmt.test, loop_ctx, top_level, internal)
+            _walk_expr(cast(jnodes.Expr, stmt.test), loop_ctx, top_level, internal)
             _walk_stmts(list(stmt.body), loop_ctx, top_level, internal)
             if hasattr(stmt, "elif_clauses"):
                 _walk_stmts(list(stmt.elif_clauses), loop_ctx, top_level, internal)
@@ -262,7 +266,7 @@ def _walk_stmts(
             _walk_stmts(list(stmt.body), loop_ctx, top_level, internal)
 
         elif isinstance(stmt, jnodes.ExprStmt):
-            _walk_expr(stmt.node, loop_ctx, top_level, internal)
+            _walk_expr(cast(jnodes.Expr, stmt.node), loop_ctx, top_level, internal)
 
 
 # Variables that are cluster identity inputs (shown separately in the form)
