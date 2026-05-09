@@ -50,8 +50,10 @@ class SpecAddon(BaseModel):
 
 
 class Day1Config(BaseModel):
-    variables: list[SpecVariable] = Field(default_factory=list)
-    template: str  # Jinja2 template — may be overridden by a {spec_name}.j2 file in the spec repo
+    variables: list[SpecVariable] = Field(default_factory=list)  # legacy schema list; ignored when structure is present
+    structure: dict[str, Any] = Field(default_factory=dict)       # structural shape: empty-leaf tree + list counts
+    immutable_paths: list[str] = Field(default_factory=list)      # dot/bracket paths locked post cluster-create
+    template: str = ""  # injected from cluster-template.j2 on read; always stripped before write
 
 
 class Day2Config(BaseModel):
@@ -92,6 +94,7 @@ class ClusterMetadata(BaseModel):
     site: str
     mce: str
     variables: dict[str, Any] = Field(default_factory=dict)
+    immutable_paths: list[str] = Field(alias="immutablePaths", default_factory=list)
     addon_overrides: dict[str, dict[str, Any]] = Field(
         alias="addonOverrides", default_factory=dict
     )

@@ -19,6 +19,8 @@ from wingman_shared.mr_conventions import (
 from wingman_shared.path_resolver import PathResolver
 from wingman_shared.yaml_utils import dump_multi_document, parse_multi_document
 
+from .template_analyzer import analyze_template
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,11 +85,9 @@ class SpecService:
                 logger.warning("Failed to load spec %s: %s", name, exc)
                 raise
 
-            # Try to load a separate Jinja2 template file ({spec_name}.j2) which
-            # overrides the inline template field when present.
-            template_path = self.pr.spec_template_file(spec_name=name)
-            try:
-                template_content, _ = await self.gl.aread_file(template_path, ref=self.default_branch)
+            # Inject the shared cluster template (all specs use the same .j2 file)
+            template_content = await self._get_shared_template()
+            if template_content:
                 spec = spec.model_copy(
                     update={"spec": spec.spec.model_copy(
                         update={"day1": spec.spec.day1.model_copy(
@@ -95,21 +95,33 @@ class SpecService:
                         )}
                     )}
                 )
-                logger.info("Loaded template file for spec %s from %s", name, template_path)
-            except NotFoundError:
-                pass  # No separate template file — use inline template
-            except Exception as exc:
-                logger.warning("Failed to load template file for spec %s: %s", name, exc)
 
             return spec
 
         return await self.cache.get_or_fetch(f"specs:detail:{name}", _fetch, ttl=60.0)
 
+    async def _get_shared_template(self) -> str:
+        async def _fetch() -> str:
+            try:
+                content, _ = await self.gl.aread_file(
+                    self.pr.shared_template_file, ref=self.default_branch
+                )
+                return content
+            except NotFoundError:
+                return ""
+            except Exception as exc:
+                logger.warning("Failed to load shared template: %s", exc)
+                return ""
+
+        return await self.cache.get_or_fetch("specs:template:shared", _fetch, ttl=300.0)
+
+    async def get_shared_template(self) -> str:
+        return await self._get_shared_template()
+
     # ── Create ─────────────────────────────────────────────────────────────────
 
     async def create_spec(self, spec: ClusterSpec, current_user: UserInfo) -> MRDetail:
         path = self.pr.spec_file(spec_name=spec.metadata.name)
-        template_path = self.pr.spec_template_file(spec_name=spec.metadata.name)
 
         if await self.gl.afile_exists(path, ref=self.default_branch):
             raise HTTPException(
@@ -117,8 +129,7 @@ class SpecService:
                 detail=f"Spec '{spec.metadata.name}' already exists",
             )
 
-        # Extract template into its own .j2 file; clear inline field in YAML
-        template_content = spec.spec.day1.template
+        # Strip inline template — all specs use the shared cluster-template.j2
         spec_without_template = spec.model_copy(
             update={"spec": spec.spec.model_copy(
                 update={"day1": spec.spec.day1.model_copy(update={"template": ""})}
@@ -143,17 +154,11 @@ class SpecService:
             f"{spec.metadata.description or ''}"
         ).strip()
 
-        actions: list[dict[str, Any]] = [
-            {"action": "create", "file_path": path, "content": content},
-        ]
-        if template_content.strip():
-            actions.append({"action": "create", "file_path": template_path, "content": template_content})
-
         try:
             await self.gl.acommit_files(
                 branch=branch,
                 message=commit_message,
-                actions=actions,
+                actions=[{"action": "create", "file_path": path, "content": content}],
                 start_branch=self.default_branch,
                 author_name=current_user.username,
             )
@@ -176,15 +181,13 @@ class SpecService:
 
     async def update_spec(self, name: str, spec: ClusterSpec, current_user: UserInfo) -> MRDetail:
         path = self.pr.spec_file(spec_name=name)
-        template_path = self.pr.spec_template_file(spec_name=name)
 
         try:
             _, last_commit_id = await self.gl.aread_file(path, ref=self.default_branch)
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=f"Spec '{name}' not found") from exc
 
-        # Extract template into its own .j2 file; clear inline field in YAML
-        template_content = spec.spec.day1.template
+        # Strip inline template — all specs use the shared cluster-template.j2
         spec_without_template = spec.model_copy(
             update={"spec": spec.spec.model_copy(
                 update={"day1": spec.spec.day1.model_copy(update={"template": ""})}
@@ -206,27 +209,14 @@ class SpecService:
             f"Update spec {name} to v{spec.metadata.version}\n\n{spec.metadata.description or ''}"
         ).strip()
 
-        # Determine whether the template file already exists (and grab its commit id for optimistic locking)
-        try:
-            _, template_commit_id = await self.gl.aread_file(template_path, ref=self.default_branch)
-            template_exists = True
-        except NotFoundError:
-            template_commit_id = None
-            template_exists = False
-
         actions: list[dict[str, Any]] = [
             {"action": "update", "file_path": path, "content": content, "last_commit_id": last_commit_id},
         ]
-        if template_content.strip():
-            template_action = "update" if template_exists else "create"
-            action: dict[str, Any] = {
-                "action": template_action, "file_path": template_path, "content": template_content
-            }
-            if template_exists and template_commit_id:
-                action["last_commit_id"] = template_commit_id
-            actions.append(action)
-        elif template_exists:
-            actions.append({"action": "delete", "file_path": template_path})
+
+        # Migrate: delete any legacy per-spec .j2 file if it still exists
+        legacy_template_path = self.pr.spec_template_file(spec_name=name)
+        if await self.gl.afile_exists(legacy_template_path, ref=self.default_branch):
+            actions.append({"action": "delete", "file_path": legacy_template_path})
 
         try:
             await self.gl.acommit_files(
@@ -315,6 +305,24 @@ class SpecService:
             ]
 
         return await self.cache.get_or_fetch("specs:versions", _fetch, ttl=300.0)
+
+    # ── Template schema ────────────────────────────────────────────────────────
+
+    async def get_template_schema(self, *, include_reserved: bool = False) -> list[dict[str, Any]]:
+        """Parse the shared Jinja2 template and return a dynamic variable schema."""
+        cache_key = "specs:template:schema:all" if include_reserved else "specs:template:schema"
+
+        async def _fetch() -> list[dict[str, Any]]:
+            template = await self._get_shared_template()
+            if not template:
+                return []
+            try:
+                return analyze_template(template, include_reserved=include_reserved)
+            except Exception as exc:
+                logger.warning("Failed to analyze template: %s", exc)
+                return []
+
+        return await self.cache.get_or_fetch(cache_key, _fetch, ttl=300.0)
 
     # ── Clusters that use a spec ───────────────────────────────────────────────
 

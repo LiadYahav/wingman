@@ -52,7 +52,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfigureOverrideableDialog } from "@/components/specs/configure-overrideable-dialog";
-import type { MRDetail, AddonCatalogEntry, SpecAddon, ClusterSpec, OverrideableField } from "@/types";
+import { DynamicVariableForm, initFormValues, type FormValues } from "@/components/clusters/dynamic-variable-form";
+import type { MRDetail, AddonCatalogEntry, SpecAddon, ClusterSpec, OverrideableField, TemplateField } from "@/types";
 
 // ── Sortable Addon Item ───────────────────────────────────────────────────────
 
@@ -261,6 +262,12 @@ function TeamSection({
   );
 }
 
+// Identity/reserved vars — shown in spec-build for immutability toggles, but excluded from
+// the saved spec's `structure` field (they're always-present cluster inputs, not structural choices).
+const IDENTITY_VAR_NAMES = new Set([
+  "cluster_name", "site", "site_name", "mce", "mce_name", "openshift_release_version",
+]);
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function NewSpecPage() {
@@ -269,7 +276,11 @@ export default function NewSpecPage() {
 
   const [specName, setSpecName] = useState("");
   const [specVersion, setSpecVersion] = useState("1.0.0");
-  const [templateText, setTemplateText] = useState("");
+  const [templateExpanded, setTemplateExpanded] = useState(false);
+  // Structure: the form tree values (in spec-build mode, leaves are empty — counts define structure)
+  const [structure, setStructure] = useState<FormValues>({});
+  // Immutable paths: fields the spec author has toggled as post-create immutable
+  const [immutablePaths, setImmutablePaths] = useState<Set<string>>(new Set());
   const [selectedAddons, setSelectedAddons] = useState<SpecAddon[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [addonSearch, setAddonSearch] = useState("");
@@ -279,6 +290,25 @@ export default function NewSpecPage() {
     queryKey: ["addons", "catalog"],
     queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
     staleTime: 120_000,
+  });
+
+  const { data: sharedTemplate = "" } = useQuery<string>({
+    queryKey: ["specs", "shared-template"],
+    queryFn: () => api.get<string>("/api/day1/specs/template"),
+    staleTime: 300_000,
+  });
+
+  const { data: templateSchema = [] } = useQuery<TemplateField[]>({
+    queryKey: ["specs", "template-schema-all"],
+    queryFn: () => api.get<TemplateField[]>("/api/day1/specs/template/schema?include_reserved=true"),
+    staleTime: 300_000,
+    select: (data) => {
+      // Seed structure with empty defaults on first load
+      if (Object.keys(structure).length === 0 && data.length > 0) {
+        setStructure(initFormValues(data));
+      }
+      return data;
+    },
   });
 
   const addonVersionsMap = useMemo(() => {
@@ -345,15 +375,31 @@ export default function NewSpecPage() {
     ? addonCatalog?.find((c) => c.team === configuringAddon.team && c.name === configuringAddon.name)
     : null;
 
+  const handleToggleImmutable = (path: string) => {
+    setImmutablePaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
   const buildFinalSpec = (): ClusterSpec => {
     if (!specName.trim()) throw new Error("Spec name is required");
-    if (!templateText.trim()) throw new Error("Cluster template is required");
     return {
       apiVersion: "wingman.io/v1",
       kind: "ClusterSpec",
       metadata: { name: specName.trim(), version: specVersion, labels: {} },
       spec: {
-        day1: { variables: [], template: templateText },
+        day1: {
+          variables: [],
+          // Strip identity vars — they're always present at cluster time, not structural choices
+          structure: Object.fromEntries(
+            Object.entries(structure).filter(([k]) => !IDENTITY_VAR_NAMES.has(k))
+          ) as Record<string, unknown>,
+          immutable_paths: [...immutablePaths],
+          template: "",
+        },
         day2: { addons: selectedAddons },
       },
     };
@@ -363,7 +409,7 @@ export default function NewSpecPage() {
     try { return jsYaml.dump(buildFinalSpec(), { lineWidth: 120, quotingType: '"' }); }
     catch { return ""; }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specName, specVersion, templateText, selectedAddons]);
+  }, [specName, specVersion, structure, immutablePaths, selectedAddons]);
 
   const createMutation = useMutation({
     mutationFn: async () => api.post<MRDetail>("/api/day1/specs", buildFinalSpec()),
@@ -433,22 +479,76 @@ export default function NewSpecPage() {
         </div>
       </div>
 
-      {/* Cluster Template */}
+      {/* Shared Cluster Template — collapsible reference */}
+      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setTemplateExpanded((v) => !v)}
+          className="w-full flex items-center gap-2 px-4 py-3 bg-muted/20 hover:bg-muted/30 transition-colors text-left"
+        >
+          <FileCode2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-sm font-semibold">Cluster Template</span>
+          <span className="ml-1 text-xs text-muted-foreground">— shared across all specs</span>
+          <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-mono">cluster-template.j2</span>
+            {templateExpanded
+              ? <ChevronDown className="h-3.5 w-3.5" />
+              : <ChevronRight className="h-3.5 w-3.5" />}
+          </span>
+        </button>
+        {templateExpanded && (
+          <pre className="w-full font-mono text-xs bg-zinc-950 text-zinc-300/70 p-4 max-h-[300px] overflow-auto leading-5 select-text border-t">
+            {sharedTemplate || "Loading shared template…"}
+          </pre>
+        )}
+      </div>
+
+      {/* Cluster Structure — spec-build mode: counts + immutability flags, no values */}
       <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/20">
-          <FileCode2 className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-sm font-semibold">Cluster Template</span>
-          <span className="ml-auto text-xs text-muted-foreground font-mono">
-            {specName.trim() || "spec-name"}.j2
-          </span>
+          <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-sm font-semibold">Cluster Structure</span>
         </div>
-        <textarea
-          className="w-full font-mono text-xs bg-zinc-950 text-zinc-200 p-4 min-h-[360px] focus:outline-none resize-y leading-5"
-          value={templateText}
-          onChange={(e) => setTemplateText(e.target.value)}
-          spellCheck={false}
-          placeholder="Jinja2 template — rendered into {cluster_name}.yaml when a cluster is created from this spec"
-        />
+        <div className="p-4 space-y-4">
+          {/* How-to callout */}
+          <div className="rounded-lg bg-blue-500/5 border border-blue-500/15 px-4 py-3 text-sm space-y-1.5">
+            <p className="font-medium text-foreground/80">Two things to do here:</p>
+            <ul className="space-y-1 text-xs text-muted-foreground list-none">
+              <li>① <strong>Set list counts</strong> — add nodepools, extra configs, node labels, etc. Every cluster from this spec will have exactly this many.</li>
+              <li>② <strong>Lock fields</strong> — click <span className="font-mono bg-muted px-1 rounded">🔒</span> next to any field to prevent it from being changed after a cluster is created.</li>
+            </ul>
+            <p className="text-xs text-muted-foreground/70 pt-0.5">Values are not set here — each cluster fills them in at creation time.</p>
+          </div>
+
+          {templateSchema.length === 0 ? (
+            <div className="rounded-lg border-2 border-dashed p-6 text-center text-sm text-muted-foreground">
+              Loading structure from template…
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <DynamicVariableForm
+                schema={templateSchema}
+                values={structure}
+                onChange={setStructure}
+                mode="spec-build"
+                immutablePaths={immutablePaths}
+                onToggleImmutable={handleToggleImmutable}
+              />
+              {immutablePaths.size > 0 && (
+                <div className="mt-3 pt-3 border-t">
+                  <p className="text-xs text-muted-foreground font-medium mb-1.5">Fields locked after cluster create:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[...immutablePaths].map((p) => (
+                      <span key={p} className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs px-2 py-0.5 font-mono border border-amber-400/20">
+                        🔒 {p}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Day2 Addons */}

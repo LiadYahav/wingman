@@ -37,6 +37,7 @@ def render_spec(spec: ClusterSpec, variables: dict[str, Any]) -> str:
         raise RenderError("Spec has no template — add a .j2 template file or set day1.template in the spec YAML")
 
     _validate_variables(spec, variables)
+    variables = _coerce_numeric_strings(variables)
 
     env = Environment(
         undefined=StrictUndefined,  # raise on any missing variable
@@ -58,6 +59,25 @@ def render_spec(spec: ClusterSpec, variables: dict[str, Any]) -> str:
         raise RenderError("Rendered template is empty")
 
     return rendered
+
+
+def _coerce_numeric_strings(obj: Any) -> Any:
+    """Recursively convert plain integer/float strings to numbers so templates can do arithmetic."""
+    if isinstance(obj, str):
+        try:
+            return int(obj)
+        except ValueError:
+            pass
+        try:
+            return float(obj)
+        except ValueError:
+            pass
+        return obj
+    if isinstance(obj, dict):
+        return {k: _coerce_numeric_strings(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_coerce_numeric_strings(item) for item in obj]
+    return obj
 
 
 def _validate_variables(spec: ClusterSpec, variables: dict[str, Any]) -> None:

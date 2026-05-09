@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, CheckCircle2, Eye, Plus, Trash2, Code, List, FileText } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, CheckCircle2, Code, Eye, FileText, List, Plus, Trash2 } from "lucide-react";
 import jsYaml from "js-yaml";
+import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -22,99 +22,16 @@ import {
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { GitLabFileList } from "@/components/common/gitlab-file-list";
 import { useIsAdmin } from "@/stores/auth-store";
-import type { ClusterSpec, MRDetail, SpecVariable, OverrideableField } from "@/types";
+import type { ClusterSpec, MRDetail, OverrideableField, TemplateField } from "@/types";
+import { DynamicVariableForm, seedFromStructure, type FormValues } from "@/components/clusters/dynamic-variable-form";
 
 const CREATE_NEW = "__create_new__";
 
-// Variables handled by Cluster Identity section — filter from Spec Variables
-const IDENTITY_VARIABLES = new Set([
-  "cluster_name",
-  "site_name",
-  "site",
-  "mce_name",
-  "mce",
-]);
-
-function extractTemplateVars(template: string): string[] {
-  const vars = new Set<string>();
-  for (const m of template.matchAll(/{{\s*([a-zA-Z_][\w.]*)/g)) vars.add(m[1].split(".")[0]);
-  for (const m of template.matchAll(/{%\s*for\s+\w+\s+in\s+([a-zA-Z_][\w.]*)/g)) vars.add(m[1].split(".")[0]);
-  return [...vars].filter((v) => !["loop", "range"].includes(v));
+function formatVariableName(name: string) {
+  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatVariableName(name: string): string {
-  return name
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-// ── Variable field ─────────────────────────────────────────────────────────────
-
-function VariableField({
-  variable, value, onChange,
-}: {
-  variable: SpecVariable; value: unknown; onChange: (v: unknown) => void;
-}) {
-  const base =
-    "w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow";
-
-  if (variable.type === "boolean") {
-    return (
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id={variable.name}
-          checked={Boolean(value)}
-          onChange={(e) => onChange(e.target.checked)}
-          className="h-4 w-4 rounded border-border text-primary"
-        />
-        <label htmlFor={variable.name} className="text-sm text-muted-foreground">
-          {variable.description ?? variable.name}
-        </label>
-      </div>
-    );
-  }
-
-  if (variable.enum) {
-    return (
-      <Select value={String(value ?? "")} onValueChange={(v) => onChange(v ?? "")}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select…" />
-        </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
-          {variable.enum.map((opt) => (
-            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
-  }
-
-  if (variable.type === "integer") {
-    return (
-      <input
-        type="number"
-        className={base}
-        value={String(value ?? "")}
-        min={variable.minimum}
-        max={variable.maximum}
-        onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
-      />
-    );
-  }
-
-  return (
-    <input
-      type="text"
-      className={base}
-      value={String(value ?? "")}
-      placeholder={variable.description ?? variable.name}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
-
-// ── Array Item Editor ──────────────────────────────────────────────────────────
+// ── Array item editor ──────────────────────────────────────────────────────────
 
 function ArrayItemEditor({
   item,
@@ -124,55 +41,34 @@ function ArrayItemEditor({
 }: {
   item: unknown;
   index: number;
-  onUpdate: (value: unknown) => void;
+  onUpdate: (v: unknown) => void;
   onRemove: () => void;
 }) {
   const isObject = item !== null && typeof item === "object" && !Array.isArray(item);
-  const itemObj = isObject ? (item as Record<string, unknown>) : null;
 
-  if (itemObj) {
+  if (isObject) {
+    const obj = item as Record<string, unknown>;
     return (
-      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+      <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-muted-foreground hover:text-destructive transition-colors p-1"
-          >
+          <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive transition-colors">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="grid gap-2">
-          {Object.entries(itemObj).map(([key, val]) => (
-            <div key={key} className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground w-24 shrink-0 truncate">{key}</label>
-              {typeof val === "boolean" ? (
-                <input
-                  type="checkbox"
-                  checked={val}
-                  onChange={(e) => onUpdate({ ...itemObj, [key]: e.target.checked })}
-                  className="h-4 w-4 rounded border-border text-primary"
-                />
-              ) : Array.isArray(val) ? (
-                <input
-                  type="text"
-                  className="flex-1 rounded border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  value={val.join(", ")}
-                  onChange={(e) => onUpdate({ ...itemObj, [key]: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
-                  placeholder="comma-separated values"
-                />
-              ) : (
-                <input
-                  type={typeof val === "number" ? "number" : "text"}
-                  className="flex-1 rounded border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  value={String(val ?? "")}
-                  onChange={(e) => onUpdate({ ...itemObj, [key]: typeof val === "number" ? Number(e.target.value) : e.target.value })}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+        {Object.entries(obj).map(([key, val]) => (
+          <div key={key} className="flex items-center gap-3">
+            <label className="text-xs font-medium text-muted-foreground w-32 shrink-0 truncate">{key}</label>
+            <input
+              type={typeof val === "number" ? "number" : "text"}
+              className="flex-1 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              value={String(val ?? "")}
+              onChange={(e) =>
+                onUpdate({ ...obj, [key]: typeof val === "number" ? Number(e.target.value) : e.target.value })
+              }
+            />
+          </div>
+        ))}
       </div>
     );
   }
@@ -181,16 +77,12 @@ function ArrayItemEditor({
     <div className="flex items-center gap-2">
       <input
         type="text"
-        className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+        className="flex-1 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
         value={String(item ?? "")}
         onChange={(e) => onUpdate(e.target.value)}
       />
-      <button
-        type="button"
-        onClick={onRemove}
-        className="text-muted-foreground hover:text-destructive transition-colors p-2"
-      >
-        <Trash2 className="h-4 w-4" />
+      <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive transition-colors">
+        <Trash2 className="h-3.5 w-3.5" />
       </button>
     </div>
   );
@@ -442,6 +334,11 @@ function OverrideField({
   );
 }
 
+// Variables that have dedicated form widgets on this page — exclude from DynamicVariableForm
+const IDENTITY_VAR_NAMES = new Set([
+  "cluster_name", "site", "site_name", "mce", "mce_name", "openshift_release_version",
+]);
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function NewClusterPage() {
@@ -455,26 +352,29 @@ export default function NewClusterPage() {
   const [newSiteName, setNewSiteName] = useState("");
   const [mce, setMce] = useState("");
   const [newMceName, setNewMceName] = useState("");
-  const [variables, setVariables] = useState<Record<string, unknown>>({});
+  // Dynamic form values — driven by the template schema from the backend
+  const [dynamicValues, setDynamicValues] = useState<FormValues>({});
   const [addonOverrides, setAddonOverrides] = useState<
     Record<string, Record<string, unknown>>
   >({});
   const [reviewOpen, setReviewOpen] = useState(false);
   const [previewYaml, setPreviewYaml] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
-  // Track whether site/mce were auto-detected (so manual changes aren't overwritten)
   const [siteAutoDetected, setSiteAutoDetected] = useState(false);
   const [mceAutoDetected, setMceAutoDetected] = useState(false);
-  // OCP version (always a first-class field, sourced from openshift-versions.txt)
   const [ocpVersion, setOcpVersion] = useState("");
-  // Free-form YAML editor for specs that have no declared variables
-  const [freeformVarsYaml, setFreeformVarsYaml] = useState("");
-  const [freeformVarsError, setFreeformVarsError] = useState<string | null>(null);
 
   const { data: specs, isLoading } = useQuery<ClusterSpec[]>({
     queryKey: ["specs"],
     queryFn: () => api.get<ClusterSpec[]>("/api/day1/specs"),
     staleTime: 60_000,
+  });
+
+  // Template schema — parsed server-side from the Jinja2 AST; drives the dynamic form
+  const { data: templateSchema = [] } = useQuery<TemplateField[]>({
+    queryKey: ["specs", "template-schema"],
+    queryFn: () => api.get<TemplateField[]>("/api/day1/specs/template/schema"),
+    staleTime: 300_000,
   });
 
   const { data: sites = [], isLoading: sitesLoading } = useQuery<string[]>({
@@ -574,24 +474,9 @@ export default function NewClusterPage() {
   const effectiveSite = site === CREATE_NEW ? newSiteName.trim() : site.trim();
   const effectiveMce = mce === CREATE_NEW ? newMceName.trim() : mce.trim();
 
-  // Parse free-form YAML vars (only used for specs with no declared variables)
-  const parsedFreeformVars = useMemo<Record<string, unknown>>(() => {
-    if (!freeformVarsYaml.trim()) return {};
-    try {
-      const parsed = jsYaml.load(freeformVarsYaml);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
-      }
-    } catch {
-      // ignore — error shown via freeformVarsError
-    }
-    return {};
-  }, [freeformVarsYaml]);
-
-  // Merge identity inputs into variables so Jinja2 can resolve cluster_name, site*, mce* etc.
-  // Identity values come AFTER the spread so they override any null spec defaults.
+  // Merge dynamic form values + identity inputs for Jinja2 rendering
   const effectiveVariables = {
-    ...(selectedSpec?.spec.day1.variables.length ? variables : parsedFreeformVars),
+    ...dynamicValues,
     ...(ocpVersion ? { openshift_release_version: ocpVersion } : {}),
     cluster_name: clusterName.trim(),
     site_name: effectiveSite,
@@ -613,32 +498,15 @@ export default function NewClusterPage() {
   const handleSelectSpec = (spec: ClusterSpec) => {
     setSelectedSpec(spec);
     setOcpVersion("");
-    setFreeformVarsError(null);
-
-    if (spec.spec.day1.variables.length > 0) {
-      // Legacy spec with declared variables — use typed form
-      const defaults: Record<string, unknown> = {};
-      for (const v of spec.spec.day1.variables) {
-        if (v.default !== undefined) defaults[v.name] = v.default;
-      }
-      setVariables(defaults);
-      setFreeformVarsYaml("");
-    } else {
-      // New-style spec: extract variable hints from the Jinja2 template
-      setVariables({});
-      const templateVars = spec.spec.day1.template
-        ? extractTemplateVars(spec.spec.day1.template)
-        : [];
-      const hintVars = templateVars.filter(
-        (v) => !IDENTITY_VARIABLES.has(v) && v !== "openshift_release_version"
-      );
-      setFreeformVarsYaml(
-        hintVars.length > 0
-          ? hintVars.map((v) => `${v}: `).join("\n") + "\n"
-          : ""
-      );
-    }
-
+    // Seed form from the spec's structure (counts from spec, leaves blank for cluster-time filling).
+    // Filter identity vars — they're handled by dedicated inputs on this page.
+    const filteredSchema = templateSchema.filter((f) => !IDENTITY_VAR_NAMES.has(f.name));
+    const specStructure = spec.spec.day1.structure ?? {};
+    setDynamicValues(
+      Object.keys(specStructure).length > 0
+        ? seedFromStructure(specStructure as Record<string, unknown>, filteredSchema)
+        : seedFromStructure({}, filteredSchema)
+    );
     // Initialize addon overrides with default values
     const overrides: Record<string, Record<string, unknown>> = {};
     for (const addon of spec.spec.day2.addons) {
@@ -661,21 +529,14 @@ export default function NewClusterPage() {
     if (!effectiveSite) { toast.error("Site is required"); return; }
     if (!effectiveMce) { toast.error("MCE is required"); return; }
     if (!ocpVersion) { toast.error("OpenShift version is required"); return; }
-    if (selectedSpec!.spec.day1.variables.length > 0) {
-      for (const v of selectedSpec!.spec.day1.variables) {
-        if (IDENTITY_VARIABLES.has(v.name)) continue;
-        if (v.required && !variables[v.name] && variables[v.name] !== 0 && variables[v.name] !== false) {
-          toast.error(`Variable "${v.name}" is required`);
-          return;
-        }
-      }
-    } else if (freeformVarsYaml.trim()) {
-      try {
-        jsYaml.load(freeformVarsYaml);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Invalid YAML";
-        setFreeformVarsError(msg);
-        toast.error(`Variables YAML error: ${msg}`);
+    // Validate required fields from template schema (skip identity vars — validated above)
+    for (const field of templateSchema) {
+      if (!field.required || IDENTITY_VAR_NAMES.has(field.name)) continue;
+      const val = dynamicValues[field.name];
+      const isEmpty = val === undefined || val === null || val === "" ||
+        (Array.isArray(val) && val.length === 0);
+      if (isEmpty) {
+        toast.error(`"${field.name}" is required`);
         return;
       }
     }
@@ -690,8 +551,9 @@ export default function NewClusterPage() {
         variables: effectiveVariables,
       });
       setPreviewYaml(result.yaml);
-    } catch {
-      setPreviewYaml("# Preview unavailable");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setPreviewYaml(`# Preview unavailable\n# ${msg}`);
     } finally {
       setPreviewLoading(false);
     }
@@ -791,9 +653,16 @@ export default function NewClusterPage() {
       {/* Step 2: Fill variables */}
       {step === "vars" && selectedSpec && (
         <div className="space-y-6">
-          {/* Cluster identity */}
+          {/* Cluster identity + OCP version — one card */}
           <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
-            <h2 className="text-sm font-semibold">Cluster Identity</h2>
+            {/* Spec badge */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Cluster Details</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 border border-primary/20">
+                <span>{selectedSpec.metadata.name}</span>
+                <span className="text-primary/60">v{selectedSpec.metadata.version}</span>
+              </span>
+            </div>
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -893,87 +762,51 @@ export default function NewClusterPage() {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* OpenShift version — always a first-class field */}
-          <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
-            <h2 className="text-sm font-semibold">OpenShift Version</h2>
-            {ocpVersions.length > 0 ? (
-              <Select value={ocpVersion} onValueChange={(v) => setOcpVersion(v ?? "")}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select OpenShift version…" />
-                </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false}>
-                  {ocpVersions.map((v) => (
-                    <SelectItem key={v} value={v}>{v}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <input
-                type="text"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-                placeholder="e.g. 4.16.0"
-                value={ocpVersion}
-                onChange={(e) => setOcpVersion(e.target.value)}
-              />
-            )}
-          </div>
-
-          {/* Spec variables — typed form for legacy specs, free-form YAML for new-style specs */}
-          {selectedSpec.spec.day1.variables.filter((v) => !IDENTITY_VARIABLES.has(v.name) && v.name !== "openshift_release_version").length > 0 ? (
-            <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
-              <h2 className="text-sm font-semibold">Spec Variables</h2>
-              <div className="space-y-4">
-                {selectedSpec.spec.day1.variables
-                  .filter((v) => !IDENTITY_VARIABLES.has(v.name) && v.name !== "openshift_release_version")
-                  .map((v) => (
-                    <div key={v.name} className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {formatVariableName(v.name)}
-                        {v.required && <span className="text-destructive ml-0.5">*</span>}
-                      </label>
-                      <VariableField
-                        variable={v}
-                        value={variables[v.name] ?? ""}
-                        onChange={(val) => setVariables((prev) => ({ ...prev, [v.name]: val }))}
-                      />
-                      {v.description && (
-                        <p className="text-xs text-muted-foreground">{v.description}</p>
-                      )}
-                    </div>
-                  ))}
+              {/* OpenShift Version — merged into identity card */}
+              <div className="space-y-1.5 border-t pt-4">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  OpenShift Version <span className="text-destructive">*</span>
+                </label>
+                {ocpVersions.length > 0 ? (
+                  <Select value={ocpVersion} onValueChange={(v) => setOcpVersion(v ?? "")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select OpenShift version…" />
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {ocpVersions.map((v) => (
+                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <input
+                    type="text"
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
+                    placeholder="e.g. 4.16.0"
+                    value={ocpVersion}
+                    onChange={(e) => setOcpVersion(e.target.value)}
+                  />
+                )}
               </div>
             </div>
-          ) : (
-            <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
+          </div>
+
+          {/* Cluster Configuration — structure from spec, values filled here */}
+          {templateSchema.length > 0 && (
+            <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
               <div>
-                <h2 className="text-sm font-semibold">Template Variables</h2>
+                <h2 className="text-sm font-semibold">Cluster Configuration</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Fill in the YAML values that the cluster template expects.
-                  <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">cluster_name</code>,
-                  <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">site</code>, and
-                  <code className="ml-1 rounded bg-muted px-1 py-0.5 font-mono text-xs">mce</code> are set automatically.
+                  Fill in the values below. The structure (number of nodepools, etc.) is fixed by the <span className="font-medium">{selectedSpec.metadata.name}</span> spec.
                 </p>
               </div>
-              <textarea
-                className={cn(
-                  "w-full rounded-lg border font-mono text-xs p-3 min-h-[200px] resize-y bg-zinc-950 text-zinc-200 focus:outline-none focus:ring-2 transition-shadow",
-                  freeformVarsError ? "border-destructive focus:ring-destructive/50" : "focus:ring-primary/50"
-                )}
-                value={freeformVarsYaml}
-                placeholder={"nodepools:\n  - infra_env: dc1-nova\n    replicas: 3\nadditional_configs: []"}
-                onChange={(e) => {
-                  setFreeformVarsYaml(e.target.value);
-                  setFreeformVarsError(null);
-                  try { jsYaml.load(e.target.value); }
-                  catch (err) { setFreeformVarsError(err instanceof Error ? err.message : "Invalid YAML"); }
-                }}
+              <DynamicVariableForm
+                schema={templateSchema.filter((f) => !IDENTITY_VAR_NAMES.has(f.name))}
+                values={dynamicValues}
+                onChange={setDynamicValues}
+                mode="cluster-create"
+                immutablePaths={new Set(selectedSpec.spec.day1.immutable_paths ?? [])}
               />
-              {freeformVarsError && (
-                <p className="text-xs text-destructive">{freeformVarsError}</p>
-              )}
             </div>
           )}
 
@@ -1141,17 +974,17 @@ export default function NewClusterPage() {
           </div>
 
           {/* Variables */}
-          {Object.entries(variables).filter(([k]) => !IDENTITY_VARIABLES.has(k)).length > 0 && (
+          {Object.keys(dynamicValues).length > 0 && (
             <div className="border-t pt-3 space-y-1">
               <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Variables</p>
-              {Object.entries(variables)
-                .filter(([k]) => !IDENTITY_VARIABLES.has(k))
-                .map(([k, v]) => (
-                  <div key={k} className="flex gap-3">
-                    <span className="text-muted-foreground w-32 shrink-0">{formatVariableName(k)}</span>
-                    <span className="font-medium">{String(v ?? "—")}</span>
-                  </div>
-                ))}
+              {Object.entries(dynamicValues).map(([k, v]) => (
+                <div key={k} className="flex gap-3">
+                  <span className="text-muted-foreground w-32 shrink-0">{formatVariableName(k)}</span>
+                  <span className="font-medium">
+                    {Array.isArray(v) ? `${(v as unknown[]).length} items` : String(v ?? "—")}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 

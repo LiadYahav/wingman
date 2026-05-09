@@ -42,6 +42,30 @@ async def list_openshift_versions(
     return await spec_svc.list_openshift_versions()
 
 
+@router.get("/template", response_model=str)
+async def get_shared_template(
+    spec_svc: SpecServiceDep,
+    user: CurrentUser,
+) -> str:
+    """Return the shared Jinja2 cluster template used by all specs."""
+    return await spec_svc.get_shared_template()
+
+
+@router.get("/template/schema")
+async def get_template_schema(
+    spec_svc: SpecServiceDep,
+    user: CurrentUser,
+    include_reserved: bool = False,
+) -> list[dict]:
+    """Parse the shared template and return a dynamic variable schema for form rendering.
+
+    Pass ?include_reserved=true to include identity/reserved variables (cluster_name,
+    openshift_release_version, etc.) — needed by the spec creation page so users can
+    toggle immutability on those fields.
+    """
+    return await spec_svc.get_template_schema(include_reserved=include_reserved)
+
+
 @router.get("/{name}", response_model=ClusterSpec)
 async def get_spec(
     name: str,

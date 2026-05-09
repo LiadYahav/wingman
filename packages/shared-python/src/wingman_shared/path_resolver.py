@@ -94,5 +94,10 @@ class PathResolver:
         return f"{self.specs_root}/{spec_name}.yaml"
 
     def spec_template_file(self, *, spec_name: str) -> str:
-        """Optional Jinja2 template file — overrides the inline template field when present."""
+        """Per-spec Jinja2 template (legacy — superseded by shared_template_file)."""
         return f"{self.specs_root}/{spec_name}.j2"
+
+    @property
+    def shared_template_file(self) -> str:
+        """Single shared Jinja2 template used by all specs (at repo root)."""
+        return "cluster-template.j2"
