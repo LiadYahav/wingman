@@ -151,6 +151,7 @@ const NAV_SECTIONS = [
   { id: "drift", label: "Drift Detection" },
   { id: "approvals", label: "Approvals" },
   { id: "audit", label: "Audit Log" },
+  { id: "filelocations", label: "File Locations" },
   { id: "troubleshooting", label: "Troubleshooting" },
 ] as const;
 
@@ -840,6 +841,130 @@ mcFiles:
           </div>
         </section>
 
+        {/* File Locations */}
+        <section>
+          <SectionHeader id="filelocations" icon={FileCode2} title="File Locations" subtitle="Where every important file lives in GitLab" />
+          <p className="text-sm text-muted-foreground leading-relaxed mb-5">
+            All platform state is stored as plain files in GitLab. Below is the authoritative map of
+            which repository each file lives in and what path it uses. Repository identifiers and path
+            templates are configured via Helm values and exposed to the services as environment variables.
+          </p>
+
+          {/* Specs repo */}
+          <div className="space-y-4 mb-6">
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10">
+                  <Layers className="h-3.5 w-3.5 text-purple-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Specs repository</p>
+                  <p className="text-xs text-muted-foreground">
+                    Helm: <InlineCode>gitlab.specsProjectId</InlineCode> → env: <InlineCode>SPECS_GITLAB_PROJECT_ID</InlineCode>
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y">
+                {[
+                  { file: "cluster-template.j2", desc: "Jinja2 template that renders every cluster manifest. Shared across all specs.", path: "/" },
+                  { file: "openshift-versions.txt", desc: "One version string per line. Populates the OpenShift version dropdown in cluster creation.", path: "/" },
+                  { file: "specs/{name}.yaml", desc: "One file per spec. Contains nodepool structure, immutable paths, and pre-configured addon list.", path: "SPECS_ROOT_PATH (default: specs/)" },
+                ].map(({ file, desc, path }) => (
+                  <div key={file} className="grid grid-cols-[200px_1fr] gap-4 px-5 py-3 items-start">
+                    <div>
+                      <p className="text-xs font-mono text-foreground font-semibold">{file}</p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">{path}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Day1 repo */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10">
+                  <Server className="h-3.5 w-3.5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Day1 configuration repository</p>
+                  <p className="text-xs text-muted-foreground">
+                    Helm: <InlineCode>gitlab.day1ProjectId</InlineCode> → env: <InlineCode>DAY1_GITLAB_PROJECT_ID</InlineCode>
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y">
+                {[
+                  {
+                    file: "{DAY1_CLUSTERS_PATH_TEMPLATE}/{cluster}.yaml",
+                    desc: "Rendered cluster manifest (AgentCluster, NodePool, MachineConfig). One file per cluster.",
+                    path: "default: sites/{site}/mces/{mce}/hostedClusters/{cluster}.yaml",
+                  },
+                ].map(({ file, desc, path }) => (
+                  <div key={file} className="grid grid-cols-[200px_1fr] gap-4 px-5 py-3 items-start">
+                    <div>
+                      <p className="text-xs font-mono text-foreground font-semibold">{file}</p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">{path}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Day2 repos */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10">
+                  <Package className="h-3.5 w-3.5 text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">Day2 team repositories</p>
+                  <p className="text-xs text-muted-foreground">
+                    Helm: <InlineCode>gitlab.day2SigsGroupPath</InlineCode> → env: <InlineCode>DAY2_SIGS_GROUP_PATH</InlineCode>
+                    {" "}— one GitLab project per team under this group
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y">
+                {[
+                  {
+                    file: "operators/{addon}/{addon}.yaml",
+                    desc: "Addon definition + ArgoCD Application metadata. Maintained by the owning team. Path template: DAY2_ADDON_DEFS_PATH_TEMPLATE.",
+                    path: "per-team project root",
+                  },
+                  {
+                    file: "mces/{mce}/{cluster}/{addon}/values.yaml",
+                    desc: "Per-cluster override values. Written by Wingman when an admin installs or updates an addon. Path template: DAY2_ADDON_OVERRIDES_PATH_TEMPLATE.",
+                    path: "per-team project root",
+                  },
+                  {
+                    file: "mces/{mce}/{cluster}/{addon}/argocd.yaml",
+                    desc: "Per-cluster ArgoCD Application overrides (target namespace, sync policy). Written alongside values.yaml.",
+                    path: "per-team project root",
+                  },
+                ].map(({ file, desc, path }) => (
+                  <div key={file} className="grid grid-cols-[200px_1fr] gap-4 px-5 py-3 items-start">
+                    <div>
+                      <p className="text-xs font-mono text-foreground font-semibold">{file}</p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">{path}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <Callout type="info" title="All paths are configurable">
+            Path templates (like <InlineCode>DAY1_CLUSTERS_PATH_TEMPLATE</InlineCode>) are set in
+            the Helm chart under <InlineCode>paths:</InlineCode> and can be overridden per deployment
+            in your <InlineCode>values.yaml</InlineCode>. The defaults shown above match the chart
+            defaults in <InlineCode>chart/values.yaml</InlineCode>.
+          </Callout>
+        </section>
+
         {/* Troubleshooting */}
         <section>
           <SectionHeader id="troubleshooting" icon={AlertTriangle} title="Troubleshooting" subtitle="Common issues and how to fix them" />
@@ -933,15 +1058,12 @@ mcFiles:
           <div className="mt-4 rounded-xl border bg-card p-4">
             <div className="flex items-center gap-2 mb-2">
               <FileCode2 className="h-4 w-4 text-muted-foreground" />
-              <p className="text-sm font-semibold">For platform operators — key file locations</p>
+              <p className="text-sm font-semibold">For platform operators</p>
             </div>
-            <div className="font-mono text-xs text-muted-foreground space-y-1 pl-6 mt-2">
-              <p><span className="text-foreground">Day1 repo</span>               — <InlineCode>site/{'{site}'}/mces/{'{mce}'}/hostedClusters/{'{cluster}'}.yaml</InlineCode></p>
-              <p><span className="text-foreground">Specs repo root</span>         — cluster-template.j2, openshift-versions.txt</p>
-              <p><span className="text-foreground">Day2 repo / operators/</span>  — per-addon team defaults (values.yaml)</p>
-              <p><span className="text-foreground">Day2 repo / mces/</span>       — per-cluster addon overrides</p>
-              <p><span className="text-foreground">Settings → About</span>        — displays connected GitLab URLs for your instance</p>
-            </div>
+            <p className="text-xs text-muted-foreground pl-6">
+              See the <a href="#filelocations" className="text-primary underline underline-offset-2 hover:no-underline">File Locations</a> section above for
+              the full map of repositories, env vars, and exact file paths.
+            </p>
           </div>
         </section>
 
