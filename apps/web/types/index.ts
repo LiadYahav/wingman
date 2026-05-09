@@ -8,6 +8,16 @@ export interface UserInfo {
   role: "admin" | "viewer";
 }
 
+// ── Template Schema (dynamic, parsed from Jinja2 AST by the backend) ─────────
+
+export interface TemplateField {
+  name: string;
+  type: "string" | "integer" | "boolean" | "list" | "object";
+  required: boolean;
+  default?: unknown;
+  fields?: TemplateField[];  // sub-fields for list-of-objects
+}
+
 // ── Cluster Spec ──────────────────────────────────────────────────────────────
 
 export interface SpecVariable {
@@ -48,6 +58,8 @@ export interface ClusterSpec {
   spec: {
     day1: {
       variables: SpecVariable[];
+      structure: Record<string, unknown>;
+      immutable_paths: string[];
       template: string;
     };
     day2: {
@@ -92,6 +104,7 @@ export interface ClusterMetadata {
   site: string;
   mce: string;
   variables: Record<string, unknown>;
+  immutablePaths?: string[];
   addonOverrides?: Record<string, Record<string, unknown>>;
 }
 
@@ -126,8 +139,9 @@ export interface InstalledAddon {
   name: string;
   version: string;
   override_values: Record<string, unknown>;
-  available_versions?: string[]; // branches available for version upgrade
-  parse_errors?: YamlParseError[]; // YAML parsing errors if addon has faulty config
+  available_versions?: string[];
+  parse_errors?: YamlParseError[];
+  gitlab_url?: string;
 }
 
 export interface MergedAddonValues {

@@ -12,6 +12,7 @@ Manages the day2 GitLab repo structure:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any, cast
 
@@ -334,6 +335,12 @@ class AddonService:
                 }
                 if parse_errors:
                     addon_entry["parse_errors"] = parse_errors
+
+                with contextlib.suppress(Exception):
+                    addon_entry["gitlab_url"] = gl.get_tree_web_url(
+                        self.pr.day2_override_dir(mce=mce, cluster=cluster_name, addon=addon_name),
+                        ref=self._default_branch,
+                    )
 
                 installed.append(addon_entry)
 

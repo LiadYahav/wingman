@@ -630,7 +630,7 @@ function InstalledAddonCard({
               }
             </button>
             {/* 3-dot menu for quick actions */}
-            {isAdmin && (
+            {(isAdmin || addon.gitlab_url) && (
               <Popover>
                 <PopoverTrigger
                   className="p-1 hover:bg-muted rounded transition-colors"
@@ -638,17 +638,31 @@ function InstalledAddonCard({
                 >
                   <MoreVertical className="h-4 w-4 text-muted-foreground" />
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-40 p-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRemoveReviewOpen(true);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Remove Addon
-                  </button>
+                <PopoverContent align="end" className="w-44 p-1">
+                  {addon.gitlab_url && (
+                    <a
+                      href={addon.gitlab_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted rounded-md transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open in GitLab
+                    </a>
+                  )}
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRemoveReviewOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove Addon
+                    </button>
+                  )}
                 </PopoverContent>
               </Popover>
             )}
