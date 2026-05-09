@@ -35,14 +35,14 @@ class _VarSchema:
         self.name = name
         self.required = True
         self.default: Any = None
-        self.fields: dict[str, "_VarSchema"] = {}
+        self.fields: dict[str, _VarSchema] = {}
 
     def mark_optional(self, default: Any = None) -> None:
         self.required = False
         if default is not None and self.default is None:
             self.default = default
 
-    def get_or_add_field(self, name: str) -> "_VarSchema":
+    def get_or_add_field(self, name: str) -> _VarSchema:
         if name not in self.fields:
             self.fields[name] = _VarSchema(name)
         return self.fields[name]
@@ -106,8 +106,8 @@ def _strip_filters(expr: jnodes.Expr) -> tuple[jnodes.Expr, bool, Any]:
 
 def _walk_expr(
     expr: jnodes.Expr,
-    loop_ctx: dict[str, "_VarSchema"],
-    top_level: dict[str, "_VarSchema"],
+    loop_ctx: dict[str, _VarSchema],
+    top_level: dict[str, _VarSchema],
     internal: set[str],
 ) -> None:
     """
@@ -167,11 +167,7 @@ def _walk_expr(
         for child in expr.nodes:
             _walk_expr(child, loop_ctx, top_level, internal)
 
-    elif isinstance(expr, jnodes.List):
-        for item in expr.items:
-            _walk_expr(item, loop_ctx, top_level, internal)
-
-    elif isinstance(expr, jnodes.Tuple):
+    elif isinstance(expr, (jnodes.List, jnodes.Tuple)):
         for item in expr.items:
             _walk_expr(item, loop_ctx, top_level, internal)
 
@@ -196,8 +192,8 @@ def _walk_expr(
 
 def _walk_stmts(
     body: list[jnodes.Node],
-    loop_ctx: dict[str, "_VarSchema"],
-    top_level: dict[str, "_VarSchema"],
+    loop_ctx: dict[str, _VarSchema],
+    top_level: dict[str, _VarSchema],
     internal: set[str],
 ) -> None:
     for stmt in body:
