@@ -171,7 +171,7 @@ function ScalarInput({
       type="text"
       className={inputCls}
       value={value as string}
-      placeholder={String(field.default ?? "")}
+      placeholder={field.example ? `e.g. ${field.example}` : String(field.default ?? "")}
       onChange={(e) => onChange(e.target.value)}
     />
   );
@@ -221,7 +221,7 @@ function ObjectEditor({
         rows={4}
         value={raw}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder="# scalar, list, or map"
+        placeholder={_field.example ? `# Example: ${_field.example}` : "# scalar, list, or map"}
       />
       {error && <p className="text-xs text-destructive flex items-center gap-1">⚠ {error}</p>}
     </div>
@@ -511,6 +511,14 @@ export function FieldEditor({
 
       {/* Input — hidden for scalars in spec-build mode */}
       {input}
+
+      {/* Example hint — shown below object/list fields (scalar uses placeholder instead) */}
+      {field.example && input !== null && (field.type === "object" || field.type === "list") && (
+        <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1.5">
+          <span className="font-semibold text-muted-foreground/50">e.g.</span>
+          <code className="font-mono">{field.example}</code>
+        </p>
+      )}
     </div>
   );
 }

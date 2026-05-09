@@ -459,8 +459,9 @@ export default function DocsPage() {
             </Step>
             <Step n={4} title="Pre-configure Day2 addons">
               In the <strong>Day2 Addons</strong> section, browse the marketplace and select addons.
-              For each addon, click <strong>Configure</strong> to choose which fields cluster operators
-              can override at cluster-creation time.
+              For each addon, click <strong>Configure</strong> to choose which fields are
+              overrideable — those are the fields cluster operators can set differently per cluster.
+              Fields not marked as overrideable will always use the addon&apos;s team default.
             </Step>
             <Step n={5} title="Review and submit">
               Click <strong>Create Spec</strong>. Wingman renders the spec YAML and opens a GitLab MR.
@@ -492,7 +493,19 @@ spec:
         overrideable_fields: []`}
           </CodeBlock>
 
-          <div className="mt-5">
+          <div className="mt-5 space-y-4">
+            <Callout type="tip" title="# Example comments in the template">
+              Platform operators can add a <InlineCode># Example: value</InlineCode> comment on the
+              line immediately before any <InlineCode>{`{{ variable }}`}</InlineCode> in the Jinja2
+              template. Wingman detects these comments and shows them as hints in the cluster creation
+              form — helping operators fill in fields correctly without needing to read the raw template.
+              <div className="mt-2">
+                <CodeBlock language="cluster-template.j2 snippet">
+{`# Example: high-perf-tuned
+tuningConfig: {{ np.tuning_config | default("") }}`}
+                </CodeBlock>
+              </div>
+            </Callout>
             <Callout type="warning" title="Editing a spec affects future clusters only">
               Changing the nodepool count in a spec does not update clusters that already exist — those
               will show as drifted. You must explicitly re-render each existing cluster if you want them

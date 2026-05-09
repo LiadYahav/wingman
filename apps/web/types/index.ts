@@ -15,6 +15,7 @@ export interface TemplateField {
   type: "string" | "integer" | "boolean" | "list" | "object";
   required: boolean;
   default?: unknown;
+  example?: string;
   fields?: TemplateField[];  // sub-fields for list-of-objects
 }
 

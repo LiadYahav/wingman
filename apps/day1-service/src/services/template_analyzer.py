@@ -16,10 +16,16 @@ Supported patterns:
 
 from __future__ import annotations
 
+import re
 from typing import Any, cast
 
 from jinja2 import Environment
 from jinja2 import nodes as jnodes
+
+# Matches `# Example: some value` (case-insensitive, optional colon)
+_EXAMPLE_RE = re.compile(r"#\s*[Ee]xample\s*:\s*(.+)")
+# Captures the first identifier path inside {{ ... }}
+_TEMPLATE_VAR_RE = re.compile(r"\{\{-?\s*([\w.]+)")
 
 _JINJA2_BUILTINS = frozenset({
     "loop", "range", "namespace", "lipsum", "dict", "true", "false",
@@ -269,6 +275,41 @@ def _walk_stmts(
             _walk_expr(cast(jnodes.Expr, stmt.node), loop_ctx, top_level, internal)
 
 
+def _extract_examples(template_str: str) -> dict[str, str]:
+    """Return {var_name: example_text} for every # Example: comment in the template.
+
+    The comment must appear on the line immediately before (or within a few lines of)
+    the {{ expr }} that uses the variable. First occurrence of each name wins.
+    """
+    examples: dict[str, str] = {}
+    lines = template_str.splitlines()
+    for i, line in enumerate(lines):
+        m = _EXAMPLE_RE.search(line)
+        if not m:
+            continue
+        example_text = m.group(1).strip()
+        # Scan the next few lines for a {{ ... }} expression
+        for j in range(i + 1, min(i + 5, len(lines))):
+            var_m = _TEMPLATE_VAR_RE.search(lines[j])
+            if var_m:
+                full_path = var_m.group(1)           # e.g. "np.tuning_config" or "platform"
+                var_name = full_path.rsplit(".", 1)[-1]  # last component only
+                if var_name and var_name.isidentifier():
+                    examples.setdefault(var_name, example_text)
+                break
+    return examples
+
+
+def _merge_examples(schema: list[dict[str, Any]], examples: dict[str, str]) -> None:
+    """Attach example text to schema entries by matching on variable name."""
+    for item in schema:
+        ex = examples.get(item["name"])
+        if ex:
+            item["example"] = ex
+        if "fields" in item:
+            _merge_examples(item["fields"], examples)
+
+
 # Variables that are cluster identity inputs (shown separately in the form)
 IDENTITY_VARS = frozenset({
     "cluster_name", "site_name", "site", "mce_name", "mce",
@@ -305,8 +346,10 @@ def analyze_template(template_str: str, *, include_reserved: bool = False) -> li
     _walk_stmts(list(ast.body), {}, top_level, internal)
 
     skip = set() if include_reserved else RESERVED_VARS
-    return [
+    result = [
         v.to_dict()
         for v in top_level.values()
         if v.name not in internal and not v.name.startswith("_") and v.name not in skip
     ]
+    _merge_examples(result, _extract_examples(template_str))
+    return result
