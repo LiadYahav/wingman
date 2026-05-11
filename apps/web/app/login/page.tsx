@@ -110,25 +110,28 @@ function LoginContent() {
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#0073ea08_1px,transparent_1px),linear-gradient(to_bottom,#0073ea08_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none" />
 
       <div className="relative w-full max-w-sm space-y-8 px-4">
-        {/* Branding */}
-        <div className="flex flex-col items-center gap-3">
+        {/* Branding — Echelon lockup */}
+        <div className="flex flex-col items-center gap-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/wingman-logo.svg"
             alt="Wingman"
-            width={56}
-            height={56}
-            className="rounded-2xl shadow-lg shadow-primary/25"
+            width={64}
+            height={64}
+            className="rounded-2xl shadow-xl shadow-black/30"
           />
-          <div className="text-center">
+          <div className="text-center space-y-1">
             <h1
-              className="text-2xl font-bold tracking-tight text-foreground"
-              style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
+              className="text-[32px] leading-none tracking-tight text-foreground"
+              style={{ fontFamily: "var(--font-grotesk, var(--font-heading))", fontWeight: 500, letterSpacing: "-0.035em" }}
             >
-              Welcome to Wingman
+              Wing<span style={{ color: "#5b78b8" }}>man</span>
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              OpenShift Cluster Management Platform
+            <p
+              className="text-[11px] tracking-[0.18em] uppercase text-muted-foreground"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              Internal Developer Platform
             </p>
           </div>
         </div>

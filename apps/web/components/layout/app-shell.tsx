@@ -13,10 +13,10 @@ function SidebarLogo() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/wingman-logo.svg" alt="Wingman" width={30} height={30} className="rounded-lg" />
       <span
-        className="font-bold text-[15px] tracking-tight text-white"
-        style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
+        className="text-[15px] text-white"
+        style={{ fontFamily: "var(--font-grotesk, var(--font-heading))", fontWeight: 500, letterSpacing: "-0.035em" }}
       >
-        Wingman
+        Wing<span style={{ color: "#5b78b8" }}>man</span>
       </span>
     </Link>
   );
