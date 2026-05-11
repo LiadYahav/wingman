@@ -151,6 +151,7 @@ const NAV_SECTIONS = [
   { id: "drift", label: "Drift Detection" },
   { id: "approvals", label: "Approvals" },
   { id: "audit", label: "Audit Log" },
+  { id: "special-features", label: "Special Features" },
   { id: "filelocations", label: "File Locations" },
   { id: "troubleshooting", label: "Troubleshooting" },
 ] as const;
@@ -838,6 +839,267 @@ mcFiles:
                 ))}
               </ul>
             </div>
+          </div>
+        </section>
+
+        {/* Special Features */}
+        <section>
+          <SectionHeader id="special-features" icon={Zap} title="Special Features" subtitle="Power-user capabilities that are easy to miss" />
+          <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+            These features exist throughout the UI but are not always obvious at first glance.
+            Knowing about them can save significant time when working with clusters and specs day-to-day.
+          </p>
+
+          <div className="space-y-5">
+
+            {/* Live cluster status */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 shrink-0">
+                  <RefreshCw className="h-3.5 w-3.5 text-emerald-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Live cluster status streaming</p>
+                  <p className="text-xs text-muted-foreground">Cluster detail page</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  When you open a cluster&apos;s detail page, Wingman opens a persistent streaming connection
+                  to the backend that pushes live status updates every ~30 seconds — no manual refresh needed.
+                  The <strong>Phase</strong> badge (e.g. <InlineCode>Running</InlineCode>,{" "}
+                  <InlineCode>Degraded</InlineCode>) and the <strong>OCP version</strong> badge update
+                  automatically as the cluster progresses through provisioning.
+                </p>
+                <p>
+                  If the stream is interrupted (network blip, pod restart), the frontend retries automatically
+                  up to 5 times with exponential back-off. You do not need to reload the page.
+                </p>
+                <Callout type="tip">
+                  To verify the stream is active, open DevTools → Network and look for a long-lived request
+                  to <InlineCode>/api/day1/clusters/{"{name}"}/status/stream</InlineCode> with status{" "}
+                  <strong>pending</strong>. The EventStream column shows each parsed frame.
+                </Callout>
+              </div>
+            </div>
+
+            {/* Preview Variables */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 shrink-0">
+                  <Eye className="h-3.5 w-3.5 text-blue-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Preview Variables</p>
+                  <p className="text-xs text-muted-foreground">Spec create / edit page</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  The <strong>Preview Variables</strong> button on the spec form shows exactly which
+                  Jinja2 variables are detected in the cluster template at that moment, together with
+                  their inferred types and whether they are required. This is the same analysis the
+                  backend runs when a cluster creation form is loaded — so what you see here is what
+                  your cluster operators will need to fill in.
+                </p>
+                <p>
+                  Use it before saving a spec to catch missing or mis-typed variable names in the
+                  template before any cluster is created from it.
+                </p>
+              </div>
+            </div>
+
+            {/* Spec history + at-SHA */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10 shrink-0">
+                  <GitBranch className="h-3.5 w-3.5 text-purple-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Spec history & time travel</p>
+                  <p className="text-xs text-muted-foreground">Spec detail page → History tab</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  Every spec has a <strong>History</strong> tab listing every Git commit that touched it.
+                  Clicking a commit row expands the full YAML of the spec <em>at that exact commit</em> —
+                  without affecting the live spec. This is useful for:
+                </p>
+                <ul className="space-y-1 pl-4 list-disc marker:text-muted-foreground/40">
+                  <li>Auditing what changed between two spec versions</li>
+                  <li>Recovering a previous value that was overwritten</li>
+                  <li>Understanding why a cluster created at a particular time has certain structure</li>
+                </ul>
+                <p>
+                  The backend serves these historical snapshots from the GitLab repository&apos;s commit
+                  tree — no separate version storage is needed.
+                </p>
+              </div>
+            </div>
+
+            {/* YAML / Form toggle */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 shrink-0">
+                  <FileCode2 className="h-3.5 w-3.5 text-amber-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Form ↔ YAML toggle for addon overrides</p>
+                  <p className="text-xs text-muted-foreground">Cluster addon install / edit dialog</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  The addon override dialog has two modes switchable via tabs at the top of the form:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-2">
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <p className="text-xs font-semibold mb-1">Form mode</p>
+                    <p className="text-xs leading-relaxed">
+                      Each overrideable field is shown as a labelled input. Integers, booleans, and
+                      simple strings have dedicated controls. Good for routine value changes.
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <p className="text-xs font-semibold mb-1">YAML mode</p>
+                    <p className="text-xs leading-relaxed">
+                      A raw YAML editor containing all override values. Necessary for nested structures,
+                      multi-line strings, or pasting values from another source. Values sync back to the
+                      form when you switch tabs.
+                    </p>
+                  </div>
+                </div>
+                <p>
+                  All object and map fields accept plain YAML directly — no JSON braces needed.
+                  A bare scalar like <InlineCode>high-perf-tuned</InlineCode> is valid; so is a
+                  multi-line map.
+                </p>
+              </div>
+            </div>
+
+            {/* Addon value layers */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-pink-500/10 shrink-0">
+                  <Layers className="h-3.5 w-3.5 text-pink-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Addon value layers view</p>
+                  <p className="text-xs text-muted-foreground">Cluster addons page → expand an addon → Layers tab</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  Expand any installed addon and click the <strong>Layers</strong> tab to see a
+                  side-by-side breakdown of where each value comes from:
+                </p>
+                <CodeBlock language="Value provenance example">
+{`replicas:      2    ← cluster override   (you set this)
+retention:     30d  ← team default       (monitoring team owns this)
+namespace:     cert-manager ← chart default (Helm chart ships this)`}
+                </CodeBlock>
+                <p>
+                  The <strong>Merged</strong> tab shows the final values as ArgoCD will apply them.
+                  Use the Layers tab when debugging unexpected addon behaviour — it makes it immediately
+                  clear which layer is winning for each key.
+                </p>
+              </div>
+            </div>
+
+            {/* MR conflict detection */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/10 shrink-0">
+                  <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">MR conflict detection</p>
+                  <p className="text-xs text-muted-foreground">Approvals page</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  The Approvals page shows a <strong>Conflicted</strong> badge on any MR whose branch
+                  has merge conflicts with the target branch. This happens when two concurrent changes
+                  touch the same file — for example, two operators creating clusters in the same MCE
+                  directory simultaneously.
+                </p>
+                <p>
+                  A conflicted MR cannot be merged until the conflict is resolved. Options:
+                </p>
+                <ul className="space-y-1 pl-4 list-disc marker:text-muted-foreground/40">
+                  <li>Close the conflicted MR and re-create the change from the Wingman UI (recommended)</li>
+                  <li>Resolve the conflict directly in GitLab if you are comfortable with the raw YAML</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Open in GitLab shortcuts */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 shrink-0">
+                  <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Open in GitLab — everywhere</p>
+                  <p className="text-xs text-muted-foreground">Available on clusters, specs, addons, and MRs</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed">
+                <p className="mb-3">
+                  Almost every resource in Wingman has a direct link to its underlying GitLab file or
+                  directory. These links open in a new tab and are available to all users including Viewers:
+                </p>
+                <div className="space-y-2">
+                  {[
+                    { where: "Cluster detail page", what: "Opens the rendered cluster YAML in the Day1 repository" },
+                    { where: "Spec detail page", what: "Opens the spec YAML in the Specs repository" },
+                    { where: "Installed addon → ⋮ menu", what: "Opens the per-cluster override directory in the team repository" },
+                    { where: "Approvals page → MR row", what: "Opens the GitLab MR diff view directly" },
+                    { where: "Audit log → commit row", what: "Opens the exact commit in GitLab via the external link icon" },
+                  ].map(({ where, what }) => (
+                    <div key={where} className="flex gap-3 rounded-lg bg-muted/30 px-3 py-2.5">
+                      <div className="w-44 shrink-0">
+                        <p className="text-xs font-medium text-foreground">{where}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground min-w-0">{what}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* OCP versions from file */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 shrink-0">
+                  <Settings2 className="h-3.5 w-3.5 text-indigo-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">OpenShift version list is repo-driven</p>
+                  <p className="text-xs text-muted-foreground">Cluster creation → OpenShift version dropdown</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
+                <p>
+                  The OpenShift version dropdown is not hardcoded. It is populated from a plain text file,{" "}
+                  <InlineCode>openshift-versions.txt</InlineCode>, in the Specs repository — one version
+                  string per line.
+                </p>
+                <p>
+                  To add or remove available versions, edit that file directly in GitLab (or via a
+                  Wingman MR). The dropdown updates immediately on the next page load — no code
+                  deployment required.
+                </p>
+                <CodeBlock language="openshift-versions.txt">
+{`4.16.12
+4.15.30
+4.14.20`}
+                </CodeBlock>
+              </div>
+            </div>
+
           </div>
         </section>
 
