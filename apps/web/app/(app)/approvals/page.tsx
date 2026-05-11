@@ -174,12 +174,19 @@ export default function ApprovalsPage() {
               : paginated.map((mr) => (
                   <tr key={`${mr.repo}-${mr.iid}`} className="hover:bg-primary/[0.03] transition-colors">
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/approvals/${mr.repo}-${mr.iid}`}
-                        className="font-semibold text-foreground hover:text-primary transition-colors"
-                      >
-                        {mr.title}
-                      </Link>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          href={`/approvals/${mr.repo}-${mr.iid}`}
+                          className="font-semibold text-foreground hover:text-primary transition-colors"
+                        >
+                          {mr.title}
+                        </Link>
+                        {mr.has_conflicts === true && (
+                          <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-[#df2f4a]/10 text-[#df2f4a]">
+                            Conflicted
+                          </span>
+                        )}
+                      </div>
                       {mr.labels.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {mr.labels.map((label) => (

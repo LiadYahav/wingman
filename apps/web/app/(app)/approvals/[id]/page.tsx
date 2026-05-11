@@ -321,6 +321,11 @@ function MRDetailContent() {
                 {mr.state}
               </span>
               <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", repoCls)}>{repo}</span>
+              {mr.has_conflicts === true && (
+                <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-[#df2f4a]/10 text-[#df2f4a]">
+                  Conflicted
+                </span>
+              )}
               {mr.labels.map((l) => (
                 <span key={l} className="rounded-full px-2 py-0.5 text-xs bg-muted text-muted-foreground">{l}</span>
               ))}

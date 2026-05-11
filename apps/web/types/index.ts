@@ -92,6 +92,8 @@ export interface NodePoolStatus {
 
 export interface ClusterLiveStatus {
   cluster_name: string;
+  hc_phase?: string;
+  ocp_version?: string;
   hc_problems: string[];
   node_pools: NodePoolStatus[];
   error?: string;
@@ -133,6 +135,16 @@ export interface AddonCatalogEntry {
   current_version: string;
   default_values: Record<string, unknown>;
   argocd_metadata?: AddonArgoMetadata;
+  dependencies: string[];
+}
+
+export interface SpecCommit {
+  sha: string;
+  short_sha: string;
+  message: string;
+  author: string;
+  date: string;
+  web_url: string;
 }
 
 export interface InstalledAddon {
@@ -177,6 +189,7 @@ export interface MRDetail {
   target_branch: string;
   labels: string[];
   repo: "day1" | "day2" | "specs"; // added by frontend aggregation
+  has_conflicts?: boolean | null;
 }
 
 export interface FileDiff {

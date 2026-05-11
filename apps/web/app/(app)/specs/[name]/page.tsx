@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Edit2, Server, AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react";
+import { ArrowLeft, Trash2, Edit2, Server, AlertTriangle, CheckCircle2, ExternalLink, GitCommitHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
@@ -13,7 +13,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { ReviewDialog } from "@/components/common/review-dialog";
-import type { ClusterSpec, MRDetail } from "@/types";
+import type { ClusterSpec, MRDetail, SpecCommit } from "@/types";
 
 interface SpecCluster {
   name: string;
@@ -47,8 +47,9 @@ export default function SpecDetailPage() {
   const isAdmin = useIsAdmin();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"overview" | "clusters" | "drift">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "clusters" | "drift" | "history">("overview");
   const [deleteReviewOpen, setDeleteReviewOpen] = useState(false);
+  const [selectedSha, setSelectedSha] = useState<string | null>(null);
 
   const { data: spec, isLoading } = useQuery<ClusterSpec>({
     queryKey: ["specs", specName],
@@ -71,6 +72,20 @@ export default function SpecDetailPage() {
     staleTime: 60_000,
   });
 
+  const { data: history, isLoading: historyLoading } = useQuery<SpecCommit[]>({
+    queryKey: ["spec-history", specName],
+    queryFn: () => api.get<SpecCommit[]>(`/api/day1/specs/${specName}/history`),
+    enabled: activeTab === "history",
+    staleTime: 60_000,
+  });
+
+  const { data: specAtSha, isLoading: specAtShaLoading } = useQuery<string>({
+    queryKey: ["spec-at-sha", specName, selectedSha],
+    queryFn: () => api.getText(`/api/day1/specs/${specName}/at/${selectedSha}`),
+    enabled: !!selectedSha && activeTab === "history",
+    staleTime: Infinity,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => api.del<MRDetail>(`/api/day1/specs/${specName}`),
     onSuccess: (mr) => {
@@ -86,6 +101,7 @@ export default function SpecDetailPage() {
     { id: "overview" as const, label: "Overview" },
     { id: "clusters" as const, label: `Clusters${clusters ? ` (${clusters.length})` : ""}` },
     { id: "drift" as const, label: "Drift" },
+    { id: "history" as const, label: "History" },
   ];
 
   return (
@@ -306,6 +322,96 @@ export default function SpecDetailPage() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* History tab */}
+      {activeTab === "history" && (
+        <div className="flex gap-4 min-h-[400px]">
+          {/* Commit list */}
+          <div className="w-80 shrink-0 bg-card rounded-xl border shadow-sm overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b bg-muted/30">
+              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Commits</h2>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              {historyLoading ? (
+                <div className="p-4 space-y-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : history?.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8 px-4">No history available.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {history?.map((commit) => (
+                    <button
+                      key={commit.sha}
+                      onClick={() => setSelectedSha(commit.sha)}
+                      className={cn(
+                        "w-full text-left px-4 py-3 transition-colors hover:bg-primary/[0.03]",
+                        selectedSha === commit.sha && "bg-primary/[0.06] border-l-2 border-l-primary"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
+                          <GitCommitHorizontal className="h-3 w-3 shrink-0" />
+                          <span>{commit.short_sha}</span>
+                        </div>
+                        <a
+                          href={commit.web_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-muted-foreground hover:text-primary transition-colors shrink-0"
+                          title="Open in GitLab"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                      <p className="text-xs font-medium mt-1 line-clamp-2 leading-snug">{commit.message}</p>
+                      <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
+                        <span>{commit.author}</span>
+                        <span>·</span>
+                        <span>{new Date(commit.date).toLocaleDateString()}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* YAML viewer */}
+          <div className="flex-1 bg-card rounded-xl border shadow-sm overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between">
+              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {selectedSha
+                  ? `Spec at ${history?.find((c) => c.sha === selectedSha)?.short_sha ?? selectedSha.slice(0, 8)}`
+                  : "Spec content"}
+              </h2>
+              {selectedSha && (
+                <span className="text-xs text-muted-foreground font-mono">{selectedSha.slice(0, 8)}</span>
+              )}
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              {!selectedSha ? (
+                <p className="text-sm text-muted-foreground text-center py-12">
+                  Select a commit to view the spec at that point in time.
+                </p>
+              ) : specAtShaLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <Skeleton key={i} className="h-4 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <pre className="text-xs font-mono text-zinc-300 bg-zinc-950 rounded-lg p-4 overflow-auto leading-5 whitespace-pre-wrap">
+                  {specAtSha}
+                </pre>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

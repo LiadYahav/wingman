@@ -73,8 +73,45 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+async function requestText(
+  path: string,
+  options: RequestInit = {}
+): Promise<string> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(path, { ...options, headers });
+
+  if (res.status === 401) {
+    clearToken();
+    try {
+      localStorage.removeItem("wingman-auth");
+    } catch { /* ignore */ }
+    window.location.href = "/login";
+    throw new Error("Unauthorized — redirecting to login");
+  }
+
+  if (!res.ok) {
+    const body = await res.text();
+    let message = `API error ${res.status}: ${body}`;
+    try {
+      const json = JSON.parse(body);
+      if (typeof json?.detail === "string") message = json.detail;
+    } catch { /* use raw body */ }
+    throw new Error(message);
+  }
+
+  return res.text();
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
+  getText: (path: string) => requestText(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: "POST",

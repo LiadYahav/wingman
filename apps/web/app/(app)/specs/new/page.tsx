@@ -51,6 +51,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { ConfigureOverrideableDialog } from "@/components/specs/configure-overrideable-dialog";
 import { DynamicVariableForm, initFormValues, type FormValues } from "@/components/clusters/dynamic-variable-form";
 import type { MRDetail, AddonCatalogEntry, SpecAddon, ClusterSpec, OverrideableField, TemplateField } from "@/types";
@@ -285,6 +292,7 @@ export default function NewSpecPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [addonSearch, setAddonSearch] = useState("");
   const [configuringAddon, setConfiguringAddon] = useState<{ team: string; name: string } | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: addonCatalog, isLoading: catalogLoading } = useQuery<AddonCatalogEntry[]>({
     queryKey: ["addons", "catalog"],
@@ -410,6 +418,13 @@ export default function NewSpecPage() {
     catch { return ""; }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [specName, specVersion, structure, immutablePaths, selectedAddons]);
+
+  const previewYaml = useMemo(() => {
+    const nonIdentity = Object.fromEntries(
+      Object.entries(structure).filter(([k]) => !IDENTITY_VAR_NAMES.has(k))
+    );
+    return jsYaml.dump(nonIdentity, { indent: 2 });
+  }, [structure]);
 
   const createMutation = useMutation({
     mutationFn: async () => api.post<MRDetail>("/api/day1/specs", buildFinalSpec()),
@@ -641,6 +656,13 @@ export default function NewSpecPage() {
       <div className="flex gap-3">
         <Link href="/specs" className={buttonVariants({ variant: "outline" })}>Cancel</Link>
         <button
+          onClick={() => setPreviewOpen(true)}
+          className={cn(buttonVariants({ variant: "outline" }), "inline-flex items-center gap-2")}
+        >
+          <Eye className="h-4 w-4" />
+          Preview variables
+        </button>
+        <button
           onClick={handleReview}
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
         >
@@ -659,6 +681,21 @@ export default function NewSpecPage() {
         isPending={createMutation.isPending}
         confirmLabel="Confirm — Create Spec MR"
       />
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Preview variables</DialogTitle>
+            <DialogDescription>
+              The structure values below will flow into the cluster template when a cluster is created from this spec.
+              Identity fields (cluster name, site, MCE) are excluded — they are supplied at creation time.
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="text-xs font-mono bg-muted rounded p-3 overflow-auto max-h-96">
+            {previewYaml}
+          </pre>
+        </DialogContent>
+      </Dialog>
 
       {configuringAddon && (
         <ConfigureOverrideableDialog

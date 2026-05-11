@@ -324,6 +324,30 @@ class SpecService:
 
         return await self.cache.get_or_fetch(cache_key, _fetch, ttl=300.0)
 
+    # ── Version history ───────────────────────────────────────────────────────
+
+    async def get_spec_history(self, name: str) -> list[dict]:
+        """Return commit history for a spec file."""
+        path = self.pr.spec_file(spec_name=name)
+        commits = await self.gl.alist_commits(ref_name=self.default_branch, path=path)
+        return [
+            {
+                "sha": c["id"],
+                "short_sha": c["short_id"],
+                "message": c.get("title", c.get("message", "")),
+                "author": c.get("author_name", ""),
+                "date": c.get("authored_date", ""),
+                "web_url": c.get("web_url", ""),
+            }
+            for c in commits
+        ]
+
+    async def get_spec_at_sha(self, name: str, sha: str) -> str:
+        """Return raw YAML of a spec at a specific commit SHA."""
+        path = self.pr.spec_file(spec_name=name)
+        content, _ = await self.gl.aread_file(path, ref=sha)
+        return content
+
     # ── Clusters that use a spec ───────────────────────────────────────────────
 
     async def get_spec_clusters(self, spec_name: str) -> list[dict[str, Any]]:

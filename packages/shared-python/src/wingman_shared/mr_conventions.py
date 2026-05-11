@@ -231,4 +231,5 @@ def parse_mr_to_detail(raw: dict[str, Any], extract_platform_author: bool = True
         source_branch=raw.get("source_branch", ""),
         target_branch=raw.get("target_branch", ""),
         labels=raw.get("labels", []),
+        has_conflicts=raw.get("has_conflicts"),
     )

@@ -146,20 +146,56 @@ E2E tests are located in `apps/web/e2e/`:
 
 ```
 e2e/
-├── fixtures/          # Mock data and API handlers
-│   ├── addons.ts      # Mock addon catalog data
-│   └── api-handlers.ts# Route mocking utilities
-├── pages/             # Page objects for test abstraction
+├── fixtures/              # Mock data and route intercept helpers
+│   ├── addons.ts          # Legacy mock addon data (used by old page-object tests)
+│   └── api-handlers.ts    # injectAdminAuth(), mockDashboardApis() helpers
+├── pages/                 # Page objects (used by the older feature test files)
 │   ├── spec-new.page.ts
 │   ├── spec-edit.page.ts
 │   ├── cluster-new.page.ts
 │   └── configure-dialog.page.ts
-└── tests/             # Test files
-    ├── spec-creation.spec.ts
-    ├── addon-configuration.spec.ts
-    ├── addon-reordering.spec.ts
-    └── field-type-handling.spec.ts
+└── tests/
+    ├── spec-creation.spec.ts       # Spec form (page-object style)
+    ├── addon-configuration.spec.ts # Addon field configure dialog
+    ├── addon-reordering.spec.ts    # Drag-to-reorder
+    ├── field-type-handling.spec.ts # YAML field types
+    ├── new-features.spec.ts        # Targeted feature regression tests
+    ├── user-flows.spec.ts          # Full mocked user journeys (34 tests)
+    │                               # Runs without a live backend — all APIs intercepted
+    ├── live-user-flows.spec.ts     # Full live user journeys with cleanup (21 tests)
+    │                               # Requires PLAYWRIGHT_BASE_URL=http://localhost:8080
+    └── live-qa.spec.ts             # Smoke QA against the real deployed stack (12 tests)
+                                    # Requires PLAYWRIGHT_BASE_URL=http://localhost:8080
 ```
+
+### Running the live tests
+
+```bash
+# Mocked tests only (no backend required — uses Next.js dev server on 3000)
+cd apps/web && npm run test:e2e
+
+# Full stack tests against the minikube deployment
+PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test live-qa.spec.ts
+PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test live-user-flows.spec.ts
+
+# All tests combined (mocked + live)
+PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test
+```
+
+### Key patterns to know
+
+- **Route intercept order**: Playwright uses LIFO matching — the last `page.route()` registered
+  wins for a given URL. Register broad wildcard routes first in `setupMocks`, then override with
+  specific ones in `beforeEach` blocks.
+- **`*` vs `**` in globs**: `*` matches one path segment; `**` matches across `/`. Use `**` when
+  a URL has variable-depth paths (e.g. `**/audit/commits/**/diff` for `{repo}/{sha}/diff`).
+- **ClusterInstalledResponse shape**: `{ cluster: string, mce: string, installed: InstalledAddon[] }`.
+  Mock responses must match this — not a bare array.
+- **SSE keeps network alive**: `waitForLoadState("networkidle")` never resolves. Always use
+  `waitForLoadState("domcontentloaded")` plus an explicit `waitForTimeout()`.
+- **401 from any unmocked endpoint triggers `window.location.href = "/login"`** (see `api-client.ts`).
+  Every endpoint a page could call must be intercepted in the mock — including secondary ones like
+  `/api/day2/gitlab-info` on the cluster addons page.
 
 ### data-testid Conventions
 

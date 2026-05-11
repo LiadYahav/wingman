@@ -6,7 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, Package, Edit2, Eye, X, Wrench, Activity, CheckCircle2, XCircle, HelpCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api-client";
+import { api, getToken } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
-import { computeLineDiff } from "@/lib/diff";
+import { computeLineDiff, computeFullFileDiff } from "@/lib/diff";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MRDetail, ClusterLiveStatus, AddonCatalogEntry, InstalledAddon } from "@/types";
 
@@ -88,6 +88,12 @@ function ClusterDetailContent() {
     retry: false,
   });
 
+  const { refetch: fetchCurrentYaml, data: currentYaml } = useQuery<string>({
+    queryKey: ["cluster-current-yaml", name, site, mce],
+    queryFn: () => api.getText(`/api/day1/clusters/${name}/current-yaml?site=${site}&mce=${mce}`),
+    enabled: false,
+  });
+
   const { data: drift, isLoading: driftLoading } = useQuery<DriftResult>({
     queryKey: ["clusters", name, "drift"],
     queryFn: () => api.get<DriftResult>(`/api/day1/clusters/${name}/drift?site=${site}&mce=${mce}`),
@@ -112,10 +118,62 @@ function ClusterDetailContent() {
     });
   }, [queryClient, name, mce]);
 
+  // SSE subscription for live status — streams updates every 30s from the backend.
+  // Uses fetch() instead of EventSource so we can pass the Authorization header.
+  useEffect(() => {
+    if (!mce) return;
+    const controller = new AbortController();
+
+    const MAX_RETRIES = 5;
+    let retries = 0;
+    const startStream = async () => {
+      try {
+        const token = getToken();
+        const res = await fetch(
+          `/api/day1/clusters/${name}/status/stream?mce=${mce}`,
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            signal: controller.signal,
+          }
+        );
+        if (!res.ok || !res.body) return;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() ?? "";
+          for (const chunk of chunks) {
+            const dataLine = chunk.split("\n").find((l) => l.startsWith("data: "));
+            if (!dataLine) continue;
+            try {
+              const parsed = JSON.parse(dataLine.slice(6)) as ClusterLiveStatus;
+              queryClient.setQueryData(["clusters", name, "live-status", mce], parsed);
+            } catch { /* ignore malformed frames */ }
+          }
+        }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") {
+          if (retries < MAX_RETRIES) {
+            retries++;
+            setTimeout(startStream, Math.min(5_000 * retries, 30_000));
+          }
+        }
+      }
+    };
+
+    startStream();
+    return () => controller.abort();
+  }, [name, mce, queryClient]);
+
   const [activeTab, setActiveTab] = useState("overview");
   const [editYaml, setEditYaml] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [beforeYaml, setBeforeYaml] = useState<string | undefined>(undefined);
   const [deleteReviewOpen, setDeleteReviewOpen] = useState(false);
   const [fixingAddon, setFixingAddon] = useState<AddonSyncEntry | null>(null);
   const [yamlSyncOpen, setYamlSyncOpen] = useState(false);
@@ -258,7 +316,11 @@ function ClusterDetailContent() {
                   <X className="h-4 w-4 mr-1.5" />Cancel
                 </button>
                 <button
-                  onClick={() => setReviewOpen(true)}
+                  onClick={async () => {
+                    const result = await fetchCurrentYaml();
+                    if (result.data) setBeforeYaml(result.data);
+                    setReviewOpen(true);
+                  }}
                   disabled={editYaml.trim() === (cluster?.yaml ?? "").trim()}
                   title={editYaml.trim() === (cluster?.yaml ?? "").trim() ? "No changes to submit" : undefined}
                   className={buttonVariants({ size: "sm" })}
@@ -421,6 +483,35 @@ function ClusterDetailContent() {
                     </div>
                   ) : (
                     <>
+                      {/* HC Phase + OCP Version metadata row */}
+                      {(liveStatus?.hc_phase || liveStatus?.ocp_version) && (
+                        <div className="flex items-center gap-4 flex-wrap">
+                          {liveStatus.hc_phase && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">Phase</span>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  liveStatus.hc_phase === "Running"
+                                    ? "text-green-600 border-green-300"
+                                    : liveStatus.hc_phase === "Degraded" || liveStatus.hc_phase === "Error"
+                                    ? "text-red-600 border-red-300"
+                                    : "text-yellow-600 border-yellow-300"
+                                }
+                              >
+                                {liveStatus.hc_phase}
+                              </Badge>
+                            </div>
+                          )}
+                          {liveStatus.ocp_version && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">OCP Version</span>
+                              <span className="font-mono font-medium text-xs">{liveStatus.ocp_version}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* HostedCluster health */}
                       <div className="flex items-start gap-2">
                         <span className="text-muted-foreground min-w-28 shrink-0">HostedCluster</span>
@@ -606,15 +697,17 @@ function ClusterDetailContent() {
       )}
 
       {/* Modify review dialog — shows actual diff between original and edited YAML */}
+      {/* Uses fresh current YAML from server as the "before" side when available */}
       <ReviewDialog
         open={reviewOpen}
         onOpenChange={setReviewOpen}
         title={`Review: Modify Cluster "${name}"`}
-        description="Changed lines are highlighted. Green = added, red = removed. Confirming creates a GitLab MR for approval."
-        diff={computeLineDiff(cluster?.yaml ?? "", editYaml)}
+        description="Full file shown — green lines added, red lines removed. Scroll to review all changes before confirming."
+        diff={computeFullFileDiff(beforeYaml ?? currentYaml ?? cluster?.yaml ?? "", editYaml)}
         onConfirm={() => modifyMutation.mutate()}
         isPending={modifyMutation.isPending}
         confirmLabel="Confirm — Create MR"
+        size="xl"
       />
 
       {/* Delete review dialog */}

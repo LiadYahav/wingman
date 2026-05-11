@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Annotated, Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from wingman_shared.cache import CacheManager
 from wingman_shared.models import (
@@ -190,6 +192,61 @@ async def get_cluster_live_status(
             detail="Live cluster status is not enabled. Set CLUSTER_STATUS_ENABLED=true.",
         )
     return await asyncio.to_thread(status_svc.fetch_cluster_status, name, mce)
+
+
+@router.get("/{name}/status/stream")
+async def stream_cluster_status(
+    name: str,
+    mce: Annotated[str, Query(description="MCE identifier")],
+    _: CurrentUser,
+) -> StreamingResponse:
+    """
+    Stream live cluster status updates via Server-Sent Events (SSE).
+
+    Polls every 30 seconds and pushes ClusterLiveStatus JSON to the client.
+    Requires CLUSTER_STATUS_ENABLED=true. Use fetch() with an Authorization
+    header on the client side (EventSource does not support custom headers).
+    """
+    status_svc = get_cluster_status_service()
+    if status_svc is None:
+        raise HTTPException(
+            status_code=501,
+            detail="Live cluster status is not enabled. Set CLUSTER_STATUS_ENABLED=true.",
+        )
+
+    async def generate():
+        try:
+            while True:
+                try:
+                    result = await asyncio.to_thread(status_svc.fetch_cluster_status, name, mce)
+                    data = json.dumps(result.model_dump())
+                    yield f"data: {data}\n\n"
+                except Exception as exc:
+                    yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+                await asyncio.sleep(30)
+        except GeneratorExit:
+            pass
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/{name}/current-yaml", response_class=PlainTextResponse)
+async def get_cluster_current_yaml(
+    name: str,
+    site: Annotated[str, Query(description="Site identifier")],
+    mce: Annotated[str, Query(description="MCE identifier")],
+    cluster_svc: ClusterServiceDep,
+    user: CurrentUser,
+) -> str:
+    """Return the raw YAML currently stored in the Day1 GitLab repo for a cluster."""
+    return await cluster_svc.get_current_yaml(name=name, site=site, mce=mce)
 
 
 @router.get("/{name}", response_model=dict)

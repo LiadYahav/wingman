@@ -86,12 +86,20 @@ npm run dev  # Starts on port 3000
 ### Running Tests
 
 ```bash
-# Python tests
-cd apps/day1-service && uv run pytest
-cd apps/day2-service && uv run pytest
+# Python lint + type check
+uvx ruff check apps/day1-service apps/day2-service packages/shared-python
+uvx mypy apps/day1-service/src --ignore-missing-imports
+uvx mypy apps/day2-service/src --ignore-missing-imports
 
-# Frontend
+# Frontend lint + build
 cd apps/web && npm run lint && npm run build
+
+# Mocked E2E tests (no backend required)
+cd apps/web && npm run test:e2e
+
+# Live E2E tests against the running stack (requires kubectl port-forward to 8080)
+PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test e2e/tests/live-qa.spec.ts
+PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test e2e/tests/live-user-flows.spec.ts
 ```
 
 ## Adding New Features
@@ -150,6 +158,10 @@ MyServiceDep = Annotated[MyService, Depends(get_my_service)]
 ```
 
 ### Adding a New Frontend Page
+
+> **Existing pages for reference**: `/clusters`, `/specs`, `/addons`, `/approvals`, `/audit`, `/docs`
+> (see `apps/web/app/(app)/`). The `/docs` page is a good example of a pure TSX content page that uses
+> no external markdown renderer.
 
 1. **Create the page** in `app/(app)/<route>/page.tsx`:
 

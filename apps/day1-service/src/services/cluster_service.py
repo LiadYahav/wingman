@@ -433,6 +433,17 @@ class ClusterService:
 
         return parse_mr_to_detail(mr_raw)
 
+    # ── Current YAML ──────────────────────────────────────────────────────────
+
+    async def get_current_yaml(self, name: str, site: str, mce: str) -> str:
+        """Return the raw YAML content currently stored in the Day1 repo for a cluster."""
+        cluster_path = self.pr.day1_cluster_file(site=site, mce=mce, cluster=name)
+        try:
+            content, _ = await self.gl.aread_file(cluster_path, ref=self.default_branch)
+        except NotFoundError as exc:
+            raise HTTPException(status_code=404, detail=f"Cluster '{name}' not found") from exc
+        return content
+
     # ── Site/MCE management ────────────────────────────────────────────────────
 
     async def list_sites(self) -> list[str]:

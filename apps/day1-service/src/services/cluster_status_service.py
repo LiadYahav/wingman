@@ -248,8 +248,20 @@ class ClusterStatusService:
             logger.warning("Failed to fetch NodePools for %s: %s", cluster_name, exc)
             hc_problems.append(f"NodePool fetch failed: {exc}")
 
+        hc_status = hc.get("status", {})
+        hc_phase: str | None = hc_status.get("phase")
+        ocp_version: str | None = None
+        try:
+            history = hc_status.get("version", {}).get("history", [])
+            if history:
+                ocp_version = history[0].get("version")
+        except Exception:
+            pass
+
         return ClusterLiveStatus(
             cluster_name=cluster_name,
             hc_problems=hc_problems,
             node_pools=node_pools,
+            hc_phase=hc_phase,
+            ocp_version=ocp_version,
         )

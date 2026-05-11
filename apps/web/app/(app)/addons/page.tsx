@@ -123,8 +123,8 @@ function AddonValuesDialog({
                         <span className="italic text-muted-foreground/60">null</span>
                       ) : typeof value === "boolean" ? (
                         <span className={value ? "text-status-ready" : "text-status-error"}>{String(value)}</span>
-                      ) : Array.isArray(value) ? (
-                        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(value, null, 2)}</pre>
+                      ) : Array.isArray(value) || (typeof value === "object") ? (
+                        <pre className="text-xs whitespace-pre-wrap">{jsYaml.dump(value, { indent: 2, lineWidth: -1 }).trim()}</pre>
                       ) : (
                         String(value)
                       )}

@@ -131,11 +131,15 @@ class AddonService:
             argocd_meta: AddonArgoMetadata | None = None
             available_versions: list[str] = []
             current_version: str = ""
+            dependencies: list[str] = []
 
             try:
                 values_content, _ = await gl.aread_file(values_path, ref=self._default_branch)
                 docs = parse_multi_document(values_content)
-                team_values = docs[0] if docs else {}
+                if docs:
+                    raw = docs[0]
+                    dependencies = raw.pop("dependencies", [])
+                    team_values = raw
             except NotFoundError:
                 pass
             except Exception as exc:
@@ -168,6 +172,7 @@ class AddonService:
                 current_version=current_version,
                 default_values=team_values,
                 argocd_metadata=argocd_meta,
+                dependencies=dependencies,
             )
 
         return await self.cache.get_or_fetch(
@@ -380,7 +385,7 @@ class AddonService:
             mce=mce, cluster=cluster_name, addon=addon_name
         )
         try:
-            content, _ = self._team_gl(team).read_file(override_path, ref=self._default_branch)
+            content, _ = await self._team_gl(team).aread_file(override_path, ref=self._default_branch)
             docs = parse_multi_document(content)
             cluster_values = docs[0] if docs else {}
         except NotFoundError:

@@ -8,6 +8,7 @@ from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import PlainTextResponse
 from wingman_shared.cache import CacheManager
 from wingman_shared.models import ClusterMetadata, ClusterSpec, MRDetail
 
@@ -64,6 +65,25 @@ async def get_template_schema(
     toggle immutability on those fields.
     """
     return await spec_svc.get_template_schema(include_reserved=include_reserved)
+
+
+@router.get("/{name}/history")
+async def get_spec_history(
+    name: str,
+    spec_svc: SpecServiceDep,
+    user: CurrentUser,
+) -> list[dict]:
+    return await spec_svc.get_spec_history(name)
+
+
+@router.get("/{name}/at/{sha}", response_class=PlainTextResponse)
+async def get_spec_at_sha(
+    name: str,
+    sha: str,
+    spec_svc: SpecServiceDep,
+    user: CurrentUser,
+) -> str:
+    return await spec_svc.get_spec_at_sha(name, sha)
 
 
 @router.get("/{name}", response_model=ClusterSpec)

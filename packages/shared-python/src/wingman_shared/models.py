@@ -133,6 +133,8 @@ class NodePoolStatus(BaseModel):
 
 class ClusterLiveStatus(BaseModel):
     cluster_name: str
+    hc_phase: str | None = None
+    ocp_version: str | None = None
     hc_problems: list[str] = Field(default_factory=list)
     node_pools: list[NodePoolStatus] = Field(default_factory=list)
     error: str | None = None  # set when the MCE API call failed entirely
@@ -168,6 +170,7 @@ class MRDetail(BaseModel):
     target_branch: str
     labels: list[str] = Field(default_factory=list)
     repo: Literal["day1", "day2", "specs"] = "day1"  # which GitLab repo this MR belongs to
+    has_conflicts: bool | None = None
 
 
 class FileDiff(BaseModel):
@@ -224,6 +227,7 @@ class AddonCatalogEntry(BaseModel):
     current_version: str = ""  # targetRevision from default metadata
     default_values: dict[str, Any] = Field(default_factory=dict)
     argocd_metadata: AddonArgoMetadata | None = None
+    dependencies: list[str] = Field(default_factory=list)
 
 
 class InstalledAddon(BaseModel):

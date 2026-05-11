@@ -64,6 +64,47 @@ export function computeLineDiff(oldText: string, newText: string): string {
   return out.join("\n");
 }
 
+/**
+ * Like computeLineDiff but shows the ENTIRE file — unchanged lines are
+ * included as context so the user can scroll through the whole document
+ * and see exactly where each change lands.
+ */
+export function computeFullFileDiff(oldText: string, newText: string): string {
+  if (oldText === newText) return "";
+
+  const A = oldText.split("\n");
+  const B = newText.split("\n");
+
+  if (A.length * B.length > 250_000) {
+    return computeLineDiff(oldText, newText); // fall back to hunked diff for huge files
+  }
+
+  const dp = Array.from({ length: A.length + 1 }, () => new Int32Array(B.length + 1));
+  for (let i = 1; i <= A.length; i++) {
+    for (let j = 1; j <= B.length; j++) {
+      dp[i][j] =
+        A[i - 1] === B[j - 1]
+          ? dp[i - 1][j - 1] + 1
+          : Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+
+  type Op = { t: " " | "+" | "-"; s: string };
+  const ops: Op[] = [];
+  let i = A.length, j = B.length;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && A[i - 1] === B[j - 1]) {
+      ops.unshift({ t: " ", s: A[i - 1] }); i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      ops.unshift({ t: "+", s: B[j - 1] }); j--;
+    } else {
+      ops.unshift({ t: "-", s: A[i - 1] }); i--;
+    }
+  }
+
+  return ["--- before", "+++ after", "@@ full file @@", ...ops.map((o) => `${o.t}${o.s}`)].join("\n");
+}
+
 /** Format entire content as a new file — all lines are additions (green). */
 export function asNewFile(content: string): string {
   return [

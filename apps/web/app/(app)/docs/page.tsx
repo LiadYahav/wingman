@@ -32,7 +32,7 @@ import {
 
 function InlineCode({ children }: { children: React.ReactNode }) {
   return (
-    <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-foreground">{children}</code>
+    <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-foreground whitespace-nowrap">{children}</code>
   );
 }
 
@@ -77,7 +77,7 @@ function Step({ n, title, children }: { n: number; title?: string; children: Rea
       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground mt-0.5">
         {n}
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         {title && <p className="text-sm font-semibold mb-0.5">{title}</p>}
         <div className="text-sm text-muted-foreground leading-relaxed">{children}</div>
       </div>
@@ -111,8 +111,8 @@ function SectionHeader({ id, icon: Icon, title, subtitle, badge }: {
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
         <Icon className="h-5 w-5 text-primary" />
       </div>
-      <div>
-        <div className="flex items-center gap-2">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-xl font-bold">{title}</h2>
           {badge && (
             <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground">{badge}</span>
@@ -131,7 +131,7 @@ function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementTy
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
           <Icon className="h-3.5 w-3.5 text-primary" />
         </div>
-        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-sm font-semibold min-w-0">{title}</p>
       </div>
       <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
     </div>
@@ -301,14 +301,14 @@ export default function DocsPage() {
               {
                 term: "Site",
                 color: "bg-amber-500/10 text-amber-500",
-                description: "A physical location — a datacenter, room, or zone. Sites are the top-level geographic grouping; one site can host multiple MCEs. In the Day1 repository, sites live under site/{site}/.",
-                example: 'nova — a physical datacenter; its clusters are at site/nova/mces/.../hostedClusters/',
+                description: "A physical location — a datacenter, room, or zone. Sites are the top-level geographic grouping; one site can host multiple MCEs. In the Day1 repository, sites live under sites/{site}/.",
+                example: 'nova — a physical datacenter; its clusters are at sites/nova/mces/.../hostedClusters/',
               },
               {
                 term: "MCE",
                 color: "bg-emerald-500/10 text-emerald-500",
-                description: "Multi-Cluster Engine — a logical management plane that lives within a Site. Groups clusters sharing the same management infrastructure. In the Day1 repository: site/{site}/mces/{mce}/hostedClusters/{cluster}.yaml.",
-                example: 'prod-dok — a logical MCE inside the nova site, at site/nova/mces/prod-dok/',
+                description: "Multi-Cluster Engine — a logical management plane that lives within a Site. Groups clusters sharing the same management infrastructure. In the Day1 repository: sites/{site}/mces/{mce}/hostedClusters/{cluster}.yaml.",
+                example: 'prod-dok — a logical MCE inside the nova site, at sites/nova/mces/prod-dok/',
               },
               {
                 term: "Merge Request",
@@ -320,11 +320,11 @@ export default function DocsPage() {
               <div key={term} className="rounded-xl border bg-card p-5">
                 <div className="flex items-start gap-4">
                   <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold font-mono mt-0.5 ${color}`}>{term}</span>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground leading-relaxed mb-2">{description}</p>
                     <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">Example</span>
-                      <p className="text-xs text-muted-foreground">{example}</p>
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5 shrink-0">Example</span>
+                      <p className="text-xs text-muted-foreground min-w-0">{example}</p>
                     </div>
                   </div>
                 </div>
@@ -339,10 +339,10 @@ export default function DocsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
             <div className="rounded-xl border bg-card p-5">
               <div className="flex items-center gap-2 mb-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
                   <Lock className="h-4 w-4 text-primary" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-bold">Admin</p>
                   <p className="text-xs text-muted-foreground">Full read-write access</p>
                 </div>
@@ -364,10 +364,10 @@ export default function DocsPage() {
             </div>
             <div className="rounded-xl border bg-card p-5">
               <div className="flex items-center gap-2 mb-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted shrink-0">
                   <Eye className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-bold">Viewer</p>
                   <p className="text-xs text-muted-foreground">Read-only access</p>
                 </div>
@@ -411,7 +411,7 @@ export default function DocsPage() {
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-start gap-3 rounded-lg border bg-card px-4 py-3">
                 <Icon className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <p className="text-sm text-muted-foreground">{text}</p>
+                <p className="text-sm text-muted-foreground min-w-0">{text}</p>
               </div>
             ))}
           </div>
@@ -434,7 +434,7 @@ export default function DocsPage() {
 
           <h3 className="text-base font-semibold mb-4">Creating a spec — worked example</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            We will walk through creating the <InlineCode>prod-dok-ha</InlineCode> spec used by the
+            We will walk through creating the <InlineCode>prod-dok-ha</InlineCode> spec used by the{" "}
             <InlineCode>prod-dok-nova</InlineCode> cluster.
           </p>
           <div className="space-y-4 mb-6">
@@ -539,7 +539,7 @@ tuningConfig: {{ np.tuning_config | default("") }}`}
                 <li><InlineCode>MCE</InlineCode> → select <InlineCode>prod-dok</InlineCode> (or type to create)</li>
               </ul>
               Site and MCE are selected from existing GitLab folder paths. The cluster will be stored at{" "}
-              <InlineCode>site/nova/mces/prod-dok/hostedClusters/prod-dok-nova.yaml</InlineCode> in the
+              <InlineCode>sites/nova/mces/prod-dok/hostedClusters/prod-dok-nova.yaml</InlineCode> in the
               Day1 repository. If the site or MCE folder does not exist yet, type the new name and
               Wingman creates it automatically.
             </Step>
@@ -711,7 +711,7 @@ mcFiles:
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <ExternalLink className="h-4 w-4 text-primary" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold mb-1">Open in GitLab</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Opens the per-cluster override directory directly in GitLab. Path:{" "}
@@ -724,7 +724,7 @@ mcFiles:
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
                 <AlertTriangle className="h-4 w-4 text-red-500" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold mb-1">Remove Addon</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Opens a confirmation dialog then commits a removal MR — deletes the cluster override
@@ -797,7 +797,7 @@ mcFiles:
             ].map((item) => (
               <div key={item} className="flex items-start gap-3 rounded-lg border bg-card px-4 py-3">
                 <GitMerge className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <p className="text-sm text-muted-foreground">{item}</p>
+                <p className="text-sm text-muted-foreground min-w-0">{item}</p>
               </div>
             ))}
           </div>
@@ -854,10 +854,10 @@ mcFiles:
           <div className="space-y-4 mb-6">
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10 shrink-0">
                   <Layers className="h-3.5 w-3.5 text-purple-500" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-semibold">Specs repository</p>
                   <p className="text-xs text-muted-foreground">
                     Helm: <InlineCode>gitlab.specsProjectId</InlineCode> → env: <InlineCode>SPECS_GITLAB_PROJECT_ID</InlineCode>
@@ -870,11 +870,9 @@ mcFiles:
                   { file: "openshift-versions.txt", desc: "One version string per line. Populates the OpenShift version dropdown in cluster creation.", path: "/" },
                   { file: "specs/{name}.yaml", desc: "One file per spec. Contains nodepool structure, immutable paths, and pre-configured addon list.", path: "SPECS_ROOT_PATH (default: specs/)" },
                 ].map(({ file, desc, path }) => (
-                  <div key={file} className="grid grid-cols-[200px_1fr] gap-4 px-5 py-3 items-start">
-                    <div>
-                      <p className="text-xs font-mono text-foreground font-semibold">{file}</p>
-                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">{path}</p>
-                    </div>
+                  <div key={file} className="px-5 py-3 space-y-1">
+                    <p className="text-xs font-mono text-foreground font-semibold break-all">{file}</p>
+                    <p className="text-[10px] text-muted-foreground/60">{path}</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
                   </div>
                 ))}
@@ -884,10 +882,10 @@ mcFiles:
             {/* Day1 repo */}
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 shrink-0">
                   <Server className="h-3.5 w-3.5 text-blue-500" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-semibold">Day1 configuration repository</p>
                   <p className="text-xs text-muted-foreground">
                     Helm: <InlineCode>gitlab.day1ProjectId</InlineCode> → env: <InlineCode>DAY1_GITLAB_PROJECT_ID</InlineCode>
@@ -902,11 +900,9 @@ mcFiles:
                     path: "default: sites/{site}/mces/{mce}/hostedClusters/{cluster}.yaml",
                   },
                 ].map(({ file, desc, path }) => (
-                  <div key={file} className="grid grid-cols-[200px_1fr] gap-4 px-5 py-3 items-start">
-                    <div>
-                      <p className="text-xs font-mono text-foreground font-semibold">{file}</p>
-                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">{path}</p>
-                    </div>
+                  <div key={file} className="px-5 py-3 space-y-1">
+                    <p className="text-xs font-mono text-foreground font-semibold break-all">{file}</p>
+                    <p className="text-[10px] text-muted-foreground/60">{path}</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
                   </div>
                 ))}
@@ -916,10 +912,10 @@ mcFiles:
             {/* Day2 repos */}
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 shrink-0">
                   <Package className="h-3.5 w-3.5 text-emerald-500" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-semibold">Day2 team repositories</p>
                   <p className="text-xs text-muted-foreground">
                     Helm: <InlineCode>gitlab.day2SigsGroupPath</InlineCode> → env: <InlineCode>DAY2_SIGS_GROUP_PATH</InlineCode>
@@ -945,11 +941,9 @@ mcFiles:
                     path: "per-team project root",
                   },
                 ].map(({ file, desc, path }) => (
-                  <div key={file} className="grid grid-cols-[200px_1fr] gap-4 px-5 py-3 items-start">
-                    <div>
-                      <p className="text-xs font-mono text-foreground font-semibold">{file}</p>
-                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">{path}</p>
-                    </div>
+                  <div key={file} className="px-5 py-3 space-y-1">
+                    <p className="text-xs font-mono text-foreground font-semibold break-all">{file}</p>
+                    <p className="text-[10px] text-muted-foreground/60">{path}</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
                   </div>
                 ))}
@@ -1033,7 +1027,7 @@ mcFiles:
               <div key={q} className="rounded-xl border bg-card overflow-hidden">
                 <div className="flex items-start gap-3 px-5 py-4 border-b bg-muted/20">
                   <Zap className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <p className="text-sm font-semibold">{q}</p>
+                  <p className="text-sm font-semibold min-w-0 break-words">{q}</p>
                 </div>
                 <div className="px-5 py-4 pl-12">
                   <p className="text-sm text-muted-foreground leading-relaxed">{a}</p>
@@ -1049,9 +1043,9 @@ mcFiles:
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
               The platform is fully transparent — every resource is a plain YAML or Jinja2 file in GitLab.
-              Open the relevant repository directly (<strong>Open in GitLab</strong> links are on every
-              cluster, spec, and addon) and inspect or edit the files manually as a last resort.
-              The platform team is also reachable via your organisation&apos;s internal channels.
+              Every cluster, spec, and addon has an{" "}<strong>Open in GitLab</strong>{" "}link so you can
+              browse or edit the underlying files directly. The platform team is also reachable via
+              your organisation&apos;s internal channels.
             </p>
           </div>
 

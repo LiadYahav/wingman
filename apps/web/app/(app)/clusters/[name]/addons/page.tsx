@@ -12,6 +12,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import jsYaml from "js-yaml";
 import { ReviewDialog as SharedReviewDialog } from "@/components/common/review-dialog";
@@ -724,36 +725,65 @@ function InstalledAddonCard({
                 <Skeleton className="h-8 w-full" />
               </div>
             ) : merged ? (
-              <>
+              <Tabs defaultValue="override">
                 <div className="flex items-center justify-between">
-                  <ProvenanceLegend />
-                  <ViewToggle mode={viewMode} onChange={handleViewModeChange} />
+                  <TabsList>
+                    <TabsTrigger value="override">Override</TabsTrigger>
+                    <TabsTrigger value="layers">Value layers</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="override">
+                    <div className="flex items-center gap-2">
+                      <ProvenanceLegend />
+                      <ViewToggle mode={viewMode} onChange={handleViewModeChange} />
+                    </div>
+                  </TabsContent>
                 </div>
-                {viewMode === "form" ? (
-                  <ValuesTable
-                    entries={Object.entries(editValues)}
-                    provenance={merged.provenance as Record<string, unknown>}
-                    onChange={(k, val) => setEditValues((prev) => ({ ...prev, [k]: val }))}
-                    onComplexChange={(k, val) => setEditValues((prev) => ({ ...prev, [k]: val }))}
-                  />
-                ) : (
-                  <div className="space-y-1">
-                    <textarea
-                      className={cn(
-                        "w-full rounded-lg border bg-muted/30 p-3 font-mono text-xs leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow",
-                        yamlError && "border-destructive/50"
-                      )}
-                      rows={Math.max(8, yamlText.split("\n").length + 1)}
-                      value={yamlText}
-                      onChange={(e) => handleYamlChange(e.target.value)}
-                      spellCheck={false}
+
+                <TabsContent value="override">
+                  {viewMode === "form" ? (
+                    <ValuesTable
+                      entries={Object.entries(editValues)}
+                      provenance={merged.provenance as Record<string, unknown>}
+                      onChange={(k, val) => setEditValues((prev) => ({ ...prev, [k]: val }))}
+                      onComplexChange={(k, val) => setEditValues((prev) => ({ ...prev, [k]: val }))}
                     />
-                    {yamlError && (
-                      <p className="text-xs text-destructive">{yamlError}</p>
-                    )}
+                  ) : (
+                    <div className="space-y-1">
+                      <textarea
+                        className={cn(
+                          "w-full rounded-lg border bg-muted/30 p-3 font-mono text-xs leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow",
+                          yamlError && "border-destructive/50"
+                        )}
+                        rows={Math.max(8, yamlText.split("\n").length + 1)}
+                        value={yamlText}
+                        onChange={(e) => handleYamlChange(e.target.value)}
+                        spellCheck={false}
+                      />
+                      {yamlError && (
+                        <p className="text-xs text-destructive">{yamlError}</p>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="layers">
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: "chart", values: merged.chart_values },
+                      { label: "team", values: merged.team_values },
+                      { label: "cluster", values: merged.cluster_values },
+                      { label: "merged", values: merged.merged },
+                    ].map(({ label, values }) => (
+                      <div key={label} className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                        <pre className="rounded-lg bg-muted/40 border p-2 text-[10px] font-mono leading-relaxed max-h-48 overflow-y-auto whitespace-pre">
+                          {jsYaml.dump(values ?? {}, { indent: 2, lineWidth: -1 }).trim() || "(empty)"}
+                        </pre>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </>
+                </TabsContent>
+              </Tabs>
             ) : (
               <p className="text-xs text-muted-foreground italic">No values available</p>
             )}
@@ -1137,6 +1167,14 @@ function AvailableAddonCard({
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">{addon.name}</p>
               <p className="text-xs text-muted-foreground">{addon.team}</p>
+              {addon.dependencies.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <span className="text-xs text-muted-foreground">Requires:</span>
+                  {addon.dependencies.map((dep) => (
+                    <span key={dep} className="rounded-full px-2 py-0.5 text-xs bg-muted text-muted-foreground font-mono">{dep}</span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 ml-3 shrink-0">
