@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <rect width="48" height="48" rx="10" fill="#0073ea"/>
-  <text x="24" y="36" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="30" font-weight="900" fill="white" text-anchor="middle">W</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#0b1733"/>
+  <g fill="none" stroke-linecap="square" stroke-linejoin="miter" stroke-width="4">
+    <path d="M10 24 L22 36 L34 24" stroke="#f1ebdc"/>
+    <path d="M20 32 L32 44 L44 32" stroke="#f1ebdc"/>
+    <path d="M30 24 L42 36 L54 24" stroke="#5b78b8"/>
+  </g>
 </svg>
