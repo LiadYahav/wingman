@@ -116,13 +116,13 @@ function LoginContent() {
           <img
             src="/wingman-logo.svg"
             alt="Wingman"
-            width={64}
-            height={64}
+            width={80}
+            height={80}
             className="rounded-2xl shadow-xl shadow-black/30"
           />
-          <div className="text-center space-y-1">
+          <div className="text-center space-y-1.5">
             <h1
-              className="text-[32px] leading-none tracking-tight text-foreground"
+              className="text-[42px] leading-none text-foreground"
               style={{ fontFamily: "var(--font-grotesk, var(--font-heading))", fontWeight: 500, letterSpacing: "-0.035em" }}
             >
               Wing<span style={{ color: "#5b78b8" }}>man</span>
