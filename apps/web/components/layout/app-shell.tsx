@@ -11,9 +11,9 @@ function SidebarLogo() {
   return (
     <Link href="/" className="flex items-center gap-2.5 px-4 py-5">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/wingman-logo.svg" alt="Wingman" width={38} height={38} className="rounded-lg" />
+      <img src="/wingman-logo.svg" alt="Wingman" width={44} height={44} className="rounded-lg" />
       <span
-        className="text-[19px] text-white"
+        className="text-[22px] text-white"
         style={{ fontFamily: "var(--font-grotesk, var(--font-heading))", fontWeight: 500, letterSpacing: "-0.035em" }}
       >
         Wing<span style={{ color: "#5b78b8" }}>man</span>
