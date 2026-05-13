@@ -27,7 +27,9 @@ import logging
 from typing import Any
 
 import gitlab
+import requests
 from gitlab.exceptions import GitlabError, GitlabGetError
+from requests.adapters import HTTPAdapter
 
 from .exceptions import AuthError, ConflictError, GitLabError, NotFoundError
 
@@ -58,6 +60,12 @@ class GitLabClient:
             private_token=access_token,
             ssl_verify=ssl_verify,
         )
+        # Increase connection pool size to avoid "pool is full" warnings
+        # under concurrent asyncio.gather() workloads (default is 10).
+        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=30)
+        self._gl.session = requests.Session()
+        self._gl.session.mount("https://", adapter)
+        self._gl.session.mount("http://", adapter)
         self._project_id = project_id
         self.default_branch = default_branch
         self._project: Any = None  # lazy-loaded

@@ -154,7 +154,7 @@ class ClusterLiveStatus(BaseModel):
 class MRAuthor(BaseModel):
     username: str
     name: str = ""
-    avatar_url: str = ""
+    avatar_url: str | None = None
 
 
 class MRDetail(BaseModel):
