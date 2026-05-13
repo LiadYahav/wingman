@@ -2,14 +2,31 @@
 
 import Link from "next/link";
 import { Menu } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { SidebarNav } from "./sidebar-nav";
 import { UserMenu } from "./user-menu";
+import { EasterEgg, triggerEasterEgg } from "./easter-egg";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
+const CLICKS_TO_TRIGGER = 5;
+const RESET_MS = 2000;
+
 function SidebarLogo() {
+  const clickCount = useRef(0);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLogoClick = useCallback(() => {
+    clickCount.current += 1;
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => { clickCount.current = 0; }, RESET_MS);
+    if (clickCount.current >= CLICKS_TO_TRIGGER) {
+      clickCount.current = 0;
+      triggerEasterEgg();
+    }
+  }, []);
+
   return (
-    <Link href="/" className="flex items-center gap-2.5 px-4 py-5">
+    <Link href="/" className="flex items-center gap-2.5 px-4 py-5" onClick={handleLogoClick}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/wingman-logo.svg" alt="Wingman" width={44} height={44} className="rounded-lg" />
       <span
@@ -70,6 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <EasterEgg />
     </div>
   );
 }

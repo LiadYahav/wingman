@@ -55,17 +55,21 @@ class GitLabClient:
             default_branch: Default target branch for MRs
             ssl_verify: True, False, or path to CA bundle file
         """
+        # Build a session with a larger pool before passing it to python-gitlab.
+        # Replacing self._gl.session after construction is unreliable in python-gitlab 4.x
+        # because the internal HTTP backend may not pick up the swap.
+        _session = requests.Session()
+        _session.verify = ssl_verify  # keep SSL semantics consistent
+        _adapter = HTTPAdapter(pool_connections=1, pool_maxsize=30)
+        _session.mount("https://", _adapter)
+        _session.mount("http://", _adapter)
+
         self._gl = gitlab.Gitlab(
             url=gitlab_url,
             private_token=access_token,
             ssl_verify=ssl_verify,
+            session=_session,
         )
-        # Increase connection pool size to avoid "pool is full" warnings
-        # under concurrent asyncio.gather() workloads (default is 10).
-        adapter = HTTPAdapter(pool_connections=1, pool_maxsize=30)
-        self._gl.session = requests.Session()
-        self._gl.session.mount("https://", adapter)
-        self._gl.session.mount("http://", adapter)
         self._project_id = project_id
         self.default_branch = default_branch
         self._project: Any = None  # lazy-loaded

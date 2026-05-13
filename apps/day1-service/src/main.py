@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 results = await asyncio.gather(
                     cluster_svc.list_clusters(),
                     spec_svc.list_specs(),
+                    spec_svc.get_template_schema(),
                     approval_svc.list_open_mrs(),
                     return_exceptions=True,
                 )
