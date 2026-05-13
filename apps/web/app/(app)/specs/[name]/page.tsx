@@ -175,7 +175,7 @@ export default function SpecDetailPage() {
                 <InfoRow label="Name" value={spec.metadata.name} />
                 <InfoRow label="Version" value={
                   <span className="rounded-full px-2 py-0.5 text-xs bg-primary/8 text-primary font-medium">
-                    v{spec.metadata.version}
+                    {spec.metadata.version}
                   </span>
                 } />
                 {spec.metadata.labels && Object.entries(spec.metadata.labels).map(([k, v]) => (
@@ -211,7 +211,7 @@ export default function SpecDetailPage() {
                 {spec.spec.day2.addons.map((addon) => (
                   <div key={`${addon.team}/${addon.name}`} className="rounded-lg border px-3 py-2 text-sm">
                     <span className="font-medium">{addon.name}</span>
-                    <span className="text-muted-foreground ml-1.5 text-xs">{addon.team} · v{addon.version}</span>
+                    <span className="text-muted-foreground ml-1.5 text-xs">{addon.team} · {addon.version}</span>
                   </div>
                 ))}
               </div>
@@ -433,7 +433,7 @@ export default function SpecDetailPage() {
           </div>
           <div className="flex gap-3">
             <span className="text-muted-foreground w-24 shrink-0">Version</span>
-            <span className="font-medium">v{spec?.metadata.version}</span>
+            <span className="font-medium">{spec?.metadata.version}</span>
           </div>
           {clusters && clusters.length > 0 && (
             <div className="flex gap-3">

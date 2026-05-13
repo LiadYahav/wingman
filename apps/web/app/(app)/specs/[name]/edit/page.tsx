@@ -282,6 +282,20 @@ export default function EditSpecPage() {
     ? addonCatalog?.find((c) => c.team === configuringAddon.team && c.name === configuringAddon.name)
     : null;
 
+  const configuringVersion = configuringAddonData?.version ?? configuringCatalogEntry?.current_version;
+  const { data: configuringChartValues, isLoading: configuringChartLoading } = useQuery<Record<string, unknown>>({
+    queryKey: ["addons", configuringAddon?.team, configuringAddon?.name, "values", configuringVersion],
+    queryFn: () => api.get<Record<string, unknown>>(
+      `/api/day2/addons/${configuringAddon!.team}/${configuringAddon!.name}/values?version=${encodeURIComponent(configuringVersion!)}`
+    ),
+    enabled: Boolean(configuringAddon && configuringVersion),
+    staleTime: 300_000,
+  });
+
+  const configuringDefaultValues = configuringChartValues
+    ? { ...configuringChartValues, ...(configuringCatalogEntry?.default_values ?? {}) }
+    : (configuringCatalogEntry?.default_values ?? {});
+
   const buildFinalSpec = (): ClusterSpec => {
     return {
       apiVersion: spec?.apiVersion ?? "wingman.io/v1",
@@ -520,7 +534,8 @@ export default function EditSpecPage() {
           open={true}
           onOpenChange={(open) => !open && setConfiguringAddon(null)}
           addonName={configuringAddon.name}
-          defaultValues={configuringCatalogEntry?.default_values ?? {}}
+          defaultValues={configuringDefaultValues}
+          isLoadingValues={configuringChartLoading}
           currentOverrideable={configuringAddonData?.overrideable ?? []}
           onSave={handleSaveOverrideable}
         />

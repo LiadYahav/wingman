@@ -398,18 +398,24 @@ class GitLabClient:
         Args:
             path: Filter commits that touch files under this path.
         """
-        filters: dict[str, Any] = {
+        params: dict[str, Any] = {
             "ref_name": ref_name,
             "per_page": per_page,
             "page": page,
         }
         if path:
-            filters["path"] = path
+            params["path"] = path
         try:
-            # Force offset pagination — keyset pagination (python-gitlab 4.x default)
-            # returns 404 "API Version Not Found" on older self-hosted GitLab instances.
-            commits = self.project.commits.list(**filters, pagination="offset", get_all=False)
-            return [c.attributes for c in commits]
+            # Use http_get directly — python-gitlab 4.x manager's pagination machinery
+            # sends requests that trigger "404 API Version Not Found" on older self-hosted
+            # GitLab instances. The raw REST call is reliable across all versions.
+            result = self._gl.http_get(
+                f"/projects/{self.project.id}/repository/commits",
+                query_data=params,
+            )
+            if isinstance(result, list):
+                return result
+            return []
         except GitlabError as exc:
             raise GitLabError(f"Failed to list commits: {exc}") from exc
 

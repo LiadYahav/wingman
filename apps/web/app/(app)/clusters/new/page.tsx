@@ -650,7 +650,7 @@ export default function NewClusterPage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="rounded-full px-2 py-0.5 text-xs bg-primary/8 text-primary font-medium">
-                      v{spec.metadata.version}
+                      {spec.metadata.version}
                     </span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
@@ -671,7 +671,7 @@ export default function NewClusterPage() {
               <h2 className="text-sm font-semibold">Cluster Details</h2>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 border border-primary/20">
                 <span>{selectedSpec.metadata.name}</span>
-                <span className="text-primary/60">v{selectedSpec.metadata.version}</span>
+                <span className="text-primary/60">{selectedSpec.metadata.version}</span>
               </span>
             </div>
             <div className="space-y-4">
@@ -1031,7 +1031,7 @@ export default function NewClusterPage() {
             </div>
             <div className="flex gap-3">
               <span className="text-muted-foreground w-32 shrink-0">Version</span>
-              <span className="font-medium">v{selectedSpec?.metadata.version}</span>
+              <span className="font-medium">{selectedSpec?.metadata.version}</span>
             </div>
           </div>
 
@@ -1065,7 +1065,7 @@ export default function NewClusterPage() {
                     <div key={addonKey}>
                       <div className="flex gap-3">
                         <span className="text-muted-foreground w-28 shrink-0 truncate">{addon.name}</span>
-                        <span className="font-medium">v{addon.version} · {addon.team}</span>
+                        <span className="font-medium">{addon.version} · {addon.team}</span>
                       </div>
                       {hasOverrides && (
                         <div className="ml-28 mt-1 pl-3 border-l-2 border-primary/20 space-y-0.5">

@@ -383,6 +383,22 @@ export default function NewSpecPage() {
     ? addonCatalog?.find((c) => c.team === configuringAddon.team && c.name === configuringAddon.name)
     : null;
 
+  // Fetch full helm chart values for the addon being configured (merges on top of team values)
+  const configuringVersion = configuringAddonData?.version ?? configuringCatalogEntry?.current_version;
+  const { data: configuringChartValues, isLoading: configuringChartLoading } = useQuery<Record<string, unknown>>({
+    queryKey: ["addons", configuringAddon?.team, configuringAddon?.name, "values", configuringVersion],
+    queryFn: () => api.get<Record<string, unknown>>(
+      `/api/day2/addons/${configuringAddon!.team}/${configuringAddon!.name}/values?version=${encodeURIComponent(configuringVersion!)}`
+    ),
+    enabled: Boolean(configuringAddon && configuringVersion),
+    staleTime: 300_000,
+  });
+
+  // Merge chart defaults (base) with team overrides so all helm fields are visible
+  const configuringDefaultValues = configuringChartValues
+    ? { ...configuringChartValues, ...(configuringCatalogEntry?.default_values ?? {}) }
+    : (configuringCatalogEntry?.default_values ?? {});
+
   const handleToggleImmutable = (path: string) => {
     setImmutablePaths((prev) => {
       const next = new Set(prev);
@@ -703,7 +719,8 @@ export default function NewSpecPage() {
           open={true}
           onOpenChange={(open) => !open && setConfiguringAddon(null)}
           addonName={configuringAddon.name}
-          defaultValues={configuringCatalogEntry?.default_values ?? {}}
+          defaultValues={configuringDefaultValues}
+          isLoadingValues={configuringChartLoading}
           currentOverrideable={configuringAddonData?.overrideable ?? []}
           onSave={handleSaveOverrideable}
         />

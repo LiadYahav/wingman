@@ -123,6 +123,7 @@ interface ConfigureOverrideableDialogProps {
   defaultValues: Record<string, unknown>;
   currentOverrideable: OverrideableField[];
   onSave: (fields: OverrideableField[]) => void;
+  isLoadingValues?: boolean;
 }
 
 export function ConfigureOverrideableDialog({
@@ -132,6 +133,7 @@ export function ConfigureOverrideableDialog({
   defaultValues,
   currentOverrideable,
   onSave,
+  isLoadingValues = false,
 }: ConfigureOverrideableDialogProps) {
   const availablePaths = useMemo(
     () => flattenKeys(defaultValues),
@@ -203,7 +205,15 @@ export function ConfigureOverrideableDialog({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {availablePaths.length === 0 ? (
+          {isLoadingValues ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center" data-testid="loading-values-message">
+              <div className="rounded-full bg-muted p-4 mb-4 animate-pulse">
+                <Package className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium">Loading chart values…</p>
+              <p className="text-xs text-muted-foreground mt-1">Fetching helm chart defaults</p>
+            </div>
+          ) : availablePaths.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center" data-testid="no-fields-message">
               <div className="rounded-full bg-muted p-4 mb-4">
                 <Package className="h-8 w-8 text-muted-foreground" />

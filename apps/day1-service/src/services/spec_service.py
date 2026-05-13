@@ -329,7 +329,11 @@ class SpecService:
     async def get_spec_history(self, name: str) -> list[dict]:
         """Return commit history for a spec file."""
         path = self.pr.spec_file(spec_name=name)
-        commits = await self.gl.alist_commits(ref_name=self.default_branch, path=path)
+        try:
+            commits = await self.gl.alist_commits(ref_name=self.default_branch, path=path)
+        except Exception as exc:
+            logger.warning("Failed to fetch spec history for %s: %s", name, exc)
+            return []
         return [self.gl.format_commit(c) for c in commits]
 
     async def get_spec_at_sha(self, name: str, sha: str) -> str:

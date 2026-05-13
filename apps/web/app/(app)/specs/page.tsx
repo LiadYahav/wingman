@@ -18,7 +18,7 @@ function SpecCard({ spec }: { spec: ClusterSpec }) {
       <div className="bg-card rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer p-5 h-full group">
         <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="text-sm font-semibold group-hover:text-primary transition-colors">{spec.metadata.name}</h3>
-          <span className="shrink-0 rounded-full px-2 py-0.5 text-xs bg-primary/10 text-primary font-medium">v{spec.metadata.version}</span>
+          <span className="shrink-0 rounded-full px-2 py-0.5 text-xs bg-primary/10 text-primary font-medium">{spec.metadata.version}</span>
         </div>
         {spec.metadata.description && (
           <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{spec.metadata.description}</p>
