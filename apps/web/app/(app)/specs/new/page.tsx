@@ -58,7 +58,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ConfigureOverrideableDialog } from "@/components/specs/configure-overrideable-dialog";
+import { ConfigureOverrideableDialog, deepMergeValues } from "@/components/specs/configure-overrideable-dialog";
 import { DynamicVariableForm, initFormValues, type FormValues } from "@/components/clusters/dynamic-variable-form";
 import type { MRDetail, AddonCatalogEntry, SpecAddon, ClusterSpec, OverrideableField, TemplateField } from "@/types";
 
@@ -394,9 +394,9 @@ export default function NewSpecPage() {
     staleTime: 300_000,
   });
 
-  // Merge chart defaults (base) with team overrides so all helm fields are visible
+  // Deep-merge: chart values as base, team values on top — preserves all nested keys
   const configuringDefaultValues = configuringChartValues
-    ? { ...configuringChartValues, ...(configuringCatalogEntry?.default_values ?? {}) }
+    ? deepMergeValues(configuringChartValues, configuringCatalogEntry?.default_values ?? {})
     : (configuringCatalogEntry?.default_values ?? {});
 
   const handleToggleImmutable = (path: string) => {

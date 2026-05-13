@@ -726,7 +726,7 @@ function InstalledAddonCard({
               </div>
             ) : merged ? (
               <Tabs defaultValue="override">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b">
                   <TabsList>
                     <TabsTrigger value="override">Override</TabsTrigger>
                     <TabsTrigger value="layers">Value layers</TabsTrigger>

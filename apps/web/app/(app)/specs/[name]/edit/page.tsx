@@ -50,7 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ConfigureOverrideableDialog } from "@/components/specs/configure-overrideable-dialog";
+import { ConfigureOverrideableDialog, deepMergeValues } from "@/components/specs/configure-overrideable-dialog";
 import { DynamicVariableForm, initFormValues, type FormValues } from "@/components/clusters/dynamic-variable-form";
 import type { ClusterSpec, MRDetail, AddonCatalogEntry, SpecAddon, OverrideableField, TemplateField } from "@/types";
 
@@ -293,7 +293,7 @@ export default function EditSpecPage() {
   });
 
   const configuringDefaultValues = configuringChartValues
-    ? { ...configuringChartValues, ...(configuringCatalogEntry?.default_values ?? {}) }
+    ? deepMergeValues(configuringChartValues, configuringCatalogEntry?.default_values ?? {})
     : (configuringCatalogEntry?.default_values ?? {});
 
   const buildFinalSpec = (): ClusterSpec => {

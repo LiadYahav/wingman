@@ -25,6 +25,28 @@ import type { OverrideableField } from "@/types";
 
 export type FieldType = "string" | "integer" | "boolean" | "object" | "array";
 
+export function deepMergeValues(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, val] of Object.entries(override)) {
+    const baseVal = result[key];
+    if (
+      val !== null && typeof val === "object" && !Array.isArray(val) &&
+      baseVal !== null && typeof baseVal === "object" && !Array.isArray(baseVal)
+    ) {
+      result[key] = deepMergeValues(
+        baseVal as Record<string, unknown>,
+        val as Record<string, unknown>
+      );
+    } else {
+      result[key] = val;
+    }
+  }
+  return result;
+}
+
 export function flattenKeys(obj: Record<string, unknown>, prefix = ""): string[] {
   const keys: string[] = [];
   for (const key of Object.keys(obj)) {
