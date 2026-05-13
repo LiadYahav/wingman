@@ -444,6 +444,18 @@ class ClusterService:
             raise HTTPException(status_code=404, detail=f"Cluster '{name}' not found") from exc
         return content
 
+    # ── History ───────────────────────────────────────────────────────────────
+
+    async def get_cluster_history(self, name: str, site: str, mce: str) -> list[dict]:
+        """Return commit history for a cluster's YAML file."""
+        path = self.pr.day1_cluster_file(site=site, mce=mce, cluster=name)
+        try:
+            commits = await self.gl.alist_commits(ref_name=self.default_branch, path=path)
+        except GitLabError as exc:
+            logger.warning("Failed to fetch cluster history for %s: %s", name, exc)
+            return []
+        return [self.gl.format_commit(c) for c in commits]
+
     # ── Site/MCE management ────────────────────────────────────────────────────
 
     async def list_sites(self) -> list[str]:

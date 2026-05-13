@@ -22,7 +22,7 @@ import {
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { GitLabFileList } from "@/components/common/gitlab-file-list";
 import { useIsAdmin } from "@/stores/auth-store";
-import type { ClusterSpec, MRDetail, OverrideableField, TemplateField } from "@/types";
+import type { AddonCatalogEntry, ClusterSpec, MRDetail, OverrideableField, TemplateField } from "@/types";
 import { DynamicVariableForm, seedFromStructure, type FormValues } from "@/components/clusters/dynamic-variable-form";
 
 const CREATE_NEW = "__create_new__";
@@ -360,6 +360,10 @@ export default function NewClusterPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [previewYaml, setPreviewYaml] = useState<string>("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  // Addons in YAML editor mode (keyed by "team/name")
+  const [yamlModeAddons, setYamlModeAddons] = useState<Set<string>>(new Set());
+  // Raw YAML text per addon while in YAML mode
+  const [addonYamlText, setAddonYamlText] = useState<Record<string, string>>({});
   const [siteAutoDetected, setSiteAutoDetected] = useState(false);
   const [mceAutoDetected, setMceAutoDetected] = useState(false);
   const [ocpVersion, setOcpVersion] = useState("");
@@ -375,6 +379,13 @@ export default function NewClusterPage() {
     queryKey: ["specs", "template-schema"],
     queryFn: () => api.get<TemplateField[]>("/api/day1/specs/template/schema"),
     staleTime: 300_000,
+  });
+
+  // Addon catalog — used for full values YAML editor (chart defaults)
+  const { data: addonCatalog = [] } = useQuery<AddonCatalogEntry[]>({
+    queryKey: ["addons", "catalog"],
+    queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
+    staleTime: 120_000,
   });
 
   const { data: sites = [], isLoading: sitesLoading } = useQuery<string[]>({
@@ -820,9 +831,33 @@ export default function NewClusterPage() {
               <div className="p-5 space-y-4">
                 {selectedSpec.spec.day2.addons.map((addon) => {
                   const addonKey = `${addon.team}/${addon.name}`;
-                  const hasOverrides = addon.overrideable && addon.overrideable.length > 0;
+                  const catalogEntry = addonCatalog.find(a => a.team === addon.team && a.name === addon.name);
+                  const hasSpecFields = addon.overrideable && addon.overrideable.length > 0;
+                  const isYamlMode = yamlModeAddons.has(addonKey);
                   const simpleFields = addon.overrideable?.filter(f => f.type !== "array" && f.type !== "object" && !Array.isArray(addonOverrides[addonKey]?.[f.path] ?? f.default)) ?? [];
                   const complexFields = addon.overrideable?.filter(f => f.type === "array" || f.type === "object" || Array.isArray(addonOverrides[addonKey]?.[f.path] ?? f.default)) ?? [];
+
+                  const toggleYamlMode = (enable: boolean) => {
+                    if (enable) {
+                      // Seed YAML editor: current overrides → spec field defaults → catalog defaults → empty
+                      const current = addonOverrides[addonKey] ?? {};
+                      const base = Object.keys(current).length > 0
+                        ? current
+                        : catalogEntry?.default_values ?? {};
+                      setAddonYamlText(prev => ({ ...prev, [addonKey]: jsYaml.dump(base, { lineWidth: 120 }) || "" }));
+                    } else {
+                      // Commit YAML back to structured overrides
+                      try {
+                        const parsed = jsYaml.load(addonYamlText[addonKey] ?? "") as Record<string, unknown> | null;
+                        setAddonOverrides(prev => ({ ...prev, [addonKey]: parsed ?? {} }));
+                      } catch { /* ignore parse error on toggle back */ }
+                    }
+                    setYamlModeAddons(prev => {
+                      const next = new Set(prev);
+                      enable ? next.add(addonKey) : next.delete(addonKey);
+                      return next;
+                    });
+                  };
 
                   return (
                     <div
@@ -841,10 +876,44 @@ export default function NewClusterPage() {
                             </span>
                           </div>
                         </div>
-                        <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{addon.team}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{addon.team}</span>
+                          {(hasSpecFields || catalogEntry) && (
+                            <button
+                              type="button"
+                              onClick={() => toggleYamlMode(!isYamlMode)}
+                              className={cn(
+                                "text-xs px-2 py-1 rounded border transition-colors",
+                                isYamlMode
+                                  ? "bg-primary/10 border-primary/30 text-primary"
+                                  : "bg-muted border-border text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              {isYamlMode ? "Fields" : "Full Values"}
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      {hasOverrides ? (
+                      {isYamlMode ? (
+                        <div className="p-4">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Edit the full values YAML. Leave keys at their defaults or remove them to use addon defaults.
+                          </p>
+                          <textarea
+                            className="w-full rounded-lg border bg-zinc-950 text-zinc-200 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y min-h-[200px]"
+                            value={addonYamlText[addonKey] ?? ""}
+                            onChange={(e) => setAddonYamlText(prev => ({ ...prev, [addonKey]: e.target.value }))}
+                            onBlur={() => {
+                              try {
+                                const parsed = jsYaml.load(addonYamlText[addonKey] ?? "") as Record<string, unknown> | null;
+                                setAddonOverrides(prev => ({ ...prev, [addonKey]: parsed ?? {} }));
+                              } catch { /* keep stale overrides until valid YAML */ }
+                            }}
+                            spellCheck={false}
+                          />
+                        </div>
+                      ) : hasSpecFields ? (
                         <div className="p-4 space-y-4">
                           {simpleFields.length > 0 && (
                             <div className="space-y-4">
@@ -859,10 +928,7 @@ export default function NewClusterPage() {
                                     onChange={(val) =>
                                       setAddonOverrides((prev) => ({
                                         ...prev,
-                                        [addonKey]: {
-                                          ...prev[addonKey],
-                                          [field.path]: val,
-                                        },
+                                        [addonKey]: { ...prev[addonKey], [field.path]: val },
                                       }))
                                     }
                                   />
@@ -873,7 +939,6 @@ export default function NewClusterPage() {
                               ))}
                             </div>
                           )}
-
                           {complexFields.length > 0 && (
                             <div className="space-y-4">
                               {simpleFields.length > 0 && <div className="border-t" />}
@@ -888,10 +953,7 @@ export default function NewClusterPage() {
                                     onChange={(val) =>
                                       setAddonOverrides((prev) => ({
                                         ...prev,
-                                        [addonKey]: {
-                                          ...prev[addonKey],
-                                          [field.path]: val,
-                                        },
+                                        [addonKey]: { ...prev[addonKey], [field.path]: val },
                                       }))
                                     }
                                   />
@@ -905,7 +967,7 @@ export default function NewClusterPage() {
                         </div>
                       ) : (
                         <div className="px-4 py-3 text-xs text-muted-foreground italic">
-                          No configurable fields for this addon
+                          No configurable fields defined in spec.{catalogEntry ? ' Use "Full Values" to edit all chart defaults.' : ""}
                         </div>
                       )}
                     </div>

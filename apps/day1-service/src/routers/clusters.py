@@ -237,6 +237,18 @@ async def stream_cluster_status(
     )
 
 
+@router.get("/{name}/history")
+async def get_cluster_history(
+    name: str,
+    site: Annotated[str, Query(description="Site identifier")],
+    mce: Annotated[str, Query(description="MCE identifier")],
+    cluster_svc: ClusterServiceDep,
+    user: CurrentUser,
+) -> list[dict]:
+    """Return commit history for a cluster's YAML file in the Day1 GitLab repo."""
+    return await cluster_svc.get_cluster_history(name=name, site=site, mce=mce)
+
+
 @router.get("/{name}/current-yaml", response_class=PlainTextResponse)
 async def get_cluster_current_yaml(
     name: str,

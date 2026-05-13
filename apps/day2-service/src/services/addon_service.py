@@ -351,6 +351,22 @@ class AddonService:
 
         return {"cluster": cluster_name, "mce": mce, "installed": installed}
 
+    async def get_cluster_addon_history(self, cluster_name: str, mce: str) -> list[dict]:
+        """Return merged commit history across all teams for a cluster's addon overrides."""
+        teams = await self.list_teams()
+        cluster_dir = self.pr.day2_cluster_addons_dir(mce=mce, cluster=cluster_name)
+        all_commits: list[dict] = []
+        for t in teams:
+            try:
+                gl = self._team_gl(t)
+                commits = await gl.alist_commits(ref_name=self._default_branch, path=cluster_dir)
+                for c in commits:
+                    all_commits.append(gl.format_commit(c, team=t))
+            except Exception as exc:
+                logger.warning("Failed to fetch addon history for team %s cluster %s: %s", t, cluster_name, exc)
+        all_commits.sort(key=lambda x: x.get("date", ""), reverse=True)
+        return all_commits
+
     async def get_merged_addon_values(
         self,
         *,

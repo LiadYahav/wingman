@@ -330,17 +330,7 @@ class SpecService:
         """Return commit history for a spec file."""
         path = self.pr.spec_file(spec_name=name)
         commits = await self.gl.alist_commits(ref_name=self.default_branch, path=path)
-        return [
-            {
-                "sha": c["id"],
-                "short_sha": c["short_id"],
-                "message": c.get("title", c.get("message", "")),
-                "author": c.get("author_name", ""),
-                "date": c.get("authored_date", ""),
-                "web_url": c.get("web_url", ""),
-            }
-            for c in commits
-        ]
+        return [self.gl.format_commit(c) for c in commits]
 
     async def get_spec_at_sha(self, name: str, sha: str) -> str:
         """Return raw YAML of a spec at a specific commit SHA."""

@@ -371,6 +371,21 @@ class GitLabClient:
 
     # ── Commits / Audit ───────────────────────────────────────────────────────
 
+    @staticmethod
+    def format_commit(raw: dict, **extra: object) -> dict:
+        """Normalise a raw python-gitlab commit attributes dict into the API response shape."""
+        return {
+            "sha": raw["id"],
+            "short_sha": raw["short_id"],
+            "message": raw.get("title", raw.get("message", "")),
+            "author": raw.get("author_name", ""),
+            "date": raw.get("authored_date", ""),
+            "web_url": raw.get("web_url", ""),
+            **extra,
+        }
+
+
+
     def list_commits(
         self,
         ref_name: str = "main",
@@ -391,7 +406,9 @@ class GitLabClient:
         if path:
             filters["path"] = path
         try:
-            commits = self.project.commits.list(**filters)
+            # Force offset pagination — keyset pagination (python-gitlab 4.x default)
+            # returns 404 "API Version Not Found" on older self-hosted GitLab instances.
+            commits = self.project.commits.list(**filters, pagination="offset", get_all=False)
             return [c.attributes for c in commits]
         except GitlabError as exc:
             raise GitLabError(f"Failed to list commits: {exc}") from exc

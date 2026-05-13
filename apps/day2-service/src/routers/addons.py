@@ -104,6 +104,17 @@ async def get_addon_values_at_version(
 # ── Cluster addon management ───────────────────────────────────────────────────
 
 
+@router.get("/clusters/{name}/history")
+async def get_cluster_addon_history(
+    name: str,
+    addon_svc: AddonServiceDep,
+    user: CurrentUser,
+    mce: str = Query(...),
+) -> list[dict]:
+    """Return commit history for a cluster's addon override files across all team repos."""
+    return await addon_svc.get_cluster_addon_history(cluster_name=name, mce=mce)
+
+
 @router.get("/clusters/{name}/addons")
 async def list_cluster_addons(
     name: str,

@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, Package, Edit2, Eye, X, Wrench, Activity, CheckCircle2, XCircle, HelpCircle, ExternalLink } from "lucide-react";
+import { ArrowLeft, AlertTriangle, RefreshCw, Trash2, Package, Edit2, Eye, X, Wrench, Activity, CheckCircle2, XCircle, HelpCircle, ExternalLink, GitCommitHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { api, getToken } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
@@ -18,6 +18,46 @@ import { ReviewDialog } from "@/components/common/review-dialog";
 import { computeLineDiff, computeFullFileDiff } from "@/lib/diff";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { MRDetail, ClusterLiveStatus, AddonCatalogEntry, InstalledAddon } from "@/types";
+
+interface CommitEntry {
+  sha: string;
+  short_sha: string;
+  message: string;
+  author: string;
+  date: string;
+  web_url: string;
+  team?: string;
+}
+
+function CommitList({ commits, isLoading, teamColumn }: { commits?: CommitEntry[]; isLoading: boolean; teamColumn?: boolean }) {
+  if (isLoading) return <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>;
+  if (!commits?.length) return <p className="text-sm text-muted-foreground py-4">No history available.</p>;
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border">
+      {commits.map((c) => (
+        <div key={c.sha} className="flex items-start gap-3 px-4 py-3">
+          <GitCommitHorizontal className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium line-clamp-1">{c.message}</p>
+            <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+              <span className="font-mono">{c.short_sha}</span>
+              <span>·</span>
+              <span>{c.author}</span>
+              <span>·</span>
+              <span>{new Date(c.date).toLocaleDateString()}</span>
+              {teamColumn && c.team && <><span>·</span><span className="text-primary/70">{c.team}</span></>}
+            </div>
+          </div>
+          {c.web_url && (
+            <a href={c.web_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors shrink-0">
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const NO_SPEC_SENTINEL = "(not linked to a cluster spec)";
 const hasSpec = (specName: string | undefined) =>
@@ -172,6 +212,21 @@ function ClusterDetailContent() {
   const [activeTab, setActiveTab] = useState("overview");
   const [editYaml, setEditYaml] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedHistorySha, setSelectedHistorySha] = useState<string | null>(null);
+
+  const { data: clusterHistory, isLoading: clusterHistoryLoading } = useQuery<{ sha: string; short_sha: string; message: string; author: string; date: string; web_url: string }[]>({
+    queryKey: ["clusters", name, "history", "day1"],
+    queryFn: () => api.get(`/api/day1/clusters/${name}/history?site=${site}&mce=${mce}`),
+    enabled: Boolean(site && mce) && activeTab === "history",
+    staleTime: 60_000,
+  });
+
+  const { data: addonHistory, isLoading: addonHistoryLoading } = useQuery<{ sha: string; short_sha: string; message: string; author: string; date: string; web_url: string; team: string }[]>({
+    queryKey: ["clusters", name, "history", "day2"],
+    queryFn: () => api.get(`/api/day2/clusters/${name}/history?mce=${mce}`),
+    enabled: Boolean(mce) && activeTab === "history",
+    staleTime: 60_000,
+  });
   const [reviewOpen, setReviewOpen] = useState(false);
   const [beforeYaml, setBeforeYaml] = useState<string | undefined>(undefined);
   const [deleteReviewOpen, setDeleteReviewOpen] = useState(false);
@@ -378,6 +433,7 @@ function ClusterDetailContent() {
                 <span className="ml-1.5 inline-flex h-2 w-2 rounded-full bg-amber-500" />
               )}
             </TabsTrigger>
+            <TabsTrigger value="history" disabled={isEditing}>History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
@@ -692,6 +748,23 @@ function ClusterDetailContent() {
                 Cluster is in sync with its spec
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-4 space-y-6">
+            {/* Day1 — cluster manifest history */}
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                Cluster Manifest (Day 1 repo)
+              </h3>
+              <CommitList commits={clusterHistory} isLoading={clusterHistoryLoading} />
+            </div>
+            {/* Day2 — addon overrides history */}
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                Addon Overrides (Day 2 repo)
+              </h3>
+              <CommitList commits={addonHistory} isLoading={addonHistoryLoading} teamColumn />
+            </div>
           </TabsContent>
         </Tabs>
       )}

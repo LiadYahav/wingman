@@ -53,7 +53,7 @@ function SignatureCard({ onClose }: { onClose: () => void }) {
           Liad Yahav
         </div>
         <div className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>
-          2024 – 2025
+          2024 – 2026
         </div>
       </div>
     </div>
