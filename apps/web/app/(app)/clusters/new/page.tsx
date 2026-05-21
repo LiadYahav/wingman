@@ -408,6 +408,14 @@ export default function NewClusterPage() {
     enabled: step === "vars",
   });
 
+  const { data: infraEnvOptions = [], isLoading: infraEnvsLoading } = useQuery<string[]>({
+    queryKey: ["mce-infraenvs", mce],
+    queryFn: () => api.get<string[]>(`/api/day1/mces/${mce}/infraenvs`),
+    enabled: Boolean(mce) && mce !== CREATE_NEW && step === "vars",
+    staleTime: 60_000,
+    retry: false,
+  });
+
   // Auto-detect site from cluster name — prefer longest match (most specific)
   useEffect(() => {
     if (!clusterName.trim() || !sites.length) return;
@@ -817,6 +825,8 @@ export default function NewClusterPage() {
                 onChange={setDynamicValues}
                 mode="cluster-create"
                 immutablePaths={new Set(selectedSpec.spec.day1.immutable_paths ?? [])}
+                infraEnvOptions={infraEnvOptions}
+                infraEnvsLoading={infraEnvsLoading}
               />
             </div>
           )}

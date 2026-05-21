@@ -437,6 +437,7 @@ function ObjectListEditor({
 
 export function FieldEditor({
   field, value, onChange, mode, path, immutablePaths, onToggleImmutable,
+  infraEnvOptions, infraEnvsLoading,
 }: {
   field: TemplateField;
   value: FieldValue;
@@ -445,6 +446,8 @@ export function FieldEditor({
   path: string;
   immutablePaths: Set<string>;
   onToggleImmutable?: (path: string) => void;
+  infraEnvOptions?: string[];
+  infraEnvsLoading?: boolean;
 }) {
   const isImmutable = immutablePaths.has(path);
   const isReadOnly = mode === "cluster-edit" && isImmutable;
@@ -482,6 +485,32 @@ export function FieldEditor({
 
     // Scalar — in spec-build mode, no value input (structure phase only)
     if (mode === "spec-build") return null;
+
+    // Smart dropdown for infra_env: populated from MCE API when available
+    if (field.name === "infra_env" && (mode === "cluster-create" || mode === "cluster-edit") && !isReadOnly) {
+      if (infraEnvsLoading) {
+        return (
+          <select disabled className={cn(inputCls, "opacity-50 cursor-wait")}>
+            <option>Loading…</option>
+          </select>
+        );
+      }
+      if (infraEnvOptions && infraEnvOptions.length > 0) {
+        return (
+          <select
+            className={inputCls}
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+          >
+            <option value="">— select infra env —</option>
+            {infraEnvOptions.map((env) => (
+              <option key={env} value={env}>{env}</option>
+            ))}
+          </select>
+        );
+      }
+      // Fall through: CLUSTER_STATUS_ENABLED=false or fetch failed → plain text input
+    }
 
     return <ScalarInput field={field} value={value} onChange={onChange} readOnly={isReadOnly} />;
   };
@@ -530,6 +559,8 @@ export function DynamicVariableForm({
   mode = "cluster-create",
   immutablePaths = new Set(),
   onToggleImmutable,
+  infraEnvOptions,
+  infraEnvsLoading,
 }: {
   schema: TemplateField[];
   values: FormValues;
@@ -537,6 +568,8 @@ export function DynamicVariableForm({
   mode?: Mode;
   immutablePaths?: Set<string>;
   onToggleImmutable?: (path: string) => void;
+  infraEnvOptions?: string[];
+  infraEnvsLoading?: boolean;
 }) {
   if (schema.length === 0) return null;
 
@@ -552,6 +585,8 @@ export function DynamicVariableForm({
           path={field.name}
           immutablePaths={immutablePaths}
           onToggleImmutable={onToggleImmutable}
+          infraEnvOptions={infraEnvOptions}
+          infraEnvsLoading={infraEnvsLoading}
         />
       ))}
     </div>
