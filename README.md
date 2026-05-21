@@ -113,6 +113,7 @@ cluster-platform/
 | **In-app documentation** | `/docs` route with full platform guide, concept explanations, worked examples, and troubleshooting. |
 | **Aggregated approvals** | Approvals page aggregates open MRs from all repositories (Day1 + all Day2 team repos) in one view. |
 | **Identity variable handling** | `cluster_name`, `site`, `mce` are dedicated identity inputs — they are not part of the dynamic variable form and always override spec defaults in Jinja2 rendering. |
+| **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
 
 ## Deployment
 
@@ -230,6 +231,12 @@ SERVICE_PORT=8001
 LOG_LEVEL=INFO
 GITLAB_DEFAULT_BRANCH=main
 GITLAB_SSL_VERIFY=true
+
+# Live MCE status (enables infra_env dropdown + cluster health checks)
+CLUSTER_STATUS_ENABLED=false
+MCE_API_DOMAIN=mgmt.example.com
+MCE_TOKENS_FILE=/etc/wingman/mce-tokens/tokens
+MCE_INFRAENV_NAMESPACE=           # empty = query all namespaces
 ```
 
 ### Day2 Service

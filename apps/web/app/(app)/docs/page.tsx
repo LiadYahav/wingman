@@ -1100,6 +1100,47 @@ namespace:     cert-manager ← chart default (Helm chart ships this)`}
               </div>
             </div>
 
+            {/* InfraEnv dropdown */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 shrink-0">
+                  <Network className="h-3.5 w-3.5 text-emerald-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">InfraEnv smart dropdown</p>
+                  <p className="text-xs text-muted-foreground">Cluster creation → template variables step</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-3">
+                <p>
+                  When a spec template defines an <InlineCode>infra_env</InlineCode> Jinja2 variable,
+                  the cluster creation form automatically renders it as a dropdown instead of a free-text
+                  input. The dropdown is populated by querying <InlineCode>InfraEnv</InlineCode> CRDs
+                  directly from the selected MCE hosting cluster via the Kubernetes API.
+                </p>
+                <p>
+                  This prevents typos in the agent label selector value — the field that determines which
+                  bare-metal nodes are assigned to the cluster:
+                </p>
+                <CodeBlock language="nodepool snippet">
+{`agentLabelSelector:
+  nodeLabelKey: infraenvs.agent-install.openshift.io
+  nodeLabelValue: {{ infra_env }}   # populated from the dropdown`}
+                </CodeBlock>
+                <p>
+                  The dropdown is only active when <InlineCode>CLUSTER_STATUS_ENABLED=true</InlineCode>{" "}
+                  and the selected MCE has a configured SA token. If the feature is disabled or the
+                  fetch fails, the field falls back to a plain text input transparently — no change to
+                  spec templates or cluster data is required.
+                </p>
+                <Callout type="tip" title="Controlling which namespace is queried">
+                  By default, InfraEnvs are listed across all namespaces. Set{" "}
+                  <InlineCode>MCE_INFRAENV_NAMESPACE</InlineCode> to restrict the query to a specific
+                  namespace (e.g. <InlineCode>openshift-machine-api</InlineCode>).
+                </Callout>
+              </div>
+            </div>
+
           </div>
         </section>
 
