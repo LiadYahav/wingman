@@ -122,6 +122,10 @@ class Settings(BaseSettings):
         default="false",
         description="SSL verification for MCE API calls: true/false or CA bundle path",
     )
+    MCE_INFRAENV_NAMESPACE: str = Field(
+        default="",
+        description="Namespace to query for InfraEnv CRDs on MCE clusters. Empty = all namespaces.",
+    )
 
     # ── Cache TTLs (seconds) ─────────────────────────────────────────────────
     # Longer TTLs reduce GitLab API calls; frontend staleTime handles freshness

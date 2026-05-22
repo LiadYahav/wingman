@@ -26,6 +26,10 @@ HC_VERSION = "v1beta1"
 HC_PLURAL = "hostedclusters"
 NP_PLURAL = "nodepools"
 
+INFRAENV_GROUP = "agent-install.openshift.io"
+INFRAENV_VERSION = "v1beta1"
+INFRAENV_PLURAL = "infraenvs"
+
 # HostedCluster: True status means healthy
 HC_TRUE_CONDITIONS = {"Available"}
 # HostedCluster: True status means a problem
@@ -265,3 +269,41 @@ class ClusterStatusService:
             hc_phase=hc_phase,
             ocp_version=ocp_version,
         )
+
+    def list_infraenvs(self, mce: str, namespace: str = "") -> list[str]:
+        """
+        List InfraEnv names from the MCE cluster. Sync — call via asyncio.to_thread.
+
+        Raises ValueError if no token is configured for the MCE.
+        Raises ApiException / Exception on Kubernetes API errors.
+        """
+        try:
+            from kubernetes.client.exceptions import ApiException  # noqa: PLC0415
+        except ImportError:
+            ApiException = Exception  # type: ignore[assignment,misc]
+
+        crd, api_server = self._build_crd_api(mce)  # raises ValueError / RuntimeError
+
+        try:
+            if namespace:
+                result = crd.list_namespaced_custom_object(
+                    group=INFRAENV_GROUP,
+                    version=INFRAENV_VERSION,
+                    namespace=namespace,
+                    plural=INFRAENV_PLURAL,
+                    _request_timeout=_K8S_TIMEOUT,
+                )
+            else:
+                result = crd.list_cluster_custom_object(
+                    group=INFRAENV_GROUP,
+                    version=INFRAENV_VERSION,
+                    plural=INFRAENV_PLURAL,
+                    _request_timeout=_K8S_TIMEOUT,
+                )
+            return sorted(item["metadata"]["name"] for item in result.get("items", []))
+        except ApiException as exc:
+            logger.warning("InfraEnv list failed for MCE '%s' at %s: %s", mce, api_server, exc)
+            raise
+        except Exception as exc:
+            logger.warning("Unexpected error listing InfraEnvs for MCE '%s': %s", mce, exc)
+            raise

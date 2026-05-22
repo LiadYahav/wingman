@@ -221,6 +221,17 @@ def get_cluster_status_service() -> ClusterStatusService | None:
     )
 
 
+def require_cluster_status_service() -> ClusterStatusService:
+    """Dependency that raises 501 when CLUSTER_STATUS_ENABLED=false."""
+    svc = get_cluster_status_service()
+    if svc is None:
+        raise HTTPException(
+            status_code=501,
+            detail="Live cluster status is not enabled. Set CLUSTER_STATUS_ENABLED=true.",
+        )
+    return svc
+
+
 def get_audit_service(
     gl_day1: Annotated[GitLabClient, Depends(get_gitlab_day1)],
     gl_specs: Annotated[GitLabClient, Depends(get_gitlab_specs)],
@@ -240,6 +251,7 @@ def get_audit_service(
 CurrentUser = Annotated[UserInfo, Depends(get_current_user)]
 AdminUser = Annotated[UserInfo, Depends(require_admin)]  # use on all write endpoints
 ClusterServiceDep = Annotated[ClusterService, Depends(get_cluster_service)]
+ClusterStatusServiceDep = Annotated[ClusterStatusService, Depends(require_cluster_status_service)]
 DriftDetectorDep = Annotated[DriftDetector, Depends(get_drift_detector)]
 SpecServiceDep = Annotated[SpecService, Depends(get_spec_service)]
 ApprovalServiceDep = Annotated[ApprovalService, Depends(get_approval_service)]
