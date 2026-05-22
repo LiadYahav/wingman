@@ -276,13 +276,29 @@ See `chart/README.md` for Helm deployment instructions.
 
 ### Building Images
 
-```bash
-# Build for local architecture
-docker build -t wingman-day1:latest -f apps/day1-service/Dockerfile .
+Production images are tagged with the **git commit SHA** so every deployment is
+traceable. Use `latest` only for quick local testing.
 
-# Build for production (amd64)
-docker buildx build --platform linux/amd64 -t wingman-day1:latest -f apps/day1-service/Dockerfile . --load
+```bash
+SHA=$(git rev-parse --short HEAD)
+
+# Build for local/minikube (native arch)
+docker build -t wingman-day1:$SHA -f apps/day1-service/Dockerfile .
+docker build -t wingman-day2:$SHA -f apps/day2-service/Dockerfile .
+docker build -t wingman-web:$SHA apps/web/
+
+# Build all three for production (amd64, clean)
+docker buildx build --platform linux/amd64 --no-cache -t wingman-day1:$SHA -f apps/day1-service/Dockerfile . --load
+docker buildx build --platform linux/amd64 --no-cache -t wingman-day2:$SHA -f apps/day2-service/Dockerfile . --load
+docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA apps/web/ --load
+
+# Save for air-gapped transfer
+docker save wingman-day1:$SHA | gzip > wingman-day1-$SHA.tar.gz
+docker save wingman-day2:$SHA | gzip > wingman-day2-$SHA.tar.gz
+docker save wingman-web:$SHA  | gzip > wingman-web-$SHA.tar.gz
 ```
+
+Update `image.tag` in `chart/values.yaml` (or `--set image.tag=$SHA`) when deploying.
 
 ### Environment Variables
 
