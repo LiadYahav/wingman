@@ -22,12 +22,12 @@ from wingman_shared.models import (
 from ..dependencies import (
     AdminUser,
     ClusterServiceDep,
+    ClusterStatusServiceDep,
     CurrentUser,
     DriftDetectorDep,
     SettingsDep,
     SpecServiceDep,
     get_cache,
-    get_cluster_status_service,
 )
 from ..services.yaml_renderer import RenderError, apply_variable_defaults, render_spec
 
@@ -136,6 +136,7 @@ class BulkStatusRequest(BaseModel):
 async def get_bulk_cluster_status(
     body: BulkStatusRequest,
     user: CurrentUser,
+    status_svc: ClusterStatusServiceDep,
 ) -> dict[str, ClusterLiveStatus]:
     """
     Fetch live status for multiple clusters in parallel.
@@ -143,12 +144,6 @@ async def get_bulk_cluster_status(
     Returns a dict mapping cluster name to its live status.
     More efficient than N individual calls when loading cluster list.
     """
-    status_svc = get_cluster_status_service()
-    if status_svc is None:
-        raise HTTPException(
-            status_code=501,
-            detail="Live cluster status is not enabled. Set CLUSTER_STATUS_ENABLED=true.",
-        )
 
     async def fetch_one(cluster: dict[str, str]) -> tuple[str, ClusterLiveStatus]:
         name = cluster["name"]
@@ -178,6 +173,7 @@ async def get_cluster_live_status(
     name: str,
     mce: Annotated[str, Query(description="MCE identifier")],
     user: CurrentUser,
+    status_svc: ClusterStatusServiceDep,
 ) -> ClusterLiveStatus:
     """
     Fetch live HostedCluster and NodePool status from the MCE OpenShift API.
@@ -185,12 +181,6 @@ async def get_cluster_live_status(
     Requires CLUSTER_STATUS_ENABLED=true. Returns 501 when the feature is disabled.
     Cannot run on minikube — only works against real OpenShift MCE clusters.
     """
-    status_svc = get_cluster_status_service()
-    if status_svc is None:
-        raise HTTPException(
-            status_code=501,
-            detail="Live cluster status is not enabled. Set CLUSTER_STATUS_ENABLED=true.",
-        )
     return await asyncio.to_thread(status_svc.fetch_cluster_status, name, mce)
 
 
@@ -199,6 +189,7 @@ async def stream_cluster_status(
     name: str,
     mce: Annotated[str, Query(description="MCE identifier")],
     _: CurrentUser,
+    status_svc: ClusterStatusServiceDep,
 ) -> StreamingResponse:
     """
     Stream live cluster status updates via Server-Sent Events (SSE).
@@ -207,12 +198,6 @@ async def stream_cluster_status(
     Requires CLUSTER_STATUS_ENABLED=true. Use fetch() with an Authorization
     header on the client side (EventSource does not support custom headers).
     """
-    status_svc = get_cluster_status_service()
-    if status_svc is None:
-        raise HTTPException(
-            status_code=501,
-            detail="Live cluster status is not enabled. Set CLUSTER_STATUS_ENABLED=true.",
-        )
 
     async def generate():
         try:

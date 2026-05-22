@@ -7,7 +7,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from ..dependencies import CurrentUser, get_cluster_status_service, get_settings
+from ..dependencies import ClusterStatusServiceDep, CurrentUser, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +18,9 @@ router = APIRouter(prefix="/api/day1/mces", tags=["mces"])
 async def list_mce_infraenvs(
     mce: str,
     user: CurrentUser,
+    status_svc: ClusterStatusServiceDep,
 ) -> list[str]:
     """List InfraEnv names available on the given MCE hosting cluster."""
-    status_svc = get_cluster_status_service()
-    if status_svc is None:
-        raise HTTPException(
-            status_code=501,
-            detail="Live cluster status is not enabled. Set CLUSTER_STATUS_ENABLED=true.",
-        )
-
     settings = get_settings()
     try:
         return await asyncio.to_thread(
