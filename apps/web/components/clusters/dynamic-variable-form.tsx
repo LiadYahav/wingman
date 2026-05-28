@@ -5,6 +5,7 @@ import jsYaml from "js-yaml";
 import { Plus, X, ChevronDown, ChevronRight, Lock, Unlock, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TemplateField } from "@/types";
+import { GitFileMultiSelect, type ConfigItem } from "@/components/specs/git-file-multi-select";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -314,6 +315,7 @@ function ObjectCard({
               path={`${basePath}.${subField.name}`}
               immutablePaths={immutablePaths}
               onToggleImmutable={onToggleImmutable}
+              inListItem
             />
           ))}
         </div>
@@ -437,7 +439,7 @@ function ObjectListEditor({
 
 export function FieldEditor({
   field, value, onChange, mode, path, immutablePaths, onToggleImmutable,
-  infraEnvOptions, infraEnvsLoading,
+  infraEnvOptions, infraEnvsLoading, inListItem = false,
 }: {
   field: TemplateField;
   value: FieldValue;
@@ -448,12 +450,27 @@ export function FieldEditor({
   onToggleImmutable?: (path: string) => void;
   infraEnvOptions?: string[];
   infraEnvsLoading?: boolean;
+  /** True when rendered inside an ObjectCard — scalar inputs are shown even in spec-build mode. */
+  inListItem?: boolean;
 }) {
   const isImmutable = immutablePaths.has(path);
   const isReadOnly = mode === "cluster-edit" && isImmutable;
   const isScalar = field.type !== "list" && field.type !== "object";
 
   const renderInput = () => {
+    // Git file picker — for the extra_configs field (list of {name} items).
+    // Shown in all modes: spec-build lets the admin pre-select defaults;
+    // cluster-create/edit lets the user confirm or adjust the selection.
+    if (field.name === "extra_configs" && field.type === "list") {
+      return (
+        <GitFileMultiSelect
+          value={(value as FieldValueMap[]).map((v) => ({ name: String(v.name ?? "") }) as ConfigItem)}
+          onChange={(items) => onChange(items as FieldValue[])}
+          readOnly={isReadOnly}
+        />
+      );
+    }
+
     if (field.type === "list" && field.fields && field.fields.length > 0) {
       return (
         <ObjectListEditor
@@ -483,8 +500,10 @@ export function FieldEditor({
       return <ObjectEditor field={field} value={value} onChange={onChange} readOnly={isReadOnly} />;
     }
 
-    // Scalar — in spec-build mode, no value input (structure phase only)
-    if (mode === "spec-build") return null;
+    // Scalar — in spec-build mode hide top-level value inputs (structure phase only).
+    // Exception: sub-fields inside an ObjectCard (e.g. node_labels key/value) must
+    // remain editable so the admin can set the actual label data.
+    if (mode === "spec-build" && !inListItem) return null;
 
     // Smart dropdown for infra_env: populated from MCE API when available
     if (field.name === "infra_env" && (mode === "cluster-create" || mode === "cluster-edit") && !isReadOnly) {

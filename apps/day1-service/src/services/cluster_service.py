@@ -564,3 +564,4 @@ class ClusterService:
         self.cache.invalidate("day1:sites:list")
         self.cache.invalidate(f"day1:sites:{site}:mces")
         return parse_mr_to_detail(mr_raw)
+
