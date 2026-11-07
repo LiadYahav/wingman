@@ -22,8 +22,15 @@ function devApiRewrites() {
   ];
 }
 
+/**
+ * Stamps each build (or dev server start). The persisted query cache is
+ * keyed on it, so data cached in an older build's shapes never reaches the
+ * pages of a newer one.
+ */
+const WINGMAN_WEB_BUILD = new Date().toISOString();
+
 export default function config(phase: string): NextConfig {
-  const nextConfig: NextConfig = { output: "standalone" };
+  const nextConfig: NextConfig = { output: "standalone", env: { WINGMAN_WEB_BUILD } };
   if (phase !== PHASE_DEVELOPMENT_SERVER) return nextConfig;
   const rewrites = devApiRewrites();
   return rewrites.length > 0 ? { ...nextConfig, rewrites: async () => rewrites } : nextConfig;
