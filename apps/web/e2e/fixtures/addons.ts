@@ -1,10 +1,14 @@
-export const mockAddons = [
+import type { AddonCatalogEntry, ClusterSpec } from "../../types";
+
+// Typed against the app's API types so a shape change fails `tsc` instead of
+// silently crashing the page-object tests at runtime.
+export const mockAddons: AddonCatalogEntry[] = [
   {
     team: "platform",
     name: "cert-manager",
-    description: "Certificate management for Kubernetes",
-    version: "1.12.0",
-    defaultValues: {
+    current_version: "1.12.0",
+    available_versions: ["1.12.0", "1.11.0"],
+    default_values: {
       replicas: 1,
       namespace: "cert-manager",
       installCRDs: true,
@@ -13,73 +17,90 @@ export const mockAddons = [
         limits: { cpu: "500m", memory: "512Mi" },
       },
     },
+    dependencies: [],
   },
   {
     team: "platform",
     name: "external-secrets",
-    description: "External secrets operator",
-    version: "0.9.0",
-    defaultValues: {
+    current_version: "0.9.0",
+    available_versions: ["0.9.0"],
+    default_values: {
       replicaCount: 1,
       serviceAccount: { create: true, name: "" },
       secretStores: [],
     },
+    dependencies: ["platform/cert-manager"],
   },
   {
     team: "observability",
     name: "prometheus",
-    description: "Monitoring and alerting toolkit",
-    version: "2.45.0",
-    defaultValues: {
+    current_version: "2.45.0",
+    available_versions: ["2.45.0", "2.44.0"],
+    default_values: {
       retention: "15d",
       scrapeInterval: "30s",
       alertmanager: { enabled: true },
       nodeExporter: { enabled: true },
     },
+    dependencies: [],
   },
   {
     team: "observability",
     name: "grafana",
-    description: "Visualization and analytics platform",
-    version: "10.0.0",
-    defaultValues: {
+    current_version: "10.0.0",
+    available_versions: ["10.0.0"],
+    default_values: {
       adminPassword: "",
       persistence: { enabled: false, size: "10Gi" },
       dashboards: [],
     },
+    dependencies: [],
   },
   {
     team: "networking",
     name: "ingress-nginx",
-    description: "NGINX Ingress Controller",
-    version: "4.7.0",
-    defaultValues: {
+    current_version: "4.7.0",
+    available_versions: ["4.7.0"],
+    default_values: {
       controller: {
         replicaCount: 2,
         service: { type: "LoadBalancer" },
         resources: { requests: { cpu: "100m", memory: "90Mi" } },
       },
     },
+    dependencies: [],
   },
 ];
 
-export const mockSpecs = [
+export const mockSpecs: ClusterSpec[] = [
   {
-    name: "production-standard",
-    displayName: "Production Standard",
-    description: "Standard production cluster template",
-    variables: [
-      { name: "cluster_name", description: "Name of the cluster", required: true },
-      { name: "environment", description: "Environment (prod/staging)", default: "prod" },
-    ],
-    day2Addons: [
-      {
-        team: "platform",
-        name: "cert-manager",
-        overrideable: [
-          { path: "replicas", type: "integer", default: 1, description: "Number of replicas" },
+    apiVersion: "wingman.io/v1",
+    kind: "ClusterSpec",
+    metadata: {
+      name: "production-standard",
+      version: "1.0.0",
+      description: "Standard production cluster template",
+      labels: {},
+    },
+    spec: {
+      day1: {
+        variables: [],
+        structure: { nodepools_count: 2 },
+        immutable_paths: ["cluster_name"],
+        template: "",
+      },
+      day2: {
+        addons: [
+          {
+            team: "platform",
+            name: "cert-manager",
+            version: "1.12.0",
+            overrideable: [
+              { path: "replicas", type: "integer", default: 1, description: "Number of replicas" },
+            ],
+          },
         ],
       },
-    ],
+    },
   },
 ];

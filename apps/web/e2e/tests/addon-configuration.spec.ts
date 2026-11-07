@@ -112,20 +112,7 @@ test.describe("Addon Configuration", () => {
   });
 
   test("shows no fields message for empty addon", async ({ page }) => {
-    await page.route("**/api/day2/addons/empty/test", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          team: "empty",
-          name: "test",
-          description: "Empty addon",
-          version: "1.0.0",
-          defaultValues: {},
-        }),
-      });
-    });
-
+    // Chart values for empty/test fall through to mockDay2Api's empty "{}" response
     await page.route("**/api/day2/addons", async (route) => {
       await route.fulfill({
         status: 200,
@@ -134,9 +121,10 @@ test.describe("Addon Configuration", () => {
           {
             team: "empty",
             name: "test",
-            description: "Empty addon",
-            version: "1.0.0",
-            defaultValues: {},
+            current_version: "1.0.0",
+            available_versions: ["1.0.0"],
+            default_values: {},
+            dependencies: [],
           },
         ]),
       });
@@ -199,6 +187,6 @@ test.describe("Addon Configuration", () => {
     await configDialog.save();
 
     const selectedAddon = specPage.getSelectedAddon("platform", "cert-manager");
-    await expect(selectedAddon.getByText(/2 field/i)).toBeVisible();
+    await expect(selectedAddon.getByText(/2 overrideable/i)).toBeVisible();
   });
 });

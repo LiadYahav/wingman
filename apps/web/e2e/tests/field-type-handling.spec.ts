@@ -19,10 +19,11 @@ test.describe("Field Type Handling", () => {
     await configDialog.waitForOpen();
 
     const secretStoresRow = configDialog.getFieldRow("secretStores");
-    await expect(secretStoresRow.getByText("array")).toBeVisible();
+    // exact: the value summary ("Empty array") also contains "array"
+    await expect(secretStoresRow.getByText("array", { exact: true })).toBeVisible();
   });
 
-  test("correctly detects object type for nested objects", async ({ page }) => {
+  test("flattens nested objects into leaf fields", async ({ page }) => {
     const specPage = new SpecNewPage(page);
     const configDialog = new ConfigureDialogPage(page);
 
@@ -32,8 +33,11 @@ test.describe("Field Type Handling", () => {
 
     await configDialog.waitForOpen();
 
-    const resourcesRow = configDialog.getFieldRow("resources.requests");
-    await expect(resourcesRow.getByText("object")).toBeVisible();
+    // Objects are not offered as a whole; each leaf becomes its own dotted path
+    await expect(configDialog.getFieldRow("resources.requests")).toHaveCount(0);
+    const cpuRow = configDialog.getFieldRow("resources.requests.cpu");
+    await expect(cpuRow).toBeVisible();
+    await expect(cpuRow.getByText("string", { exact: true })).toBeVisible();
   });
 
   test("shows correct value summary for arrays", async ({ page }) => {
@@ -50,7 +54,7 @@ test.describe("Field Type Handling", () => {
     await expect(dashboardsRow.getByText(/empty array/i)).toBeVisible();
   });
 
-  test("shows correct value summary for objects", async ({ page }) => {
+  test("shows value summaries for nested object leaves", async ({ page }) => {
     const specPage = new SpecNewPage(page);
     const configDialog = new ConfigureDialogPage(page);
 
@@ -60,8 +64,8 @@ test.describe("Field Type Handling", () => {
 
     await configDialog.waitForOpen();
 
-    const persistenceRow = configDialog.getFieldRow("persistence");
-    await expect(persistenceRow.getByText(/2 propert/i)).toBeVisible();
+    await expect(configDialog.getFieldRow("persistence.enabled").getByText("false")).toBeVisible();
+    await expect(configDialog.getFieldRow("persistence.size").getByText('"10Gi"')).toBeVisible();
   });
 
   test("shows correct value summary for booleans", async ({ page }) => {

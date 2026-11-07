@@ -3,30 +3,34 @@ import { Page, Locator } from "@playwright/test";
 export class SpecNewPage {
   readonly page: Page;
   readonly nameInput: Locator;
-  readonly displayNameInput: Locator;
-  readonly descriptionInput: Locator;
+  readonly versionInput: Locator;
   readonly addonSearch: Locator;
   readonly submitButton: Locator;
 
   constructor(page: Page) {
     this.page = page;
     this.nameInput = page.getByTestId("spec-name-input");
-    this.displayNameInput = page.getByTestId("spec-display-name-input");
-    this.descriptionInput = page.getByTestId("spec-description-input");
-    this.addonSearch = page.getByPlaceholder("Search addons");
-    this.submitButton = page.getByRole("button", { name: /create spec/i });
+    this.versionInput = page.getByTestId("spec-version-input");
+    this.addonSearch = page.getByRole("textbox", { name: "Search addons" });
+    this.submitButton = page.getByRole("button", { name: /review & create/i });
   }
 
   async goto() {
+    // Visit "/" first so Zustand's async persist hydration picks up the
+    // injected auth before we land on the target route (see injectAdminAuth).
+    await this.page.goto("/");
     await this.page.goto("/specs/new");
   }
 
-  async fillBasicInfo(name: string, displayName: string, description?: string) {
+  async fillBasicInfo(name: string, version?: string) {
     await this.nameInput.fill(name);
-    await this.displayNameInput.fill(displayName);
-    if (description) {
-      await this.descriptionInput.fill(description);
+    if (version) {
+      await this.versionInput.fill(version);
     }
+  }
+
+  getTeamHeader(team: string): Locator {
+    return this.page.getByRole("button", { name: new RegExp(`^${team}`) });
   }
 
   getAddonCard(team: string, name: string): Locator {
@@ -38,7 +42,7 @@ export class SpecNewPage {
   }
 
   async selectAddon(team: string, name: string) {
-    await this.getAddonCard(team, name).click();
+    await this.getAddonCard(team, name).getByRole("button", { name: "Add", exact: true }).click();
   }
 
   async searchAddons(query: string) {

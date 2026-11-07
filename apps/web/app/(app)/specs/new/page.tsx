@@ -142,6 +142,7 @@ function SortableAddonItem({
       </div>
       <button
         onClick={onRemove}
+        aria-label="Remove addon"
         className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
       >
         <X className="h-4 w-4" />
@@ -494,6 +495,7 @@ export default function NewSpecPage() {
             <input
               className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
               placeholder="e.g. standard-ha, dok, compact-single"
+              data-testid="spec-name-input"
               value={specName}
               onChange={(e) => setSpecName(e.target.value)}
             />
@@ -503,6 +505,7 @@ export default function NewSpecPage() {
             <input
               className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
               placeholder="1.0.0"
+              data-testid="spec-version-input"
               value={specVersion}
               onChange={(e) => setSpecVersion(e.target.value)}
             />
@@ -602,6 +605,7 @@ export default function NewSpecPage() {
                   <input
                     type="text"
                     placeholder="Search..."
+                    aria-label="Search addons"
                     value={addonSearch}
                     onChange={(e) => setAddonSearch(e.target.value)}
                     className="w-40 rounded-lg border bg-background pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
