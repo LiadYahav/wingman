@@ -27,6 +27,11 @@ dev = [
     "ruff==0.14.0",
     "ty==0.0.78",
 ]
+# The build backend every member's [build-system] names. Pinned here so
+# uv.lock covers it and scripts/export-requirements.sh exports it with hashes:
+# the images build the workspace members' wheels offline with exactly this
+# version (docs/ops/images.md). Bump it with the members' build-system.
+build = ["hatchling==1.32.4"]
 
 # ── pytest ──────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
