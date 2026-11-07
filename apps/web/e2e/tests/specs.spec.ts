@@ -6,10 +6,11 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
+import { catalogEntry } from "../fixtures/addons";
 import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
 import { SpecEditPage } from "../pages/spec-edit.page";
 import { SpecNewPage } from "../pages/spec-new.page";
-import type { ErrorCode, MRDetail, SpecCluster, SpecDrift, SpecEntry } from "../../types";
+import type { CatalogEntry, ErrorCode, MRDetail, SpecCluster, SpecDrift, SpecEntry } from "../../types";
 
 // ── Mock data ────────────────────────────────────────────────────────────────
 
@@ -342,8 +343,9 @@ test.describe("Spec edit", () => {
 // ── Create ───────────────────────────────────────────────────────────────────
 
 test.describe("Spec create", () => {
-  async function openNew(page: Page, onPost: (route: Route) => Promise<void>) {
+  async function openNew(page: Page, onPost: (route: Route) => Promise<void>, catalog: CatalogEntry[] = []) {
     await open(page, "/", async (p) => {
+      await p.route("**/api/day2/addons", (r) => json(r, catalog));
       await p.route("**/api/day1/specs/template", (r) => json(r, ""));
       await p.route("**/api/day1/specs", (r) =>
         r.request().method() === "POST" ? onPost(r) : json(r, [STANDARD, BROKEN])
@@ -411,5 +413,32 @@ test.describe("Spec create", () => {
     await expect(page.getByText("Spec MR !10 opened")).toBeVisible();
     await page.waitForURL(/\/specs$/);
     expect(sent).toMatchObject({ metadata: { name: "new-spec", version: "2.0.0", description: "For test clusters" } });
+  });
+
+  test("a chart is added at its team default, HEAD when the team sets none", async ({ page }) => {
+    let sent: SpecEntry | null = null;
+    const spec = await openNew(
+      page,
+      async (r) => {
+        sent = r.request().postDataJSON();
+        await json(r, mr(11, "[Wingman/Specs] Create spec new-spec"), 201);
+      },
+      [catalogEntry({ team: "redbull", name: "cluster-roles", current_version: "HEAD", available_versions: ["main", "release-1"], default_values: {} })]
+    );
+    const card = spec.getAddonCard("redbull", "cluster-roles");
+    await expect(card.getByRole("combobox")).toContainText("HEAD");
+    await card.getByRole("combobox").click();
+    // HEAD is the chart repo's default branch, which the branches list first
+    await expect(page.getByRole("option")).toHaveText(["HEAD", "main", "release-1"]);
+    await page.keyboard.press("Escape");
+
+    await spec.selectAddon("redbull", "cluster-roles");
+    await spec.fillBasicInfo("new-spec", "1.0.0");
+    await spec.reviewAndConfirm();
+
+    await expect(page.getByText("Spec MR !11 opened")).toBeVisible();
+    expect((sent as unknown as SpecEntry).spec.day2.addons).toEqual([
+      { team: "redbull", name: "cluster-roles", version: "HEAD", overrideable: [] },
+    ]);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -22,10 +22,11 @@ import {
 } from "@/components/clusters/cluster-facts";
 import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
+import { chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { fetchLiveStatus } from "@/lib/live-status";
 import { toastMrOpened } from "@/lib/mr-toast";
 import type {
-  AddonCatalogEntry, AddonDrift, ClusterDetail, ClusterDrift, ClusterLiveStatus, InstalledAddon, MRDetail,
+  AddonDrift, CatalogEntry, ChangeResult, ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts, MRDetail,
 } from "@/types";
 
 interface CommitEntry {
@@ -115,20 +116,27 @@ function ClusterDetailContent() {
     staleTime: 60_000,
   });
 
-  // Prefetch the addons page's data (keys match it)
+  // The cluster's charts as day2 lists them (a bare name, narrowed by its MCE):
+  // the entry its charts page reads, and what a drift fix writes against.
+  const chartsQuery = useMemo(
+    () => ({
+      queryKey: day2Keys.charts(name, mce),
+      queryFn: () => api.get<DestinationCharts>(day2Api.charts(name, mce)),
+      staleTime: 30_000,
+    }),
+    [name, mce]
+  );
+
+  // Prefetch the charts page's data
   useEffect(() => {
     if (!mce) return;
+    queryClient.prefetchQuery(chartsQuery);
     queryClient.prefetchQuery({
-      queryKey: ["clusters", name, "addons"],
-      queryFn: () => api.get<{ installed: InstalledAddon[] }>(`/api/day2/clusters/${encodeURIComponent(name)}/addons?mce=${encodeURIComponent(mce)}`),
-      staleTime: 30_000,
+      queryKey: day2Keys.catalog,
+      queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
+      staleTime: 120_000,
     });
-    queryClient.prefetchQuery({
-      queryKey: ["addons", "catalog"],
-      queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
-      staleTime: 60_000,
-    });
-  }, [queryClient, name, mce]);
+  }, [queryClient, chartsQuery, mce]);
 
   // Server-sent status updates, once the first read shows status is on. fetch()
   // instead of EventSource so the Authorization header can be sent.
@@ -194,8 +202,8 @@ function ClusterDetailContent() {
   });
 
   const { data: addonHistory, isLoading: addonHistoryLoading } = useQuery<CommitEntry[]>({
-    queryKey: ["clusters", name, "history", "day2"],
-    queryFn: () => api.get(`/api/day2/clusters/${encodeURIComponent(name)}/history?mce=${encodeURIComponent(mce)}`),
+    queryKey: day2Keys.history(name, mce),
+    queryFn: () => api.get(day2Api.history(name, mce)),
     enabled: Boolean(mce) && activeTab === "history",
     staleTime: 60_000,
   });
@@ -203,11 +211,18 @@ function ClusterDetailContent() {
   const [deleteReviewOpen, setDeleteReviewOpen] = useState(false);
   const [fixingAddon, setFixingAddon] = useState<AddonDrift | null>(null);
 
-  /** Install or update a spec addon on day2 with the values requested at create. */
-  const fixAddon = (entry: AddonDrift) => {
-    const base = `/api/day2/clusters/${encodeURIComponent(name)}/addons/${encodeURIComponent(entry.team)}/${encodeURIComponent(entry.addon_name)}?mce=${encodeURIComponent(mce)}`;
+  /**
+   * Install or update a spec addon on day2 with the values requested at
+   * create. A write names the destination by the id day2 resolved the name
+   * to; an update carries the commit the chart's values file was read at.
+   */
+  const fixAddon = async (entry: AddonDrift): Promise<ChangeResult> => {
+    const charts = await queryClient.fetchQuery(chartsQuery);
+    const path = day2Api.chart(charts.id, entry.team, entry.addon_name);
     const payload = { version: entry.expected_version, override_values: entry.override_values };
-    return entry.reason === "missing" ? api.post<MRDetail>(base, payload) : api.put<MRDetail>(base, payload);
+    if (entry.reason === "missing") return api.post<ChangeResult>(path, payload);
+    const installed = charts.installed.find((c) => c.team === entry.team && c.name === entry.addon_name);
+    return api.put<ChangeResult>(path, { ...payload, last_commit_id: installed?.last_commit_id ?? null });
   };
 
   const addonFixMutation = useMutation({
@@ -222,7 +237,7 @@ function ClusterDetailContent() {
 
   const fixAllMutation = useMutation({
     mutationFn: async () => {
-      const opened: MRDetail[] = [];
+      const opened: ChangeResult[] = [];
       for (const entry of drift?.addon_drift ?? []) opened.push(await fixAddon(entry));
       return opened;
     },
@@ -349,10 +364,7 @@ function ClusterDetailContent() {
                 <ExternalLink className="h-4 w-4 mr-1.5" />GitLab
               </a>
             )}
-            <Link
-              href={`/clusters/${encodeURIComponent(name)}/addons${where}`}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
+            <Link href={chartsHref(name, mce)} className={buttonVariants({ variant: "outline", size: "sm" })}>
               <Package className="h-4 w-4 mr-1.5" />Addons
             </Link>
 

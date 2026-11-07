@@ -16,7 +16,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
 import { clusterHref } from "@/lib/clusters";
-import type { AddonCatalogEntry, ClusterLiveStatus, ClusterStatus, DriftState, DriftSummaryItem, InstalledAddon } from "@/types";
+import { day2Api, day2Keys } from "@/lib/day2";
+import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftState, DriftSummaryItem } from "@/types";
 
 type SortField = "name" | "site" | "spec" | "mastertag" | "created_at";
 type SortDir = "asc" | "desc";
@@ -189,15 +190,15 @@ export default function ClustersPage() {
           queryFn: () => api.get(`/api/day1/clusters/${name}/drift?${query}`),
           staleTime: 60_000,
         });
-        // Keys match the cluster addons page
+        // The entries the cluster's charts page reads (a bare name, narrowed by its MCE)
         queryClient.prefetchQuery({
-          queryKey: ["clusters", c.name, "addons"],
-          queryFn: () => api.get<{ installed: InstalledAddon[] }>(`/api/day2/clusters/${name}/addons?mce=${encodeURIComponent(c.mce)}`),
+          queryKey: day2Keys.charts(c.name, c.mce),
+          queryFn: () => api.get<DestinationCharts>(day2Api.charts(c.name, c.mce)),
           staleTime: 60_000,
         });
         queryClient.prefetchQuery({
-          queryKey: ["addons", "catalog"],
-          queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
+          queryKey: day2Keys.catalog,
+          queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
           staleTime: 120_000,
         });
       };

@@ -73,6 +73,16 @@ export interface SpecEntry extends ClusterSpec {
   load_problems?: string[];
 }
 
+/** A commit of `GET /specs/{name}/history`. */
+export interface SpecCommit {
+  sha: string;
+  short_sha: string;
+  message: string;
+  author: string;
+  date: string;
+  web_url: string;
+}
+
 // ── Naming and the HostedCluster a file renders ─────────────────────────────
 
 /** Whether a name follows `ocp4-<env>-<name>-<site>[-<seq>]` (ADR-0014). */

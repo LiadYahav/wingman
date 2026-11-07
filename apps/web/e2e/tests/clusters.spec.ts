@@ -8,7 +8,7 @@
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
 import { fulfillProblem, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
-import type { ClusterDetail, ClusterDrift, ClusterStatus, DriftSummaryItem } from "../../types";
+import type { ClusterDetail, ClusterDrift, ClusterStatus, DestinationCharts, DriftSummaryItem, InstalledChart } from "../../types";
 
 const SITE = "site1";
 const MCE = "ocp4-prod-mce-site1-a";
@@ -80,6 +80,36 @@ const DETAIL: ClusterDetail = {
   mce_default_mastertag: "4.16.27-x86_64",
   problems: [],
 };
+
+/** The id day2 resolves the bare name to; writes use it. */
+const HOSTED_ID = `hosted:${SITE}:prod:${MCE}:${NAME}`;
+const CLUSTER_ROLES: InstalledChart = {
+  team: "redbull",
+  name: "cluster-roles",
+  version: "release-1",
+  override_values: { replicas: 1 },
+  parse_errors: [],
+  gitlab_url: "https://gitlab.example.com/sigs/redbull/-/tree/main/x",
+  source: "cluster",
+  path: `sites/${SITE}/prod/mces/${MCE}/${NAME}/cluster-roles`,
+  override_path: `sites/${SITE}/prod/mces/${MCE}/${NAME}/cluster-roles/values.yaml`,
+  last_commit_id: "5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e5ca1ab1e",
+  pinned: false,
+  deploy: {
+    app_name: `redbull-${NAME}-cluster-roles-deploy`, argo: MCE, namespace: "gitops-redbull",
+    repo_url: "https://gitlab.example.com/helm-charts/cluster-roles.git", target_revision: "release-1", path: ".",
+    release_name: "cluster-roles", destination: NAME, destination_namespace: "cluster-roles", sync_policy: {}, auto_sync: false,
+  },
+  warnings: [],
+};
+
+/** `GET /api/day2/clusters/{name}/addons?mce=`, what the detail page prefetches. */
+function charts(installed: InstalledChart[] = []): DestinationCharts {
+  return {
+    cluster: NAME, mce: MCE, id: HOSTED_ID, kind: "hosted", site: SITE, env: "prod", ocp_version: "4.16.27",
+    installed, excluded: [], warnings: [], argocd_note: "",
+  };
+}
 
 function drift(overrides: Partial<ClusterDrift> = {}): ClusterDrift {
   return {
@@ -156,7 +186,7 @@ test.describe("Cluster list", () => {
 });
 
 test.describe("Cluster detail", () => {
-  async function openDetail(page: Page, clusterDrift: ClusterDrift = drift()) {
+  async function openDetail(page: Page, clusterDrift: ClusterDrift = drift(), installed: InstalledChart[] = []) {
     await injectAdminAuth(page);
     await mockDashboardApis(page);
     await statusOff(page);
@@ -166,8 +196,11 @@ test.describe("Cluster detail", () => {
     await page.route(`**/api/day1/clusters/${NAME}/drift?**`, (r: Route) =>
       r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(clusterDrift) })
     );
-    await page.route(`**/api/day2/clusters/${NAME}/**`, (r: Route) =>
-      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ cluster: NAME, mce: MCE, installed: [] }) })
+    await page.route(`**/api/day2/clusters/${NAME}/history?**`, (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) })
+    );
+    await page.route(`**/api/day2/clusters/${NAME}/addons?**`, (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(charts(installed)) })
     );
     await page.route("**/api/day2/addons", (r: Route) =>
       r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) })
@@ -266,7 +299,7 @@ test.describe("Cluster detail", () => {
       addon_drift: [{ addon_name: "cluster-roles", team: "redbull", reason: "missing", expected_version: "main", installed_version: "", override_values: { replicas: 2 } }],
     }));
     const install = page.waitForRequest((req: Request) => req.method() === "POST" && req.url().includes("/addons/redbull/cluster-roles"));
-    await page.route(`**/api/day2/clusters/${NAME}/addons/redbull/cluster-roles**`, (r: Route) =>
+    await page.route(`**/api/day2/clusters/${encodeURIComponent(HOSTED_ID)}/addons/redbull/cluster-roles`, (r: Route) =>
       r.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(mockMR({ iid: 9, repo: "day2", team: "redbull" })) })
     );
 
@@ -275,7 +308,66 @@ test.describe("Cluster detail", () => {
     await page.getByRole("button", { name: "Install" }).click();
     await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
 
-    expect((await install).postDataJSON()).toEqual({ version: "main", override_values: { replicas: 2 } });
+    // Addressed by the id day2 resolved the name to, not by name and ?mce=
+    const request = await install;
+    expect(new URL(request.url()).pathname).toBe(`/api/day2/clusters/${encodeURIComponent(HOSTED_ID)}/addons/redbull/cluster-roles`);
+    expect(request.postDataJSON()).toEqual({ version: "main", override_values: { replicas: 2 } });
+    await expect(page.getByText("Fix MR !9 opened")).toBeVisible();
+  });
+
+  test("a version fix carries the last_commit_id day2 listed the chart's values with", async ({ page }) => {
+    await openDetail(page, drift({
+      state: "drifted", is_drifted: true,
+      addon_drift: [{ addon_name: "cluster-roles", team: "redbull", reason: "version_mismatch", expected_version: "main", installed_version: "release-1", override_values: { replicas: 2 } }],
+    }), [CLUSTER_ROLES]);
+    const update = page.waitForRequest((req: Request) => req.method() === "PUT");
+    await page.route(`**/api/day2/clusters/${encodeURIComponent(HOSTED_ID)}/addons/redbull/cluster-roles`, (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockMR({ iid: 10, repo: "day2", team: "redbull" })) })
+    );
+
+    await page.getByRole("tab", { name: "Drift" }).click();
+    await page.getByRole("button", { name: "Update" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
+
+    expect((await update).postDataJSON()).toEqual({
+      version: "main", override_values: { replicas: 2 }, last_commit_id: CLUSTER_ROLES.last_commit_id,
+    });
+  });
+
+  test("the Addons link opens the cluster's charts, narrowed by its MCE", async ({ page }) => {
+    await openDetail(page);
+    await expect(page.getByRole("main").getByRole("link", { name: "Addons" })).toHaveAttribute(
+      "href", `/clusters/${NAME}/addons?mce=${MCE}`
+    );
+  });
+
+  test("the charts page reads the listing the detail page prefetched", async ({ page }) => {
+    let listings = 0;
+    page.on("request", (req: Request) => {
+      if (new URL(req.url()).pathname === `/api/day2/clusters/${NAME}/addons`) listings += 1;
+    });
+    await page.route(`**/api/day2/clusters/${NAME}?**`, (r: Route) =>
+      r.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({
+          id: HOSTED_ID, kind: "hosted", name: NAME, site: SITE, env: "prod", mce: MCE, ocp_version: "4.16.27",
+          argo: MCE, teams: ["redbull"], in_day1: true, warnings: [],
+        }),
+      })
+    );
+    await page.route("**/api/day2/gitlab-info", (r: Route) =>
+      r.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ gitlab_url: "https://gitlab.example.com", sigs_group_path: "sigs", sigs_group_url: "https://gitlab.example.com/groups/sigs" }),
+      })
+    );
+    await openDetail(page, drift(), [CLUSTER_ROLES]);
+    await expect.poll(() => listings).toBe(1);
+
+    await page.getByRole("main").getByRole("link", { name: "Addons" }).click();
+    await page.waitForURL(`**/clusters/${NAME}/addons?mce=${MCE}`);
+    await expect(page.getByTestId("installed-redbull-cluster-roles")).toBeVisible();
+    expect(listings).toBe(1);
   });
 
   test("a file that does not parse is shown with its problems", async ({ page }) => {

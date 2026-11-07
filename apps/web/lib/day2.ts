@@ -8,7 +8,7 @@
  * keep working (ADR-0020). `?mce=` narrows a bare name.
  */
 
-import type { DestinationKind, Finding, LayerRole } from "@/types/day2";
+import type { CatalogEntry, DestinationKind, Finding, LayerRole } from "@/types/day2";
 
 // ── Addressing ───────────────────────────────────────────────────────────────
 
@@ -42,6 +42,9 @@ const cluster = (key: string) => `/api/day2/clusters/${encodeURIComponent(key)}`
 
 export const day2Api = {
   catalog: "/api/day2/addons",
+  /** The chart's own `values.yaml` at a chart repo branch (`HEAD` when omitted). */
+  chartDefaults: (team: string, chart: string, version?: string) =>
+    `/api/day2/addons/${encodeURIComponent(team)}/${encodeURIComponent(chart)}/values${query({ version })}`,
   gitlabInfo: "/api/day2/gitlab-info",
   mergePreview: "/api/day2/merge-preview",
   destinations: "/api/day2/clusters",
@@ -55,19 +58,24 @@ export const day2Api = {
       last_commit_id: lastCommitId ?? undefined,
     })}`,
   bulk: (id: string) => `${cluster(id)}/addons/bulk`,
+  history: (key: string, mce?: string) => `${cluster(key)}/history${query({ mce: narrow(key, mce) })}`,
   upgradeCheck: (id: string, to: string) => `${cluster(id)}/upgrade-check${query({ to })}`,
 };
 
 /**
- * Query keys, all under `day2`: the day1 pages cache day2 reads under
- * `["clusters", …]` and `["addons", "catalog"]`, possibly in older shapes.
+ * Query keys, all under `day2`, for the day2 pages and the day1 pages alike:
+ * a day1 page that prefetches a destination's charts fills the entry its
+ * charts page reads.
  */
 export const day2Keys = {
   catalog: ["day2", "catalog"] as const,
+  chartDefaults: (team: string, chart: string, version: string) =>
+    ["day2", "chart-defaults", team, chart, version] as const,
   gitlabInfo: ["day2", "gitlab-info"] as const,
   destinations: ["day2", "destinations"] as const,
   lints: ["day2", "lints"] as const,
   charts: (key: string, mce?: string) => ["day2", "charts", key, narrow(key, mce) ?? ""] as const,
+  history: (key: string, mce?: string) => ["day2", "history", key, narrow(key, mce) ?? ""] as const,
   preview: (id: string, team: string, chart: string, version: string, draft: string | null) =>
     ["day2", "preview", id, team, chart, version, draft] as const,
   upgradeCheck: (id: string, to: string) => ["day2", "upgrade-check", id, to] as const,
@@ -76,6 +84,22 @@ export const day2Keys = {
 /** The web page of a destination's charts. */
 export function chartsHref(key: string, mce?: string): string {
   return `/clusters/${encodeURIComponent(key)}/addons${query({ mce: narrow(key, mce) })}`;
+}
+
+// ── Catalog ──────────────────────────────────────────────────────────────────
+
+/**
+ * The revisions a chart can be asked for: the team default first (`HEAD`,
+ * the chart repo's default branch, when the team sets none), then the
+ * branches, default branch first. `also` keeps a revision already chosen
+ * (a spec's) on the list, last, when the repo no longer has it.
+ */
+export function chartRevisions(
+  entry: Pick<CatalogEntry, "current_version" | "available_versions"> | undefined,
+  also?: string,
+): string[] {
+  const revisions = [entry?.current_version, ...(entry?.available_versions ?? []), also];
+  return [...new Set(revisions.filter((v): v is string => Boolean(v)))];
 }
 
 /** A route param back to the key (Next may or may not have decoded it). */
