@@ -62,14 +62,17 @@ const mockSpecHistory = [
   },
 ];
 
+// `GET /api/day1/specs/{name}` (SpecOut): the template is filled on read.
 const mockSpec = {
   apiVersion: "wingman.io/v1",
   kind: "ClusterSpec",
-  metadata: { name: "some-spec", version: "1.0.0", labels: {} },
+  metadata: { name: "some-spec", description: "", version: "1.0.0", labels: {} },
   spec: {
-    day1: { variables: [], structure: {}, immutable_paths: [], template: "" },
+    day1: { variables: [], structure: {}, immutable_paths: [], template: "", values: {} },
     day2: { addons: [] },
   },
+  load_error: null,
+  load_problems: [],
 };
 
 const mockAddonCatalogWithDeps = [

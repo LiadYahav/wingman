@@ -4,6 +4,7 @@ export class SpecNewPage {
   readonly page: Page;
   readonly nameInput: Locator;
   readonly versionInput: Locator;
+  readonly descriptionInput: Locator;
   readonly addonSearch: Locator;
   readonly submitButton: Locator;
 
@@ -11,6 +12,7 @@ export class SpecNewPage {
     this.page = page;
     this.nameInput = page.getByTestId("spec-name-input");
     this.versionInput = page.getByTestId("spec-version-input");
+    this.descriptionInput = page.getByTestId("spec-description-input");
     this.addonSearch = page.getByRole("textbox", { name: "Search addons" });
     this.submitButton = page.getByRole("button", { name: /review & create/i });
   }
@@ -56,5 +58,11 @@ export class SpecNewPage {
 
   async submit() {
     await this.submitButton.click();
+  }
+
+  /** Open the review dialog and confirm the create MR. */
+  async reviewAndConfirm() {
+    await this.submitButton.click();
+    await this.page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
   }
 }
