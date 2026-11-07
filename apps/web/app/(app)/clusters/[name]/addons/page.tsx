@@ -328,8 +328,8 @@ function ValuesTable({
       {entries.map(([k, v]) => {
         const prov = provenance ? getProvenance(provenance, k) : "";
         const borderColor =
-          prov === "cluster" ? "border-l-[#0073ea]" :
-          prov === "team"    ? "border-l-[#00c875]" :
+          prov === "cluster" ? "border-l-primary" :
+          prov === "team"    ? "border-l-status-ready" :
           "border-l-transparent";
 
         const isComplex = isComplexValue(v);
@@ -417,11 +417,11 @@ function ProvenanceLegend() {
   return (
     <div className="flex items-center gap-4 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
-        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#0073ea]" />
+        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-primary" />
         cluster override
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#00c875]" />
+        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-status-ready" />
         team default
       </span>
       <span className="flex items-center gap-1.5">
@@ -602,8 +602,8 @@ function InstalledAddonCard({
             className="flex items-center gap-3 min-w-0 flex-1 text-left"
             onClick={() => setExpanded((v) => !v)}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#00c875]/10 dark:bg-[#00c875]/20 shrink-0">
-              <Package className="h-4 w-4 text-[#00c875]" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-status-ready/15 shrink-0">
+              <Package className="h-4 w-4 text-status-ready" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">{addon.name}</p>
@@ -620,7 +620,7 @@ function InstalledAddonCard({
                 YAML Error
               </span>
             ) : (
-              <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-[#00c875]/10 text-[#007038] dark:text-[#00c875]">
+              <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-status-ready/10 text-status-ready-fg">
                 Installed
               </span>
             )}
@@ -2167,7 +2167,7 @@ function ClusterAddonsContent() {
               <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
                 Installed
               </h2>
-              <span className="rounded-full bg-[#00c875]/10 text-[#007038] dark:text-[#00c875] px-2 py-0.5 text-xs font-semibold">
+              <span className="rounded-full bg-status-ready/10 text-status-ready-fg px-2 py-0.5 text-xs font-semibold">
                 {installed.length}
               </span>
             </div>

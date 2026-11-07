@@ -43,9 +43,10 @@ test.describe("Addon Reordering", () => {
     const prometheus = specPage.getSelectedAddon("observability", "prometheus");
     const ingress = specPage.getSelectedAddon("networking", "ingress-nginx");
 
-    await expect(certManager.getByText("1")).toBeVisible();
-    await expect(prometheus.getByText("2")).toBeVisible();
-    await expect(ingress.getByText("3")).toBeVisible();
+    // exact: the version picker ("1.12.0", "2.45.0") also contains these digits
+    await expect(certManager.getByText("1", { exact: true })).toBeVisible();
+    await expect(prometheus.getByText("2", { exact: true })).toBeVisible();
+    await expect(ingress.getByText("3", { exact: true })).toBeVisible();
   });
 
   test("updates order numbers after drag and drop", async ({ page }) => {
@@ -58,17 +59,23 @@ test.describe("Addon Reordering", () => {
     const certManager = specPage.getSelectedAddon("platform", "cert-manager");
     const prometheus = specPage.getSelectedAddon("observability", "prometheus");
 
-    const certHandle = certManager.locator("[data-testid='drag-handle']");
+    const handleBounds = await certManager.locator("[data-testid='drag-handle']").boundingBox();
     const prometheusBounds = await prometheus.boundingBox();
+    expect(handleBounds).not.toBeNull();
+    expect(prometheusBounds).not.toBeNull();
 
-    if (prometheusBounds) {
-      await certHandle.dragTo(prometheus, {
-        targetPosition: { x: prometheusBounds.width / 2, y: prometheusBounds.height + 10 },
-      });
-    }
+    // dnd-kit's PointerSensor needs intermediate pointer moves; a single-jump
+    // dragTo() never registers a drag, so move in steps past prometheus.
+    const startX = handleBounds!.x + handleBounds!.width / 2;
+    const startY = handleBounds!.y + handleBounds!.height / 2;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX, startY + 5, { steps: 5 });
+    await page.mouse.move(startX, prometheusBounds!.y + prometheusBounds!.height + 10, { steps: 20 });
+    await page.mouse.up();
 
-    await expect(prometheus.getByText("1")).toBeVisible();
-    await expect(certManager.getByText("2")).toBeVisible();
+    await expect(prometheus.getByText("1", { exact: true })).toBeVisible();
+    await expect(certManager.getByText("2", { exact: true })).toBeVisible();
   });
 
   test("five addons display without collision", async ({ page }) => {

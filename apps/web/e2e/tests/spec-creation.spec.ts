@@ -11,19 +11,19 @@ test.describe("Spec Creation", () => {
     const specPage = new SpecNewPage(page);
     await specPage.goto();
 
-    await specPage.fillBasicInfo("test-spec", "Test Spec", "A test spec for e2e");
+    await specPage.fillBasicInfo("test-spec", "2.0.0");
 
     await expect(specPage.nameInput).toHaveValue("test-spec");
-    await expect(specPage.displayNameInput).toHaveValue("Test Spec");
+    await expect(specPage.versionInput).toHaveValue("2.0.0");
   });
 
   test("shows addon catalog with teams", async ({ page }) => {
     const specPage = new SpecNewPage(page);
     await specPage.goto();
 
-    await expect(page.getByText("platform")).toBeVisible();
-    await expect(page.getByText("observability")).toBeVisible();
-    await expect(page.getByText("networking")).toBeVisible();
+    await expect(specPage.getTeamHeader("platform")).toBeVisible();
+    await expect(specPage.getTeamHeader("observability")).toBeVisible();
+    await expect(specPage.getTeamHeader("networking")).toBeVisible();
   });
 
   test("can search addons", async ({ page }) => {

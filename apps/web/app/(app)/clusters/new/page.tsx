@@ -615,7 +615,7 @@ export default function NewClusterPage() {
       {/* Step indicator */}
       <div className="flex items-center gap-2 text-sm">
         <span className={cn("flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
-          step === "spec" ? "bg-primary text-white" : "bg-[#00c875] text-white")}>
+          step === "spec" ? "bg-primary text-white" : "bg-status-ready text-white")}>
           {step === "spec" ? "1" : <CheckCircle2 className="h-4 w-4" />}
         </span>
         <span className={step === "spec" ? "font-semibold" : "text-muted-foreground"}>Choose Spec</span>

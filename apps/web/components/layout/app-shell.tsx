@@ -26,14 +26,11 @@ function SidebarLogo() {
   }, []);
 
   return (
-    <Link href="/" className="flex items-center gap-2.5 px-4 py-5" onClick={handleLogoClick}>
+    <Link href="/" className="flex h-14 items-center gap-2.5 px-4" onClick={handleLogoClick}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/wingman-logo.svg" alt="Wingman" width={44} height={44} className="rounded-lg" />
-      <span
-        className="text-[22px] text-white"
-        style={{ fontFamily: "var(--font-grotesk, var(--font-heading))", fontWeight: 500, letterSpacing: "-0.035em" }}
-      >
-        Wing<span style={{ color: "#5b78b8" }}>man</span>
+      <img src="/wingman-logo.svg" alt="Wingman" width={32} height={32} className="rounded-lg" />
+      <span className="text-[17px] font-semibold tracking-tight text-foreground">
+        Wing<span className="text-primary">man</span>
       </span>
     </Link>
   );
@@ -41,10 +38,9 @@ function SidebarLogo() {
 
 function SidebarContent() {
   return (
-    <div className="flex h-full flex-col bg-sidebar">
+    <div className="flex h-full w-full flex-col border-r border-sidebar-border bg-sidebar">
       <SidebarLogo />
-      <div className="h-px mx-3 bg-sidebar-border" />
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="flex-1 overflow-y-auto pt-2">
         <SidebarNav />
       </div>
     </div>
@@ -70,9 +66,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top header — clean white bar */}
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-card px-4">
+        {/* Top header — translucent, blurs content scrolling beneath it */}
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/70 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
           <button
+            aria-label="Open navigation"
             className="md:hidden inline-flex items-center justify-center rounded-lg hover:bg-muted size-8 text-muted-foreground transition-colors"
             onClick={() => setMobileOpen(true)}
           >
@@ -83,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-background">
+        <main className="flex-1 overflow-y-auto">
           {children}
         </main>
       </div>

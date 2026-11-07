@@ -4,37 +4,32 @@ type Phase = "Provisioning" | "Ready" | "Error" | "Deleting" | "Unknown";
 
 const phaseConfig: Record<
   Phase,
-  { label: string; dotClass: string; bgClass: string; textClass: string }
+  { label: string; dotClass: string; chipClass: string }
 > = {
   Ready: {
     label: "Ready",
-    dotClass: "bg-[#00c875]",
-    bgClass: "bg-[#00c875]/10 dark:bg-[#00c875]/15",
-    textClass: "text-[#007038] dark:text-[#00c875]",
+    dotClass: "bg-status-ready",
+    chipClass: "bg-status-ready/15 text-status-ready-fg ring-status-ready/25",
   },
   Provisioning: {
     label: "Provisioning",
-    dotClass: "bg-[#579bfc] animate-pulse",
-    bgClass: "bg-[#579bfc]/10 dark:bg-[#579bfc]/15",
-    textClass: "text-[#0060b9] dark:text-[#579bfc]",
+    dotClass: "bg-status-provisioning animate-pulse",
+    chipClass: "bg-status-provisioning/15 text-status-provisioning-fg ring-status-provisioning/25",
   },
   Error: {
     label: "Error",
-    dotClass: "bg-[#df2f4a]",
-    bgClass: "bg-[#df2f4a]/10 dark:bg-[#df2f4a]/15",
-    textClass: "text-[#a0122a] dark:text-[#df2f4a]",
+    dotClass: "bg-status-error",
+    chipClass: "bg-status-error/15 text-status-error-fg ring-status-error/25",
   },
   Deleting: {
     label: "Deleting",
-    dotClass: "bg-[#fdab3d] animate-pulse",
-    bgClass: "bg-[#fdab3d]/10 dark:bg-[#fdab3d]/15",
-    textClass: "text-[#c07800] dark:text-[#fdab3d]",
+    dotClass: "bg-status-warning animate-pulse",
+    chipClass: "bg-status-warning/15 text-status-warning-fg ring-status-warning/25",
   },
   Unknown: {
     label: "Unknown",
-    dotClass: "bg-muted-foreground/40",
-    bgClass: "bg-muted",
-    textClass: "text-muted-foreground",
+    dotClass: "bg-status-deleting",
+    chipClass: "bg-status-deleting/15 text-status-deleting-fg ring-status-deleting/25",
   },
 };
 
@@ -44,9 +39,8 @@ export function StatusBadge({ phase }: { phase: Phase }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-        config.bgClass,
-        config.textClass
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
+        config.chipClass
       )}
     >
       <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", config.dotClass)} />

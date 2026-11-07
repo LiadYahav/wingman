@@ -521,17 +521,17 @@ export default function ClustersPage() {
                             <Skeleton className="h-5 w-16" />
                           ) : driftMap.get(cluster.name) ? (
                             <span className="relative inline-flex">
-                              <span className="absolute inset-0 rounded-full bg-[#fdab3d]/30 animate-ping" />
+                              <span className="absolute inset-0 rounded-full bg-status-warning/30 animate-ping" />
                               <Link
                                 href={`/clusters/${cluster.name}?site=${cluster.site}&mce=${cluster.mce}`}
-                                className="relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-[#fdab3d]/10 text-[#c07800] dark:text-[#fdab3d] hover:bg-[#fdab3d]/20 transition-colors"
+                                className="relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-status-warning/10 text-status-warning-fg hover:bg-status-warning/20 transition-colors"
                               >
                                 <AlertTriangle className="h-3 w-3" />
                                 Drifted
                               </Link>
                             </span>
                           ) : (
-                            <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-[#00c875]/8 text-[#007038] dark:text-[#00c875]")}>
+                            <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-status-ready/8 text-status-ready-fg")}>
                               <CheckCircle2 className="h-3 w-3" />
                               Synced
                             </span>

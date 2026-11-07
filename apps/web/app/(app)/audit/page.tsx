@@ -12,9 +12,9 @@ import type { CommitRecord, MRDetail, FileDiff } from "@/types";
 
 function RepoBadge({ repo }: { repo: string }) {
   const cls = repo === "day1"
-    ? "bg-[#0073ea]/10 text-[#0073ea] dark:bg-[#579bfc]/15 dark:text-[#579bfc]"
+    ? "bg-primary/10 text-primary dark:bg-status-provisioning/15 dark:text-status-provisioning"
     : repo === "day2"
-    ? "bg-[#00c875]/10 text-[#007038] dark:bg-[#00c875]/15 dark:text-[#00c875]"
+    ? "bg-status-ready/10 text-status-ready-fg dark:bg-status-ready/15 dark:text-status-ready"
     : "bg-muted text-muted-foreground";
   return (
     <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", cls)}>
@@ -44,9 +44,9 @@ function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
       {diffs.map((diff, i) => {
         const isOpen = openFiles.has(i);
         const badge = diff.new_file
-          ? { label: "new", cls: "bg-[#00c875]/10 text-[#007038] dark:text-[#00c875]", Icon: FilePlus }
+          ? { label: "new", cls: "bg-status-ready/10 text-status-ready-fg", Icon: FilePlus }
           : diff.deleted_file
-          ? { label: "deleted", cls: "bg-[#df2f4a]/10 text-[#df2f4a]", Icon: FileX }
+          ? { label: "deleted", cls: "bg-status-error/10 text-status-error", Icon: FileX }
           : { label: null, cls: "", Icon: FileEdit };
         const filePath = diff.renamed_file
           ? `${diff.old_path} → ${diff.new_path}`
@@ -152,16 +152,16 @@ function MRRow({ mr }: { mr: MRDetail }) {
   const [expanded, setExpanded] = useState(false);
 
   const stateColor = mr.state === "merged"
-    ? "text-[#9b51e0] dark:text-[#c084fc]"
+    ? "text-chart-5 dark:text-[#c084fc]"
     : mr.state === "closed"
-    ? "text-[#df2f4a] dark:text-[#f87171]"
-    : "text-[#00c875]";
+    ? "text-status-error dark:text-[#f87171]"
+    : "text-status-ready";
 
   const stateBg = mr.state === "merged"
-    ? "bg-[#9b51e0]/10 dark:bg-[#9b51e0]/20"
+    ? "bg-chart-5/15"
     : mr.state === "closed"
-    ? "bg-[#df2f4a]/10 dark:bg-[#df2f4a]/20"
-    : "bg-[#00c875]/10 dark:bg-[#00c875]/20";
+    ? "bg-status-error/15"
+    : "bg-status-ready/15";
 
   const { data: detail, isLoading: detailLoading, isError: detailError } = useQuery<{ mr: MRDetail; diffs: FileDiff[] }>({
     queryKey: ["audit", mr.repo, "mr-diff", mr.iid],

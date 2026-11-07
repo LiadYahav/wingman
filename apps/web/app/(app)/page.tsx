@@ -38,10 +38,10 @@ function StatCard({
   href: string; loading: boolean; color?: "blue" | "green" | "orange" | "red";
 }) {
   const colorMap = {
-    blue:   { icon: "text-[#0073ea]", bg: "bg-[#0073ea]/8 dark:bg-[#0073ea]/15", value: "text-[#0073ea]" },
-    green:  { icon: "text-[#00c875]", bg: "bg-[#00c875]/8 dark:bg-[#00c875]/15", value: "text-[#007038] dark:text-[#00c875]" },
-    orange: { icon: "text-[#fdab3d]", bg: "bg-[#fdab3d]/8 dark:bg-[#fdab3d]/15", value: "text-[#c07800] dark:text-[#fdab3d]" },
-    red:    { icon: "text-[#df2f4a]", bg: "bg-[#df2f4a]/8 dark:bg-[#df2f4a]/15", value: "text-[#a0122a] dark:text-[#df2f4a]" },
+    blue:   { icon: "text-primary", bg: "bg-primary/15", value: "text-primary" },
+    green:  { icon: "text-status-ready", bg: "bg-status-ready/15", value: "text-status-ready-fg" },
+    orange: { icon: "text-status-warning", bg: "bg-status-warning/15", value: "text-status-warning-fg" },
+    red:    { icon: "text-status-error", bg: "bg-status-error/15", value: "text-status-error-fg" },
   };
   const c = colorMap[color];
   return (
@@ -187,9 +187,9 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {[
-                { label: "Ready", count: stats?.ready ?? 0, color: "text-[#00c875]", bg: "bg-[#00c875]/8 dark:bg-[#00c875]/15", icon: CheckCircle2 },
-                { label: "Provisioning", count: stats?.provisioning ?? 0, color: "text-[#579bfc]", bg: "bg-[#579bfc]/8 dark:bg-[#579bfc]/15", icon: Clock },
-                { label: "Error", count: stats?.error ?? 0, color: "text-[#df2f4a]", bg: "bg-[#df2f4a]/8 dark:bg-[#df2f4a]/15", icon: AlertTriangle },
+                { label: "Ready", count: stats?.ready ?? 0, color: "text-status-ready", bg: "bg-status-ready/15", icon: CheckCircle2 },
+                { label: "Provisioning", count: stats?.provisioning ?? 0, color: "text-status-provisioning", bg: "bg-status-provisioning/15", icon: Clock },
+                { label: "Error", count: stats?.error ?? 0, color: "text-status-error", bg: "bg-status-error/15", icon: AlertTriangle },
               ].map(({ label, count, color, bg, icon: Icon }) => (
                 <div key={label} className="flex items-center justify-between rounded-lg px-3 py-2.5 bg-muted/40 hover:bg-muted/60 transition-colors">
                   <div className="flex items-center gap-2.5">
@@ -229,8 +229,8 @@ export default function DashboardPage() {
                   <span className={cn(
                     "ml-3 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
                     mr.repo === "day1"
-                      ? "bg-[#0073ea]/10 text-[#0073ea] dark:bg-[#579bfc]/15 dark:text-[#579bfc]"
-                      : "bg-[#00c875]/10 text-[#007038] dark:bg-[#00c875]/15 dark:text-[#00c875]"
+                      ? "bg-primary/10 text-primary dark:bg-status-provisioning/15 dark:text-status-provisioning"
+                      : "bg-status-ready/10 text-status-ready-fg dark:bg-status-ready/15 dark:text-status-ready"
                   )}>
                     {mr.repo}
                   </span>
@@ -239,8 +239,8 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="rounded-full bg-[#00c875]/10 dark:bg-[#00c875]/15 p-3 mb-3">
-                <CheckCircle2 className="h-6 w-6 text-[#00c875]" />
+              <div className="rounded-full bg-status-ready/15 p-3 mb-3">
+                <CheckCircle2 className="h-6 w-6 text-status-ready" />
               </div>
               <p className="text-sm font-semibold">All caught up!</p>
               <p className="text-xs text-muted-foreground mt-0.5">No pending approvals</p>

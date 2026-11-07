@@ -59,7 +59,7 @@ export async function mockDashboardApis(page: Page) {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
   });
   await page.route("**/api/day1/clusters/drift-summary", async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({}) });
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
   });
   await page.route("**/api/day1/approvals", async (route: Route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
@@ -80,10 +80,16 @@ export async function mockDay2Api(page: Page) {
 
   await page.route("**/api/day2/addons/*/**", async (route: Route) => {
     const url = route.request().url();
-    const match = url.match(/\/api\/day2\/addons\/([^/]+)\/([^/]+)/);
+    const match = url.match(/\/api\/day2\/addons\/([^/]+)\/([^/?]+)(\/values)?/);
     if (match) {
-      const [, team, name] = match;
+      const [, team, name, values] = match;
       const addon = mockAddons.find((a) => a.team === team && a.name === name);
+      if (values) {
+        // Helm chart defaults; the configure dialog deep-merges the team's
+        // default_values on top, so an empty chart means "team values only".
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({}) });
+        return;
+      }
       if (addon) {
         await route.fulfill({
           status: 200,
@@ -120,7 +126,7 @@ export async function mockDay1Api(page: Page) {
     const method = route.request().method();
     const url = route.request().url();
     const name = url.split("/").pop();
-    const spec = mockSpecs.find((s) => s.name === name);
+    const spec = mockSpecs.find((s) => s.metadata.name === name);
 
     if (method === "GET" && spec) {
       await route.fulfill({
@@ -138,6 +144,26 @@ export async function mockDay1Api(page: Page) {
     } else {
       await route.fulfill({ status: 404 });
     }
+  });
+
+  // Registered after the "specs/*" catch-all so these win (Playwright matches LIFO)
+  await page.route("**/api/day1/specs/template", async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify("# cluster-template.j2\napiVersion: v1"),
+    });
+  });
+
+  await page.route("**/api/day1/specs/template/schema**", async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { name: "nodepools_count", type: "integer", required: true, default: 1 },
+        { name: "cluster_name", type: "string", required: true },
+      ]),
+    });
   });
 
   await page.route("**/api/day1/mces", async (route: Route) => {
@@ -159,6 +185,7 @@ export async function mockDay1Api(page: Page) {
 
 export async function mockAllApis(page: Page) {
   await injectAdminAuth(page);
+  await mockDashboardApis(page);
   await mockDay1Api(page);
   await mockDay2Api(page);
 }

@@ -30,11 +30,11 @@ function FileDiffCard({ diff }: { diff: FileDiff }) {
   const [open, setOpen] = useState(true);
 
   const badge = diff.new_file
-    ? { label: "new", cls: "bg-[#00c875]/10 text-[#007038] dark:text-[#00c875]" }
+    ? { label: "new", cls: "bg-status-ready/10 text-status-ready-fg" }
     : diff.deleted_file
-    ? { label: "deleted", cls: "bg-[#df2f4a]/10 text-[#df2f4a]" }
+    ? { label: "deleted", cls: "bg-status-error/10 text-status-error" }
     : diff.renamed_file
-    ? { label: "renamed", cls: "bg-[#fdab3d]/10 text-[#c07800] dark:text-[#fdab3d]" }
+    ? { label: "renamed", cls: "bg-status-warning/10 text-status-warning-fg" }
     : null;
 
   const Icon = diff.new_file ? FilePlus : diff.deleted_file ? FileX : FileEdit;
@@ -257,16 +257,16 @@ function MRDetailContent() {
   const diffs = data?.diffs ?? [];
 
   const stateColor = mr?.state === "merged"
-    ? "text-[#9b51e0] bg-[#9b51e0]/10"
+    ? "text-chart-5 bg-chart-5/10"
     : mr?.state === "closed"
-    ? "text-[#df2f4a] bg-[#df2f4a]/10"
-    : "text-[#00c875] bg-[#00c875]/10";
+    ? "text-status-error bg-status-error/10"
+    : "text-status-ready bg-status-ready/10";
 
   const repoCls = repo === "day1"
-    ? "bg-[#0073ea]/10 text-[#0073ea]"
+    ? "bg-primary/10 text-primary"
     : repo === "specs"
-    ? "bg-[#9b51e0]/10 text-[#9b51e0]"
-    : "bg-[#00c875]/10 text-[#007038] dark:text-[#00c875]";
+    ? "bg-chart-5/10 text-chart-5"
+    : "bg-status-ready/10 text-status-ready-fg";
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
@@ -322,7 +322,7 @@ function MRDetailContent() {
               </span>
               <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", repoCls)}>{repo}</span>
               {mr.has_conflicts === true && (
-                <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-[#df2f4a]/10 text-[#df2f4a]">
+                <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-status-error/10 text-status-error">
                   Conflicted
                 </span>
               )}
@@ -359,7 +359,7 @@ function MRDetailContent() {
               <div className="flex gap-2 pt-1 border-t">
                 <button
                   onClick={() => setApproveReviewOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#00c875] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#00b368] transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-status-ready px-3 py-1.5 text-xs font-semibold text-white hover:bg-status-ready/90 transition-colors"
                 >
                   <Eye className="h-3.5 w-3.5" />
                   Review & Approve
