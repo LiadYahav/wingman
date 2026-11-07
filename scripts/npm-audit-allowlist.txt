@@ -8,50 +8,6 @@
 # Recorded 2026-11-07, after in-range lockfile updates (no package.json
 # change) cleared 83 of the 147 advisories reported before.
 
-# next 16.2.4 is pinned exactly in apps/web/package.json; next@16.4.5 fixes every one,
-# including the critical RCEs. postcss and sharp are next's own dependencies. Bump next and
-# eslint-config-next together, then check the UI and run the mocked E2E suite.
-GHSA-2464-fhr4-w9xw  next                       critical  fix: next@16.4.5  # Next.js: Unauthenticated Remote Code Execution in Image Optimization API when SVG files are used
-GHSA-267c-6grr-h53f  next                       high      fix: next@16.4.5  # Next.js has a Middleware / Proxy bypass in App Router applications via segment-prefetch routes
-GHSA-26hh-7cqf-hhc6  next                       high      fix: next@16.4.5  # Next.js has a Middleware / Proxy bypass in App Router applications via segment-prefetch routes - Incomplete Fix Follow-Up
-GHSA-2xp9-vwfh-vxw4  next                       critical  fix: next@16.4.5  # Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used
-GHSA-36qx-fr4f-26g5  next                       high      fix: next@16.4.5  # Next.js has a Middleware / Proxy bypass in Pages Router applications using i18n
-GHSA-39w2-rjm5-chcv  next                       low       fix: next@16.4.5  # Next.js has information disclosure in development server's Model Context Protocol endpoint
-GHSA-3g8h-86w9-wvmq  next                       low       fix: next@16.4.5  # Next.js's Middleware / Proxy redirects can be cache-poisoned
-GHSA-4633-3j49-mh5q  next                       moderate  fix: next@16.4.5  # Next.js: Cache confusion of response bodies for requests with bodies containing invalid UTF-8 byte sequences
-GHSA-492v-c6pp-mqqv  next                       high      fix: next@16.4.5  # Next.js has a Middleware / Proxy bypass through dynamic route parameter injection
-GHSA-4c39-4ccg-62r3  next                       moderate  fix: next@16.4.5  # Next.js: Unbounded Server Action payload in Edge runtime
-GHSA-4jqv-mc3x-m676  next                       moderate  fix: next@16.4.5  # Next.js has cache poisoning of SSG and ISR pages in self-hosted applications
-GHSA-673q-mjm6-r5xr  next                       critical  fix: next@16.4.5  # Next.js: Unauthenticated Remote Code Execution in `use cache` functions returning typed arrays
-GHSA-68g3-v927-f742  next                       moderate  fix: next@16.4.5  # Next.js: Cache confusion of response bodies for requests with bodies
-GHSA-6gpp-xcg3-4w24  next                       high      fix: next@16.4.5  # Next.js: Middleware / Proxy bypass in App Router applications using Turbopack and single locale
-GHSA-89xv-2m56-2m9x  next                       high      fix: next@16.4.5  # Next.js: Server-Side Request Forgery in Server Actions on custom servers
-GHSA-8h8q-6873-q5fj  next                       high      fix: next@16.4.5  # Next.js Vulnerable to Denial of Service with Server Components
-GHSA-955p-x3mx-jcvp  next                       moderate  fix: next@16.4.5  # Next.js: Unauthenticated disclosure of internal Server Function endpoints
-GHSA-c4j6-fc7j-m34r  next                       high      fix: next@16.4.5  # Next.js vulnerable to server-side request forgery in applications using WebSocket upgrades
-GHSA-cjq9-62q9-8jv4  next                       high      fix: next@16.4.5  # Next.js has Server-Side Request Forgery in Image Optimization
-GHSA-f87g-xv8r-7p7x  next                       moderate  fix: next@16.4.5  # Next.js has information disclosure in App Router metadata image routes via dynamicParams bypass
-GHSA-ffhc-5mcf-pf4q  next                       moderate  fix: next@16.4.5  # Next.js vulnerable to cross-site scripting in App Router applications using CSP nonces
-GHSA-gx5p-jg67-6x7h  next                       moderate  fix: next@16.4.5  # Next.js has cross-site scripting in beforeInteractive scripts with untrusted input
-GHSA-h64f-5h5j-jqjh  next                       moderate  fix: next@16.4.5  # Next.js has a Denial of Service in the Image Optimization API
-GHSA-m99w-x7hq-7vfj  next                       high      fix: next@16.4.5  # Next.js: Denial of Service in App Router using Server Actions
-GHSA-mcj8-r9mp-w47p  next                       moderate  fix: next@16.4.5  # Next.js has cache poisoning in SSG/ISR rendering that leads to cross-user content substitution and persistent denial of service
-GHSA-mg66-mrh9-m8jx  next                       high      fix: next@16.4.5  # Next.js vulnerable to Denial of Service via connection exhaustion in applications using Cache Components
-GHSA-p293-qw3h-jr36  next                       critical  fix: next@16.4.5  # Next.js: Unauthenticated Remote Code Execution on windows-hosted servers
-GHSA-p3m5-59mp-jv5r  next                       high      fix: next@16.4.5  # Next.js: Denial of Service in App Router using Server Actions
-GHSA-p9j2-gv94-2wf4  next                       high      fix: next@16.4.5  # Next.js: Server-Side Request Forgery in rewrites via attacker-controlled destination hostname
-GHSA-q8wf-6r8g-63ch  next                       moderate  fix: next@16.4.5  # Next.js: Denial of Service in the Image Optimization API using SVGs
-GHSA-vcvr-r3jv-pc5j  next                       critical  fix: next@16.4.5  # Next.js: Remote Code Execution in next/og ImageResponse
-GHSA-vfv6-92ff-j949  next                       low       fix: next@16.4.5  # Next.js vulnerable to cache poisoning via collisions in React Server Component cache-busting
-GHSA-wfc6-r584-vfw7  next                       moderate  fix: next@16.4.5  # Next.js vulnerable to cache poisoning in React Server Component responses
-GHSA-6g55-p6wh-862q  postcss                    high      fix: next@16.4.5  # PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments
-GHSA-fxqj-rqcc-2cmp  postcss                    moderate  fix: next@16.4.5  # PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset
-GHSA-qx2v-qp2m-jg93  postcss                    moderate  fix: next@16.4.5  # PostCSS has XSS via Unescaped </style> in its CSS Stringify Output
-GHSA-r28c-9q8g-f849  postcss                    high      fix: next@16.4.5  # PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure
-GHSA-f88m-g3jw-g9cj  sharp                      high      fix: next@16.4.5  # sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591
-GHSA-rgj7-g3m4-5g8c  sharp                      high      fix: next@16.4.5  # sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545
-GHSA-wq5f-xc86-pv6w  sharp                      high      fix: next@16.4.5  # sharp : Vulnerability in librsvg dependency CVE-2026-96889
-
 # Reached only through monaco-editor 0.56.0 (the peer @monaco-editor/react installs),
 # which pins dompurify exactly. Fixed by a monaco-editor update, a runtime UI change
 # that belongs in a web change with the editor checked by hand.
