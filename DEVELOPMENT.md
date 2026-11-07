@@ -62,11 +62,12 @@ Wingman is a GitOps-based Internal Developer Platform (IDP) for OpenShift cluste
 # Install uv (Python package manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Day1 Service
-cd apps/day1-service
-uv sync
-cp .env.example .env  # Configure GitLab tokens
-uv run uvicorn src.main:app --reload --port 8001
+# Day1 Service (from the repo root; env in apps/day1-service/src/wingman_day1/settings.py)
+uv sync --locked --all-packages --all-groups --all-extras
+WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake JWT_SECRET_KEY=<32+ chars> \
+  DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs \
+  DEV_AUTH_ENABLED=true DEV_AUTH_SECRET=<32+ chars> \
+  uv run uvicorn wingman_day1.main:app --reload --port 8001   # fake: the dev/gitlab-fixtures repos
 
 # Day2 Service (separate terminal, from the repo root; env in apps/day2-service/src/wingman_day2/settings.py)
 uv sync --locked --all-packages --all-groups --all-extras

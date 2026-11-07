@@ -25,14 +25,18 @@ image:
   nginx:
     pullPolicy: IfNotPresent   # nginx:alpine pulled from Docker Hub (or mirror)
 
+# Local only: allows weak dev login (ADR-0009).
+environment: "development"
+
 # GitLab running as Docker container on host machine
 # minikube can reach it via host.minikube.internal
 gitlab:
   url: "http://host.minikube.internal:8929"  # GitLab CE HTTP port
-  sslVerify: "false"                          # no TLS in local GitLab
-  day1ProjectId: "wingman-dev/day1-config"
-  day2SigsGroupPath: "wingman-dev/sigs"
-  specsProjectId: "wingman-dev/cluster-specs"
+  verifyTls: false                            # no TLS in local GitLab
+  # The projects scripts/dev/seed_gitlab.py creates.
+  day1ProjectId: "gitops-day1/platform-config"
+  day2SigsGroupPath: "sigs"
+  specsProjectId: "wingman/cluster-specs"
   webhookSecret: "local-webhook-secret"
 
 # OpenShift OAuth not available on minikube — use dev auth instead

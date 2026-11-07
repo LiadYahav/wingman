@@ -6,22 +6,31 @@ metadata:
   labels:
     {{- include "wingman.labels" . | nindent 4 }}
 data:
-  # ── GitLab connection ────────────────────────────────────────────────────────
+  # Every variable here is read by wingman_core.settings or a service's
+  # settings.py (day1 and day2 share this ConfigMap); a name no service reads
+  # does not belong here. Secrets are in secret.yaml.
+
+  # ── Runtime ──────────────────────────────────────────────────────────────────
+  WINGMAN_ENVIRONMENT: {{ .Values.environment | quote }}
+
+  # ── GitLab ───────────────────────────────────────────────────────────────────
   GITLAB_URL: {{ .Values.gitlab.url | quote }}
-  GITLAB_DEFAULT_BRANCH: {{ .Values.gitlab.defaultBranch | quote }}
-  GITLAB_SSL_VERIFY: {{ .Values.gitlab.sslVerify | quote }}
-
-  # ── GitLab project IDs / group paths ────────────────────────────────────────
+  GITLAB_VERIFY_TLS: {{ .Values.gitlab.verifyTls | quote }}
   DAY1_GITLAB_PROJECT_ID: {{ .Values.gitlab.day1ProjectId | quote }}
-  DAY2_SIGS_GROUP_PATH: {{ .Values.gitlab.day2SigsGroupPath | quote }}
   SPECS_GITLAB_PROJECT_ID: {{ .Values.gitlab.specsProjectId | quote }}
+  SPECS_ROOT_PATH: {{ .Values.gitlab.specsRoot | quote }}
+  DAY2_SIGS_GROUP_PATH: {{ .Values.gitlab.day2SigsGroupPath | quote }}
+  DAY2_GITOPS_BRANCH: {{ .Values.gitlab.day2GitopsBranch | quote }}
 
-  # ── Path templates ───────────────────────────────────────────────────────────
-  DAY1_CLUSTERS_PATH_TEMPLATE: {{ .Values.paths.day1ClustersTemplate | quote }}
-  DAY1_CLUSTER_FILE_SUFFIX: {{ .Values.paths.clusterFileSuffix | quote }}
-  DAY2_ADDON_DEFS_PATH_TEMPLATE: {{ .Values.paths.day2AddonDefsTemplate | quote }}
-  DAY2_ADDON_OVERRIDES_PATH_TEMPLATE: {{ .Values.paths.day2AddonOverridesTemplate | quote }}
-  SPECS_ROOT_PATH: {{ .Values.paths.specsRoot | quote }}
+  # ── day1 ─────────────────────────────────────────────────────────────────────
+  # How a cluster file's stem becomes the chart's clusterName (ADR-0015):
+  # production's ApplicationSet strips "ocp4-"; the GitHub sandbox keeps it ("").
+  DAY1_CLUSTER_NAME_STRIP_PREFIX: {{ .Values.day1.clusterNameStripPrefix | quote }}
+  DAY1_CACHE_TTL_SECONDS: {{ .Values.day1.cacheTtlSeconds | quote }}
+  DAY2_SERVICE_URL: "http://wingman-day2:8002"
+
+  # ── day2 ─────────────────────────────────────────────────────────────────────
+  DAY2_CACHE_TTL_SECONDS: {{ .Values.day2.cacheTtlSeconds | quote }}
 
   # ── OpenShift OAuth ──────────────────────────────────────────────────────────
   OPENSHIFT_OAUTH_HOST: {{ .Values.auth.openshiftOAuthHost | quote }}
@@ -30,45 +39,24 @@ data:
   OPENSHIFT_OAUTH_REDIRECT_URI: {{ include "wingman.oauthRedirectUri" . | quote }}
   OPENSHIFT_SSL_VERIFY: {{ .Values.auth.sslVerify | quote }}
 
-  # ── JWT ──────────────────────────────────────────────────────────────────────
+  # ── Sessions and roles ───────────────────────────────────────────────────────
   JWT_EXPIRY_HOURS: {{ .Values.auth.jwtExpiryHours | quote }}
-
-  # ── RBAC ─────────────────────────────────────────────────────────────────────
   WINGMAN_ADMIN_GROUPS: {{ .Values.auth.adminGroups | quote }}
   WINGMAN_VIEWER_GROUPS: {{ .Values.auth.viewerGroups | quote }}
 
-  # ── Dev auth ─────────────────────────────────────────────────────────────────
+  # ── Dev auth (never in production) ───────────────────────────────────────────
   DEV_AUTH_ENABLED: {{ .Values.devAuth.enabled | quote }}
 
-  # ── Inter-service URLs ───────────────────────────────────────────────────────
-  DAY1_SERVICE_URL: "http://wingman-day1:8001"
-  DAY2_SERVICE_URL: "http://wingman-day2:8002"
-
-  # ── Cache TTLs ───────────────────────────────────────────────────────────────
-  CACHE_CLUSTER_LIST_TTL: {{ .Values.cache.clusterListTtl | quote }}
-  CACHE_CLUSTER_DETAIL_TTL: {{ .Values.cache.clusterDetailTtl | quote }}
-  CACHE_SPEC_LIST_TTL: {{ .Values.cache.specListTtl | quote }}
-  CACHE_SPEC_DETAIL_TTL: {{ .Values.cache.specDetailTtl | quote }}
-  CACHE_ADDON_CATALOG_TTL: {{ .Values.cache.addonCatalogTtl | quote }}
-  CACHE_ADDON_VALUES_TTL: {{ .Values.cache.addonValuesTtl | quote }}
-  CACHE_HELM_VALUES_TTL: {{ .Values.cache.helmValuesTtl | quote }}
-  CACHE_HELM_BRANCHES_TTL: {{ .Values.cache.helmBranchesTtl | quote }}
-  CACHE_APPROVALS_TTL: {{ .Values.cache.approvalsTtl | quote }}
-  CACHE_AUDIT_TTL: {{ .Values.cache.auditTtl | quote }}
-  CACHE_BACKGROUND_REFRESH_SECONDS: {{ .Values.cache.backgroundRefreshSeconds | quote }}
-
-  # ── Live cluster status feature flag ────────────────────────────────────────
+  # ── Live cluster status from the MCE hubs ────────────────────────────────────
   CLUSTER_STATUS_ENABLED: {{ .Values.clusterStatus.enabled | quote }}
   {{- if .Values.clusterStatus.enabled }}
   MCE_API_DOMAIN: {{ .Values.clusterStatus.mceDomain | quote }}
-  MCE_CLUSTER_NAME_PREFIX: {{ .Values.clusterStatus.clusterNamePrefix | quote }}
   MCE_SSL_VERIFY: {{ .Values.clusterStatus.sslVerify | quote }}
   MCE_TOKENS_FILE: "/etc/wingman/mce-tokens/tokens"
   {{- end }}
 
   # ── TLS CA bundle path (used when caBundle is set) ───────────────────────────
   {{- if .Values.tls.caBundle }}
-  REQUESTS_CA_BUNDLE: {{ .Values.tls.caBundleMountPath | quote }}
   SSL_CERT_FILE: {{ .Values.tls.caBundleMountPath | quote }}
   {{- end }}
 

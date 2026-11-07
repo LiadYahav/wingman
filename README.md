@@ -202,33 +202,47 @@ name that names one destination. Changes since the legacy service:
 
 ## Environment Variables
 
+Both services read their settings at start-up and refuse an unsafe or
+incomplete configuration (ADR-0009). The chart sets them
+(`chart/templates/configmap.yaml`, `secret.yaml`);
+`tests/repo/test_chart_env_contract.py` fails when the chart and the settings
+classes disagree. The full lists, with defaults, are in
+`packages/wingman-core/src/wingman_core/settings.py` (shared) and each
+service's `settings.py`.
+
 ### Day1 Service
 
 ```env
-# Required
+# Required (the settings refuse to start without them, ADR-0009)
 GITLAB_URL=https://gitlab.example.com
-GITLAB_ACCESS_TOKEN=glpat-xxx
-DAY1_GITLAB_PROJECT_ID=wingman/clusters
-SPECS_GITLAB_PROJECT_ID=wingman/specs
-JWT_SECRET_KEY=your-secret-key
+GITLAB_TOKEN=<service account token>
+DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config
+SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs
+JWT_SECRET_KEY=at-least-32-characters-shared-with-day2
 
-# OpenShift OAuth
-OPENSHIFT_OAUTH_URL=https://oauth.openshift.example.com
-OPENSHIFT_CLIENT_ID=wingman
-OPENSHIFT_CLIENT_SECRET=xxx
-OPENSHIFT_REDIRECT_URI=https://wingman.example.com/api/auth/callback
+# Login: complete OpenShift OAuth settings, or dev login (never in production)
+OPENSHIFT_OAUTH_HOST=oauth-openshift.apps.example.com
+OPENSHIFT_API_HOST=api.example.com:6443
+OPENSHIFT_OAUTH_CLIENT_ID=wingman-app
+OPENSHIFT_OAUTH_CLIENT_SECRET=<secret>
+OPENSHIFT_OAUTH_REDIRECT_URI=https://wingman.apps.example.com/login
+DEV_AUTH_ENABLED=false
+DEV_AUTH_SECRET=                  # at least 32 characters when dev login is on
 
 # RBAC
 WINGMAN_ADMIN_GROUPS=wingman-admins
 WINGMAN_VIEWER_GROUPS=wingman-viewers
 
 # Optional
-SERVICE_PORT=8001
-LOG_LEVEL=INFO
-GITLAB_DEFAULT_BRANCH=main
-GITLAB_SSL_VERIFY=true
+DAY1_CLUSTER_NAME_STRIP_PREFIX=ocp4-   # ADR-0015: "" for the GitHub sandbox
+DAY1_CACHE_TTL_SECONDS=30              # at most 60 (ADR-0011)
+GITLAB_VERIFY_TLS=true                 # an internal CA goes in SSL_CERT_FILE
+GITLAB_WEBHOOK_SECRET=                 # empty: the webhook answers 404
+DAY2_SERVICE_URL=http://wingman-day2:8002
+WINGMAN_ENVIRONMENT=production         # development allows the fake backend
+WINGMAN_GIT_BACKEND=gitlab             # fake: in-memory, seeded from dev/gitlab-fixtures
 
-# Live MCE status (enables infra_env dropdown + cluster health checks)
+# Live MCE status (enables the InfraEnv dropdown and cluster health)
 CLUSTER_STATUS_ENABLED=false
 MCE_API_DOMAIN=mgmt.example.com
 MCE_TOKENS_FILE=/etc/wingman/mce-tokens/tokens
@@ -240,7 +254,7 @@ MCE_INFRAENV_NAMESPACE=           # empty = query all namespaces
 ```env
 # Required (the settings refuse to start without them, ADR-0009)
 GITLAB_URL=https://gitlab.example.com
-GITLAB_TOKEN=glpat-xxx
+GITLAB_TOKEN=<service account token>
 DAY2_SIGS_GROUP_PATH=gitops-day2-prod/sigs      # every project directly in it is a team
 DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config   # read-only for day2 (versions, hosted clusters)
 JWT_SECRET_KEY=at-least-32-characters-shared-with-day1
@@ -281,7 +295,7 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for detailed development guide, archite
 cd apps/web && npm install && npm run dev
 
 # Backend services (uses uv — no virtualenv management needed)
-cd apps/day1-service && uv sync && uv run uvicorn src.main:app --port 8001 --reload
+uv run uvicorn wingman_day1.main:app --port 8001 --reload   # from the repo root (uv workspace)
 uv run uvicorn wingman_day2.main:app --port 8002 --reload   # from the repo root (uv workspace)
 
 # Or use the development proxy (proxies /api/* to running backend services)

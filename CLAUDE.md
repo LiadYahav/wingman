@@ -93,12 +93,15 @@ Explicit user instructions; violating one is a real mistake, not style.
   per-service exports, the web image from the root lock, build on every PR,
   publish and release from main, a blocking npm audit, a nightly live-GitLab
   run.
+- Done: both service images install only from the hash-pinned exports
+  (`docs/ops/images.md`); the chart sets exactly the variables the services
+  read (`tests/repo/test_chart_env_contract.py`) and probes
+  `/health/live`/`/health/ready`.
 - **Not done yet, in order:** (1) web pages for the new data and both API
-  change notes; (2) the chart's env for the rewritten services
-  (`GITLAB_TOKEN`, dropped `CACHE_*`); (3) end-to-end check of the whole
-  stack against the seeded local GitLab; (4) day2's Dockerfile on
-  `docs/ops/images.md`, chart hardening and a values schema; (5) ecosystem
-  features (servers per hosted cluster from server-scan, workflow runs).
+  change notes; (2) end-to-end check of the whole stack against the seeded
+  local GitLab; (3) chart hardening (a values schema, a pinned nginx image);
+  (4) ecosystem features (servers per hosted cluster from server-scan,
+  workflow runs).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -202,14 +205,16 @@ ADR-0032). The pass:
 7. **GitLab CE** for the live contract: `live-gitlab.yml` and
    `scripts/dev/gitlab-up.sh` together, then record the run in ADR-0005.
 
-## Legacy services (until rewritten)
+## Running the services
 
-- Run from the service dir: `uv run uvicorn src.main:app --reload --port 8001`
-  (day1) / `8002` (day2); imports are relative.
-- Required env: `GITLAB_URL`, `GITLAB_ACCESS_TOKEN`, `JWT_SECRET_KEY`; day1
-  `DAY1_GITLAB_PROJECT_ID`, `SPECS_GITLAB_PROJECT_ID`; day2
-  `DAY2_SIGS_GROUP_PATH`. Local login: `DEV_AUTH_ENABLED=true` and a non-empty
-  `DEV_AUTH_SECRET` (day1). Full reference: README.md.
+- From the repo root: `uv run uvicorn wingman_day1.main:app --port 8001`,
+  `uv run uvicorn wingman_day2.main:app --port 8002`. Settings are in each
+  service's `settings.py` plus `wingman_core.settings`; README.md lists them.
+  The token is `GITLAB_TOKEN` (not the legacy `GITLAB_ACCESS_TOKEN`).
+- No GitLab needed: `WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake`
+  seeds an in-memory GitLab from `dev/gitlab-fixtures`. Local login:
+  `DEV_AUTH_ENABLED=true` and a `DEV_AUTH_SECRET` of 32+ characters (day1),
+  sent as `secret` to `POST /api/auth/dev-login`.
 - Roles come from OpenShift groups (`WINGMAN_ADMIN_GROUPS` /
   `WINGMAN_VIEWER_GROUPS`) and travel in the app JWT; both services share
   `JWT_SECRET_KEY`. `AdminUser` guards writes, `CurrentUser` reads.

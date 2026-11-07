@@ -59,30 +59,28 @@ gitlab:
   day2SigsGroupPath: ""    # GitLab path to the sigs subgroup e.g. "platform-team/sigs"
   specsProjectId: ""        # e.g. "44" or "platform-team/cluster-specs"
 
-  defaultBranch: "main"
-
-  # TLS verification for GitLab API calls
-  # "true"  → verify using system CAs
-  # "false" → skip verification (not recommended)
-  # "/etc/pki/tls/certs/ca.crt" → path to CA bundle mounted in the pod
-  sslVerify: "true"
-
+  specsRoot: "specs"        # folder of the spec files inside specsProjectId
+  # The branch the platform's generators read and day2's MRs target.
+  day2GitopsBranch: "main"
+  # TLS verification for GitLab API calls: true or false. An internal CA goes
+  # in tls.caBundle (mounted and named by SSL_CERT_FILE), not here.
+  verifyTls: true
   # Webhook secret — GitLab will send this in X-Gitlab-Token header
   # Set in GitLab: Project → Settings → Webhooks → Secret token
   webhookSecret: ""
 
-# ── Path templates (directories inside each GitLab project) ──────────────────
-# These tell the platform where files live INSIDE each repo.
-# Placeholders: {site}, {mce}, {cluster}, {team}, {addon}
-paths:
-  day1ClustersTemplate: "sites/{site}/mces/{mce}/hostedClusters"
-  # Suffix for cluster YAML files inside hostedClusters/ (e.g. "ocp4-prod.yaml" → suffix ".yaml")
-  # Change this if your cluster files use a different suffix
-  clusterFileSuffix: ".yaml"
-  # Day2 paths are relative to each team's GitLab project root (team = project in sigs subgroup)
-  day2AddonDefsTemplate: "operators/{addon}"
-  day2AddonOverridesTemplate: "mces/{mce}/{cluster}/{addon}"
-  specsRoot: "specs"
+# ── Runtime ────────────────────────────────────────────────────────────────────
+# production refuses the in-memory GitLab and weak dev login (ADR-0009).
+environment: "production"
+
+# ── day1 and day2 ──────────────────────────────────────────────────────────────
+day1:
+  # Stripped from a cluster file's name to make the chart's clusterName
+  # (ADR-0015): "ocp4-" as production's ApplicationSet does, "" for the sandbox.
+  clusterNameStripPrefix: "ocp4-"
+  cacheTtlSeconds: 30     # GitLab reads, per replica (ADR-0011; at most 60)
+day2:
+  cacheTtlSeconds: 15     # GitLab reads, per replica (ADR-0011; at most 60)
 
 # ── OpenShift OAuth ────────────────────────────────────────────────────────────
 # [AIR-GAPPED] All values come from your OpenShift cluster
@@ -212,20 +210,6 @@ replicaCount:
   web: 1
   nginx: 1
 
-# ── Cache TTLs (seconds) ───────────────────────────────────────────────────────
-cache:
-  clusterListTtl: 30
-  clusterDetailTtl: 30
-  specListTtl: 60
-  specDetailTtl: 60
-  addonCatalogTtl: 120
-  addonValuesTtl: 120
-  helmValuesTtl: 300
-  helmBranchesTtl: 120
-  approvalsTtl: 15
-  auditTtl: 30
-  backgroundRefreshSeconds: 60
-
 # ── Live cluster status (OpenShift/HyperShift only) ───────────────────────────
 # Disabled by default. Cannot be used on minikube — requires real MCE clusters.
 # When enabled, the day1-service queries each MCE's OpenShift API using SA tokens
@@ -241,10 +225,6 @@ clusterStatus:
   mceDomain: ""           # e.g. "openshift.example.com" → https://api.{mce}.openshift.example.com:6443
   tokensSecretName: "mce-sa-tokens"  # name of the k8s secret holding SA tokens
   sslVerify: "false"                 # set to "true" or CA bundle path for production
-  # Prefix in Wingman cluster names that is stripped when deriving the HC namespace.
-  # HC CR name  = full cluster name  (e.g. ocp4-prod-web)
-  # HC namespace = hcp-{name without prefix}  (e.g. hcp-prod-web)
-  clusterNamePrefix: "ocp4-"
 
 # ── Namespace ──────────────────────────────────────────────────────────────────
 # Override with --namespace on helm install

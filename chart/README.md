@@ -131,9 +131,11 @@ docker push your-registry.local/wingman/day1:latest
 ### Health Check Failures
 
 If pods restart due to liveness probe timeouts:
-- Check GitLab connectivity from pods
-- Increase probe timeouts in values.yaml
-- Check cache warming logs: `kubectl logs -f deploy/wingman-day2`
+- Liveness is `/health/live` (the process answers); readiness is
+  `/health/ready`, which also needs GitLab to answer. A pod that is live but
+  not ready cannot reach GitLab: check `gitlab.url`, the token and the CA.
+- `kubectl logs deploy/wingman-day1` (or `-day2`): a configuration the
+  service refuses (ADR-0009) is logged at start-up, and the pod exits.
 
 ### GitLab API Errors
 
@@ -143,12 +145,9 @@ Verify tokens have correct scopes:
 
 ### SSL/TLS Issues
 
-For self-signed GitLab certificates:
-```yaml
-global:
-  gitlab:
-    sslVerify: false  # Or path to CA bundle
-```
+For an internal CA, paste it into `tls.caBundle`; it is mounted in every pod
+and named by `SSL_CERT_FILE`. `gitlab.verifyTls: false` turns verification
+off (never in production).
 
 ## Uninstall
 
