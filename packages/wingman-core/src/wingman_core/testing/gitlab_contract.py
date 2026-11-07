@@ -374,6 +374,25 @@ class GitLabContract:
         assert (await gitlab.read_file(project.id, _p("README.md"), "main")).content == "# merged\n"
         assert (await gitlab.get_merge_request(mr.ref)).state is MRState.MERGED
 
+    async def test_after_a_merge_a_file_history_starts_with_the_branch_commit(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        """``git log -- <path>`` skips a merge whose path matches a parent's.
+
+        So the newest history entry is the commit that changed the file, the
+        same commit the file's ``last_commit_id`` names; the fake once listed
+        the merge commit first.
+        """
+        project = await new_project(FILES)
+        await _branch_with_change(gitlab, project, "b1", "README.md", "# merged\n")
+        change = (await gitlab.list_commits(project.id, ref="b1", path=_p("README.md")))[0]
+        mr = await gitlab.create_merge_request(project.id, NewMergeRequest("b1", "main", "merge"))
+        await gitlab.approve_merge_request(mr.ref)
+        await gitlab.merge_merge_request(mr.ref)
+        history = await gitlab.list_commits(project.id, ref="main", path=_p("README.md"))
+        file = await gitlab.read_file(project.id, _p("README.md"), "main")
+        assert history[0].id == change.id == file.last_commit_id
+
     async def test_merge_with_stale_sha_is_revision_conflict(
         self, gitlab: GitLabPort, new_project: NewProject
     ) -> None:

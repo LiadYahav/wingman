@@ -529,11 +529,23 @@ class InMemoryGitLab:
         return merged
 
     def _touches(self, record: _ProjectRecord, commit: _CommitRecord, path: RepoPath) -> bool:
-        parent = record.commits[commit.parents[0]].files if commit.parents else {}
-        changed = {
-            p for p in set(parent) | set(commit.files) if parent.get(p) != commit.files.get(p)
-        }
-        return any(RepoPath(p).is_within(path) for p in changed)
+        """Whether ``git log -- <path>`` lists ``commit``.
+
+        Git's default history simplification skips a merge whose ``path`` is
+        identical to any one parent's, so after an MR merges, a file's history
+        starts with the branch commit that changed it, not the merge commit,
+        and agrees with the file's ``last_commit_id``.
+        """
+        parents = [record.commits[p].files for p in commit.parents] or [{}]
+        return all(_changed_within(parent, commit.files, path) for parent in parents)
+
+
+def _changed_within(before: Mapping[str, str], after: Mapping[str, str], path: RepoPath) -> bool:
+    """Whether any file at or under ``path`` differs between two trees."""
+    return any(
+        before.get(p) != after.get(p) and RepoPath(p).is_within(path)
+        for p in set(before) | set(after)
+    )
 
 
 def _apply(files: dict[str, str], file_commits: Mapping[str, str], change: FileChange) -> None:

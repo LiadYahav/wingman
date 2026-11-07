@@ -137,8 +137,10 @@ async def test_history_commits_mrs_and_diffs_across_teams(
     mrs = await services.audit.merge_requests(per_page=10, page=1)
     assert [(m.team, m.merge_request.state) for m in mrs] == [("redbull", MRState.MERGED)]
     history = await services.audit.cluster_history("ocp4-prod-herzi-site1")
-    assert history[0].team == "redbull" and "Merge branch" in history[0].commit.title
-    team, diff = await services.audit.commit_diff(history[1].commit.id)
+    # As `git log -- <path>`: the merge commit matches its branch parent, so the
+    # newest entry is the commit that wrote the chart, not the merge.
+    assert history[0].team == "redbull" and history[0].commit.title.startswith("Install bmhgen")
+    team, diff = await services.audit.commit_diff(history[0].commit.id)
     assert team == "redbull" and [str(d.new_path) for d in diff] == [
         f"{HERZI_DIR}/bmhgen/values.yaml"
     ]
