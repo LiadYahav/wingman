@@ -7,34 +7,33 @@
 
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { catalogEntry } from "../fixtures/addons";
+import { hostedCharts, previewOf } from "../fixtures/day2";
 
 // ── Shared mock data (correct field shapes matching TypeScript types) ──────────
 
 const CATALOG = [
-  {
+  catalogEntry({
     team: "platform",
     name: "cert-manager",
     current_version: "1.12.0",
     available_versions: ["1.12.0", "1.11.0"],
     default_values: { replicas: 1, namespace: "cert-manager", installCRDs: true },
-    dependencies: [],
-  },
-  {
+  }),
+  catalogEntry({
     team: "platform",
     name: "external-secrets",
     current_version: "0.9.0",
     available_versions: ["0.9.0"],
     default_values: { replicaCount: 1 },
-    dependencies: ["platform/cert-manager"],
-  },
-  {
+  }),
+  catalogEntry({
     team: "observability",
     name: "prometheus",
     current_version: "2.45.0",
     available_versions: ["2.45.0", "2.44.0"],
     default_values: { retention: "15d" },
-    dependencies: [],
-  },
+  }),
 ];
 
 const SPECS = [
@@ -113,27 +112,9 @@ const AUDIT_MRS = [
   { ...MOCK_MR, repo: "day1" as const, state: "merged" as const },
 ];
 
-const INSTALLED_ADDONS = [
-  {
-    team: "platform",
-    name: "cert-manager",
-    version: "1.12.0",
-    override_values: { replicas: 2 },
-    available_versions: ["1.12.0", "1.11.0"],
-    gitlab_url: "https://gitlab.example.com/mces/mce-east/test-cluster/cert-manager",
-  },
-];
-
-const MERGED_VALUES = {
-  addon_name: "cert-manager",
-  team: "platform",
-  version: "1.12.0",
-  merged: { replicas: 2, namespace: "cert-manager", installCRDs: true },
-  chart_values: { replicas: 1, namespace: "cert-manager", installCRDs: true },
-  team_values: { replicas: 1, namespace: "cert-manager", installCRDs: true },
-  cluster_values: { replicas: 2 },
-  provenance: { replicas: "cluster", namespace: "team", installCRDs: "team" },
-};
+// The day2 cluster charts (`GET /api/day2/clusters/{id}/addons`) and one chart's values preview.
+const CLUSTER_CHARTS = { ...hostedCharts(), cluster: "test-cluster", mce: "mce-east" };
+const MERGED_VALUES = previewOf("platform", "cert-manager");
 
 // ── Mock helper ───────────────────────────────────────────────────────────────
 
@@ -255,7 +236,7 @@ async function setupMocks(page: Page) {
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) })
   );
 
-  // Cluster addons — response must match ClusterInstalledResponse: { cluster, mce, installed[] }
+  // Cluster charts: DestinationCharts, or a ValuesPreview for one chart
   await page.route("**/api/day2/clusters/*/addons**", async (r: Route) => {
     const url = r.request().url();
     if (url.match(/\/addons\/[^/]+\/[^/?]+/)) {
@@ -264,7 +245,7 @@ async function setupMocks(page: Page) {
       await r.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ cluster: "test-cluster", mce: "mce-east", installed: INSTALLED_ADDONS }),
+        body: JSON.stringify(CLUSTER_CHARTS),
       });
     }
   });
@@ -612,7 +593,7 @@ test.describe("Cluster Addons Flow", () => {
         await r.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ cluster: "test-cluster", mce: "mce-east", installed: INSTALLED_ADDONS }),
+          body: JSON.stringify(CLUSTER_CHARTS),
         });
       }
     });
@@ -717,19 +698,15 @@ test.describe("Global Addons Catalog", () => {
 
     await page.getByPlaceholder("Search addons or teams...").fill("prometheus");
     await page.waitForTimeout(300);
-    await expect(page.getByText("prometheus")).toBeVisible();
-    await expect(page.getByText("cert-manager")).not.toBeVisible();
+    await expect(page.getByRole("heading", { name: "prometheus" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "cert-manager" })).not.toBeVisible();
   });
 
-  test("F5: dependency chips appear on available-addon cards in cluster addons page", async ({ page }) => {
-    // F5 dependency chips live on the cluster addons "Available Addons" panel,
-    // not on the global catalog page which uses a simpler card layout.
+  test("cluster charts page shows fleet defaults beside the cluster's own charts", async ({ page }) => {
     await navigateTo(page, "/clusters/test-cluster/addons?mce=mce-east");
 
-    // The available addons section shows addon catalog with dependency chips.
-    // external-secrets has dependency on platform/cert-manager.
-    const bodyText = await page.textContent("body") ?? "";
-    // If available addons section renders, dependency info from mock data should be visible
-    expect(bodyText).toMatch(/cert-manager|external-secrets|platform/i);
+    // cert-manager and prometheus are the cluster's own (CLUSTER_CHARTS); external-secrets is a fleet default there.
+    await expect(page.getByText("prometheus").first()).toBeVisible();
+    await expect(page.getByText("fleet default").first()).toBeVisible();
   });
 });

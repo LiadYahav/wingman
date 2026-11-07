@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen } from "lucide-react";
+import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, Network, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navGroups = [
@@ -11,6 +11,7 @@ const navGroups = [
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard, exact: true },
       { label: "Clusters", href: "/clusters", icon: Server },
+      { label: "Destinations", href: "/destinations", icon: Network },
       { label: "Specs", href: "/specs", icon: Layers },
       { label: "Addons", href: "/addons", icon: Package },
     ],
@@ -20,6 +21,7 @@ const navGroups = [
     items: [
       { label: "Approvals", href: "/approvals", icon: GitPullRequest },
       { label: "Audit", href: "/audit", icon: ClipboardList },
+      { label: "Lints", href: "/lints", icon: ShieldAlert },
     ],
   },
   {
