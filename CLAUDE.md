@@ -13,6 +13,10 @@ Wingman is a GitOps-based Internal Developer Platform (IDP) for OpenShift cluste
 - **Specs**: Cluster templates defining variables and default addons
 - **MCE**: Multi-Cluster Engine - groups clusters by management plane
 
+### Ecosystem (read before changing day1/day2 flows)
+
+Wingman is being brought back on top of the team-redbull platform: server-scan (servers), segments-manager (VLAN segments), Temporal workflows + orchestrator API, herzi (fills InfraEnv pools), the hostedclusters-setup chart, gitops-day2. The current day1/day2 code predates it and does not match it. What we learned, the gaps and open questions are in `docs/ecosystem/README.md` (per-system detail in `docs/ecosystem/notes/`). There is **no Day1 create-cluster workflow yet** (planned); don't assume one exists.
+
 ## Repository Structure
 
 ```
@@ -21,7 +25,7 @@ apps/
   day2-service/     # FastAPI - addon management
   web/              # Next.js frontend
 packages/
-  shared-python/    # Shared utilities (gitlab_client, cache, models)
+  shared-python/    # Shared utilities (gitlab_client, cache, models); edits apply to both services
 chart/              # Helm chart for deployment
 ```
 
@@ -29,10 +33,10 @@ chart/              # Helm chart for deployment
 
 ### ALWAYS Use Async GitLab Methods
 
-The GitLab client has sync methods that block the event loop. Always use the `a`-prefixed async versions:
+The GitLab client has sync methods that block the event loop (causing health check timeouts). Always use the `a`-prefixed async versions, and always `await` them:
 
 ```python
-# WRONG - blocks event loop, causes health check timeouts
+# WRONG - blocks event loop
 content, _ = self.gl.read_file(path)
 dirs = self.gl.list_directories(path)
 
@@ -41,85 +45,39 @@ content, _ = await self.gl.aread_file(path)
 dirs = await self.gl.alist_directories(path)
 ```
 
+Use `asyncio.gather` for parallel GitLab operations.
+
 ### Error Handling for GitLab Operations
 
-Always catch specific exceptions:
+Catch specific exceptions (`wingman_shared.exceptions`): `NotFoundError` (file missing, usually return `None`) and `GitLabError` (log, then `raise HTTPException(500, ...) from exc`).
 
-```python
-from wingman_shared.exceptions import NotFoundError, GitLabError
+### YAML Parsing and Caching
 
-try:
-    content, _ = await gl.aread_file(path)
-except NotFoundError:
-    return None  # File doesn't exist
-except GitLabError as exc:
-    logger.warning("GitLab API error: %s", exc)
-    raise HTTPException(500, "GitLab error") from exc
-```
-
-### YAML Parsing
-
-Use the shared YAML utilities that handle errors gracefully:
-
-```python
-from wingman_shared.yaml_utils import parse_multi_document, YamlParseResult
-
-# Returns empty list on error, never crashes
-docs = parse_multi_document(content)
-
-# Or get detailed error info
-result = parse_multi_document(content, return_error=True)
-if result.error:
-    # Has line, column, snippet for IDE-like error display
-    logger.warning("Parse error: %s", result.error)
-```
-
-### Caching Pattern
-
-Use the cache for all GitLab reads:
-
-```python
-async def get_data(self, key: str) -> Data:
-    async def _fetch() -> Data:
-        content, _ = await self.gl.aread_file(f"path/{key}.yaml")
-        return Data.model_validate(parse_multi_document(content)[0])
-    
-    return await self.cache.get_or_fetch(
-        f"prefix:{key}", _fetch, ttl=60.0
-    )
-```
+- Parse YAML with `wingman_shared.yaml_utils.parse_multi_document` (returns `[]` on error; pass `return_error=True` for line/column/snippet). Don't call `yaml.safe_load` directly.
+- Wrap every GitLab read in `cache.get_or_fetch(key, fetcher, ttl=...)` (`wingman_shared/cache.py`).
 
 ### Frontend Data Fetching
 
-Use React Query with appropriate caching:
+Use React Query with a real `staleTime` (e.g. `30_000`); don't use `staleTime: 0` without good reason. Avoid N+1 calls from the frontend.
 
 ```typescript
 const { data } = useQuery({
   queryKey: ["clusters", name],
   queryFn: () => api.get(`/api/day1/clusters/${name}`),
-  staleTime: 30_000,  // Don't refetch for 30s
+  staleTime: 30_000,
 });
 ```
 
-## Common Tasks
+### Frontend Stack Gotcha
 
-### Adding a New API Endpoint
+Next.js 16 / React 19 / Tailwind 4 / zod 4: APIs differ from older docs. Read `apps/web/AGENTS.md` and `node_modules/next/dist/docs/` before frontend edits. `apps/web/proxy.ts` replaces middleware. UI primitives use `@base-ui/react` + shadcn.
 
-1. Create route in `src/routers/<domain>.py`
-2. Create service method in `src/services/<domain>_service.py`
-3. Register router in `src/main.py`
-4. Add dependency in `src/dependencies.py`
+## Running Locally
 
-### Adding a New Frontend Page
-
-1. Create `app/(app)/<route>/page.tsx`
-2. Add types to `types/index.ts`
-3. Use React Query for data fetching
-
-### Modifying Shared Code
-
-Edit files in `packages/shared-python/src/wingman_shared/`
-Both services automatically get updates.
+- Run from the service dir: `uv sync --extra dev && uv run uvicorn src.main:app --reload --port 8001` (day1) / `8002` (day2). Imports are relative, so it must be `src.main:app`.
+- Services crash at startup without: `GITLAB_URL`, `GITLAB_ACCESS_TOKEN`, `JWT_SECRET_KEY`; day1 also needs `DAY1_GITLAB_PROJECT_ID`, `SPECS_GITLAB_PROJECT_ID`; day2 also `DAY2_SIGS_GROUP_PATH`. They read `.env` from the cwd (there is no `.env.example`, despite DEVELOPMENT.md). Full env reference: README.md.
+- Local login without OpenShift OAuth: `DEV_AUTH_ENABLED=true` plus a non-empty `DEV_AUTH_SECRET` (day1).
+- `CLUSTER_STATUS_ENABLED` is off by default and cannot run on minikube.
 
 ## Testing Commands
 
@@ -131,56 +89,24 @@ uvx ruff check apps/day1-service apps/day2-service packages/shared-python
 uvx mypy apps/day1-service/src --ignore-missing-imports
 uvx mypy apps/day2-service/src --ignore-missing-imports
 
-# Frontend lint and build
-cd apps/web && npm run lint && npm run build
+# Frontend lint, typecheck, build (CI also runs tsc; there is no typecheck script)
+cd apps/web && npm run lint && npx tsc --noEmit && npm run build
 
 # Frontend E2E tests (Playwright)
-cd apps/web && npm run test:e2e          # Run all tests headless
+cd apps/web && npm run test:e2e          # Runs ALL specs in e2e/tests, including live ones (those fail without a backend)
 cd apps/web && npm run test:e2e:ui       # Interactive test UI
 cd apps/web && npm run test:e2e:headed   # Run tests in visible browser
+cd apps/web && npx playwright test user-flows.spec.ts -g "name"   # Single mocked spec/test
 ```
+
+Python tests: none exist yet (`src/tests/` holds only `__init__.py`). CI runs `pytest tests/ ... || echo "No tests found"`, so a pytest failure never fails CI. Single test once added: `cd apps/day1-service && uv run pytest src/tests/test_x.py::test_y`.
 
 ## E2E Testing with Playwright
 
-E2E tests are located in `apps/web/e2e/`:
+Tests live in `apps/web/e2e/` (`fixtures/api-handlers.ts` has the route-intercept helpers: `injectAdminAuth`, `mockDashboardApis`, `mockDay1Api`, `mockDay2Api`, `mockAllApis`).
 
-```
-e2e/
-├── fixtures/              # Mock data and route intercept helpers
-│   ├── addons.ts          # Legacy mock addon data (used by old page-object tests)
-│   └── api-handlers.ts    # injectAdminAuth(), mockDashboardApis() helpers
-├── pages/                 # Page objects (used by the older feature test files)
-│   ├── spec-new.page.ts
-│   ├── spec-edit.page.ts
-│   ├── cluster-new.page.ts
-│   └── configure-dialog.page.ts
-└── tests/
-    ├── spec-creation.spec.ts       # Spec form (page-object style)
-    ├── addon-configuration.spec.ts # Addon field configure dialog
-    ├── addon-reordering.spec.ts    # Drag-to-reorder
-    ├── field-type-handling.spec.ts # YAML field types
-    ├── new-features.spec.ts        # Targeted feature regression tests
-    ├── user-flows.spec.ts          # Full mocked user journeys (34 tests)
-    │                               # Runs without a live backend — all APIs intercepted
-    ├── live-user-flows.spec.ts     # Full live user journeys with cleanup (21 tests)
-    │                               # Requires PLAYWRIGHT_BASE_URL=http://localhost:8080
-    └── live-qa.spec.ts             # Smoke QA against the real deployed stack (12 tests)
-                                    # Requires PLAYWRIGHT_BASE_URL=http://localhost:8080
-```
-
-### Running the live tests
-
-```bash
-# Mocked tests only (no backend required — uses Next.js dev server on 3000)
-cd apps/web && npm run test:e2e
-
-# Full stack tests against the minikube deployment
-PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test live-qa.spec.ts
-PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test live-user-flows.spec.ts
-
-# All tests combined (mocked + live)
-PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test
-```
+- `user-flows.spec.ts` is fully mocked (no backend). The older feature specs use the page objects in `e2e/pages/`.
+- `live-user-flows.spec.ts` and `live-qa.spec.ts` hit the real stack (minikube): `PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test live-qa.spec.ts`.
 
 ### Key patterns to know
 
@@ -197,74 +123,37 @@ PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test
   Every endpoint a page could call must be intercepted in the mock — including secondary ones like
   `/api/day2/gitlab-info` on the cluster addons page.
 
-### data-testid Conventions
-
-Use `data-testid` attributes for E2E test selectors:
-- Addon cards: `data-testid="addon-card-{team}-{name}"`
-- Selected addons: `data-testid="selected-addon-{team}-{name}"`
-- Field rows: `data-testid="field-row-{path}"` (dots replaced with dashes)
-- Drag handles: `data-testid="drag-handle"`
-- Save buttons: `data-testid="save-config-button"`
+Selectors use `data-testid` (e.g. `addon-card-{team}-{name}`, `field-row-{path}` with dots replaced by dashes); grep existing tests for the conventions.
 
 ## Building Docker Images
 
-Production images are tagged with the **git commit SHA** (not `latest`) so every
-deployment is traceable and rollbacks are unambiguous.
+CI (`.github/workflows/ci.yml`) pushes `ghcr.io/<owner>/wingman-{day1,day2,web}` on merges to main with 3 tags: `<short_sha>`, `latest`, and `v<VERSION>` (from the root `VERSION` file). Bumping `VERSION` is the only release mechanism; it is not synced to `chart/Chart.yaml` or the pyproject/package.json versions. `chart/values.yaml` defaults `image.*.tag` to `latest`.
+
+Manual production builds are tagged with the **git commit SHA** (not `latest`) so deployments are traceable and rollbacks unambiguous:
 
 ```bash
-# Get the current commit SHA
 SHA=$(git rev-parse --short HEAD)
 
-# For local/minikube (arm64 or native)
-docker build -t wingman-day1:$SHA -f apps/day1-service/Dockerfile .
-docker build -t wingman-day2:$SHA -f apps/day2-service/Dockerfile .
-docker build -t wingman-web:$SHA apps/web/
-
-# For production (amd64) — use --no-cache for a clean build
+# Production (amd64) — --no-cache for a clean build; drop --platform/--no-cache for local/minikube
 docker buildx build --platform linux/amd64 --no-cache -t wingman-day1:$SHA -f apps/day1-service/Dockerfile . --load
 docker buildx build --platform linux/amd64 --no-cache -t wingman-day2:$SHA -f apps/day2-service/Dockerfile . --load
 docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA apps/web/ --load
 
-# Save for air-gapped transfer
-docker save wingman-day1:$SHA | gzip > wingman-day1-$SHA.tar.gz
-docker save wingman-day2:$SHA | gzip > wingman-day2-$SHA.tar.gz
-docker save wingman-web:$SHA  | gzip > wingman-web-$SHA.tar.gz
+# Air-gapped transfer: docker save wingman-<svc>:$SHA | gzip > wingman-<svc>-$SHA.tar.gz
 ```
 
-> **Helm chart**: update `image.tag` in `chart/values.yaml` (or pass `--set image.tag=$SHA`)
-> when deploying a new build.
+Update `image.tag` in `chart/values.yaml` (or `--set image.tag=$SHA`) when deploying a new build.
 
-## Key Files Reference
+## Conventions and Pitfalls
 
-| File | Purpose |
-|------|---------|
-| `packages/shared-python/src/wingman_shared/gitlab_client.py` | GitLab API wrapper with async methods |
-| `packages/shared-python/src/wingman_shared/models.py` | Shared Pydantic models |
-| `packages/shared-python/src/wingman_shared/yaml_utils.py` | YAML parsing with error handling |
-| `apps/day2-service/src/services/addon_service.py` | Core addon management logic |
-| `apps/day1-service/src/services/cluster_service.py` | Cluster provisioning logic |
-| `apps/web/lib/api-client.ts` | Frontend API client |
-| `apps/web/types/index.ts` | TypeScript type definitions |
-| `apps/web/components/specs/configure-overrideable-dialog.tsx` | Day2 addon field configuration dialog |
-| `apps/web/e2e/` | Playwright E2E tests directory |
-
-## Performance Guidelines
-
-1. **Batch API calls**: Avoid N+1 queries from frontend
-2. **Use asyncio.gather**: For parallel GitLab operations
-3. **Cache everything**: GitLab reads are expensive
-4. **Set staleTime**: Frontend queries should cache appropriately
-
-## Common Pitfalls
-
-- **Don't use sync GitLab methods in async context** - causes health check timeouts
-- **Don't forget `await`** on async GitLab calls - causes "coroutine never awaited"
-- **Don't set staleTime: 0** on frontend queries without good reason
-- **Don't add network policies** - they cause connectivity issues
+- Commits use conventional-commit prefixes (`feat:`, `fix:`, `docs:`, `ci:`, `refactor:`).
+- Platform-generated branches (`platform/{user}/{action}-{resource}-{ts}`) and MR titles (`[Wingman/Day1|Day2|Specs] Verb type name`) are parsed by the audit service. Don't change them casually (`wingman_shared/mr_conventions.py`).
+- Don't add network policies - they cause connectivity issues.
 
 ## Auth/RBAC
 
-- Users get `admin` or `viewer` role from GitLab group membership
+- Users get `admin` or `viewer` role from **OpenShift** group membership (`WINGMAN_ADMIN_GROUPS` / `WINGMAN_VIEWER_GROUPS`, see `wingman_shared/auth/rbac.py`). Both services must share the same `JWT_SECRET_KEY` and group settings.
 - Role is embedded in JWT token
 - Use `AdminUser` dependency for write operations
 - Use `CurrentUser` for read-only endpoints
+- Services that need cluster status use `ClusterStatusServiceDep` (`dependencies.py`), which returns 501 when the feature is disabled.
