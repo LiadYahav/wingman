@@ -161,8 +161,9 @@ helm template <cluster> <chart-dir> -f sites/configValues.yaml -f sites/<site>/v
 Web: `npm run lint --workspace=web`, `cd apps/web && npx tsc --noEmit`,
 `npm run build --workspace=web`. Playwright: `npm run test:e2e:mocked
 --workspace=web` runs the `mocked` project (every spec but `live-*`; CI runs
-it); `npm run test:e2e` runs every spec, including `live-*` ones that need a
-backend (`PLAYWRIGHT_BASE_URL`). Playwright traps: route mocks match LIFO; SSE
+it); the `live` project is `live-day1-flows.spec.ts` and `live-day2.spec.ts`,
+against a running stack on a disposable GitLab (`PLAYWRIGHT_BASE_URL`, the dev
+login secret; commands in `apps/web/README.md`). Playwright traps: route mocks match LIFO; SSE
 keeps the network busy, so wait on `domcontentloaded`, never `networkidle`;
 any unmocked endpoint's 401 redirects to `/login`.
 

@@ -1,7 +1,8 @@
 /**
- * The day2 pages against a running day1 + day2 stack whose GitLab is the
- * in-memory fake seeded from dev/gitlab-fixtures (WINGMAN_GIT_BACKEND=fake):
- * no network, and nothing merges, so every run sees the same main branch.
+ * The day2 pages, and a day1 cluster page's link into them, against a
+ * running day1 + day2 stack whose GitLab is the in-memory fake seeded from
+ * dev/gitlab-fixtures (WINGMAN_GIT_BACKEND=fake): no network, and nothing
+ * merges, so every run sees the same main branch.
  *
  * Run with the stack behind one origin (nginx, or any proxy with the chart's
  * routing) and the dev login secret:
@@ -52,6 +53,46 @@ test("the catalog flags the miscased repoUrl", async ({ page }) => {
   await open(page, "/addons");
   await expect(page.getByText(/charts? across \d+ teams/)).toBeVisible();
   await expect(page.getByRole("button", { name: /kyverno/ })).toContainText("No lowercase repourl");
+});
+
+test("the catalog sorts, folds a team, and shows team values as YAML", async ({ page }) => {
+  await open(page, "/addons");
+  const redbull = page.locator("section").filter({ has: page.getByRole("button", { name: /^redbull/ }) });
+  await expect(redbull.locator("h3")).toHaveText(["bmhgen", "cluster-roles", "kyverno"]);
+
+  await page.getByRole("button", { name: "Z→A" }).click();
+  await expect(redbull.locator("h3")).toHaveText(["kyverno", "cluster-roles", "bmhgen"]);
+
+  const team = redbull.getByRole("button", { name: /^redbull/ });
+  await team.click();
+  await expect(team).toHaveAttribute("aria-expanded", "false");
+  await expect(redbull.locator("h3")).toHaveCount(0);
+  await team.click();
+
+  await page.getByRole("button", { name: /^log-forwarder/ }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Team falcon");
+  await dialog.getByRole("button", { name: "YAML" }).click();
+  const yaml = await dialog.locator("pre").first().textContent();
+  expect(yaml).toMatch(/^\w[\w-]*:/m);
+  expect(yaml).not.toMatch(/\{\s*"/);
+});
+
+test("a hosted cluster's day1 page links to its charts, read from the listing it prefetched", async ({ page }) => {
+  let listings = 0;
+  page.on("request", (r: Request) => {
+    if (new URL(r.url()).pathname === `/api/day2/clusters/${HAWK}/addons`) listings += 1;
+  });
+  await open(page, `/clusters/${HAWK}?site=site1&mce=ocp4-prod-mce-site1-a`);
+  await expect(page.getByRole("heading", { name: HAWK })).toBeVisible();
+  await page.getByRole("tab", { name: "History" }).click();
+  await expect(page.getByText("Addon values (day2 team repos)")).toBeVisible();
+  await expect.poll(() => listings).toBe(1);
+
+  await page.getByRole("main").getByRole("link", { name: "Addons" }).click();
+  await page.waitForURL(`**/clusters/${HAWK}/addons?mce=ocp4-prod-mce-site1-a`);
+  await expect(page.getByTestId("installed-falcon-cluster-roles")).toBeVisible();
+  expect(listings).toBe(1);
 });
 
 test("a hosted cluster from a day1 link: provenance, then an update guarded by last_commit_id", async ({ page }) => {

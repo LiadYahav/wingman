@@ -54,9 +54,13 @@ e2e/
 
 ### Running Tests
 
+Two Playwright projects (`playwright.config.ts`): `mocked` is every spec but `live-*.spec.ts`,
+with every API call intercepted (`e2e/fixtures/`), and is what CI runs; `live` is the two
+`live-*` specs, against a running stack.
+
 ```bash
-# Run all tests headless
-npm run test:e2e
+# The mocked suite, no backend needed (CI runs it against a production build)
+npm run test:e2e:mocked
 
 # Interactive mode with test explorer
 npm run test:e2e:ui
@@ -64,15 +68,21 @@ npm run test:e2e:ui
 # Run specific test file
 npx playwright test addon-configuration
 
-# The main day1 flows against a running stack (see "Running against local services"):
-# create, approve as a second user, edit, delete. Every step opens a real MR, so use a
-# disposable GitLab only (the in-memory fake or the seeded local GitLab CE).
+# The day1 flows against a running stack (see "Running against local services"): the
+# dashboard; a cluster created, found among the approvals, approved by a second user (a
+# branch that moved since the review is refused), edited and deleted with last_commit_id;
+# live status (off is not an error); a spec built from the catalog, its history, an edit and
+# a delete; the audit log. Every step opens a real MR, so use a disposable GitLab only (the
+# in-memory fake or the seeded local GitLab CE).
 WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
   npx playwright test live-day1-flows --project=live
-# The day2 pages against the same stack
+# The day2 pages against the same stack: the catalog, a hosted cluster's charts from its day1
+# page, install/update/remove/bulk, an MCE, a UPI fleet default, the hub, destinations, lints
 DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
   npx playwright test live-day2 --project=live
 ```
+
+`npm run test:e2e` runs both projects; without a stack the `live` specs skip (no secret) or fail.
 
 ### Page Objects
 
