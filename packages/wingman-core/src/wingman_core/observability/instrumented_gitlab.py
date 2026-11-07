@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from wingman_core.domain.git import (
     Branch,
     Commit,
+    CommitAuthor,
     FileChange,
     FileContent,
     FileDiff,
@@ -107,6 +108,7 @@ class InstrumentedGitLab:
         message: str,
         changes: Sequence[FileChange],
         start_branch: str | None = None,
+        author: CommitAuthor | None = None,
     ) -> Commit:
         """See GitLabPort.commit."""
         return await self._call(
@@ -117,6 +119,7 @@ class InstrumentedGitLab:
                 message=message,
                 changes=changes,
                 start_branch=start_branch,
+                author=author,
             ),
         )
 

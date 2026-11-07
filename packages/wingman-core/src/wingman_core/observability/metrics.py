@@ -42,6 +42,9 @@ class Dependency(StrEnum):
     """An external system a service calls."""
 
     GITLAB = "gitlab"
+    KUBERNETES = "kubernetes"
+    OPENSHIFT_OAUTH = "openshift_oauth"
+    DAY2 = "day2"
 
 
 class Outcome(StrEnum):

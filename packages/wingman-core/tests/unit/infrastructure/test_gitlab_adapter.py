@@ -20,7 +20,7 @@ from wingman_core.domain.errors import (
     PermissionDeniedError,
     RevisionConflictError,
 )
-from wingman_core.domain.git import FileChange, RepoPath
+from wingman_core.domain.git import CommitAuthor, FileChange, RepoPath
 from wingman_core.domain.merge_request import MergeRequestRef, MRState, NewMergeRequest
 from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
@@ -252,6 +252,19 @@ async def test_commit_sends_the_golden_body() -> None:
             {"action": "move", "file_path": "e.yaml", "previous_path": "d.yaml"},
         ],
     }
+
+
+async def test_commit_author_is_sent_as_author_fields() -> None:
+    rec = Recorder(reply(201, COMMIT))
+    await rec.adapter().commit(
+        7,
+        branch="main",
+        message="m",
+        changes=[FileChange.create(RepoPath("a.yaml"), "a: 1\n")],
+        author=CommitAuthor("Jane Doe", "jane@example.invalid"),
+    )
+    body = json.loads(rec.requests[0].content)
+    assert (body["author_name"], body["author_email"]) == ("Jane Doe", "jane@example.invalid")
 
 
 async def test_empty_commit_is_rejected_without_a_request() -> None:

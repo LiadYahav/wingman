@@ -38,6 +38,7 @@ from wingman_core.domain.errors import (
 from wingman_core.domain.git import (
     Branch,
     Commit,
+    CommitAuthor,
     EntryKind,
     FileChange,
     FileContent,
@@ -161,6 +162,7 @@ class GitLabHttpAdapter:
         message: str,
         changes: Sequence[FileChange],
         start_branch: str | None = None,
+        author: CommitAuthor | None = None,
     ) -> Commit:
         """See GitLabPort.commit."""
         if not changes:
@@ -172,6 +174,9 @@ class GitLabHttpAdapter:
         }
         if start_branch is not None:
             body["start_branch"] = start_branch
+        if author is not None:
+            body["author_name"] = author.name
+            body["author_email"] = author.email
         return _commit(
             await self._write("POST", f"/projects/{project_id}/repository/commits", body)
         )

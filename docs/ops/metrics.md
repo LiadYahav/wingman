@@ -27,8 +27,16 @@ fails when this table and the code disagree.
 | `wingman_build_info` | gauge | `service`, `version`, `commit` | Always 1; which build is running. Version skew between day1, day2 and web shows here. |
 | `wingman_http_requests_total` | counter | `method`, `route`, `status_class` | HTTP requests served. `status_class` is `2xx`..`5xx`. |
 | `wingman_http_request_duration_seconds` | histogram | `method`, `route` | Time to serve a request. |
-| `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`; `operation` is a GitLabPort method; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
+| `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth` or `day2`; `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
 | `wingman_dependency_request_duration_seconds` | histogram | `dependency`, `operation` | Time spent in a call, retries included. |
+
+Operations of the other dependencies (day1):
+
+| `dependency` | `operation` |
+|---|---|
+| `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs` |
+| `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
+| `day2` | `list_installed_addons` |
 
 ## Reading the GitLab outcomes
 

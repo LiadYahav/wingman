@@ -7,7 +7,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from wingman_core.domain.errors import InvalidRepoPathError
-from wingman_core.domain.git import ChangeKind, FileChange, RepoPath
+from wingman_core.domain.git import ChangeKind, CommitAuthor, FileChange, RepoPath
 
 
 @pytest.mark.parametrize("value", ["/abs", "a//b", "a/../b", "..", "./a", "a/", "a\\b", "a\x00b"])
@@ -75,3 +75,12 @@ def test_file_change_rejects_impossible_combinations(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         build()
+
+
+@pytest.mark.parametrize(
+    ("name", "email"),
+    [("", "a@b"), ("Jane", " "), ("Jane\nX-Header: y", "a@b"), ("Jane", "<a@b>")],
+)
+def test_commit_author_rejects_empty_or_header_breaking_values(name: str, email: str) -> None:
+    with pytest.raises(ValueError, match="invalid commit author"):
+        CommitAuthor(name, email)

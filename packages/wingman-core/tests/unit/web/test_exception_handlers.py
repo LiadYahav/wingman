@@ -10,7 +10,13 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from wingman_core.domain.errors import AmbiguousWriteError, NotFoundError, RevisionConflictError
-from wingman_core.web.errors import ErrorCode, ValidationFailed
+from wingman_core.web.errors import (
+    AppError,
+    DependencyUnavailable,
+    ErrorCode,
+    FeatureDisabled,
+    ValidationFailed,
+)
 from wingman_core.web.exception_handlers import PROBLEM_JSON, register_exception_handlers
 from wingman_core.web.request_context import RequestIdMiddleware
 
@@ -103,3 +109,26 @@ async def test_unexpected_errors_hide_internals_and_mint_a_request_id(
     assert "secret internals" not in response.text
     assert body["request_id"].startswith("req_")
     assert response.headers["x-request-id"] == body["request_id"]
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code"),
+    [
+        (FeatureDisabled("status is off"), 501, "FEATURE_DISABLED"),
+        (DependencyUnavailable("hub down"), 502, "DEPENDENCY_UNAVAILABLE"),
+    ],
+)
+async def test_non_git_dependency_errors_have_their_own_codes(
+    error: AppError, status: int, code: str
+) -> None:
+    app = make_app()
+
+    @app.get("/dependency")
+    async def dependency() -> None:
+        raise error
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        response = await c.get("/dependency")
+    assert (response.status_code, response.json()["code"]) == (status, code)
+    assert response.json()["type"] == f"/problems/{code.lower().replace('_', '-')}"
