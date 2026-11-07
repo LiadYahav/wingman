@@ -1,0 +1,78 @@
+"""Every cache key day1 uses, one function per key family (ADR-0011).
+
+Reads build keys here and writes invalidate through the prefixes here, so a
+key and the invalidation that clears it cannot drift apart (the legacy
+service cleared ``approvals:day1:list`` while the list lived under
+``approvals:combined:list``). ``repo`` is the short repository key
+(``day1`` or ``specs``).
+
+Families:
+
+- ``<repo>:project``                       the project and its default branch
+- ``<repo>:files:...``                     trees, files, history at the default branch
+- ``<repo>:commit:<sha>``                  one commit (immutable)
+- ``<repo>:mrs:...``                       merge-request lists
+- ``day2:installed:<site>:<mce>:<name>``  day2's installed addons for one cluster
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from wingman_core.domain.git import RepoPath
+from wingman_core.domain.merge_request import MRState
+
+
+def project(repo: str) -> str:
+    """The project and its default branch."""
+    return f"{repo}:project"
+
+
+def files_prefix(repo: str) -> str:
+    """Everything read from the default branch's tree; cleared when the branch moves."""
+    return f"{repo}:files:"
+
+
+def tree(repo: str, path: RepoPath, *, recursive: bool) -> str:
+    """A tree listing."""
+    return f"{files_prefix(repo)}tree:{'r' if recursive else 'd'}:{path}"
+
+
+def file(repo: str, path: RepoPath) -> str:
+    """One file at the default branch."""
+    return f"{files_prefix(repo)}file:{path}"
+
+
+def history(repo: str, path: RepoPath, *, limit: int) -> str:
+    """The commits that changed a path."""
+    return f"{files_prefix(repo)}history:{limit}:{path}"
+
+
+def commits(repo: str, *, limit: int) -> str:
+    """The newest commits on the default branch."""
+    return f"{files_prefix(repo)}commits:{limit}"
+
+
+def commit(repo: str, sha: str) -> str:
+    """One commit; commits never change, so nothing invalidates this family."""
+    return f"{repo}:commit:{sha}"
+
+
+def commit_diff(repo: str, sha: str) -> str:
+    """One commit's diff; immutable like the commit."""
+    return f"{repo}:commit-diff:{sha}"
+
+
+def day2_installed(site: str, mce: str, cluster: str) -> str:
+    """What day2 reports as installed on one cluster (expires; day2 has no webhook to day1)."""
+    return f"day2:installed:{site}:{mce}:{cluster}"
+
+
+def merge_requests_prefix(repo: str) -> str:
+    """Every merge-request list; cleared when an MR is opened, updated, merged or closed."""
+    return f"{repo}:mrs:"
+
+
+def merge_requests(repo: str, *, state: MRState | None, labels: Sequence[str], limit: int) -> str:
+    """One merge-request list."""
+    return f"{merge_requests_prefix(repo)}{state or 'any'}:{','.join(sorted(labels))}:{limit}"
