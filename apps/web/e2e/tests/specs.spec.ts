@@ -255,10 +255,12 @@ test.describe("Spec detail", () => {
 test.describe("Spec edit", () => {
   test("an update keeps what the page does not edit and sends nothing the service refuses", async ({ page }) => {
     let sent: Record<string, unknown> | null = null;
+    let sentTo = "";
     await open(page, "/", async (p) => {
       await p.route("**/api/day1/specs/agent-standard", (r) => {
         if (r.request().method() !== "PUT") return json(r, STANDARD);
         sent = r.request().postDataJSON();
+        sentTo = r.request().url();
         return json(r, mr(8, "[Wingman/Specs] Update spec agent-standard"));
       });
     });
@@ -283,6 +285,9 @@ test.describe("Spec edit", () => {
     expect(body.spec.day2.addons).toEqual(STANDARD.spec.day2.addons);
     expect(body).not.toHaveProperty("load_error");
     expect(body).not.toHaveProperty("load_problems");
+    expect(body).not.toHaveProperty("last_commit_id");
+    // A day1 that does not send last_commit_id yet gets an unguarded update
+    expect(new URL(sentTo).search).toBe("");
   });
 
   test("a refused update lists every problem next to the actions", async ({ page }) => {
@@ -337,6 +342,97 @@ test.describe("Spec edit", () => {
 
     await expect(problemAlert(page, "cannot be edited")).toBeVisible();
     await expect(edit.reviewButton).toHaveCount(0);
+  });
+});
+
+// ── Guarded writes (ADR-0006) ────────────────────────────────────────────────
+
+test.describe("Spec writes carry the last_commit_id they read", () => {
+  const READ_AT = "aaaaaaaa11111111aaaaaaaa11111111aaaaaaaa";
+  const NEWER = "bbbbbbbb22222222bbbbbbbb22222222bbbbbbbb";
+  // The spec itself, with or without ?last_commit_id= (not /clusters, /drift, ...)
+  const SPEC_URL = /\/api\/day1\/specs\/agent-standard(\?.*)?$/;
+  const STALE = "spec 'agent-standard' changed since aaaaaaaa; reload and try again";
+
+  /** The spec as read at `readAt()`; writes go to `onWrite`. */
+  function specRoute(readAt: () => string, method: string, onWrite: (route: Route, url: URL) => Promise<void>) {
+    return async (p: Page) => {
+      await p.route(SPEC_URL, (r) =>
+        r.request().method() === method
+          ? onWrite(r, new URL(r.request().url()))
+          : json(r, { ...STANDARD, last_commit_id: readAt() })
+      );
+    };
+  }
+
+  const reread = (page: Page) =>
+    page.waitForResponse((res) => SPEC_URL.test(res.url()) && res.request().method() === "GET");
+
+  test("an update sends it; a 409 offers a reload and the retry sends the new one", async ({ page }) => {
+    let readAt = READ_AT;
+    const puts: { url: URL; body: Record<string, unknown> }[] = [];
+    await open(page, "/", specRoute(() => readAt, "PUT", async (r, url) => {
+      puts.push({ url, body: r.request().postDataJSON() });
+      if (puts.length === 1) {
+        readAt = NEWER; // someone merged a change meanwhile
+        return json(r, problem(409, "REVISION_CONFLICT", STALE), 409);
+      }
+      return json(r, mr(12, "[Wingman/Specs] Update spec agent-standard"));
+    }));
+    const edit = new SpecEditPage(page);
+    await edit.goto("agent-standard");
+
+    await edit.descriptionInput.fill("Changed");
+    await edit.reviewAndConfirm();
+    await expect(problemAlert(page, "changed since you opened it")).toBeVisible();
+    expect(puts[0].url.searchParams.get("last_commit_id")).toBe(READ_AT);
+    expect(puts[0].body).not.toHaveProperty("last_commit_id");
+
+    const reloaded = reread(page);
+    await page.getByRole("button", { name: /reload spec/i }).click();
+    await reloaded;
+    await expect(problemAlert(page, "changed since you opened it")).toHaveCount(0);
+    await edit.descriptionInput.fill("Changed again");
+    await edit.reviewAndConfirm();
+
+    await expect(page.getByText("Update MR !12 opened")).toBeVisible();
+    expect(puts).toHaveLength(2);
+    expect(puts[1].url.searchParams.get("last_commit_id")).toBe(NEWER);
+  });
+
+  test("a delete sends it; a 409 offers a reload and the retry sends the new one", async ({ page }) => {
+    let readAt = READ_AT;
+    const deletes: URL[] = [];
+    await open(page, "/specs/agent-standard", async (p) => {
+      await p.route("**/api/day1/specs/agent-standard/clusters", (r) => json(r, []));
+      await specRoute(() => readAt, "DELETE", async (r, url) => {
+        deletes.push(url);
+        if (deletes.length === 1) {
+          readAt = NEWER;
+          return json(r, problem(409, "REVISION_CONFLICT", STALE), 409);
+        }
+        return json(r, mr(13, "[Wingman/Specs] Delete spec agent-standard"));
+      })(p);
+    });
+
+    const header = page.getByRole("main").getByRole("button", { name: "Delete", exact: true });
+    await header.click();
+    await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
+    const stale = problemAlert(page, "changed since you opened it");
+    await expect(stale).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(deletes[0].searchParams.get("last_commit_id")).toBe(READ_AT);
+
+    const reloaded = reread(page);
+    await stale.getByRole("button", { name: "Reload" }).click();
+    await reloaded;
+    await expect(stale).toHaveCount(0);
+    await header.click();
+    await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
+
+    await expect(page.getByText("Delete MR !13 opened")).toBeVisible();
+    expect(deletes).toHaveLength(2);
+    expect(deletes[1].searchParams.get("last_commit_id")).toBe(NEWER);
   });
 });
 

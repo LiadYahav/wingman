@@ -52,11 +52,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfigureOverrideableDialog, deepMergeValues } from "@/components/specs/configure-overrideable-dialog";
-import { formatPreset, specDocument, specVersionProblem } from "@/lib/specs";
+import { formatPreset, specApiPath, specDocument, specVersionProblem } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { DynamicVariableForm, initFormValues, type FormValues } from "@/components/clusters/dynamic-variable-form";
 import { chartRevisions, day2Api, day2Keys } from "@/lib/day2";
-import type { CatalogEntry, ClusterSpec, MRDetail, OverrideableField, SpecAddon, TemplateField } from "@/types";
+import type { CatalogEntry, ClusterSpec, MRDetail, OverrideableField, SpecAddon, SpecDetail, TemplateField } from "@/types";
 
 // ── Sortable Addon Item ───────────────────────────────────────────────────────
 
@@ -203,10 +203,13 @@ export default function EditSpecPage() {
   const [addonSearch, setAddonSearch] = useState("");
   const [configuringAddon, setConfiguringAddon] = useState<{ team: string; name: string } | null>(null);
 
-  const { data: spec, isLoading: specLoading, error: specError } = useQuery<ClusterSpec>({
+  const { data: spec, isLoading: specLoading, error: specError } = useQuery<SpecDetail>({
     queryKey: ["specs", specName],
-    queryFn: () => api.get<ClusterSpec>(`/api/day1/specs/${encodeURIComponent(specName)}`),
+    queryFn: () => api.get<SpecDetail>(specApiPath(specName)),
     staleTime: 60_000,
+    // The update sends this read's last_commit_id: re-read on every visit (a
+    // cached copy renders meanwhile), so a change merged since is the base.
+    refetchOnMount: "always",
     retry: (count, error) => !isApiError(error, "VALIDATION_ERROR") && !isApiError(error, "NOT_FOUND") && count < 2,
   });
 
@@ -343,7 +346,8 @@ export default function EditSpecPage() {
   const diff = useMemo(() => computeLineDiff(originalFullYaml, currentFullYaml), [originalFullYaml, currentFullYaml]);
 
   const updateMutation = useMutation({
-    mutationFn: async () => api.put<MRDetail>(`/api/day1/specs/${encodeURIComponent(specName)}`, buildFinalSpec()),
+    // Guarded by the commit the spec was read at; a stale one is a 409 with a reload below
+    mutationFn: async () => api.put<MRDetail>(specApiPath(specName, spec?.last_commit_id), buildFinalSpec()),
     onSuccess: (mr) => {
       toastMrOpened(mr, router.push, "Update MR");
       setReviewOpen(false);
