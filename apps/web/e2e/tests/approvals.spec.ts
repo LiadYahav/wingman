@@ -182,12 +182,10 @@ test.describe("Approve with the reviewed sha", () => {
 
   test("editing a new file commits it on the branch with the reviewed sha", async ({ page }) => {
     await open(page);
+    let current = DAY1_MR;
     await page.route("**/api/day1/approvals/42?repo=day1", async (r: Route) => {
-      if (r.request().method() === "PUT") {
-        await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail({ ...DAY1_MR, sha: "1111111111111111111111111111111111111111" })) });
-      } else {
-        await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail(DAY1_MR)) });
-      }
+      if (r.request().method() === "PUT") current = { ...DAY1_MR, sha: "1111111111111111111111111111111111111111" };
+      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail(current)) });
     });
     await go(page, "/approvals/day1-42");
 

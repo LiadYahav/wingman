@@ -265,8 +265,9 @@ function MRDetailContent() {
     refetchOnWindowFocus: false,
   });
 
+  /** Refresh the lists; this page's own detail is set or refetched by the caller. */
   const afterChange = () => {
-    queryClient.invalidateQueries({ queryKey: ["approvals"] });
+    queryClient.invalidateQueries({ queryKey: ["approvals"], predicate: (q) => q.queryKey[1] !== "detail" });
     queryClient.invalidateQueries({ queryKey: ["audit"] });
   };
 
