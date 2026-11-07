@@ -1,0 +1,85 @@
+# Advisories `npm audit` reports that are accepted for now, by GHSA id. This
+# list may only shrink: scripts/npm-audit.py fails on any advisory missing here
+# and on any entry npm no longer reports, so a fix removes its lines in the
+# same change. Regenerate the lines with `python3 scripts/npm-audit.py --list`;
+# only the first word of a line is read. Never add an entry without the reason
+# and the fix, as for each group below.
+#
+# Recorded 2026-11-07, after in-range lockfile updates (no package.json
+# change) cleared 83 of the 147 advisories reported before.
+
+# next 16.2.4 is pinned exactly in apps/web/package.json; next@16.4.5 fixes every one,
+# including the critical RCEs. postcss and sharp are next's own dependencies. Bump next and
+# eslint-config-next together, then check the UI and run the mocked E2E suite.
+GHSA-2464-fhr4-w9xw  next                       critical  fix: next@16.4.5  # Next.js: Unauthenticated Remote Code Execution in Image Optimization API when SVG files are used
+GHSA-267c-6grr-h53f  next                       high      fix: next@16.4.5  # Next.js has a Middleware / Proxy bypass in App Router applications via segment-prefetch routes
+GHSA-26hh-7cqf-hhc6  next                       high      fix: next@16.4.5  # Next.js has a Middleware / Proxy bypass in App Router applications via segment-prefetch routes - Incomplete Fix Follow-Up
+GHSA-2xp9-vwfh-vxw4  next                       critical  fix: next@16.4.5  # Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used
+GHSA-36qx-fr4f-26g5  next                       high      fix: next@16.4.5  # Next.js has a Middleware / Proxy bypass in Pages Router applications using i18n
+GHSA-39w2-rjm5-chcv  next                       low       fix: next@16.4.5  # Next.js has information disclosure in development server's Model Context Protocol endpoint
+GHSA-3g8h-86w9-wvmq  next                       low       fix: next@16.4.5  # Next.js's Middleware / Proxy redirects can be cache-poisoned
+GHSA-4633-3j49-mh5q  next                       moderate  fix: next@16.4.5  # Next.js: Cache confusion of response bodies for requests with bodies containing invalid UTF-8 byte sequences
+GHSA-492v-c6pp-mqqv  next                       high      fix: next@16.4.5  # Next.js has a Middleware / Proxy bypass through dynamic route parameter injection
+GHSA-4c39-4ccg-62r3  next                       moderate  fix: next@16.4.5  # Next.js: Unbounded Server Action payload in Edge runtime
+GHSA-4jqv-mc3x-m676  next                       moderate  fix: next@16.4.5  # Next.js has cache poisoning of SSG and ISR pages in self-hosted applications
+GHSA-673q-mjm6-r5xr  next                       critical  fix: next@16.4.5  # Next.js: Unauthenticated Remote Code Execution in `use cache` functions returning typed arrays
+GHSA-68g3-v927-f742  next                       moderate  fix: next@16.4.5  # Next.js: Cache confusion of response bodies for requests with bodies
+GHSA-6gpp-xcg3-4w24  next                       high      fix: next@16.4.5  # Next.js: Middleware / Proxy bypass in App Router applications using Turbopack and single locale
+GHSA-89xv-2m56-2m9x  next                       high      fix: next@16.4.5  # Next.js: Server-Side Request Forgery in Server Actions on custom servers
+GHSA-8h8q-6873-q5fj  next                       high      fix: next@16.4.5  # Next.js Vulnerable to Denial of Service with Server Components
+GHSA-955p-x3mx-jcvp  next                       moderate  fix: next@16.4.5  # Next.js: Unauthenticated disclosure of internal Server Function endpoints
+GHSA-c4j6-fc7j-m34r  next                       high      fix: next@16.4.5  # Next.js vulnerable to server-side request forgery in applications using WebSocket upgrades
+GHSA-cjq9-62q9-8jv4  next                       high      fix: next@16.4.5  # Next.js has Server-Side Request Forgery in Image Optimization
+GHSA-f87g-xv8r-7p7x  next                       moderate  fix: next@16.4.5  # Next.js has information disclosure in App Router metadata image routes via dynamicParams bypass
+GHSA-ffhc-5mcf-pf4q  next                       moderate  fix: next@16.4.5  # Next.js vulnerable to cross-site scripting in App Router applications using CSP nonces
+GHSA-gx5p-jg67-6x7h  next                       moderate  fix: next@16.4.5  # Next.js has cross-site scripting in beforeInteractive scripts with untrusted input
+GHSA-h64f-5h5j-jqjh  next                       moderate  fix: next@16.4.5  # Next.js has a Denial of Service in the Image Optimization API
+GHSA-m99w-x7hq-7vfj  next                       high      fix: next@16.4.5  # Next.js: Denial of Service in App Router using Server Actions
+GHSA-mcj8-r9mp-w47p  next                       moderate  fix: next@16.4.5  # Next.js has cache poisoning in SSG/ISR rendering that leads to cross-user content substitution and persistent denial of service
+GHSA-mg66-mrh9-m8jx  next                       high      fix: next@16.4.5  # Next.js vulnerable to Denial of Service via connection exhaustion in applications using Cache Components
+GHSA-p293-qw3h-jr36  next                       critical  fix: next@16.4.5  # Next.js: Unauthenticated Remote Code Execution on windows-hosted servers
+GHSA-p3m5-59mp-jv5r  next                       high      fix: next@16.4.5  # Next.js: Denial of Service in App Router using Server Actions
+GHSA-p9j2-gv94-2wf4  next                       high      fix: next@16.4.5  # Next.js: Server-Side Request Forgery in rewrites via attacker-controlled destination hostname
+GHSA-q8wf-6r8g-63ch  next                       moderate  fix: next@16.4.5  # Next.js: Denial of Service in the Image Optimization API using SVGs
+GHSA-vcvr-r3jv-pc5j  next                       critical  fix: next@16.4.5  # Next.js: Remote Code Execution in next/og ImageResponse
+GHSA-vfv6-92ff-j949  next                       low       fix: next@16.4.5  # Next.js vulnerable to cache poisoning via collisions in React Server Component cache-busting
+GHSA-wfc6-r584-vfw7  next                       moderate  fix: next@16.4.5  # Next.js vulnerable to cache poisoning in React Server Component responses
+GHSA-6g55-p6wh-862q  postcss                    high      fix: next@16.4.5  # PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments
+GHSA-fxqj-rqcc-2cmp  postcss                    moderate  fix: next@16.4.5  # PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset
+GHSA-qx2v-qp2m-jg93  postcss                    moderate  fix: next@16.4.5  # PostCSS has XSS via Unescaped </style> in its CSS Stringify Output
+GHSA-r28c-9q8g-f849  postcss                    high      fix: next@16.4.5  # PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure
+GHSA-f88m-g3jw-g9cj  sharp                      high      fix: next@16.4.5  # sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591
+GHSA-rgj7-g3m4-5g8c  sharp                      high      fix: next@16.4.5  # sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545
+GHSA-wq5f-xc86-pv6w  sharp                      high      fix: next@16.4.5  # sharp : Vulnerability in librsvg dependency CVE-2026-96889
+
+# Reached only through monaco-editor 0.56.0 (the peer @monaco-editor/react installs),
+# which pins dompurify exactly. Fixed by a monaco-editor update, a runtime UI change
+# that belongs in a web change with the editor checked by hand.
+GHSA-39q2-94rc-95cp  dompurify                  moderate  fix: an in-range update  # DOMPurify's ADD_TAGS function form bypasses FORBID_TAGS due to short-circuit evaluation
+GHSA-55q2-fjhq-7xh7  dompurify                  moderate  fix: an in-range update  # DOMPurify: IN_PLACE hook removal leaves a detached subtree executable, causing XSS
+GHSA-6688-9rhm-gjv2  dompurify                  low       fix: an in-range update  # DOMPurify: IN_PLACE returns a force-removed rawtext root whose text carries attacker markup — pure HTML reparse executes
+GHSA-76mc-f452-cxcm  dompurify                  moderate  fix: an in-range update  # DOMPurify: Hook mutation of `data.allowedTags` / `data.allowedAttributes` permanently pollutes `DEFAULT_ALLOWED_TAGS` / `DEFAULT_ALLOWED_ATTR`
+GHSA-c2j3-45gr-mqc4  dompurify                  low       fix: an in-range update  # DOMPurify: `CUSTOM_ELEMENT_HANDLING` bypasses `afterSanitizeElements` for allowed custom elements.
+GHSA-c6gr-qvv4-5v3f  dompurify                  low       fix: an in-range update  # DOMPurify: SMIL attributeName=href guard is skipped when PARSER_MEDIA_TYPE is application/xhtml+xml
+GHSA-cj63-jhhr-wcxv  dompurify                  moderate  fix: an in-range update  # DOMPurify USE_PROFILES prototype pollution allows event handlers
+GHSA-cjmm-f4jc-qw8r  dompurify                  moderate  fix: an in-range update  # DOMPurify ADD_ATTR predicate skips URI validation
+GHSA-cmwh-pvxp-8882  dompurify                  moderate  fix: an in-range update  # DOMPurify: Permanent `ALLOWED_ATTR` pollution via `setConfig()` bypassing the hook clone-guard (incomplete fix of the 3.4.7 hook-pollution patch)
+GHSA-crv5-9vww-q3g8  dompurify                  moderate  fix: an in-range update  # DOMPurify has a SAFE_FOR_TEMPLATES bypass in RETURN_DOM mode
+GHSA-gvmj-g25r-r7wr  dompurify                  low       fix: an in-range update  # DOMPurify: SAFE_FOR_TEMPLATES bypass - template expressions survive sanitization inside <template> content when using DOM output modes
+GHSA-h7mw-gpvr-xq4m  dompurify                  moderate  fix: an in-range update  # DOMPurify: FORBID_TAGS bypassed by function-based ADD_TAGS predicate (asymmetry with FORBID_ATTR fix)
+GHSA-h8r8-wccr-v5f2  dompurify                  moderate  fix: an in-range update  # DOMPurify is vulnerable to mutation-XSS via Re-Contextualization 
+GHSA-hpcv-96wg-7vj8  dompurify                  moderate  fix: an in-range update  # DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks
+GHSA-mrv2-3pqr-j5jr  dompurify                  high      fix: an in-range update  # DOMPurify IN_PLACE: hook that removes a parent or sibling leaves the detached subtree's event handlers armed (incomplete fix for GHSA-p98j-92pf-mc4p)
+GHSA-r47g-fvhr-h676  dompurify                  moderate  fix: an in-range update  # DOMPurify: IN_PLACE mode preserves attributes of a clobbered root element, allowing XSS via attacker-controlled root DOM
+GHSA-rp9w-3fw7-7cwq  dompurify                  moderate  fix: an in-range update  # DOMPurify IN_PLACE Sanitization Bypass via Attached Shadow Root Inside <template>.content
+GHSA-v2wj-7wpq-c8vv  dompurify                  moderate  fix: an in-range update  # DOMPurify contains a Cross-site Scripting vulnerability
+GHSA-v9jr-rg53-9pgp  dompurify                  moderate  fix: an in-range update  # DOMPurify: Prototype Pollution to XSS Bypass via CUSTOM_ELEMENT_HANDLING Fallback
+GHSA-vxr8-fq34-vvx9  dompurify                  low       fix: an in-range update  # DOMPurify: Trusted Types policy survives `clearConfig()` and can poison later `RETURN_TRUSTED_TYPE` output
+GHSA-x4vx-rjvf-j5p4  dompurify                  low       fix: an in-range update  # DOMPurify: `IN_PLACE` mode trusts attacker-controlled `nodeName` on live non-form nodes, allowing script retention and XSS via attacker-supplied DOM objects
+
+# Through the shadcn CLI (apps/web/package.json `dependencies`, though only its
+# tailwind.css is used at build time) and zod. npm's suggested fix (shadcn@1.0.0) is a
+# downgrade; the real fix is a shadcn release that moves them, or zod > 4.3.x.
+GHSA-gcqx-w48m-w2h4  deepmerge                  low       fix: shadcn@1.0.0 (semver major)  # deepmerge mergeObject() allows prototype poisoning of returned objects
+GHSA-g3hv-75wg-m249  minimatch                  moderate  fix: shadcn@1.0.0 (semver major)  # minimatch has potential denial of service via globparts amplification
+GHSA-mrhx-c7xc-m3w5  zod                        high      fix: shadcn@1.0.0 (semver major)  # Zod can exhaust memory while validating oversized constrained collections
