@@ -30,7 +30,7 @@ dev = [
 
 # ── pytest ──────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
-testpaths = ["packages/wingman-core/tests"]
+testpaths = ["packages/wingman-core/tests", "apps/day1-service/tests"]
 addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -43,7 +43,7 @@ filterwarnings = ["error"]
 # ── coverage ────────────────────────────────────────────────────────────────
 [tool.coverage.run]
 branch = true
-source = ["wingman_core"]
+source = ["wingman_core", "wingman_day1"]
 
 [tool.coverage.report]
 fail_under = 90
@@ -74,7 +74,7 @@ ignore = ["D203", "D212"]
 convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["wingman_core", "wingman_shared"]
+known-first-party = ["wingman_core", "wingman_shared", "wingman_day1"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Query", "fastapi.Depends", "fastapi.Header"]
@@ -94,7 +94,7 @@ blanket-ignore-comment = "error"
 
 # ── import-linter: the layer rules (ADR-0001) ───────────────────────────────
 [tool.importlinter]
-root_packages = ["wingman_core"]
+root_packages = ["wingman_core", "wingman_day1"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -136,3 +136,64 @@ forbidden_modules = [
     "wingman_core.infrastructure", "wingman_core.observability", "wingman_core.web",
     "fastapi", "starlette", "httpx",
 ]
+
+# ── day1 (same layers as core; only wingman_day1.main composes adapters) ─────
+
+[[tool.importlinter.contracts]]
+name = "day1 domain is pure: no I/O libraries and no outer layers"
+type = "forbidden"
+source_modules = ["wingman_day1.domain"]
+forbidden_modules = [
+    "wingman_day1.ports", "wingman_day1.application", "wingman_day1.infrastructure",
+    "wingman_day1.api", "wingman_day1.main", "wingman_day1.settings",
+    "wingman_core.ports", "wingman_core.application", "wingman_core.infrastructure",
+    "wingman_core.observability", "wingman_core.web", "wingman_core.testing",
+    "fastapi", "starlette", "httpx", "pydantic_settings", "prometheus_client",
+]
+
+[[tool.importlinter.contracts]]
+name = "day1 ports depend only on the domain"
+type = "forbidden"
+source_modules = ["wingman_day1.ports"]
+forbidden_modules = [
+    "wingman_day1.application", "wingman_day1.infrastructure", "wingman_day1.api",
+    "wingman_day1.main", "wingman_core.infrastructure", "wingman_core.web",
+    "fastapi", "starlette", "httpx",
+]
+
+[[tool.importlinter.contracts]]
+name = "day1 application depends only on the domain and ports"
+type = "forbidden"
+source_modules = ["wingman_day1.application"]
+forbidden_modules = [
+    "wingman_day1.infrastructure", "wingman_day1.api", "wingman_day1.main",
+    "wingman_day1.settings", "wingman_core.infrastructure", "wingman_core.observability",
+    "wingman_core.web", "fastapi", "starlette", "httpx",
+]
+
+[[tool.importlinter.contracts]]
+name = "day1 infrastructure does not depend on the application or the API"
+type = "forbidden"
+source_modules = ["wingman_day1.infrastructure"]
+forbidden_modules = [
+    "wingman_day1.application", "wingman_day1.api", "wingman_day1.main",
+    "wingman_core.web", "fastapi", "starlette",
+]
+
+[[tool.importlinter.contracts]]
+name = "day1 API reaches adapters only through the composition root"
+type = "forbidden"
+source_modules = ["wingman_day1.api"]
+forbidden_modules = [
+    "wingman_day1.infrastructure", "wingman_day1.main", "wingman_core.infrastructure",
+    "httpx",
+]
+# wingman_core.web.auth verifies tokens with core's SessionTokens; that indirect
+# import is core's business. The API itself must not name an adapter.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "wingman_day1 does not import wingman_day2"
+type = "forbidden"
+source_modules = ["wingman_day1"]
+forbidden_modules = ["wingman_day2"]
