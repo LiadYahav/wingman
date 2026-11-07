@@ -1,8 +1,8 @@
 # Notes: gitops-day2-prod + kubevirt-workflows, and what they mean for Wingman day2
 
 Paths below are relative to:
-- `ECO = /private/tmp/claude-501/-Users-roiblum-Downloads-scripts-wingman/60427645-e4b9-4b8e-94ad-b88eed448a81/scratchpad/eco`
-- `WM  = /Users/roiblum/Downloads/scripts/wingman`
+- `ECO = a local clone of the team-redbull repos`
+- `WM  = this repository`
 
 No secrets were printed. Where they exist: the Argo scmProvider token secret `gitops-day2` (key `token`, namespace
 `openshift-gitops` on prod-hub; referenced in `ECO/gitops-day2-prod/argocd-day2-platform/groups/templates/groupsAppset.yaml`);

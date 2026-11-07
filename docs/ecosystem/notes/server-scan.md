@@ -1,6 +1,6 @@
 # server-scan — notes for the Wingman modernization
 
-Repo: `scratchpad/eco/server-scan` (read-only clone, `team-redbull/server-scan`, last commit f140914).
+Repo: `team-redbull/server-scan` (read-only clone, `team-redbull/server-scan`, last commit f140914).
 All paths below are relative to that repo unless they start with `apps/` (= Wingman).
 Live: `<sandbox URL, see CLAUDE.local.md>` (probed with GET only).
 

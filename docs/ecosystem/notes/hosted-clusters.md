@@ -1,8 +1,8 @@
 # Hosted-cluster setup today: herzi, hostedclusters-setup chart, stack-export GitOps
 
 Scope: how a hosted cluster gets set up in the new ecosystem, and what Wingman day1 should produce.
-Paths: `ECO=/private/tmp/claude-501/-Users-roiblum-Downloads-scripts-wingman/60427645-e4b9-4b8e-94ad-b88eed448a81/scratchpad/eco`,
-`SE=/Users/roiblum/Downloads/stack-export`, `WM=/Users/roiblum/Downloads/scripts/wingman`.
+Paths: `ECO=a local clone of the team-redbull repos`,
+`SE=~/Downloads/stack-export (local, private)`, `WM=this repository`.
 Secrets, tokens, pull secrets and certificates are mentioned by location only.
 
 ---

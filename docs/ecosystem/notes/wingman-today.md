@@ -1,6 +1,6 @@
 # Wingman today — precise map (as of branch roiblum/feat-web-modern-ui, HEAD 47b0e02)
 
-Repo: /Users/roiblum/Downloads/scripts/wingman. Paths below are relative to it.
+Repo: this repository. Paths below are relative to it.
 Last real feature work: May 2026 (PR #1 infraenv dropdown merged ~2026-05-22). Nov 2026 commits are UI-theme + e2e only.
 
 Architecture in one line: Next.js UI → nginx → two FastAPI services (day1, day2) → GitLab (only state store, no DB).

@@ -1,9 +1,9 @@
 # segments-manager — notes for the Wingman modernization
 
-Repo: `scratchpad/eco/segments-manager` (team-redbull/segments-manager, HEAD `a4edc12`, 2026-10-11).
+Repo: `team-redbull/segments-manager` (team-redbull/segments-manager, HEAD `a4edc12`, 2026-10-11).
 Live: `<sandbox URL, see CLAUDE.local.md>`
 (probed with GET only on 2026-11-07; Swagger at `/docs`, schema at `/openapi.json`, title "Segments Manager API" 0.1.0).
-Raw live captures: `scratchpad/live-sm/*.json`.
+Raw live captures: `a local scratch folder: live-sm/*.json`.
 
 > `.planning/**` is STALE: it describes the NetBox/pynetbox + VRF era (March 2026). The current code is MongoDB,
 > no NetBox, no VRF, no IPAM. Trust `CLAUDE.md`, `README.md`, `ARCHITECTURE.md` and `src/`.

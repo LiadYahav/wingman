@@ -2,10 +2,10 @@
 
 Sources:
 - Repo `github.com/team-redbull/workflows`, read-only clone at
-  `/private/tmp/claude-501/-Users-roiblum-Downloads-scripts-wingman/60427645-e4b9-4b8e-94ad-b88eed448a81/scratchpad/eco/workflows`.
+  `team-redbull/workflows`.
   It is a **shallow clone of `main` only**: 50 commits, 2026-10-31 to 2026-11-05, head `00b3324`. Remote branches are not visible.
 - Live API: `<sandbox URL, see CLAUDE.local.md>`. OpenAPI saved to
-  `/private/tmp/claude-501/-Users-roiblum-Downloads-scripts-wingman/60427645-e4b9-4b8e-94ad-b88eed448a81/scratchpad/notes/workflows-orchestrator-openapi.json`
+  `docs/ecosystem/notes/workflows-orchestrator-openapi.json`
   ("Cluster Orchestrator API" 0.1.0, OpenAPI 3.1, **25 operations / 38 schemas, no securitySchemes**).
 - Live docs: `<sandbox URL, see CLAUDE.local.md>`. Deployed tag `v1.0.71`, byte-identical to the repo's `docs/site` apart from the version stamp.
 - Only GETs were made against live systems. Nothing was started, signalled or cancelled.
@@ -57,7 +57,7 @@ Key rationale files: `README.md` (61 KB), `CLAUDE.md` (108 KB; §2 naming/API, �
 | vm-lifecycle-worker | Chart written 2026-11-05, **not on redbull-platform main yet**. Also needs the kv-capacity / kv-vm-api agents on each KubeVirt cluster; until then runs wait with every cluster `no-agent`. |
 | cluster-upgrade limbs (3) | **No services entry; installed by hand on the sandbox.** Docs page: "Built, and run on a sandbox HostedCluster — not in production yet" (`docs/site/cluster-upgrade/upgrade-cluster.html`). |
 
-**Live sandbox Temporal, as seen by GET `/workflows/runs?workflow_type=…` on 2026-11-07** (saved under `/private/tmp/claude-501/-Users-roiblum-Downloads-scripts-wingman/60427645-e4b9-4b8e-94ad-b88eed448a81/scratchpad/live-runs/`):
+**Live sandbox Temporal, as seen by GET `/workflows/runs?workflow_type=…` on 2026-11-07** (saved under `a local scratch folder`):
 - Runs exist only for cluster-upgrade:
   - `UpgradeClusterWorkflow`: 8 runs, all id `upgrade-cluster-ocp4-upgrade-demo` (3 COMPLETED, 5 CONTINUED_AS_NEW), 2026-10-31 to 11-01.
   - `UpgradeControlPlaneWorkflow`: 3 runs.
