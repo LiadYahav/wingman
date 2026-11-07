@@ -4,12 +4,20 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Fonts are system stacks: no webfont download, no FOUT, safe for air-gapped builds. */
+@theme static {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-grotesk: var(--font-sans);
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* Motion */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
-  --font-heading: var(--font-heading);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,152 +47,199 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.5);
-  --radius-md: calc(var(--radius) * 0.75);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.5);
-  --radius-2xl: calc(var(--radius) * 2);
-  /* Status colors */
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  /* Status colors. Base = dots/icons/fills; -fg = readable text on a tint of the base (use bg-status-x/15). */
   --color-status-ready: var(--status-ready);
+  --color-status-ready-fg: var(--status-ready-fg);
   --color-status-provisioning: var(--status-provisioning);
+  --color-status-provisioning-fg: var(--status-provisioning-fg);
   --color-status-error: var(--status-error);
+  --color-status-error-fg: var(--status-error-fg);
   --color-status-warning: var(--status-warning);
+  --color-status-warning-fg: var(--status-warning-fg);
   --color-status-deleting: var(--status-deleting);
+  --color-status-deleting-fg: var(--status-deleting-fg);
+  --shadow-card: var(--shadow-card);
+  --shadow-float: var(--shadow-float);
 }
 
+/* ── Light ─────────────────────────────────────────────────────────── */
 :root {
-  /* ── Monday.com Vibe — Light Theme ───────────────────────── */
+  --radius: 0.625rem;
 
-  /* Page background — Monday.com's #f6f7fb */
-  --background: oklch(0.975 0.005 270);
-  --foreground: oklch(0.304 0.01 270);        /* #323338 */
+  --background: oklch(0.985 0.002 260);
+  --foreground: oklch(0.21 0.012 260);
 
-  /* Cards — white, elevated against bg */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.304 0.01 270);
-
+  --card-foreground: oklch(0.21 0.012 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.304 0.01 270);
+  --popover-foreground: oklch(0.21 0.012 260);
 
-  /* Primary — Monday.com's signature blue #0073ea */
-  --primary: oklch(0.546 0.18 250);
-  --primary-foreground: oklch(1 0 0);
+  --primary: oklch(0.55 0.21 262);
+  --primary-foreground: oklch(0.99 0 0);
 
-  --secondary: oklch(0.96 0.005 270);
-  --secondary-foreground: oklch(0.304 0.01 270);
+  --secondary: oklch(0.96 0.004 260);
+  --secondary-foreground: oklch(0.26 0.012 260);
+  --muted: oklch(0.962 0.004 260);
+  --muted-foreground: oklch(0.5 0.012 260);
+  --accent: oklch(0.955 0.01 262);
+  --accent-foreground: oklch(0.26 0.012 260);
 
-  --muted: oklch(0.925 0.008 260);            /* #e6e9ef */
-  --muted-foreground: oklch(0.53 0.015 270);  /* #676879 */
+  --destructive: oklch(0.58 0.21 25);
 
-  --accent: oklch(0.925 0.008 260);
-  --accent-foreground: oklch(0.304 0.01 270);
+  --border: oklch(0.915 0.005 260);
+  --input: oklch(0.89 0.006 260);
+  --ring: oklch(0.55 0.21 262 / 55%);
 
-  /* Red for destructive — Monday.com's #df2f4a */
-  --destructive: oklch(0.55 0.2 15);
+  --chart-1: oklch(0.55 0.21 262);
+  --chart-2: oklch(0.62 0.15 152);
+  --chart-3: oklch(0.68 0.16 78);
+  --chart-4: oklch(0.6 0.21 25);
+  --chart-5: oklch(0.58 0.17 300);
 
-  --border: oklch(0.86 0.015 265);            /* #d0d4e4 */
-  --input: oklch(0.86 0.015 265);
-  --ring: oklch(0.546 0.18 250);
+  /* Status: hues at L~0.62 read as equally prominent; -fg clears AA on a 15% tint. */
+  --status-ready: oklch(0.62 0.15 152);
+  --status-ready-fg: oklch(0.42 0.12 152);
+  --status-provisioning: oklch(0.62 0.15 245);
+  --status-provisioning-fg: oklch(0.45 0.16 250);
+  --status-error: oklch(0.6 0.21 25);
+  --status-error-fg: oklch(0.5 0.19 25);
+  --status-warning: oklch(0.72 0.16 78);
+  --status-warning-fg: oklch(0.48 0.12 70);
+  --status-deleting: oklch(0.62 0.02 260);
+  --status-deleting-fg: oklch(0.45 0.015 260);
 
-  /* Charts */
-  --chart-1: oklch(0.546 0.18 250);   /* blue */
-  --chart-2: oklch(0.72 0.2 155);     /* green */
-  --chart-3: oklch(0.78 0.15 75);     /* orange */
-  --chart-4: oklch(0.55 0.2 15);      /* red */
-  --chart-5: oklch(0.65 0.18 300);    /* purple */
+  /* Sidebar blends into the page instead of being a heavy navy slab. */
+  --sidebar: oklch(0.975 0.003 260);
+  --sidebar-foreground: oklch(0.38 0.012 260);
+  --sidebar-primary: oklch(0.55 0.21 262);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.93 0.008 262);
+  --sidebar-accent-foreground: oklch(0.21 0.012 260);
+  --sidebar-border: oklch(0.915 0.005 260);
+  --sidebar-ring: oklch(0.55 0.21 262 / 55%);
 
-  --radius: 0.5rem;  /* 8px — Monday.com base radius */
-
-  /* Status colors — Monday.com's exact palette */
-  --status-ready: oklch(0.72 0.2 155);         /* #00c875 green */
-  --status-provisioning: oklch(0.65 0.15 250); /* #579bfc blue */
-  --status-error: oklch(0.55 0.2 15);          /* #df2f4a red */
-  --status-warning: oklch(0.78 0.15 75);       /* #fdab3d orange */
-  --status-deleting: oklch(0.62 0.02 270);     /* gray */
-
-  /* Sidebar — Monday.com dark workspace panel #292f4c */
-  --sidebar: oklch(0.258 0.042 270);
-  --sidebar-foreground: oklch(0.82 0.01 270);  /* #c3c6d4 */
-  --sidebar-primary: oklch(0.546 0.18 250);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.32 0.04 270);
-  --sidebar-accent-foreground: oklch(0.95 0.008 270);
-  --sidebar-border: oklch(0.34 0.04 270);
-  --sidebar-ring: oklch(0.546 0.18 250);
+  --shadow-card: 0 1px 2px oklch(0.2 0.02 260 / 5%), 0 0 0 1px oklch(0.2 0.02 260 / 3%);
+  --shadow-float: 0 8px 28px oklch(0.2 0.02 260 / 12%), 0 2px 6px oklch(0.2 0.02 260 / 6%);
 }
 
+/* ── Dark (default) ────────────────────────────────────────────────── */
 .dark {
-  /* ── Monday.com Vibe — Dark Theme ───────────────────────── */
+  color-scheme: dark;
 
-  --background: oklch(0.185 0.035 270);        /* #181b34 */
-  --foreground: oklch(0.878 0.008 260);        /* #d5d8df */
+  --background: oklch(0.17 0.006 260);
+  --foreground: oklch(0.95 0.003 260);
 
-  --card: oklch(0.295 0.035 270);              /* #30324e */
-  --card-foreground: oklch(0.878 0.008 260);
+  --card: oklch(0.21 0.007 260);
+  --card-foreground: oklch(0.95 0.003 260);
+  --popover: oklch(0.235 0.008 260);
+  --popover-foreground: oklch(0.95 0.003 260);
 
-  --popover: oklch(0.295 0.035 270);
-  --popover-foreground: oklch(0.878 0.008 260);
+  --primary: oklch(0.65 0.19 258);
+  --primary-foreground: oklch(0.99 0 0);
 
-  /* Monday.com keeps the same blue in dark mode */
-  --primary: oklch(0.6 0.18 250);
-  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.255 0.008 260);
+  --secondary-foreground: oklch(0.92 0.004 260);
+  --muted: oklch(0.255 0.008 260);
+  --muted-foreground: oklch(0.7 0.01 260);
+  --accent: oklch(0.28 0.02 262);
+  --accent-foreground: oklch(0.95 0.003 260);
 
-  --secondary: oklch(0.32 0.035 270);
-  --secondary-foreground: oklch(0.878 0.008 260);
+  --destructive: oklch(0.65 0.19 25);
 
-  --muted: oklch(0.32 0.035 270);
-  --muted-foreground: oklch(0.62 0.015 270);
+  --border: oklch(0.29 0.008 260);
+  --input: oklch(0.32 0.01 260);
+  --ring: oklch(0.65 0.19 258 / 55%);
 
-  --accent: oklch(0.32 0.035 270);
-  --accent-foreground: oklch(0.878 0.008 260);
+  --chart-1: oklch(0.65 0.19 258);
+  --chart-2: oklch(0.72 0.15 152);
+  --chart-3: oklch(0.78 0.15 78);
+  --chart-4: oklch(0.68 0.19 25);
+  --chart-5: oklch(0.7 0.15 300);
 
-  --destructive: oklch(0.62 0.19 15);
+  --status-ready: oklch(0.72 0.16 152);
+  --status-ready-fg: oklch(0.85 0.13 152);
+  --status-provisioning: oklch(0.7 0.15 245);
+  --status-provisioning-fg: oklch(0.85 0.11 245);
+  --status-error: oklch(0.67 0.2 25);
+  --status-error-fg: oklch(0.84 0.13 25);
+  --status-warning: oklch(0.8 0.15 78);
+  --status-warning-fg: oklch(0.87 0.13 78);
+  --status-deleting: oklch(0.65 0.02 260);
+  --status-deleting-fg: oklch(0.8 0.006 260);
 
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.6 0.18 250);
+  --sidebar: oklch(0.15 0.006 260);
+  --sidebar-foreground: oklch(0.75 0.01 260);
+  --sidebar-primary: oklch(0.65 0.19 258);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.24 0.015 262);
+  --sidebar-accent-foreground: oklch(0.96 0.003 260);
+  --sidebar-border: oklch(0.26 0.008 260);
+  --sidebar-ring: oklch(0.65 0.19 258 / 55%);
 
-  --chart-1: oklch(0.6 0.18 250);
-  --chart-2: oklch(0.72 0.2 155);
-  --chart-3: oklch(0.78 0.15 75);
-  --chart-4: oklch(0.62 0.19 15);
-  --chart-5: oklch(0.68 0.18 300);
-
-  /* Status colors — slightly brighter in dark for contrast */
-  --status-ready: oklch(0.75 0.2 155);
-  --status-provisioning: oklch(0.68 0.16 250);
-  --status-error: oklch(0.62 0.19 15);
-  --status-warning: oklch(0.8 0.16 75);
-  --status-deleting: oklch(0.65 0.02 270);
-
-  /* Sidebar stays dark, slightly lighter in dark mode */
-  --sidebar: oklch(0.185 0.035 270);
-  --sidebar-foreground: oklch(0.78 0.012 270);
-  --sidebar-primary: oklch(0.6 0.18 250);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.25 0.04 270);
-  --sidebar-accent-foreground: oklch(0.9 0.01 270);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.6 0.18 250);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 40%);
+  --shadow-float: 0 16px 40px oklch(0 0 0 / 50%), 0 2px 8px oklch(0 0 0 / 30%);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "cv11", "ss01";
-    font-variation-settings: "opsz" 32;
-  }
   html {
     @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading, var(--font-sans));
+    letter-spacing: -0.01em;
+    text-wrap: balance;
   }
   button {
     cursor: pointer;
     user-select: none;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 30%, transparent);
+  }
+  /* Slim, theme-aware scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+  }
+}
+
+/* Subtle ambient glow behind the page content in dark mode. */
+.dark body {
+  background-image:
+    radial-gradient(1100px 520px at 100% -8%, oklch(0.24 0.04 262 / 55%), transparent 60%),
+    radial-gradient(800px 420px at -8% 0%, oklch(0.2 0.02 262 / 50%), transparent 55%);
+  background-attachment: fixed;
+}
+
+/* Numeric columns align digit-for-digit. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Remove movement, keep feedback (colour/opacity transitions still run). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

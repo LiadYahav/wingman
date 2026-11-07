@@ -263,11 +263,11 @@ export default function SpecDetailPage() {
                       </td>
                       <td className="px-4 py-3">
                         {c.is_drifted ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-[#fdab3d]">
+                          <span className="inline-flex items-center gap-1 text-xs text-status-warning">
                             <AlertTriangle className="h-3 w-3" />Drifted
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-[#00c875]">
+                          <span className="inline-flex items-center gap-1 text-xs text-status-ready">
                             <CheckCircle2 className="h-3 w-3" />In sync
                           </span>
                         )}
@@ -287,7 +287,7 @@ export default function SpecDetailPage() {
             <Skeleton className="h-32 w-full rounded-xl" />
           ) : driftResults?.length === 0 ? (
             <div className="bg-card rounded-xl border shadow-sm p-8 text-center">
-              <CheckCircle2 className="h-8 w-8 text-[#00c875] mx-auto mb-2" />
+              <CheckCircle2 className="h-8 w-8 text-status-ready mx-auto mb-2" />
               <p className="text-sm font-semibold">All clusters in sync</p>
               <p className="text-xs text-muted-foreground mt-1">No drift detected across any clusters using this spec</p>
             </div>
@@ -305,11 +305,11 @@ export default function SpecDetailPage() {
                     </Link>
                   </div>
                   {r.is_drifted ? (
-                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-[#fdab3d]/10 text-[#c07800] dark:text-[#fdab3d]">
+                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-status-warning/10 text-status-warning-fg">
                       <AlertTriangle className="h-3 w-3" />Drifted
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-[#00c875]/10 text-[#007038] dark:text-[#00c875]">
+                    <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-status-ready/10 text-status-ready-fg">
                       <CheckCircle2 className="h-3 w-3" />In sync
                     </span>
                   )}

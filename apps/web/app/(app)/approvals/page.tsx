@@ -14,11 +14,11 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 function RepoBadge({ repo }: { repo: string }) {
   const cls = repo === "day1"
-    ? "bg-[#0073ea]/10 text-[#0073ea] dark:bg-[#579bfc]/15 dark:text-[#579bfc]"
+    ? "bg-primary/10 text-primary dark:bg-status-provisioning/15 dark:text-status-provisioning"
     : repo === "day2"
-    ? "bg-[#00c875]/10 text-[#007038] dark:bg-[#00c875]/15 dark:text-[#00c875]"
+    ? "bg-status-ready/10 text-status-ready-fg dark:bg-status-ready/15 dark:text-status-ready"
     : repo === "specs"
-    ? "bg-[#9b51e0]/10 text-[#9b51e0] dark:bg-[#9b51e0]/15 dark:text-[#c490f0]"
+    ? "bg-chart-5/10 text-chart-5 dark:bg-chart-5/15 dark:text-[#c490f0]"
     : "bg-muted text-muted-foreground";
   return (
     <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", cls)}>
@@ -182,7 +182,7 @@ export default function ApprovalsPage() {
                           {mr.title}
                         </Link>
                         {mr.has_conflicts === true && (
-                          <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-[#df2f4a]/10 text-[#df2f4a]">
+                          <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-status-error/10 text-status-error">
                             Conflicted
                           </span>
                         )}
@@ -221,8 +221,8 @@ export default function ApprovalsPage() {
               <tr>
                 <td colSpan={5} className="px-4 py-16 text-center">
                   <div className="flex flex-col items-center gap-3">
-                    <div className="rounded-full bg-[#00c875]/10 dark:bg-[#00c875]/15 p-3">
-                      <CheckCircle2 className="h-7 w-7 text-[#00c875]" />
+                    <div className="rounded-full bg-status-ready/15 p-3">
+                      <CheckCircle2 className="h-7 w-7 text-status-ready" />
                     </div>
                     <div>
                       <p className="text-sm font-semibold">All caught up!</p>

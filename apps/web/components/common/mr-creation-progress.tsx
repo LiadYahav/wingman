@@ -34,7 +34,7 @@ export function MRCreationProgress() {
               key={i}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-4 py-2.5 transition-all duration-500",
-                done && "bg-[#00c875]/5",
+                done && "bg-status-ready/5",
                 active && "bg-primary/5",
                 !done && !active && "opacity-35",
               )}
@@ -42,13 +42,13 @@ export function MRCreationProgress() {
               <div
                 className={cn(
                   "rounded-full p-1.5 transition-colors duration-400",
-                  done ? "bg-[#00c875]/15" : active ? "bg-primary/12" : "bg-muted",
+                  done ? "bg-status-ready/15" : active ? "bg-primary/12" : "bg-muted",
                 )}
               >
                 <phase.icon
                   className={cn(
                     "h-3.5 w-3.5 transition-colors duration-400",
-                    done ? "text-[#00c875]" : active ? "text-primary" : "text-muted-foreground",
+                    done ? "text-status-ready" : active ? "text-primary" : "text-muted-foreground",
                   )}
                 />
               </div>
@@ -73,7 +73,7 @@ export function MRCreationProgress() {
                 </span>
               )}
               {done && (
-                <CheckCircle2 className="h-3.5 w-3.5 text-[#00c875] shrink-0 animate-in zoom-in-75 duration-200" />
+                <CheckCircle2 className="h-3.5 w-3.5 text-status-ready shrink-0 animate-in zoom-in-75 duration-200" />
               )}
             </div>
           );

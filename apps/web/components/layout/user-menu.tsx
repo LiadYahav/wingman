@@ -11,19 +11,17 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 
-// Monday.com-style avatar color per initial
+// Stable avatar color per initial, drawn from the theme palette
 function avatarColor(initial: string) {
   const colors = [
-    "bg-[#0073ea]",   // blue
-    "bg-[#00c875]",   // green
-    "bg-[#9b51e0]",   // purple
-    "bg-[#ff7575]",   // coral
-    "bg-[#fdab3d]",   // orange
-    "bg-[#33d391]",   // teal
-    "bg-[#e2445c]",   // red
-    "bg-[#579bfc]",   // light blue
+    "bg-primary",
+    "bg-status-ready",
+    "bg-chart-5",
+    "bg-status-error",
+    "bg-status-warning",
+    "bg-status-provisioning",
   ];
-  return colors[(initial.charCodeAt(0) - 65) % colors.length];
+  return colors[Math.abs(initial.charCodeAt(0) - 65) % colors.length];
 }
 
 export function UserMenu() {
@@ -51,7 +49,7 @@ export function UserMenu() {
         <span className="hidden sm:inline text-sm font-medium">{user.username}</span>
         <ChevronDown className="hidden sm:block h-3.5 w-3.5 text-muted-foreground" />
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-60 p-2 shadow-lg">
+      <PopoverContent align="end" className="w-60 p-2 shadow-float">
         {/* User info */}
         <div className="px-2 py-2">
           <div className="flex items-center gap-2.5">

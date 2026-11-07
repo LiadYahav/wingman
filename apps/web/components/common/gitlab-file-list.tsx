@@ -28,9 +28,9 @@ function FileRow({ file }: { file: GitLabFile }) {
         )}
         onClick={() => hasContent && setOpen((v) => !v)}
       >
-        <FilePlus className="h-3.5 w-3.5 text-[#00c875] shrink-0" />
+        <FilePlus className="h-3.5 w-3.5 text-status-ready shrink-0" />
         <span className="flex-1 text-sm font-mono font-medium break-all min-w-0">{file.path}</span>
-        <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-[#00c875]/10 text-[#007038] dark:text-[#00c875] shrink-0">
+        <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-status-ready/10 text-status-ready-fg shrink-0">
           new
         </span>
         {hasContent && (
