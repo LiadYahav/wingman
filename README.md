@@ -390,12 +390,8 @@ All changes create Merge Requests instead of direct commits:
 
 ### Health Checks
 
-- Day1: `GET /healthz`
+- Day1: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
 - Day2: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
-
-### Cache Stats
-
-- Day1: `GET /api/day1/cache/stats`
 
 ### Logs
 

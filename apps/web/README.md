@@ -104,12 +104,16 @@ components/
 └── specs/              # Spec-specific components
 
 lib/
-├── api-client.ts       # Typed API client
+├── api-client.ts       # Typed API client; errors are RFC 9457 problems (ApiError)
+├── approvals.ts        # How an MR is addressed: day1-<iid>, specs-<iid>, day2-<team>-<iid>
+├── live-status.ts      # Live HostedCluster status (501 FEATURE_DISABLED = status is off)
 ├── utils.ts            # Utility functions
 └── diff.ts             # Diff computation utilities
 
 types/
-└── index.ts            # TypeScript type definitions
+├── index.ts            # Shared types (auth, MRs, audit) and re-exports
+├── problem.ts          # RFC 9457 problem bodies and error codes
+└── day1.ts             # day1 service shapes (clusters, specs, MCEs, drift)
 ```
 
 ## Environment Variables

@@ -509,9 +509,9 @@ tuningConfig: {{ np.tuning_config | default("") }}`}
               </div>
             </Callout>
             <Callout type="warning" title="Editing a spec affects future clusters only">
-              Changing the nodepool count in a spec does not update clusters that already exist — those
-              will show as drifted. You must explicitly re-render each existing cluster if you want them
-              to follow the new structure.
+              Changing a spec does not touch clusters that already exist: their files keep what they were
+              rendered with, and nothing re-renders them (the inputs of a render are not stored). To change
+              an existing cluster, edit its file from the cluster page.
             </Callout>
           </div>
         </section>
@@ -749,15 +749,15 @@ mcFiles:
         <section>
           <SectionHeader id="drift" icon={RefreshCw} title="Drift Detection" subtitle="Know when your clusters diverge from their spec" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            A cluster is <strong>drifted</strong> when its committed manifest no longer matches what the
-            current spec would render. Common causes:
+            A cluster linked to a spec is <strong>drifted</strong> when an addon its spec lists is missing
+            on the cluster or installed at another version. Every cluster has one of four states:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             {[
-              { title: "Spec updated", desc: "Someone edited the spec after you created the cluster. The cluster still runs old config." },
-              { title: "Direct Git edit", desc: "Someone edited the cluster's manifest directly in GitLab, bypassing Wingman." },
-              { title: "Addon drift", desc: "An addon's team defaults changed and the cluster overrides no longer produce the expected result." },
-              { title: "Version skew", desc: "The spec's OpenShift version was bumped but the cluster was not re-rendered." },
+              { title: "In sync", desc: "Every addon of the spec version the cluster was created from is installed at that version." },
+              { title: "Drifted", desc: "An addon is missing or at another version. The Drift tab lists each one with a fix." },
+              { title: "Unknown", desc: "Drift could not be determined: day2 did not answer, or the spec is gone. It is never shown as in sync." },
+              { title: "Not linked", desc: "The cluster was not created from a spec, so there is nothing to drift from." },
             ].map(({ title, desc }) => (
               <div key={title} className="rounded-xl border bg-card p-4">
                 <p className="text-sm font-semibold mb-1">{title}</p>
@@ -769,16 +769,17 @@ mcFiles:
           <h3 className="text-base font-semibold mb-3">Viewing and resolving drift</h3>
           <div className="space-y-3">
             <Step n={1} title="Find drifted clusters">
-              Drifted clusters are highlighted on the <strong>Clusters</strong> list page with a red
-              indicator. The spec detail page also lists which of its clusters are drifted.
+              The <strong>Clusters</strong> list shows each cluster&apos;s drift state and filters by it;
+              the dashboard counts drifted and unknown clusters separately. A spec&apos;s detail page lists
+              the drift of every cluster created from it.
             </Step>
-            <Step n={2} title="Review the diff">
-              Open the cluster → <strong>Drift</strong> tab to see a unified diff of what changed
-              (similar to <InlineCode>git diff</InlineCode>).
+            <Step n={2} title="Review the addons">
+              Open the cluster → <strong>Drift</strong> tab to see which addons are missing or at another
+              version, and what the spec requires.
             </Step>
             <Step n={3} title="Resolve">
-              Either re-render the cluster (apply the current spec) or edit specific values to reconcile.
-              Both paths open a GitLab MR.
+              Install or update each addon from the Drift tab (with the values requested at create). Each
+              fix opens a day2 MR for approval.
             </Step>
           </div>
         </section>
@@ -1278,8 +1279,8 @@ namespace:     cert-manager ← chart default (Helm chart ships this)`}
                 ),
               },
               {
-                q: "Cluster shows as drifted immediately after creation",
-                a: "The spec was edited between when you opened the creation form and when the MR was merged. Re-render the cluster from the current spec.",
+                q: "Cluster shows as drifted right after creation",
+                a: "Drift compares the spec's addons with what day2 has installed. Until the addon MRs are opened and merged, a new cluster's spec addons are missing: install them from the cluster's Drift tab.",
               },
               {
                 q: "MR was merged but cluster is still not provisioned",
