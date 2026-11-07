@@ -30,11 +30,13 @@ class SpecService:
     def __init__(
         self,
         gitlab_specs: GitLabClient,
+        gitlab_day1: GitLabClient,
         path_resolver: PathResolver,
         cache: CacheManager,
         default_branch: str = "main",
     ) -> None:
         self.gl = gitlab_specs
+        self.gl_day1 = gitlab_day1
         self.pr = path_resolver
         self.cache = cache
         self.default_branch = default_branch
@@ -350,3 +352,42 @@ class SpecService:
         # or the router delegates to cluster_service. Service returns spec name filter.
         # Left for router to compose from cluster_service.list_clusters()
         raise NotImplementedError("Compose via cluster_service in router")
+
+    # ── Extra config file picker ───────────────────────────────────────────────
+
+    async def list_extra_configs(self, folder: str) -> list[str]:
+        """List config names available for the extra_configs nodepool field.
+
+        Reads file names from *folder* inside the Day1 GitLab project
+        (non-recursive, files only — sub-directories are excluded at the
+        GitLab API level) and returns plain names with extensions stripped,
+        ready for the cluster creation form.
+
+        Rules applied:
+          - Files ending with ".bu" are excluded (Butane source files).
+          - Extensions are stripped: "worker-chrony.yaml" → "worker-chrony".
+          - Result is sorted alphabetically.
+          - Returns an empty list when the folder doesn't exist or is empty.
+        """
+        async def _fetch() -> list[str]:
+            try:
+                # alist_files() filters type=="blob" — sub-directories never appear
+                names = await self.gl_day1.alist_files(path=folder, ref=self.default_branch)
+            except NotFoundError:
+                return []
+            except GitLabError as exc:
+                logger.warning("Failed to list extra configs from '%s': %s", folder, exc)
+                return []
+
+            result: list[str] = []
+            for name in names:
+                if name.endswith(".bu"):
+                    continue
+                # Strip extension: "worker-chrony.yaml" → "worker-chrony"
+                stem = name.rsplit(".", 1)[0] if "." in name else name
+                result.append(stem)
+
+            return sorted(result)
+
+        cache_key = f"day1:extra-configs:{folder}"
+        return await self.cache.get_or_fetch(cache_key, _fetch, ttl=60.0)

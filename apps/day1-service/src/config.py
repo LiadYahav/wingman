@@ -42,6 +42,21 @@ class Settings(BaseSettings):
     DAY1_CLUSTERS_PATH_TEMPLATE: str = "sites/{site}/mces/{mce}/hostedClusters"
     DAY1_CLUSTER_FILE_SUFFIX: str = ".yaml"
 
+    # ── Git file picker — extra_configs field only ────────────────────────────
+    # Folder path inside the Day1 repo whose files are offered as a selectable
+    # list for the extra_configs field on each nodepool during cluster creation.
+    # The default/standard configs (auto-generated per nodepool) are unaffected.
+    # Leave empty to disable the picker (extra_configs falls back to plain text).
+    # Sub-directories and files ending with ".bu" are always excluded.
+    # Example: "machineconfigs/extra"
+    GIT_FILE_EXTRA_CONFIGS_FOLDER: str = Field(
+        default="",
+        description=(
+            "Folder path in the Day1 repo containing extra config files for the "
+            "extra_configs nodepool field. Leave empty to disable the git file picker."
+        ),
+    )
+
     # ── Specs path templates (inside the Specs project) ──────────────────────
     # Specs live at {SPECS_ROOT_PATH}/{spec_name}.yaml
     SPECS_ROOT_PATH: str = "specs"

@@ -154,12 +154,14 @@ def get_cluster_service(
 
 def get_spec_service(
     gl_specs: Annotated[GitLabClient, Depends(get_gitlab_specs)],
+    gl_day1: Annotated[GitLabClient, Depends(get_gitlab_day1)],
     path_resolver: Annotated[PathResolver, Depends(get_path_resolver)],
     cache: Annotated[CacheManager, Depends(get_cache)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SpecService:
     return SpecService(
         gitlab_specs=gl_specs,
+        gitlab_day1=gl_day1,
         path_resolver=path_resolver,
         cache=cache,
         default_branch=settings.GITLAB_DEFAULT_BRANCH,

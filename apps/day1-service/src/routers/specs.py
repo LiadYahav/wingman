@@ -67,6 +67,24 @@ async def get_template_schema(
     return await spec_svc.get_template_schema(include_reserved=include_reserved)
 
 
+@router.get("/extra-configs", response_model=list[str])
+async def list_extra_configs(
+    spec_svc: SpecServiceDep,
+    settings: SettingsDep,
+    user: CurrentUser,
+) -> list[str]:
+    """Return the list of extra config names available for nodepool extra_configs.
+
+    Reads file names from the folder configured by GIT_FILE_EXTRA_CONFIGS_FOLDER
+    inside the Day1 repo. Sub-directories and .bu files are excluded; extensions
+    are stripped. Returns an empty list when the setting is not configured.
+    """
+    folder = settings.GIT_FILE_EXTRA_CONFIGS_FOLDER.strip()
+    if not folder:
+        return []
+    return await spec_svc.list_extra_configs(folder)
+
+
 @router.get("/{name}/history")
 async def get_spec_history(
     name: str,
