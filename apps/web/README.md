@@ -62,6 +62,10 @@ npm run test:e2e:ui
 
 # Run specific test file
 npx playwright test addon-configuration
+
+# The day2 pages against the real services, with the in-memory GitLab seeded
+# from dev/gitlab-fixtures (WINGMAN_GIT_BACKEND=fake) behind one origin
+PLAYWRIGHT_BASE_URL=http://localhost:8080 DEV_AUTH_SECRET=... npx playwright test --project=live live-day2
 ```
 
 ### Page Objects
