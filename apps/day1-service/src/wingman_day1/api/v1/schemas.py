@@ -23,7 +23,7 @@ from wingman_day1.application.clusters import ClusterFile
 from wingman_day1.application.drift import ClusterDrift
 from wingman_day1.application.sites import MceView
 from wingman_day1.application.specs import SpecEntry
-from wingman_day1.domain.addons import AddonDrift, RequestedAddon
+from wingman_day1.domain.addons import AddonDrift, RequestedAddon, VersionDifference
 from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata
@@ -639,11 +639,11 @@ class SpecOut(ClusterSpec):
 
 
 class AddonDriftOut(BaseModel):
-    """A spec addon not installed as the spec says."""
+    """A spec addon the cluster does not have; install it at the team default."""
 
     addon_name: str
     team: str
-    reason: Literal["missing", "version_mismatch"]
+    reason: Literal["missing"]
     expected_version: str
     installed_version: str
     override_values: dict[str, Any]
@@ -659,6 +659,25 @@ class AddonDriftOut(BaseModel):
             expected_version=drift.expected_version,
             installed_version=drift.installed_version,
             override_values=dict(drift.override_values),
+        )
+
+
+class VersionDifferenceOut(BaseModel):
+    """A spec addon installed at another version: information, not drift (ADR-0025)."""
+
+    addon_name: str
+    team: str
+    spec_version: str
+    installed_version: str
+
+    @classmethod
+    def of(cls, difference: VersionDifference) -> VersionDifferenceOut:
+        """From a version difference."""
+        return cls(
+            addon_name=difference.name,
+            team=difference.team,
+            spec_version=difference.spec_version,
+            installed_version=difference.installed_version,
         )
 
 
@@ -679,6 +698,9 @@ class ClusterDriftOut(BaseModel):
     current_spec_version: str | None
     unified_diff: str = ""
     addon_drift: list[AddonDriftOut]
+    """Spec addons the cluster does not have: what makes it ``drifted``."""
+    version_differences: list[VersionDifferenceOut] = Field(default_factory=list)
+    """Spec addons at another version; reported only, never fixed (ADR-0025)."""
     error: str | None
 
     @classmethod
@@ -694,6 +716,7 @@ class ClusterDriftOut(BaseModel):
             spec_version=drift.spec_version,
             current_spec_version=drift.current_spec_version,
             addon_drift=[AddonDriftOut.of(d) for d in drift.addon_drift],
+            version_differences=[VersionDifferenceOut.of(d) for d in drift.version_differences],
             error=drift.error,
         )
 

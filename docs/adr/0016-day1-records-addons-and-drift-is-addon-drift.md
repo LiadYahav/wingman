@@ -1,7 +1,7 @@
 # ADR-0016: Day1 records a spec's addons and their overrides; it never writes day2, and unknown drift is not "in sync"
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0025 (version differences)
 
 ## Context
 

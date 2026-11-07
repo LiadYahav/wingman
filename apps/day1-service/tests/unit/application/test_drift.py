@@ -88,16 +88,17 @@ async def test_an_installed_spec_addon_at_its_version_is_in_sync(
     assert (await context.drift.for_cluster(REF)).state is DriftState.IN_SYNC
 
 
-async def test_an_addon_at_another_version_is_a_mismatch(
+async def test_an_addon_at_another_version_is_reported_and_in_sync(
     support: Any, gitlab: InMemoryGitLab, hub: Any, identity: Any, clock: Any
 ) -> None:
     day2 = FakeDay2Addons({NEW: [InstalledAddon("redbull", "cluster-roles", "2.0.0")]})
     app = support.build_app(gitlab=gitlab, hub=hub, identity=identity, day2=day2, clock=clock)
     context: Day1Context = app.state.day1
     await create_merged(context, support)
-    [entry] = (await context.drift.for_cluster(REF)).addon_drift
-    assert entry.reason is AddonDriftReason.VERSION_MISMATCH
-    assert entry.installed_version == "2.0.0"
+    drift = await context.drift.for_cluster(REF)
+    assert drift.addon_drift == () and drift.state is DriftState.IN_SYNC
+    [difference] = drift.version_differences
+    assert (difference.name, difference.installed_version) == ("cluster-roles", "2.0.0")
 
 
 async def test_day2_down_makes_drift_unknown_not_in_sync(

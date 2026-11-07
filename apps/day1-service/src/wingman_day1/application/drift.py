@@ -3,7 +3,9 @@
 Day1 cannot re-render a cluster to compare files: no inputs are stored, and
 the file legitimately changes after create (CI and the allocate-segment
 workflow add keys, people edit it). So drift is the spec's day2 addons:
-each must be installed, at the spec's version. A cluster whose state cannot
+each must be installed. One installed at another version than the spec
+names is reported beside the verdict, never counted as drift (ADR-0025). A
+cluster whose state cannot
 be determined (its spec is gone or unreadable, day2 did not answer) is
 ``unknown``, never in sync (ADR-0004; herzi's "unknown is not zero").
 """
@@ -17,7 +19,12 @@ from enum import StrEnum
 
 from wingman_day1.application.clusters import ClusterFile, ClusterService
 from wingman_day1.application.specs import SpecCatalog, SpecEntry
-from wingman_day1.domain.addons import AddonDrift, RequestedAddon, addon_drift
+from wingman_day1.domain.addons import (
+    AddonDrift,
+    RequestedAddon,
+    VersionDifference,
+    compare_addons,
+)
 from wingman_day1.domain.errors import Day2UnavailableError
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.ports import Day2Addons
@@ -45,6 +52,9 @@ class ClusterDrift:
     """The spec version the cluster was created from."""
     current_spec_version: str | None = None
     addon_drift: tuple[AddonDrift, ...] = ()
+    """Spec addons the cluster does not have: the drift, which day2 can install."""
+    version_differences: tuple[VersionDifference, ...] = ()
+    """Spec addons at another version: reported only, never drift (ADR-0025)."""
     error: str | None = None
 
     @property
@@ -99,6 +109,7 @@ class DriftService:
             *,
             current: str | None = None,
             drift: tuple[AddonDrift, ...] = (),
+            differences: tuple[VersionDifference, ...] = (),
             error: str | None = None,
         ) -> ClusterDrift:
             return ClusterDrift(
@@ -108,6 +119,7 @@ class DriftService:
                 spec_version=provenance.spec_version,
                 current_spec_version=current,
                 addon_drift=drift,
+                version_differences=differences,
                 error=error,
             )
 
@@ -125,6 +137,8 @@ class DriftService:
             installed = await self._day2.installed(cluster.ref)
         except Day2UnavailableError as exc:
             return verdict(DriftState.UNKNOWN, current=current, error=f"day2 did not answer: {exc}")
-        drift = addon_drift(expected, installed, requested=provenance.requested_addons)
-        state = DriftState.DRIFTED if drift else DriftState.IN_SYNC
-        return verdict(state, current=current, drift=tuple(drift))
+        found = compare_addons(expected, installed, requested=provenance.requested_addons)
+        state = DriftState.DRIFTED if found.missing else DriftState.IN_SYNC
+        return verdict(
+            state, current=current, drift=found.missing, differences=found.version_differences
+        )

@@ -6,12 +6,14 @@ import pytest
 
 from wingman_core.domain.users import Role, User
 from wingman_day1.domain.addons import (
+    AddonComparison,
     AddonDrift,
     AddonDriftReason,
     AddonKey,
     InstalledAddon,
     RequestedAddon,
-    addon_drift,
+    VersionDifference,
+    compare_addons,
 )
 from wingman_day1.domain.changes import (
     ClusterAction,
@@ -46,21 +48,22 @@ def test_an_addon_key_prints_as_team_slash_name() -> None:
 def test_a_missing_addon_carries_the_values_requested_at_create() -> None:
     expected = [RequestedAddon("redbull", "cluster-roles", "main")]
     requested = [RequestedAddon("redbull", "cluster-roles", "main", {"replicas": 3})]
-    assert addon_drift(expected, [], requested=requested) == [
+    assert compare_addons(expected, [], requested=requested).missing == (
         AddonDrift(
             "redbull", "cluster-roles", AddonDriftReason.MISSING, "main", "", {"replicas": 3}
-        )
-    ]
+        ),
+    )
 
 
-def test_an_addon_at_another_version_is_a_mismatch() -> None:
-    drift = addon_drift(
+def test_an_addon_at_another_version_is_reported_not_drift() -> None:
+    found = compare_addons(
         [RequestedAddon("redbull", "cluster-roles", "2.1.0")],
         [InstalledAddon("redbull", "cluster-roles", "2.0.0")],
     )
-    assert drift == [
-        AddonDrift("redbull", "cluster-roles", AddonDriftReason.VERSION_MISMATCH, "2.1.0", "2.0.0")
-    ]
+    assert found.missing == ()
+    assert found.version_differences == (
+        VersionDifference("redbull", "cluster-roles", "2.1.0", "2.0.0"),
+    )
 
 
 def test_extra_installed_addons_are_not_drift() -> None:
@@ -68,15 +71,18 @@ def test_extra_installed_addons_are_not_drift() -> None:
         InstalledAddon("redbull", "cluster-roles", "main"),
         InstalledAddon("lynx", "backup", "1.0.0"),
     ]
-    assert addon_drift([RequestedAddon("redbull", "cluster-roles", "main")], installed) == []
+    assert (
+        compare_addons([RequestedAddon("redbull", "cluster-roles", "main")], installed)
+        == AddonComparison()
+    )
 
 
 def test_an_addon_is_matched_by_team_and_name_not_name_alone() -> None:
-    drift = addon_drift(
+    found = compare_addons(
         [RequestedAddon("redbull", "cluster-roles", "main")],
         [InstalledAddon("lynx", "cluster-roles", "main")],
     )
-    assert [d.reason for d in drift] == [AddonDriftReason.MISSING]
+    assert [d.reason for d in found.missing] == [AddonDriftReason.MISSING]
 
 
 # ── Status rules ─────────────────────────────────────────────────────────────
