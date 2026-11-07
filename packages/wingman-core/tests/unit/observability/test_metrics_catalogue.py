@@ -31,7 +31,7 @@ from wingman_core.web.metrics import install_metrics
 DOCS = Path(__file__).resolve().parents[5] / "docs" / "ops" / "metrics.md"
 
 EXPECTED = {
-    "wingman_build_info": ("gauge", {"service", "version", "commit"}),
+    "wingman_build_info": ("gauge", {"component", "version", "commit"}),
     "wingman_http_requests": ("counter", {"method", "route", "status_class"}),
     "wingman_http_request_duration_seconds": ("histogram", {"method", "route"}),
     "wingman_dependency_requests": ("counter", {"dependency", "operation", "outcome"}),
@@ -40,7 +40,7 @@ EXPECTED = {
 
 
 def make_metrics() -> WingmanMetrics:
-    return WingmanMetrics(CollectorRegistry(), service="day1", version="1.2.3", commit="abc1234")
+    return WingmanMetrics(CollectorRegistry(), component="day1", version="1.2.3", commit="abc1234")
 
 
 def sample(metrics: WingmanMetrics, name: str, **labels: str) -> float | None:
@@ -76,7 +76,7 @@ def test_alerted_outcomes_exist_at_zero_before_any_call() -> None:
         labels = {"dependency": "gitlab", "operation": "commit", "outcome": outcome}
         assert sample(metrics, "wingman_dependency_requests_total", **labels) == 0.0
     assert (
-        sample(metrics, "wingman_build_info", service="day1", version="1.2.3", commit="abc1234")
+        sample(metrics, "wingman_build_info", component="day1", version="1.2.3", commit="abc1234")
         == 1.0
     )
 

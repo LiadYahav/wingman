@@ -24,7 +24,7 @@ fails when this table and the code disagree.
 
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
-| `wingman_build_info` | gauge | `service`, `version`, `commit` | Always 1; which build is running. Version skew between day1, day2 and web shows here. |
+| `wingman_build_info` | gauge | `component`, `version`, `commit` | Always 1; which build is running. `component` is `day1` or `day2` (not `service`: Prometheus adds that as a target label). Version skew shows here. |
 | `wingman_http_requests_total` | counter | `method`, `route`, `status_class` | HTTP requests served. `status_class` is `2xx`..`5xx`. |
 | `wingman_http_request_duration_seconds` | histogram | `method`, `route` | Time to serve a request. |
 | `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`; `operation` is a GitLabPort method; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |

@@ -75,13 +75,15 @@ Explicit user instructions; violating one is a real mistake, not style.
   with `helm template` against both chart copies); fixtures; the
   `wingman-core` foundation (GitLab port, httpx adapter, in-memory fake,
   contract suite passing 27/27 on the fake and on GitLab CE 19.5.3, RFC 9457
-  errors, metrics, settings); CI and `scripts/gate.sh`; ADRs 0001-0010.
+  errors, metrics, settings, auth, cache, approvals); CI and
+  `scripts/gate.sh`; ADRs 0001-0011; monitoring in the chart (ServiceMonitor,
+  7 promtool-tested alerts with a runbook, a Grafana dashboard, all off by
+  default) with a test tying alerts and dashboard to the metric catalogue.
 - **Not done yet, in order:** (1) day1 rewrite on `wingman-core` against
   `gitops-day1/platform-config`; (2) day2 rewrite against the gitops-day2
   layout; (3) web pages for the new data; (4) end-to-end check against the
-  seeded local GitLab; (5) images installing from the lock, chart
-  hardening, ServiceMonitor, alert rules with promtool tests, Grafana
-  dashboard; (6) ecosystem features (servers per hosted cluster from
+  seeded local GitLab; (5) images installing from the lock (hash-pinned
+  per-service exports), chart hardening and a values schema; (6) ecosystem features (servers per hosted cluster from
   server-scan, workflow runs).
 
 ## Key technical facts (cross-cutting traps)

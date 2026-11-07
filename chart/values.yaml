@@ -249,3 +249,22 @@ clusterStatus:
 # ── Namespace ──────────────────────────────────────────────────────────────────
 # Override with --namespace on helm install
 namespace: ""  # defaults to .Release.Namespace
+
+# ── Monitoring (ADR-0010; docs/ops/metrics.md, docs/ops/runbook.md) ───────────
+# day1 and day2 serve /metrics on their own port (never through the Route).
+# Everything here needs the Prometheus Operator CRDs (monitoring.coreos.com);
+# on OpenShift, enable user-workload monitoring first. All off by default.
+monitoring:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}            # extra labels, if your Prometheus selects ServiceMonitors by label
+  prometheusRule:
+    enabled: false
+    labels: {}            # e.g. { role: alert-rules } if your Prometheus selects rules by label
+  grafanaDashboard:
+    enabled: false        # a ConfigMap for Grafana's dashboard sidecar
+    namespace: ""         # where the sidecar looks; defaults to the release namespace
+    label: grafana_dashboard
+    labelValue: "1"

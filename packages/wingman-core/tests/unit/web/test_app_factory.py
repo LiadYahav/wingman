@@ -24,7 +24,7 @@ def make_app(
     return create_base_app(
         title="t",
         version="0",
-        metrics=WingmanMetrics(CollectorRegistry(), service="t", version="0", commit="0"),
+        metrics=WingmanMetrics(CollectorRegistry(), component="t", version="0", commit="0"),
         session_tokens=SessionTokens("s" * 40, ttl=timedelta(hours=1)),
         readiness=readiness,
         cors_origins=cors_origins,

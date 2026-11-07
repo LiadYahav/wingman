@@ -121,17 +121,17 @@ class WingmanMetrics:
     """Every collector a service exports, registered on one registry."""
 
     def __init__(
-        self, registry: CollectorRegistry, *, service: str, version: str, commit: str
+        self, registry: CollectorRegistry, *, component: str, version: str, commit: str
     ) -> None:
         """Register the catalogue on ``registry`` and set the build info."""
         self.registry = registry
         self.build_info = Gauge(
             "wingman_build_info",
             "Always 1; the labels say which build is running.",
-            ["service", "version", "commit"],
+            ["component", "version", "commit"],
             registry=registry,
         )
-        self.build_info.labels(service=service, version=version, commit=commit).set(1)
+        self.build_info.labels(component=component, version=version, commit=commit).set(1)
         self.http_requests = Counter(
             "wingman_http_requests_total",
             "HTTP requests served, by route template and status class.",

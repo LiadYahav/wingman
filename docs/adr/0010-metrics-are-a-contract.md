@@ -38,13 +38,25 @@ to the code.
 
 ## Consequences
 
-- Alert rules, a ServiceMonitor and a Grafana dashboard ship with the chart
-  next (alerts unit-tested with promtool, as in herzi; the dashboard checked
-  against this catalogue, which would have caught server-scan's drifted
-  threshold).
+- The chart ships a ServiceMonitor, a PrometheusRule built from the plain
+  `chart/files/alerts.rules.yaml` (7 alerts, each unit-tested with promtool and
+  each with a runbook section in `docs/ops/runbook.md`) and a Grafana
+  dashboard (`chart/dashboards/wingman.json`, also as a sidecar ConfigMap).
+  All three are off by default (`monitoring.*`): they need the Prometheus
+  Operator CRDs.
+- The build label is `component`, not `service`: Prometheus adds `service` as a
+  target label, and the clash would rename ours to `exported_service`.
 
 ## Verification
 
 `packages/wingman-core/tests/unit/observability/test_metrics_catalogue.py`:
 the exact families, types and labels; the docs table matches the code; alerted
 outcomes exist at zero; `other` fallbacks; a scrape through ASGI.
+
+`tests/repo/test_observability_contract.py`: every metric and label used by an
+alert or a dashboard query is exported, every alert has a runbook section and
+every section an alert, dashboard panels use the datasource variable and the
+`job` filter, and a panel quoting an alert's threshold quotes the real one.
+Verified on 2026-11-07 by breaking each: a misspelled metric in a rule and a
+wrong threshold in a panel each fail the suite. `promtool test rules
+chart/tests/alerts.test.yaml` fires and clears each alert.

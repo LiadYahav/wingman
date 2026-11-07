@@ -4,6 +4,7 @@
 #
 #   scripts/gate.sh          # everything
 #   scripts/gate.sh python   # only the Python checks
+#   scripts/gate.sh chart    # only the Helm chart and alert-rule checks (needs helm, promtool)
 #   scripts/gate.sh web      # only the web checks
 #
 # Keep this file and ci.yml in step: a check added to one belongs in both.
@@ -42,6 +43,14 @@ if [[ $scope == all || $scope == python ]]; then
     uv run --with deptry==0.24.0 deptry src --known-first-party wingman_core'
   step "legacy ruff" uv run ruff check "${LEGACY[@]}"
   step "legacy mypy" bash -c 'for d in packages/shared-python/src/wingman_shared apps/day1-service/src apps/day2-service/src; do uv run mypy "$d" --ignore-missing-imports || exit 1; done'
+fi
+
+if [[ $scope == all || $scope == chart ]]; then
+  step "helm lint --strict" helm lint --strict chart
+  step "helm template (every chart/ci fixture)" bash -c 'for f in chart/ci/*.yaml; do
+    helm template wingman chart --namespace wingman -f "$f" >/dev/null || { echo "failed: $f"; exit 1; }; done'
+  step "promtool check rules" promtool check rules chart/files/alerts.rules.yaml
+  step "promtool test rules" promtool test rules chart/tests/alerts.test.yaml
 fi
 
 if [[ $scope == all || $scope == web ]]; then
