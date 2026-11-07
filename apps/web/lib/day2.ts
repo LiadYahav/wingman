@@ -26,13 +26,6 @@ export function isDestinationId(key: string): boolean {
   return key === "hub" || key.includes(":");
 }
 
-/** The kind an id names, without asking the service (`undefined` for a bare name). */
-export function kindOfId(key: string): DestinationKind | undefined {
-  if (key === "hub") return "hub";
-  const kind = key.split(":", 1)[0];
-  return (DESTINATION_KINDS as readonly string[]).includes(kind) ? (kind as DestinationKind) : undefined;
-}
-
 function query(params: Record<string, string | undefined>): string {
   const search = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) search.set(k, v);
@@ -50,7 +43,6 @@ const cluster = (key: string) => `/api/day2/clusters/${encodeURIComponent(key)}`
 export const day2Api = {
   catalog: "/api/day2/addons",
   gitlabInfo: "/api/day2/gitlab-info",
-  teams: "/api/day2/teams",
   mergePreview: "/api/day2/merge-preview",
   destinations: "/api/day2/clusters",
   lints: (team?: string) => `/api/day2/lints${query({ team })}`,
@@ -66,12 +58,13 @@ export const day2Api = {
   upgradeCheck: (id: string, to: string) => `${cluster(id)}/upgrade-check${query({ to })}`,
 };
 
-/** Query keys, under one `day2` root so a write can refresh every day2 read at once. */
+/**
+ * Query keys, all under `day2`: the day1 pages cache day2 reads under
+ * `["clusters", …]` and `["addons", "catalog"]`, possibly in older shapes.
+ */
 export const day2Keys = {
-  all: ["day2"] as const,
   catalog: ["day2", "catalog"] as const,
   gitlabInfo: ["day2", "gitlab-info"] as const,
-  teams: ["day2", "teams"] as const,
   destinations: ["day2", "destinations"] as const,
   lints: ["day2", "lints"] as const,
   charts: (key: string, mce?: string) => ["day2", "charts", key, narrow(key, mce) ?? ""] as const,
