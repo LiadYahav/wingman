@@ -59,8 +59,10 @@ async function approveAndMerge(page: Page, url: string) {
 
 /** Open the MR a write's toast announces (a day1 or specs MR). */
 async function followToast(page: Page, toast: RegExp): Promise<string> {
-  await expect(page.getByText(toast)).toBeVisible({ timeout: 15_000 });
-  await page.getByRole("button", { name: "Review" }).click();
+  // Earlier writes' toasts may still be up, each with its own Review button.
+  const announced = page.locator("[data-sonner-toast]").filter({ hasText: toast });
+  await expect(announced).toBeVisible({ timeout: 15_000 });
+  await announced.getByRole("button", { name: "Review" }).click();
   await page.waitForURL(/\/approvals\/(day1|specs)-\d+$/);
   return page.url();
 }
