@@ -11,6 +11,7 @@ import jsYaml from "js-yaml";
 import { toast } from "sonner";
 import { api, isApiError } from "@/lib/api-client";
 import { approvalHref } from "@/lib/approvals";
+import { day2Api, day2Keys } from "@/lib/day2";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,7 +22,7 @@ import { ProblemList } from "@/components/common/problem-list";
 import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
 import type {
-  AddonCatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OverrideableField, SpecEntry, TemplateField,
+  CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OverrideableField, SpecEntry, TemplateField,
 } from "@/types";
 import { DynamicVariableForm, seedFromStructure, type FieldValue, type FormValues } from "@/components/clusters/dynamic-variable-form";
 
@@ -552,10 +553,10 @@ export default function NewClusterPage() {
   });
   const schema = useMemo(() => templateSchema ?? [], [templateSchema]);
 
-  // Addon catalog — chart defaults for the full values YAML editor
-  const { data: addonCatalog = [] } = useQuery<AddonCatalogEntry[]>({
-    queryKey: ["addons", "catalog"],
-    queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
+  // The day2 catalog: the team defaults seed the full values YAML editor
+  const { data: addonCatalog = [] } = useQuery<CatalogEntry[]>({
+    queryKey: day2Keys.catalog,
+    queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
     staleTime: 120_000,
     enabled: step === "vars",
   });

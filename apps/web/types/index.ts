@@ -10,63 +10,6 @@ export interface UserInfo {
   role: "admin" | "viewer";
 }
 
-// ── Addon ─────────────────────────────────────────────────────────────────────
-
-export interface YamlParseError {
-  message: string;
-  line: number | null;
-  column: number | null;
-  context: string | null; // The problematic line
-  snippet: string | null; // Multi-line snippet with error highlighted
-}
-
-export interface AddonArgoMetadata {
-  projectNamespace: string;
-  repourl: string;
-  targetRevision: string;
-  syncPolicy: Record<string, unknown>;
-}
-
-export interface AddonCatalogEntry {
-  team: string;
-  name: string;
-  available_versions: string[];
-  current_version: string;
-  default_values: Record<string, unknown>;
-  argocd_metadata?: AddonArgoMetadata;
-  dependencies: string[];
-}
-
-export interface SpecCommit {
-  sha: string;
-  short_sha: string;
-  message: string;
-  author: string;
-  date: string;
-  web_url: string;
-}
-
-export interface InstalledAddon {
-  team: string;
-  name: string;
-  version: string;
-  override_values: Record<string, unknown>;
-  available_versions?: string[];
-  parse_errors?: YamlParseError[];
-  gitlab_url?: string;
-}
-
-export interface MergedAddonValues {
-  merged: Record<string, unknown>;
-  provenance: Record<string, unknown>; // same structure, values: "chart"|"team"|"cluster"
-  chart_values: Record<string, unknown>;
-  team_values: Record<string, unknown>;
-  cluster_values: Record<string, unknown>;
-  addon_name: string;
-  team: string;
-  version: string;
-}
-
 // ── MR / Approval (both services) ─────────────────────────────────────────────
 
 export interface MRAuthor {

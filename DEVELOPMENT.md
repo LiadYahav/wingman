@@ -96,11 +96,14 @@ scripts/gate.sh python   # day2 and wingman-core: ruff, ty, import-linter, pytes
 cd apps/web && npm run lint && npm run build
 
 # Mocked E2E tests (no backend required)
-cd apps/web && npm run test:e2e
+cd apps/web && npm run test:e2e:mocked
 
-# Live E2E tests against the running stack (requires kubectl port-forward to 8080)
-PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test e2e/tests/live-qa.spec.ts
-PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test e2e/tests/live-user-flows.spec.ts
+# Live E2E tests against a running stack whose GitLab is disposable (the in-memory
+# fake or the seeded local GitLab CE): every write opens a real MR. See apps/web/README.md.
+WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test live-day1-flows --project=live
+DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test live-day2 --project=live
 ```
 
 ## Adding New Features

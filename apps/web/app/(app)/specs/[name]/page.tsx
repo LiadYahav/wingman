@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Edit2, Server, CheckCircle2, ExternalLink, GitCommitHorizontal, Lock } from "lucide-react";
+import { ArrowLeft, Trash2, Edit2, Server, CheckCircle2, ExternalLink, GitCommitHorizontal, Lock, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api, isApiError, errorMessages } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
 import { DriftBadge } from "@/components/clusters/drift-badge";
-import { formatPreset, structureSummary } from "@/lib/specs";
+import { formatPreset, specApiPath, structureSummary } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
-import type { ClusterSpec, DriftState, MRDetail, SpecCluster, SpecCommit, SpecDrift } from "@/types";
+import type { ClusterSpec, DriftState, MRDetail, SpecCluster, SpecCommit, SpecDetail, SpecDrift } from "@/types";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -32,6 +32,10 @@ function clusterHref(name: string, site: string, mce: string) {
 }
 
 const DRIFT_ORDER: DriftState[] = ["drifted", "unknown", "in_sync", "not_linked"];
+
+/** A 409 REVISION_CONFLICT: the spec file moved since this page read it. */
+const STALE_SPEC =
+  "The spec changed since you opened it, so the delete was refused and nothing was changed. Reload to see the current spec, then delete it again if you still want to.";
 
 /** What a cluster of this spec starts from: preset values, list counts, locked fields. */
 function ClusterInputsCard({ spec }: { spec: ClusterSpec }) {
@@ -110,10 +114,13 @@ export default function SpecDetailPage() {
   const [deleteReviewOpen, setDeleteReviewOpen] = useState(false);
   const [selectedSha, setSelectedSha] = useState<string | null>(null);
 
-  const { data: spec, isLoading, error: specError } = useQuery<ClusterSpec>({
+  const { data: spec, isLoading, error: specError, refetch: refetchSpec } = useQuery<SpecDetail>({
     queryKey: ["specs", specName],
-    queryFn: () => api.get<ClusterSpec>(`/api/day1/specs/${encodeURIComponent(specName)}`),
+    queryFn: () => api.get<SpecDetail>(specApiPath(specName)),
     staleTime: 60_000,
+    // A delete sends this read's last_commit_id: re-read on every visit (a
+    // cached copy renders meanwhile), so a change merged since is seen.
+    refetchOnMount: "always",
     retry: (count, error) => !isApiError(error, "VALIDATION_ERROR") && !isApiError(error, "NOT_FOUND") && count < 2,
   });
   // A spec file that does not parse answers 422 with every problem; it can still be deleted.
@@ -149,7 +156,8 @@ export default function SpecDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => api.del<MRDetail>(`/api/day1/specs/${encodeURIComponent(specName)}`),
+    // Guarded by the commit the spec was read at (a spec that does not load has none)
+    mutationFn: () => api.del<MRDetail>(specApiPath(specName, spec?.last_commit_id)),
     onSuccess: (mr) => {
       toastMrOpened(mr, router.push, "Delete MR");
       setDeleteReviewOpen(false);
@@ -157,14 +165,22 @@ export default function SpecDetailPage() {
       router.push("/specs");
     },
     onError: (err) => {
+      // A stale read is never retried: the page says so and offers a reload
       if (isApiError(err, "REVISION_CONFLICT")) {
-        toast.error("The spec changed since you opened it", { description: "Reload the page and review it again." });
-        queryClient.invalidateQueries({ queryKey: ["specs", specName] });
+        setDeleteReviewOpen(false);
         return;
       }
       toast.error("Could not open the delete MR", { description: errorMessages(err).join(" · ") });
     },
   });
+  const deleteConflict = isApiError(deleteMutation.error, "REVISION_CONFLICT");
+
+  /** After a 409: read the spec (and its history) again, then the delete can be reviewed anew. */
+  const reloadAfterConflict = async () => {
+    deleteMutation.reset();
+    await refetchSpec();
+    queryClient.invalidateQueries({ queryKey: ["spec-history", specName] });
+  };
 
   const driftCounts = DRIFT_ORDER
     .map((state) => ({ state, count: driftResults?.filter((r) => r.state === state).length ?? 0 }))
@@ -216,6 +232,15 @@ export default function SpecDetailPage() {
           </div>
         )}
       </div>
+
+      {deleteConflict && (
+        <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm">
+          <p className="text-status-warning-fg">{STALE_SPEC}</p>
+          <button onClick={reloadAfterConflict} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload
+          </button>
+        </div>
+      )}
 
       {specError && (
         <ProblemList

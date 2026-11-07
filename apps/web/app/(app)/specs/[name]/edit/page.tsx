@@ -52,10 +52,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfigureOverrideableDialog, deepMergeValues } from "@/components/specs/configure-overrideable-dialog";
-import { formatPreset, specDocument, specVersionProblem } from "@/lib/specs";
+import { formatPreset, specApiPath, specDocument, specVersionProblem } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { DynamicVariableForm, initFormValues, type FormValues } from "@/components/clusters/dynamic-variable-form";
-import type { ClusterSpec, MRDetail, AddonCatalogEntry, SpecAddon, OverrideableField, TemplateField } from "@/types";
+import { chartRevisions, day2Api, day2Keys } from "@/lib/day2";
+import type { CatalogEntry, ClusterSpec, MRDetail, OverrideableField, SpecAddon, SpecDetail, TemplateField } from "@/types";
 
 // ── Sortable Addon Item ───────────────────────────────────────────────────────
 
@@ -113,8 +114,9 @@ function SortableAddonItem({
 // ── Addon Catalog Card ────────────────────────────────────────────────────────
 
 function AddonCatalogCard({ addon, isSelected, onAdd }: {
-  addon: AddonCatalogEntry; isSelected: boolean; onAdd: (version: string) => void;
+  addon: CatalogEntry; isSelected: boolean; onAdd: (version: string) => void;
 }) {
+  // The team default (HEAD when it sets none), so a cluster inherits it without a pin
   const [selectedVersion, setSelectedVersion] = useState(addon.current_version);
   return (
     <div
@@ -140,7 +142,7 @@ function AddonCatalogCard({ addon, isSelected, onAdd }: {
             <Tag className="h-3 w-3 mr-1" /><SelectValue />
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
-            {addon.available_versions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+            {chartRevisions(addon).map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
           </SelectContent>
         </Select>
         <button onClick={() => onAdd(selectedVersion)} disabled={isSelected}
@@ -155,11 +157,11 @@ function AddonCatalogCard({ addon, isSelected, onAdd }: {
 // ── Team Section ──────────────────────────────────────────────────────────────
 
 function TeamSection({ team, addons, selectedAddons, onAdd }: {
-  team: string; addons: AddonCatalogEntry[]; selectedAddons: SpecAddon[];
-  onAdd: (addon: AddonCatalogEntry, version: string) => void;
+  team: string; addons: CatalogEntry[]; selectedAddons: SpecAddon[];
+  onAdd: (addon: CatalogEntry, version: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const isAddonSelected = (a: AddonCatalogEntry) => selectedAddons.some((s) => s.team === a.team && s.name === a.name);
+  const isAddonSelected = (a: CatalogEntry) => selectedAddons.some((s) => s.team === a.team && s.name === a.name);
   return (
     <div className="space-y-3">
       <button onClick={() => setExpanded((v) => !v)} className="flex items-center gap-2 group w-full text-left">
@@ -201,16 +203,19 @@ export default function EditSpecPage() {
   const [addonSearch, setAddonSearch] = useState("");
   const [configuringAddon, setConfiguringAddon] = useState<{ team: string; name: string } | null>(null);
 
-  const { data: spec, isLoading: specLoading, error: specError } = useQuery<ClusterSpec>({
+  const { data: spec, isLoading: specLoading, error: specError } = useQuery<SpecDetail>({
     queryKey: ["specs", specName],
-    queryFn: () => api.get<ClusterSpec>(`/api/day1/specs/${encodeURIComponent(specName)}`),
+    queryFn: () => api.get<SpecDetail>(specApiPath(specName)),
     staleTime: 60_000,
+    // The update sends this read's last_commit_id: re-read on every visit (a
+    // cached copy renders meanwhile), so a change merged since is the base.
+    refetchOnMount: "always",
     retry: (count, error) => !isApiError(error, "VALIDATION_ERROR") && !isApiError(error, "NOT_FOUND") && count < 2,
   });
 
-  const { data: addonCatalog, isLoading: catalogLoading } = useQuery<AddonCatalogEntry[]>({
-    queryKey: ["addons", "catalog"],
-    queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
+  const { data: addonCatalog, isLoading: catalogLoading } = useQuery<CatalogEntry[]>({
+    queryKey: day2Keys.catalog,
+    queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
     staleTime: 120_000,
   });
 
@@ -241,11 +246,10 @@ export default function EditSpecPage() {
     });
   };
 
-  const addonVersionsMap = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    for (const addon of addonCatalog ?? []) map[`${addon.team}/${addon.name}`] = addon.available_versions;
-    return map;
-  }, [addonCatalog]);
+  const catalogByKey = useMemo(
+    () => new Map((addonCatalog ?? []).map((addon) => [`${addon.team}/${addon.name}`, addon])),
+    [addonCatalog]
+  );
 
   const filteredCatalog = useMemo(() => {
     if (!addonCatalog) return {};
@@ -254,7 +258,7 @@ export default function EditSpecPage() {
         a.name.toLowerCase().includes(addonSearch.toLowerCase()) ||
         a.team.toLowerCase().includes(addonSearch.toLowerCase())
     );
-    return filtered.reduce<Record<string, AddonCatalogEntry[]>>((acc, addon) => {
+    return filtered.reduce<Record<string, CatalogEntry[]>>((acc, addon) => {
       if (!acc[addon.team]) acc[addon.team] = [];
       acc[addon.team].push(addon);
       return acc;
@@ -287,16 +291,16 @@ export default function EditSpecPage() {
     ? effectiveAddons.find((a) => a.team === configuringAddon.team && a.name === configuringAddon.name)
     : null;
   const configuringCatalogEntry = configuringAddon
-    ? addonCatalog?.find((c) => c.team === configuringAddon.team && c.name === configuringAddon.name)
+    ? catalogByKey.get(`${configuringAddon.team}/${configuringAddon.name}`)
     : null;
 
-  const configuringVersion = configuringAddonData?.version ?? configuringCatalogEntry?.current_version;
+  // The chart's own values at the chosen revision (the team values merge on top)
+  const configuringVersion = configuringAddonData?.version ?? configuringCatalogEntry?.current_version ?? "HEAD";
   const { data: configuringChartValues, isLoading: configuringChartLoading } = useQuery<Record<string, unknown>>({
-    queryKey: ["addons", configuringAddon?.team, configuringAddon?.name, "values", configuringVersion],
-    queryFn: () => api.get<Record<string, unknown>>(
-      `/api/day2/addons/${configuringAddon!.team}/${configuringAddon!.name}/values?version=${encodeURIComponent(configuringVersion!)}`
-    ),
-    enabled: Boolean(configuringAddon && configuringVersion),
+    queryKey: day2Keys.chartDefaults(configuringAddon?.team ?? "", configuringAddon?.name ?? "", configuringVersion),
+    queryFn: () =>
+      api.get<Record<string, unknown>>(day2Api.chartDefaults(configuringAddon!.team, configuringAddon!.name, configuringVersion)),
+    enabled: Boolean(configuringAddon),
     staleTime: 300_000,
   });
 
@@ -342,7 +346,8 @@ export default function EditSpecPage() {
   const diff = useMemo(() => computeLineDiff(originalFullYaml, currentFullYaml), [originalFullYaml, currentFullYaml]);
 
   const updateMutation = useMutation({
-    mutationFn: async () => api.put<MRDetail>(`/api/day1/specs/${encodeURIComponent(specName)}`, buildFinalSpec()),
+    // Guarded by the commit the spec was read at; a stale one is a 409 with a reload below
+    mutationFn: async () => api.put<MRDetail>(specApiPath(specName, spec?.last_commit_id), buildFinalSpec()),
     onSuccess: (mr) => {
       toastMrOpened(mr, router.push, "Update MR");
       setReviewOpen(false);
@@ -561,7 +566,7 @@ export default function EditSpecPage() {
                             onRemove={() => setSelectedAddons(effectiveAddons.filter((a) => !(a.team === addon.team && a.name === addon.name)))}
                             onVersionChange={(v) => setSelectedAddons(effectiveAddons.map((a) => a.team === addon.team && a.name === addon.name ? { ...a, version: v } : a))}
                             onConfigure={() => setConfiguringAddon({ team: addon.team, name: addon.name })}
-                            availableVersions={addonVersionsMap[`${addon.team}/${addon.name}`] ?? [addon.version]}
+                            availableVersions={chartRevisions(catalogByKey.get(`${addon.team}/${addon.name}`), addon.version)}
                           />
                         ))}
                       </div>

@@ -73,6 +73,26 @@ export interface SpecEntry extends ClusterSpec {
   load_problems?: string[];
 }
 
+/** `GET /specs/{name}`: one spec, with the commit its file was read at. */
+export interface SpecDetail extends SpecEntry {
+  /**
+   * Send it back on update and delete (`?last_commit_id=`); a stale one is
+   * 409 REVISION_CONFLICT (ADR-0006). Optional: a day1 service that predates
+   * it does not send it, and a write then goes unguarded.
+   */
+  last_commit_id?: string | null;
+}
+
+/** A commit of `GET /specs/{name}/history`. */
+export interface SpecCommit {
+  sha: string;
+  short_sha: string;
+  message: string;
+  author: string;
+  date: string;
+  web_url: string;
+}
+
 // ── Naming and the HostedCluster a file renders ─────────────────────────────
 
 /** Whether a name follows `ocp4-<env>-<name>-<site>[-<seq>]` (ADR-0014). */
