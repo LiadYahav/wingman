@@ -255,14 +255,19 @@ function MRDetailContent() {
   const ref = parseApprovalId(id);
   const queryKey = ["approvals", "detail", id];
 
-  // No background refetch: an approval names the head shown here, so the diff
-  // must not change under the reviewer. A moved branch is a 409 and a reload.
+  // Fetched fresh every time the page opens (never from a cache, see
+  // providers.tsx), then never in the background: an approval names the head
+  // shown here, so the diff must not change under the reviewer. A branch that
+  // moved since is a 409 and a reload.
   const { data, isLoading, error, refetch } = useQuery<ApprovalDetail>({
     queryKey,
     queryFn: () => api.get<ApprovalDetail>(approvalApiPath(ref!)),
     enabled: ref !== null,
-    staleTime: 5 * 60_000,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnMount: "always",
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   /** Refresh the lists; this page's own detail is set or refetched by the caller. */

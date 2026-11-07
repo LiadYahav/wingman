@@ -120,6 +120,48 @@ test.describe("Approve with the reviewed sha", () => {
     await expect(alert).not.toBeVisible();
   });
 
+  test("an approval page opened again shows the branch as it is now, not a cached head", async ({ page }) => {
+    await open(page);
+    const moved = { ...DAY1_MR, sha: "8888888888888888888888888888888888888888" };
+    let head = DAY1_MR;
+    await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail(head)) })
+    );
+    await go(page, "/approvals");
+    await page.getByRole("link", { name: DAY1_MR.title }).click();
+    await expect(page.getByText(DAY1_MR.sha.slice(0, 8))).toBeVisible();
+
+    // CI pushes to the branch while the reviewer is elsewhere in the app.
+    head = moved;
+    await page.getByRole("link", { name: "Approvals" }).first().click();
+    await page.getByRole("link", { name: DAY1_MR.title }).click();
+    await expect(page.getByText(moved.sha.slice(0, 8))).toBeVisible();
+
+    const approve = page.waitForRequest((req: Request) => req.url().includes("/api/day1/approvals/42/approve?repo=day1"));
+    await page.route("**/api/day1/approvals/42/approve?repo=day1", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...moved, state: "merged" }) })
+    );
+    await page.getByRole("button", { name: /review & approve/i }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Approve & Merge" }).click();
+    expect((await approve).postDataJSON()).toEqual({ sha: moved.sha });
+  });
+
+  test("an approval's detail is never written to the persisted query cache", async ({ page }) => {
+    await open(page);
+    await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail(DAY1_MR)) })
+    );
+    await go(page, "/approvals/day1-42");
+    await expect(page.getByText(DAY1_MR.sha.slice(0, 8))).toBeVisible();
+    // The persister writes at most once a second; wait until it has written.
+    await expect
+      .poll(() => page.evaluate(() => window.localStorage.getItem("wingman-query-cache") ?? ""), { timeout: 5_000 })
+      .toContain("clientState");
+    const stored = await page.evaluate(() => window.localStorage.getItem("wingman-query-cache") ?? "");
+    expect(stored).not.toContain(DAY1_MR.sha);
+    expect(stored).not.toContain('"approvals"');
+  });
+
   test("self-approval is refused with a clear message", async ({ page }) => {
     await open(page);
     await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>
