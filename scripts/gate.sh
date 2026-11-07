@@ -2,17 +2,33 @@
 # The local CI gate: runs what .github/workflows/ci.yml runs, in the same
 # order, and reports every failure instead of stopping at the first.
 #
-#   scripts/gate.sh          # everything
-#   scripts/gate.sh python   # only the Python checks
+#   scripts/gate.sh          # everything below, in this order
+#   scripts/gate.sh ci       # workflows and scripts: actionlint, zizmor, shellcheck (pinned, scripts/ci-tools.sh)
+#   scripts/gate.sh python   # only the Python checks, including the requirement-export drift check
 #   scripts/gate.sh chart    # only the Helm chart and alert-rule checks (needs helm, promtool)
-#   scripts/gate.sh web      # only the web checks
+#   scripts/gate.sh web      # only the web checks, including npm audit
+#   scripts/gate.sh e2e      # the mocked Playwright suite against a production build
+#
+# e2e needs Playwright's browser (`cd apps/web && npx playwright install chromium --only-shell`);
+# PLAYWRIGHT_CHANNEL=chrome runs it on an installed Google Chrome instead.
+# Not here: image builds (CI's `images` job; locally `podman build -f apps/web/Dockerfile .`)
+# and the live GitLab contract suite (nightly in CI, .github/workflows/live-gitlab.yml).
 #
 # Keep this file and ci.yml in step: a check added to one belongs in both.
+# Which Python packages get which checks lives in scripts/python-packages.sh.
 set -uo pipefail
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 scope="${1:-all}"
 failed=()
+
+case $scope in
+  all | ci | python | chart | web | e2e) ;;
+  *)
+    echo "usage: scripts/gate.sh [all|ci|python|chart|web|e2e]" >&2
+    exit 2
+    ;;
+esac
 
 step() {
   local name=$1
@@ -26,40 +42,100 @@ step() {
   fi
 }
 
-# New code is held to the strict bar; legacy packages keep their old lint
-# until their rewrite (ADR-0001).
-STRICT=(packages/wingman-core apps/day1-service)
-LEGACY=(packages/shared-python apps/day2-service)
+# shellcheck source=scripts/python-packages.sh
+source scripts/python-packages.sh
+
+tools="${XDG_CACHE_HOME:-$HOME/.cache}/wingman/ci-tools"
+
+zizmor_all() {
+  # The online audits (impostor commits, a `# vX.Y.Z` comment that names
+  # another tag) need a GitHub token. CI always has one; locally gh's is used.
+  local token=${GH_TOKEN:-${GITHUB_TOKEN:-}}
+  if [[ -z $token ]] && command -v gh >/dev/null; then
+    token=$(gh auth token 2>/dev/null) || token=""
+  fi
+  if [[ -z $token ]]; then
+    echo "no GitHub token (run gh auth login): offline audits only here; CI runs them all"
+    "$tools/zizmor" --offline .github
+  else
+    GH_TOKEN=$token "$tools/zizmor" .github
+  fi
+}
+
+deptry_all() {
+  local entry
+  for entry in "${DEPTRY[@]}"; do
+    (cd "${entry%%:*}" && uv run --with deptry==0.24.0 deptry src --known-first-party "${entry#*:}") || return 1
+  done
+}
+
+legacy_ruff() {
+  ((${#LEGACY[@]} == 0)) || uv run ruff check "${LEGACY[@]}"
+}
+
+legacy_mypy() {
+  local dir
+  for dir in "${LEGACY_MYPY[@]}"; do
+    uv run mypy "$dir" --ignore-missing-imports || return 1
+  done
+}
+
+helm_template_all() {
+  local values
+  for values in chart/ci/*.yaml; do
+    helm template wingman chart --namespace wingman -f "$values" >/dev/null || {
+      echo "failed: $values"
+      return 1
+    }
+  done
+}
+
+web_built=false
+
+if [[ $scope == all || $scope == ci ]]; then
+  step "install actionlint, zizmor, shellcheck (pinned, checksum-verified)" scripts/ci-tools.sh "$tools"
+  step "actionlint" "$tools/actionlint" -shellcheck "$tools/shellcheck"
+  step "zizmor" zizmor_all
+  step "shellcheck (scripts)" "$tools/shellcheck" scripts/*.sh scripts/dev/*.sh
+fi
 
 if [[ $scope == all || $scope == python ]]; then
   step "uv sync --locked" uv sync --locked --all-packages --all-groups --all-extras --quiet
+  step "requirement exports match uv.lock" scripts/export-requirements.sh --check
   step "ruff check" uv run ruff check "${STRICT[@]}"
   step "ruff format --check" uv run ruff format --check "${STRICT[@]}"
   step "ty" uv run ty check "${STRICT[@]}"
   step "import-linter" uv run lint-imports
   step "pytest (coverage >= 90%)" uv run pytest --cov --cov-fail-under=90 -q
   step "pip-audit" uv run --with pip-audit==2.10.1 pip-audit --skip-editable --progress-spinner off
-  step "deptry (wingman-core)" bash -c 'cd packages/wingman-core &&
-    uv run --with deptry==0.24.0 deptry src --known-first-party wingman_core'
-  step "deptry (day1)" bash -c 'cd apps/day1-service &&
-    uv run --with deptry==0.24.0 deptry src --known-first-party wingman_day1'
-  step "legacy ruff" uv run ruff check "${LEGACY[@]}"
-  step "legacy mypy" bash -c 'for d in packages/shared-python/src/wingman_shared apps/day2-service/src; do uv run mypy "$d" --ignore-missing-imports || exit 1; done'
+  step "deptry" deptry_all
+  step "legacy ruff" legacy_ruff
+  step "legacy mypy" legacy_mypy
 fi
 
 if [[ $scope == all || $scope == chart ]]; then
   step "helm lint --strict" helm lint --strict chart
-  step "helm template (every chart/ci fixture)" bash -c 'for f in chart/ci/*.yaml; do
-    helm template wingman chart --namespace wingman -f "$f" >/dev/null || { echo "failed: $f"; exit 1; }; done'
+  step "helm template (every chart/ci fixture)" helm_template_all
   step "promtool check rules" promtool check rules chart/files/alerts.rules.yaml
   step "promtool test rules" promtool test rules chart/tests/alerts.test.yaml
 fi
 
-if [[ $scope == all || $scope == web ]]; then
+if [[ $scope == all || $scope == web || $scope == e2e ]]; then
   step "npm ci" npm ci --no-audit --no-fund --silent
+fi
+
+if [[ $scope == all || $scope == web ]]; then
+  step "npm audit (allowlist may only shrink)" python3 scripts/npm-audit.py
   step "web lint" npm run lint --workspace=web --silent
   step "web typecheck" bash -c 'cd apps/web && npx tsc --noEmit'
   step "web build" npm run build --workspace=web --silent
+  web_built=true
+fi
+
+if [[ $scope == all || $scope == e2e ]]; then
+  $web_built || step "web build" npm run build --workspace=web --silent
+  # CI=1 as in CI: the production server (`next start`), one worker, retries.
+  step "playwright (mocked suite)" env CI=1 npm run test:e2e:mocked --workspace=web
 fi
 
 if ((${#failed[@]})); then

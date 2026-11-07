@@ -1,7 +1,16 @@
 # CI. Every check here is also in scripts/gate.sh, in the same order; a check
-# added to one belongs in both. Nothing may fail silently: no `|| true`, no
-# `|| echo`. Actions are pinned to commit SHAs with the version in a comment
-# (server-scan ADR-0013); bump them deliberately, verifying the tag resolves.
+# added to one belongs in both. Nothing may fail silently: no `|| true` on a
+# check, no `|| echo`, no `continue-on-error`.
+#
+# Every action is pinned to a full commit SHA with its version in a comment
+# (server-scan ADR-0013): a tag can be re-pointed at new code, a SHA cannot.
+# zizmor (the `workflows` job) refuses an unpinned `uses:` and a comment that
+# names a different tag. Pins never update themselves: bump them by hand,
+# verifying the new tag resolves first (CLAUDE.md, "Keeping CI current").
+#
+# Every job states its own permissions; the workflow default is none.
+# Pull requests build every image without pushing. Main pushes them, and cuts
+# a release when VERSION names a version that does not exist yet (ADR-0030).
 name: CI
 
 on:
@@ -10,12 +19,17 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
 
+# A newer push supersedes a branch's run. Never cancel a main run: it can be
+# mid-publish.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    shell: bash # -eo pipefail, unlike the implicit default
 
 env:
   UV_VERSION: "0.13.7"
@@ -23,12 +37,44 @@ env:
   NODE_VERSION: "24"
 
 jobs:
+  workflows:
+    name: Workflows and scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint, zizmor and shellcheck (pinned, checksum-verified)
+        run: scripts/ci-tools.sh "$RUNNER_TEMP/ci-tools"
+
+      # The runner's own shellcheck would float with the image; this one is pinned.
+      - name: actionlint
+        run: '"$RUNNER_TEMP/ci-tools/actionlint" -shellcheck "$RUNNER_TEMP/ci-tools/shellcheck"'
+
+      # The token enables the online audits: impostor commits, and a
+      # `# vX.Y.Z` comment that is not the tag the SHA came from.
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/ci-tools/zizmor" .github'
+
+      - name: shellcheck (scripts)
+        run: '"$RUNNER_TEMP/ci-tools/shellcheck" scripts/*.sh scripts/dev/*.sh'
+
   python:
     name: Python
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
@@ -39,14 +85,26 @@ jobs:
       - name: uv sync --locked
         run: uv sync --locked --all-packages --all-groups --all-extras
 
+      # The images install from these exports (docs/ops/images.md); a stale
+      # one would ship versions uv.lock does not name.
+      - name: requirement exports match uv.lock
+        run: scripts/export-requirements.sh --check
+
+      # The package lists are in scripts/python-packages.sh, shared with the gate.
       - name: ruff check
-        run: uv run ruff check packages/wingman-core apps/day1-service
+        run: |
+          source scripts/python-packages.sh
+          uv run ruff check "${STRICT[@]}"
 
       - name: ruff format --check
-        run: uv run ruff format --check packages/wingman-core apps/day1-service
+        run: |
+          source scripts/python-packages.sh
+          uv run ruff format --check "${STRICT[@]}"
 
       - name: ty
-        run: uv run ty check packages/wingman-core apps/day1-service
+        run: |
+          source scripts/python-packages.sh
+          uv run ty check "${STRICT[@]}"
 
       - name: import-linter
         run: uv run lint-imports
@@ -57,31 +115,37 @@ jobs:
       - name: pip-audit
         run: uv run --with pip-audit==2.10.1 pip-audit --skip-editable --progress-spinner off
 
-      - name: deptry (wingman-core)
-        working-directory: packages/wingman-core
-        run: uv run --with deptry==0.24.0 deptry src --known-first-party wingman_core
-
-      - name: deptry (day1)
-        working-directory: apps/day1-service
-        run: uv run --with deptry==0.24.0 deptry src --known-first-party wingman_day1
+      - name: deptry
+        run: |
+          source scripts/python-packages.sh
+          for entry in "${DEPTRY[@]}"; do
+            (cd "${entry%%:*}" && uv run --with deptry==0.24.0 deptry src --known-first-party "${entry#*:}")
+          done
 
       # The legacy packages keep their old checks until they are rewritten
       # (ADR-0001). They have no tests yet; none are faked here.
       - name: legacy ruff
-        run: uv run ruff check packages/shared-python apps/day2-service
+        run: |
+          source scripts/python-packages.sh
+          if ((${#LEGACY[@]})); then uv run ruff check "${LEGACY[@]}"; fi
 
       - name: legacy mypy
         run: |
-          for d in packages/shared-python/src/wingman_shared apps/day2-service/src; do
-            uv run mypy "$d" --ignore-missing-imports
+          source scripts/python-packages.sh
+          for dir in "${LEGACY_MYPY[@]}"; do
+            uv run mypy "$dir" --ignore-missing-imports
           done
 
   chart:
     name: Chart and alerts
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Pinned and checksum-verified, as in herzi's CI.
       - name: Install helm (pinned, checksum-verified)
@@ -126,8 +190,12 @@ jobs:
     name: Web
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -137,6 +205,11 @@ jobs:
 
       - name: npm ci
         run: npm ci --no-audit --no-fund
+
+      # Blocking: any advisory not in scripts/npm-audit-allowlist.txt fails,
+      # and so does an allowlisted one that no longer applies.
+      - name: npm audit (allowlist may only shrink)
+        run: python3 scripts/npm-audit.py
 
       - name: lint
         run: npm run lint --workspace=web
@@ -148,50 +221,303 @@ jobs:
       - name: build
         run: npm run build --workspace=web
 
+  e2e:
+    name: Web E2E (mocked Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: npm ci
+        run: npm ci --no-audit --no-fund
+
+      # Keyed on the resolved @playwright/test version, so a bump always
+      # fetches the matching browser, and a hit skips the slowest step.
+      - name: Resolve the Playwright version
+        id: playwright
+        working-directory: apps/web
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Playwright browser
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-headless-shell-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      # No --with-deps: the runner image has the browser libraries.
+      # --only-shell: the mocked project runs headless and needs no full Chrome.
+      - name: Install the Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: apps/web
+        run: npx playwright install chromium --only-shell
+
+      - name: build
+        run: npm run build --workspace=web
+
+      # The `mocked` project: every spec except live-*.spec.ts, which need a
+      # running backend. playwright.config.ts starts the production server.
+      - name: Playwright (mocked suite)
+        run: npm run test:e2e:mocked --workspace=web
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 14
+
+  # Builds every image on every run, pushing nothing: a pull request proves
+  # its images build, and main fills the build cache `publish` pushes from.
+  # Runs alongside the checks; untested code never reaches the registry
+  # because only `publish` pushes, and it needs every job.
   images:
-    name: Image ${{ matrix.image.name }}
-    needs: [python, chart, web]
+    name: Image ${{ matrix.image.name }} (build)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
-      packages: write
     strategy:
       fail-fast: false
       matrix:
         image:
-          - { name: day1, context: ., file: apps/day1-service/Dockerfile }
-          - { name: day2, context: ., file: apps/day2-service/Dockerfile }
-          - { name: web, context: apps/web, file: apps/web/Dockerfile }
+          - { name: day1, file: apps/day1-service/Dockerfile }
+          - { name: day2, file: apps/day2-service/Dockerfile }
+          - { name: web, file: apps/web/Dockerfile }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Image metadata
-        id: meta
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      # Every image builds from the repository root, so it can read uv.lock's
+      # exports or the root package-lock.json (docs/ops/images.md).
+      - name: Build (never pushes)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ${{ matrix.image.file }}
+          platforms: linux/amd64
+          push: false
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+
+  # Reads VERSION and the existing releases. On a pull request it fails a
+  # VERSION that moves backwards, before it merges; on main it also reads the
+  # registry and decides whether this commit cuts a release (ADR-0030).
+  release-plan:
+    name: Release plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read # lists the published image tags (main only)
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      release: ${{ steps.plan.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every tag
+          persist-credentials: false
+
+      - name: List the published image tags
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GHCR_TOKEN: ${{ github.token }}
         run: |
-          echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-          echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
-          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          python3 scripts/release.py registry-tags \
+            "ghcr.io/$owner/wingman-day1" "ghcr.io/$owner/wingman-day2" "ghcr.io/$owner/wingman-web" \
+            > "$RUNNER_TEMP/registry-tags.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/registry-tags.txt") tags published"
+
+      - name: Plan the release (VERSION only moves forward)
+        id: plan
+        run: |
+          args=()
+          if [[ -f "$RUNNER_TEMP/registry-tags.txt" ]]; then
+            args=(--registry-tags "$RUNNER_TEMP/registry-tags.txt")
+          fi
+          python3 scripts/release.py plan "${args[@]}"
+
+  # ── main only: publish ────────────────────────────────────────────────────
+  # Tag first, then push images, then write the release: a re-run of a run
+  # that failed part-way finds the tag on its own commit and repeats each step
+  # idempotently. Re-run that run; a later commit does not re-release it.
+  release-tag:
+    name: Tag the release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [workflows, python, chart, web, e2e, images, release-plan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # creates the v<VERSION> tag
+    steps:
+      # Through the API, so no checkout holds a write token on disk.
+      - name: Create the annotated tag (idempotent)
+        if: needs.release-plan.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          api="repos/$GITHUB_REPOSITORY/git"
+          if ref=$(gh api "$api/ref/tags/$TAG" 2>/dev/null); then
+            sha=$(jq -r .object.sha <<<"$ref")
+            if [[ "$(jq -r .object.type <<<"$ref")" == tag ]]; then
+              sha=$(gh api "$api/tags/$sha" --jq .object.sha)
+            fi
+            if [[ "$sha" != "$GITHUB_SHA" ]]; then
+              echo "::error::$TAG already exists on ${sha:0:7}; refusing to re-tag"
+              exit 1
+            fi
+            echo "$TAG already points at this commit: a re-run, keeping it"
+            exit 0
+          fi
+          object=$(gh api "$api/tags" -f tag="$TAG" -f message="$TAG" -f object="$GITHUB_SHA" -f type=commit --jq .sha)
+          gh api "$api/refs" -f ref="refs/tags/$TAG" -f sha="$object" > /dev/null
+          echo "tagged $GITHUB_SHA as $TAG"
+
+  publish:
+    name: Publish ${{ matrix.image.name }} (GHCR)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [release-plan, release-tag]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # pushes to ghcr.io
+      id-token: write # signs the provenance attestation (Sigstore)
+      attestations: write # stores it
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: day1, file: apps/day1-service/Dockerfile, description: "Wingman day1 service: hosted cluster provisioning" }
+          - { name: day2, file: apps/day2-service/Dockerfile, description: "Wingman day2 service: charts on clusters" }
+          - { name: web, file: apps/web/Dockerfile, description: "Wingman web app" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Image name
+        id: image
+        env:
+          NAME: ${{ matrix.image.name }}
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/wingman-$NAME" >> "$GITHUB_OUTPUT"
+
+      # Tags: <short sha> and latest on every main commit; v<VERSION> only
+      # when this commit cuts that release, so a version tag never moves.
+      # The highest-priority tag becomes the version label and build arg.
+      - name: Tags and OCI labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=raw,value=${{ needs.release-plan.outputs.tag }},enable=${{ needs.release-plan.outputs.release == 'true' }},priority=1000
+            type=sha,prefix=,format=short,priority=300
+            type=raw,value=latest,priority=200
+          labels: |
+            org.opencontainers.image.title=wingman-${{ matrix.image.name }}
+            org.opencontainers.image.description=${{ matrix.image.description }}
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to ghcr.io
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
-
-      - name: Build, and push on main
+      # From the cache `images` filled. The SBOM and the (unsigned) BuildKit
+      # provenance travel with the image as attestation manifests.
+      - name: Build and push
+        id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
-          context: ${{ matrix.image.context }}
+          context: .
           file: ${{ matrix.image.file }}
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-          tags: |
-            ghcr.io/${{ steps.meta.outputs.owner }}/wingman-${{ matrix.image.name }}:${{ steps.meta.outputs.short_sha }}
-            ghcr.io/${{ steps.meta.outputs.owner }}/wingman-${{ matrix.image.name }}:latest
-            ghcr.io/${{ steps.meta.outputs.owner }}/wingman-${{ matrix.image.name }}:v${{ steps.meta.outputs.version }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha,scope=${{ matrix.image.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+
+      # Signed SLSA provenance, verifiable offline from the bundle or with
+      # `gh attestation verify oci://<image>@<digest> --owner <owner>`.
+      # Storage records exist only for organisation-owned repositories.
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+  release-notes:
+    name: Release notes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-plan.outputs.release == 'true'
+    needs: [release-plan, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # creates the GitHub release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the previous tag and every subject since it
+          persist-credentials: false
+
+      # From the Conventional Commit subjects since the previous tag; there
+      # is no CHANGELOG to forget (server-scan, herzi).
+      - name: Publish the release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          python3 scripts/release.py notes "$TAG" \
+            --image "ghcr.io/$owner/wingman-day1" --image "ghcr.io/$owner/wingman-day2" --image "ghcr.io/$owner/wingman-web" \
+            > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+          for attempt in 1 2 3; do
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              echo "release $TAG already exists"
+              break
+            fi
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" && break
+            if [[ $attempt == 3 ]]; then
+              echo "::error::could not create release $TAG after 3 attempts"
+              exit 1
+            fi
+            echo "release create failed (attempt $attempt), retrying in 30s"
+            sleep 30
+          done

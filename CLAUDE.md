@@ -82,15 +82,20 @@ Explicit user instructions; violating one is a real mistake, not style.
 - Done: day1 rewritten on `wingman-core` as `wingman_day1`
   (`apps/day1-service/src/wingman_day1`, ADRs 0012-0019), checked end to end
   against local GitLab with `scripts/dev/day1_live_e2e.py` and through both
-  chart copies; its image installs from `uv.lock`. Web-visible API changes:
+  chart copies. Web-visible API changes:
   `docs/notes/2026-11-07-day1-api-changes.md`.
+- Done: CI's supply chain and releases (ADR-0030, ADR-0032): hash-pinned
+  per-service exports, the web image from the root lock, build on every PR,
+  publish and release from main, a blocking npm audit, a nightly live-GitLab
+  run.
 - **Not done yet, in order:** (1) day2 rewrite against the gitops-day2
   layout; (2) web pages for the new data and the day1 API changes; (3) the
   chart's day1 env (`GITLAB_TOKEN`, dropped `CACHE_*`, see the note); (4)
   end-to-end check of the whole stack against the seeded local GitLab; (5)
-  day2's image from the lock, chart hardening and a values schema; (6)
-  ecosystem features (servers per hosted cluster from server-scan, workflow
-  runs).
+  the day1/day2 Dockerfiles adopting `docs/ops/images.md`, the `next`
+  16.4.5 bump the npm audit allowlist waits on, chart hardening and a values
+  schema; (6) ecosystem features (servers per hosted cluster from
+  server-scan, workflow runs).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -125,7 +130,16 @@ Explicit user instructions; violating one is a real mistake, not style.
 ```bash
 uv sync --locked --all-packages --all-groups --all-extras
 scripts/gate.sh                    # everything CI runs, in CI's order
-scripts/gate.sh python             # only the Python half
+scripts/gate.sh ci                 # actionlint, zizmor, shellcheck (pinned tools, scripts/ci-tools.sh)
+scripts/gate.sh python             # the Python half, incl. the requirement-export drift check
+scripts/gate.sh web                # npm ci, npm audit (allowlist), lint, typecheck, build
+scripts/gate.sh e2e                # the mocked Playwright suite on a production build
+PLAYWRIGHT_CHANNEL=chrome scripts/gate.sh e2e   # on installed Chrome (Playwright's download hangs here)
+
+# After any pyproject.toml change: relock and re-export, commit all three
+uv lock && scripts/export-requirements.sh
+# Images, from the repository root (docs/ops/images.md)
+podman build -f apps/web/Dockerfile -t wingman-web:dev .
 
 # Real GitLab (podman; ~8 GB VM, see the script header)
 scripts/dev/gitlab-up.sh token     # start local GitLab CE 19.5.3 and make the dev token
@@ -139,13 +153,51 @@ helm template <cluster> <chart-dir> -f sites/configValues.yaml -f sites/<site>/v
 ```
 
 Web: `npm run lint --workspace=web`, `cd apps/web && npx tsc --noEmit`,
-`npm run build --workspace=web`. Playwright: `cd apps/web && npm run test:e2e`
-runs every spec, including `live-*` ones that need a backend; the mocked ones
-are `user-flows.spec.ts` and the page-object specs. Playwright traps: route
-mocks match LIFO; SSE keeps the network busy, so wait on `domcontentloaded`,
-never `networkidle`; any unmocked endpoint's 401 redirects to `/login`.
+`npm run build --workspace=web`. Playwright: `npm run test:e2e:mocked
+--workspace=web` runs the `mocked` project (every spec but `live-*`; CI runs
+it); `npm run test:e2e` runs every spec, including `live-*` ones that need a
+backend (`PLAYWRIGHT_BASE_URL`). Playwright traps: route mocks match LIFO; SSE
+keeps the network busy, so wait on `domcontentloaded`, never `networkidle`;
+any unmocked endpoint's 401 redirects to `/login`.
+
+The live GitLab contract runs nightly in CI (`.github/workflows/live-gitlab.yml`)
+and fails unless every live test ran. Only GitHub can run the publish jobs
+(tag, push, release notes; ADR-0030).
 
 Then the step no command covers: re-read the docs your change made wrong.
+
+## Keeping CI current (manual, roughly quarterly)
+
+Nothing updates itself and there is no Dependabot or Renovate (ADR-0003,
+ADR-0032). The pass:
+
+1. **Action pins.** Compare each `uses:` comment (`# vX.Y.Z`) with the
+   action's latest release. Resolve the new tag to its commit before pinning,
+   dereferencing annotated tags:
+   `gh api repos/<o>/<r>/git/ref/tags/<tag>` (an `object.type` of `tag` means
+   one more `gh api repos/<o>/<r>/git/tags/<sha> --jq .object.sha`). Never
+   copy a SHA from a README; server-scan was broken twice by tags that do not
+   exist. Then `scripts/gate.sh ci`: zizmor refuses a tag pin and a comment that
+   names another tag.
+2. **Downloaded tools.** `scripts/ci-tools.sh` (actionlint, zizmor,
+   shellcheck) and the helm/promtool steps in `ci.yml`: new version plus every
+   checksum, from the release's checksum file or the API's asset digests
+   (the script header has the command).
+3. **Vulnerable or unused.** `scripts/gate.sh python web` runs `pip-audit`,
+   `deptry` and the npm audit gate. Prefer deleting an unused dependency to
+   bumping it. A fixed advisory leaves `scripts/npm-audit-allowlist.txt` in the
+   same commit (the gate fails until it does); `next` 16.4.5 clears 37 entries.
+4. **Runtime deprecations.** Actions declare a Node runtime; GitHub removes
+   old ones (server-scan had to replace a tagging action for that).
+5. **Base images.** `apps/web/Dockerfile` (and the service Dockerfiles) pin
+   UBI 9.8 by tag and digest, and CPython by checksum; docs/ops/images.md has
+   the commands to resolve a new digest and checksums.
+6. **ty and ruff** are pinned exactly in the root dev group; a ty bump moves
+   diagnostics (ADR-0008), so bump it in its own commit and read new errors as
+   ty changing. **hatchling** (root `build` group) follows the members'
+   build-system; after a bump, `uv lock && scripts/export-requirements.sh`.
+7. **GitLab CE** for the live contract: `live-gitlab.yml` and
+   `scripts/dev/gitlab-up.sh` together, then record the run in ADR-0005.
 
 ## Legacy services (until rewritten)
 
@@ -158,9 +210,12 @@ Then the step no command covers: re-read the docs your change made wrong.
 - Roles come from OpenShift groups (`WINGMAN_ADMIN_GROUPS` /
   `WINGMAN_VIEWER_GROUPS`) and travel in the app JWT; both services share
   `JWT_SECRET_KEY`. `AdminUser` guards writes, `CurrentUser` reads.
-- Images: CI pushes `ghcr.io/<owner>/wingman-{day1,day2,web}` on main with
-  `<short_sha>`, `latest`, `v<VERSION>`. Manual production builds are tagged
-  with the commit SHA.
+- Images (docs/ops/images.md, ADR-0030): CI builds all three on every PR and
+  pushes `ghcr.io/<owner>/wingman-{day1,day2,web}` from main as `<short_sha>`
+  and `latest`; `v<VERSION>` only when VERSION names a new, higher version
+  (that commit is the release: git tag, signed provenance, release notes).
+  Never re-point or lower a version. Manual production builds are tagged with
+  the commit SHA.
 
 ## Where to continue right now
 

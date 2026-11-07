@@ -1,0 +1,21 @@
+# The build context of apps/web/Dockerfile is the repository root; this file
+# (BuildKit and podman read <Dockerfile>.dockerignore beside the Dockerfile)
+# lets in only what that Dockerfile copies. An allowlist, as in herzi: a new
+# file stays out of the image until it is named here.
+**
+!package.json
+!package-lock.json
+!apps/web/
+!apps/web/**
+
+# Inside apps/web: local build output and everything only tests or editors use.
+apps/web/node_modules
+apps/web/.next
+apps/web/e2e
+apps/web/playwright.config.ts
+apps/web/playwright-report
+apps/web/test-results
+apps/web/Dockerfile*
+apps/web/*.md
+**/.env*
+**/.DS_Store
