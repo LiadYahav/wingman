@@ -28,7 +28,7 @@ dev = [
 packages = ["src"]
 
 [tool.uv.sources]
-wingman-shared = { path = "../../packages/shared-python", editable = true }
+wingman-shared = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

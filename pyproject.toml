@@ -1,0 +1,129 @@
+# Wingman's Python workspace: one lockfile (uv.lock) and one tooling config for
+# every Python package. Each member keeps its own pyproject for its runtime
+# dependencies; versions are pinned exactly there (ADR-0003).
+#
+# Packages still on the legacy layout (shared-python, day1-service,
+# day2-service) keep their own [tool.ruff] sections until they are rewritten;
+# ruff uses the nearest config, so the strict rules below apply to new code.
+
+[tool.uv.workspace]
+members = [
+    "packages/wingman-core",
+    "packages/shared-python",
+    "apps/day1-service",
+    "apps/day2-service",
+]
+
+[tool.uv]
+required-version = ">=0.13,<0.14"
+
+[dependency-groups]
+dev = [
+    "hypothesis==6.170.15",
+    "import-linter==2.15",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==6.0.0",
+    "ruff==0.14.0",
+    "ty==0.0.78",
+]
+
+# ── pytest ──────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["packages/wingman-core/tests"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+xfail_strict = true
+markers = [
+    "live_gitlab: runs against a real GitLab; skipped unless WINGMAN_TEST_GITLAB_URL and WINGMAN_TEST_GITLAB_TOKEN are set",
+]
+filterwarnings = ["error"]
+
+# ── coverage ────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+branch = true
+source = ["wingman_core"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.$",
+]
+
+# ── ruff ────────────────────────────────────────────────────────────────────
+# The rule set is server-scan's, plus BLE001 (no blind `except Exception`).
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["apps/web", "node_modules", "dev/gitlab-fixtures"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC", "S", "W605",
+    "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "ANN204", "ANN205", "ANN206",
+    "PTH", "LOG", "RET", "PERF", "FURB", "TRY004", "TRY300", "TRY400", "D", "BLE001",
+]
+ignore = ["D203", "D212"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["wingman_core", "wingman_shared"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Query", "fastapi.Depends", "fastapi.Header"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106", "S311", "D"]
+"**/testing/**" = ["S101", "D102"]
+"scripts/**" = ["T201"]
+
+# ── ty ──────────────────────────────────────────────────────────────────────
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.rules]
+unused-awaitable = "error"
+blanket-ignore-comment = "error"
+
+# ── import-linter: the layer rules (ADR-0001) ───────────────────────────────
+[tool.importlinter]
+root_packages = ["wingman_core"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "core domain is pure: no I/O libraries and no outer layers"
+type = "forbidden"
+source_modules = ["wingman_core.domain"]
+forbidden_modules = [
+    "wingman_core.ports", "wingman_core.application", "wingman_core.infrastructure",
+    "wingman_core.web", "wingman_core.testing",
+    "fastapi", "starlette", "httpx", "pydantic_settings", "prometheus_client", "structlog",
+]
+
+[[tool.importlinter.contracts]]
+name = "core ports depend only on the domain"
+type = "forbidden"
+source_modules = ["wingman_core.ports"]
+forbidden_modules = [
+    "wingman_core.application", "wingman_core.infrastructure", "wingman_core.web",
+    "fastapi", "starlette", "httpx",
+]
+
+[[tool.importlinter.contracts]]
+name = "core infrastructure does not depend on web"
+type = "forbidden"
+source_modules = ["wingman_core.infrastructure"]
+forbidden_modules = ["wingman_core.web", "fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
+name = "core observability does not depend on web"
+type = "forbidden"
+source_modules = ["wingman_core.observability"]
+forbidden_modules = ["wingman_core.web", "fastapi", "starlette"]
