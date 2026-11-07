@@ -29,7 +29,6 @@ from wingman_core.ports.clock import Clock, system_clock
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_core.settings import GitBackend
 from wingman_core.web.app_factory import create_base_app
-from wingman_day2 import __version__
 from wingman_day2.api.v1 import router
 from wingman_day2.api.v1.errors import register_day2_errors
 from wingman_day2.application.services import Day2Services
@@ -67,8 +66,8 @@ def create_app(
     metrics = WingmanMetrics(
         registry or CollectorRegistry(),
         component="day2",
-        version=__version__,
-        commit=config.day2.wingman_build_commit,
+        version=config.day2.wingman_version,
+        commit=config.day2.wingman_commit,
     )
     client: httpx.AsyncClient | None = None
     if gitlab is None:
@@ -101,7 +100,7 @@ def create_app(
 
     app = create_base_app(
         title="Wingman day2",
-        version=__version__,
+        version=config.day2.wingman_version,
         metrics=metrics,
         session_tokens=SessionTokens(
             config.auth.jwt_secret_key.get_secret_value(),

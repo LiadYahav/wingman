@@ -8,7 +8,9 @@
 - ``DAY2_CACHE_TTL_SECONDS``: how long a GitLab read is kept (ADR-0011; at most 60).
 - ``WINGMAN_FIXTURES_DIR``: with ``WINGMAN_GIT_BACKEND=fake``, the tree to seed
   the in-memory GitLab from (default ``dev/gitlab-fixtures``).
-- ``WINGMAN_BUILD_COMMIT``: the commit ``wingman_build_info`` reports.
+- ``WINGMAN_VERSION``, ``WINGMAN_COMMIT``: the build ``wingman_build_info`` reports; the
+  image sets both, with the same names as day1, so the version-skew alert compares like
+  with like.
 
 ``GITLAB_URL`` and ``GITLAB_TOKEN`` are required unless the backend is the fake.
 """
@@ -22,6 +24,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from wingman_core.settings import AuthSettings, GitBackend, GitLabSettings, RuntimeSettings
+from wingman_day2 import __version__
 
 FAKE_GITLAB_URL = "http://gitlab.fake"
 
@@ -36,7 +39,8 @@ class Day2Settings(BaseSettings):
     day2_gitops_branch: str = Field(default="main", min_length=1)
     day2_cache_ttl_seconds: float = Field(default=15.0, gt=0, le=60)
     wingman_fixtures_dir: Path | None = None
-    wingman_build_commit: str = "unknown"
+    wingman_version: str = __version__
+    wingman_commit: str = "unknown"
 
     @property
     def day1_project(self) -> int | str:
