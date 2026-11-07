@@ -40,11 +40,18 @@ The root `.python-version` said 3.12 while every package required 3.13.
 ## Consequences
 
 - Upgrading anything is an explicit edit plus `uv lock`, reviewed as a diff.
-- The images must install from the lock as well; until the Dockerfiles do
-  (hash-pinned `requirements` exports per service), the legacy images still
-  resolve at build time. That is tracked as the next step of the foundation.
+- The images install from the lock as well (2026-11-07). The web image runs
+  `npm ci` against the root `package-lock.json` from the repository root.
+  `scripts/export-requirements.sh` writes hash-pinned per-service exports
+  (`deploy/python/requirements-{day1,day2}.txt`) and the members' build
+  backend (`requirements-build.txt`, from the root `build` group); the Python
+  images install those with `--require-hashes --no-deps` and build the
+  workspace members offline (the pattern is in `docs/ops/images.md`, and the
+  two service Dockerfiles adopt it with their rewrite). A `pyproject.toml`
+  change is therefore `uv lock` plus the export script, committed together.
 
 ## Verification
 
 `uv sync --locked` in CI and in `scripts/gate.sh` fails on any drift between
-the manifests and `uv.lock`.
+the manifests and `uv.lock`; `scripts/export-requirements.sh --check` (CI and
+the gate) fails on any drift between `uv.lock` and the exports.
