@@ -40,13 +40,13 @@ jobs:
         run: uv sync --locked --all-packages --all-groups --all-extras
 
       - name: ruff check
-        run: uv run ruff check packages/wingman-core
+        run: uv run ruff check packages/wingman-core apps/day2-service
 
       - name: ruff format --check
-        run: uv run ruff format --check packages/wingman-core
+        run: uv run ruff format --check packages/wingman-core apps/day2-service
 
       - name: ty
-        run: uv run ty check packages/wingman-core
+        run: uv run ty check packages/wingman-core apps/day2-service
 
       - name: import-linter
         run: uv run lint-imports
@@ -61,14 +61,18 @@ jobs:
         working-directory: packages/wingman-core
         run: uv run --with deptry==0.24.0 deptry src --known-first-party wingman_core
 
+      - name: deptry (day2)
+        working-directory: apps/day2-service
+        run: uv run --with deptry==0.24.0 deptry src --known-first-party wingman_day2
+
       # The legacy packages keep their old checks until they are rewritten
       # (ADR-0001). They have no tests yet; none are faked here.
       - name: legacy ruff
-        run: uv run ruff check packages/shared-python apps/day1-service apps/day2-service
+        run: uv run ruff check packages/shared-python apps/day1-service
 
       - name: legacy mypy
         run: |
-          for d in packages/shared-python/src/wingman_shared apps/day1-service/src apps/day2-service/src; do
+          for d in packages/shared-python/src/wingman_shared apps/day1-service/src; do
             uv run mypy "$d" --ignore-missing-imports
           done
 

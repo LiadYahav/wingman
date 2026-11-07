@@ -4,44 +4,27 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wingman-day2-service"
-version = "0.1.0"
-description = "Wingman Day2 Service — addon and operator management"
-requires-python = ">=3.13"
+version = "0.2.0"
+description = "Wingman day2: charts on clusters through the gitops-day2 team repos"
+requires-python = ">=3.13,<3.14"
+# Exact pins (ADR-0003); the same versions wingman-core pins, where both use one.
 dependencies = [
-    "wingman-shared",
-    "fastapi>=0.115,<1",
-    "uvicorn[standard]>=0.30,<1",
+    "fastapi==0.141.1",
+    "httpx==0.28.1",
+    "prometheus-client==0.26.0",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.15.0",
+    "pyyaml==6.0.3",
+    "uvicorn[standard]==0.54.0",
+    "wingman-core",
 ]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8",
-    "pytest-asyncio>=0.24",
-    "pytest-mock>=3.14",
-    "httpx>=0.27",
-    "ruff>=0.8",
-    "mypy>=1.13",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src"]
 
 [tool.uv.sources]
-wingman-shared = { workspace = true }
+wingman-core = { workspace = true }
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
+[tool.hatch.build.targets.wheel]
+packages = ["src/wingman_day2"]
 
-[tool.ruff]
-target-version = "py313"
-line-length = 120
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
-
-[tool.mypy]
-python_version = "3.13"
-warn_return_any = false
-warn_unused_ignores = false
-disallow_untyped_defs = false
-check_untyped_defs = true
+[tool.deptry.per_rule_ignores]
+# The server the image's CMD runs; nothing imports it.
+DEP002 = ["uvicorn"]

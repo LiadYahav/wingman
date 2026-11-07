@@ -32,3 +32,8 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0009](0009-settings-fail-closed.md) | Settings refuse insecure or fake-in-production configurations at start-up |
 | [0010](0010-metrics-are-a-contract.md) | Metrics follow one catalogue with bounded labels, served off the public Route |
 | [0011](0011-per-replica-read-cache.md) | GitLab reads are cached per replica for seconds; writes clear what they made stale |
+| [0020](0020-day2-four-destination-kinds.md) | day2 models four destination kinds, discovered from folders and day1, each with an id that carries its position |
+| [0021](0021-value-stacks-with-provenance-checked-by-the-oracle.md) | The values preview is the platform's exact stack with Helm's merge and per-key provenance, held to render_chain.py by an oracle test |
+| [0022](0022-what-day2-writes.md) | day2 writes the minimum per change, never pins a version per cluster by default, and says that removal orphans |
+| [0023](0023-day2-lints.md) | day2 lints are render_chain.py's rules as errors plus Wingman's own; a change that adds an error is refused |
+| [0024](0024-chart-versions-and-defaults.md) | Chart versions and defaults come from the chart repo on the same GitLab, at the resolved revision and path |

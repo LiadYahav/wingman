@@ -28,8 +28,8 @@ step() {
 
 # New code is held to the strict bar; legacy packages keep their old lint
 # until their rewrite (ADR-0001).
-STRICT=(packages/wingman-core)
-LEGACY=(packages/shared-python apps/day1-service apps/day2-service)
+STRICT=(packages/wingman-core apps/day2-service)
+LEGACY=(packages/shared-python apps/day1-service)
 
 if [[ $scope == all || $scope == python ]]; then
   step "uv sync --locked" uv sync --locked --all-packages --all-groups --all-extras --quiet
@@ -41,8 +41,10 @@ if [[ $scope == all || $scope == python ]]; then
   step "pip-audit" uv run --with pip-audit==2.10.1 pip-audit --skip-editable --progress-spinner off
   step "deptry (wingman-core)" bash -c 'cd packages/wingman-core &&
     uv run --with deptry==0.24.0 deptry src --known-first-party wingman_core'
+  step "deptry (day2)" bash -c 'cd apps/day2-service &&
+    uv run --with deptry==0.24.0 deptry src --known-first-party wingman_day2'
   step "legacy ruff" uv run ruff check "${LEGACY[@]}"
-  step "legacy mypy" bash -c 'for d in packages/shared-python/src/wingman_shared apps/day1-service/src apps/day2-service/src; do uv run mypy "$d" --ignore-missing-imports || exit 1; done'
+  step "legacy mypy" bash -c 'for d in packages/shared-python/src/wingman_shared apps/day1-service/src; do uv run mypy "$d" --ignore-missing-imports || exit 1; done'
 fi
 
 if [[ $scope == all || $scope == chart ]]; then
