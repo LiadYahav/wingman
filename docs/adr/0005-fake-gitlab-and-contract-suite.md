@@ -46,6 +46,12 @@ settings refuse in production (ADR-0009).
 - Tests are fast (the core suite runs in under a second) and deterministic.
 - Each new GitLab behaviour Wingman relies on needs a contract test first, or
   the fake has nothing holding it honest.
+- The live tier runs on a schedule (2026-11-07):
+  `.github/workflows/live-gitlab.yml`, nightly and on demand, boots GitLab CE
+  19.5.3 like `scripts/dev/gitlab-up.sh`, makes a throwaway token with
+  `gitlab-rails runner`, and fails unless at least 27 live tests ran and none
+  skipped (`scripts/assert-junit.py`: pytest alone passes a suite that skips).
+  Bumping GitLab means changing that workflow and the dev script together.
 
 ## Verification
 
@@ -57,3 +63,8 @@ settings refuse in production (ADR-0009).
   the adapter: an MR's stored diff is computed in a background job (empty
   right after the MR opens, so open MRs are diffed with the compare API), and
   a merged MR's source branch is removed asynchronously.
+- 2026-11-07, the nightly workflow's shell dry-run against the local GitLab
+  CE 19.5.3: its `gitlab-rails runner` token step makes a working token (then
+  revoked); the suite passes 27/27 and `scripts/assert-junit.py --min-tests 27`
+  accepts it; the same suite with no GitLab configured (27 skipped, pytest
+  exit 0) is refused. The scheduled run itself only happens on GitHub.
