@@ -669,55 +669,83 @@ mcFiles:
 
         {/* Addons */}
         <section>
-          <SectionHeader id="addons" icon={Package} title="Day2 Addons" subtitle="Install, configure, and manage operators on running clusters" />
+          <SectionHeader id="addons" icon={Package} title="Day2 Addons" subtitle="Install, configure, and manage charts on the hub, MCEs, hosted and UPI clusters" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            Addons are Kubernetes operators deployed via ArgoCD. Each addon belongs to a <strong>team</strong>{" "}
-            (e.g. <InlineCode>networking</InlineCode>, <InlineCode>storage</InlineCode>, <InlineCode>monitoring</InlineCode>).
-            Teams maintain default values; per-cluster overrides are layered on top.
+            Addons are Helm charts the platform&apos;s ArgoCD deploys. Each belongs to a <strong>team</strong>,
+            whose GitLab project under the sigs group holds the chart&apos;s team default
+            (<InlineCode>operators/{"{chart}"}/</InlineCode>) and a folder per destination that gets it. A
+            folder existing is the registration: Wingman installs a chart by opening an MR that adds the folder.
+            There are four kinds of destination, listed on the <strong>Destinations</strong> page:
           </p>
-
-          <h3 className="text-base font-semibold mb-3">Value layering</h3>
-          <CodeBlock language="Addon value priority (lowest → highest)">
-{`1. Helm chart defaults       (shipped with the operator)
-2. Team defaults              operators/{addon}/values.yaml
-3. Cluster overrides          mces/{mce}/{cluster}/{addon}/values.yaml
-                              ↑ this is what Wingman writes when you fill the addon form`}
+          <CodeBlock language="Where a chart's folder lives, per destination kind">
+{`hub      defaults/hub/{chart}/
+mce      sites/{site}/{env}/mces/{mce}/in-cluster/{chart}/
+hosted   sites/{site}/{env}/mces/{mce}/{cluster}/{chart}/
+upi      sites/{site}/{env}/upi/{cluster}/{chart}/`}
           </CodeBlock>
 
-          <h3 className="text-base font-semibold mt-6 mb-4">Installing an addon</h3>
+          <h3 className="text-base font-semibold mt-6 mb-3">Value layering</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+            The platform merges up to ten files, as Helm does (a later layer wins; <InlineCode>null</InlineCode>{" "}
+            deletes a key). For a hosted cluster:
+          </p>
+          <CodeBlock language="Hosted-cluster value stack (lowest → highest)">
+{`chart             the chart's own values.yaml, at the resolved revision
+team              operators/{chart}/values.yaml
+team-ocp-version  operators/{chart}/ocp-versions/{ocp}/values.yaml
+site, site-env    sites/{site}/values.yaml, sites/{site}/{env}/values.yaml
+fleet …           defaults/hosted-clusters/{chart}/values[-{env}|-{cluster}].yaml
+mce               sites/{site}/{env}/mces/{mce}/values.yaml
+cluster-wide      …/{cluster}/values.yaml
+cluster           …/{cluster}/{chart}/values.yaml
+                  ↑ the file Wingman writes when you edit a chart's values`}
+          </CodeBlock>
+          <p className="text-sm text-muted-foreground leading-relaxed mt-3 mb-5">
+            The values table shows every merged value with the layer that set it (<strong>Set by</strong>);
+            the <strong>Layers</strong> tab lists the stack file by file. Editing a value writes it into the
+            cluster&apos;s file; <em>inherit</em> takes it out again.
+          </p>
+
+          <h3 className="text-base font-semibold mt-6 mb-4">Installing a chart</h3>
           <div className="space-y-3 mb-5">
-            <Step n={1} title="Open the cluster's Addons tab">
-              Navigate to the cluster (<InlineCode>prod-dok-nova</InlineCode>) → <strong>Addons</strong> tab.
+            <Step n={1} title="Open the destination's charts">
+              From a cluster&apos;s page (<strong>Addons</strong>), or any destination on the <strong>Destinations</strong> page.
             </Step>
-            <Step n={2} title="Browse the catalog">
-              Click <strong>Add Addon</strong>. The catalog is organized by team. Select the addon you need.
+            <Step n={2} title="Pick a chart under Available">
+              Click <strong>Install</strong>, or select several and use <strong>Install selected</strong>: one MR per team,
+              and if any chart is refused, none is opened.
             </Step>
-            <Step n={3} title="Configure override values">
-              Only fields the spec author marked as <em>overrideable</em> are shown. You can use the
-              <strong> Form</strong> mode for simple key-value edits or switch to <strong>YAML</strong> mode
-              for multi-level structures.
+            <Step n={3} title="Set only what differs">
+              The form shows the values the chart would get; change only what this destination needs. The revision is
+              inherited from the team; choosing another one is an <strong>emergency pin</strong> that detaches the
+              destination from future upgrades, so it must be confirmed.
             </Step>
-            <Step n={4} title="Submit">
-              Click <strong>Install</strong>. Wingman commits an override <InlineCode>values.yaml</InlineCode>{" "}
-              to the team&apos;s Day2 repository and opens a GitLab MR. Merge it to trigger ArgoCD sync.
+            <Step n={4} title="Review and open the MR">
+              The review shows the files the MR creates. After it is merged, ArgoCD generates the app;
+              a manual-sync app deploys nothing until someone syncs it. Wingman has no ArgoCD access, so it never
+              shows sync or health.
             </Step>
           </div>
 
-          <h3 className="text-base font-semibold mb-3">The addon kebab menu</h3>
-          <p className="text-sm text-muted-foreground mb-3">
-            Each installed addon row has a <strong>⋮</strong> menu with two options:
+          <h3 className="text-base font-semibold mb-3">Fleet defaults</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-5">
+            A chart in a team&apos;s <InlineCode>defaults/{"{scope}"}/</InlineCode> is deployed to every destination of
+            that kind. It appears as <strong>fleet default</strong>; editing it writes{" "}
+            <InlineCode>defaults/{"{scope}"}/{"{chart}"}/values-{"{cluster}"}.yaml</InlineCode>. It cannot be removed
+            from one cluster or installed into a cluster folder as well (that would generate the app twice): exclude
+            the cluster in <InlineCode>defaults/{"{scope}"}/exclusions.yaml</InlineCode> instead.
           </p>
+
+          <h3 className="text-base font-semibold mb-3">The chart&apos;s ⋮ menu</h3>
           <div className="space-y-3 mb-5">
             <div className="flex gap-4 rounded-xl border bg-card p-4">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <ExternalLink className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold mb-1">Open in GitLab</p>
+                <p className="text-sm font-semibold mb-1">Open folder in GitLab</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Opens the per-cluster override directory directly in GitLab. Path:{" "}
-                  <InlineCode>mces/{"{mce}"}/{"{cluster}"}/{"{addon}"}</InlineCode>. Visible to all users,
-                  including Viewers — useful for auditing or emergency direct-Git edits.
+                  Opens the chart&apos;s folder in the team repository. Visible to all users, including Viewers.
                 </p>
               </div>
             </div>
@@ -726,22 +754,22 @@ mcFiles:
                 <AlertTriangle className="h-4 w-4 text-red-500" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold mb-1">Remove Addon</p>
+                <p className="text-sm font-semibold mb-1">Remove</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Opens a confirmation dialog then commits a removal MR — deletes the cluster override
-                  files and removes the ArgoCD Application. Admin-only.
+                  Opens an MR deleting the chart&apos;s folder, which deletes its ArgoCD Application, but ArgoCD{" "}
+                  <strong>orphans the workload: it keeps running</strong>. A teardown needs{" "}
+                  <InlineCode>argocd app delete {"<app>"} --cascade</InlineCode> after the merge. Admin-only.
                 </p>
               </div>
             </div>
           </div>
 
           <Callout type="tip" title="Addon override example">
-            Say the <InlineCode>monitoring/prometheus-stack</InlineCode> addon has a team default of{" "}
-            <InlineCode>retention: 30d</InlineCode>. For <InlineCode>prod-dok-nova</InlineCode> you
-            override to <InlineCode>retention: 90d</InlineCode> and{" "}
-            <InlineCode>storageClass: fast-ssd</InlineCode>. These two values are written to{" "}
-            <InlineCode>mces/prod-dok/prod-dok-nova/prometheus-stack/values.yaml</InlineCode> in the
-            monitoring team&apos;s repository — the team default is unaffected.
+            Say <InlineCode>monitoring/prometheus-stack</InlineCode> has a team default of{" "}
+            <InlineCode>retention: 30d</InlineCode>. For <InlineCode>prod-dok-nova</InlineCode> you set{" "}
+            <InlineCode>retention: 90d</InlineCode>. Only that value is written, to{" "}
+            <InlineCode>sites/nova/prod/mces/prod-dok/prod-dok-nova/prometheus-stack/values.yaml</InlineCode> in the
+            monitoring team&apos;s repository; the team default is unaffected.
           </Callout>
         </section>
 
@@ -946,27 +974,27 @@ mcFiles:
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">Form ↔ YAML toggle for addon overrides</p>
-                  <p className="text-xs text-muted-foreground">Cluster addon install / edit dialog</p>
+                  <p className="text-xs text-muted-foreground">A chart&apos;s install form and values editor</p>
                 </div>
               </div>
               <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
                 <p>
-                  The addon override dialog has two modes switchable via tabs at the top of the form:
+                  A chart&apos;s values editor has two views:
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-2">
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <p className="text-xs font-semibold mb-1">Form mode</p>
                     <p className="text-xs leading-relaxed">
-                      Each overrideable field is shown as a labelled input. Integers, booleans, and
-                      simple strings have dedicated controls. Good for routine value changes.
+                      Every merged value with the layer that set it. Numbers stay numbers, booleans
+                      are switches, lists and maps are YAML. Good for routine value changes.
                     </p>
                   </div>
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <p className="text-xs font-semibold mb-1">YAML mode</p>
                     <p className="text-xs leading-relaxed">
-                      A raw YAML editor containing all override values. Necessary for nested structures,
-                      multi-line strings, or pasting values from another source. Values sync back to the
-                      form when you switch tabs.
+                      The file the change writes, verbatim. Necessary for new keys, multi-line strings,
+                      or a <InlineCode>null</InlineCode> that deletes a default. Values sync back to the
+                      form when you switch.
                     </p>
                   </div>
                 </div>
@@ -991,18 +1019,17 @@ mcFiles:
               </div>
               <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
                 <p>
-                  Expand any installed addon and click the <strong>Layers</strong> tab to see a
-                  side-by-side breakdown of where each value comes from:
+                  Every value in a chart&apos;s values table carries the layer that set it:
                 </p>
                 <CodeBlock language="Value provenance example">
-{`replicas:      2    ← cluster override   (you set this)
-retention:     30d  ← team default       (monitoring team owns this)
-namespace:     cert-manager ← chart default (Helm chart ships this)`}
+{`replicas:   2              ← cluster    (this cluster's values.yaml)
+retention:  30d            ← team       (operators/{chart}/values.yaml)
+namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                 </CodeBlock>
                 <p>
-                  The <strong>Merged</strong> tab shows the final values as ArgoCD will apply them.
-                  Use the Layers tab when debugging unexpected addon behaviour — it makes it immediately
-                  clear which layer is winning for each key.
+                  The <strong>Layers</strong> tab lists the whole stack in merge order, with the files that do not
+                  exist dimmed, so you can see which layer is winning for each key. The merge is the service&apos;s,
+                  the same one ArgoCD&apos;s Helm runs.
                 </p>
               </div>
             </div>
@@ -1229,18 +1256,23 @@ namespace:     cert-manager ← chart default (Helm chart ships this)`}
               <div className="divide-y">
                 {[
                   {
-                    file: "operators/{addon}/{addon}.yaml",
-                    desc: "Addon definition + ArgoCD Application metadata. Maintained by the owning team. Path template: DAY2_ADDON_DEFS_PATH_TEMPLATE.",
+                    file: "operators/{chart}/{chart}.yaml, values.yaml",
+                    desc: "The team default: where the chart comes from (repourl, targetRevision, path) and its values. Maintained by the owning team.",
                     path: "per-team project root",
                   },
                   {
-                    file: "mces/{mce}/{cluster}/{addon}/values.yaml",
-                    desc: "Per-cluster override values. Written by Wingman when an admin installs or updates an addon. Path template: DAY2_ADDON_OVERRIDES_PATH_TEMPLATE.",
+                    file: "sites/{site}/{env}/mces/{mce}/{cluster}/{chart}/values.yaml",
+                    desc: "A hosted cluster's values for the chart, written by Wingman on install and update. MCEs use …/mces/{mce}/in-cluster/{chart}/, UPI clusters sites/{site}/{env}/upi/{cluster}/{chart}/, the hub defaults/hub/{chart}/.",
                     path: "per-team project root",
                   },
                   {
-                    file: "mces/{mce}/{cluster}/{addon}/argocd.yaml",
-                    desc: "Per-cluster ArgoCD Application overrides (target namespace, sync policy). Written alongside values.yaml.",
+                    file: "…/{chart}/{chart}.yaml",
+                    desc: "Written only when the cluster needs a deploy-config key it does not inherit: a repourl, or an emergency targetRevision pin.",
+                    path: "per-team project root",
+                  },
+                  {
+                    file: "defaults/{scope}/{chart}/values-{cluster}.yaml",
+                    desc: "A fleet default's values for one cluster, written when you edit a fleet default. The layout is the platform's contract, not configurable.",
                     path: "per-team project root",
                   },
                 ].map(({ file, desc, path }) => (
@@ -1295,10 +1327,10 @@ namespace:     cert-manager ← chart default (Helm chart ships this)`}
                 q: "Addon installed but not appearing in the cluster",
                 a: (
                   <>
-                    ArgoCD syncs on a schedule (or manually via the ArgoCD UI). Use{" "}
-                    <strong>Open in GitLab</strong> from the addon menu to confirm the{" "}
-                    <InlineCode>values.yaml</InlineCode> is committed, then check the ArgoCD Application
-                    health in the ArgoCD dashboard.
+                    Most leaf apps are manual-sync: after the merge ArgoCD generates the app, but nothing
+                    deploys until someone syncs it in ArgoCD (Wingman has no ArgoCD access). Use{" "}
+                    <strong>Open folder in GitLab</strong> from the chart&apos;s menu to confirm the folder is on{" "}
+                    <InlineCode>main</InlineCode>, then sync the app named in the MR&apos;s notes.
                   </>
                 ),
               },
