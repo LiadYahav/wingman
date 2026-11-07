@@ -163,12 +163,12 @@ export default function LintsPage() {
                         <td className="px-4 py-3">
                           <Icon className={cn("h-4 w-4", tone.text)} aria-label={tone.label} />
                         </td>
-                        <td className="max-w-2xl px-4 py-3">
+                        <td className="max-w-xl px-4 py-3">
                           <p className="break-words text-sm">{f.message}</p>
                           <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{f.rule}</p>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-xs">{f.team || "—"}</td>
-                        <td className="max-w-md px-4 py-3 text-xs">
+                        <td className="min-w-80 max-w-lg px-4 py-3 text-xs">
                           {f.path && <p className="break-all font-mono text-[11px]">{f.path}</p>}
                           {(f.cluster || f.chart) && (
                             <p className="mt-0.5 text-muted-foreground">
