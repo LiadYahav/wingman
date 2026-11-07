@@ -61,6 +61,12 @@ npm run test:e2e:ui
 
 # Run specific test file
 npx playwright test addon-configuration
+
+# The main day1 flows against a running stack (see "Running against local services"):
+# create, approve as a second user, edit, delete. Every step opens a real MR, so use a
+# disposable GitLab only (the in-memory fake or the seeded local GitLab CE).
+WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test live-day1-flows --project=live
 ```
 
 ### Page Objects
