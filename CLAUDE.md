@@ -84,18 +84,21 @@ Explicit user instructions; violating one is a real mistake, not style.
   against local GitLab with `scripts/dev/day1_live_e2e.py` and through both
   chart copies. Web-visible API changes:
   `docs/notes/2026-11-07-day1-api-changes.md`.
+- Done: day2 rewritten as `wingman_day2` (four destination kinds, fleet
+  defaults and exclusions, the platform's value stacks with provenance,
+  lints, one MR per team; ADRs 0020-0024), held to the team's
+  `render_chain.py` by an oracle test and run against GitLab CE 19.5.3.
+  Web-visible API changes: `docs/notes/2026-11-07-day2-api-changes.md`.
 - Done: CI's supply chain and releases (ADR-0030, ADR-0032): hash-pinned
   per-service exports, the web image from the root lock, build on every PR,
   publish and release from main, a blocking npm audit, a nightly live-GitLab
   run.
-- **Not done yet, in order:** (1) day2 rewrite against the gitops-day2
-  layout; (2) web pages for the new data and the day1 API changes; (3) the
-  chart's day1 env (`GITLAB_TOKEN`, dropped `CACHE_*`, see the note); (4)
-  end-to-end check of the whole stack against the seeded local GitLab; (5)
-  the day1/day2 Dockerfiles adopting `docs/ops/images.md`, the `next`
-  16.4.5 bump the npm audit allowlist waits on, chart hardening and a values
-  schema; (6) ecosystem features (servers per hosted cluster from
-  server-scan, workflow runs).
+- **Not done yet, in order:** (1) web pages for the new data and both API
+  change notes; (2) the chart's env for the rewritten services
+  (`GITLAB_TOKEN`, dropped `CACHE_*`); (3) end-to-end check of the whole
+  stack against the seeded local GitLab; (4) day2's Dockerfile on
+  `docs/ops/images.md`, chart hardening and a values schema; (5) ecosystem
+  features (servers per hosted cluster from server-scan, workflow runs).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -223,31 +226,18 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-07 — the `wingman-core` foundation.** Branch
-`roiblum/feat-ecosystem-day1-day2`. Shipped the core package (ADRs
-0001-0010), CI and the gate, local GitLab scripts and the seeded fixtures.
-**Next:** rewrite day1 on the core against `gitops-day1/platform-config`
-(values file from the new template, naming rules, read-only sites/MCEs, read
-`mastertag`/nodepools/VLAN, status names, MR branches that CI commits to), and
-in parallel day2 against the gitops-day2 layout (four cluster kinds, defaults
-and exclusions, the 10-layer values merge, version pins). **Open:**
-production vs sandbox `clusterName`, canonical site codes and InfraEnv naming
-(questions in `docs/ecosystem/README.md`).
-
-**2026-11-07 — day1 on `wingman-core`.** Branch
-`worktree-agent-a8c8a548e56c6a474` (to merge into
-`roiblum/feat-ecosystem-day1-day2`). `apps/day1-service/src/wingman_day1`
-replaces the legacy `src/`: values file from the shared template in a
-sandbox, naming rules, read-only sites/MCEs with default `mastertag` and hub
-version, `ClusterProvisioner` (MR today), approvals on core `Approvals`
-with the reviewed head, hub/OAuth/day2 over httpx behind ports (ADRs
-0012-0019). Run locally: `WINGMAN_ENVIRONMENT=development
-WINGMAN_GIT_BACKEND=fake JWT_SECRET_KEY=<32+ chars>
-DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config
-SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs DEV_AUTH_ENABLED=true
-DEV_AUTH_SECRET=<32+ chars> uv run uvicorn wingman_day1.main:app --port 8001`;
-against local GitLab: `uv run python scripts/dev/day1_live_e2e.py --token
-<local token> --sandbox-chart <chart dir>`. **Next:** the web changes in
-`docs/notes/2026-11-07-day1-api-changes.md` and the chart's day1 env.
-**Open:** the off-convention MCE rule (ADR-0014) waits on team question 3;
-the default `clusterName` rule (ADR-0015) on question 2.
+**2026-11-07 — integration of day1, day2 and CI.** Branch
+`roiblum/feat-ecosystem-day1-day2`. Merged the three agent branches: day1
+(`wingman_day1`, ADRs 0012-0019), day2 (`wingman_day2`, ADRs 0020-0024) and
+CI (ADRs 0030-0032). Session tokens now expire by the injected clock. All
+Python packages except the legacy `wingman-shared` are on the strict bar
+(`scripts/python-packages.sh`). Run locally: day1 `uv run uvicorn
+wingman_day1.main:app --port 8001`, day2 `uv run uvicorn
+wingman_day2.main:app --port 8002` (env in each `settings.py`; both read
+`GITLAB_TOKEN`; `WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake`
+for the fixtures). **Next:** the web pages for both API change notes
+(`docs/notes/2026-11-07-day{1,2}-api-changes.md`), the chart env, an
+end-to-end run of the whole stack. **Deferred:** ArgoCD sync/status (no Argo
+API access), `exclusions.yaml` edits, OCP-version pin MRs. **Open:** team
+questions 2 (`clusterName`) and 3 (off-convention MCEs) in
+`docs/ecosystem/README.md`.

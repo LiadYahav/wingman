@@ -35,7 +35,7 @@ build = ["hatchling==1.32.4"]
 
 # ── pytest ──────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
-testpaths = ["packages/wingman-core/tests", "apps/day1-service/tests", "tests/repo"]
+testpaths = ["packages/wingman-core/tests", "apps/day1-service/tests", "apps/day2-service/tests", "tests/repo"]
 addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -48,7 +48,7 @@ filterwarnings = ["error"]
 # ── coverage ────────────────────────────────────────────────────────────────
 [tool.coverage.run]
 branch = true
-source = ["wingman_core", "wingman_day1"]
+source = ["wingman_core", "wingman_day1", "wingman_day2"]
 
 [tool.coverage.report]
 fail_under = 90
@@ -79,7 +79,7 @@ ignore = ["D203", "D212"]
 convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["wingman_core", "wingman_shared", "wingman_day1"]
+known-first-party = ["wingman_core", "wingman_shared", "wingman_day1", "wingman_day2"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Query", "fastapi.Depends", "fastapi.Header"]
@@ -97,9 +97,13 @@ python-version = "3.13"
 unused-awaitable = "error"
 blanket-ignore-comment = "error"
 
+# Vendored verbatim from a team repo (day2's render_chain.py oracle); not ours to retype.
+[tool.ty.src]
+exclude = ["apps/day2-service/tests/oracle/render_chain.py"]
+
 # ── import-linter: the layer rules (ADR-0001) ───────────────────────────────
 [tool.importlinter]
-root_packages = ["wingman_core", "wingman_day1"]
+root_packages = ["wingman_core", "wingman_day1", "wingman_day2"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -202,3 +206,58 @@ name = "wingman_day1 does not import wingman_day2"
 type = "forbidden"
 source_modules = ["wingman_day1"]
 forbidden_modules = ["wingman_day2"]
+
+# ── import-linter: day2 (ADR-0001; wingman_day2.main is the composition root) ─
+[[tool.importlinter.contracts]]
+name = "day2 domain is pure: no I/O libraries and no outer layers"
+type = "forbidden"
+source_modules = ["wingman_day2.domain"]
+forbidden_modules = [
+    "wingman_day2.ports", "wingman_day2.application", "wingman_day2.infrastructure",
+    "wingman_day2.api", "wingman_day2.main", "wingman_day2.settings",
+    "wingman_core.ports", "wingman_core.application", "wingman_core.infrastructure",
+    "wingman_core.observability", "wingman_core.web", "wingman_core.testing",
+    "fastapi", "starlette", "httpx", "pydantic_settings", "prometheus_client",
+]
+
+[[tool.importlinter.contracts]]
+name = "day2 ports depend only on the domains"
+type = "forbidden"
+source_modules = ["wingman_day2.ports"]
+forbidden_modules = [
+    "wingman_day2.application", "wingman_day2.infrastructure", "wingman_day2.api",
+    "wingman_core.infrastructure", "wingman_core.web", "fastapi", "starlette", "httpx",
+]
+
+[[tool.importlinter.contracts]]
+name = "day2 application depends only on the domains and ports"
+type = "forbidden"
+source_modules = ["wingman_day2.application"]
+forbidden_modules = [
+    "wingman_day2.infrastructure", "wingman_day2.api", "wingman_day2.main",
+    "wingman_day2.settings", "wingman_core.infrastructure", "wingman_core.observability",
+    "wingman_core.web", "fastapi", "starlette", "httpx",
+]
+
+[[tool.importlinter.contracts]]
+name = "day2 infrastructure does not depend on the use cases or the web"
+type = "forbidden"
+source_modules = ["wingman_day2.infrastructure"]
+forbidden_modules = [
+    "wingman_day2.application", "wingman_day2.api", "wingman_day2.main",
+    "wingman_core.web", "fastapi", "starlette",
+]
+
+[[tool.importlinter.contracts]]
+name = "day2 API reaches adapters only through the composition root"
+type = "forbidden"
+source_modules = ["wingman_day2.api"]
+# Core's auth dependency verifies tokens with an adapter; that indirect path is core's own.
+allow_indirect_imports = true
+forbidden_modules = ["wingman_day2.infrastructure", "wingman_core.infrastructure", "wingman_day2.main"]
+
+[[tool.importlinter.contracts]]
+name = "wingman_day2 does not import wingman_day1 or the legacy shared package"
+type = "forbidden"
+source_modules = ["wingman_day2"]
+forbidden_modules = ["wingman_day1", "wingman_shared"]

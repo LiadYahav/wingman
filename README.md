@@ -41,7 +41,7 @@ Wingman is an Internal Developer Platform (IDP) for managing OpenShift HostedCon
 |-----------|-------------|------------|
 | **web** | Frontend UI | Next.js 16, React 19, TailwindCSS, React Query |
 | **day1-service** | Cluster provisioning, specs, approvals | Python 3.13, FastAPI, python-gitlab |
-| **day2-service** | Addon management, operator lifecycle | Python 3.13, FastAPI, python-gitlab |
+| **day2-service** | Charts on clusters through the gitops-day2 team repos | Python 3.13, FastAPI, wingman-core (httpx) |
 | **shared-python** | Common utilities, models, GitLab client | Python 3.13, Pydantic |
 
 ### GitOps Flow
@@ -172,29 +172,25 @@ Base path: `/api/day1`
 
 Base path: `/api/day2`
 
-#### Addon Catalog
+`{cluster}` is a cluster id (`hub`, `mce:<site>:<env>:<mce>`,
+`hosted:<site>:<env>:<mce>:<cluster>`, `upi:<site>:<env>:<cluster>`) or a bare
+name that names one destination. Changes since the legacy service:
+[docs/notes/2026-11-07-day2-api-changes.md](docs/notes/2026-11-07-day2-api-changes.md).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/addons` | List all available addons |
-| `GET` | `/addons/{team}/{addon}` | Get addon details |
-| `GET` | `/addons/{team}/{addon}/versions` | List addon versions |
-| `GET` | `/addons/{team}/{addon}/values` | Get default values at version |
-
-#### Cluster Addons
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/clusters/{name}/addons` | List installed addons on cluster |
-| `GET` | `/clusters/{name}/addons/{team}/{addon}` | Get merged addon values |
-| `POST` | `/clusters/{name}/addons/{team}/{addon}` | Install addon (returns MR) |
-| `POST` | `/clusters/{name}/addons/bulk` | Bulk install addons (returns MR) |
-| `PUT` | `/clusters/{name}/addons/{team}/{addon}` | Update addon (returns MR) |
-| `DELETE` | `/clusters/{name}/addons/{team}/{addon}` | Remove addon (returns MR) |
-
-#### Approvals & Audit
-
-Same endpoints as Day1 but for Day2 repository.
+| `GET` | `/teams`, `/addons[?team]`, `/addons/{team}/{addon}` | Teams (projects of the sigs group) and their `operators/` catalog |
+| `GET` | `/addons/{team}/{addon}/versions`, `/values?version=` | Chart repo branches; the chart's own values at a branch |
+| `GET` | `/clusters[?kind&site&env]`, `/clusters/{cluster}` | Destinations from every team repo and day1 |
+| `GET` | `/clusters/{cluster}/addons` | Charts on the cluster: own folders and fleet defaults |
+| `GET` | `/clusters/{cluster}/addons/{team}/{addon}` | The merged values, layer by layer, with provenance |
+| `POST` | `/merge-preview` | The same, with edited cluster values |
+| `POST`/`PUT`/`DELETE` | `/clusters/{cluster}/addons/{team}/{addon}` | Install / update / remove (each opens an MR) |
+| `POST` | `/clusters/{cluster}/addons/bulk` | Install several charts: one MR per team |
+| `GET` | `/clusters/{cluster}/history`, `/clusters/{cluster}/upgrade-check?to=` | Commits on the cluster's folders; pins a version change would lose |
+| `GET` | `/lints[?team]` | render_chain.py's checks plus Wingman's own |
+| `GET`/`PUT`/`POST` | `/approvals`, `/approvals/{team}/{iid}[/approve\|/reject]` | MRs addressed by team and number |
+| `GET` | `/audit/commits`, `/audit/merge-requests`, `/audit/commits/{sha}/diff` | History across team repos |
 
 ### Auth Service
 
@@ -242,18 +238,22 @@ MCE_INFRAENV_NAMESPACE=           # empty = query all namespaces
 ### Day2 Service
 
 ```env
-# Required
+# Required (the settings refuse to start without them, ADR-0009)
 GITLAB_URL=https://gitlab.example.com
-GITLAB_ACCESS_TOKEN=glpat-xxx
-DAY2_SIGS_GROUP_PATH=wingman/sigs
-JWT_SECRET_KEY=your-secret-key
+GITLAB_TOKEN=glpat-xxx
+DAY2_SIGS_GROUP_PATH=gitops-day2-prod/sigs      # every project directly in it is a team
+DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config   # read-only for day2 (versions, hosted clusters)
+JWT_SECRET_KEY=at-least-32-characters-shared-with-day1
 
 # RBAC (same as Day1)
 WINGMAN_ADMIN_GROUPS=wingman-admins
 WINGMAN_VIEWER_GROUPS=wingman-viewers
 
 # Optional
-SERVICE_PORT=8002
+DAY2_GITOPS_BRANCH=main          # the branch the platform reads; MRs target it
+DAY2_CACHE_TTL_SECONDS=15        # at most 60 (ADR-0011)
+WINGMAN_GIT_BACKEND=fake         # local only: an in-memory GitLab seeded from dev/gitlab-fixtures
+WINGMAN_ENVIRONMENT=development  # default production, which refuses the fake backend
 ```
 
 ### Frontend
@@ -282,7 +282,7 @@ cd apps/web && npm install && npm run dev
 
 # Backend services (uses uv — no virtualenv management needed)
 cd apps/day1-service && uv sync && uv run uvicorn src.main:app --port 8001 --reload
-cd apps/day2-service && uv sync && uv run uvicorn src.main:app --port 8002 --reload
+uv run uvicorn wingman_day2.main:app --port 8002 --reload   # from the repo root (uv workspace)
 
 # Or use the development proxy (proxies /api/* to running backend services)
 cd apps/web && npx tsx proxy.ts
@@ -347,24 +347,18 @@ wingman-clusters/
 
 ### Day2 Repository (Addons)
 
-Each team is a separate GitLab project under the `sigs` subgroup:
+Each team is a project directly in the sigs group, laid out as the
+gitops-day2 platform reads it (a folder existing is the registration;
+details in `docs/ecosystem/notes/day2-kubevirt.md` and ADR-0020):
 
 ```
-wingman/sigs/
-├── network/                       # Team: network
-│   ├── operators/
-│   │   └── {addon}/
-│   │       └── {addon}.yaml       # Addon definition + ArgoCD metadata
-│   └── mces/
-│       └── {mce}/
-│           └── {cluster}/
-│               └── {addon}/
-│                   ├── values.yaml       # Override values
-│                   └── argocd.yaml       # Override metadata
-├── storage/                       # Team: storage
-│   └── ...
-└── security/                      # Team: security
-    └── ...
+sigs/<team>/
+├── operators/<chart>/{<chart>.yaml, values.yaml}         # team default (+ ocp-versions/<v>/ pins)
+├── defaults/{hub,mces,hosted-clusters,upi}/<chart>/       # fleet defaults (+ exclusions.yaml)
+└── sites/<site>/<env>/
+    ├── mces/<mce>/in-cluster/<chart>/                     # charts on the MCE hub
+    ├── mces/<mce>/<cluster>/<chart>/                      # charts on a hosted cluster
+    └── upi/<cluster>/<chart>/                             # charts on a UPI cluster
 ```
 
 ## Key Concepts
@@ -377,11 +371,12 @@ wingman/sigs/
 
 ### Addon Layers
 
-Addon values are merged from three layers (later layers override earlier):
-
-1. **Chart defaults**: `values.yaml` from the Helm chart repository
-2. **Team defaults**: `operators/{addon}/{addon}.yaml` in team project
-3. **Cluster overrides**: `mces/{mce}/{cluster}/{addon}/values.yaml`
+Chart values are merged exactly as the platform's `deployApp.yaml` stacks them:
+the chart's own `values.yaml` at the pinned revision, then up to ten team-repo
+layers for a hosted cluster (team default, OCP-version pin, site, site+env,
+fleet default and its env/cluster variants, MCE-wide, cluster-wide, the
+cluster's chart folder). The preview shows which layer set each value
+(ADR-0021).
 
 ### MR Workflow
 
@@ -397,12 +392,11 @@ All changes create Merge Requests instead of direct commits:
 ### Health Checks
 
 - Day1: `GET /healthz`
-- Day2: `GET /healthz`
+- Day2: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
 
 ### Cache Stats
 
 - Day1: `GET /api/day1/cache/stats`
-- Day2: `GET /api/day2/cache/stats`
 
 ### Logs
 
