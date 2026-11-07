@@ -12,41 +12,35 @@
  */
 
 import { test, expect, Page } from "@playwright/test";
-import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
 
 // ── Shared mock data ──────────────────────────────────────────────────────────
 
-const mockMRConflicted = {
+const mockMRConflicted = mockMR({
   iid: 42,
   title: "Add cluster east-prod",
   description: "Provisioning cluster east-prod",
-  author: { username: "alice", name: "Alice Smith", avatar_url: "" },
-  state: "opened",
+  author: { username: "alice", name: "alice", avatar_url: "" },
   created_at: "2026-01-15T10:00:00Z",
   updated_at: "2026-01-15T10:00:00Z",
-  web_url: "https://gitlab.example.com/mr/42",
   source_branch: "add-cluster-east-prod",
-  target_branch: "main",
   labels: [],
-  repo: "day1",
   has_conflicts: true,
-};
+});
 
-const mockMRNoConflict = {
+const mockMRNoConflict = mockMR({
   iid: 99,
   title: "Update grafana addon",
   description: "",
-  author: { username: "bob", name: "Bob Jones", avatar_url: "" },
-  state: "opened",
+  author: { username: "bob", name: "", avatar_url: null },
   created_at: "2026-01-14T09:00:00Z",
   updated_at: "2026-01-14T09:00:00Z",
-  web_url: "https://gitlab.example.com/mr/99",
   source_branch: "update-grafana",
-  target_branch: "main",
   labels: [],
   repo: "day2",
+  team: "observability",
   has_conflicts: false,
-};
+});
 
 const mockSpecHistory = [
   {
@@ -67,14 +61,17 @@ const mockSpecHistory = [
   },
 ];
 
+// `GET /api/day1/specs/{name}` (SpecOut): the template is filled on read.
 const mockSpec = {
   apiVersion: "wingman.io/v1",
   kind: "ClusterSpec",
-  metadata: { name: "some-spec", version: "1.0.0", labels: {} },
+  metadata: { name: "some-spec", description: "", version: "1.0.0", labels: {} },
   spec: {
-    day1: { variables: [], structure: {}, immutable_paths: [], template: "" },
+    day1: { variables: [], structure: {}, immutable_paths: [], template: "", values: {} },
     day2: { addons: [] },
   },
+  load_error: null,
+  load_problems: [],
 };
 
 // ── Shared setup helpers ──────────────────────────────────────────────────────

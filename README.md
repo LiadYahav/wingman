@@ -273,8 +273,9 @@ WINGMAN_ENVIRONMENT=development  # default production, which refuses the fake ba
 ### Frontend
 
 The web app uses relative API paths (`/api/day1`, `/api/day2`, `/api/auth`) — no build-time env vars
-are required. The Next.js server proxies those paths to the backend services at runtime via the
-ingress or the `apps/web/proxy.ts` dev proxy.
+are required. In a deployment nginx routes them to the services; locally, `next dev` proxies them when
+`WINGMAN_DEV_DAY1_URL` and `WINGMAN_DEV_DAY2_URL` are set (development server only; see
+[apps/web/README.md](apps/web/README.md#running-against-local-services)).
 
 ## Development Setup
 
@@ -291,15 +292,17 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for detailed development guide, archite
 ### Local Development
 
 ```bash
-# Frontend
-cd apps/web && npm install && npm run dev
+# Backend services, from the repo root (uv workspace)
+uv run uvicorn wingman_day1.main:app --port 8001 --reload
+uv run uvicorn wingman_day2.main:app --port 8002 --reload
 
-# Backend services (uses uv — no virtualenv management needed)
-uv run uvicorn wingman_day1.main:app --port 8001 --reload   # from the repo root (uv workspace)
-uv run uvicorn wingman_day2.main:app --port 8002 --reload   # from the repo root (uv workspace)
+# Backend services, from the repo root (uv workspace)
+uv run uvicorn wingman_day1.main:app --port 8001 --reload
+uv run uvicorn wingman_day2.main:app --port 8002 --reload
 
-# Or use the development proxy (proxies /api/* to running backend services)
-cd apps/web && npx tsx proxy.ts
+# Frontend, proxying /api/* to them (apps/web/README.md has a no-network setup on the fake GitLab)
+cd apps/web && npm ci
+WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1:8002 npm run dev
 ```
 
 ### Docker Build
@@ -405,12 +408,8 @@ All changes create Merge Requests instead of direct commits:
 
 ### Health Checks
 
-- Day1: `GET /healthz`
+- Day1: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
 - Day2: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
-
-### Cache Stats
-
-- Day1: `GET /api/day1/cache/stats`
 
 ### Logs
 

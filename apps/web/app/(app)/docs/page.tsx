@@ -509,9 +509,9 @@ tuningConfig: {{ np.tuning_config | default("") }}`}
               </div>
             </Callout>
             <Callout type="warning" title="Editing a spec affects future clusters only">
-              Changing the nodepool count in a spec does not update clusters that already exist — those
-              will show as drifted. You must explicitly re-render each existing cluster if you want them
-              to follow the new structure.
+              Changing a spec does not touch clusters that already exist: their files keep what they were
+              rendered with, and nothing re-renders them (the inputs of a render are not stored). To change
+              an existing cluster, edit its file from the cluster page.
             </Callout>
           </div>
         </section>
@@ -535,14 +535,18 @@ tuningConfig: {{ np.tuning_config | default("") }}`}
             <Step n={2} title="Fill in cluster identity">
               These three fields are set once, forever:
               <ul className="mt-2 space-y-1 list-none">
-                <li><InlineCode>Cluster name</InlineCode> → <InlineCode>prod-dok-nova</InlineCode></li>
-                <li><InlineCode>Site</InlineCode> → select <InlineCode>nova</InlineCode> (or type to create)</li>
-                <li><InlineCode>MCE</InlineCode> → select <InlineCode>prod-dok</InlineCode> (or type to create)</li>
+                <li><InlineCode>Site</InlineCode> → select <InlineCode>site1</InlineCode></li>
+                <li><InlineCode>MCE</InlineCode> → select <InlineCode>ocp4-prod-mce-site1-a</InlineCode></li>
+                <li><InlineCode>Cluster name</InlineCode> → <InlineCode>ocp4-prod-nova-site1</InlineCode></li>
               </ul>
-              Site and MCE are selected from existing GitLab folder paths. The cluster will be stored at{" "}
-              <InlineCode>sites/nova/mces/prod-dok/hostedClusters/prod-dok-nova.yaml</InlineCode> in the
-              Day1 repository. If the site or MCE folder does not exist yet, type the new name and
-              Wingman creates it automatically.
+              Sites and MCEs are read from the day1 repository and are read-only: Wingman never creates
+              them (MCE onboarding happens elsewhere). Names follow{" "}
+              <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, and the env must be the MCE&apos;s;
+              the form says why a name is refused. The OpenShift version defaults to the MCE&apos;s mastertag.
+              The cluster is stored at{" "}
+              <InlineCode>sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-nova-site1.yaml</InlineCode>.
+              The VLAN and DHCP network are not yours to fill: the allocate-segment workflow commits them to
+              the MR branch, and the cluster page shows them as pending until then.
             </Step>
             <Step n={3} title="Fill in global fields">
               <ul className="mt-1 space-y-1 list-none">
@@ -777,15 +781,15 @@ cluster           …/{cluster}/{chart}/values.yaml
         <section>
           <SectionHeader id="drift" icon={RefreshCw} title="Drift Detection" subtitle="Know when your clusters diverge from their spec" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            A cluster is <strong>drifted</strong> when its committed manifest no longer matches what the
-            current spec would render. Common causes:
+            A cluster linked to a spec is <strong>drifted</strong> when an addon its spec lists is missing
+            on the cluster or installed at another version. Every cluster has one of four states:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             {[
-              { title: "Spec updated", desc: "Someone edited the spec after you created the cluster. The cluster still runs old config." },
-              { title: "Direct Git edit", desc: "Someone edited the cluster's manifest directly in GitLab, bypassing Wingman." },
-              { title: "Addon drift", desc: "An addon's team defaults changed and the cluster overrides no longer produce the expected result." },
-              { title: "Version skew", desc: "The spec's OpenShift version was bumped but the cluster was not re-rendered." },
+              { title: "In sync", desc: "Every addon of the spec version the cluster was created from is installed at that version." },
+              { title: "Drifted", desc: "An addon is missing or at another version. The Drift tab lists each one with a fix." },
+              { title: "Unknown", desc: "Drift could not be determined: day2 did not answer, or the spec is gone. It is never shown as in sync." },
+              { title: "Not linked", desc: "The cluster was not created from a spec, so there is nothing to drift from." },
             ].map(({ title, desc }) => (
               <div key={title} className="rounded-xl border bg-card p-4">
                 <p className="text-sm font-semibold mb-1">{title}</p>
@@ -797,16 +801,17 @@ cluster           …/{cluster}/{chart}/values.yaml
           <h3 className="text-base font-semibold mb-3">Viewing and resolving drift</h3>
           <div className="space-y-3">
             <Step n={1} title="Find drifted clusters">
-              Drifted clusters are highlighted on the <strong>Clusters</strong> list page with a red
-              indicator. The spec detail page also lists which of its clusters are drifted.
+              The <strong>Clusters</strong> list shows each cluster&apos;s drift state and filters by it;
+              the dashboard counts drifted and unknown clusters separately. A spec&apos;s detail page lists
+              the drift of every cluster created from it.
             </Step>
-            <Step n={2} title="Review the diff">
-              Open the cluster → <strong>Drift</strong> tab to see a unified diff of what changed
-              (similar to <InlineCode>git diff</InlineCode>).
+            <Step n={2} title="Review the addons">
+              Open the cluster → <strong>Drift</strong> tab to see which addons are missing or at another
+              version, and what the spec requires.
             </Step>
             <Step n={3} title="Resolve">
-              Either re-render the cluster (apply the current spec) or edit specific values to reconcile.
-              Both paths open a GitLab MR.
+              Install or update each addon from the Drift tab (with the values requested at create). Each
+              fix opens a day2 MR for approval.
             </Step>
           </div>
         </section>
@@ -830,6 +835,13 @@ cluster           …/{cluster}/{chart}/values.yaml
               </div>
             ))}
           </div>
+          <Callout type="info" title="You approve the commit you reviewed">
+            Approving names the head commit shown on the review page. If anything was pushed to the branch
+            since (the day1 CI or the allocate-segment workflow commit to cluster MRs), nothing is merged and
+            Wingman asks you to reload and review the new diff. Nobody approves a change they requested
+            themselves.
+          </Callout>
+          <div className="h-3" />
           <Callout type="danger" title="MRs expire">
             Wingman does not auto-merge MRs. If an MR sits unmerged for a long time, the branch may
             conflict with subsequent changes. Close stale MRs and re-create them from the Wingman UI.
@@ -1310,8 +1322,8 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                 ),
               },
               {
-                q: "Cluster shows as drifted immediately after creation",
-                a: "The spec was edited between when you opened the creation form and when the MR was merged. Re-render the cluster from the current spec.",
+                q: "Cluster shows as drifted right after creation",
+                a: "Drift compares the spec's addons with what day2 has installed. Until the addon MRs are opened and merged, a new cluster's spec addons are missing: install them from the cluster's Drift tab.",
               },
               {
                 q: "MR was merged but cluster is still not provisioned",
@@ -1336,7 +1348,7 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
               },
               {
                 q: 'Site / MCE dropdown shows "No options"',
-                a: "Wingman reads existing sites and MCEs from the Day1 GitLab repository folder structure. If no clusters have been deployed yet, the list is empty — type a new name to create the first one.",
+                a: "Wingman reads sites and MCEs from the day1 repository's folders and never creates them. An empty list means the repository has no site or MCE folder yet: MCE onboarding happens outside Wingman.",
               },
               {
                 q: "I cannot see Create / Install / Remove buttons",

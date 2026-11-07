@@ -1,40 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery, useQueries } from "@tanstack/react-query";
-import { Server, GitPullRequest, AlertTriangle, CheckCircle2, Clock, ArrowRight, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Server, GitPullRequest, AlertTriangle, CheckCircle2, Clock, ArrowRight, Plus, CircleHelp, Activity } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RepoBadge } from "@/components/common/repo-badge";
 import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
-import type { ClusterStatus, ClusterLiveStatus, MRDetail } from "@/types";
-
-function liveStatusToPhase(s: ClusterLiveStatus): "Ready" | "Error" | "Provisioning" | "Unknown" {
-  if (s.error) return "Error";
-  if (s.hc_problems.length > 0) return "Error";
-  if (s.node_pools.length === 0) return "Unknown";
-  const allReady = s.node_pools.every(
-    (np) => np.ready_replicas === np.desired_replicas && np.problems.length === 0
-  );
-  return allReady ? "Ready" : "Provisioning";
-}
-
-interface DashboardStats {
-  total_clusters: number;
-  provisioning: number;
-  ready: number;
-  error: number;
-  drifted: number;
-  total_specs: number;
-  open_approvals_day1: number;
-  open_approvals_day2: number;
-}
+import { useBulkStatus } from "@/hooks/use-bulk-status";
+import { liveStatusToPhase } from "@/lib/live-status";
+import { approvalHref, mrKey } from "@/lib/approvals";
+import type { ClusterStatus, DriftSummaryItem, MRDetail, SpecEntry } from "@/types";
 
 function StatCard({
-  title, value, icon: Icon, href, loading, color = "blue",
+  title, value, hint, icon: Icon, href, loading, color = "blue",
 }: {
-  title: string; value: number | undefined; icon: React.ElementType;
+  title: string; value: number | undefined; hint?: string; icon: React.ElementType;
   href: string; loading: boolean; color?: "blue" | "green" | "orange" | "red";
 }) {
   const colorMap = {
@@ -46,16 +29,17 @@ function StatCard({
   const c = colorMap[color];
   return (
     <Link href={href} className="block group">
-      <div className="bg-card rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all p-5 cursor-pointer">
+      <div className="bg-card rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all p-5 cursor-pointer h-full">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</p>
             {loading
               ? <Skeleton className="mt-2 h-9 w-16" />
-              : <p className={cn("mt-1 text-3xl font-bold", c.value)}>{value ?? "—"}</p>
+              : <p className={cn("mt-1 text-3xl font-bold tabular-nums", c.value)}>{value ?? "—"}</p>
             }
+            {hint && !loading && <p className="mt-1 text-xs text-muted-foreground truncate">{hint}</p>}
           </div>
-          <div className={cn("rounded-xl p-2.5", c.bg)}>
+          <div className={cn("rounded-xl p-2.5 shrink-0", c.bg)}>
             <Icon className={cn("h-5 w-5", c.icon)} />
           </div>
         </div>
@@ -70,89 +54,56 @@ export default function DashboardPage() {
   const { data: clusters, isLoading: clustersLoading } = useQuery<ClusterStatus[]>({
     queryKey: ["clusters"],
     queryFn: () => api.get<ClusterStatus[]>("/api/day1/clusters"),
-    // Use global staleTime (2 min) — no override needed
   });
 
-  const { data: specs } = useQuery<{ name: string }[]>({
+  // Same cache entries as the specs and approvals pages
+  const { data: specs } = useQuery<SpecEntry[]>({
     queryKey: ["specs"],
-    queryFn: () => api.get<{ name: string }[]>("/api/day1/specs").catch(() => []),
-    // Use global staleTime (2 min)
+    queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
   });
 
-  const { data: approvalsDay1 } = useQuery<MRDetail[]>({
+  const { data: approvalsDay1, isError: day1ApprovalsFailed } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day1"],
-    queryFn: () => api.get<MRDetail[]>("/api/day1/approvals").catch(() => [] as MRDetail[]),
-    staleTime: 60_000, // 1 min — approvals change less frequently
+    queryFn: () => api.get<MRDetail[]>("/api/day1/approvals"),
+    staleTime: 60_000,
   });
 
-  const { data: approvalsDay2 } = useQuery<MRDetail[]>({
+  const { data: approvalsDay2, isError: day2ApprovalsFailed } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day2"],
-    queryFn: () => api.get<MRDetail[]>("/api/day2/approvals").catch(() => [] as MRDetail[]),
-    staleTime: 60_000, // 1 min
+    queryFn: () => api.get<MRDetail[]>("/api/day2/approvals"),
+    staleTime: 60_000,
   });
 
-  // Fire live status queries in parallel for every cluster — same cache keys as clusters page
-  const liveStatusResults = useQueries({
-    queries: (clusters ?? []).map((c) => ({
-      queryKey: ["clusters", c.name, "live-status", c.mce],
-      queryFn: async (): Promise<ClusterLiveStatus | null> => {
-        try {
-          return await api.get<ClusterLiveStatus>(`/api/day1/clusters/${c.name}/status?mce=${c.mce}`);
-        } catch (err) {
-          if (err instanceof Error && err.message.startsWith("API error 501")) return null;
-          throw err;
-        }
-      },
-      staleTime: 2 * 60_000,     // 2 min — match clusters page
-      refetchInterval: 2 * 60_000, // 2 min polling
-      retry: false,
-      enabled: Boolean(c.mce),
-    })),
-  });
+  const { data: liveStatuses, isLoading: statusLoading } = useBulkStatus(clusters);
 
-  // Build phase map: cluster name → live phase (or fallback to stored phase)
-  const phaseMap = new Map<string, string>();
-  (clusters ?? []).forEach((c, i) => {
-    const result = liveStatusResults[i];
-    if (result?.data) {
-      phaseMap.set(c.name, liveStatusToPhase(result.data));
-    } else {
-      // Feature disabled (null) or still loading — fall back to stored phase
-      phaseMap.set(c.name, c.phase ?? "Unknown");
-    }
-  });
-
-  // Show skeleton only while clusters list itself is loading (live status fills in progressively)
-  const statsLoading = clustersLoading;
-
-  const stats: DashboardStats | undefined = clusters ? {
-    total_clusters: clusters.length,
-    ready: Array.from(phaseMap.values()).filter((p) => p === "Ready").length,
-    provisioning: Array.from(phaseMap.values()).filter((p) => p === "Provisioning").length,
-    error: Array.from(phaseMap.values()).filter((p) => p === "Error").length,
-    drifted: 0,
-    total_specs: specs?.length ?? 0,
-    open_approvals_day1: approvalsDay1?.length ?? 0,
-    open_approvals_day2: approvalsDay2?.length ?? 0,
-  } : undefined;
-
-  const { data: driftSummary } = useQuery<{ name: string; is_drifted: boolean }[]>({
+  const { data: driftSummary, isLoading: driftLoading } = useQuery<DriftSummaryItem[]>({
     queryKey: ["clusters", "drift-summary"],
-    queryFn: () => api.get("/api/day1/clusters/drift-summary"),
-    staleTime: 60_000,  // Cache for 1 minute - drift detection is expensive
-    gcTime: 5 * 60_000, // Keep in cache for 5 minutes
+    queryFn: () => api.get<DriftSummaryItem[]>("/api/day1/clusters/drift-summary"),
+    staleTime: 60_000, // drift asks day2 about every linked cluster
+    gcTime: 5 * 60_000,
   });
 
-  const driftedCount = driftSummary?.filter((d) => d.is_drifted).length ?? stats?.drifted ?? 0;
+  const phases = (clusters ?? []).flatMap((c) => {
+    const status = liveStatuses?.[c.name];
+    return status ? [liveStatusToPhase(status)] : [];
+  });
+  const health = {
+    ready: phases.filter((p) => p === "Ready").length,
+    provisioning: phases.filter((p) => p === "Provisioning").length,
+    error: phases.filter((p) => p === "Error").length,
+  };
+  const statusOff = liveStatuses === null;
 
-  const recentApprovals = [
-    ...(approvalsDay1?.map((mr) => ({ ...mr, repo: "day1" as const })) ?? []),
-    ...(approvalsDay2?.map((mr) => ({ ...mr, repo: "day2" as const })) ?? []),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 6);
+  const drifted = driftSummary?.filter((d) => d.state === "drifted").length ?? 0;
+  const driftUnknown = driftSummary?.filter((d) => d.state === "unknown").length ?? 0;
 
-  const approvalsLoading = !approvalsDay1 && !approvalsDay2;
-
-  const totalApprovals = (stats?.open_approvals_day1 ?? 0) + (stats?.open_approvals_day2 ?? 0);
+  const allApprovals = [...(approvalsDay1 ?? []), ...(approvalsDay2 ?? [])];
+  const recentApprovals = [...allApprovals]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 6);
+  const approvalsLoading = !approvalsDay1 && !approvalsDay2 && !day1ApprovalsFailed && !day2ApprovalsFailed;
+  const unavailableApprovals = [day1ApprovalsFailed && "day1", day2ApprovalsFailed && "day2"].filter(Boolean);
+  const totalApprovals = allApprovals.length;
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -167,10 +118,30 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard title="Total Clusters" value={stats?.total_clusters} icon={Server} href="/clusters" loading={statsLoading} color="blue" />
-        <StatCard title="Ready" value={stats?.ready} icon={CheckCircle2} href="/clusters" loading={statsLoading} color="green" />
-        <StatCard title="Pending Approvals" value={totalApprovals} icon={GitPullRequest} href="/approvals" loading={statsLoading} color={totalApprovals > 0 ? "orange" : "blue"} />
-        <StatCard title="Drifted" value={driftedCount} icon={AlertTriangle} href="/clusters" loading={statsLoading && driftSummary === undefined} color={driftedCount > 0 ? "red" : "blue"} />
+        <StatCard
+          title="Total Clusters"
+          value={clusters?.length}
+          hint={specs ? `${specs.length} spec${specs.length !== 1 ? "s" : ""}` : undefined}
+          icon={Server} href="/clusters" loading={clustersLoading} color="blue"
+        />
+        <StatCard
+          title="Ready"
+          value={statusOff ? undefined : health.ready}
+          hint={statusOff ? "Live status is off" : undefined}
+          icon={CheckCircle2} href="/clusters" loading={clustersLoading || statusLoading} color="green"
+        />
+        <StatCard
+          title="Pending Approvals" value={totalApprovals}
+          hint={unavailableApprovals.length > 0 ? `${unavailableApprovals.join(" and ")} unavailable` : undefined}
+          icon={GitPullRequest} href="/approvals" loading={approvalsLoading}
+          color={totalApprovals > 0 ? "orange" : "blue"}
+        />
+        <StatCard
+          title="Drifted" value={driftSummary ? drifted : undefined}
+          hint={driftUnknown > 0 ? `${driftUnknown} unknown` : undefined}
+          icon={AlertTriangle} href="/clusters" loading={driftLoading}
+          color={drifted > 0 ? "red" : "blue"}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -182,14 +153,25 @@ export default function DashboardPage() {
               View all <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
-          {statsLoading ? (
+          {clustersLoading || statusLoading ? (
             <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-11 w-full rounded-lg" />)}</div>
+          ) : statusOff ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="rounded-full bg-muted p-3 mb-3">
+                <Activity className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-semibold">Live status is off</p>
+              <p className="text-xs text-muted-foreground mt-0.5 max-w-xs">
+                This deployment does not read HostedClusters from the MCE hubs (CLUSTER_STATUS_ENABLED).
+              </p>
+            </div>
           ) : (
             <div className="space-y-2">
               {[
-                { label: "Ready", count: stats?.ready ?? 0, color: "text-status-ready", bg: "bg-status-ready/15", icon: CheckCircle2 },
-                { label: "Provisioning", count: stats?.provisioning ?? 0, color: "text-status-provisioning", bg: "bg-status-provisioning/15", icon: Clock },
-                { label: "Error", count: stats?.error ?? 0, color: "text-status-error", bg: "bg-status-error/15", icon: AlertTriangle },
+                { label: "Ready", count: health.ready, color: "text-status-ready", bg: "bg-status-ready/15", icon: CheckCircle2 },
+                { label: "Provisioning", count: health.provisioning, color: "text-status-provisioning", bg: "bg-status-provisioning/15", icon: Clock },
+                { label: "Error", count: health.error, color: "text-status-error", bg: "bg-status-error/15", icon: AlertTriangle },
+                { label: "Unknown", count: (clusters?.length ?? 0) - phases.length + phases.filter((p) => p === "Unknown").length, color: "text-muted-foreground", bg: "bg-muted", icon: CircleHelp },
               ].map(({ label, count, color, bg, icon: Icon }) => (
                 <div key={label} className="flex items-center justify-between rounded-lg px-3 py-2.5 bg-muted/40 hover:bg-muted/60 transition-colors">
                   <div className="flex items-center gap-2.5">
@@ -215,28 +197,25 @@ export default function DashboardPage() {
           </div>
           {approvalsLoading ? (
             <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>
-          ) : recentApprovals && recentApprovals.length > 0 ? (
+          ) : recentApprovals.length > 0 ? (
             <div className="space-y-1">
               {recentApprovals.map((mr) => (
-                <Link key={`${mr.repo}-${mr.iid}`} href={`/approvals/${mr.repo}-${mr.iid}`}
+                <Link key={mrKey(mr)} href={approvalHref(mr)}
                   className="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-muted/50 transition-colors group">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{mr.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
                       by {mr.author.username} · {new Date(mr.created_at).toLocaleDateString("en-GB")}
                     </p>
                   </div>
-                  <span className={cn(
-                    "ml-3 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
-                    mr.repo === "day1"
-                      ? "bg-primary/10 text-primary dark:bg-status-provisioning/15 dark:text-status-provisioning"
-                      : "bg-status-ready/10 text-status-ready-fg dark:bg-status-ready/15 dark:text-status-ready"
-                  )}>
-                    {mr.repo}
-                  </span>
+                  <RepoBadge repo={mr.repo} className="ml-3 shrink-0" />
                 </Link>
               ))}
             </div>
+          ) : unavailableApprovals.length > 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              Approvals could not be loaded from {unavailableApprovals.join(" and ")}.
+            </p>
           ) : (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <div className="rounded-full bg-status-ready/15 p-3 mb-3">

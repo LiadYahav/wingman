@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Eye,
@@ -17,8 +17,8 @@ import {
   Tag,
   Settings2,
   FileCode2,
+  RotateCcw,
 } from "lucide-react";
-import { toast } from "sonner";
 import jsYaml from "js-yaml";
 import {
   DndContext,
@@ -37,10 +37,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { api } from "@/lib/api-client";
+import { api, isApiError } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReviewDialog } from "@/components/common/review-dialog";
+import { ProblemList } from "@/components/common/problem-list";
 import { computeLineDiff } from "@/lib/diff";
 import { cn } from "@/lib/utils";
 import {
@@ -51,6 +52,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ConfigureOverrideableDialog, deepMergeValues } from "@/components/specs/configure-overrideable-dialog";
+import { formatPreset, specDocument, specVersionProblem } from "@/lib/specs";
+import { toastMrOpened } from "@/lib/mr-toast";
 import { DynamicVariableForm, initFormValues, type FormValues } from "@/components/clusters/dynamic-variable-form";
 import type { ClusterSpec, MRDetail, AddonCatalogEntry, SpecAddon, OverrideableField, TemplateField } from "@/types";
 
@@ -100,7 +103,7 @@ function SortableAddonItem({
           </SelectContent>
         </Select>
       </div>
-      <button onClick={onRemove} className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+      <button onClick={onRemove} aria-label="Remove addon" className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
         <X className="h-4 w-4" />
       </button>
     </div>
@@ -176,8 +179,6 @@ function TeamSection({ team, addons, selectedAddons, onAdd }: {
   );
 }
 
-// (Legacy SpecVariable editor removed — cluster structure now defined via DynamicVariableForm)
-
 const IDENTITY_VAR_NAMES = new Set([
   "cluster_name", "site", "site_name", "mce", "mce_name", "openshift_release_version",
 ]);
@@ -188,8 +189,11 @@ export default function EditSpecPage() {
   const params = useParams();
   const specName = params.name as string;
   const router = useRouter();
+  const queryClient = useQueryClient();
 
+  // `null` = unchanged from the loaded spec
   const [specVersion, setSpecVersion] = useState<string | null>(null);
+  const [description, setDescription] = useState<string | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<SpecAddon[] | null>(null);
   const [structure, setStructure] = useState<FormValues | null>(null);
   const [immutablePaths, setImmutablePaths] = useState<Set<string> | null>(null);
@@ -197,10 +201,11 @@ export default function EditSpecPage() {
   const [addonSearch, setAddonSearch] = useState("");
   const [configuringAddon, setConfiguringAddon] = useState<{ team: string; name: string } | null>(null);
 
-  const { data: spec, isLoading: specLoading } = useQuery<ClusterSpec>({
+  const { data: spec, isLoading: specLoading, error: specError } = useQuery<ClusterSpec>({
     queryKey: ["specs", specName],
-    queryFn: () => api.get<ClusterSpec>(`/api/day1/specs/${specName}`),
+    queryFn: () => api.get<ClusterSpec>(`/api/day1/specs/${encodeURIComponent(specName)}`),
     staleTime: 60_000,
+    retry: (count, error) => !isApiError(error, "VALIDATION_ERROR") && !isApiError(error, "NOT_FOUND") && count < 2,
   });
 
   const { data: addonCatalog, isLoading: catalogLoading } = useQuery<AddonCatalogEntry[]>({
@@ -216,7 +221,10 @@ export default function EditSpecPage() {
   });
 
   const effectiveVersion = specVersion ?? spec?.metadata.version ?? "1.0.0";
+  const effectiveDescription = description ?? spec?.metadata.description ?? "";
+  const versionProblem = specVersionProblem(effectiveVersion.trim());
   const sharedTemplate = spec?.spec.day1.template ?? "";
+  const presets = Object.entries(spec?.spec.day1.values ?? {});
   const effectiveAddons = selectedAddons ?? spec?.spec.day2.addons ?? [];
   // Seed structure from spec on first render; fall back to blank template defaults
   const effectiveStructure = structure ?? (spec?.spec.day1.structure
@@ -296,19 +304,24 @@ export default function EditSpecPage() {
     ? deepMergeValues(configuringChartValues, configuringCatalogEntry?.default_values ?? {})
     : (configuringCatalogEntry?.default_values ?? {});
 
-  const buildFinalSpec = (): ClusterSpec => {
+  /**
+   * The loaded spec with this page's edits. Everything the page does not edit
+   * (labels, preset values, legacy variables) is kept as loaded; the name is
+   * fixed, since renaming in an update is refused.
+   */
+  const buildFinalSpec = (): ClusterSpec | null => {
+    if (!spec) return null;
+    const loaded = specDocument(spec);
     return {
-      apiVersion: spec?.apiVersion ?? "wingman.io/v1",
-      kind: spec?.kind ?? "ClusterSpec",
-      metadata: { name: specName, version: effectiveVersion, labels: spec?.metadata.labels ?? {} },
+      ...loaded,
+      metadata: { ...loaded.metadata, name: specName, version: effectiveVersion.trim(), description: effectiveDescription.trim() },
       spec: {
         day1: {
-          variables: [],
+          ...loaded.spec.day1,
           structure: Object.fromEntries(
             Object.entries(effectiveStructure).filter(([k]) => !IDENTITY_VAR_NAMES.has(k))
           ) as Record<string, unknown>,
           immutable_paths: [...effectiveImmutablePaths],
-          template: "",
         },
         day2: { addons: effectiveAddons },
       },
@@ -317,32 +330,44 @@ export default function EditSpecPage() {
 
   const originalFullYaml = useMemo(() => {
     if (!spec) return "";
-    return jsYaml.dump(spec, { lineWidth: 120, quotingType: '"' });
+    return jsYaml.dump(specDocument(spec), { lineWidth: 120, quotingType: '"' });
   }, [spec]);
 
   const currentFullYaml = useMemo(() => {
-    try { return jsYaml.dump(buildFinalSpec(), { lineWidth: 120, quotingType: '"' }); }
-    catch { return ""; }
+    const final = buildFinalSpec();
+    return final ? jsYaml.dump(final, { lineWidth: 120, quotingType: '"' }) : "";
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specName, effectiveVersion, effectiveStructure, effectiveImmutablePaths, effectiveAddons]);
+  }, [spec, specName, effectiveVersion, effectiveDescription, effectiveStructure, effectiveImmutablePaths, effectiveAddons]);
 
   const diff = useMemo(() => computeLineDiff(originalFullYaml, currentFullYaml), [originalFullYaml, currentFullYaml]);
 
   const updateMutation = useMutation({
-    mutationFn: async () => api.put<MRDetail>(`/api/day1/specs/${specName}`, buildFinalSpec()),
+    mutationFn: async () => api.put<MRDetail>(`/api/day1/specs/${encodeURIComponent(specName)}`, buildFinalSpec()),
     onSuccess: (mr) => {
-      toast.success(`Update MR #${mr.iid} created: ${mr.title}`);
+      toastMrOpened(mr, router.push, "Update MR");
       setReviewOpen(false);
-      router.push(`/specs/${specName}`);
+      queryClient.invalidateQueries({ queryKey: ["specs"] });
+      router.push(`/specs/${encodeURIComponent(specName)}`);
     },
-    onError: (err: Error) => {
-      toast.error(`Failed: ${err.message}`);
-      setReviewOpen(false);
-    },
+    // The problem is shown in full next to the actions; the form stays as edited.
+    onError: () => setReviewOpen(false),
   });
+  const conflict = isApiError(updateMutation.error, "REVISION_CONFLICT");
+
+  /** Drop every local edit and read the spec again (after a 409). */
+  const reload = () => {
+    setSpecVersion(null);
+    setDescription(null);
+    setSelectedAddons(null);
+    setStructure(null);
+    setImmutablePaths(null);
+    updateMutation.reset();
+    queryClient.invalidateQueries({ queryKey: ["specs", specName] });
+  };
 
   const handleReview = () => {
-    try { buildFinalSpec(); } catch (e) { toast.error((e as Error).message); return; }
+    if (versionProblem) return;
+    updateMutation.reset();
     setReviewOpen(true);
   };
 
@@ -351,20 +376,29 @@ export default function EditSpecPage() {
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Link href={`/specs/${specName}`} className={buttonVariants({ variant: "ghost", size: "icon" })}>
+        <Link href={`/specs/${encodeURIComponent(specName)}`} className={buttonVariants({ variant: "ghost", size: "icon" })}>
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
             Edit Spec
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-0.5 break-all">
             Editing <span className="font-medium">{specName}</span>
           </p>
         </div>
       </div>
 
-      {isLoading ? (
+      {specError ? (
+        <ProblemList
+          error={specError}
+          title={
+            isApiError(specError, "VALIDATION_ERROR")
+              ? "This spec's file does not load, so it cannot be edited here. Fix it in GitLab, or delete the spec."
+              : undefined
+          }
+        />
+      ) : isLoading ? (
         <div className="space-y-6">
           <Skeleton className="h-20 rounded-xl" />
           <Skeleton className="h-96 rounded-xl" />
@@ -372,15 +406,35 @@ export default function EditSpecPage() {
         </div>
       ) : (
         <>
-          {/* Version */}
+          {/* Version and description */}
           <div className="bg-card rounded-xl border shadow-sm p-4">
-            <div className="max-w-xs">
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Version</label>
-              <input
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                value={effectiveVersion}
-                onChange={(e) => setSpecVersion(e.target.value)}
-              />
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+              <div>
+                <label htmlFor="spec-version" className="text-xs font-medium text-muted-foreground mb-1.5 block">Version</label>
+                <input
+                  id="spec-version"
+                  data-testid="spec-version-input"
+                  aria-invalid={Boolean(versionProblem)}
+                  className={cn(
+                    "w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50",
+                    versionProblem && "border-destructive/60 focus:ring-destructive/40"
+                  )}
+                  value={effectiveVersion}
+                  onChange={(e) => setSpecVersion(e.target.value)}
+                />
+                {versionProblem && <p className="mt-1 text-xs text-destructive">{versionProblem}</p>}
+              </div>
+              <div>
+                <label htmlFor="spec-description" className="text-xs font-medium text-muted-foreground mb-1.5 block">Description</label>
+                <input
+                  id="spec-description"
+                  data-testid="spec-description-input"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  placeholder="What clusters of this spec are for"
+                  value={effectiveDescription}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
@@ -393,7 +447,7 @@ export default function EditSpecPage() {
               <span className="ml-auto text-xs text-muted-foreground font-mono">cluster-template.j2</span>
             </div>
             <pre className="w-full font-mono text-xs bg-zinc-950 text-zinc-300/70 p-4 max-h-[300px] overflow-auto leading-5 select-text">
-              {sharedTemplate || "Loading shared template…"}
+              {sharedTemplate || "The specs repo has no cluster-template.j2."}
             </pre>
           </div>
 
@@ -404,7 +458,21 @@ export default function EditSpecPage() {
               <span className="text-sm font-semibold">Cluster Structure</span>
               <span className="ml-1 text-xs text-muted-foreground">— add list items to set counts; toggle 🔒 to lock fields post-create</span>
             </div>
-            <div className="p-4">
+            <div className="p-4 space-y-4">
+              {presets.length > 0 && (
+                <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-1.5" data-testid="spec-presets">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Preset values ({presets.length}) — kept as they are; a cluster&apos;s own values override them.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {presets.map(([key, value]) => (
+                      <span key={key} className="rounded-full bg-background border px-2 py-0.5 text-xs font-mono max-w-full truncate" title={formatPreset(value)}>
+                        {key}: {formatPreset(value)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {templateSchema.length === 0 ? (
                 <div className="rounded-lg border-2 border-dashed p-6 text-center text-sm text-muted-foreground">
                   Loading structure from template…
@@ -449,7 +517,7 @@ export default function EditSpecPage() {
                   <h3 className="text-sm font-semibold">Available Addons</h3>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <input type="text" placeholder="Search..." value={addonSearch}
+                    <input type="text" placeholder="Search..." aria-label="Search addons" value={addonSearch}
                       onChange={(e) => setAddonSearch(e.target.value)}
                       className="w-40 rounded-lg border bg-background pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50" />
                   </div>
@@ -505,10 +573,23 @@ export default function EditSpecPage() {
           </div>
 
           {/* Actions */}
+          {updateMutation.error && (
+            <div className="space-y-2">
+              <ProblemList
+                error={updateMutation.error}
+                title={conflict ? "This spec changed since you opened it. Reload it and make your edits again." : undefined}
+              />
+              {conflict && (
+                <button onClick={reload} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}>
+                  <RotateCcw className="h-3.5 w-3.5" />Reload spec
+                </button>
+              )}
+            </div>
+          )}
           <div className="flex gap-3">
-            <Link href={`/specs/${specName}`} className={buttonVariants({ variant: "outline" })}>Cancel</Link>
-            <button onClick={handleReview}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
+            <Link href={`/specs/${encodeURIComponent(specName)}`} className={buttonVariants({ variant: "outline" })}>Cancel</Link>
+            <button onClick={handleReview} disabled={Boolean(versionProblem)}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
               <Eye className="h-4 w-4" />Review & Update
             </button>
           </div>
@@ -524,6 +605,7 @@ export default function EditSpecPage() {
         onConfirm={() => updateMutation.mutate()}
         isPending={updateMutation.isPending}
         confirmLabel="Confirm — Update Spec MR"
+        confirmDisabled={!diff}
       >
         {!diff && <p className="text-sm text-muted-foreground italic text-center py-4">Nothing changed.</p>}
       </ReviewDialog>

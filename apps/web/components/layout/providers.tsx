@@ -35,6 +35,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     persistQueryClient({
       queryClient,
       persister,
+      // A new build drops what an older one cached (its shapes may differ)
+      buster: process.env.WINGMAN_WEB_BUILD,
       maxAge: 10 * 60 * 1000, // 10 minutes
       dehydrateOptions: {
         shouldDehydrateQuery: (query) => query.state.status === "success",

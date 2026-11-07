@@ -11,8 +11,9 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Charts per Destination**: Install, edit and remove Day2 charts on the hub, MCEs, hosted and UPI clusters; every value shows the layer that set it
 - **Destinations and Lints**: Every place teams deploy to, and every check on the team repos
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
-- **Site/MCE from GitLab**: Dropdowns populated from GitLab folder paths; new names create folders
-- **Approval Workflow**: Aggregated view of open MRs from all platform repositories
+- **Sites and MCEs are read-only**: picked from the day1 repo's folders (Wingman never creates them); the MCE's mastertag is the default OpenShift version
+- **Naming convention**: new cluster names must follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing off-convention names are flagged, not hidden
+- **Approval Workflow**: Aggregated view of open MRs from all platform repositories; an approval names the commit the reviewer saw, so a branch that moved since is refused
 - **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
 - **In-App Documentation**: Full platform guide at `/docs`
 
@@ -63,9 +64,14 @@ npm run test:e2e:ui
 # Run specific test file
 npx playwright test addon-configuration
 
-# The day2 pages against the real services, with the in-memory GitLab seeded
-# from dev/gitlab-fixtures (WINGMAN_GIT_BACKEND=fake) behind one origin
-PLAYWRIGHT_BASE_URL=http://localhost:8080 DEV_AUTH_SECRET=... npx playwright test --project=live live-day2
+# The main day1 flows against a running stack (see "Running against local services"):
+# create, approve as a second user, edit, delete. Every step opens a real MR, so use a
+# disposable GitLab only (the in-memory fake or the seeded local GitLab CE).
+WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test live-day1-flows --project=live
+# The day2 pages against the same stack
+DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test live-day2 --project=live
 ```
 
 ### Page Objects
@@ -113,22 +119,55 @@ components/
 └── specs/              # Spec-specific components
 
 lib/
-├── api-client.ts       # Typed API client
+├── api-client.ts       # Typed API client; errors are RFC 9457 problems (ApiError)
+├── approvals.ts        # How an MR is addressed: day1-<iid>, specs-<iid>, day2-<team>-<iid>
 ├── day2.ts             # Day2 paths, query keys, layer roles, problems
+├── live-status.ts      # Live HostedCluster status (501 FEATURE_DISABLED = status is off)
 ├── values.ts           # Helm values as data: leaves, paths, YAML
 ├── utils.ts            # Utility functions
 └── diff.ts             # Diff computation utilities
 
 types/
-├── index.ts            # TypeScript type definitions
+├── index.ts            # Shared types (auth, MRs, audit) and re-exports
+├── problem.ts          # RFC 9457 problem bodies and error codes
+├── day1.ts             # day1 service shapes (clusters, specs, MCEs, drift)
 └── day2.ts             # The day2 service's bodies (from its Pydantic schemas)
 ```
 
 ## Environment Variables
 
-The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. API routes
-(`/api/day1`, `/api/day2`, `/api/auth`) are proxied at runtime by the ingress or, in local
-development, by `proxy.ts`.
+The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. In a deployment,
+nginx routes `/api/auth`, `/api/day1` and `/api/webhooks` to day1 and `/api/day2` to day2
+(`chart/templates/nginx-configmap.yaml`); `proxy.ts` only guards pages.
+
+### Running against local services
+
+`next dev` proxies the same paths when these are set (development server only; a production build
+never has the rewrites, see `next.config.ts`):
+
+| Variable | Example | Proxies |
+|---|---|---|
+| `WINGMAN_DEV_DAY1_URL` | `http://127.0.0.1:8001` | `/api/auth/*`, `/api/day1/*`, `/api/webhooks/*` |
+| `WINGMAN_DEV_DAY2_URL` | `http://127.0.0.1:8002` | `/api/day2/*` |
+
+```bash
+# Both services on the in-memory GitLab seeded from dev/gitlab-fixtures (no network needed),
+# from the repository root; both need the same JWT_SECRET_KEY (32+ characters).
+export WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake \
+  GITLAB_URL=http://gitlab.invalid GITLAB_TOKEN=test-token-never-logged-0001 \
+  JWT_SECRET_KEY=local-jwt-secret-at-least-32-characters \
+  DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs \
+  DAY2_SIGS_GROUP_PATH=sigs DAY2_SERVICE_URL=http://127.0.0.1:8002
+DEV_AUTH_ENABLED=true DEV_AUTH_SECRET=local-dev-login-secret-32-characters \
+  uv run uvicorn wingman_day1.main:app --port 8001 &
+uv run uvicorn wingman_day2.main:app --port 8002 &
+
+cd apps/web
+WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1:8002 npm run dev
+```
+
+Sign in on `/login` with any lowercase username and the `DEV_AUTH_SECRET`. Approving needs a
+second user: nobody approves a change they requested.
 
 ## Docker
 
