@@ -7,40 +7,31 @@ import { ExternalLink, CheckCircle2, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ProblemList } from "@/components/common/problem-list";
+import { RepoBadge } from "@/components/common/repo-badge";
+import { approvalHref, mrKey } from "@/lib/approvals";
+import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 import type { MRDetail } from "@/types";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
-function RepoBadge({ repo }: { repo: string }) {
-  const cls = repo === "day1"
-    ? "bg-primary/10 text-primary dark:bg-status-provisioning/15 dark:text-status-provisioning"
-    : repo === "day2"
-    ? "bg-status-ready/10 text-status-ready-fg dark:bg-status-ready/15 dark:text-status-ready"
-    : repo === "specs"
-    ? "bg-chart-5/10 text-chart-5 dark:bg-chart-5/15 dark:text-[#c490f0]"
-    : "bg-muted text-muted-foreground";
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", cls)}>
-      {repo}
-    </span>
-  );
-}
-
 export default function ApprovalsPage() {
   const queryClient = useQueryClient();
+  const username = useAuthStore((s) => s.user?.username);
   const [search, setSearch] = useState("");
   const [repoFilter, setRepoFilter] = useState<"all" | "day1" | "day2" | "specs">("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const { data: day1Mrs, isLoading: loadingDay1, isFetching: fetchingDay1 } = useQuery<MRDetail[]>({
+  // day1 lists the day1 and specs repos (each MR says which); day2 lists every team repo.
+  const { data: day1Mrs, isLoading: loadingDay1, isFetching: fetchingDay1, error: day1Error } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day1"],
     queryFn: () => api.get<MRDetail[]>("/api/day1/approvals"),
     staleTime: 15_000,
   });
 
-  const { data: day2Mrs, isLoading: loadingDay2, isFetching: fetchingDay2 } = useQuery<MRDetail[]>({
+  const { data: day2Mrs, isLoading: loadingDay2, isFetching: fetchingDay2, error: day2Error } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day2"],
     queryFn: () => api.get<MRDetail[]>("/api/day2/approvals"),
     staleTime: 15_000,
@@ -50,8 +41,8 @@ export default function ApprovalsPage() {
   const isFetching = fetchingDay1 || fetchingDay2;
 
   const allMrs: MRDetail[] = useMemo(() => [
-    ...(day1Mrs ?? []),  // day1 service returns both day1 and specs MRs with repo field set
-    ...(day2Mrs?.map((mr) => ({ ...mr, repo: "day2" as const })) ?? []),
+    ...(day1Mrs ?? []),
+    ...(day2Mrs ?? []),
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
   [day1Mrs, day2Mrs]);
 
@@ -62,8 +53,9 @@ export default function ApprovalsPage() {
       const q = search.toLowerCase();
       list = list.filter((m) =>
         m.title.toLowerCase().includes(q) ||
-        m.author?.username?.toLowerCase().includes(q) ||
-        m.labels?.some((l: string) => l.toLowerCase().includes(q))
+        m.author.username.toLowerCase().includes(q) ||
+        (m.team ?? "").toLowerCase().includes(q) ||
+        m.labels.some((l) => l.toLowerCase().includes(q))
       );
     }
     return list;
@@ -149,7 +141,10 @@ export default function ApprovalsPage() {
         )}
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+      {day1Error && <ProblemList error={day1Error} title="Day1 and spec MRs could not be loaded" />}
+      {day2Error && <ProblemList error={day2Error} title="Day2 team MRs could not be loaded" />}
+
+      <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/30">
@@ -172,12 +167,12 @@ export default function ApprovalsPage() {
                   </tr>
                 ))
               : paginated.map((mr) => (
-                  <tr key={`${mr.repo}-${mr.iid}`} className="hover:bg-primary/[0.03] transition-colors">
+                  <tr key={mrKey(mr)} className="hover:bg-primary/[0.03] transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
-                          href={`/approvals/${mr.repo}-${mr.iid}`}
-                          className="font-semibold text-foreground hover:text-primary transition-colors"
+                          href={approvalHref(mr)}
+                          className="font-semibold text-foreground hover:text-primary transition-colors break-words"
                         >
                           {mr.title}
                         </Link>
@@ -198,9 +193,16 @@ export default function ApprovalsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <RepoBadge repo={mr.repo} />
+                      <RepoBadge repo={mr.repo} team={mr.team} />
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{mr.author.username}</td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {mr.author.username}
+                      {mr.author.username === username && (
+                        <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium bg-muted text-muted-foreground" title="You requested this change; another admin approves it">
+                          you
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {new Date(mr.created_at).toLocaleDateString("en-GB")}
                     </td>
@@ -217,7 +219,7 @@ export default function ApprovalsPage() {
                     </td>
                   </tr>
                 ))}
-            {!isLoading && allMrs.length === 0 && (
+            {!isLoading && allMrs.length === 0 && !day1Error && !day2Error && (
               <tr>
                 <td colSpan={5} className="px-4 py-16 text-center">
                   <div className="flex flex-col items-center gap-3">

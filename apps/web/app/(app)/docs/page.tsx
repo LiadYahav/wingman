@@ -803,6 +803,13 @@ mcFiles:
               </div>
             ))}
           </div>
+          <Callout type="info" title="You approve the commit you reviewed">
+            Approving names the head commit shown on the review page. If anything was pushed to the branch
+            since (the day1 CI or the allocate-segment workflow commit to cluster MRs), nothing is merged and
+            Wingman asks you to reload and review the new diff. Nobody approves a change they requested
+            themselves.
+          </Callout>
+          <div className="h-3" />
           <Callout type="danger" title="MRs expire">
             Wingman does not auto-merge MRs. If an MR sits unmerged for a long time, the branch may
             conflict with subsequent changes. Close stale MRs and re-create them from the Wingman UI.

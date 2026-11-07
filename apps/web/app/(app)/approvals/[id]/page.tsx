@@ -5,24 +5,26 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X,
-  ChevronDown, ChevronRight, FilePlus, FileX, FileEdit, Edit2, Eye,
+  ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X, ChevronDown, ChevronRight,
+  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api-client";
-import { useIsAdmin } from "@/stores/auth-store";
+import { api, isApiError } from "@/lib/api-client";
+import { approvalApiPath, parseApprovalId, type MRRef } from "@/lib/approvals";
+import { useAuthStore, useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
+import { ProblemList } from "@/components/common/problem-list";
+import { RepoBadge } from "@/components/common/repo-badge";
 import { computeLineDiff } from "@/lib/diff";
-import type { MRDetail, FileDiff } from "@/types";
+import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
 
-interface MRDetailResponse {
-  mr: MRDetail;
-  diffs: FileDiff[];
-}
+/** 409 REVISION_CONFLICT on approve or edit: the head is not the one reviewed. */
+const BRANCH_MOVED =
+  "The branch moved since you loaded this MR (CI or the allocate-segment workflow pushed to it). Nothing was merged. Reload and review the new diff again.";
 
 // ── File diff card ─────────────────────────────────────────────────────────────
 
@@ -49,7 +51,7 @@ function FileDiffCard({ diff }: { diff: FileDiff }) {
         onClick={() => setOpen((v) => !v)}
       >
         <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className="flex-1 text-sm font-mono font-medium truncate">{filePath}</span>
+        <span className="flex-1 text-sm font-mono font-medium truncate" title={filePath}>{filePath}</span>
         {badge && (
           <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium shrink-0", badge.cls)}>
             {badge.label}
@@ -74,65 +76,62 @@ function FileDiffCard({ diff }: { diff: FileDiff }) {
 
 // ── Edit MR panel ─────────────────────────────────────────────────────────────
 
+/**
+ * A new file's diff is its whole content. A changed file's diff holds only
+ * hunks, so rebuilding it from the diff would drop every line outside them:
+ * only files the MR adds are editable here.
+ */
+function newFileContent(d: FileDiff): string {
+  const body = d.diff.split("\n")
+    .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
+    .map((l) => l.slice(1))
+    .join("\n");
+  return d.diff.includes("\\ No newline at end of file") ? body : `${body}\n`;
+}
+
 function EditMRPanel({
-  diffs, repo, apiBase, mrIid, onDone,
+  mr, mrRef, diffs, onSaved, onCancel,
 }: {
+  mr: MRDetail;
+  mrRef: MRRef;
   diffs: FileDiff[];
-  repo: string;
-  apiBase: string;
-  mrIid: number;
-  onDone: () => void;
+  onSaved: (detail: ApprovalDetail) => void;
+  onCancel: () => void;
 }) {
-  const editableDiffs = diffs.filter((d) => !d.deleted_file && d.diff);
+  const editableDiffs = diffs.filter((d) => d.new_file && d.diff);
+  const lockedCount = diffs.filter((d) => !d.deleted_file && !d.new_file).length;
 
-  // Extract current content of each file from the MR diff (+lines = proposed content)
-  const extractContent = (d: FileDiff) =>
-    d.diff.split("\n")
-      .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
-      .map((l) => l.slice(1))
-      .join("\n");
-
-  const [fileContents, setFileContents] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const d of editableDiffs) {
-      init[d.new_path] = extractContent(d);
-    }
-    return init;
-  });
+  const [fileContents, setFileContents] = useState<Record<string, string>>(() =>
+    Object.fromEntries(editableDiffs.map((d) => [d.new_path, newFileContent(d)]))
+  );
   const [message, setMessage] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [saveError, setSaveError] = useState<unknown>(null);
 
   const updateMutation = useMutation({
-    mutationFn: () =>
-      api.put<{ mr: MRDetail; diffs: FileDiff[] }>(
-        `/api/${apiBase}/approvals/${mrIid}?repo=${repo}`,
-        {
-          files: Object.entries(fileContents).map(([path, content]) => ({ path, content })),
-          message: message || undefined,
-        }
-      ),
-    onSuccess: () => {
-      toast.success("Changes submitted — awaiting re-approval");
-      setReviewOpen(false);
-      onDone();
+    mutationFn: () => {
+      const files: UpdateMRFile[] = editableDiffs
+        .filter((d) => fileContents[d.new_path] !== newFileContent(d))
+        .map((d) => ({ path: d.new_path, content: fileContents[d.new_path] ?? "" }));
+      // day1 refuses the commit if the branch moved past the head reviewed here
+      const body = mrRef.service === "day1" ? { files, message, sha: mr.sha } : { files, message };
+      return api.put<ApprovalDetail>(approvalApiPath(mrRef), body);
     },
-    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
+    onSuccess: (detail) => {
+      toast.success("Changes committed to the MR branch — review them again before approving");
+      setReviewOpen(false);
+      onSaved(detail);
+    },
+    onError: (e) => {
+      setReviewOpen(false);
+      setSaveError(e);
+    },
   });
 
-  if (editableDiffs.length === 0) {
-    return (
-      <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-        No editable files in this MR.
-      </div>
-    );
-  }
-
-  // Build a combined diff of all edited files for the review dialog
+  // A combined diff of the edited files for the review dialog
   const reviewDiff = editableDiffs
     .map((d) => {
-      const original = extractContent(d);
-      const edited = fileContents[d.new_path] ?? "";
-      const fileDiff = computeLineDiff(original, edited);
+      const fileDiff = computeLineDiff(newFileContent(d), fileContents[d.new_path] ?? "");
       if (!fileDiff) return null;
       return `--- a/${d.new_path}\n+++ b/${d.new_path}\n${fileDiff.split("\n").slice(2).join("\n")}`;
     })
@@ -143,35 +142,56 @@ function EditMRPanel({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Edit MR Files</h2>
-        <button onClick={onDone} className="text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={onCancel} aria-label="Close editor" className="text-muted-foreground hover:text-foreground transition-colors">
           <X className="h-4 w-4" />
         </button>
       </div>
-      <input
-        type="text"
-        placeholder="Commit message (optional)"
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-      />
-      {editableDiffs.map((d) => (
-        <div key={d.new_path} className="space-y-1.5">
-          <label className="text-xs font-mono font-medium text-muted-foreground">{d.new_path}</label>
-          <textarea
-            className="w-full font-mono text-xs bg-zinc-950 text-zinc-200 p-3 rounded-lg min-h-[200px] focus:outline-none resize-y leading-5"
-            value={fileContents[d.new_path] ?? ""}
-            onChange={(e) => setFileContents((prev) => ({ ...prev, [d.new_path]: e.target.value }))}
-            spellCheck={false}
-          />
+      {lockedCount > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {lockedCount} changed file{lockedCount !== 1 ? "s" : ""} can only be edited{" "}
+          <a href={mr.web_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">in GitLab</a>:
+          the diff holds only the changed lines, not the whole file.
+        </p>
+      )}
+      {saveError !== null && (
+        isApiError(saveError, "REVISION_CONFLICT")
+          ? <ProblemList error={saveError} title={BRANCH_MOVED} />
+          : <ProblemList error={saveError} title="The edit was refused" />
+      )}
+      {editableDiffs.length === 0 ? (
+        <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
+          No file in this MR can be edited here.
         </div>
-      ))}
-      <button
-        onClick={() => setReviewOpen(true)}
-        className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
-      >
-        <Eye className="h-4 w-4" />
-        Review & Submit Changes
-      </button>
+      ) : (
+        <>
+          <input
+            type="text"
+            placeholder="Commit message (optional)"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+          {editableDiffs.map((d) => (
+            <div key={d.new_path} className="space-y-1.5">
+              <label htmlFor={`edit-${d.new_path}`} className="text-xs font-mono font-medium text-muted-foreground break-all">{d.new_path}</label>
+              <textarea
+                id={`edit-${d.new_path}`}
+                className="w-full font-mono text-xs bg-zinc-950 text-zinc-200 p-3 rounded-lg min-h-[200px] focus:outline-none resize-y leading-5"
+                value={fileContents[d.new_path] ?? ""}
+                onChange={(e) => setFileContents((prev) => ({ ...prev, [d.new_path]: e.target.value }))}
+                spellCheck={false}
+              />
+            </div>
+          ))}
+          <button
+            onClick={() => { setSaveError(null); setReviewOpen(true); }}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
+          >
+            <Eye className="h-4 w-4" />
+            Review & Submit Changes
+          </button>
+        </>
+      )}
 
       <ReviewDialog
         open={reviewOpen}
@@ -179,13 +199,15 @@ function EditMRPanel({
         title="Review: Edit MR Files"
         description={
           reviewDiff
-            ? "Changed lines are highlighted. Green = added, red = removed. Submitting pushes a new commit to the MR branch and requires re-approval."
+            ? "Changed lines are highlighted. Submitting adds a commit on top of the MR branch (never a force-push); the MR then needs a fresh review."
             : "No changes detected — the files are identical to the current MR content."
         }
         diff={reviewDiff || undefined}
         onConfirm={() => updateMutation.mutate()}
         isPending={updateMutation.isPending}
         confirmLabel="Submit Changes"
+        pendingLabel="Committing to the MR branch…"
+        confirmDisabled={!reviewDiff}
       >
         {!reviewDiff && (
           <p className="text-sm text-muted-foreground italic text-center py-4">Nothing changed.</p>
@@ -197,57 +219,98 @@ function EditMRPanel({
 
 // ── MR detail page ────────────────────────────────────────────────────────────
 
+function ActionError({ error, onReload }: { error: unknown; onReload: () => void }) {
+  if (isApiError(error, "REVISION_CONFLICT")) {
+    return (
+      <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm">
+        <p className="text-status-warning-fg">{BRANCH_MOVED}</p>
+        <button onClick={onReload} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload
+        </button>
+      </div>
+    );
+  }
+  if (isApiError(error, "SELF_APPROVAL")) {
+    return <ProblemList error={error} title="You requested this change, so another admin must approve it." />;
+  }
+  if (isApiError(error, "NOT_MERGEABLE")) {
+    return <ProblemList error={error} title="GitLab cannot merge this MR right now" />;
+  }
+  return <ProblemList error={error} title="The action failed" />;
+}
+
 function MRDetailContent() {
   const params = useParams();
   const id = params.id as string;
   const isAdmin = useIsAdmin();
+  const username = useAuthStore((s) => s.user?.username);
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [approveReviewOpen, setApproveReviewOpen] = useState(false);
+  // The head shown when the approve dialog opened; kept after close for the exit animation.
+  const [reviewedSha, setReviewedSha] = useState("");
+  const [approveOpen, setApproveOpen] = useState(false);
   const [rejectReviewOpen, setRejectReviewOpen] = useState(false);
+  const [actionError, setActionError] = useState<unknown>(null);
 
-  // Parse repo-iid format: day1-123, day2-456, specs-789
-  const match = id.match(/^(day1|day2|specs)-(\d+)$/);
-  const repo = match?.[1] ?? "";
-  const mrIid = parseInt(match?.[2] ?? "0", 10);
+  const ref = parseApprovalId(id);
+  const queryKey = ["approvals", "detail", id];
 
-  // day1 and specs MRs go through day1 service, day2 MRs go through day2 service
-  const apiBase = repo === "day2" ? "day2" : "day1";
-
-  const { data, isLoading, error, refetch } = useQuery<MRDetailResponse>({
-    queryKey: ["approvals", repo, mrIid],
-    queryFn: () => api.get<MRDetailResponse>(`/api/${apiBase}/approvals/${mrIid}?repo=${repo}`),
-    enabled: Boolean(repo && mrIid),
-    staleTime: 15_000,
+  // No background refetch: an approval names the head shown here, so the diff
+  // must not change under the reviewer. A moved branch is a 409 and a reload.
+  const { data, isLoading, error, refetch } = useQuery<ApprovalDetail>({
+    queryKey,
+    queryFn: () => api.get<ApprovalDetail>(approvalApiPath(ref!)),
+    enabled: ref !== null,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
+  const afterChange = () => {
+    queryClient.invalidateQueries({ queryKey: ["approvals"] });
+    queryClient.invalidateQueries({ queryKey: ["audit"] });
+  };
+
   const approveMutation = useMutation({
-    mutationFn: () => api.post(`/api/${apiBase}/approvals/${mrIid}/approve?repo=${repo}`, {}),
-    onSuccess: () => {
-      toast.success("MR approved and merged");
-      setApproveReviewOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+    mutationFn: (sha: string) => api.post<MRDetail>(approvalApiPath(ref!, "approve"), { sha }),
+    onSuccess: (mr) => {
+      toast.success(`!${mr.iid} approved and merged`);
+      setApproveOpen(false);
+      afterChange();
+      // What the merge changed
+      queryClient.invalidateQueries({ queryKey: ref?.service === "day2" ? ["clusters"] : ref?.repo === "specs" ? ["specs"] : ["clusters"] });
       refetch();
     },
-    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
+    onError: (e) => {
+      setApproveOpen(false);
+      setActionError(e);
+    },
   });
 
   const rejectMutation = useMutation({
-    mutationFn: () => api.post(`/api/${apiBase}/approvals/${mrIid}/reject?repo=${repo}`, {}),
-    onSuccess: () => {
-      toast.success("MR rejected");
+    mutationFn: () => api.post<MRDetail>(approvalApiPath(ref!, "reject")),
+    onSuccess: (mr) => {
+      toast.success(`!${mr.iid} rejected`);
       setRejectReviewOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      afterChange();
       refetch();
     },
-    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
+    onError: (e) => {
+      setRejectReviewOpen(false);
+      setActionError(e);
+    },
   });
 
-  if (!match) {
+  const reload = async () => {
+    setActionError(null);
+    setEditing(false);
+    await refetch();
+  };
+
+  if (!ref) {
     return (
       <div className="p-6 max-w-4xl mx-auto">
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Invalid MR ID format: <code>{id}</code>. Expected format: day1-123, day2-456, or specs-789.
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive break-words">
+          Invalid MR ID: <code>{id}</code>. Expected <code>day1-123</code>, <code>specs-45</code> or <code>day2-&lt;team&gt;-67</code>.
         </div>
       </div>
     );
@@ -255,18 +318,13 @@ function MRDetailContent() {
 
   const mr = data?.mr;
   const diffs = data?.diffs ?? [];
+  const isOwnChange = Boolean(mr && username && mr.author.username === username);
 
   const stateColor = mr?.state === "merged"
     ? "text-chart-5 bg-chart-5/10"
     : mr?.state === "closed"
     ? "text-status-error bg-status-error/10"
     : "text-status-ready bg-status-ready/10";
-
-  const repoCls = repo === "day1"
-    ? "bg-primary/10 text-primary"
-    : repo === "specs"
-    ? "bg-chart-5/10 text-chart-5"
-    : "bg-status-ready/10 text-status-ready-fg";
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
@@ -282,6 +340,7 @@ function MRDetailContent() {
             <h1
               className="text-2xl font-bold tracking-tight truncate"
               style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
+              title={mr?.title}
             >
               {mr?.title}
             </h1>
@@ -301,9 +360,7 @@ function MRDetailContent() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load MR. Please try again.
-        </div>
+        <ProblemList error={error} title={isApiError(error, 404) ? "This merge request does not exist or is not a Wingman MR" : "Failed to load the MR"} />
       ) : isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-24 rounded-xl" />
@@ -320,7 +377,7 @@ function MRDetailContent() {
                   : <GitPullRequest className="h-3 w-3" />}
                 {mr.state}
               </span>
-              <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", repoCls)}>{repo}</span>
+              <RepoBadge repo={mr.repo} team={mr.team} className="px-2.5 py-1" />
               {mr.has_conflicts === true && (
                 <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-status-error/10 text-status-error">
                   Conflicted
@@ -331,69 +388,78 @@ function MRDetailContent() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-              <div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground mb-0.5">Author</p>
-                <p className="font-medium">{mr.author.username}</p>
+                <p className="font-medium truncate">{mr.author.username}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Created</p>
-                <p className="font-medium">{new Date(mr.created_at).toLocaleDateString("en-GB")}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">{mr.merged_at ? "Merged" : "Created"}</p>
+                <p className="font-medium">{new Date(mr.merged_at ?? mr.created_at).toLocaleDateString("en-GB")}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground mb-0.5">Source branch</p>
-                <p className="font-mono text-xs font-medium truncate">{mr.source_branch}</p>
+                <p className="font-mono text-xs font-medium truncate" title={mr.source_branch}>{mr.source_branch}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">Target branch</p>
+                <p className="font-mono text-xs font-medium truncate">{mr.target_branch}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Target branch</p>
-                <p className="font-mono text-xs font-medium">{mr.target_branch}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Head</p>
+                <p className="font-mono text-xs font-medium" title={mr.sha}>{mr.sha.slice(0, 8)}</p>
               </div>
             </div>
 
             {mr.description && (
-              <p className="text-sm text-muted-foreground border-t pt-3">{mr.description}</p>
+              <p className="text-sm text-muted-foreground border-t pt-3 whitespace-pre-line break-words">{mr.description}</p>
             )}
 
-            {/* Action buttons */}
             {isAdmin && mr.state === "opened" && !editing && (
-              <div className="flex gap-2 pt-1 border-t">
+              <div className="flex flex-wrap items-center gap-2 pt-3 border-t">
                 <button
-                  onClick={() => setApproveReviewOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-status-ready px-3 py-1.5 text-xs font-semibold text-white hover:bg-status-ready/90 transition-colors"
+                  onClick={() => { setActionError(null); setReviewedSha(mr.sha); setApproveOpen(true); }}
+                  disabled={isOwnChange}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-status-ready px-3 py-1.5 text-xs font-semibold text-white hover:bg-status-ready/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Eye className="h-3.5 w-3.5" />
                   Review & Approve
                 </button>
                 <button
-                  onClick={() => setEditing(true)}
+                  onClick={() => { setActionError(null); setEditing(true); }}
                   className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold hover:bg-muted transition-colors"
                 >
                   <Edit2 className="h-3.5 w-3.5" />Edit Files
                 </button>
                 <button
-                  onClick={() => setRejectReviewOpen(true)}
+                  onClick={() => { setActionError(null); setRejectReviewOpen(true); }}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 text-destructive px-3 py-1.5 text-xs font-semibold hover:bg-destructive/10 transition-colors"
                 >
                   <X className="h-3.5 w-3.5" />Reject
                 </button>
+                {isOwnChange && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <UserX className="h-3.5 w-3.5" />You requested this change; another admin approves it.
+                  </span>
+                )}
               </div>
             )}
           </div>
 
-          {/* Edit panel */}
+          {actionError !== null && <ActionError error={actionError} onReload={reload} />}
+
           {editing && (
             <div className="bg-card rounded-xl border shadow-sm p-5">
               <EditMRPanel
+                mr={mr}
+                mrRef={ref}
                 diffs={diffs}
-                repo={repo}
-                apiBase={apiBase}
-                mrIid={mrIid}
-                onDone={() => { setEditing(false); refetch(); }}
+                onSaved={(detail) => { queryClient.setQueryData(queryKey, detail); setEditing(false); afterChange(); }}
+                onCancel={() => setEditing(false)}
               />
             </div>
           )}
 
-          {/* File diffs */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               Changed Files ({diffs.length})
@@ -409,21 +475,22 @@ function MRDetailContent() {
         </>
       ) : null}
 
-      {/* Approve review dialog */}
+      {/* Approve: names the head shown on this page when the dialog opened */}
       <ReviewDialog
-        open={approveReviewOpen}
-        onOpenChange={setApproveReviewOpen}
+        open={approveOpen}
+        onOpenChange={setApproveOpen}
         title="Review: Approve & Merge MR"
-        description="You are about to approve and merge this MR into the target branch. This action triggers a GitOps sync."
-        onConfirm={() => approveMutation.mutate()}
+        description="You are about to approve and merge exactly the commit reviewed here. If anything was pushed to the branch since, nothing is merged and you are asked to review again."
+        onConfirm={() => approveMutation.mutate(reviewedSha)}
         isPending={approveMutation.isPending}
         confirmLabel="Approve & Merge"
+        pendingLabel="Approving and merging…"
       >
         {mr && (
           <div className="rounded-lg border bg-muted/30 p-4 text-sm space-y-2">
             <div className="flex gap-3">
               <span className="text-muted-foreground w-28 shrink-0">Title</span>
-              <span className="font-semibold">{mr.title}</span>
+              <span className="font-semibold break-words min-w-0">{mr.title}</span>
             </div>
             <div className="flex gap-3">
               <span className="text-muted-foreground w-28 shrink-0">Author</span>
@@ -434,6 +501,10 @@ function MRDetailContent() {
               <span className="font-medium">{diffs.length}</span>
             </div>
             <div className="flex gap-3">
+              <span className="text-muted-foreground w-28 shrink-0">Commit</span>
+              <span className="font-mono text-xs font-medium">{reviewedSha.slice(0, 12)}</span>
+            </div>
+            <div className="flex gap-3">
               <span className="text-muted-foreground w-28 shrink-0">Merging into</span>
               <span className="font-mono text-xs font-medium">{mr.target_branch}</span>
             </div>
@@ -441,22 +512,22 @@ function MRDetailContent() {
         )}
       </ReviewDialog>
 
-      {/* Reject review dialog */}
       <ReviewDialog
         open={rejectReviewOpen}
         onOpenChange={setRejectReviewOpen}
         title="Review: Reject MR"
-        description="This will close the MR without merging. The author will need to create a new MR to re-submit."
+        description="This closes the MR without merging. The requester opens a new one to try again."
         onConfirm={() => rejectMutation.mutate()}
         isPending={rejectMutation.isPending}
         confirmLabel="Confirm — Reject MR"
         confirmVariant="destructive"
+        pendingLabel="Closing the MR…"
       >
         {mr && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm space-y-2">
             <div className="flex gap-3">
               <span className="text-muted-foreground w-28 shrink-0">Title</span>
-              <span className="font-semibold">{mr.title}</span>
+              <span className="font-semibold break-words min-w-0">{mr.title}</span>
             </div>
             <div className="flex gap-3">
               <span className="text-muted-foreground w-28 shrink-0">Author</span>

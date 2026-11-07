@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,6 +32,11 @@ interface ReviewDialogProps {
   confirmDisabled?: boolean;
   /** Dialog size: "default" (2xl), "lg" (4xl), "xl" (5xl) */
   size?: "default" | "lg" | "xl";
+  /**
+   * For actions that do not open an MR (approve, reject): what is happening
+   * while pending, shown instead of the MR-creation progress.
+   */
+  pendingLabel?: string;
 }
 
 /**
@@ -50,6 +56,7 @@ export function ReviewDialog({
   confirmVariant = "default",
   confirmDisabled = false,
   size = "default",
+  pendingLabel,
 }: ReviewDialogProps) {
   const sizeClasses = {
     default: "sm:max-w-2xl",
@@ -65,7 +72,12 @@ export function ReviewDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        {isPending ? (
+        {isPending && pendingLabel ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground" role="status">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {pendingLabel}
+          </div>
+        ) : isPending ? (
           <MRCreationProgress />
         ) : (
           <div className="max-h-[55vh] overflow-y-auto space-y-3 py-1">
@@ -89,7 +101,7 @@ export function ReviewDialog({
               buttonVariants({ variant: confirmVariant === "destructive" ? "destructive" : "default" })
             )}
           >
-            {isPending ? "Creating MR…" : confirmLabel}
+            {isPending ? pendingLabel ?? "Creating MR…" : confirmLabel}
           </button>
         </DialogFooter>
       </DialogContent>
