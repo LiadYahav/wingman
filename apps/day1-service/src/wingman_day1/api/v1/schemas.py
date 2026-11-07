@@ -613,12 +613,16 @@ class SpecOut(ClusterSpec):
     load_error: str | None = None
     """Set for a spec file that does not parse; the rest is then a placeholder."""
     load_problems: list[str] = Field(default_factory=list)
+    last_commit_id: str | None = None
+    """The commit that last changed the file: send it back with an edit or delete."""
 
     @classmethod
     def of(cls, entry: SpecEntry) -> SpecOut:
         """From a catalog entry."""
         if entry.spec is not None:
-            return cls.model_validate(entry.spec.model_dump())
+            return cls.model_validate(
+                {**entry.spec.model_dump(), "last_commit_id": entry.last_commit_id}
+            )
         error = entry.error
         return cls.model_construct(
             metadata=SpecMetadata.model_construct(
@@ -627,6 +631,7 @@ class SpecOut(ClusterSpec):
             spec=SpecBody(),
             load_error=str(error) if error else "unreadable",
             load_problems=list(error.problems) if error else [],
+            last_commit_id=entry.last_commit_id,
         )
 
 

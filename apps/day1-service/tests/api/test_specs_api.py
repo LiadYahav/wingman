@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 import yaml
 
+from wingman_core.domain.git import RepoPath
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 
@@ -111,6 +112,20 @@ async def test_create_update_and_delete_open_spec_mrs(
     assert (renamed.status_code, renamed.json()["code"]) == (422, "VALIDATION_ERROR")
 
     update = {**WEB_SPEC, "metadata": {"name": "agent-single", "version": "1.1.0"}}
+    read = (await client.get("/api/day1/specs/agent-single", headers=alice)).json()
+    file = await gitlab.read_file(pid, RepoPath("specs/agent-single.yaml"), "main")
+    assert read["last_commit_id"] == file.last_commit_id
+    listed = (await client.get("/api/day1/specs", headers=alice)).json()
+    assert {s["metadata"]["name"]: s["last_commit_id"] for s in listed}["agent-single"] == (
+        file.last_commit_id
+    )
+    fresh = await client.put(
+        "/api/day1/specs/agent-single",
+        params={"last_commit_id": read["last_commit_id"]},
+        json=update,
+        headers=alice,
+    )
+    assert fresh.status_code == 200, fresh.text
     stale = await client.put(
         "/api/day1/specs/agent-single",
         params={"last_commit_id": "0" * 40},

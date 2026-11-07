@@ -34,6 +34,8 @@ class SpecEntry:
     name: str
     spec: ClusterSpec | None
     error: InvalidSpecError | None = None
+    last_commit_id: str | None = None
+    """The commit that last changed the file; an edit or delete sends it back."""
 
 
 class SpecCatalog:
@@ -89,6 +91,15 @@ class SpecCatalog:
         """One spec with the template filled in. Missing → ``ResourceNotFoundError``."""
         spec, _ = await self._read(name)
         return with_template(spec, await self.template())
+
+    async def entry(self, name: str) -> SpecEntry:
+        """One spec with the template and its file's ``last_commit_id``.
+
+        Missing → ``ResourceNotFoundError``; a file that does not parse raises
+        its ``InvalidSpecError``.
+        """
+        spec, last_commit_id = await self._read(name)
+        return SpecEntry(name, with_template(spec, await self.template()), None, last_commit_id)
 
     async def history(self, name: str) -> list[Commit]:
         """Commits that changed a spec's file."""
@@ -196,10 +207,14 @@ class SpecCatalog:
 
     async def _entry(self, name: str, template: str) -> SpecEntry:
         try:
-            spec, _ = await self._read(name)
+            file = await self._specs.read(self._path(name))
+        except NotFoundError as exc:
+            raise ResourceNotFoundError(f"spec {name!r} does not exist") from exc
+        try:
+            spec = parse_spec(file.content, expected_name=name)
         except InvalidSpecError as exc:
-            return SpecEntry(name, None, exc)
-        return SpecEntry(name, with_template(spec, template))
+            return SpecEntry(name, None, exc, file.last_commit_id)
+        return SpecEntry(name, with_template(spec, template), None, file.last_commit_id)
 
 
 def _summary(verb: str, spec: ClusterSpec) -> str:

@@ -126,7 +126,9 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     `day1.template` (it is still filled on read). Unknown keys → 422.
     `metadata.name` must be a DNS-1123 label, `metadata.version` one word.
 22. `PUT /specs/{name}` and `DELETE /specs/{name}` accept `?last_commit_id=`;
-    renaming in a PUT → 422; creating an existing spec → 409.
+    renaming in a PUT → 422; creating an existing spec → 409. `GET
+    /specs/{name}` and the list items carry `last_commit_id` (the commit that
+    last changed the file, a broken spec's too): send it back.
 23. `GET /specs/{name}/clusters` items gain `state`, `error`;
     `GET /specs/{name}/drift` now returns real results (it always returned
     `[]`), items `{cluster, site, mce, state, is_drifted, spec_version,

@@ -18,7 +18,6 @@ from wingman_day1.api.v1.schemas import (
     change_out,
 )
 from wingman_day1.application.approvals import RepoKey
-from wingman_day1.application.specs import SpecEntry
 from wingman_day1.domain.specs import ClusterSpec
 
 router = APIRouter(prefix="/api/day1/specs", tags=["specs"])
@@ -106,7 +105,7 @@ async def spec_drift(name: Name, context: Context, user: CurrentUser) -> list[Sp
 @router.get("/{name}")
 async def get_spec(name: Name, context: Context, user: CurrentUser) -> SpecOut:
     """One spec, with the shared template filled in."""
-    return SpecOut.of(SpecEntry(name, await context.specs.get(name)))
+    return SpecOut.of(await context.specs.entry(name))
 
 
 @router.post("", status_code=201)
