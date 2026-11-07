@@ -1,61 +1,89 @@
 import { Page, Locator } from "@playwright/test";
 
+/** The two-step create form at /clusters/new: choose a spec, then configure the cluster. */
 export class ClusterNewPage {
   readonly page: Page;
-  readonly nameInput: Locator;
-  readonly specSelect: Locator;
-  readonly mceSelect: Locator;
   readonly siteSelect: Locator;
-  readonly submitButton: Locator;
+  readonly mceSelect: Locator;
+  readonly nameInput: Locator;
+  readonly namingHint: Locator;
+  readonly versionSelect: Locator;
+  readonly versionInput: Locator;
+  readonly versionSource: Locator;
+  readonly offConventionMces: Locator;
+  readonly formProblems: Locator;
+  readonly reviewButton: Locator;
+  readonly reviewDialog: Locator;
 
   constructor(page: Page) {
     this.page = page;
-    this.nameInput = page.getByTestId("cluster-name-input");
-    this.specSelect = page.getByTestId("spec-select");
-    this.mceSelect = page.getByTestId("mce-select");
     this.siteSelect = page.getByTestId("site-select");
-    this.submitButton = page.getByRole("button", { name: /create cluster/i });
+    this.mceSelect = page.getByTestId("mce-select");
+    this.nameInput = page.getByTestId("cluster-name-input");
+    this.namingHint = page.getByTestId("naming-hint");
+    this.versionSelect = page.getByTestId("ocp-version-select");
+    this.versionInput = page.getByTestId("ocp-version-input");
+    this.versionSource = page.getByTestId("ocp-version-source");
+    this.offConventionMces = page.getByTestId("off-convention-mces");
+    this.formProblems = page.getByTestId("form-problems");
+    this.reviewButton = page.getByTestId("review-button");
+    this.reviewDialog = page.getByRole("dialog");
   }
 
+  /** Land on "/" first so the persisted session hydrates, then open the form. */
   async goto() {
+    await this.page.goto("/");
+    await this.page.waitForLoadState("domcontentloaded");
     await this.page.goto("/clusters/new");
+    await this.page.waitForLoadState("domcontentloaded");
   }
 
-  getOverrideField(path: string): Locator {
-    const testId = `override-field-${path.replace(/\./g, "-")}`;
-    return this.page.getByTestId(testId);
+  specCard(name: string): Locator {
+    return this.page.getByTestId(`spec-card-${name}`);
   }
 
-  async fillClusterName(name: string) {
+  async chooseSpec(name: string) {
+    await this.specCard(name).click();
+  }
+
+  /** An option of the open select popup. */
+  option(name: string | RegExp): Locator {
+    return this.page.getByRole("option", { name });
+  }
+
+  /** An MCE option; its accessible name also carries the env chip. */
+  mceOption(mce: string): Locator {
+    return this.option(new RegExp(`^${mce.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  }
+
+  async selectSite(site: string) {
+    await this.siteSelect.click();
+    await this.option(site).click();
+  }
+
+  async selectMce(mce: string) {
+    await this.mceSelect.click();
+    await this.mceOption(mce).click();
+  }
+
+  async fillName(name: string) {
     await this.nameInput.fill(name);
   }
 
-  async selectSpec(specName: string) {
-    await this.specSelect.click();
-    await this.page.getByRole("option", { name: specName }).click();
+  /** A form input of the dynamic template form, by its `e.g. <example>` placeholder. */
+  templateInput(example: string): Locator {
+    return this.page.getByPlaceholder(`e.g. ${example}`);
   }
 
-  async selectMce(mceName: string) {
-    await this.mceSelect.click();
-    await this.page.getByRole("option", { name: mceName }).click();
+  overrideField(team: string, addon: string, path: string): Locator {
+    return this.page.getByTestId(`override-field-${team}-${addon}-${path.replace(/\./g, "-")}`);
   }
 
-  async selectSite(siteName: string) {
-    await this.siteSelect.click();
-    await this.page.getByRole("option", { name: siteName }).click();
+  async review() {
+    await this.reviewButton.click();
   }
 
-  async setOverrideValue(path: string, value: string) {
-    const field = this.getOverrideField(path);
-    await field.fill(value);
-  }
-
-  async toggleBooleanOverride(path: string) {
-    const field = this.getOverrideField(path);
-    await field.click();
-  }
-
-  async submit() {
-    await this.submitButton.click();
+  async confirm() {
+    await this.reviewDialog.getByRole("button", { name: /confirm/i }).click();
   }
 }

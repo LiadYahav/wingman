@@ -14,6 +14,12 @@ export interface FieldValueMap { [key: string]: FieldValue }
 export type FieldValue = string | number | boolean | FieldValue[] | FieldValueMap;
 export type FormValues = FieldValueMap;
 
+/** InfraEnv names on the MCE hub, for every `infra_env` input at any depth (e.g. inside nodepools). */
+interface InfraEnvProps {
+  infraEnvOptions?: string[];
+  infraEnvsLoading?: boolean;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function defaultForField(field: TemplateField): FieldValue {
@@ -232,6 +238,7 @@ function ObjectEditor({
 
 function ObjectCard({
   fields, value, onChange, onRemove, index, mode, basePath, immutablePaths, onToggleImmutable,
+  infraEnvOptions, infraEnvsLoading,
 }: {
   fields: TemplateField[];
   value: Record<string, FieldValue>;
@@ -242,7 +249,7 @@ function ObjectCard({
   basePath: string;
   immutablePaths: Set<string>;
   onToggleImmutable?: (path: string) => void;
-}) {
+} & InfraEnvProps) {
   const [expanded, setExpanded] = useState(true);
 
   // Build a one-line summary for collapsed state
@@ -314,6 +321,8 @@ function ObjectCard({
               path={`${basePath}.${subField.name}`}
               immutablePaths={immutablePaths}
               onToggleImmutable={onToggleImmutable}
+              infraEnvOptions={infraEnvOptions}
+              infraEnvsLoading={infraEnvsLoading}
             />
           ))}
         </div>
@@ -325,9 +334,9 @@ function ObjectCard({
 // ── String list editor ─────────────────────────────────────────────────────────
 
 function StringListEditor({
-  field, value, onChange, mode,
+  value, onChange, mode,
 }: {
-  field: TemplateField; value: FieldValue[]; onChange: (v: FieldValue[]) => void; mode: Mode;
+  value: FieldValue[]; onChange: (v: FieldValue[]) => void; mode: Mode;
 }) {
   const canAdd = mode === "spec-build";
 
@@ -376,6 +385,7 @@ function StringListEditor({
 
 function ObjectListEditor({
   field, value, onChange, mode, basePath, immutablePaths, onToggleImmutable,
+  infraEnvOptions, infraEnvsLoading,
 }: {
   field: TemplateField;
   value: FieldValue[];
@@ -384,7 +394,7 @@ function ObjectListEditor({
   basePath: string;
   immutablePaths: Set<string>;
   onToggleImmutable?: (path: string) => void;
-}) {
+} & InfraEnvProps) {
   const subFields = field.fields!;
   const canAdd = mode === "spec-build";
   const items = value as Record<string, FieldValue>[];
@@ -402,6 +412,8 @@ function ObjectListEditor({
           basePath={`${basePath}[${i}]`}
           immutablePaths={immutablePaths}
           onToggleImmutable={onToggleImmutable}
+          infraEnvOptions={infraEnvOptions}
+          infraEnvsLoading={infraEnvsLoading}
           onChange={(updated) => {
             const next = [...items];
             next[i] = updated;
@@ -446,9 +458,7 @@ export function FieldEditor({
   path: string;
   immutablePaths: Set<string>;
   onToggleImmutable?: (path: string) => void;
-  infraEnvOptions?: string[];
-  infraEnvsLoading?: boolean;
-}) {
+} & InfraEnvProps) {
   const isImmutable = immutablePaths.has(path);
   const isReadOnly = mode === "cluster-edit" && isImmutable;
   const isScalar = field.type !== "list" && field.type !== "object";
@@ -464,6 +474,8 @@ export function FieldEditor({
           basePath={path}
           immutablePaths={immutablePaths}
           onToggleImmutable={onToggleImmutable}
+          infraEnvOptions={infraEnvOptions}
+          infraEnvsLoading={infraEnvsLoading}
         />
       );
     }
@@ -471,7 +483,6 @@ export function FieldEditor({
     if (field.type === "list") {
       return (
         <StringListEditor
-          field={field}
           value={value as FieldValue[]}
           onChange={(v) => onChange(v)}
           mode={mode}
@@ -568,9 +579,7 @@ export function DynamicVariableForm({
   mode?: Mode;
   immutablePaths?: Set<string>;
   onToggleImmutable?: (path: string) => void;
-  infraEnvOptions?: string[];
-  infraEnvsLoading?: boolean;
-}) {
+} & InfraEnvProps) {
   if (schema.length === 0) return null;
 
   return (

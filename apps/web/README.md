@@ -9,8 +9,9 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Two-Phase Cluster Form**: Specs define structure; clusters fill values — nodepool count is locked by spec
 - **Marketplace Addon Picker**: Browse and select Day2 addons on spec creation/edit pages
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
-- **Site/MCE from GitLab**: Dropdowns populated from GitLab folder paths; new names create folders
-- **Approval Workflow**: Aggregated view of open MRs from all platform repositories
+- **Sites and MCEs are read-only**: picked from the day1 repo's folders (Wingman never creates them); the MCE's mastertag is the default OpenShift version
+- **Naming convention**: new cluster names must follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing off-convention names are flagged, not hidden
+- **Approval Workflow**: Aggregated view of open MRs from all platform repositories; an approval names the commit the reviewer saw, so a branch that moved since is refused
 - **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
 - **In-App Documentation**: Full platform guide at `/docs`
 

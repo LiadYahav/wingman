@@ -1,34 +1,179 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, CheckCircle2, Code, Eye, FileText, List, Plus, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Code, Eye, FileText, Info, List, Plus, RotateCcw, Trash2,
+} from "lucide-react";
 import jsYaml from "js-yaml";
 import { toast } from "sonner";
-import { api } from "@/lib/api-client";
+import { api, isApiError } from "@/lib/api-client";
+import { approvalHref } from "@/lib/approvals";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { GitLabFileList } from "@/components/common/gitlab-file-list";
+import { ProblemList } from "@/components/common/problem-list";
+import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
-import type { AddonCatalogEntry, ClusterSpec, MRDetail, OverrideableField, TemplateField } from "@/types";
-import { DynamicVariableForm, seedFromStructure, type FormValues } from "@/components/clusters/dynamic-variable-form";
+import type {
+  AddonCatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OverrideableField, SpecEntry, TemplateField,
+} from "@/types";
+import { DynamicVariableForm, seedFromStructure, type FieldValue, type FormValues } from "@/components/clusters/dynamic-variable-form";
 
-const CREATE_NEW = "__create_new__";
+const inputCls =
+  "w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow";
 
 function formatVariableName(name: string) {
   return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ── Naming convention (ADR-0014), mirrored from day1's domain/names.py ────────
+//
+// The server is authoritative; this only gives the hint while typing.
+
+const DNS_LABEL = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
+const MAX_DNS_LABEL = 63;
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** `ocp4-<env>-<name>-<site>[-<seq>]` for one site; group 1 is the env. */
+function clusterNamePattern(site: string) {
+  return new RegExp(
+    `^ocp4-(prod|prep|test)-([a-z0-9](?:[-a-z0-9]*[a-z0-9])?)-${escapeRegExp(site)}(?:-([a-z0-9]+))?$`
+  );
+}
+
+/** Why the server would refuse `name` under `site` and `mce`; `siteMces` once they have loaded. */
+function nameProblems(name: string, site: string, mce: Mce | undefined, siteMces: Mce[] | undefined): string[] {
+  const problems: string[] = [];
+  if (name.length > MAX_DNS_LABEL) problems.push(`Longer than ${MAX_DNS_LABEL} characters`);
+  if (!DNS_LABEL.test(name)) {
+    problems.push("Use lowercase letters, digits and '-', starting and ending with a letter or digit");
+  }
+  if (!site) return problems;
+  const match = clusterNamePattern(site).exec(name);
+  if (!match) {
+    problems.push(`Does not follow ocp4-<env>-<name>-${site}[-<seq>]`);
+  } else if (mce) {
+    if (mce.follows_convention && mce.env && match[1] !== mce.env) {
+      problems.push(`Env "${match[1]}" does not match ${mce.name} (env "${mce.env}")`);
+    }
+  } else if (siteMces && !siteMces.some((m) => m.follows_convention && m.env === match[1])) {
+    problems.push(`No "${match[1]}" MCE on ${site} follows the convention, so this env cannot be created there`);
+  }
+  return problems;
+}
+
+/** The site whose convention the name follows; the longest wins (`site-a` over `site`). */
+function siteFromName(name: string, sites: string[]): string | null {
+  const matches = sites.filter((s) => clusterNamePattern(s).test(name));
+  return matches.sort((a, b) => b.length - a.length)[0] ?? null;
+}
+
+/** The one conventional MCE of the site whose env the name carries. */
+function mceFromName(name: string, site: string, mces: Mce[]): string | null {
+  const env = clusterNamePattern(site).exec(name)?.[1];
+  if (!env) return null;
+  const candidates = mces.filter((m) => m.follows_convention && m.env === env);
+  return candidates.length === 1 ? candidates[0].name : null;
+}
+
+// ── Form values ──────────────────────────────────────────────────────────────
+
+function isEmptyValue(value: unknown): boolean {
+  if (value === undefined || value === null || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+/** Every required input left empty, at any depth (`nodepools[1].infra_env`). */
+function missingRequired(schema: TemplateField[], values: Record<string, unknown>, prefix = ""): string[] {
+  const missing: string[] = [];
+  for (const field of schema) {
+    const path = prefix ? `${prefix}.${field.name}` : field.name;
+    const value = values[field.name];
+    if (field.type === "list" && field.fields?.length) {
+      const items = Array.isArray(value) ? value : [];
+      if (field.required && items.length === 0) missing.push(path);
+      items.forEach((item, i) => {
+        if (item && typeof item === "object") {
+          missing.push(...missingRequired(field.fields!, item as Record<string, unknown>, `${path}[${i}]`));
+        }
+      });
+    } else if (field.required && isEmptyValue(value)) {
+      missing.push(path);
+    }
+  }
+  return missing;
+}
+
+/** `nodepools[1].configs[0].name` → `Nodepool 2 › Config 1 › Name`. */
+function labelForPath(path: string): string {
+  return path
+    .split(".")
+    .map((part) => {
+      const item = /^(\w+)\[(\d+)\]$/.exec(part);
+      return item
+        ? `${formatVariableName(item[1]).replace(/s$/, "")} ${Number(item[2]) + 1}`
+        : formatVariableName(part);
+    })
+    .join(" › ");
+}
+
+function setValueAtPath(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
+  const [head, ...rest] = path.split(".");
+  if (rest.length === 0) return { ...obj, [head]: value };
+  const child = obj[head];
+  const base = child && typeof child === "object" && !Array.isArray(child) ? (child as Record<string, unknown>) : {};
+  return { ...obj, [head]: setValueAtPath(base, rest.join("."), value) };
+}
+
+/** Drop the leaves a form field left blank, and the maps that leaves empty. */
+function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === "" || value === undefined) continue;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const nested = pruneEmpty(value as Record<string, unknown>);
+      if (Object.keys(nested).length > 0) out[key] = nested;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/** Override defaults the spec declares, as nested Helm values. */
+function defaultOverrides(fields: OverrideableField[]): Record<string, unknown> {
+  let values: Record<string, unknown> = {};
+  for (const field of fields) {
+    if (field.default !== undefined && field.default !== null) values = setValueAtPath(values, field.path, field.default);
+  }
+  return values;
+}
+
+function seedForm(spec: SpecEntry, schema: TemplateField[]): FormValues {
+  const seeded = seedFromStructure(spec.spec.day1.structure ?? {}, schema);
+  // Presets are merged under what the form sends, so a blank field would win over
+  // a preset: start the form from them instead.
+  const presets = spec.spec.day1.values ?? {};
+  for (const field of schema) {
+    if (field.name in presets) seeded[field.name] = presets[field.name] as FieldValue;
+  }
+  return seeded;
+}
+
+function summarizeValue(value: unknown): string {
+  if (Array.isArray(value)) return `${value.length} item${value.length !== 1 ? "s" : ""}`;
+  if (value && typeof value === "object") return "configured";
+  return value === "" || value === undefined || value === null ? "—" : String(value);
 }
 
 // ── Array item editor ──────────────────────────────────────────────────────────
@@ -52,7 +197,7 @@ function ArrayItemEditor({
       <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
-          <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive transition-colors">
+          <button type="button" onClick={onRemove} aria-label={`Remove item ${index + 1}`} className="text-muted-foreground hover:text-destructive transition-colors">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -61,7 +206,7 @@ function ArrayItemEditor({
             <label className="text-xs font-medium text-muted-foreground w-32 shrink-0 truncate">{key}</label>
             <input
               type={typeof val === "number" ? "number" : "text"}
-              className="flex-1 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              className="flex-1 min-w-0 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
               value={String(val ?? "")}
               onChange={(e) =>
                 onUpdate({ ...obj, [key]: typeof val === "number" ? Number(e.target.value) : e.target.value })
@@ -77,11 +222,11 @@ function ArrayItemEditor({
     <div className="flex items-center gap-2">
       <input
         type="text"
-        className="flex-1 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+        className="flex-1 min-w-0 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
         value={String(item ?? "")}
         onChange={(e) => onUpdate(e.target.value)}
       />
-      <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-destructive transition-colors">
+      <button type="button" onClick={onRemove} aria-label={`Remove item ${index + 1}`} className="text-muted-foreground hover:text-destructive transition-colors">
         <Trash2 className="h-3.5 w-3.5" />
       </button>
     </div>
@@ -90,18 +235,41 @@ function ArrayItemEditor({
 
 // ── Override field ─────────────────────────────────────────────────────────────
 
+function ModeToggle({ mode, onChange, formIcon: FormIcon }: {
+  mode: "form" | "yaml"; onChange: (m: "form" | "yaml") => void; formIcon: typeof List;
+}) {
+  return (
+    <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/50 w-fit">
+      {([["form", FormIcon, "Form"], ["yaml", Code, "YAML"]] as const).map(([value, Icon, label]) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onChange(value)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+            mode === value ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Icon className="h-3.5 w-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function OverrideField({
+  id,
   field,
   value,
   onChange,
 }: {
+  id: string;
   field: OverrideableField;
   value: unknown;
   onChange: (v: unknown) => void;
 }) {
   const [mode, setMode] = useState<"form" | "yaml">("form");
-  const base =
-    "w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow";
 
   const isArrayValue = Array.isArray(value);
   const isObjectValue = value !== null && typeof value === "object" && !isArrayValue;
@@ -112,12 +280,13 @@ function OverrideField({
       <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
         <input
           type="checkbox"
-          id={field.path}
+          id={id}
+          data-testid={id}
           checked={Boolean(value)}
           onChange={(e) => onChange(e.target.checked)}
           className="h-5 w-5 rounded border-border text-primary cursor-pointer"
         />
-        <label htmlFor={field.path} className="text-sm cursor-pointer select-none">
+        <label htmlFor={id} className="text-sm cursor-pointer select-none">
           {field.description || field.path}
         </label>
       </div>
@@ -128,7 +297,9 @@ function OverrideField({
     return (
       <input
         type="number"
-        className={base}
+        id={id}
+        data-testid={id}
+        className={inputCls}
         value={String(value ?? "")}
         onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
       />
@@ -156,32 +327,8 @@ function OverrideField({
     };
 
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/50 w-fit">
-          <button
-            type="button"
-            onClick={() => setMode("form")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-              mode === "form" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <List className="h-3.5 w-3.5" />
-            Form
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("yaml")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-              mode === "yaml" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Code className="h-3.5 w-3.5" />
-            YAML
-          </button>
-        </div>
-
+      <div className="space-y-3" data-testid={id}>
+        <ModeToggle mode={mode} onChange={setMode} formIcon={List} />
         {mode === "form" ? (
           <div className="space-y-2">
             {arrValue.length === 0 ? (
@@ -199,10 +346,7 @@ function OverrideField({
                     newArr[idx] = newVal;
                     onChange(newArr);
                   }}
-                  onRemove={() => {
-                    const newArr = arrValue.filter((_, i) => i !== idx);
-                    onChange(newArr);
-                  }}
+                  onRemove={() => onChange(arrValue.filter((_, i) => i !== idx))}
                 />
               ))
             )}
@@ -223,8 +367,7 @@ function OverrideField({
             onChange={(e) => {
               try {
                 const parsed = jsYaml.load(e.target.value);
-                if (Array.isArray(parsed)) onChange(parsed);
-                else onChange(e.target.value);
+                onChange(Array.isArray(parsed) ? parsed : e.target.value);
               } catch {
                 onChange(e.target.value);
               }
@@ -240,32 +383,8 @@ function OverrideField({
     const yamlStr = typeof value === "string" ? value : jsYaml.dump(objValue, { indent: 2, lineWidth: 120 });
 
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/50 w-fit">
-          <button
-            type="button"
-            onClick={() => setMode("form")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-              mode === "form" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            Form
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("yaml")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-              mode === "yaml" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Code className="h-3.5 w-3.5" />
-            YAML
-          </button>
-        </div>
-
+      <div className="space-y-3" data-testid={id}>
+        <ModeToggle mode={mode} onChange={setMode} formIcon={FileText} />
         {mode === "form" ? (
           <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
             {Object.keys(objValue).length === 0 ? (
@@ -284,9 +403,9 @@ function OverrideField({
                   ) : Array.isArray(val) ? (
                     <input
                       type="text"
-                      className="flex-1 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      className="flex-1 min-w-0 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                       value={val.join(", ")}
-                      onChange={(e) => onChange({ ...objValue, [key]: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                      onChange={(e) => onChange({ ...objValue, [key]: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
                       placeholder="comma-separated"
                     />
                   ) : typeof val === "object" && val !== null ? (
@@ -294,7 +413,7 @@ function OverrideField({
                   ) : (
                     <input
                       type={typeof val === "number" ? "number" : "text"}
-                      className="flex-1 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      className="flex-1 min-w-0 rounded border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
                       value={String(val ?? "")}
                       onChange={(e) => onChange({ ...objValue, [key]: typeof val === "number" ? Number(e.target.value) : e.target.value })}
                     />
@@ -311,8 +430,7 @@ function OverrideField({
             onChange={(e) => {
               try {
                 const parsed = jsYaml.load(e.target.value);
-                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) onChange(parsed);
-                else onChange(e.target.value);
+                onChange(parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : e.target.value);
               } catch {
                 onChange(e.target.value);
               }
@@ -326,7 +444,9 @@ function OverrideField({
   return (
     <input
       type="text"
-      className={base}
+      id={id}
+      data-testid={id}
+      className={inputCls}
       value={String(value ?? "")}
       placeholder={field.description || field.path}
       onChange={(e) => onChange(e.target.value)}
@@ -334,72 +454,134 @@ function OverrideField({
   );
 }
 
-// Variables that have dedicated form widgets on this page — exclude from DynamicVariableForm
-const IDENTITY_VAR_NAMES = new Set([
-  "cluster_name", "site", "site_name", "mce", "mce_name", "openshift_release_version",
-]);
+// ── Inline form errors ─────────────────────────────────────────────────────────
+
+/** A failed preview or create (the service's problem), or the form's own check. */
+type FormError =
+  | {
+      kind: "server";
+      error: unknown;
+      title: string;
+      hint?: string;
+      /** The spec changed under the form: offer to start again from the current one. */
+      reloadSpec?: boolean;
+    }
+  | { kind: "form"; lines: string[] };
+
+/** What the form itself caught before asking the service; styled like ProblemList. */
+function FormChecks({ lines }: { lines: string[] }) {
+  return (
+    <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+        <div className="min-w-0 space-y-1">
+          <p className="font-medium">Some fields need attention</p>
+          <ul className="list-disc pl-4 space-y-0.5">
+            {lines.map((line, i) => <li key={i} className="break-words">{line}</li>)}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function describeFailure(error: unknown, what: "preview" | "create"): FormError {
+  const verb = what === "preview" ? "The cluster file could not be rendered" : "The merge request was not opened";
+  if (isApiError(error, "ALREADY_EXISTS")) {
+    return {
+      kind: "server",
+      error,
+      title: "This cluster name is taken",
+      hint: "A cluster with this name exists, or an open MR already creates it. Pick another name.",
+    };
+  }
+  if (isApiError(error, "REVISION_CONFLICT")) {
+    return {
+      kind: "server",
+      error,
+      title: "The spec changed since you opened it",
+      hint: "Reload the specs and fill the form again from the current version.",
+      reloadSpec: true,
+    };
+  }
+  if (isApiError(error, "VALIDATION_ERROR")) return { kind: "server", error, title: `${verb}: fix the following` };
+  if (isApiError(error, "NOT_FOUND")) {
+    return { kind: "server", error, title: verb, hint: "The site, MCE or spec no longer exists in GitLab. Reload the page." };
+  }
+  return { kind: "server", error, title: verb };
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
+
+type OverrideMode = "fields" | "yaml";
 
 export default function NewClusterPage() {
   const isAdmin = useIsAdmin();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<"spec" | "vars">("spec");
-  const [selectedSpec, setSelectedSpec] = useState<ClusterSpec | null>(null);
-  const [clusterName, setClusterName] = useState("");
-  const [site, setSite] = useState("");
-  const [newSiteName, setNewSiteName] = useState("");
-  const [mce, setMce] = useState("");
-  const [newMceName, setNewMceName] = useState("");
-  // Dynamic form values — driven by the template schema from the backend
-  const [dynamicValues, setDynamicValues] = useState<FormValues>({});
-  const [addonOverrides, setAddonOverrides] = useState<
-    Record<string, Record<string, unknown>>
-  >({});
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [previewYaml, setPreviewYaml] = useState<string>("");
-  const [previewLoading, setPreviewLoading] = useState(false);
-  // Addons in YAML editor mode (keyed by "team/name")
-  const [yamlModeAddons, setYamlModeAddons] = useState<Set<string>>(new Set());
-  // Raw YAML text per addon while in YAML mode
-  const [addonYamlText, setAddonYamlText] = useState<Record<string, string>>({});
-  const [siteAutoDetected, setSiteAutoDetected] = useState(false);
-  const [mceAutoDetected, setMceAutoDetected] = useState(false);
-  const [ocpVersion, setOcpVersion] = useState("");
+  const errorRef = useRef<HTMLDivElement>(null);
 
-  const { data: specs, isLoading } = useQuery<ClusterSpec[]>({
+  const [step, setStep] = useState<"spec" | "vars">("spec");
+  const [selectedSpec, setSelectedSpec] = useState<SpecEntry | null>(null);
+  const [clusterName, setClusterName] = useState("");
+  // `null` = not chosen: the value is detected from the cluster name.
+  const [siteChoice, setSiteChoice] = useState<string | null>(null);
+  const [mceChoice, setMceChoice] = useState<string | null>(null);
+  // `null` = not chosen: the spec's preset, else the MCE's default mastertag.
+  const [ocpChoice, setOcpChoice] = useState<string | null>(null);
+  // `null` = untouched: the form shows the spec's structure and presets.
+  const [dynamicValues, setDynamicValues] = useState<FormValues | null>(null);
+  // Nested Helm values per spec addon, keyed "team/name".
+  const [addonOverrides, setAddonOverrides] = useState<Record<string, Record<string, unknown>>>({});
+  const [overrideModes, setOverrideModes] = useState<Record<string, OverrideMode>>({});
+  const [addonYamlText, setAddonYamlText] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<FormError | null>(null);
+  const [reviewed, setReviewed] = useState<{ request: CreateClusterRequest; preview: ClusterPreview } | null>(null);
+
+  const { data: specs, isLoading: specsLoading, error: specsError } = useQuery<SpecEntry[]>({
     queryKey: ["specs"],
-    queryFn: () => api.get<ClusterSpec[]>("/api/day1/specs"),
+    queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
     staleTime: 60_000,
   });
 
   // Template schema — parsed server-side from the Jinja2 AST; drives the dynamic form
-  const { data: templateSchema = [] } = useQuery<TemplateField[]>({
+  const { data: templateSchema, isLoading: schemaLoading } = useQuery<TemplateField[]>({
     queryKey: ["specs", "template-schema"],
     queryFn: () => api.get<TemplateField[]>("/api/day1/specs/template/schema"),
     staleTime: 300_000,
   });
+  const schema = useMemo(() => templateSchema ?? [], [templateSchema]);
 
-  // Addon catalog — used for full values YAML editor (chart defaults)
+  // Addon catalog — chart defaults for the full values YAML editor
   const { data: addonCatalog = [] } = useQuery<AddonCatalogEntry[]>({
     queryKey: ["addons", "catalog"],
     queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
     staleTime: 120_000,
+    enabled: step === "vars",
   });
 
   const { data: sites = [], isLoading: sitesLoading } = useQuery<string[]>({
     queryKey: ["sites"],
     queryFn: () => api.get<string[]>("/api/day1/sites"),
     staleTime: 60_000,
+    enabled: step === "vars",
   });
 
-  const { data: mces = [], isLoading: mcesLoading } = useQuery<string[]>({
-    queryKey: ["sites", site, "mces"],
-    queryFn: () => api.get<string[]>(`/api/day1/sites/${site}/mces`),
-    enabled: Boolean(site) && site !== CREATE_NEW,
+  const trimmedName = clusterName.trim();
+  const detectedSite = trimmedName ? siteFromName(trimmedName, sites) : null;
+  const site = siteChoice ?? detectedSite ?? "";
+
+  const { data: mces = [], isLoading: mcesLoading } = useQuery<Mce[]>({
+    queryKey: ["mces", site],
+    queryFn: () => api.get<Mce[]>(`/api/day1/mces?site=${encodeURIComponent(site)}`),
+    enabled: Boolean(site),
     staleTime: 60_000,
   });
+
+  const detectedMce = site && trimmedName ? mceFromName(trimmedName, site, mces) : null;
+  const mce = mceChoice && mces.some((m) => m.name === mceChoice) ? mceChoice : (detectedMce ?? "");
+  const selectedMce = mces.find((m) => m.name === mce);
+  const offConventionMces = mces.filter((m) => !m.follows_convention);
 
   const { data: ocpVersions = [] } = useQuery<string[]>({
     queryKey: ["openshift-versions"],
@@ -408,101 +590,69 @@ export default function NewClusterPage() {
     enabled: step === "vars",
   });
 
-  const { data: infraEnvOptions = [], isLoading: infraEnvsLoading } = useQuery<string[]>({
+  // InfraEnvs on the MCE hub; `null` when live status is off (then the field is free text).
+  const { data: infraEnvs, isLoading: infraEnvsLoading, error: infraEnvsError } = useQuery<string[] | null>({
     queryKey: ["mce-infraenvs", mce],
-    queryFn: () => api.get<string[]>(`/api/day1/mces/${mce}/infraenvs`),
-    enabled: Boolean(mce) && mce !== CREATE_NEW && step === "vars",
+    queryFn: async () => {
+      try {
+        return await api.get<string[]>(`/api/day1/mces/${encodeURIComponent(mce)}/infraenvs`);
+      } catch (error) {
+        if (isApiError(error, "FEATURE_DISABLED")) return null;
+        throw error;
+      }
+    },
+    enabled: Boolean(mce) && step === "vars",
     staleTime: 60_000,
     retry: false,
   });
 
-  // Auto-detect site from cluster name — prefer longest match (most specific)
-  useEffect(() => {
-    if (!clusterName.trim() || !sites.length) return;
-    if (site && site !== CREATE_NEW && !siteAutoDetected) return; // don't override manual selection
-    const nameLower = clusterName.toLowerCase();
-    const matched = [...sites]
-      .filter((s) => nameLower.includes(s.toLowerCase()))
-      .sort((a, b) => b.length - a.length)[0];
-    if (matched && matched !== site) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSite(matched);
-      setSiteAutoDetected(true);
-      setMce("");
-      setMceAutoDetected(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterName, sites]);
+  const presetVersion = selectedSpec?.spec.day1.values?.openshift_release_version;
+  const versionDefault = typeof presetVersion === "string" && presetVersion
+    ? { value: presetVersion, source: `preset by spec ${selectedSpec?.metadata.name}` }
+    : selectedMce?.default_mastertag
+    ? { value: selectedMce.default_mastertag, source: `default of ${selectedMce.name}` }
+    : null;
+  const ocpVersion = ocpChoice ?? versionDefault?.value ?? "";
+  const versionOptions = ocpVersion && !ocpVersions.includes(ocpVersion) ? [ocpVersion, ...ocpVersions] : ocpVersions;
 
-  // Auto-detect MCE from cluster name once site is known
-  useEffect(() => {
-    if (!clusterName.trim() || !site || site === CREATE_NEW || !mces.length) return;
-    if (mce && mce !== CREATE_NEW && !mceAutoDetected) return; // don't override manual selection
-    const nameLower = clusterName.toLowerCase();
-    const matched = [...mces]
-      .filter((m) => nameLower.includes(m.toLowerCase()))
-      .sort((a, b) => b.length - a.length)[0];
-    if (matched && matched !== mce) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setMce(matched);
-      setMceAutoDetected(true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterName, site, mces]);
+  const seededValues = useMemo(
+    () => (selectedSpec ? seedForm(selectedSpec, schema) : {}),
+    [selectedSpec, schema]
+  );
+  const formValues = dynamicValues ?? seededValues;
+  const presetKeys = Object.keys(selectedSpec?.spec.day1.values ?? {});
 
-  const createSiteMutation = useMutation({
-    mutationFn: (name: string) => api.post<MRDetail>("/api/day1/sites", { name }),
-    onSuccess: (mr) => {
-      toast.success(`Site MR #${mr.iid} created. Site will be available after merge.`);
-      queryClient.invalidateQueries({ queryKey: ["sites"] });
-    },
-    onError: (err: Error) => toast.error(`Failed to create site: ${err.message}`),
-  });
+  const namingIssues = trimmedName
+    ? nameProblems(trimmedName, site, selectedMce, site && !mcesLoading ? mces : undefined)
+    : [];
+  const namePlaceholder = `ocp4-${selectedMce?.env ?? "<env>"}-<name>-${site || "<site>"}`;
 
-  const createMceMutation = useMutation({
-    mutationFn: ({ siteName, mceName }: { siteName: string; mceName: string }) =>
-      api.post<MRDetail>(`/api/day1/sites/${siteName}/mces`, { name: mceName }),
-    onSuccess: (mr) => {
-      toast.success(`MCE MR #${mr.iid} created. MCE will be available after merge.`);
-      queryClient.invalidateQueries({ queryKey: ["sites", site, "mces"] });
-    },
-    onError: (err: Error) => toast.error(`Failed to create MCE: ${err.message}`),
+  const showError = (error: FormError) => {
+    setFormError(error);
+    requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  };
+
+  const previewMutation = useMutation({
+    mutationFn: (request: CreateClusterRequest) => api.post<ClusterPreview>("/api/day1/clusters/preview", request),
+    onSuccess: (preview, request) => setReviewed({ request, preview }),
+    onError: (error) => showError(describeFailure(error, "preview")),
   });
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      api.post<MRDetail>("/api/day1/clusters", {
-        name: clusterName.trim(),
-        site: effectiveSite,
-        mce: effectiveMce,
-        spec_name: selectedSpec!.metadata.name,
-        spec_version: selectedSpec!.metadata.version,
-        variables: effectiveVariables,
-      }),
+    mutationFn: (request: CreateClusterRequest) => api.post<MRDetail>("/api/day1/clusters", request),
     onSuccess: (mr) => {
-      toast.success(`MR #${mr.iid} created: ${mr.title}`);
-      setReviewOpen(false);
-      router.push("/clusters");
+      toast.success(`MR !${mr.iid} opened: ${mr.title}`, {
+        description: "CI and the allocate-segment workflow add their keys to its branch; another admin approves it after.",
+      });
+      setReviewed(null);
+      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      router.push(approvalHref(mr));
     },
-    onError: (err: Error) => {
-      toast.error(`Failed: ${err.message}`);
-      setReviewOpen(false);
+    onError: (error) => {
+      setReviewed(null);
+      showError(describeFailure(error, "create"));
     },
   });
-
-  const effectiveSite = site === CREATE_NEW ? newSiteName.trim() : site.trim();
-  const effectiveMce = mce === CREATE_NEW ? newMceName.trim() : mce.trim();
-
-  // Merge dynamic form values + identity inputs for Jinja2 rendering
-  const effectiveVariables = {
-    ...dynamicValues,
-    ...(ocpVersion ? { openshift_release_version: ocpVersion } : {}),
-    cluster_name: clusterName.trim(),
-    site_name: effectiveSite,
-    site: effectiveSite,
-    mce_name: effectiveMce,
-    mce: effectiveMce,
-  };
 
   if (!isAdmin) {
     return (
@@ -514,99 +664,120 @@ export default function NewClusterPage() {
     );
   }
 
-  const handleSelectSpec = (spec: ClusterSpec) => {
+  const handleSelectSpec = (spec: SpecEntry) => {
     setSelectedSpec(spec);
-    setOcpVersion("");
-    // Seed form from the spec's structure (counts from spec, leaves blank for cluster-time filling).
-    // Filter identity vars — they're handled by dedicated inputs on this page.
-    const filteredSchema = templateSchema.filter((f) => !IDENTITY_VAR_NAMES.has(f.name));
-    const specStructure = spec.spec.day1.structure ?? {};
-    setDynamicValues(
-      Object.keys(specStructure).length > 0
-        ? seedFromStructure(specStructure as Record<string, unknown>, filteredSchema)
-        : seedFromStructure({}, filteredSchema)
-    );
-    // Initialize addon overrides with default values
+    setOcpChoice(null);
+    setDynamicValues(null);
+    setFormError(null);
     const overrides: Record<string, Record<string, unknown>> = {};
     for (const addon of spec.spec.day2.addons) {
-      const addonKey = `${addon.team}/${addon.name}`;
-      if (addon.overrideable && addon.overrideable.length > 0) {
-        overrides[addonKey] = {};
-        for (const field of addon.overrideable) {
-          if (field.default !== undefined) {
-            overrides[addonKey][field.path] = field.default;
-          }
-        }
-      }
+      const defaults = defaultOverrides(addon.overrideable ?? []);
+      if (Object.keys(defaults).length > 0) overrides[`${addon.team}/${addon.name}`] = defaults;
     }
     setAddonOverrides(overrides);
+    setOverrideModes({});
+    setAddonYamlText({});
     setStep("vars");
   };
 
-  const handleReview = async () => {
-    if (!clusterName.trim()) { toast.error("Cluster name is required"); return; }
-    if (!effectiveSite) { toast.error("Site is required"); return; }
-    if (!effectiveMce) { toast.error("MCE is required"); return; }
-    if (!ocpVersion) { toast.error("OpenShift version is required"); return; }
-    // Validate required fields from template schema (skip identity vars — validated above)
-    for (const field of templateSchema) {
-      if (!field.required || IDENTITY_VAR_NAMES.has(field.name)) continue;
-      const val = dynamicValues[field.name];
-      const isEmpty = val === undefined || val === null || val === "" ||
-        (Array.isArray(val) && val.length === 0);
-      if (isEmpty) {
-        toast.error(`"${field.name}" is required`);
-        return;
+  /** The addon overrides to send, or the problems that stop the request. */
+  const collectOverrides = (): { overrides: Record<string, Record<string, unknown>>; problems: string[] } => {
+    const overrides: Record<string, Record<string, unknown>> = {};
+    const problems: string[] = [];
+    for (const addon of selectedSpec?.spec.day2.addons ?? []) {
+      const key = `${addon.team}/${addon.name}`;
+      let values: Record<string, unknown>;
+      if (overrideModes[key] === "yaml") {
+        try {
+          const parsed = jsYaml.load(addonYamlText[key] ?? "");
+          if (parsed !== null && parsed !== undefined && (typeof parsed !== "object" || Array.isArray(parsed))) {
+            problems.push(`${key}: the values must be a YAML mapping`);
+            continue;
+          }
+          values = (parsed as Record<string, unknown> | null) ?? {};
+        } catch (e) {
+          problems.push(`${key}: the values are not valid YAML (${(e as Error).message.split("\n")[0]})`);
+          continue;
+        }
+      } else {
+        values = pruneEmpty(addonOverrides[key] ?? {});
       }
+      if (Object.keys(values).length > 0) overrides[key] = values;
     }
-    setPreviewLoading(true);
-    try {
-      const result = await api.post<{ yaml: string }>("/api/day1/clusters/preview", {
-        name: clusterName.trim(),
-        site: effectiveSite,
-        mce: effectiveMce,
-        spec_name: selectedSpec!.metadata.name,
-        spec_version: selectedSpec!.metadata.version,
-        variables: effectiveVariables,
-      });
-      setPreviewYaml(result.yaml);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setPreviewYaml(`# Preview unavailable\n# ${msg}`);
-    } finally {
-      setPreviewLoading(false);
-    }
-    setReviewOpen(true);
+    return { overrides, problems };
   };
 
-  const handleSiteChange = (value: string | null) => {
-    setSite(value ?? "");
-    setSiteAutoDetected(false); // user manually chose — stop auto-detection
-    setMce("");
-    setMceAutoDetected(false);
-    setNewMceName("");
+  const handleReview = () => {
+    setFormError(null);
+    const problems: string[] = [];
+    if (!site) problems.push("Choose a site");
+    if (!mce) problems.push("Choose an MCE");
+    if (!trimmedName) problems.push("Enter a cluster name");
+    if (!ocpVersion.trim()) problems.push("Choose an OpenShift version");
+    problems.push(...missingRequired(schema, formValues).map((path) => `${labelForPath(path)} is required`));
+    const { overrides, problems: overrideProblems } = collectOverrides();
+    problems.push(...overrideProblems);
+    if (problems.length > 0) {
+      showError({ kind: "form", lines: problems });
+      return;
+    }
+    previewMutation.mutate({
+      name: trimmedName,
+      site,
+      mce,
+      spec_name: selectedSpec!.metadata.name,
+      spec_version: selectedSpec!.metadata.version,
+      variables: { ...formValues, openshift_release_version: ocpVersion.trim() },
+      ...(Object.keys(overrides).length > 0 ? { addon_overrides: overrides } : {}),
+    });
   };
 
-  const handleMceChange = (value: string | null) => {
-    setMce(value ?? "");
-    setMceAutoDetected(false); // user manually chose — stop auto-detection
+  const reloadSpecs = () => {
+    queryClient.invalidateQueries({ queryKey: ["specs"] });
+    setFormError(null);
+    setSelectedSpec(null);
+    setStep("spec");
   };
+
+  const toggleYamlMode = (addonKey: string, enable: boolean, catalogDefaults: Record<string, unknown>) => {
+    if (enable) {
+      // Seed the editor: current overrides, else the chart's defaults
+      const current = addonOverrides[addonKey] ?? {};
+      const base = Object.keys(current).length > 0 ? current : catalogDefaults;
+      setAddonYamlText((prev) => ({ ...prev, [addonKey]: Object.keys(base).length > 0 ? jsYaml.dump(base, { lineWidth: 120 }) : "" }));
+    } else {
+      try {
+        const parsed = jsYaml.load(addonYamlText[addonKey] ?? "");
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          setAddonOverrides((prev) => ({ ...prev, [addonKey]: parsed as Record<string, unknown> }));
+        }
+      } catch { /* keep the last valid overrides */ }
+    }
+    setOverrideModes((prev) => ({ ...prev, [addonKey]: enable ? "yaml" : "fields" }));
+  };
+
+  // The review dialog shows the request that was previewed, which is what Confirm sends.
+  const reviewedOverrides = reviewed?.request.addon_overrides ?? {};
+  const reviewedVariables = Object.entries(reviewed?.request.variables ?? {}).filter(
+    ([k]) => k !== "openshift_release_version"
+  );
+  const pending = previewMutation.isPending;
 
   return (
     <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/clusters" className={buttonVariants({ variant: "ghost", size: "icon" })}>
+        <Link href="/clusters" className={buttonVariants({ variant: "ghost", size: "icon" })} aria-label="Back to clusters">
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div>
+        <div className="min-w-0">
           <h1
             className="text-2xl font-bold tracking-tight"
             style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
           >
             New Cluster
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-0.5 truncate">
             {step === "spec" ? "Step 1 of 2 — Choose a spec" : `Step 2 of 2 — Configure "${selectedSpec?.metadata.name}"`}
           </p>
         </div>
@@ -630,41 +801,68 @@ export default function NewClusterPage() {
       {/* Step 1: Select spec */}
       {step === "spec" && (
         <div className="space-y-3">
-          {isLoading ? (
+          {specsLoading ? (
             Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+          ) : specsError ? (
+            <ProblemList error={specsError} title="The specs could not be loaded" />
           ) : specs?.length === 0 ? (
             <div className="bg-card rounded-xl border p-8 text-center text-muted-foreground">
               No specs available.{" "}
               <Link href="/specs/new" className="text-primary hover:underline">Create a spec first</Link>.
             </div>
           ) : (
-            specs?.map((spec) => (
-              <button
-                key={spec.metadata.name}
-                onClick={() => handleSelectSpec(spec)}
-                className="w-full text-left bg-card rounded-xl border shadow-sm hover:border-primary/50 hover:shadow-md transition-all p-5 group"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold group-hover:text-primary transition-colors">
-                      {spec.metadata.name}
-                    </h3>
-                    {spec.metadata.description && (
-                      <p className="text-sm text-muted-foreground mt-0.5">{spec.metadata.description}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      {spec.spec.day2.addons.length} addon{spec.spec.day2.addons.length !== 1 ? "s" : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="rounded-full px-2 py-0.5 text-xs bg-primary/8 text-primary font-medium">
-                      {spec.metadata.version}
-                    </span>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            specs?.map((spec) =>
+              spec.load_error ? (
+                <div
+                  key={spec.metadata.name}
+                  data-testid={`spec-card-${spec.metadata.name}`}
+                  aria-disabled="true"
+                  className="w-full bg-card rounded-xl border border-dashed p-5 opacity-80"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold break-all">{spec.metadata.name}</h3>
+                      <p className="text-xs text-status-warning-fg mt-1 flex items-start gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+                        <span className="break-words">This spec file does not parse, so it cannot be used: {spec.load_error}</span>
+                      </p>
+                      {spec.load_problems && spec.load_problems.length > 0 && (
+                        <ul className="mt-1.5 ml-5 list-disc text-xs text-muted-foreground space-y-0.5">
+                          {spec.load_problems.map((p, i) => <li key={i} className="break-words">{p}</li>)}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </button>
-            ))
+              ) : (
+                <button
+                  key={spec.metadata.name}
+                  data-testid={`spec-card-${spec.metadata.name}`}
+                  onClick={() => handleSelectSpec(spec)}
+                  className="w-full text-left bg-card rounded-xl border shadow-sm hover:border-primary/50 hover:shadow-md transition-all p-5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold group-hover:text-primary transition-colors break-all">
+                        {spec.metadata.name}
+                      </h3>
+                      {spec.metadata.description && (
+                        <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{spec.metadata.description}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        {spec.spec.day2.addons.length} addon{spec.spec.day2.addons.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="rounded-full px-2 py-0.5 text-xs bg-primary/8 text-primary font-medium max-w-32 truncate">
+                        {spec.metadata.version}
+                      </span>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                  </div>
+                </button>
+              )
+            )
           )}
         </div>
       )}
@@ -672,127 +870,160 @@ export default function NewClusterPage() {
       {/* Step 2: Fill variables */}
       {step === "vars" && selectedSpec && (
         <div className="space-y-6">
-          {/* Cluster identity + OCP version — one card */}
+          {/* Where the cluster lives, its name and OCP version */}
           <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
-            {/* Spec badge */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold">Cluster Details</h2>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 border border-primary/20">
-                <span>{selectedSpec.metadata.name}</span>
-                <span className="text-primary/60">{selectedSpec.metadata.version}</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 border border-primary/20 min-w-0">
+                <span className="truncate">{selectedSpec.metadata.name}</span>
+                <span className="text-primary/60 shrink-0">{selectedSpec.metadata.version}</span>
               </span>
             </div>
             <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5 min-w-0">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Site <span className="text-destructive">*</span>
+                  </label>
+                  <Select
+                    value={site || null}
+                    onValueChange={(v) => { setSiteChoice(v ?? null); setMceChoice(null); }}
+                    disabled={sitesLoading || sites.length === 0}
+                  >
+                    <SelectTrigger className="w-full" data-testid="site-select" aria-label="Site">
+                      <SelectValue placeholder={sitesLoading ? "Loading sites…" : sites.length === 0 ? "No sites in the day1 repo" : "Select site…"} />
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {sites.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!siteChoice && detectedSite && (
+                    <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
+                  )}
+                </div>
+                <div className="space-y-1.5 min-w-0">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    MCE <span className="text-destructive">*</span>
+                  </label>
+                  <Select
+                    value={mce || null}
+                    onValueChange={(v) => {
+                      // Choosing an MCE pins its site too, so editing the name no longer moves either.
+                      setSiteChoice(site);
+                      setMceChoice(v ?? null);
+                    }}
+                    disabled={!site || mcesLoading || mces.length === 0}
+                  >
+                    <SelectTrigger className="w-full" data-testid="mce-select" aria-label="MCE">
+                      <SelectValue
+                        placeholder={
+                          !site ? "Select site first…"
+                            : mcesLoading ? "Loading MCEs…"
+                            : mces.length === 0 ? "No MCEs on this site"
+                            : "Select MCE…"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {mces.map((m) => (
+                        <SelectItem key={m.name} value={m.name} disabled={!m.follows_convention}>
+                          <span className="truncate">{m.name}</span>
+                          {m.env ? (
+                            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{m.env}</span>
+                          ) : (
+                            <span className="text-[10px] text-status-warning-fg">off convention</span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!mceChoice && detectedMce && (
+                    <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
+                  )}
+                </div>
+              </div>
+
+              {offConventionMces.length > 0 && (
+                <p className="text-xs text-muted-foreground flex items-start gap-1.5" data-testid="off-convention-mces">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+                  <span className="min-w-0 break-words">
+                    {offConventionMces.map((m) => m.name).join(", ")} {offConventionMces.length === 1 ? "does" : "do"} not
+                    follow ocp4-&lt;env&gt;-mce-{site}-&lt;letter&gt;; Wingman creates clusters only under MCEs that do.
+                  </span>
+                </p>
+              )}
+              {selectedMce && (selectedMce.stray_files.length > 0 || selectedMce.problems.length > 0) && (
+                <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3.5 py-3 text-xs text-status-warning-fg space-y-1" data-testid="mce-warnings">
+                  <p className="font-medium flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {selectedMce.name} needs attention
+                  </p>
+                  <ul className="list-disc pl-5 space-y-0.5">
+                    {selectedMce.stray_files.map((f) => (
+                      <li key={f} className="break-all">
+                        <span className="font-mono">{f}</span> is in hostedClusters/ but is not a cluster file; it breaks the MCE&apos;s ApplicationSet
+                      </li>
+                    ))}
+                    {selectedMce.problems.map((p, i) => <li key={i} className="break-words">{p}</li>)}
+                  </ul>
+                </div>
+              )}
+
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label htmlFor="cluster-name" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Cluster Name <span className="text-destructive">*</span>
                 </label>
                 <input
+                  id="cluster-name"
                   type="text"
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-                  placeholder="e.g. alpha-prod"
+                  data-testid="cluster-name-input"
+                  className={cn(inputCls, "font-mono")}
+                  placeholder={namePlaceholder}
                   value={clusterName}
                   onChange={(e) => setClusterName(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby="cluster-name-hint"
+                  aria-invalid={namingIssues.length > 0}
                 />
+                <div id="cluster-name-hint" data-testid="naming-hint" className="text-[11px] leading-relaxed">
+                  {!trimmedName ? (
+                    <p className="text-muted-foreground">
+                      Format <span className="font-mono">ocp4-&lt;env&gt;-&lt;name&gt;-&lt;site&gt;[-&lt;seq&gt;]</span>; the env must be the MCE&apos;s.
+                    </p>
+                  ) : namingIssues.length > 0 ? (
+                    <ul className="text-status-warning-fg space-y-0.5">
+                      {namingIssues.map((p) => (
+                        <li key={p} className="flex items-start gap-1.5">
+                          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                          <span className="break-words">{p}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : site && selectedMce ? (
+                    <p className="text-status-ready-fg flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3 w-3 shrink-0" />
+                      Follows the naming convention
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">Choose the {site ? "MCE" : "site and MCE"} to check the name against.</p>
+                  )}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Site <span className="text-destructive">*</span>
-                </label>
-                <Select value={site} onValueChange={handleSiteChange} disabled={sitesLoading}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select site…" />
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    {sites.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                    {sites.length > 0 && <SelectSeparator />}
-                    <SelectItem value={CREATE_NEW}>
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Create new site
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                {site === CREATE_NEW && (
-                  <div className="flex gap-2 mt-2">
-                    <input
-                      type="text"
-                      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-                      placeholder="New site name"
-                      value={newSiteName}
-                      onChange={(e) => setNewSiteName(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => newSiteName.trim() && createSiteMutation.mutate(newSiteName.trim())}
-                      disabled={!newSiteName.trim() || createSiteMutation.isPending}
-                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />Create
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  MCE <span className="text-destructive">*</span>
-                </label>
-                <Select
-                  value={mce}
-                  onValueChange={handleMceChange}
-                  disabled={!site || site === CREATE_NEW || mcesLoading}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={!site ? "Select site first…" : "Select MCE…"} />
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    {mces.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                    {site && site !== CREATE_NEW && (
-                      <>
-                        {mces.length > 0 && <SelectSeparator />}
-                        <SelectItem value={CREATE_NEW}>
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          Create new MCE
-                        </SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-                {mce === CREATE_NEW && site && site !== CREATE_NEW && (
-                  <div className="flex gap-2 mt-2">
-                    <input
-                      type="text"
-                      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-                      placeholder="New MCE name"
-                      value={newMceName}
-                      onChange={(e) => setNewMceName(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => newMceName.trim() && createMceMutation.mutate({ siteName: site, mceName: newMceName.trim() })}
-                      disabled={!newMceName.trim() || createMceMutation.isPending}
-                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />Create
-                    </button>
-                  </div>
-                )}
-              </div>
-              {/* OpenShift Version — merged into identity card */}
+
               <div className="space-y-1.5 border-t pt-4">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   OpenShift Version <span className="text-destructive">*</span>
                 </label>
-                {ocpVersions.length > 0 ? (
-                  <Select value={ocpVersion} onValueChange={(v) => setOcpVersion(v ?? "")}>
-                    <SelectTrigger className="w-full">
+                {versionOptions.length > 0 ? (
+                  <Select value={ocpVersion || null} onValueChange={(v) => setOcpChoice(v ?? null)}>
+                    <SelectTrigger className="w-full" data-testid="ocp-version-select" aria-label="OpenShift version">
                       <SelectValue placeholder="Select OpenShift version…" />
                     </SelectTrigger>
                     <SelectContent alignItemWithTrigger={false}>
-                      {ocpVersions.map((v) => (
+                      {versionOptions.map((v) => (
                         <SelectItem key={v} value={v}>{v}</SelectItem>
                       ))}
                     </SelectContent>
@@ -800,33 +1031,59 @@ export default function NewClusterPage() {
                 ) : (
                   <input
                     type="text"
-                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-                    placeholder="e.g. 4.16.0"
+                    data-testid="ocp-version-input" aria-label="OpenShift version"
+                    className={cn(inputCls, "font-mono")}
+                    placeholder="e.g. 4.16.27-x86_64"
                     value={ocpVersion}
-                    onChange={(e) => setOcpVersion(e.target.value)}
+                    onChange={(e) => setOcpChoice(e.target.value)}
                   />
                 )}
+                <p className="text-[11px] text-muted-foreground" data-testid="ocp-version-source">
+                  {ocpChoice === null && versionDefault
+                    ? `Becomes the file's mastertag; ${versionDefault.source}.`
+                    : "Becomes the file's mastertag."}
+                </p>
               </div>
             </div>
           </div>
 
           {/* Cluster Configuration — structure from spec, values filled here */}
-          {templateSchema.length > 0 && (
+          {schemaLoading ? (
+            <Skeleton className="h-48 rounded-xl" />
+          ) : schema.length === 0 ? (
+            <div className="rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm text-status-warning-fg flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              The cluster template takes no inputs besides the name, site, MCE and version, or the specs project has no cluster-template.j2.
+            </div>
+          ) : (
             <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4">
               <div>
                 <h2 className="text-sm font-semibold">Cluster Configuration</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Fill in the values below. The structure (number of nodepools, etc.) is fixed by the <span className="font-medium">{selectedSpec.metadata.name}</span> spec.
                 </p>
+                {presetKeys.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1.5" data-testid="spec-presets">
+                    Preset by the spec: {presetKeys.map((k) => <code key={k} className="font-mono text-[11px] mr-1.5">{k}</code>)}
+                  </p>
+                )}
               </div>
+              {infraEnvsError && (
+                <p className="text-xs text-muted-foreground flex items-start gap-1.5" data-testid="infraenv-hint">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+                  <span className="break-words">
+                    InfraEnvs could not be listed from {mce} ({infraEnvsError.message}); type their names.
+                  </span>
+                </p>
+              )}
               <DynamicVariableForm
-                schema={templateSchema.filter((f) => !IDENTITY_VAR_NAMES.has(f.name))}
-                values={dynamicValues}
+                schema={schema}
+                values={formValues}
                 onChange={setDynamicValues}
                 mode="cluster-create"
                 immutablePaths={new Set(selectedSpec.spec.day1.immutable_paths ?? [])}
-                infraEnvOptions={infraEnvOptions}
-                infraEnvsLoading={infraEnvsLoading}
+                infraEnvOptions={infraEnvs ?? undefined}
+                infraEnvsLoading={infraEnvsLoading && Boolean(mce)}
               />
             </div>
           )}
@@ -836,62 +1093,41 @@ export default function NewClusterPage() {
             <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b bg-muted/30">
                 <h2 className="text-sm font-semibold">Addon Configuration</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Customize addon values for this cluster</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Values for the spec&apos;s day2 addons on this cluster. They are recorded in the cluster file and used when the addons are installed.
+                </p>
               </div>
               <div className="p-5 space-y-4">
                 {selectedSpec.spec.day2.addons.map((addon) => {
                   const addonKey = `${addon.team}/${addon.name}`;
-                  const catalogEntry = addonCatalog.find(a => a.team === addon.team && a.name === addon.name);
-                  const hasSpecFields = addon.overrideable && addon.overrideable.length > 0;
-                  const isYamlMode = yamlModeAddons.has(addonKey);
-                  const simpleFields = addon.overrideable?.filter(f => f.type !== "array" && f.type !== "object" && !Array.isArray(addonOverrides[addonKey]?.[f.path] ?? f.default)) ?? [];
-                  const complexFields = addon.overrideable?.filter(f => f.type === "array" || f.type === "object" || Array.isArray(addonOverrides[addonKey]?.[f.path] ?? f.default)) ?? [];
-
-                  const toggleYamlMode = (enable: boolean) => {
-                    if (enable) {
-                      // Seed YAML editor: current overrides → spec field defaults → catalog defaults → empty
-                      const current = addonOverrides[addonKey] ?? {};
-                      const base = Object.keys(current).length > 0
-                        ? current
-                        : catalogEntry?.default_values ?? {};
-                      setAddonYamlText(prev => ({ ...prev, [addonKey]: jsYaml.dump(base, { lineWidth: 120 }) || "" }));
-                    } else {
-                      // Commit YAML back to structured overrides
-                      try {
-                        const parsed = jsYaml.load(addonYamlText[addonKey] ?? "") as Record<string, unknown> | null;
-                        setAddonOverrides(prev => ({ ...prev, [addonKey]: parsed ?? {} }));
-                      } catch { /* ignore parse error on toggle back */ }
-                    }
-                    setYamlModeAddons(prev => {
-                      const next = new Set(prev);
-                      enable ? next.add(addonKey) : next.delete(addonKey);
-                      return next;
-                    });
-                  };
+                  const catalogEntry = addonCatalog.find((a) => a.team === addon.team && a.name === addon.name);
+                  const fields = addon.overrideable ?? [];
+                  const values = addonOverrides[addonKey] ?? {};
+                  const isYamlMode = overrideModes[addonKey] === "yaml";
+                  const valueOf = (f: OverrideableField) => getValueAtPath(values, f.path) ?? f.default ?? "";
+                  const isComplex = (f: OverrideableField) => f.type === "array" || f.type === "object" || Array.isArray(valueOf(f));
+                  const ordered = [...fields.filter((f) => !isComplex(f)), ...fields.filter(isComplex)];
 
                   return (
-                    <div
-                      key={addonKey}
-                      className="rounded-xl border bg-background overflow-hidden"
-                    >
-                      <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <div key={addonKey} className="rounded-xl border bg-background overflow-hidden" data-testid={`addon-${addon.team}-${addon.name}`}>
+                      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-muted/20 border-b">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                             <span className="text-xs font-bold text-primary">{addon.name.charAt(0).toUpperCase()}</span>
                           </div>
-                          <div>
-                            <span className="font-semibold text-sm">{addon.name}</span>
-                            <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary font-medium">
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span className="font-semibold text-sm truncate">{addon.name}</span>
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary font-medium shrink-0">
                               {addon.version}
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{addon.team}</span>
-                          {(hasSpecFields || catalogEntry) && (
+                          {(fields.length > 0 || catalogEntry) && (
                             <button
                               type="button"
-                              onClick={() => toggleYamlMode(!isYamlMode)}
+                              onClick={() => toggleYamlMode(addonKey, !isYamlMode, catalogEntry?.default_values ?? {})}
                               className={cn(
                                 "text-xs px-2 py-1 rounded border transition-colors",
                                 isYamlMode
@@ -908,229 +1144,178 @@ export default function NewClusterPage() {
                       {isYamlMode ? (
                         <div className="p-4">
                           <p className="text-xs text-muted-foreground mb-2">
-                            Edit the full values YAML. Leave keys at their defaults or remove them to use addon defaults.
+                            Edit the values YAML. Every key here is recorded as an override; remove keys to keep the addon&apos;s defaults.
                           </p>
                           <textarea
+                            data-testid={`override-yaml-${addon.team}-${addon.name}`}
                             className="w-full rounded-lg border bg-zinc-950 text-zinc-200 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y min-h-[200px]"
                             value={addonYamlText[addonKey] ?? ""}
-                            onChange={(e) => setAddonYamlText(prev => ({ ...prev, [addonKey]: e.target.value }))}
-                            onBlur={() => {
-                              try {
-                                const parsed = jsYaml.load(addonYamlText[addonKey] ?? "") as Record<string, unknown> | null;
-                                setAddonOverrides(prev => ({ ...prev, [addonKey]: parsed ?? {} }));
-                              } catch { /* keep stale overrides until valid YAML */ }
-                            }}
+                            onChange={(e) => setAddonYamlText((prev) => ({ ...prev, [addonKey]: e.target.value }))}
                             spellCheck={false}
                           />
                         </div>
-                      ) : hasSpecFields ? (
+                      ) : fields.length > 0 ? (
                         <div className="p-4 space-y-4">
-                          {simpleFields.length > 0 && (
-                            <div className="space-y-4">
-                              {simpleFields.map((field) => (
-                                <div key={field.path} className="space-y-1.5">
-                                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                    {field.path}
-                                  </label>
-                                  <OverrideField
-                                    field={field}
-                                    value={addonOverrides[addonKey]?.[field.path] ?? field.default ?? ""}
-                                    onChange={(val) =>
-                                      setAddonOverrides((prev) => ({
-                                        ...prev,
-                                        [addonKey]: { ...prev[addonKey], [field.path]: val },
-                                      }))
-                                    }
-                                  />
-                                  {field.description && (
-                                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                                  )}
-                                </div>
-                              ))}
+                          {ordered.map((field) => (
+                            <div key={field.path} className="space-y-1.5">
+                              <label htmlFor={`override-field-${addon.team}-${addon.name}-${field.path.replace(/\./g, "-")}`} className="text-xs font-medium text-muted-foreground uppercase tracking-wide break-all">
+                                {field.path}
+                              </label>
+                              <OverrideField
+                                id={`override-field-${addon.team}-${addon.name}-${field.path.replace(/\./g, "-")}`}
+                                field={field}
+                                value={valueOf(field)}
+                                onChange={(val) =>
+                                  setAddonOverrides((prev) => ({
+                                    ...prev,
+                                    [addonKey]: setValueAtPath(prev[addonKey] ?? {}, field.path, val),
+                                  }))
+                                }
+                              />
+                              {field.description && (
+                                <p className="text-xs text-muted-foreground">{field.description}</p>
+                              )}
                             </div>
-                          )}
-                          {complexFields.length > 0 && (
-                            <div className="space-y-4">
-                              {simpleFields.length > 0 && <div className="border-t" />}
-                              {complexFields.map((field) => (
-                                <div key={field.path} className="space-y-2">
-                                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                                    {field.path}
-                                  </label>
-                                  <OverrideField
-                                    field={field}
-                                    value={addonOverrides[addonKey]?.[field.path] ?? field.default ?? ""}
-                                    onChange={(val) =>
-                                      setAddonOverrides((prev) => ({
-                                        ...prev,
-                                        [addonKey]: { ...prev[addonKey], [field.path]: val },
-                                      }))
-                                    }
-                                  />
-                                  {field.description && (
-                                    <p className="text-xs text-muted-foreground">{field.description}</p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          ))}
                         </div>
                       ) : (
                         <div className="px-4 py-3 text-xs text-muted-foreground italic">
-                          No configurable fields defined in spec.{catalogEntry ? ' Use "Full Values" to edit all chart defaults.' : ""}
+                          No configurable fields defined in spec.{catalogEntry ? ' Use "Full Values" to set chart values.' : ""}
                         </div>
                       )}
                     </div>
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {formError && (
+            <div ref={errorRef} className="space-y-2 scroll-mt-24" data-testid="form-problems">
+              {formError.kind === "form" ? (
+                <FormChecks lines={formError.lines} />
+              ) : (
+                <ProblemList error={formError.error} title={formError.title} />
+              )}
+              {formError.kind === "server" && (formError.hint || formError.reloadSpec) && (
+                <div className="flex items-center justify-between gap-3 px-1">
+                  {formError.hint && <p className="text-xs text-muted-foreground">{formError.hint}</p>}
+                  {formError.reloadSpec && (
+                    <button type="button" onClick={reloadSpecs} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}>
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload specs
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* Actions */}
           <div className="flex gap-3">
-            <button onClick={() => setStep("spec")} className={buttonVariants({ variant: "outline" })}>
+            <button onClick={() => { setStep("spec"); setFormError(null); }} className={buttonVariants({ variant: "outline" })}>
               <ArrowLeft className="h-4 w-4 mr-1.5" />Back
             </button>
             <button
               onClick={handleReview}
-              disabled={previewLoading}
+              disabled={pending}
+              data-testid="review-button"
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Eye className="h-4 w-4" />
-              {previewLoading ? "Generating preview…" : "Review & Create"}
+              {pending ? "Rendering preview…" : "Review & Create"}
             </button>
           </div>
         </div>
       )}
 
-      {/* Review dialog */}
+      {/* Review dialog: exactly the file the create commits */}
       <ReviewDialog
-        open={reviewOpen}
-        onOpenChange={setReviewOpen}
+        open={reviewed !== null}
+        onOpenChange={(open) => { if (!open) setReviewed(null); }}
         title="Review: Create Cluster"
-        description="Review the cluster configuration below. Confirming will create a GitLab MR for approval."
-        onConfirm={() => createMutation.mutate()}
+        description="This is the file the merge request adds. After it is pushed, CI and the allocate-segment workflow commit mcConfigMap, vlanId and dhcp_values to the branch; approve once they have."
+        onConfirm={() => reviewed && createMutation.mutate(reviewed.request)}
         isPending={createMutation.isPending}
         confirmLabel="Confirm — Create Cluster MR"
       >
-        <div className="rounded-lg border bg-muted/30 p-4 space-y-3 text-sm font-mono">
-          {/* Identity */}
-          <div className="space-y-1">
-            <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Identity</p>
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-32 shrink-0">Cluster Name</span>
-              <span className="font-medium">{clusterName}</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-32 shrink-0">Site</span>
-              <span className="font-medium">{effectiveSite}</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-32 shrink-0">MCE</span>
-              <span className="font-medium">{effectiveMce}</span>
-            </div>
-          </div>
-
-          {/* Spec */}
-          <div className="border-t pt-3 space-y-1">
-            <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Spec</p>
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-32 shrink-0">Name</span>
-              <span className="font-medium">{selectedSpec?.metadata.name}</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-32 shrink-0">Version</span>
-              <span className="font-medium">{selectedSpec?.metadata.version}</span>
-            </div>
-          </div>
-
-          {/* Variables */}
-          {Object.keys(dynamicValues).length > 0 && (
-            <div className="border-t pt-3 space-y-1">
-              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Variables</p>
-              {Object.entries(dynamicValues).map(([k, v]) => (
-                <div key={k} className="flex gap-3">
-                  <span className="text-muted-foreground w-32 shrink-0">{formatVariableName(k)}</span>
-                  <span className="font-medium">
-                    {Array.isArray(v) ? `${(v as unknown[]).length} items` : String(v ?? "—")}
-                  </span>
+        {reviewed && (
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3 text-sm font-mono">
+            <div className="space-y-1">
+              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Identity</p>
+              {[
+                ["Cluster Name", reviewed.request.name],
+                ["Site", reviewed.request.site],
+                ["MCE", reviewed.request.mce],
+                ["OpenShift", String(reviewed.request.variables.openshift_release_version ?? "")],
+              ].map(([label, value]) => (
+                <div key={label} className="flex gap-3">
+                  <span className="text-muted-foreground w-32 shrink-0">{label}</span>
+                  <span className="font-medium break-all min-w-0">{value}</span>
                 </div>
               ))}
             </div>
-          )}
 
-          {/* Addons */}
-          {selectedSpec && selectedSpec.spec.day2.addons.length > 0 && (
-            <div className="border-t pt-3">
-              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                Addons ({selectedSpec.spec.day2.addons.length})
-              </p>
-              <div className="space-y-2">
-                {selectedSpec.spec.day2.addons.map((addon) => {
-                  const addonKey = `${addon.team}/${addon.name}`;
-                  const overrides = addonOverrides[addonKey] ?? {};
-                  const hasOverrides = Object.keys(overrides).length > 0;
-                  return (
-                    <div key={addonKey}>
-                      <div className="flex gap-3">
-                        <span className="text-muted-foreground w-28 shrink-0 truncate">{addon.name}</span>
-                        <span className="font-medium">{addon.version} · {addon.team}</span>
-                      </div>
-                      {hasOverrides && (
-                        <div className="ml-28 mt-1 pl-3 border-l-2 border-primary/20 space-y-0.5">
-                          {Object.entries(overrides).map(([path, value]) => (
-                            <div key={path} className="flex gap-2 text-xs">
-                              <span className="text-primary/70">{formatVariableName(path)}:</span>
-                              <span className="font-medium">{Array.isArray(value) ? `${(value as unknown[]).length} items` : typeof value === "object" && value !== null ? "configured" : String(value)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            <div className="border-t pt-3 space-y-1">
+              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Spec</p>
+              <div className="flex gap-3">
+                <span className="text-muted-foreground w-32 shrink-0">Name</span>
+                <span className="font-medium break-all min-w-0">{reviewed.request.spec_name}</span>
+              </div>
+              <div className="flex gap-3">
+                <span className="text-muted-foreground w-32 shrink-0">Version</span>
+                <span className="font-medium">{reviewed.request.spec_version}</span>
               </div>
             </div>
-          )}
 
-          {/* GitLab Files */}
-          <GitLabFileList
-            groups={[
-              {
-                label: "Day 1 repo (cluster manifest)",
-                files: [
-                  {
-                    path: `sites/${effectiveSite}/mces/${effectiveMce}/hostedClusters/${clusterName.trim()}.yaml`,
-                    content: previewYaml || undefined,
-                  },
-                ],
-              },
-              ...(selectedSpec && selectedSpec.spec.day2.addons.length > 0
-                ? [{
-                    label: "Day 2 repo (addon configs, created when addons are deployed)",
-                    files: selectedSpec.spec.day2.addons.flatMap((addon) => {
-                      const overrides = addonOverrides[`${addon.team}/${addon.name}`] ?? {};
-                      const valuesContent = Object.keys(overrides).length > 0
-                        ? jsYaml.dump(overrides, { lineWidth: 120 })
-                        : "# No overrides — using addon defaults\n";
-                      const metaContent = `targetRevision: "${addon.version}"\n`;
-                      return [
-                        {
-                          path: `mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/values.yaml`,
-                          content: valuesContent,
-                        },
-                        {
-                          path: `mces/${effectiveMce}/${clusterName.trim()}/${addon.name}/${addon.name}.yaml`,
-                          content: metaContent,
-                        },
-                      ];
-                    }),
-                  }]
-                : []),
-            ]}
-          />
-        </div>
+            {reviewedVariables.length > 0 && (
+              <div className="border-t pt-3 space-y-1">
+                <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Variables</p>
+                {reviewedVariables.map(([k, v]) => (
+                  <div key={k} className="flex gap-3">
+                    <span className="text-muted-foreground w-32 shrink-0 truncate">{formatVariableName(k)}</span>
+                    <span className="font-medium break-all min-w-0">{summarizeValue(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedSpec && selectedSpec.spec.day2.addons.length > 0 && (
+              <div className="border-t pt-3">
+                <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                  Requested addons ({selectedSpec.spec.day2.addons.length})
+                </p>
+                <div className="space-y-2">
+                  {selectedSpec.spec.day2.addons.map((addon) => {
+                    const addonKey = `${addon.team}/${addon.name}`;
+                    const overrides = reviewedOverrides[addonKey];
+                    return (
+                      <div key={addonKey}>
+                        <div className="flex gap-3">
+                          <span className="text-muted-foreground w-32 shrink-0 truncate">{addon.name}</span>
+                          <span className="font-medium">{addon.version} · {addon.team}</span>
+                        </div>
+                        {overrides ? (
+                          <pre className="ml-32 mt-1 pl-3 border-l-2 border-primary/20 text-xs text-foreground/80 whitespace-pre-wrap break-all">
+                            {jsYaml.dump(overrides, { lineWidth: 100 }).trimEnd()}
+                          </pre>
+                        ) : (
+                          <p className="ml-32 mt-1 pl-3 border-l-2 border-border text-xs font-sans text-muted-foreground">No override values</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs font-sans text-muted-foreground">
+                  Recorded in the cluster file&apos;s header; installing them is a day2 change.
+                </p>
+              </div>
+            )}
+
+            <GitLabFileList
+              groups={[{ label: "Day 1 repo (cluster values file)", files: [{ path: reviewed.preview.path, content: reviewed.preview.yaml }] }]}
+            />
+          </div>
+        )}
       </ReviewDialog>
     </div>
   );

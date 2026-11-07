@@ -535,14 +535,18 @@ tuningConfig: {{ np.tuning_config | default("") }}`}
             <Step n={2} title="Fill in cluster identity">
               These three fields are set once, forever:
               <ul className="mt-2 space-y-1 list-none">
-                <li><InlineCode>Cluster name</InlineCode> → <InlineCode>prod-dok-nova</InlineCode></li>
-                <li><InlineCode>Site</InlineCode> → select <InlineCode>nova</InlineCode> (or type to create)</li>
-                <li><InlineCode>MCE</InlineCode> → select <InlineCode>prod-dok</InlineCode> (or type to create)</li>
+                <li><InlineCode>Site</InlineCode> → select <InlineCode>site1</InlineCode></li>
+                <li><InlineCode>MCE</InlineCode> → select <InlineCode>ocp4-prod-mce-site1-a</InlineCode></li>
+                <li><InlineCode>Cluster name</InlineCode> → <InlineCode>ocp4-prod-nova-site1</InlineCode></li>
               </ul>
-              Site and MCE are selected from existing GitLab folder paths. The cluster will be stored at{" "}
-              <InlineCode>sites/nova/mces/prod-dok/hostedClusters/prod-dok-nova.yaml</InlineCode> in the
-              Day1 repository. If the site or MCE folder does not exist yet, type the new name and
-              Wingman creates it automatically.
+              Sites and MCEs are read from the day1 repository and are read-only: Wingman never creates
+              them (MCE onboarding happens elsewhere). Names follow{" "}
+              <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, and the env must be the MCE&apos;s;
+              the form says why a name is refused. The OpenShift version defaults to the MCE&apos;s mastertag.
+              The cluster is stored at{" "}
+              <InlineCode>sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-nova-site1.yaml</InlineCode>.
+              The VLAN and DHCP network are not yours to fill: the allocate-segment workflow commits them to
+              the MR branch, and the cluster page shows them as pending until then.
             </Step>
             <Step n={3} title="Fill in global fields">
               <ul className="mt-1 space-y-1 list-none">
@@ -1312,7 +1316,7 @@ namespace:     cert-manager ← chart default (Helm chart ships this)`}
               },
               {
                 q: 'Site / MCE dropdown shows "No options"',
-                a: "Wingman reads existing sites and MCEs from the Day1 GitLab repository folder structure. If no clusters have been deployed yet, the list is empty — type a new name to create the first one.",
+                a: "Wingman reads sites and MCEs from the day1 repository's folders and never creates them. An empty list means the repository has no site or MCE folder yet: MCE onboarding happens outside Wingman.",
               },
               {
                 q: "I cannot see Create / Install / Remove buttons",
