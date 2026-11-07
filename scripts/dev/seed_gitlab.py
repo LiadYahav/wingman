@@ -37,9 +37,29 @@ async def _group_id(client: httpx.AsyncClient, path: str) -> int:
 
 
 async def _delete_and_wait(client: httpx.AsyncClient, path: str) -> None:
-    await client.delete(f"/projects/{quote(path, safe='')}", params={"permanently_remove": "true", "full_path": path})
+    """Delete a project now, not in GitLab's delayed-deletion window.
+
+    GitLab 18+ only schedules a project for deletion (and renames it to
+    ``<path>-deletion_scheduled-<id>``); a second DELETE with
+    ``permanently_remove`` and that new full path removes it at once. On a
+    GitLab without delayed deletion the first call already deletes it.
+    """
+    found = await client.get(f"/projects/{quote(path, safe='')}")
+    found.raise_for_status()
+    project = found.json()
+    pid = project["id"]
+    if not project.get("marked_for_deletion_on"):
+        (await client.delete(f"/projects/{pid}")).raise_for_status()
+        project = (await client.get(f"/projects/{pid}")).json()
+    if project.get("marked_for_deletion_on"):
+        removed = await client.delete(
+            f"/projects/{pid}",
+            params={"permanently_remove": "true", "full_path": project["path_with_namespace"]},
+        )
+        if removed.status_code != 404:
+            removed.raise_for_status()
     for _ in range(60):
-        if (await client.get(f"/projects/{quote(path, safe='')}")).status_code == 404:
+        if (await client.get(f"/projects/{pid}")).status_code == 404:
             return
         await asyncio.sleep(1)
     raise RuntimeError(f"{path} was not deleted within a minute")
