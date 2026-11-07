@@ -25,7 +25,7 @@ kubectl create namespace wingman
 eval $(minikube docker-env)
 docker build -t wingman-day1:latest -f apps/day1-service/Dockerfile .
 docker build -t wingman-day2:latest -f apps/day2-service/Dockerfile .
-docker build -t wingman-web:latest apps/web/
+docker build -t wingman-web:latest -f apps/web/Dockerfile .
 
 # Install with minikube values
 helm upgrade --install wingman ./chart \

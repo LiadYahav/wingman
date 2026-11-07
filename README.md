@@ -299,7 +299,7 @@ SHA=$(git rev-parse --short HEAD)
 # Build all three for production (linux/amd64, clean)
 docker buildx build --platform linux/amd64 --no-cache -t wingman-day1:$SHA -f apps/day1-service/Dockerfile . --load
 docker buildx build --platform linux/amd64 --no-cache -t wingman-day2:$SHA -f apps/day2-service/Dockerfile . --load
-docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA apps/web/ --load
+docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA -f apps/web/Dockerfile . --load
 
 # Save for air-gapped / on-prem transfer
 docker save wingman-day1:$SHA | gzip > wingman-day1-$SHA.tar.gz

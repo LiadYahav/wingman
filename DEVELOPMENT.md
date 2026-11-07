@@ -285,12 +285,12 @@ SHA=$(git rev-parse --short HEAD)
 # Build for local/minikube (native arch)
 docker build -t wingman-day1:$SHA -f apps/day1-service/Dockerfile .
 docker build -t wingman-day2:$SHA -f apps/day2-service/Dockerfile .
-docker build -t wingman-web:$SHA apps/web/
+docker build -t wingman-web:$SHA -f apps/web/Dockerfile .
 
 # Build all three for production (amd64, clean)
 docker buildx build --platform linux/amd64 --no-cache -t wingman-day1:$SHA -f apps/day1-service/Dockerfile . --load
 docker buildx build --platform linux/amd64 --no-cache -t wingman-day2:$SHA -f apps/day2-service/Dockerfile . --load
-docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA apps/web/ --load
+docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA -f apps/web/Dockerfile . --load
 
 # Save for air-gapped transfer
 docker save wingman-day1:$SHA | gzip > wingman-day1-$SHA.tar.gz

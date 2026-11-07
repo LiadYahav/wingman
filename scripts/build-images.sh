@@ -21,7 +21,7 @@ docker build -f apps/day2-service/Dockerfile -t "wingman-day2:${TAG}" .
 
 echo ""
 echo "==> Building wingman-web:${TAG}"
-docker build -f apps/web/Dockerfile -t "wingman-web:${TAG}" apps/web/
+docker build -f apps/web/Dockerfile -t "wingman-web:${TAG}" .
 
 echo ""
 echo "==> Images loaded into minikube:"
