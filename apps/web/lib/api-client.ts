@@ -16,7 +16,7 @@
  */
 
 import Cookies from "js-cookie";
-import type { ErrorCode, Problem, RequestFieldError } from "@/types/problem";
+import type { ErrorCode, Problem, ProblemDetails, RequestFieldError } from "@/types/problem";
 
 const TOKEN_COOKIE = "wingman-token";
 
@@ -38,36 +38,46 @@ function clearToken(): void {
   Cookies.remove(TOKEN_COOKIE);
 }
 
-/** An error response from a Wingman service. */
+/**
+ * An error response from a Wingman service. The problem's members are own
+ * fields (`status`, `code`, `detail`, `details`, `request_id`), so any reader
+ * of the error sees them; `problem` is the body as received.
+ */
 export class ApiError extends Error {
   readonly status: number;
-  /** The problem body, or `null` when the response was not a problem (a proxy's HTML page). */
+  /** The stable member to match on; `null` when the response was not a problem (a proxy's HTML page). */
+  readonly code: ErrorCode | null;
+  /** The problem's human message (also `message`). */
+  readonly detail: string;
+  readonly details: ProblemDetails;
+  readonly request_id: string | null;
+  /** The problem body, or `null` when the response was not a problem. */
   readonly problem: Problem | null;
 
   constructor(status: number, problem: Problem | null, fallback: string) {
     super(problem?.detail || fallback);
     this.name = "ApiError";
     this.status = status;
+    this.code = problem?.code ?? null;
+    this.detail = this.message;
+    this.details = problem?.details ?? {};
+    this.request_id = problem?.request_id ?? null;
     this.problem = problem;
   }
 
-  get code(): ErrorCode | null {
-    return this.problem?.code ?? null;
-  }
-
   get requestId(): string | null {
-    return this.problem?.request_id ?? null;
+    return this.request_id;
   }
 
   /** `details.problems`: every rule the request broke. */
   get problems(): string[] {
-    const problems = this.problem?.details?.problems;
+    const problems = this.details.problems;
     return Array.isArray(problems) ? problems.map(String) : [];
   }
 
   /** `details.errors`: FastAPI's field-level validation errors. */
   get fieldErrors(): RequestFieldError[] {
-    const errors = this.problem?.details?.errors;
+    const errors = this.details.errors;
     return Array.isArray(errors) ? errors : [];
   }
 
