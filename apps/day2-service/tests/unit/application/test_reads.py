@@ -298,9 +298,24 @@ async def test_a_chart_not_yet_installed_previews_as_an_install(services: Day2Se
         await services.preview.preview(HERZI, "redbull", "nope")
 
 
-async def test_a_preview_reports_unreadable_chart_defaults_instead_of_hiding_them(
+async def test_a_subchart_path_reads_the_defaults_from_that_folder(
     services: Day2Services,
 ) -> None:
+    token = await services.preview.preview(PROD_MCE, "redbull", "dhcp-api-token")
+    assert token.chart.path == "charts/dhcp-api-token" and token.chart.problem is None
+    assert token.chart.values["secretName"] == "dhcp-api-token"
+
+
+async def test_a_preview_reports_unreadable_chart_defaults_instead_of_hiding_them(
+    services: Day2Services, gitlab: InMemoryGitLab
+) -> None:
+    pid = (await gitlab.get_project("helm-charts/dhcp-scope-manager")).id
+    await gitlab.commit(
+        pid,
+        branch="main",
+        message="drop the subchart's defaults",
+        changes=[FileChange.delete(RepoPath("charts/dhcp-api-token/values.yaml"))],
+    )
     kyverno = await services.preview.preview(PROD_MCE, "redbull", "kyverno")
     assert kyverno.chart.problem is not None and "repourl" in kyverno.chart.problem
     token = await services.preview.preview(PROD_MCE, "redbull", "dhcp-api-token")
