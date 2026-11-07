@@ -18,7 +18,9 @@ turns into a security hole without any error.
 - A validator rejects any configuration that would run insecurely, and the
   service does not start. So far: an empty `GITLAB_TOKEN`, and
   `WINGMAN_GIT_BACKEND=fake` with `WINGMAN_ENVIRONMENT=production` (the fake
-  keeps everything in memory and would silently lose every change).
+  keeps everything in memory and would silently lose every change), and a
+  `JWT_SECRET_KEY` shorter than 32 characters (an HS256 secret that short can
+  be brute-forced offline from any one session token).
 - The default environment is `production`, so forgetting to set it means the
   strictest checks, not the loosest.
 - The rewritten auth, webhook and CORS settings will follow the same rule:

@@ -31,3 +31,4 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0008](0008-ty-type-checker.md) | ty is the type checker, as in server-scan |
 | [0009](0009-settings-fail-closed.md) | Settings refuse insecure or fake-in-production configurations at start-up |
 | [0010](0010-metrics-are-a-contract.md) | Metrics follow one catalogue with bounded labels, served off the public Route |
+| [0011](0011-per-replica-read-cache.md) | GitLab reads are cached per replica for seconds; writes clear what they made stale |

@@ -48,6 +48,41 @@ class GitLabSettings(BaseSettings):
         return self
 
 
+MIN_JWT_SECRET_LENGTH = 32
+
+
+class AuthSettings(BaseSettings):
+    """Session tokens and role mapping. Same environment names as the legacy services."""
+
+    model_config = SettingsConfigDict(extra="ignore")
+
+    jwt_secret_key: SecretStr
+    jwt_expiry_hours: int = Field(default=8, ge=1, le=24)
+    wingman_admin_groups: str = ""
+    wingman_viewer_groups: str = ""
+
+    @model_validator(mode="after")
+    def _strong_secret(self) -> Self:
+        """A short HS256 secret can be brute-forced offline from any one token."""
+        if len(self.jwt_secret_key.get_secret_value()) < MIN_JWT_SECRET_LENGTH:
+            raise ValueError(f"JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters")
+        return self
+
+    @property
+    def admin_groups(self) -> tuple[str, ...]:
+        """``WINGMAN_ADMIN_GROUPS``, split on commas."""
+        return _split(self.wingman_admin_groups)
+
+    @property
+    def viewer_groups(self) -> tuple[str, ...]:
+        """``WINGMAN_VIEWER_GROUPS``, split on commas."""
+        return _split(self.wingman_viewer_groups)
+
+
+def _split(value: str) -> tuple[str, ...]:
+    return tuple(part.strip() for part in value.split(",") if part.strip())
+
+
 class RuntimeSettings(BaseSettings):
     """Where and how a service runs. Environment variables ``WINGMAN_*``."""
 

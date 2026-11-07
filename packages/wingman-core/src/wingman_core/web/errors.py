@@ -55,6 +55,7 @@ class ErrorCode(StrEnum):
     GIT_REJECTED = "GIT_REJECTED"
     AMBIGUOUS_WRITE = "AMBIGUOUS_WRITE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    SELF_APPROVAL = "SELF_APPROVAL"
 
     @property
     def slug(self) -> str:
@@ -155,6 +156,13 @@ class AmbiguousWrite(AppError):
 
     status = 504
     code = ErrorCode.AMBIGUOUS_WRITE
+
+
+class SelfApproval(AppError):
+    """Nobody approves a change they requested."""
+
+    status = 403
+    code = ErrorCode.SELF_APPROVAL
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (

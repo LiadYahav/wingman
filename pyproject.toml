@@ -127,3 +127,12 @@ name = "core observability does not depend on web"
 type = "forbidden"
 source_modules = ["wingman_core.observability"]
 forbidden_modules = ["wingman_core.web", "fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
+name = "core application depends only on the domain and ports"
+type = "forbidden"
+source_modules = ["wingman_core.application"]
+forbidden_modules = [
+    "wingman_core.infrastructure", "wingman_core.observability", "wingman_core.web",
+    "fastapi", "starlette", "httpx",
+]

@@ -1,0 +1,99 @@
+"""The FastAPI app every service starts from.
+
+``create_base_app`` wires what each service must have and none may forget:
+RFC 9457 errors (ADR-0004), request ids, metrics and ``/metrics``
+(ADR-0010), session tokens for ``CurrentUser``/``AdminUser``, and health:
+
+- ``/health/live`` and ``/healthz`` (the chart's existing probe path): the
+  process serves requests. Never checks dependencies, so a GitLab outage does
+  not restart every pod.
+- ``/health/ready``: each readiness check passes within a timeout. Its body is
+  a plain object, not a problem document: it is read by probes, not by the
+  web app (as in server-scan).
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
+from typing import Final
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from wingman_core.infrastructure.session_tokens import SessionTokens
+from wingman_core.observability.metrics import WingmanMetrics
+from wingman_core.web.exception_handlers import register_exception_handlers
+from wingman_core.web.metrics import install_metrics
+from wingman_core.web.request_context import RequestIdMiddleware
+
+ReadinessCheck = Callable[[], Awaitable[object]]
+"""Raises (or times out) when a dependency is not usable."""
+
+Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
+
+READINESS_TIMEOUT_SECONDS: Final = 3.0
+
+
+def create_base_app(
+    *,
+    title: str,
+    version: str,
+    metrics: WingmanMetrics,
+    session_tokens: SessionTokens,
+    readiness: Mapping[str, ReadinessCheck] | None = None,
+    cors_origins: Sequence[str] = (),
+    lifespan: Lifespan | None = None,
+) -> FastAPI:
+    """A FastAPI app with Wingman's middleware, handlers, metrics and health routes.
+
+    ``cors_origins`` must be explicit origins: the web app is served from the
+    same origin as the API, so the default is no CORS at all, and ``*`` is
+    refused.
+    """
+    if "*" in cors_origins:
+        raise ValueError("CORS origins must be explicit; '*' is refused")
+    app = FastAPI(title=title, version=version, lifespan=lifespan)
+    app.state.metrics = metrics
+    app.state.session_tokens = session_tokens
+    install_metrics(app, metrics)
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(cors_origins),
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+            allow_headers=["authorization", "content-type", "x-request-id"],
+        )
+    app.add_middleware(RequestIdMiddleware)
+    register_exception_handlers(app)
+    _add_health_routes(app, dict(readiness or {}))
+    return app
+
+
+def _add_health_routes(app: FastAPI, checks: dict[str, ReadinessCheck]) -> None:
+    @app.get("/health/live", include_in_schema=False)
+    @app.get("/healthz", include_in_schema=False)
+    async def live() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/health/ready", include_in_schema=False)
+    async def ready() -> JSONResponse:
+        results = await asyncio.gather(*(_run(check) for check in checks.values()))
+        report = dict(zip(checks, results, strict=True))
+        ok = all(result == "ok" for result in results)
+        return JSONResponse(
+            status_code=200 if ok else 503,
+            content={"status": "ready" if ok else "not_ready", "checks": report},
+        )
+
+
+async def _run(check: ReadinessCheck) -> str:
+    try:
+        await asyncio.wait_for(check(), timeout=READINESS_TIMEOUT_SECONDS)
+    except TimeoutError:
+        return "timeout"
+    except Exception as exc:  # noqa: BLE001 - a readiness check reports any failure, never raises
+        return f"error: {type(exc).__name__}"
+    return "ok"

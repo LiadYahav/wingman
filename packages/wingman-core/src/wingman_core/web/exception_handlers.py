@@ -11,8 +11,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from wingman_core.application.approvals import SelfApprovalError, UnmanagedProjectError
 from wingman_core.domain.errors import GitError
-from wingman_core.web.errors import AppError, ErrorCode, from_git_error
+from wingman_core.web.errors import (
+    AppError,
+    ErrorCode,
+    NotFound,
+    SelfApproval,
+    from_git_error,
+)
 from wingman_core.web.request_context import REQUEST_ID_HEADER
 
 logger = logging.getLogger(__name__)
@@ -75,6 +82,14 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(GitError)
     async def handle_git_error(request: Request, exc: GitError) -> JSONResponse:
         return await handle_app_error(request, from_git_error(exc))
+
+    @app.exception_handler(SelfApprovalError)
+    async def handle_self_approval(request: Request, exc: SelfApprovalError) -> JSONResponse:
+        return await handle_app_error(request, SelfApproval(str(exc)))
+
+    @app.exception_handler(UnmanagedProjectError)
+    async def handle_unmanaged(request: Request, exc: UnmanagedProjectError) -> JSONResponse:
+        return await handle_app_error(request, NotFound(str(exc)))
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(
