@@ -38,6 +38,7 @@ from wingman_core.domain.errors import (
 from wingman_core.domain.git import (
     Branch,
     Commit,
+    CommitAuthor,
     EntryKind,
     FileChange,
     FileContent,
@@ -161,6 +162,7 @@ class GitLabHttpAdapter:
         message: str,
         changes: Sequence[FileChange],
         start_branch: str | None = None,
+        author: CommitAuthor | None = None,
     ) -> Commit:
         """See GitLabPort.commit."""
         if not changes:
@@ -172,6 +174,9 @@ class GitLabHttpAdapter:
         }
         if start_branch is not None:
             body["start_branch"] = start_branch
+        if author is not None:
+            body["author_name"] = author.name
+            body["author_email"] = author.email
         return _commit(
             await self._write("POST", f"/projects/{project_id}/repository/commits", body)
         )
@@ -273,10 +278,27 @@ class GitLabHttpAdapter:
         branch moves; until it finishes, a merge is refused with 405 even for a
         clean MR. This waits (bounded) for the check before merging, so
         "approve and merge" right after "open" works.
+
+        GitLab also updates an MR's ``sha`` in the background after a push to
+        its branch, so the MR may report an older head than the branch has.
+        With ``sha``, the branch head itself is compared first: a different
+        head means the branch moved since review, ``RevisionConflictError``
+        at once (even while the MR still reports the reviewed one). A matching
+        head while the MR lags is GitLab catching up: wait for it.
         """
         for attempt in range(self._merge_wait_attempts):
             current = await self._get(_mr_path(ref))
-            if current.get("detailed_merge_status") not in _MERGE_CHECKING:
+            waiting = current.get("detailed_merge_status") in _MERGE_CHECKING
+            if sha is not None and current.get("state") == MRState.OPENED:
+                branch = quote(current["source_branch"], safe="")
+                head = await self._get(f"/projects/{ref.project_id}/repository/branches/{branch}")
+                if head["commit"]["id"] != sha:
+                    raise RevisionConflictError(
+                        f"merge request {ref}: source branch is at {head['commit']['id'][:8]}, "
+                        f"not the reviewed {sha[:8]}"
+                    )
+                waiting = waiting or current.get("sha") != sha
+            if not waiting:
                 break
             await self._sleep(min(self._backoff * 2**attempt, 2.0))
         body: dict[str, JSON] = {}

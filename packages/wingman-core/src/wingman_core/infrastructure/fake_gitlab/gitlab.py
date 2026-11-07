@@ -29,6 +29,7 @@ from wingman_core.domain.git import (
     Branch,
     ChangeKind,
     Commit,
+    CommitAuthor,
     EntryKind,
     FileChange,
     FileContent,
@@ -56,6 +57,7 @@ class _CommitRecord:
     message: str
     authored_at: datetime
     sequence: int
+    author: CommitAuthor | None = None
 
 
 @dataclass(slots=True)
@@ -223,6 +225,7 @@ class InMemoryGitLab:
         message: str,
         changes: Sequence[FileChange],
         start_branch: str | None = None,
+        author: CommitAuthor | None = None,
     ) -> Commit:
         """See GitLabPort.commit."""
         record = self._project(project_id)
@@ -238,7 +241,12 @@ class InMemoryGitLab:
         for change in changes:
             _apply(files, base.file_commits, change)
         commit = self._new_commit(
-            record, parents=(base.id,), files=files, origins=(base,), message=message
+            record,
+            parents=(base.id,),
+            files=files,
+            origins=(base,),
+            message=message,
+            author=author,
         )
         record.branches[branch] = commit.id
         return self._commit_dto(record, commit)
@@ -421,6 +429,7 @@ class InMemoryGitLab:
         files: Mapping[str, str],
         origins: Sequence[_CommitRecord],
         message: str,
+        author: CommitAuthor | None = None,
     ) -> _CommitRecord:
         """Record a commit. A file identical to one in ``origins`` keeps that file's last commit."""
         sequence = next(self._sequence)
@@ -440,6 +449,7 @@ class InMemoryGitLab:
             message=message,
             authored_at=self._clock(),
             sequence=sequence,
+            author=author,
         )
         record.commits[commit_id] = commit
         return commit
@@ -450,8 +460,8 @@ class InMemoryGitLab:
             short_id=commit.id[:8],
             title=commit.title,
             message=commit.message,
-            author_name=self._username,
-            author_email=self._email,
+            author_name=commit.author.name if commit.author else self._username,
+            author_email=commit.author.email if commit.author else self._email,
             authored_at=commit.authored_at,
             web_url=f"{record.project.web_url}/-/commit/{commit.id}",
             parent_ids=commit.parents,

@@ -56,6 +56,8 @@ class ErrorCode(StrEnum):
     AMBIGUOUS_WRITE = "AMBIGUOUS_WRITE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
     SELF_APPROVAL = "SELF_APPROVAL"
+    FEATURE_DISABLED = "FEATURE_DISABLED"
+    DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
 
     @property
     def slug(self) -> str:
@@ -163,6 +165,20 @@ class SelfApproval(AppError):
 
     status = 403
     code = ErrorCode.SELF_APPROVAL
+
+
+class FeatureDisabled(AppError):
+    """The feature is switched off in this deployment's settings."""
+
+    status = 501
+    code = ErrorCode.FEATURE_DISABLED
+
+
+class DependencyUnavailable(AppError):
+    """A system other than GitLab (a hub API, OpenShift OAuth, another service) failed."""
+
+    status = 502
+    code = ErrorCode.DEPENDENCY_UNAVAILABLE
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (

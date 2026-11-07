@@ -23,7 +23,7 @@ from wingman_core.domain.errors import (
     NotMergeableError,
     RevisionConflictError,
 )
-from wingman_core.domain.git import EntryKind, FileChange, Project, RepoPath
+from wingman_core.domain.git import CommitAuthor, EntryKind, FileChange, Project, RepoPath
 from wingman_core.domain.merge_request import MergeRequestRef, MRState, NewMergeRequest
 from wingman_core.ports.gitlab import GitLabPort
 
@@ -197,6 +197,23 @@ class GitLabContract:
         with pytest.raises(NotFoundError):
             await gitlab.read_file(project.id, _p("added.yaml"), "main")
         assert "feature" in [b.name for b in await gitlab.list_branches(project.id)]
+
+    async def test_commit_author_is_recorded_in_history(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        author = CommitAuthor("Jane Doe", "jane.doe@example.invalid")
+        made = await gitlab.commit(
+            project.id,
+            branch="feature",
+            start_branch="main",
+            message="authored",
+            changes=[FileChange.create(_p("authored.yaml"), "d: 4\n")],
+            author=author,
+        )
+        assert (made.author_name, made.author_email) == (author.name, author.email)
+        listed = await gitlab.get_commit(project.id, made.id)
+        assert (listed.author_name, listed.author_email) == (author.name, author.email)
 
     async def test_commit_to_missing_branch_is_not_found(
         self, gitlab: GitLabPort, new_project: NewProject
@@ -375,6 +392,24 @@ class GitLabContract:
         assert (
             await gitlab.read_file(project.id, _p("README.md"), "main")
         ).content == "# fixture\n"
+
+    async def test_merge_of_the_new_head_right_after_a_push_succeeds(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        # GitLab updates an MR's sha in the background after a push; a merge naming the
+        # branch's real head must still go through (CI and workflows push to MR branches).
+        project = await new_project(FILES)
+        await _branch_with_change(gitlab, project, "b1", "README.md", "# one\n")
+        mr = await gitlab.create_merge_request(project.id, NewMergeRequest("b1", "main", "pushed"))
+        pushed = await gitlab.commit(
+            project.id,
+            branch="b1",
+            message="bot push [skip ci]",
+            changes=[FileChange.update(_p("README.md"), "# two\n", last_commit_id=None)],
+        )
+        merged = await gitlab.merge_merge_request(mr.ref, sha=pushed.id)
+        assert merged.state is MRState.MERGED
+        assert (await gitlab.read_file(project.id, _p("README.md"), "main")).content == "# two\n"
 
     async def test_merge_with_conflicts_is_not_mergeable(
         self, gitlab: GitLabPort, new_project: NewProject

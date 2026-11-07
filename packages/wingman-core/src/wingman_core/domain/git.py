@@ -193,6 +193,25 @@ class FileChange:
 
 
 @dataclass(frozen=True, slots=True)
+class CommitAuthor:
+    """Who a commit is authored by, when that is not the account making it.
+
+    Wingman commits with its service account's token; passing the requesting
+    user here makes Git history (and the audit view) name the person, while
+    GitLab still records the service account as the committer.
+    """
+
+    name: str
+    email: str
+
+    def __post_init__(self) -> None:
+        """Reject values GitLab would refuse or that would forge a header line."""
+        for value in (self.name, self.email):
+            if not value.strip() or any(c in value for c in "\r\n<>"):
+                raise ValueError(f"invalid commit author field {value!r}")
+
+
+@dataclass(frozen=True, slots=True)
 class Commit:
     """A commit, as listed in history."""
 

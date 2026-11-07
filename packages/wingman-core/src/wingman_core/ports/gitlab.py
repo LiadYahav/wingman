@@ -14,6 +14,7 @@ from typing import Protocol
 from wingman_core.domain.git import (
     Branch,
     Commit,
+    CommitAuthor,
     FileChange,
     FileContent,
     FileDiff,
@@ -69,10 +70,13 @@ class GitLabPort(Protocol):
         message: str,
         changes: Sequence[FileChange],
         start_branch: str | None = None,
+        author: CommitAuthor | None = None,
     ) -> Commit:
         """Commit file changes atomically: all of them apply or none do.
 
-        With ``start_branch``, ``branch`` is created from it first. Raises
+        With ``start_branch``, ``branch`` is created from it first. With
+        ``author``, the commit is authored by that person; the token's account
+        stays the committer. Raises
         ``AlreadyExistsError`` (create of an existing file), ``NotFoundError``
         (update or delete of a missing file) or ``RevisionConflictError`` (a
         stale ``last_commit_id``). Never retried (ADR-0006).

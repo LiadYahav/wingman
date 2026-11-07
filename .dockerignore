@@ -1,0 +1,13 @@
+# Build context of the Python images (repository root). Allowlist: only what
+# their Dockerfiles copy; the web image builds from apps/web with its own.
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!packages/wingman-core/
+!packages/shared-python/
+!apps/day1-service/
+!apps/day2-service/
+**/__pycache__
+**/.venv
+**/tests

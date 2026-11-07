@@ -20,7 +20,7 @@ from wingman_core.domain.errors import (
     PermissionDeniedError,
     RevisionConflictError,
 )
-from wingman_core.domain.git import FileChange, RepoPath
+from wingman_core.domain.git import CommitAuthor, FileChange, RepoPath
 from wingman_core.domain.merge_request import MergeRequestRef, MRState, NewMergeRequest
 from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
@@ -254,6 +254,19 @@ async def test_commit_sends_the_golden_body() -> None:
     }
 
 
+async def test_commit_author_is_sent_as_author_fields() -> None:
+    rec = Recorder(reply(201, COMMIT))
+    await rec.adapter().commit(
+        7,
+        branch="main",
+        message="m",
+        changes=[FileChange.create(RepoPath("a.yaml"), "a: 1\n")],
+        author=CommitAuthor("Jane Doe", "jane@example.invalid"),
+    )
+    body = json.loads(rec.requests[0].content)
+    assert (body["author_name"], body["author_email"]) == ("Jane Doe", "jane@example.invalid")
+
+
 async def test_empty_commit_is_rejected_without_a_request() -> None:
     rec = Recorder(reply(201, COMMIT))
     with pytest.raises(InvalidRequestError):
@@ -273,15 +286,62 @@ async def test_merge_request_parsing_and_creation_body() -> None:
     assert json.loads(rec.requests[0].content)["labels"] == "wingman,day1"
 
 
+MR_PATH = "/api/v4/projects/7/merge_requests/3"
+BRANCH_PATH = "/api/v4/projects/7/repository/branches/b"
+
+
+def branch_at(sha: str) -> Handler:
+    return reply(200, {"name": "b", "commit": {"id": sha}})
+
+
 async def test_merge_waits_for_the_mergeability_check() -> None:
     checking = {**MR, "detailed_merge_status": "checking"}
     merged = {**MR, "state": "merged", "merged_at": "2026-11-07T10:01:00Z"}
-    rec = Recorder(reply(200, checking), reply(200, checking), reply(200, MR), reply(200, merged))
+    rec = Recorder(
+        reply(200, checking),
+        branch_at("abc"),
+        reply(200, checking),
+        branch_at("abc"),
+        reply(200, MR),
+        branch_at("abc"),
+        reply(200, merged),
+    )
     result = await rec.adapter().merge_merge_request(MergeRequestRef(7, 3), sha="abc")
     assert result.state is MRState.MERGED
-    assert [r.method for r in rec.requests] == ["GET", "GET", "GET", "PUT"]
+    assert [r.method for r in rec.requests] == ["GET"] * 6 + ["PUT"]
     assert json.loads(rec.requests[-1].content) == {"sha": "abc"}
     assert rec.sleeps == [0.1, 0.2]
+
+
+async def test_merge_waits_while_gitlab_catches_up_with_a_push_to_the_branch() -> None:
+    # Right after a push, GitLab still reports the MR's old head; the branch is at the new one.
+    merged = {**MR, "sha": "new", "state": "merged", "merged_at": "2026-11-07T10:01:00Z"}
+    rec = Recorder(
+        reply(200, {**MR, "sha": "old"}),
+        branch_at("new"),
+        reply(200, {**MR, "sha": "new"}),
+        branch_at("new"),
+        reply(200, merged),
+    )
+    result = await rec.adapter().merge_merge_request(MergeRequestRef(7, 3), sha="new")
+    assert result.state is MRState.MERGED
+    assert [(r.method, r.url.path) for r in rec.requests] == [
+        ("GET", MR_PATH),
+        ("GET", BRANCH_PATH),
+        ("GET", MR_PATH),
+        ("GET", BRANCH_PATH),
+        ("PUT", f"{MR_PATH}/merge"),
+    ]
+    assert rec.sleeps == [0.1]
+
+
+async def test_merge_of_a_branch_that_moved_since_review_is_refused_while_gitlab_lags() -> None:
+    # GitLab still reports the reviewed head, but the branch already holds a newer commit:
+    # merging now could merge the lagging head and drop the newer commit with the branch.
+    rec = Recorder(reply(200, {**MR, "sha": "reviewed"}), branch_at("newer"))
+    with pytest.raises(RevisionConflictError, match="not the reviewed"):
+        await rec.adapter().merge_merge_request(MergeRequestRef(7, 3), sha="reviewed")
+    assert [r.method for r in rec.requests] == ["GET", "GET"]
 
 
 @pytest.mark.parametrize(
