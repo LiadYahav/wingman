@@ -237,7 +237,7 @@ function ConfigureDialog({
 }) {
   const [choice, setChoice] = useState(initial);
   const preview = useInstallPreview(entry, destination, choice, true);
-  const blocker = installBlocker(entry, choice);
+  const blocker = installBlocker(entry, choice, preview.data);
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="sm:max-w-4xl" showCloseButton={false}>

@@ -251,6 +251,7 @@ export function previewOf(team: string, chart: string, override?: Values): Value
     layers,
     deploy: {
       ...leaf(team, chart, revision),
+      repo_url: entry.argocd_metadata.repourl,
       layers: [
         layer("team", `operators/${chart}/${chart}.yaml`, { targetRevision: entry.current_version }),
         layer("cluster", `${HOSTED_FOLDER}/${chart}/${chart}.yaml`, current?.pinned ? { targetRevision: revision } : {}, Boolean(current?.pinned)),

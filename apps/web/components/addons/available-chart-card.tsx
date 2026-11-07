@@ -31,9 +31,13 @@ export interface InstallChoice {
 
 export const DEFAULT_CHOICE: InstallChoice = { values: EMPTY, version: null, emergencyPin: false, repourl: "" };
 
-/** The chart has no lowercase `repourl` in its team default: the install must give one. */
-export function needsRepourl(entry: CatalogEntry): boolean {
-  return !entry.argocd_metadata.repourl;
+/**
+ * No layer of the deploy config sets a lowercase `repourl` (the team default
+ * may have only the miscased `repoUrl`), so the install must give one. The
+ * preview knows what this destination inherits; the catalog only the team default.
+ */
+export function needsRepourl(entry: CatalogEntry, preview?: ValuesPreview): boolean {
+  return !(preview ? preview.deploy.repo_url : entry.argocd_metadata.repourl);
 }
 
 /**
@@ -68,7 +72,7 @@ export function InstallForm({
           installing it gives {destination.name} its own copy in its folder.
         </p>
       )}
-      {needsRepourl(entry) && (
+      {needsRepourl(entry, data) && (
         <label className="block space-y-1 text-xs">
           <span className="font-semibold uppercase tracking-wide text-muted-foreground">Chart repo URL (repourl)</span>
           <input
@@ -139,8 +143,8 @@ function installPaths(entry: CatalogEntry, preview: ValuesPreview | undefined) {
 }
 
 /** What is still missing before the chart can be installed, or `null`. */
-export function installBlocker(entry: CatalogEntry, choice: InstallChoice): string | null {
-  if (needsRepourl(entry) && !choice.repourl.trim()) return "Give the chart repo URL";
+export function installBlocker(entry: CatalogEntry, choice: InstallChoice, preview?: ValuesPreview): string | null {
+  if (needsRepourl(entry, preview) && !choice.repourl.trim()) return "Give the chart repo URL";
   if (choice.version !== null && !choice.emergencyPin) return "Confirm the emergency pin";
   return null;
 }
@@ -179,8 +183,8 @@ export function AvailableChartCard({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [writeError, setWriteError] = useState("");
-  const blocker = installBlocker(entry, choice);
   const preview = useInstallPreview(entry, destination, choice, open);
+  const blocker = installBlocker(entry, choice, preview.data);
 
   const install = useMutation({
     mutationFn: () =>
