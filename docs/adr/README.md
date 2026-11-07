@@ -32,3 +32,11 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0009](0009-settings-fail-closed.md) | Settings refuse insecure or fake-in-production configurations at start-up |
 | [0010](0010-metrics-are-a-contract.md) | Metrics follow one catalogue with bounded labels, served off the public Route |
 | [0011](0011-per-replica-read-cache.md) | GitLab reads are cached per replica for seconds; writes clear what they made stale |
+| [0012](0012-day1-values-file-and-key-ownership.md) | A cluster file is a chart values file; people and automation own disjoint keys |
+| [0013](0013-sandboxed-template-and-spec-presets.md) | The cluster file is rendered from the shared template in a sandbox; specs are value presets |
+| [0014](0014-cluster-and-mce-naming-rules.md) | New cluster names follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing ones are flagged, not hidden |
+| [0015](0015-cluster-name-derivation-setting.md) | How a file stem becomes the chart's `clusterName` is a setting; production's rule is the default |
+| [0016](0016-day1-records-addons-and-drift-is-addon-drift.md) | Day1 records a spec's addons and overrides, never writes day2, and unknown drift is not "in sync" |
+| [0017](0017-cluster-provisioner-port.md) | Provisioning is a `ClusterProvisioner` port: a merge request today, the `create-cluster` workflow later |
+| [0018](0018-sites-and-mces-are-read-only.md) | Sites and MCEs are read-only folders in Wingman |
+| [0019](0019-hub-api-over-httpx.md) | MCE hubs, OpenShift OAuth and day2 are reached over httpx, behind ports, with failures reported |

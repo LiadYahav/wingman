@@ -76,13 +76,18 @@ Explicit user instructions; violating one is a real mistake, not style.
   `wingman-core` foundation (GitLab port, httpx adapter, in-memory fake,
   contract suite passing 27/27 on the fake and on GitLab CE 19.5.3, RFC 9457
   errors, metrics, settings); CI and `scripts/gate.sh`; ADRs 0001-0010.
-- **Not done yet, in order:** (1) day1 rewrite on `wingman-core` against
-  `gitops-day1/platform-config`; (2) day2 rewrite against the gitops-day2
-  layout; (3) web pages for the new data; (4) end-to-end check against the
-  seeded local GitLab; (5) images installing from the lock, chart
-  hardening, ServiceMonitor, alert rules with promtool tests, Grafana
-  dashboard; (6) ecosystem features (servers per hosted cluster from
-  server-scan, workflow runs).
+- Done (day1 branch): day1 rewritten on `wingman-core` as `wingman_day1`
+  (`apps/day1-service/src/wingman_day1`, ADRs 0012-0019), checked end to end
+  against local GitLab with `scripts/dev/day1_live_e2e.py` and through both
+  chart copies; its image installs from `uv.lock`. Web-visible API changes:
+  `docs/notes/2026-11-07-day1-api-changes.md`.
+- **Not done yet, in order:** (1) day2 rewrite against the gitops-day2
+  layout; (2) web pages for the new data and the day1 API changes; (3) the
+  chart's day1 env (`GITLAB_TOKEN`, dropped `CACHE_*`, see the note); (4)
+  end-to-end check of the whole stack against the seeded local GitLab; (5)
+  day2's image from the lock, chart hardening, ServiceMonitor, alert rules
+  with promtool tests, Grafana dashboard; (6) ecosystem features (servers per
+  hosted cluster from server-scan, workflow runs).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -96,12 +101,16 @@ Explicit user instructions; violating one is a real mistake, not style.
   none of them, and must expect those commits on its MR branches.
 - **`clusterName` differs**: production's ApplicationSet strips `ocp4-` from
   the file name (`openshift-prod-x-site1` in `hcp-prod-x-site1`); the GitHub
-  sandbox keeps it. See `docs/ecosystem/README.md`.
+  sandbox keeps it. Day1 follows `DAY1_CLUSTER_NAME_STRIP_PREFIX` (default
+  `ocp4-`; `""` for the sandbox; ADR-0015). See `docs/ecosystem/README.md`.
 - **Naming convention** `ocp4-<env>-<name>-<site>[-<seq>]`; the chart derives
   the day2 `<env>` from the MCE name and fails on names that don't follow it.
-- **GitLab is asynchronous in places**: an MR's stored diff and its
-  mergeability are computed by background jobs, and a merged source branch is
-  deleted later. The adapter handles the first two; don't assume the third.
+  Sites may contain dashes: match a name against its site folder, never split
+  it (ADR-0014).
+- **GitLab is asynchronous in places**: an MR's stored diff, its mergeability
+  and its `sha` after a push are computed by background jobs, and a merged
+  source branch is deleted later. The adapter handles the first three (a
+  merge checks the branch head itself); don't assume the fourth.
 - **ty honours only `# type: ignore` or `# ty: ignore[rule]`**, never a
   mypy-style `# type: ignore[code]` (ADR-0008).
 - **Next.js 16 / React 19 / Tailwind 4 / zod 4** differ from older docs. Read
@@ -166,3 +175,21 @@ in parallel day2 against the gitops-day2 layout (four cluster kinds, defaults
 and exclusions, the 10-layer values merge, version pins). **Open:**
 production vs sandbox `clusterName`, canonical site codes and InfraEnv naming
 (questions in `docs/ecosystem/README.md`).
+
+**2026-11-07 — day1 on `wingman-core`.** Branch
+`worktree-agent-a8c8a548e56c6a474` (to merge into
+`roiblum/feat-ecosystem-day1-day2`). `apps/day1-service/src/wingman_day1`
+replaces the legacy `src/`: values file from the shared template in a
+sandbox, naming rules, read-only sites/MCEs with default `mastertag` and hub
+version, `ClusterProvisioner` (MR today), approvals on core `Approvals`
+with the reviewed head, hub/OAuth/day2 over httpx behind ports (ADRs
+0012-0019). Run locally: `WINGMAN_ENVIRONMENT=development
+WINGMAN_GIT_BACKEND=fake JWT_SECRET_KEY=<32+ chars>
+DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config
+SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs DEV_AUTH_ENABLED=true
+DEV_AUTH_SECRET=<32+ chars> uv run uvicorn wingman_day1.main:app --port 8001`;
+against local GitLab: `uv run python scripts/dev/day1_live_e2e.py --token
+<local token> --sandbox-chart <chart dir>`. **Next:** the web changes in
+`docs/notes/2026-11-07-day1-api-changes.md` and the chart's day1 env.
+**Open:** the off-convention MCE rule (ADR-0014) waits on team question 3;
+the default `clusterName` rule (ADR-0015) on question 2.
