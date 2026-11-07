@@ -8,6 +8,8 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Spec Templates**: Define cluster templates with Day1 provisioning, Day2 addons, and immutable field flags
 - **Two-Phase Cluster Form**: Specs define structure; clusters fill values — nodepool count is locked by spec
 - **Marketplace Addon Picker**: Browse and select Day2 addons on spec creation/edit pages
+- **Charts per Destination**: Install, edit and remove Day2 charts on the hub, MCEs, hosted and UPI clusters; every value shows the layer that set it
+- **Destinations and Lints**: Every place teams deploy to, and every check on the team repos
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
 - **Site/MCE from GitLab**: Dropdowns populated from GitLab folder paths; new names create folders
 - **Approval Workflow**: Aggregated view of open MRs from all platform repositories
@@ -91,6 +93,8 @@ app/
 │   ├── clusters/       # Cluster management pages
 │   ├── specs/          # Spec template pages
 │   ├── addons/         # Addon catalog
+│   ├── destinations/   # Day2 destinations (hub, MCEs, hosted, UPI)
+│   ├── lints/          # Day2 lint findings
 │   ├── approvals/      # MR approval workflow
 │   ├── audit/          # Audit trail
 │   ├── docs/           # In-app platform documentation
@@ -101,15 +105,19 @@ app/
 components/
 ├── ui/                 # Base UI components (shadcn/ui)
 ├── common/             # Shared components (dialogs, headers)
+├── addons/             # A destination's charts: values editor, cards, bulk install
 └── specs/              # Spec-specific components
 
 lib/
 ├── api-client.ts       # Typed API client
+├── day2.ts             # Day2 paths, query keys, layer roles, problems
+├── values.ts           # Helm values as data: leaves, paths, YAML
 ├── utils.ts            # Utility functions
 └── diff.ts             # Diff computation utilities
 
 types/
-└── index.ts            # TypeScript type definitions
+├── index.ts            # TypeScript type definitions
+└── day2.ts             # The day2 service's bodies (from its Pydantic schemas)
 ```
 
 ## Environment Variables
