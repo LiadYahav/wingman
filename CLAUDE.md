@@ -1,159 +1,168 @@
-# Wingman Platform - AI Agent Guide
+# CLAUDE.md
 
-This file provides context for AI coding assistants working on the Wingman codebase.
+Orients a Claude Code session on this repo. `README.md` is the human
+quickstart; `docs/ecosystem/README.md` is how Wingman fits the team-redbull
+platform (read it before changing day1 or day2); `docs/adr/` holds the
+decisions and their reasons; `docs/ops/` holds the operator contracts
+(metrics). The session history is `docs/notes/session-log.md`. Personal,
+untracked notes (live sandbox URLs, local tokens) are in `CLAUDE.local.md`.
+This file is loaded every session, so it stays short.
 
-## Project Overview
+## What this is
 
-Wingman is a GitOps-based Internal Developer Platform (IDP) for OpenShift cluster provisioning. It uses GitLab as its source of truth (no database).
+Wingman is the team's self-service portal for OpenShift hosted clusters:
+day1 (create, edit, delete a hosted cluster) and day2 (install and configure
+charts on clusters). GitLab is its only store: every change is a merge request
+into the day1 values repo (`gitops-day1/platform-config`) or a team's day2 repo
+(`sigs/<team>`), and ArgoCD applies what is merged. It was written before the
+ecosystem it now has to fit (server-scan, segments-manager, Temporal
+workflows, herzi, the hostedclusters-setup chart, the reworked gitops-day2
+layout); the rewrite is in progress (see Current status).
 
-### Core Concepts
+Monorepo: `apps/web` (Next.js 16), `apps/day1-service` and
+`apps/day2-service` (FastAPI), `packages/wingman-core` (the new shared core),
+`packages/shared-python` (legacy shared code, being replaced), `chart/`
+(Helm), `dev/gitlab-fixtures` (production-shaped repo trees for tests and
+local GitLab).
 
-- **Day1**: Cluster provisioning - creating new OpenShift clusters from specs
-- **Day2**: Addon management - installing/configuring operators on existing clusters
-- **Specs**: Cluster templates defining variables and default addons
-- **MCE**: Multi-Cluster Engine - groups clusters by management plane
+## Standing project conventions — follow without being re-told
 
-### Ecosystem (read before changing day1/day2 flows)
+Explicit user instructions; violating one is a real mistake, not style.
 
-Wingman is being brought back on top of the team-redbull platform: server-scan (servers), segments-manager (VLAN segments), Temporal workflows + orchestrator API, herzi (fills InfraEnv pools), the hostedclusters-setup chart, gitops-day2. The current day1/day2 code predates it and does not match it. What we learned, the gaps and open questions are in `docs/ecosystem/README.md` (per-system detail in `docs/ecosystem/notes/`). There is **no Day1 create-cluster workflow yet** (planned); don't assume one exists.
+1. **The quality bar is server-scan and herzi** (the team's best repos, in
+   team-redbull). New code, tests, CI, docs and repo hygiene must not be below
+   them. When unsure how to do something, look at how they do it.
+2. **Git: commit and push after each completed stage**, on a feature branch,
+   with Conventional Commit subjects (`feat:`, `fix:`, `docs:`, `ci:`,
+   `test:`, `refactor:`). One unit of work per commit. Never push to `main`
+   directly; merges go through a PR.
+3. **This repo is public.** Never commit live URLs, tokens, internal hostnames,
+   or findings about private systems (e.g. the production export in
+   `~/Downloads/stack-export`). Put them in the git-ignored `CLAUDE.local.md`.
+4. **Layers are enforced** (ADR-0001): domain → ports → application →
+   infrastructure/observability → web. `uv run lint-imports` must pass. New
+   external systems get a port, an adapter and a fake; never a client call
+   from a router.
+5. **GitLab only through `GitLabPort`** (ADR-0002). New code never imports
+   python-gitlab or `wingman_shared.gitlab_client`.
+6. **Writes are guarded and never retried** (ADR-0006): updates carry the
+   read's `last_commit_id`, merges carry the reviewed `sha`, and an
+   `AmbiguousWriteError` is surfaced, not retried.
+7. **An MR is `(project, iid)`** and the branch/title/description formats in
+   `wingman_core.domain.mr_conventions` are a contract (ADR-0007).
+8. **Errors are RFC 9457 problems** (ADR-0004). Raise `AppError` subclasses;
+   never `HTTPException`; never swallow a read error.
+9. **Metrics names and labels are a contract** (ADR-0010,
+   `docs/ops/metrics.md`). No unbounded label values.
+10. **Exact pins, one lockfile** (ADR-0003). `uv sync --locked` must pass. No
+    Dependabot/Renovate.
+11. **Docs change in the same commit as the code.** A new decision gets an ADR
+    (template in `docs/adr/README.md`); a superseded one is marked, never
+    deleted.
+12. **Use parallel agents** where work splits into independent pieces.
+13. **Wingman owns day1 until the planned `create-cluster` workflow exists**
+    (user decision 2026-11-07). Keep provisioning behind an adapter so it can
+    switch to starting the workflow. The orchestrator API has no auth; that is
+    accepted.
+14. **Site and MCE are read-only in Wingman** (user decision 2026-11-07).
+    Wingman never creates them; MCE onboarding happens elsewhere.
+15. **Don't add network policies** — they cause connectivity issues.
 
-## Repository Structure
+## Current status
 
-```
-apps/
-  day1-service/     # FastAPI - cluster provisioning
-  day2-service/     # FastAPI - addon management
-  web/              # Next.js frontend
-packages/
-  shared-python/    # Shared utilities (gitlab_client, cache, models); edits apply to both services
-chart/              # Helm chart for deployment
-```
+- Done: ecosystem map (`docs/ecosystem/`); the new day1 template
+  (`dev/gitlab-fixtures/wingman/cluster-specs/cluster-template.j2`, verified
+  with `helm template` against both chart copies); fixtures; the
+  `wingman-core` foundation (GitLab port, httpx adapter, in-memory fake,
+  contract suite passing 27/27 on the fake and on GitLab CE 19.5.3, RFC 9457
+  errors, metrics, settings); CI and `scripts/gate.sh`; ADRs 0001-0010.
+- **Not done yet, in order:** (1) day1 rewrite on `wingman-core` against
+  `gitops-day1/platform-config`; (2) day2 rewrite against the gitops-day2
+  layout; (3) web pages for the new data; (4) end-to-end check against the
+  seeded local GitLab; (5) images installing from the lock, chart
+  hardening, ServiceMonitor, alert rules with promtool tests, Grafana
+  dashboard; (6) ecosystem features (servers per hosted cluster from
+  server-scan, workflow runs).
 
-## Critical Patterns
+## Key technical facts (cross-cutting traps)
 
-### ALWAYS Use Async GitLab Methods
+- **Every file in `sites/<site>/mces/<mce>/hostedClusters/` becomes an ArgoCD
+  Application**, and an empty one fails the generator. Never write a
+  placeholder (`.gitkeep`) or sidecar there. The legacy MCE-create path did.
+- **The cluster file is a values file** for the hostedclusters-setup chart:
+  `owner`, `mastertag`, `nodepool[]` (`infraEnvName`, `replicas`, `labels`,
+  `configs`). `vlanId` and `dhcp_values` are written by the allocate-segment
+  workflow on the MR branch; `mcFiles`/`mcConfigMap` by CI. Wingman writes
+  none of them, and must expect those commits on its MR branches.
+- **`clusterName` differs**: production's ApplicationSet strips `ocp4-` from
+  the file name (`openshift-prod-x-site1` in `hcp-prod-x-site1`); the GitHub
+  sandbox keeps it. See `docs/ecosystem/README.md`.
+- **Naming convention** `ocp4-<env>-<name>-<site>[-<seq>]`; the chart derives
+  the day2 `<env>` from the MCE name and fails on names that don't follow it.
+- **GitLab is asynchronous in places**: an MR's stored diff and its
+  mergeability are computed by background jobs, and a merged source branch is
+  deleted later. The adapter handles the first two; don't assume the third.
+- **ty honours only `# type: ignore` or `# ty: ignore[rule]`**, never a
+  mypy-style `# type: ignore[code]` (ADR-0008).
+- **Next.js 16 / React 19 / Tailwind 4 / zod 4** differ from older docs. Read
+  `apps/web/AGENTS.md` and `node_modules/next/dist/docs/` before frontend edits.
+  `apps/web/proxy.ts` replaces middleware.
 
-The GitLab client has sync methods that block the event loop (causing health check timeouts). Always use the `a`-prefixed async versions, and always `await` them:
-
-```python
-# WRONG - blocks event loop
-content, _ = self.gl.read_file(path)
-dirs = self.gl.list_directories(path)
-
-# CORRECT - runs in thread pool
-content, _ = await self.gl.aread_file(path)
-dirs = await self.gl.alist_directories(path)
-```
-
-Use `asyncio.gather` for parallel GitLab operations.
-
-### Error Handling for GitLab Operations
-
-Catch specific exceptions (`wingman_shared.exceptions`): `NotFoundError` (file missing, usually return `None`) and `GitLabError` (log, then `raise HTTPException(500, ...) from exc`).
-
-### YAML Parsing and Caching
-
-- Parse YAML with `wingman_shared.yaml_utils.parse_multi_document` (returns `[]` on error; pass `return_error=True` for line/column/snippet). Don't call `yaml.safe_load` directly.
-- Wrap every GitLab read in `cache.get_or_fetch(key, fetcher, ttl=...)` (`wingman_shared/cache.py`).
-
-### Frontend Data Fetching
-
-Use React Query with a real `staleTime` (e.g. `30_000`); don't use `staleTime: 0` without good reason. Avoid N+1 calls from the frontend.
-
-```typescript
-const { data } = useQuery({
-  queryKey: ["clusters", name],
-  queryFn: () => api.get(`/api/day1/clusters/${name}`),
-  staleTime: 30_000,
-});
-```
-
-### Frontend Stack Gotcha
-
-Next.js 16 / React 19 / Tailwind 4 / zod 4: APIs differ from older docs. Read `apps/web/AGENTS.md` and `node_modules/next/dist/docs/` before frontend edits. `apps/web/proxy.ts` replaces middleware. UI primitives use `@base-ui/react` + shadcn.
-
-## Running Locally
-
-- Run from the service dir: `uv sync --extra dev && uv run uvicorn src.main:app --reload --port 8001` (day1) / `8002` (day2). Imports are relative, so it must be `src.main:app`.
-- Services crash at startup without: `GITLAB_URL`, `GITLAB_ACCESS_TOKEN`, `JWT_SECRET_KEY`; day1 also needs `DAY1_GITLAB_PROJECT_ID`, `SPECS_GITLAB_PROJECT_ID`; day2 also `DAY2_SIGS_GROUP_PATH`. They read `.env` from the cwd (there is no `.env.example`, despite DEVELOPMENT.md). Full env reference: README.md.
-- Local login without OpenShift OAuth: `DEV_AUTH_ENABLED=true` plus a non-empty `DEV_AUTH_SECRET` (day1).
-- `CLUSTER_STATUS_ENABLED` is off by default and cannot run on minikube.
-
-## Testing Commands
-
-```bash
-# Python lint
-uvx ruff check apps/day1-service apps/day2-service packages/shared-python
-
-# Python types
-uvx mypy apps/day1-service/src --ignore-missing-imports
-uvx mypy apps/day2-service/src --ignore-missing-imports
-
-# Frontend lint, typecheck, build (CI also runs tsc; there is no typecheck script)
-cd apps/web && npm run lint && npx tsc --noEmit && npm run build
-
-# Frontend E2E tests (Playwright)
-cd apps/web && npm run test:e2e          # Runs ALL specs in e2e/tests, including live ones (those fail without a backend)
-cd apps/web && npm run test:e2e:ui       # Interactive test UI
-cd apps/web && npm run test:e2e:headed   # Run tests in visible browser
-cd apps/web && npx playwright test user-flows.spec.ts -g "name"   # Single mocked spec/test
-```
-
-Python tests: none exist yet (`src/tests/` holds only `__init__.py`). CI runs `pytest tests/ ... || echo "No tests found"`, so a pytest failure never fails CI. Single test once added: `cd apps/day1-service && uv run pytest src/tests/test_x.py::test_y`.
-
-## E2E Testing with Playwright
-
-Tests live in `apps/web/e2e/` (`fixtures/api-handlers.ts` has the route-intercept helpers: `injectAdminAuth`, `mockDashboardApis`, `mockDay1Api`, `mockDay2Api`, `mockAllApis`).
-
-- `user-flows.spec.ts` is fully mocked (no backend). The older feature specs use the page objects in `e2e/pages/`.
-- `live-user-flows.spec.ts` and `live-qa.spec.ts` hit the real stack (minikube): `PLAYWRIGHT_BASE_URL=http://localhost:8080 npx playwright test live-qa.spec.ts`.
-
-### Key patterns to know
-
-- **Route intercept order**: Playwright uses LIFO matching — the last `page.route()` registered
-  wins for a given URL. Register broad wildcard routes first in `setupMocks`, then override with
-  specific ones in `beforeEach` blocks.
-- **`*` vs `**` in globs**: `*` matches one path segment; `**` matches across `/`. Use `**` when
-  a URL has variable-depth paths (e.g. `**/audit/commits/**/diff` for `{repo}/{sha}/diff`).
-- **ClusterInstalledResponse shape**: `{ cluster: string, mce: string, installed: InstalledAddon[] }`.
-  Mock responses must match this — not a bare array.
-- **SSE keeps network alive**: `waitForLoadState("networkidle")` never resolves. Always use
-  `waitForLoadState("domcontentloaded")` plus an explicit `waitForTimeout()`.
-- **401 from any unmocked endpoint triggers `window.location.href = "/login"`** (see `api-client.ts`).
-  Every endpoint a page could call must be intercepted in the mock — including secondary ones like
-  `/api/day2/gitlab-info` on the cluster addons page.
-
-Selectors use `data-testid` (e.g. `addon-card-{team}-{name}`, `field-row-{path}` with dots replaced by dashes); grep existing tests for the conventions.
-
-## Building Docker Images
-
-CI (`.github/workflows/ci.yml`) pushes `ghcr.io/<owner>/wingman-{day1,day2,web}` on merges to main with 3 tags: `<short_sha>`, `latest`, and `v<VERSION>` (from the root `VERSION` file). Bumping `VERSION` is the only release mechanism; it is not synced to `chart/Chart.yaml` or the pyproject/package.json versions. `chart/values.yaml` defaults `image.*.tag` to `latest`.
-
-Manual production builds are tagged with the **git commit SHA** (not `latest`) so deployments are traceable and rollbacks unambiguous:
+## Verifying your work
 
 ```bash
-SHA=$(git rev-parse --short HEAD)
+uv sync --locked --all-packages --all-groups --all-extras
+scripts/gate.sh                    # everything CI runs, in CI's order
+scripts/gate.sh python             # only the Python half
 
-# Production (amd64) — --no-cache for a clean build; drop --platform/--no-cache for local/minikube
-docker buildx build --platform linux/amd64 --no-cache -t wingman-day1:$SHA -f apps/day1-service/Dockerfile . --load
-docker buildx build --platform linux/amd64 --no-cache -t wingman-day2:$SHA -f apps/day2-service/Dockerfile . --load
-docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA apps/web/ --load
+# Real GitLab (podman; ~8 GB VM, see the script header)
+scripts/dev/gitlab-up.sh token     # start local GitLab CE 19.5.3 and make the dev token
+uv run python scripts/dev/seed_gitlab.py --token wingman-local-dev-token-0001
+WINGMAN_TEST_GITLAB_URL=http://localhost:8929 WINGMAN_TEST_GITLAB_TOKEN=wingman-local-dev-token-0001 \
+  uv run pytest -m live_gitlab     # the GitLab contract against real GitLab
 
-# Air-gapped transfer: docker save wingman-<svc>:$SHA | gzip > wingman-<svc>-$SHA.tar.gz
+# A day1 cluster file through the chart, as ArgoCD renders it
+helm template <cluster> <chart-dir> -f sites/configValues.yaml -f sites/<site>/values.yaml \
+  -f sites/<site>/mces/<mce>/values.yaml -f <cluster-file> --set-string clusterName=<cluster>,site=<site>,mce=<mce>
 ```
 
-Update `image.tag` in `chart/values.yaml` (or `--set image.tag=$SHA`) when deploying a new build.
+Web: `npm run lint --workspace=web`, `cd apps/web && npx tsc --noEmit`,
+`npm run build --workspace=web`. Playwright: `cd apps/web && npm run test:e2e`
+runs every spec, including `live-*` ones that need a backend; the mocked ones
+are `user-flows.spec.ts` and the page-object specs. Playwright traps: route
+mocks match LIFO; SSE keeps the network busy, so wait on `domcontentloaded`,
+never `networkidle`; any unmocked endpoint's 401 redirects to `/login`.
 
-## Conventions and Pitfalls
+Then the step no command covers: re-read the docs your change made wrong.
 
-- Commits use conventional-commit prefixes (`feat:`, `fix:`, `docs:`, `ci:`, `refactor:`).
-- Platform-generated branches (`platform/{user}/{action}-{resource}-{ts}`) and MR titles (`[Wingman/Day1|Day2|Specs] Verb type name`) are parsed by the audit service. Don't change them casually (`wingman_shared/mr_conventions.py`).
-- Don't add network policies - they cause connectivity issues.
+## Legacy services (until rewritten)
 
-## Auth/RBAC
+- Run from the service dir: `uv run uvicorn src.main:app --reload --port 8001`
+  (day1) / `8002` (day2); imports are relative.
+- Required env: `GITLAB_URL`, `GITLAB_ACCESS_TOKEN`, `JWT_SECRET_KEY`; day1
+  `DAY1_GITLAB_PROJECT_ID`, `SPECS_GITLAB_PROJECT_ID`; day2
+  `DAY2_SIGS_GROUP_PATH`. Local login: `DEV_AUTH_ENABLED=true` and a non-empty
+  `DEV_AUTH_SECRET` (day1). Full reference: README.md.
+- Roles come from OpenShift groups (`WINGMAN_ADMIN_GROUPS` /
+  `WINGMAN_VIEWER_GROUPS`) and travel in the app JWT; both services share
+  `JWT_SECRET_KEY`. `AdminUser` guards writes, `CurrentUser` reads.
+- Images: CI pushes `ghcr.io/<owner>/wingman-{day1,day2,web}` on main with
+  `<short_sha>`, `latest`, `v<VERSION>`. Manual production builds are tagged
+  with the commit SHA.
 
-- Users get `admin` or `viewer` role from **OpenShift** group membership (`WINGMAN_ADMIN_GROUPS` / `WINGMAN_VIEWER_GROUPS`, see `wingman_shared/auth/rbac.py`). Both services must share the same `JWT_SECRET_KEY` and group settings.
-- Role is embedded in JWT token
-- Use `AdminUser` dependency for write operations
-- Use `CurrentUser` for read-only endpoints
-- Services that need cluster status use `ClusterStatusServiceDep` (`dependencies.py`), which returns 501 when the feature is disabled.
+## Where to continue right now
+
+**This section holds exactly one entry — the most recent unit of work.** When
+you finish yours, move this entry to the top of `docs/notes/session-log.md`
+and write yours here.
+
+**2026-11-07 — the `wingman-core` foundation.** Branch
+`roiblum/feat-ecosystem-day1-day2`. Shipped the core package (ADRs
+0001-0010), CI and the gate, local GitLab scripts and the seeded fixtures.
+**Next:** rewrite day1 on the core against `gitops-day1/platform-config`
+(values file from the new template, naming rules, read-only sites/MCEs, read
+`mastertag`/nodepools/VLAN, status names, MR branches that CI commits to), and
+in parallel day2 against the gitops-day2 layout (four cluster kinds, defaults
+and exclusions, the 10-layer values merge, version pins). **Open:**
+production vs sandbox `clusterName`, canonical site codes and InfraEnv naming
+(questions in `docs/ecosystem/README.md`).
