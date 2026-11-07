@@ -114,9 +114,38 @@ types/
 
 ## Environment Variables
 
-The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. API routes
-(`/api/day1`, `/api/day2`, `/api/auth`) are proxied at runtime by the ingress or, in local
-development, by `proxy.ts`.
+The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. In a deployment,
+nginx routes `/api/auth`, `/api/day1` and `/api/webhooks` to day1 and `/api/day2` to day2
+(`chart/templates/nginx-configmap.yaml`); `proxy.ts` only guards pages.
+
+### Running against local services
+
+`next dev` proxies the same paths when these are set (development server only; a production build
+never has the rewrites, see `next.config.ts`):
+
+| Variable | Example | Proxies |
+|---|---|---|
+| `WINGMAN_DEV_DAY1_URL` | `http://127.0.0.1:8001` | `/api/auth/*`, `/api/day1/*`, `/api/webhooks/*` |
+| `WINGMAN_DEV_DAY2_URL` | `http://127.0.0.1:8002` | `/api/day2/*` |
+
+```bash
+# Both services on the in-memory GitLab seeded from dev/gitlab-fixtures (no network needed),
+# from the repository root; both need the same JWT_SECRET_KEY (32+ characters).
+export WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake \
+  GITLAB_URL=http://gitlab.invalid GITLAB_TOKEN=test-token-never-logged-0001 \
+  JWT_SECRET_KEY=local-jwt-secret-at-least-32-characters \
+  DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs \
+  DAY2_SIGS_GROUP_PATH=sigs DAY2_SERVICE_URL=http://127.0.0.1:8002
+DEV_AUTH_ENABLED=true DEV_AUTH_SECRET=local-dev-login-secret-32-characters \
+  uv run uvicorn wingman_day1.main:app --port 8001 &
+uv run uvicorn wingman_day2.main:app --port 8002 &
+
+cd apps/web
+WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1:8002 npm run dev
+```
+
+Sign in on `/login` with any lowercase username and the `DEV_AUTH_SECRET`. Approving needs a
+second user: nobody approves a change they requested.
 
 ## Docker
 
