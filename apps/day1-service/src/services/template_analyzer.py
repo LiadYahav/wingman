@@ -22,8 +22,9 @@ from typing import Any, cast
 from jinja2 import Environment
 from jinja2 import nodes as jnodes
 
-# Matches `# Example: some value` (case-insensitive, optional colon)
-_EXAMPLE_RE = re.compile(r"#\s*[Ee]xample\s*:\s*(.+)")
+# Matches `# Example: some value` (a YAML comment, which ends up in the rendered
+# file) and `{# Example: some value #}` (a Jinja comment, which does not).
+_EXAMPLE_RE = re.compile(r"#\s*[Ee]xample\s*:\s*(.+?)\s*(?:-?#\})?\s*$")
 # Captures the first identifier path inside {{ ... }}
 _TEMPLATE_VAR_RE = re.compile(r"\{\{-?\s*([\w.]+)")
 

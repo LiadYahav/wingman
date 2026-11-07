@@ -1,0 +1,5 @@
+# OCP releases offered on the cluster-create form, one per line.
+# The value is written to the cluster file's `mastertag` as is.
+4.16.27-x86_64
+4.18.22-x86_64
+4.21.40-x86_64

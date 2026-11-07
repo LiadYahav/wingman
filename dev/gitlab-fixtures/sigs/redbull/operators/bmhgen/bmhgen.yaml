@@ -1,0 +1,5 @@
+projectNamespace: metal3-system
+repourl: {{GITLAB_URL}}/helm-charts/bmhgen.git
+syncPolicy:
+  syncOptions:
+    - CreateNamespace=true

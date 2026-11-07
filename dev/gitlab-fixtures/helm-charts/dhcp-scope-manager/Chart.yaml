@@ -1,0 +1,4 @@
+# Wingman dev fixture: a stub chart. Each branch of this repo is one frozen release.
+apiVersion: v2
+name: dhcp-scope-manager
+version: 0.0.0

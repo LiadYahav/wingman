@@ -1,0 +1,9 @@
+# SIMULATION data (2026-09-29) — fake, temporary, deleted after validation.
+repourl: {{GITLAB_URL}}/helm-charts/sim-day2-helm-charts.git
+path: charts/sim-configmap
+targetRevision: main
+projectNamespace: sim-lynx
+syncPolicy:
+  automated:
+    selfHeal: true
+    prune: false

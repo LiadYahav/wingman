@@ -1,0 +1,5 @@
+replicas: 1
+image:
+  tag: v1.0.0
+reconcile:
+  intervalSeconds: 60

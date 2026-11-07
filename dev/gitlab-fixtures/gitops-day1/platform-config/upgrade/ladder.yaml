@@ -1,0 +1,93 @@
+# yaml-language-server: $schema=schema/ladder.schema.json
+#
+# The hosted-cluster upgrade ladder: the releases the control plane steps
+# through, one minor at a time, and how far workers may lag behind it.
+# Read by the cluster-upgrade workflow at the start of every run; validated by
+# scripts/validate_upgrade_rules.py. Field reference: upgrade/README.md.
+#
+# How the rungs were chosen (2026-10-31): every consecutive pair below is an
+# upgrade edge in Red Hat's public stable-4.16 ... stable-4.21 graphs
+# (api.openshift.com/api/upgrades_info/v1/graph), taking the newest release of
+# each minor that still has an edge on to the next rung. A cluster first moves
+# to its own minor's rung, e.g. 4.16.27 -> 4.16.55 and 4.20.18 -> 4.20.44 are
+# both stable edges -- the same shape as the observed InPlace path
+# 4.15.0 -> 4.15.41 -> 4.16.27.
+#
+# PROPOSED for the dev copy: the team confirms each rung before production.
+
+schemaVersion: 1
+
+# Team rule: NodePools never fall more than 2 minors behind their control
+# plane. HyperShift itself allows 3 (versioning-support.md, release-4.22), so
+# this is the stricter of the two and may never be raised above 3.
+maxWorkerSkew: 2
+
+# Date the rungs were last checked against the upgrade graph; shown to the
+# approver. null when they never were.
+verifiedAgainstGraph: "2026-10-31"
+
+release:
+  # THIS REPO IS THE SANDBOX DEV COPY: its hosted clusters run on a connected lab
+  # and take releases straight from Red Hat's public repository, so there is no
+  # mirror, no IDMS to check and no separate control-plane-operator image (quay's
+  # ocp-release has no -hypershift tag; the payload's own CPO is used).
+  #
+  # Production (the air-gapped platform-config) keeps its one full mirror:
+  #   imagePath: registry-internal/openshift-release
+  #   repo: "{imagePath}/openshift/release-images"
+  #   tag: "{version}-x86_64"
+  #   cpoRepo: "{imagePath}/openshift/release"
+  #   cpoTag: "{version}-x86_64-hypershift"
+  #   (mirrored: true, the default)
+  #
+  # Every hosted cluster's imagePath (and imageHc, where set) must equal
+  # imagePath; the workflow refuses one that points anywhere else. repo must
+  # describe what the chart renders: <imagePath>/<releaseRepo>:<tag>
+  # (hostedclusters-setup templates/hc.yaml, nodepool.yaml), so the sandbox
+  # clusters set releaseRepo: ocp-release and cpoRepo: "".
+  imagePath: quay.io/openshift-release-dev
+  repo: "{imagePath}/ocp-release"
+  tag: "{version}-x86_64"
+  mirrored: false
+
+ladder:
+  - { version: 4.15.41, must: true }
+  - { version: 4.16.55, must: true }
+  - { version: 4.17.58, must: true }
+  - { version: 4.18.56, must: true }
+  - { version: 4.19.53, must: true }
+  - { version: 4.20.44, must: true }
+  - { version: 4.21.40, must: true }
+  # No 4.22 rung yet: as of 2026-10-31, Red Hat publishes 4.21 -> 4.22 edges
+  # only in candidate-4.22, not in fast or stable. Clusters already on 4.22 can
+  # still take a 4.22 z-stream; nothing is moved INTO 4.22 until a verified
+  # rung is added here.
+
+# Admin acks the workflow may give by itself (DESIGN §6.2a, decision D16).
+# Some releases make an administrator acknowledge an API removal before the
+# control plane may leave their minor: the hosted cluster's CVO reports
+# Upgradeable=False, reason AdminAckRequired, and HyperShift refuses the minor
+# step until the gate's key is "true" in the hosted cluster's
+# openshift-config/admin-acks. Before such a step the workflow reads the hosted
+# cluster's APIRequestCount for the gate's `apis`:
+#   * nobody called them in the last 24 hours -> the workflow gives the ack;
+#   * somebody did -> it lists who, and waits for a person's approval.
+# A gate missing from this list always waits for a person.
+adminAcks:
+  - gate: ack-4.19-admissionregistration-v1beta1-api-removals-in-4.20
+    source: 'Red Hat KCS 7130599, "Preparing to upgrade to OpenShift Container Platform 4.20"'
+    apis:
+      - mutatingwebhookconfigurations.v1beta1.admissionregistration.k8s.io
+      - validatingwebhookconfigurations.v1beta1.admissionregistration.k8s.io
+      - validatingadmissionpolicies.v1beta1.admissionregistration.k8s.io
+      - validatingadmissionpolicybindings.v1beta1.admissionregistration.k8s.io
+
+# Callers of a gated API that do not count as using it: they walk every
+# registered API, whatever its version (Red Hat KCS 6955985, "Navigating
+# Kubernetes API deprecations and removals"). Add a user here only with the
+# reason next to it.
+apiUsageIgnoredUsers:
+  - system:serviceaccount:kube-system:generic-garbage-collector
+  - system:serviceaccount:kube-system:namespace-controller
+  - system:kube-controller-manager
+  - system:cluster-policy-controller
