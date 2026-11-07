@@ -78,11 +78,15 @@ Explicit user instructions; violating one is a real mistake, not style.
   errors, metrics, settings, auth, cache, approvals); CI and
   `scripts/gate.sh`; ADRs 0001-0011; monitoring in the chart (ServiceMonitor,
   7 promtool-tested alerts with a runbook, a Grafana dashboard, all off by
-  default) with a test tying alerts and dashboard to the metric catalogue.
+  default) with a test tying alerts and dashboard to the metric catalogue;
+  the day2 rewrite (`wingman_day2`: four destination kinds, fleet defaults
+  and exclusions, the platform's value stacks with provenance, lints, MRs per
+  team; ADRs 0020-0024; an oracle test against the team's `render_chain.py`;
+  run against GitLab CE 19.5.3).
 - **Not done yet, in order:** (1) day1 rewrite on `wingman-core` against
-  `gitops-day1/platform-config`; (2) day2 rewrite against the gitops-day2
-  layout; (3) web pages for the new data; (4) end-to-end check against the
-  seeded local GitLab; (5) images installing from the lock (hash-pinned
+  `gitops-day1/platform-config`; (3) web pages for the new data (day2's API
+  changes are listed in `docs/notes/2026-11-07-day2-api-changes.md`); (4)
+  end-to-end check against the seeded local GitLab; (5) images installing from the lock (hash-pinned
   per-service exports), chart hardening and a values schema; (6) ecosystem features (servers per hosted cluster from
   server-scan, workflow runs).
 
@@ -168,3 +172,21 @@ in parallel day2 against the gitops-day2 layout (four cluster kinds, defaults
 and exclusions, the 10-layer values merge, version pins). **Open:**
 production vs sandbox `clusterName`, canonical site codes and InfraEnv naming
 (questions in `docs/ecosystem/README.md`).
+
+**2026-11-07 — the day2 rewrite.** Branch `worktree-agent-a2d6d3b83dd18abaf`
+(on `706935d`). `apps/day2-service/src/wingman_day2` replaces the legacy
+service: four destination kinds discovered from team folders plus day1, the
+platform's value stacks with per-key provenance, install/update/remove/bulk as
+one MR per team (no per-cluster `targetRevision` unless an emergency pin is
+asked for; removal orphans the workload, and says so), render_chain.py's lints
+plus Wingman's, approvals by `(team, iid)` (ADRs 0020-0024). An oracle test
+runs the team's own `render_chain.py` (vendored, with the platform charts,
+through helm) against Wingman's discovery. Run it with
+`uv run uvicorn wingman_day2.main:app --port 8002` from the repo root; env in
+`wingman_day2/settings.py` (`GITLAB_TOKEN`, not `GITLAB_ACCESS_TOKEN`;
+`DAY1_GITLAB_PROJECT_ID`; `WINGMAN_GIT_BACKEND=fake` for the fixtures).
+**Next:** the web pages for the new API
+(`docs/notes/2026-11-07-day2-api-changes.md`); the chart passes
+`GITLAB_ACCESS_TOKEN` where wingman-core reads `GITLAB_TOKEN`. **Deferred:**
+ArgoCD sync/status (no Argo API access), editing `exclusions.yaml` (needs
+comment-preserving YAML), OCP-version pin edits as first-class MRs.

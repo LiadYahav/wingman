@@ -68,11 +68,11 @@ uv sync
 cp .env.example .env  # Configure GitLab tokens
 uv run uvicorn src.main:app --reload --port 8001
 
-# Day2 Service (separate terminal)
-cd apps/day2-service
-uv sync
-cp .env.example .env
-uv run uvicorn src.main:app --reload --port 8002
+# Day2 Service (separate terminal, from the repo root; env in apps/day2-service/src/wingman_day2/settings.py)
+uv sync --locked --all-packages --all-groups --all-extras
+WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake JWT_SECRET_KEY=<32+ chars> \
+  DAY2_SIGS_GROUP_PATH=sigs DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config \
+  uv run uvicorn wingman_day2.main:app --reload --port 8002   # fake: the dev/gitlab-fixtures repos
 ```
 
 ### Frontend (Next.js)
@@ -87,9 +87,9 @@ npm run dev  # Starts on port 3000
 
 ```bash
 # Python lint + type check
-uvx ruff check apps/day1-service apps/day2-service packages/shared-python
+uvx ruff check apps/day1-service packages/shared-python
 uvx mypy apps/day1-service/src --ignore-missing-imports
-uvx mypy apps/day2-service/src --ignore-missing-imports
+scripts/gate.sh python   # day2 and wingman-core: ruff, ty, import-linter, pytest (incl. the render_chain oracle), deptry
 
 # Frontend lint + build
 cd apps/web && npm run lint && npm run build
