@@ -52,7 +52,27 @@ def test_token_round_trip_keeps_identity_and_role() -> None:
 def test_expired_token_is_refused() -> None:
     old = tokens(NOW - timedelta(hours=9)).issue(VIEWER)
     with pytest.raises(InvalidSessionError):
-        SessionTokens(SECRET, ttl=timedelta(hours=8)).verify(old)
+        tokens().verify(old)
+
+
+def test_expiry_follows_the_injected_clock_not_the_wall_clock() -> None:
+    """A fixed clock far in the past still verifies its own fresh tokens."""
+    past = datetime(2001, 1, 1, tzinfo=UTC)
+    assert tokens(past).verify(tokens(past).issue(VIEWER)) == VIEWER
+    with pytest.raises(InvalidSessionError, match="expired"):
+        tokens(past + timedelta(hours=8)).verify(tokens(past).issue(VIEWER))
+
+
+def test_a_token_issued_in_the_future_is_refused_beyond_the_skew() -> None:
+    assert tokens().verify(tokens(NOW + timedelta(seconds=20)).issue(VIEWER)) == VIEWER
+    with pytest.raises(InvalidSessionError, match="future"):
+        tokens().verify(tokens(NOW + timedelta(minutes=5)).issue(VIEWER))
+
+
+def test_a_token_with_non_numeric_times_is_refused() -> None:
+    token = jwt.encode({"sub": "x", "role": "admin", "iat": "now", "exp": "later"}, SECRET)
+    with pytest.raises(InvalidSessionError, match="non-numeric"):
+        tokens().verify(token)
 
 
 @pytest.mark.parametrize(

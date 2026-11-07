@@ -18,6 +18,9 @@ from wingman_core.domain.users import Role, User
 from wingman_core.ports.clock import Clock, system_clock
 
 ALGORITHM: Final = "HS256"
+# Day1 and day2 run on different pods; a token one issues may look slightly
+# early to the other.
+CLOCK_SKEW: Final = timedelta(seconds=30)
 
 
 class InvalidSessionError(Exception):
@@ -48,17 +51,34 @@ class SessionTokens:
         return jwt.encode(payload, self._secret, algorithm=ALGORITHM)
 
     def verify(self, token: str) -> User:
-        """The user a valid token was issued for. Raises ``InvalidSessionError``."""
+        """The user a valid token was issued for. Raises ``InvalidSessionError``.
+
+        Expiry is checked against the injected clock, the same one ``issue``
+        uses; PyJWT's own check would read the wall clock instead.
+        """
         try:
             payload = jwt.decode(
                 token,
                 self._secret,
                 algorithms=[ALGORITHM],
-                options={"require": ["sub", "exp", "iat", "role"]},
+                options={
+                    "require": ["sub", "exp", "iat", "role"],
+                    "verify_exp": False,
+                    "verify_iat": False,
+                    "verify_nbf": False,
+                },
             )
             role = Role(payload["role"])
         except (jwt.InvalidTokenError, ValueError) as exc:
             raise InvalidSessionError(type(exc).__name__) from exc
+        exp, iat = payload["exp"], payload["iat"]
+        if not all(isinstance(t, int | float) and not isinstance(t, bool) for t in (exp, iat)):
+            raise InvalidSessionError("non-numeric exp or iat")
+        now = self._clock().timestamp()
+        if exp <= now:
+            raise InvalidSessionError("expired")
+        if iat > now + CLOCK_SKEW.total_seconds():
+            raise InvalidSessionError("issued in the future")
         username = payload["sub"]
         if not isinstance(username, str) or not username:
             raise InvalidSessionError("empty subject")
