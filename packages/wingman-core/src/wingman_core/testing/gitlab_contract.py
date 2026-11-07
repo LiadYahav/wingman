@@ -393,6 +393,24 @@ class GitLabContract:
             await gitlab.read_file(project.id, _p("README.md"), "main")
         ).content == "# fixture\n"
 
+    async def test_merge_of_the_new_head_right_after_a_push_succeeds(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        # GitLab updates an MR's sha in the background after a push; a merge naming the
+        # branch's real head must still go through (CI and workflows push to MR branches).
+        project = await new_project(FILES)
+        await _branch_with_change(gitlab, project, "b1", "README.md", "# one\n")
+        mr = await gitlab.create_merge_request(project.id, NewMergeRequest("b1", "main", "pushed"))
+        pushed = await gitlab.commit(
+            project.id,
+            branch="b1",
+            message="bot push [skip ci]",
+            changes=[FileChange.update(_p("README.md"), "# two\n", last_commit_id=None)],
+        )
+        merged = await gitlab.merge_merge_request(mr.ref, sha=pushed.id)
+        assert merged.state is MRState.MERGED
+        assert (await gitlab.read_file(project.id, _p("README.md"), "main")).content == "# two\n"
+
     async def test_merge_with_conflicts_is_not_mergeable(
         self, gitlab: GitLabPort, new_project: NewProject
     ) -> None:
