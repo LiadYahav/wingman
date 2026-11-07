@@ -186,13 +186,13 @@ ADR-0032). The pass:
    exist. Then `scripts/gate.sh ci`: zizmor refuses a tag pin and a comment that
    names another tag.
 2. **Downloaded tools.** `scripts/ci-tools.sh` (actionlint, zizmor,
-   shellcheck) and the helm/promtool steps in `ci.yml`: new version plus every
-   checksum, from the release's checksum file or the API's asset digests
-   (the script header has the command).
+   shellcheck), `scripts/install-helm.sh` and the promtool step in `ci.yml`:
+   new version plus every checksum, from the release's checksum file or the
+   API's asset digests (the script header has the command).
 3. **Vulnerable or unused.** `scripts/gate.sh python web` runs `pip-audit`,
    `deptry` and the npm audit gate. Prefer deleting an unused dependency to
    bumping it. A fixed advisory leaves `scripts/npm-audit-allowlist.txt` in the
-   same commit (the gate fails until it does); `next` 16.4.5 clears 37 entries.
+   same commit (the gate fails until it does).
 4. **Runtime deprecations.** Actions declare a Node runtime; GitHub removes
    old ones (server-scan had to replace a tagging action for that).
 5. **Base images.** `apps/web/Dockerfile` (and the service Dockerfiles) pin
@@ -202,7 +202,11 @@ ADR-0032). The pass:
    diagnostics (ADR-0008), so bump it in its own commit and read new errors as
    ty changing. **hatchling** (root `build` group) follows the members'
    build-system; after a bump, `uv lock && scripts/export-requirements.sh`.
-7. **GitLab CE** for the live contract: `live-gitlab.yml` and
+7. **Runner image.** Every job runs on `ubuntu-24.04`, not `ubuntu-latest`:
+   when `ubuntu-latest` moved to 26.04, Playwright had no browser build for it
+   and the E2E job failed. Move all jobs together, after checking Playwright
+   supports the new image.
+8. **GitLab CE** for the live contract: `live-gitlab.yml` and
    `scripts/dev/gitlab-up.sh` together, then record the run in ADR-0005.
 
 ## Running the services

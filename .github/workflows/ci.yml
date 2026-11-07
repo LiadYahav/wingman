@@ -39,7 +39,7 @@ env:
 jobs:
   workflows:
     name: Workflows and scripts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -67,7 +67,7 @@ jobs:
 
   python:
     name: Python
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -143,7 +143,7 @@ jobs:
 
   chart:
     name: Chart and alerts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -187,7 +187,7 @@ jobs:
 
   web:
     name: Web
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -222,7 +222,7 @@ jobs:
 
   e2e:
     name: Web E2E (mocked Playwright)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -283,7 +283,7 @@ jobs:
   # because only `publish` pushes, and it needs every job.
   images:
     name: Image ${{ matrix.image.name }} (build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -321,7 +321,7 @@ jobs:
   # registry and decides whether this commit cuts a release (ADR-0030).
   release-plan:
     name: Release plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -364,7 +364,7 @@ jobs:
     name: Tag the release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [workflows, python, chart, web, e2e, images, release-plan]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write # creates the v<VERSION> tag
@@ -398,7 +398,7 @@ jobs:
     name: Publish ${{ matrix.image.name }} (GHCR)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [release-plan, release-tag]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -483,7 +483,7 @@ jobs:
     name: Release notes
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-plan.outputs.release == 'true'
     needs: [release-plan, publish]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write # creates the GitHub release
