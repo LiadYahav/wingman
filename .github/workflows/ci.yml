@@ -39,6 +39,17 @@ jobs:
       - name: uv sync --locked
         run: uv sync --locked --all-packages --all-groups --all-extras
 
+      # day2's oracle test renders the platform charts with helm, as the team's
+      # render_chain.py does; the same pinned, checksum-verified helm as the chart job.
+      - name: Install helm (pinned, checksum-verified)
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/helm.tar.gz" https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz
+          # Source: https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz.sha256sum
+          echo "0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b  $RUNNER_TEMP/helm.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/helm.tar.gz" -C "$RUNNER_TEMP" linux-amd64/helm
+          install -m 0755 "$RUNNER_TEMP/linux-amd64/helm" /usr/local/bin/helm
+
       - name: ruff check
         run: uv run ruff check packages/wingman-core apps/day2-service
 

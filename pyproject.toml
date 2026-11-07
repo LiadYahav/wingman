@@ -92,6 +92,10 @@ python-version = "3.13"
 unused-awaitable = "error"
 blanket-ignore-comment = "error"
 
+# Vendored verbatim from a team repo (day2's render_chain.py oracle); not ours to retype.
+[tool.ty.src]
+exclude = ["apps/day2-service/tests/oracle/render_chain.py"]
+
 # ── import-linter: the layer rules (ADR-0001) ───────────────────────────────
 [tool.importlinter]
 root_packages = ["wingman_core", "wingman_day2"]
