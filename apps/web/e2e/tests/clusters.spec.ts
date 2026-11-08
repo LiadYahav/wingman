@@ -298,7 +298,7 @@ test.describe("Cluster detail", () => {
   test("drifted addons are fixed with the values requested at create; there is no YAML sync", async ({ page }) => {
     await openDetail(page, drift({
       state: "drifted", is_drifted: true,
-      addon_drift: [{ addon_name: "cluster-roles", team: "redbull", reason: "missing", expected_version: "main", installed_version: "", override_values: { replicas: 2 } }],
+      addon_drift: [{ addon_name: "cluster-roles", team: "redbull", reason: "missing", expected_version: "main", override_values: { replicas: 2 } }],
     }));
     const install = page.waitForRequest((req: Request) => req.method() === "POST" && req.url().includes("/addons/redbull/cluster-roles"));
     await page.route(`**/api/day2/clusters/${encodeURIComponent(HOSTED_ID)}/addons/redbull/cluster-roles`, (r: Route) =>
