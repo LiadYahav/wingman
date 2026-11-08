@@ -42,6 +42,14 @@ class RepoReads(Protocol):
         """A file's content and the commit it was read at (its ``last_commit_id``)."""
         ...
 
+    async def last_change(self, path: RepoPath) -> Commit | None:
+        """The newest commit that changed ``path``, as of the commit files are read at.
+
+        A read's ``last_commit_id`` is that commit, not the file's own last
+        change (ADR-0035); this is the file's own, for "changed by, at".
+        """
+        ...
+
     async def changed_since(self, path: RepoPath, commit_id: str) -> bool:
         """Whether ``path`` changed on the default branch after ``commit_id``.
 

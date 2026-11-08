@@ -353,7 +353,7 @@ class ClusterService:
             problems.extend(exc.problems or [str(exc)])
         provenance = read_provenance(file.content)
         problems.extend(provenance.problems)
-        last_change = await self._day1.commit(file.last_commit_id) if with_commit else None
+        last_change = await self._day1.last_change(ref.path) if with_commit else None
         explicit = values.cluster_name if values else None
         return ClusterFile(
             ref=ref,

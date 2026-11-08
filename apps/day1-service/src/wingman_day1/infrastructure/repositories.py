@@ -10,6 +10,7 @@ cached. Concurrent misses share one GitLab call.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 
 from wingman_core.domain.errors import NotFoundError
@@ -54,6 +55,7 @@ class CachedRepository:
         self._ttl = ttl
         self._snapshots = snapshots or RepoSnapshots(gitlab, cache, ttl=ttl)
         self._project_id: int | None = None
+        self._last_changes: tuple[str, dict[str, asyncio.Task[list[Commit]]]] = ("", {})
 
     @property
     def key(self) -> str:
@@ -94,6 +96,29 @@ class CachedRepository:
         return FileContent(
             path=path, ref=project.default_branch, content=content, last_commit_id=files.commit_id
         )
+
+    async def last_change(self, path: RepoPath) -> Commit | None:
+        """See RepoReads.last_change: one history lookup per file, kept while the head stays."""
+        project, files = await self._files()
+        if files is None:
+            return None
+        commit_id, known = self._last_changes
+        if commit_id != files.commit_id:
+            commit_id, known = files.commit_id, {}
+            self._last_changes = (commit_id, known)
+        task = known.get(str(path))
+        if task is None:
+            task = asyncio.ensure_future(
+                self._gitlab.list_commits(project.id, ref=commit_id, path=path, limit=1)
+            )
+            known[str(path)] = task
+        try:
+            found = await asyncio.shield(task)
+        except BaseException:
+            if known.get(str(path)) is task and task.done():
+                del known[str(path)]  # a failed lookup is not kept
+            raise
+        return found[0] if found else None
 
     async def changed_since(self, path: RepoPath, commit_id: str) -> bool:
         """See RepoReads.changed_since: two history lookups, never cached."""
