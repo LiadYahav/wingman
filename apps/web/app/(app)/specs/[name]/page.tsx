@@ -546,7 +546,7 @@ export default function SpecDetailPage() {
             <div className="flex gap-3">
               <span className="text-muted-foreground w-24 shrink-0">⚠ Used by</span>
               <span className="font-medium text-status-warning-fg">
-                {clusters.length} cluster{clusters.length !== 1 ? "s" : ""} — they keep their files but are no longer linked to a spec
+                {clusters.length} cluster{clusters.length !== 1 ? "s" : ""} — they keep their files, and their drift shows Unknown because the spec they name is gone
               </span>
             </div>
           )}
