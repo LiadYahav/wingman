@@ -645,7 +645,6 @@ class AddonDriftOut(BaseModel):
     team: str
     reason: Literal["missing"]
     expected_version: str
-    installed_version: str
     override_values: dict[str, Any]
     """The values requested at create; install with them."""
 
@@ -657,7 +656,6 @@ class AddonDriftOut(BaseModel):
             team=drift.team,
             reason=drift.reason.value,
             expected_version=drift.expected_version,
-            installed_version=drift.installed_version,
             override_values=dict(drift.override_values),
         )
 
@@ -696,10 +694,9 @@ class ClusterDriftOut(BaseModel):
     spec_name: str | None
     spec_version: str | None
     current_spec_version: str | None
-    unified_diff: str = ""
     addon_drift: list[AddonDriftOut]
     """Spec addons the cluster does not have: what makes it ``drifted``."""
-    version_differences: list[VersionDifferenceOut] = Field(default_factory=list)
+    version_differences: list[VersionDifferenceOut]
     """Spec addons at another version; reported only, never fixed (ADR-0025)."""
     error: str | None
 
@@ -765,5 +762,4 @@ class SpecDriftOut(BaseModel):
     state: DriftStateOut
     is_drifted: bool | None
     spec_version: str | None
-    unified_diff: str = ""
     error: str | None

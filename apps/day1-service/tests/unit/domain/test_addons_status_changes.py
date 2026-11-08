@@ -48,9 +48,7 @@ def test_a_missing_addon_carries_the_values_requested_at_create() -> None:
     expected = [RequestedAddon("redbull", "cluster-roles", "main")]
     requested = [RequestedAddon("redbull", "cluster-roles", "main", {"replicas": 3})]
     assert compare_addons(expected, [], requested=requested).missing == (
-        AddonDrift(
-            "redbull", "cluster-roles", AddonDriftReason.MISSING, "main", "", {"replicas": 3}
-        ),
+        AddonDrift("redbull", "cluster-roles", AddonDriftReason.MISSING, "main", {"replicas": 3}),
     )
 
 

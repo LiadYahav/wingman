@@ -188,4 +188,3 @@ async def test_a_specs_clusters_and_their_drift(
     drift = (await client.get("/api/day1/specs/agent-standard/drift", headers=bob)).json()
     assert drift[0]["cluster"] == "ocp4-prod-falcon-site1"
     assert drift[0]["spec_version"] == "1.0.0"
-    assert drift[0]["unified_diff"] == ""
