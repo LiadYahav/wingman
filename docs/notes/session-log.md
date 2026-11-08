@@ -4,6 +4,19 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-08 — PR #17 finished and merged; flavors v2 started.** The web
+followed both API notes; report-only drift (ADR-0025); the in-app docs
+audited and guarded (`tests/repo/test_web_docs_contract.py`); UX basics; a
+cleanup and review pass (legacy package gone, duplicates in core, the
+agents' mistakes fixed); the delete-cluster workflow contract (ADR-0033);
+versions from the upgrade ladder. The user's decisions are in
+`docs/ideas/flavors-v2.md` and `architecture-fit.md`. **Next:** flavors v2 on
+`roiblum/feat-flavors-v2`:
+- stage 2's sync, half done in the worktree `agent-a35695ba357fd9bb2` as a
+  WIP commit;
+- stage 3, the web pages and the flavor page redesign (apple-design skill);
+- an upgrade guide for its operator steps.
+
 **2026-11-07 — integration of day1, day2 and CI.** Branch
 `roiblum/feat-ecosystem-day1-day2`. Merged the three agent branches: day1
 (`wingman_day1`, ADRs 0012-0019), day2 (`wingman_day2`, ADRs 0020-0024) and
