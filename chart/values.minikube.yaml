@@ -23,7 +23,7 @@ image:
   web:
     pullPolicy: Never
   nginx:
-    pullPolicy: IfNotPresent   # nginx:alpine pulled from Docker Hub (or mirror)
+    pullPolicy: IfNotPresent   # nginx:latest (values.yaml) pulled from Docker Hub (or a mirror)
 
 # Local only: allows weak dev login (ADR-0009).
 environment: "development"
