@@ -95,7 +95,7 @@ async def test_a_push_to_the_specs_project_clears_the_cached_specs(
     client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
 ) -> None:
     viewer = auth(support.VIEWER)
-    assert len((await client.get("/api/day1/specs", headers=viewer)).json()) == 3
+    assert len((await client.get("/api/day1/specs", headers=viewer)).json()) == 4
     await support.push(
         gitlab,
         support.SPECS,
@@ -103,11 +103,11 @@ async def test_a_push_to_the_specs_project_clears_the_cached_specs(
         file="specs/agent-mini.yaml",
         content="metadata: {name: agent-mini, version: '1'}\n",
     )
-    assert len((await client.get("/api/day1/specs", headers=viewer)).json()) == 3  # cached
+    assert len((await client.get("/api/day1/specs", headers=viewer)).json()) == 4  # cached
     pid = await support.project_id(gitlab, support.SPECS)
     await client.post(
         "/api/webhooks/gitlab",
         json={"project": {"id": pid}},
         headers={**TOKEN, "X-Gitlab-Event": "Push Hook"},
     )
-    assert len((await client.get("/api/day1/specs", headers=viewer)).json()) == 4
+    assert len((await client.get("/api/day1/specs", headers=viewer)).json()) == 5

@@ -393,3 +393,82 @@ async def test_a_flavor_saved_with_the_legacy_name_is_stored_with_the_new_one(
     day1 = yaml.safe_load(files["specs/agent-flavor.yaml"])["spec"]["day1"]
     assert day1["locked_paths"] == ["platform"]
     assert "immutable_paths" not in day1
+
+
+# ── The configs rule (agent-baseline: nodepools[*].configs) ──────────────────
+
+
+def baseline(support: Any, *pools: dict[str, Any]) -> CreateCluster:
+    """A create from the agent-baseline fixture flavor (every nodepool's configs locked)."""
+    return create(support, spec="agent-baseline", nodepools=list(pools))
+
+
+async def test_the_rule_accepts_its_configs_in_any_order_with_each_nodepools_hardware(
+    context: Day1Context, support: Any
+) -> None:
+    rendered = await context.clusters.preview(
+        baseline(
+            support,
+            pool(*DELL_CONFIGS),
+            pool(
+                {"name": "nic-ring-buffer"},
+                {"name": "workers-chrony-configuration"},
+                {"name": "nm-conf", "hardware": "cisco"},
+                infra_env="hp-gen11-site1-64c",
+            ),
+        )
+    )
+    pools = yaml.safe_load(rendered.content)["nodepool"]
+    assert [c["name"] for c in pools[1]["configs"]] == [
+        "nic-ring-buffer",
+        "workers-chrony-configuration",
+        "nm-conf-prod-falcon-site1-cisco",
+    ]
+
+
+async def test_a_nodepool_with_other_configs_than_the_rule_is_refused(
+    context: Day1Context, support: Any
+) -> None:
+    request = baseline(
+        support, pool(*DELL_CONFIGS), pool(*DELL_CONFIGS[:2], infra_env="hp-gen11-site1-64c")
+    )
+    with pytest.raises(InvalidInputError) as caught:
+        await context.clusters.preview(request)
+    (problem,) = caught.value.problems
+    assert problem.startswith(
+        "nodepools[1].configs: locked by flavor agent-baseline: every nodepool has "
+        '[{"name": "nm-conf"}, {"name": "workers-chrony-configuration"}, '
+        '{"name": "nic-ring-buffer"}]'
+    )
+
+
+async def test_a_nodepool_that_sends_no_configs_gets_the_rule_and_must_pick_its_hardware(
+    context: Day1Context, support: Any
+) -> None:
+    request = baseline(support, pool(*DELL_CONFIGS), {"infra_env": "hp-gen11-site1-64c"})
+    with pytest.raises(InvalidInputError) as caught:
+        await context.clusters.preview(request)
+    assert caught.value.problems == (
+        "nodepools[1].configs[0]: nm-conf needs a hardware type, one of cisco, dell, dell-data",
+    )
+
+
+async def test_the_rules_flavor_loads_and_enforces_the_rule(context: Day1Context) -> None:
+    entry = await context.specs.entry("agent-baseline")
+    assert entry.spec is not None
+    assert [str(lock.path) for lock in entry.spec.locks()] == ["nodepools[*].configs"]
+
+
+async def test_a_rule_whose_nodepools_disagree_is_not_saved(
+    context: Day1Context, support: Any
+) -> None:
+    spec = flavor(
+        locked_paths=["nodepools[*].configs"],
+        values={"nodepools": [{"configs": DELL_CONFIGS}, {"configs": DELL_CONFIGS[1:]}]},
+    )
+    with pytest.raises(InvalidSpecError) as caught:
+        await context.specs.create(spec, user=support.ALICE)
+    assert caught.value.problems == (
+        "locked_paths: nodepools[*].configs locks every nodepool to the same configs, but "
+        "nodepools[1].configs names other configs than nodepools[0].configs",
+    )

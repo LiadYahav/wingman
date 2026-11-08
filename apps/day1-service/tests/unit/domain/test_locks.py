@@ -10,6 +10,8 @@ from hypothesis import strategies as st
 
 from wingman_core.testing.fixtures import default_fixture_root
 from wingman_day1.domain.locks import (
+    CONFIGS_RULE,
+    EVERY,
     LOCKABLE,
     MISSING,
     InputPath,
@@ -19,9 +21,12 @@ from wingman_day1.domain.locks import (
     assigned,
     cluster_file_key,
     enforced_locks,
+    entry_key,
     lock_conflicts,
     lock_problems,
     lookup,
+    rule_entries,
+    same_configs,
     same_value,
 )
 
@@ -45,6 +50,8 @@ VALUES: dict[str, Any] = {
         ("a[0][1].b.c", ("a", 0, 1, "b", "c")),
         ("_x", ("_x",)),
         ("nodepool[999].nodeLabels", ("nodepool", 999, "nodeLabels")),
+        ("nodepools[*].configs", ("nodepools", EVERY, "configs")),
+        ("a[*][0]", ("a", EVERY, 0)),
     ],
 )
 def test_a_path_parses_and_prints_as_written(text: str, segments: tuple[object, ...]) -> None:
@@ -69,6 +76,9 @@ def test_a_path_parses_and_prints_as_written(text: str, segments: tuple[object, 
         ("a[0]x", "unexpected 'x' at character 5"),
         ("a.b-c", "unexpected '-'"),
         ("nodepools.0.configs", "unexpected '.' at character 10"),
+        ("a[**]", "unexpected '['"),
+        ("a[*", "unexpected '['"),
+        ("a.*", "unexpected '.'"),
         ("a" * 254, "longer than 253 characters"),
     ],
 )
@@ -83,12 +93,13 @@ def test_anything_else_is_not_a_path(text: str, reason: str) -> None:
         st.one_of(
             st.from_regex(r"[A-Za-z_][A-Za-z0-9_]{0,8}", fullmatch=True),
             st.integers(min_value=0, max_value=999),
+            st.just(EVERY),
         ),
         max_size=6,
     ),
     st.from_regex(r"[A-Za-z_][A-Za-z0-9_]{0,8}", fullmatch=True),
 )
-def test_every_path_prints_to_text_that_parses_back(rest: list[str | int], head: str) -> None:
+def test_every_path_prints_to_text_that_parses_back(rest: list[Any], head: str) -> None:
     path = InputPath((head, *rest))
     assert InputPath.parse(str(path)) == path
 
@@ -104,6 +115,9 @@ def test_lookup_follows_names_and_positions() -> None:
     ):
         assert lookup(VALUES, InputPath.parse(missing)) is MISSING
     assert lookup(VALUES, InputPath.parse("platform.x")) is MISSING
+    assert lookup(VALUES, CONFIGS_RULE) is MISSING  # a rule names every position, not one
+    assert InputPath.parse("nodepools[*].configs").is_rule
+    assert not InputPath.parse("nodepools[0].configs").is_rule
 
 
 def test_assigned_copies_along_the_path_and_needs_the_parent() -> None:
@@ -118,6 +132,7 @@ def test_assigned_copies_along_the_path_and_needs_the_parent() -> None:
         assert assigned(VALUES, InputPath.parse(no_parent), 1) is None
     assert assigned({"a": [1, 2]}, InputPath.parse("a[1]"), 9) == {"a": [1, 9]}
     assert assigned({"a": [1]}, InputPath.parse("a[1]"), 9) is None
+    assert assigned(VALUES, CONFIGS_RULE, []) is None
 
 
 # ── What can be locked, and where it is in the file ─────────────────────────
@@ -133,6 +148,7 @@ def test_assigned_copies_along_the_path_and_needs_the_parent() -> None:
         ("nodepools[0].replicas", "nodepool[0].replicas"),
         ("nodepools[3].configs", "nodepool[3].configs"),
         ("nodepools[1].node_labels", "nodepool[1].nodeLabels"),
+        ("nodepools[*].configs", "nodepool[*].configs"),
     ],
 )
 def test_each_lockable_input_maps_to_its_cluster_file_key(input_path: str, file_key: str) -> None:
@@ -151,6 +167,9 @@ def test_each_lockable_input_maps_to_its_cluster_file_key(input_path: str, file_
         "owner_merkaz.x",
         "cluster_name",
         "openshift_release_version",
+        "nodepools[*].replicas",
+        "nodepools[*].node_labels",
+        "nodepools[*]",
     ],
 )
 def test_nothing_else_has_a_file_key(path: str) -> None:
@@ -166,6 +185,7 @@ def test_the_lockable_table_reads_as_the_docs_write_it() -> None:
         "nodepools[<i>].replicas",
         "nodepools[<i>].configs",
         "nodepools[<i>].node_labels",
+        "nodepools[*].configs",
     ]
 
 
@@ -319,3 +339,120 @@ def test_a_lock_on_a_nodepool_the_request_does_not_have_is_a_problem() -> None:
         "nodepools[1]"
     ]
     assert inputs == {"nodepools": [{"infra_env": "a"}]}
+
+
+# ── The configs rule: every nodepool has exactly these configs ──────────────
+
+TEAM = [{"name": "nm-conf", "hardware": "dell"}, {"name": "chrony"}, {"name": "nic-ring-buffer"}]
+RULE_VALUES: dict[str, Any] = {
+    "nodepools": [
+        {"replicas": 2, "configs": TEAM},
+        # Another order and another hardware: the same configs by the rule.
+        {
+            "configs": [
+                {"name": "nic-ring-buffer"},
+                {"name": "nm-conf", "hardware": "cisco"},
+                {"name": "chrony"},
+            ]
+        },
+    ]
+}
+RULE = [{"name": "nm-conf"}, {"name": "chrony"}, {"name": "nic-ring-buffer"}]
+
+
+def test_a_config_entry_compares_by_its_name_whatever_its_hardware() -> None:
+    assert entry_key({"name": "nm-conf", "hardware": "dell"}) == "nm-conf"
+    assert entry_key({"name": "chrony"}) == "chrony"
+    assert entry_key("chrony") == '"chrony"'
+    assert entry_key({"name": ""}) == '{"name": ""}'
+    assert rule_entries(TEAM) == RULE
+    assert same_configs(TEAM, list(reversed(RULE)))
+    assert not same_configs(TEAM, RULE[:2])
+    assert not same_configs(RULE, [*RULE, {"name": "chrony"}])  # each as often
+
+
+def test_the_rule_can_be_saved_when_the_flavors_nodepools_agree() -> None:
+    assert lock_problems(["nodepools[*].configs", "nodepools[0].replicas"], RULE_VALUES) == []
+    assert enforced_locks(["nodepools[*].configs"], RULE_VALUES) == (Lock(CONFIGS_RULE, RULE),)
+
+
+@pytest.mark.parametrize(
+    ("values", "problem"),
+    [
+        ({}, "is locked but spec.day1.values sets no nodepools[0].configs for it"),
+        ({"nodepools": []}, "sets no nodepools[0].configs for it"),
+        (
+            {"nodepools": [{"configs": TEAM}, {"replicas": 1}]},
+            "locks every nodepool's configs, but spec.day1.values.nodepools[1] sets none",
+        ),
+        (
+            {"nodepools": ["x"]},
+            "locks every nodepool's configs, but spec.day1.values.nodepools[0] sets none",
+        ),
+        (
+            {"nodepools": [{"configs": TEAM}, {"configs": TEAM[:2]}]},
+            "nodepools[1].configs names other configs than nodepools[0].configs",
+        ),
+        (
+            {"nodepools": [{"configs": [{"name": "chrony"}]}]},
+            "must list nm-conf exactly once: every nodepool needs its own network config",
+        ),
+        (
+            {"nodepools": [{"configs": [*TEAM, {"name": "nm-conf", "hardware": "cisco"}]}]},
+            "must list nm-conf exactly once",
+        ),
+    ],
+)
+def test_a_rule_without_one_agreed_value_is_refused(values: dict[str, Any], problem: str) -> None:
+    (found,) = lock_problems(["nodepools[*].configs"], values)
+    assert found.startswith("locked_paths: nodepools[*].configs ")
+    assert problem in found
+    assert enforced_locks(["nodepools[*].configs"], values) == ()
+
+
+def test_a_position_cannot_lock_configs_beside_the_rule() -> None:
+    paths = ["nodepools[*].configs", "nodepools[0].configs", "nodepools[0].replicas"]
+    assert lock_problems(paths, RULE_VALUES) == [
+        "locked_paths: nodepools[0].configs is covered by nodepools[*].configs, which locks "
+        "every nodepool's configs; lock one or the other"
+    ]
+    # A stored spec that has both enforces the rule, not the position.
+    assert enforced_locks(paths, RULE_VALUES) == (
+        Lock(CONFIGS_RULE, RULE),
+        Lock(InputPath.parse("nodepools[0].replicas"), 2),
+    )
+
+
+def test_a_create_whose_nodepools_break_the_rule_conflicts() -> None:
+    locks = enforced_locks(["nodepools[*].configs"], RULE_VALUES)
+    sent = {
+        "nodepools": [
+            {"configs": [{"name": "chrony"}, {"name": "nic-ring-buffer"}, {"name": "nm-conf"}]},
+            {"configs": [{"name": "chrony"}]},
+            {"infra_env": "no-configs-sent"},
+            "not-a-pool",
+            {"configs": "not-a-list"},
+        ]
+    }
+    assert lock_conflicts(sent, locks, flavor="agent-baseline") == [
+        'nodepools[1].configs: locked by flavor agent-baseline: every nodepool has [{"name": '
+        '"nm-conf"}, {"name": "chrony"}, {"name": "nic-ring-buffer"}] (nm-conf for the '
+        'nodepool\'s own hardware), in any order; the request sends [{"name": "chrony"}]'
+    ]
+    assert lock_conflicts({"nodepools": "x"}, locks, flavor="f") == []
+
+
+def test_the_rule_fills_every_nodepool_that_sends_no_configs() -> None:
+    locks = enforced_locks(["nodepools[*].configs"], RULE_VALUES)
+    sent = {"nodepools": [{"infra_env": "a"}, {"infra_env": "b", "configs": TEAM}, "x"]}
+    inputs, problems = apply_locks(sent, locks)
+    assert problems == []
+    assert inputs["nodepools"] == [
+        {"infra_env": "a", "configs": RULE},
+        {"infra_env": "b", "configs": TEAM},
+        "x",
+    ]
+    filled = inputs["nodepools"][0]["configs"]  # ty: ignore[not-subscriptable]
+    assert filled is not RULE
+    assert filled[0] is not RULE[0]  # copies, never the flavor's own
+    assert apply_locks({"platform": "x"}, locks) == ({"platform": "x"}, [])

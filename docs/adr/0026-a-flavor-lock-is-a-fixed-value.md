@@ -1,7 +1,7 @@
 # ADR-0026: A flavor lock is a fixed value the flavor enforces
 
 Date: 2026-11-08
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0029 (a configs rule for every nodepool, beside the positional locks)
 
 ## Context
 

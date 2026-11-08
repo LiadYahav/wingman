@@ -40,11 +40,12 @@ async def test_the_list_carries_the_legacy_spec_shape_and_the_template(
 ) -> None:
     specs = (await client.get("/api/day1/specs", headers=auth(support.VIEWER))).json()
     assert [s["metadata"]["name"] for s in specs] == [
+        "agent-baseline",
         "agent-dell",
         "agent-single",
         "agent-standard",
     ]
-    single = specs[1]
+    single = specs[2]
     assert set(single) >= {"apiVersion", "kind", "metadata", "spec", "load_error", "warnings"}
     assert single["load_error"] is None
     assert single["spec"]["day1"]["template"].startswith("{#-")
@@ -52,10 +53,10 @@ async def test_the_list_carries_the_legacy_spec_shape_and_the_template(
     # The fixture file still says immutable_paths; the API answers with the new name.
     assert single["spec"]["day1"]["locked_paths"] == []
     assert "immutable_paths" not in single["spec"]["day1"]
-    dell = specs[0]["spec"]["day1"]
+    dell = specs[1]["spec"]["day1"]
     assert dell["locked_paths"] == ["nodepools[0].configs"]
     assert dell["values"]["nodepools"][0]["configs"][0] == {"name": "nm-conf", "hardware": "dell"}
-    assert specs[0]["warnings"] == []
+    assert specs[1]["warnings"] == []
 
 
 async def test_a_broken_spec_is_listed_with_its_error(
