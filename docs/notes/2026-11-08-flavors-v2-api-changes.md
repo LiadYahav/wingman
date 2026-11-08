@@ -485,3 +485,10 @@ Refusals:
 - 422 when the preview has problems, or nothing changes;
 - 409 `REVISION_CONFLICT` when the file changed since `last_commit_id` or
   the flavor is no longer at `spec_version` (preview again).
+
+## 13. Changed: `GET /clusters` rows carry `owner`
+
+Each row gains `owner`: the file's owner numbers as text, keyed as in the
+file (`{"merkaz": "1234", "anaf": "56", "mador": "7"}`; `{}` when the file has
+no `owner` mapping or does not parse). The cluster list filters and groups
+by them.

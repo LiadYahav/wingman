@@ -357,12 +357,15 @@ class ClusterStatusOut(BaseModel):
     path: str
     hosted_cluster: HostedClusterOut
     naming: NamingOut
+    owner: dict[str, str]
+    """The file's ``owner`` numbers (merkaz, anaf, mador) as text; ``{}`` when it has none."""
     problems: list[str]
 
     @classmethod
     def of(cls, cluster: ClusterFile) -> ClusterStatusOut:
         """From a cluster file."""
         change = cluster.last_change
+        owner = cluster.values.owner if cluster.values and cluster.values.owner else {}
         return cls(
             name=cluster.ref.name,
             site=cluster.ref.site,
@@ -375,6 +378,11 @@ class ClusterStatusOut(BaseModel):
             path=str(cluster.ref.path),
             hosted_cluster=HostedClusterOut.of(cluster.hosted_cluster),
             naming=NamingOut.of(cluster.naming),
+            owner={
+                str(key): str(value)
+                for key, value in owner.items()
+                if isinstance(value, str | int) and not isinstance(value, bool)
+            },
             problems=list(cluster.problems),
         )
 
