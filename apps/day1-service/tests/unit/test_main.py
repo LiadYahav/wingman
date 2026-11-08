@@ -172,11 +172,28 @@ def test_the_app_serves_the_legacy_paths_and_no_site_or_mce_creation(app: FastAP
     assert not any("sync-yaml" in path for path, _ in routes)
 
 
-async def test_readiness_asks_gitlab_for_the_day1_project(client: httpx.AsyncClient) -> None:
+async def test_readiness_asks_gitlab_for_both_projects(client: httpx.AsyncClient) -> None:
     response = await client.get("/health/ready")
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "checks": {"gitlab": "ok"}}
     assert (await client.get("/metrics")).status_code == 200
+
+
+async def test_without_the_specs_project_day1_is_not_ready() -> None:
+    gitlab = InMemoryGitLab()
+    gitlab.create_project("gitops-day1/platform-config", {"README.md": "day1"})
+    app = create_app(
+        settings=settings(),
+        auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
+        runtime=FAKE,
+        adapters=Adapters(gitlab=gitlab, day2=FakeDay2Addons(), closers=()),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://day1"
+    ) as client:
+        response = await client.get("/health/ready")
+    assert response.status_code == 503
+    assert response.json()["checks"] == {"gitlab": "error: NotFoundError"}
 
 
 async def test_shutting_down_closes_every_adapter() -> None:

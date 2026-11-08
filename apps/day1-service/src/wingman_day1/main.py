@@ -295,6 +295,14 @@ def create_app(
 
     gitlab = adapters.gitlab
     day1_project = project_ref(settings.day1_gitlab_project_id)
+    specs_project = project_ref(settings.specs_gitlab_project_id)
+
+    async def gitlab_ready() -> None:
+        # Both projects: a wrong SPECS_GITLAB_PROJECT_ID (or a token without
+        # access, which GitLab answers 404) must not look like an empty specs list.
+        await gitlab.get_project(day1_project)
+        await gitlab.get_project(specs_project)
+
     app = create_base_app(
         title="Wingman day1",
         version=runtime.version,
@@ -302,7 +310,7 @@ def create_app(
         api_prefix="/api/day1",
         metrics=metrics,
         session_tokens=session_tokens,
-        readiness={"gitlab": lambda: gitlab.get_project(day1_project)},
+        readiness={"gitlab": gitlab_ready},
         lifespan=lifespan,
     )
     app.state.day1 = context
