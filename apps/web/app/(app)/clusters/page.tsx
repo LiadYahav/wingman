@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef } from "react";
+import { Fragment, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, FileWarning, Server, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { api } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,45 @@ const DRIFT_FILTERS: { value: DriftFilter; label: string }[] = [
   { value: "unknown", label: "Unknown" },
   { value: "not_linked", label: "Not linked" },
 ];
+
+/** The owner numbers a cluster file carries (§13 of the flavors v2 API note), in the file's order. */
+const OWNER_KEYS = ["merkaz", "anaf", "mador"] as const;
+type OwnerKey = (typeof OWNER_KEYS)[number];
+type GroupBy = "none" | OwnerKey;
+
+const OWNER_LABEL: Record<OwnerKey, string> = { merkaz: "Merkaz", anaf: "Anaf", mador: "Mador" };
+
+/** An owner filter's choice for clusters whose file does not set that number. */
+const NO_OWNER = "\u0000none";
+/** The filter option that clears it. */
+const ANY_OWNER = "\u0000any";
+
+/** One owner number of a row; `""` when the file has none (an old day1 sends no `owner`). */
+function ownerOf(c: ClusterStatus, key: OwnerKey): string {
+  return c.owner?.[key] ?? "";
+}
+
+function compareOwner(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a) return 1; // clusters without the number come last
+  if (!b) return -1;
+  return a.localeCompare(b, undefined, { numeric: true });
+}
+
+function OwnerCell({ cluster }: { cluster: ClusterStatus }) {
+  const parts = OWNER_KEYS.map((k) => ownerOf(cluster, k));
+  if (parts.every((p) => !p)) return <span className="text-muted-foreground/60 text-xs">—</span>;
+  return (
+    <span className="font-mono text-xs text-muted-foreground whitespace-nowrap" data-testid="cluster-owner">
+      {OWNER_KEYS.map((k, i) => (
+        <Fragment key={k}>
+          {i > 0 && " / "}
+          <span title={`${OWNER_LABEL[k]} ${parts[i] || "not set"}`}>{parts[i] || "—"}</span>
+        </Fragment>
+      ))}
+    </span>
+  );
+}
 
 function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
   if (sortField !== field) return <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />;
@@ -133,6 +173,8 @@ export default function ClustersPage() {
   const [search, setSearch] = useState("");
   const [siteFilter, setSiteFilter] = useState<string>("all");
   const [driftFilter, setDriftFilter] = useState<DriftFilter>("all");
+  const [ownerFilter, setOwnerFilter] = useState<Record<OwnerKey, string | null>>({ merkaz: null, anaf: null, mador: null });
+  const [groupBy, setGroupBy] = useState<GroupBy>("none");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
@@ -226,6 +268,23 @@ export default function ClustersPage() {
     return counts;
   }, [clusters, driftOf]);
 
+  /** Each owner filter's choices: every number the files carry, with its count, and "not set" when some lack it. */
+  const ownerOptions = useMemo(() => {
+    const options = {} as Record<OwnerKey, ComboboxOption[]>;
+    for (const key of OWNER_KEYS) {
+      const counts = new Map<string, number>();
+      for (const c of clusters ?? []) counts.set(ownerOf(c, key), (counts.get(ownerOf(c, key)) ?? 0) + 1);
+      const numbers = [...counts.keys()].filter(Boolean).sort(compareOwner);
+      const count = (n: number) => `${n} cluster${n !== 1 ? "s" : ""}`;
+      options[key] = [
+        { value: ANY_OWNER, label: `Any ${key}` },
+        ...numbers.map((n) => ({ value: n, label: `${OWNER_LABEL[key]} ${n}`, description: count(counts.get(n) ?? 0) })),
+        ...(counts.has("") ? [{ value: NO_OWNER, label: `No ${key}`, description: count(counts.get("") ?? 0) }] : []),
+      ];
+    }
+    return options;
+  }, [clusters]);
+
   const filtered = useMemo(() => {
     let list = clusters ?? [];
     if (search.trim()) {
@@ -236,13 +295,23 @@ export default function ClustersPage() {
           c.site.toLowerCase().includes(q) ||
           c.mce.toLowerCase().includes(q) ||
           (c.spec_name ?? "").toLowerCase().includes(q) ||
-          (c.mastertag ?? "").toLowerCase().includes(q)
+          (c.mastertag ?? "").toLowerCase().includes(q) ||
+          OWNER_KEYS.some((k) => ownerOf(c, k).includes(q))
       );
     }
     if (siteFilter !== "all") list = list.filter((c) => c.site === siteFilter);
     if (driftFilter !== "all") list = list.filter((c) => driftOf(c)?.state === driftFilter);
+    for (const key of OWNER_KEYS) {
+      const wanted = ownerFilter[key];
+      if (wanted !== null) list = list.filter((c) => ownerOf(c, key) === (wanted === NO_OWNER ? "" : wanted));
+    }
 
     return [...list].sort((a, b) => {
+      // Grouped: the group first, then the chosen order within it
+      if (groupBy !== "none") {
+        const group = compareOwner(ownerOf(a, groupBy), ownerOf(b, groupBy));
+        if (group !== 0) return group;
+      }
       let cmp = 0;
       if (sortField === "name") cmp = a.name.localeCompare(b.name);
       else if (sortField === "site") cmp = `${a.site}/${a.mce}`.localeCompare(`${b.site}/${b.mce}`);
@@ -251,7 +320,15 @@ export default function ClustersPage() {
       else if (sortField === "created_at") cmp = (a.created_at ?? "").localeCompare(b.created_at ?? "");
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [clusters, search, siteFilter, driftFilter, sortField, sortDir, driftOf]);
+  }, [clusters, search, siteFilter, driftFilter, ownerFilter, groupBy, sortField, sortDir, driftOf]);
+
+  /** How many filtered clusters each group has, for its heading (a group can span pages). */
+  const groupSizes = useMemo(() => {
+    const sizes = new Map<string, number>();
+    if (groupBy === "none") return sizes;
+    for (const c of filtered) sizes.set(ownerOf(c, groupBy), (sizes.get(ownerOf(c, groupBy)) ?? 0) + 1);
+    return sizes;
+  }, [filtered, groupBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -267,10 +344,18 @@ export default function ClustersPage() {
   }
 
   function clearFilters() {
-    setSearch(""); setSiteFilter("all"); setDriftFilter("all"); setPage(1);
+    setSearch(""); setSiteFilter("all"); setDriftFilter("all"); setOwnerFilter({ merkaz: null, anaf: null, mador: null }); setPage(1);
   }
 
-  const hasActiveFilters = search || siteFilter !== "all" || driftFilter !== "all";
+  const setOwner = (key: OwnerKey, value: string | null) => {
+    setOwnerFilter((prev) => ({ ...prev, [key]: value === ANY_OWNER ? null : value }));
+    setPage(1);
+  };
+
+  const hasActiveFilters =
+    search || siteFilter !== "all" || driftFilter !== "all" || OWNER_KEYS.some((k) => ownerFilter[k] !== null);
+  const hasOwners = (clusters ?? []).some((c) => OWNER_KEYS.some((k) => ownerOf(c, k)));
+  const columns = 8;
   const statusOff = liveStatuses === null;
 
   const sortHeader = (field: SortField, label: string) => (
@@ -371,6 +456,49 @@ export default function ClustersPage() {
           ))}
         </div>
 
+        {hasOwners && (
+          <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Owner filters">
+            <span className="text-xs text-muted-foreground font-medium">Owner:</span>
+            {OWNER_KEYS.map((key) => (
+              <Combobox
+                key={key}
+                size="sm"
+                options={ownerOptions[key]}
+                value={ownerFilter[key]}
+                onValueChange={(v) => setOwner(key, v)}
+                placeholder={OWNER_LABEL[key]}
+                searchPlaceholder={`Search ${key} numbers…`}
+                emptyMessage={`No ${key} number matches.`}
+                aria-label={`Filter by ${key}`}
+                data-testid={`owner-filter-${key}`}
+                className={cn(
+                  "w-auto min-w-24 max-w-40 text-xs",
+                  ownerFilter[key] !== null && "border-primary text-primary"
+                )}
+              />
+            ))}
+          </div>
+        )}
+
+        {hasOwners && (
+          <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Group by owner">
+            <span className="text-xs text-muted-foreground font-medium">Group:</span>
+            {(["none", ...OWNER_KEYS] as const).map((g) => (
+              <button
+                key={g}
+                onClick={() => { setGroupBy(g); setPage(1); }}
+                aria-pressed={groupBy === g}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-xs font-medium transition-all border",
+                  groupBy === g
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                )}
+              >{g === "none" ? "None" : OWNER_LABEL[g]}</button>
+            ))}
+          </div>
+        )}
+
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
@@ -410,96 +538,117 @@ export default function ClustersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
-                  <th className="text-left px-4 py-3">{sortHeader("name", "Name")}</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3">{sortHeader("site", "Site / MCE")}</th>
-                  <th className="text-left px-4 py-3">{sortHeader("mastertag", "Mastertag")}</th>
-                  <th className="text-left px-4 py-3">{sortHeader("spec", "Spec")}</th>
-                  <th className="text-left px-4 py-3">{sortHeader("created_at", "Last change")}</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Drift</th>
+                  <th className="text-left px-3 py-3">{sortHeader("name", "Name")}</th>
+                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                  <th className="text-left px-3 py-3">{sortHeader("site", "Site / MCE")}</th>
+                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap" title="Merkaz / anaf / mador">
+                    Owner
+                  </th>
+                  <th className="text-left px-3 py-3">{sortHeader("mastertag", "Mastertag")}</th>
+                  <th className="text-left px-3 py-3">{sortHeader("spec", "Spec")}</th>
+                  <th className="text-left px-3 py-3">{sortHeader("created_at", "Last change")}</th>
+                  <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Drift</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading
                   ? Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i}>
-                        {Array.from({ length: 7 }).map((_, j) => (
-                          <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                        {Array.from({ length: columns }).map((_, j) => (
+                          <td key={j} className="px-3 py-3"><Skeleton className="h-4 w-full" /></td>
                         ))}
                       </tr>
                     ))
-                  : paginated.map((cluster) => {
+                  : paginated.map((cluster, i) => {
                       const drift = driftOf(cluster);
+                      const group = groupBy === "none" ? null : ownerOf(cluster, groupBy);
+                      // A group's heading opens it, and each page it continues on
+                      const startsGroup = group !== null && (i === 0 || ownerOf(paginated[i - 1], groupBy as OwnerKey) !== group);
+                      const size = group !== null ? groupSizes.get(group) ?? 0 : 0;
                       return (
-                        <tr
-                          key={cluster.path}
-                          data-testid={`cluster-row-${cluster.name}`}
-                          className="hover:bg-primary/[0.03] transition-colors"
-                          onMouseEnter={() => prefetchCluster(cluster)}
-                        >
-                          <td className="px-4 py-3 max-w-[22rem]">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <Link
-                                href={clusterHref(cluster)}
-                                className="font-semibold text-foreground hover:text-primary transition-colors truncate"
-                                title={cluster.name}
-                              >
-                                {cluster.name}
-                              </Link>
-                              <ClusterFlags cluster={cluster} />
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <ClusterStatusCell
-                              cluster={cluster}
-                              status={liveStatuses?.[cluster.name]}
-                              statusOff={statusOff}
-                              isLoading={statusLoading}
-                              failed={statusFailed}
-                            />
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="leading-snug">
-                              <p className="text-sm text-foreground">{cluster.site}</p>
-                              <p className="text-xs text-muted-foreground">{cluster.mce}</p>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-muted-foreground">
-                            {cluster.mastertag ?? "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            {cluster.spec_name ? (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <Link href={`/specs/${encodeURIComponent(cluster.spec_name)}`} className="hover:text-primary transition-colors font-medium whitespace-nowrap">
-                                  {cluster.spec_name}
+                        <Fragment key={cluster.path}>
+                          {startsGroup && (
+                            <tr data-testid={`owner-group-${groupBy}-${group || "none"}`} className="bg-muted/40">
+                              <td colSpan={columns} className="px-3 py-2 text-xs font-semibold text-foreground">
+                                {group ? `${OWNER_LABEL[groupBy as OwnerKey]} ${group}` : `No ${groupBy}`}
+                                <span className="ml-2 font-normal text-muted-foreground">
+                                  {size} cluster{size !== 1 ? "s" : ""}
+                                </span>
+                              </td>
+                            </tr>
+                          )}
+                          <tr
+                            data-testid={`cluster-row-${cluster.name}`}
+                            className="hover:bg-primary/[0.03] transition-colors"
+                            onMouseEnter={() => prefetchCluster(cluster)}
+                          >
+                            <td className="px-3 py-3 max-w-[22rem]">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Link
+                                  href={clusterHref(cluster)}
+                                  className="font-semibold text-foreground hover:text-primary transition-colors truncate"
+                                  title={cluster.name}
+                                >
+                                  {cluster.name}
                                 </Link>
-                                {cluster.spec_version && (
-                                  <span className="rounded-full px-1.5 py-0.5 text-xs bg-primary/8 text-primary font-medium whitespace-nowrap">
-                                    v{cluster.spec_version}
-                                  </span>
-                                )}
+                                <ClusterFlags cluster={cluster} />
                               </div>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                            <div className="leading-snug">
-                              <p className="text-sm">{cluster.created_by ?? "—"}</p>
-                              <p className="text-xs">
-                                {cluster.created_at ? formatDate(cluster.created_at) : ""}
-                              </p>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            {drift ? <DriftBadge state={drift.state} error={drift.error} /> : <Skeleton className="h-5 w-16" />}
-                          </td>
-                        </tr>
+                            </td>
+                            <td className="px-3 py-3">
+                              <ClusterStatusCell
+                                cluster={cluster}
+                                status={liveStatuses?.[cluster.name]}
+                                statusOff={statusOff}
+                                isLoading={statusLoading}
+                                failed={statusFailed}
+                              />
+                            </td>
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <div className="leading-snug">
+                                <p className="text-sm text-foreground">{cluster.site}</p>
+                                <p className="text-xs text-muted-foreground">{cluster.mce}</p>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3">
+                              <OwnerCell cluster={cluster} />
+                            </td>
+                            <td className="px-3 py-3 whitespace-nowrap font-mono text-xs text-muted-foreground">
+                              {cluster.mastertag ?? "—"}
+                            </td>
+                            <td className="px-3 py-3">
+                              {cluster.spec_name ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <Link href={`/specs/${encodeURIComponent(cluster.spec_name)}`} className="hover:text-primary transition-colors font-medium whitespace-nowrap">
+                                    {cluster.spec_name}
+                                  </Link>
+                                  {cluster.spec_version && (
+                                    <span className="rounded-full px-1.5 py-0.5 text-xs bg-primary/8 text-primary font-medium whitespace-nowrap">
+                                      v{cluster.spec_version}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
+                              <div className="leading-snug">
+                                <p className="text-sm">{cluster.created_by ?? "—"}</p>
+                                <p className="text-xs">
+                                  {cluster.created_at ? formatDate(cluster.created_at) : ""}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="px-3 py-3">
+                              {drift ? <DriftBadge state={drift.state} error={drift.error} /> : <Skeleton className="h-5 w-16" />}
+                            </td>
+                          </tr>
+                        </Fragment>
                       );
                     })}
                 {!isLoading && clusters?.length === 0 && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={columns}>
                       <EmptyState
                         icon={Server}
                         title="No clusters yet"
@@ -512,7 +661,7 @@ export default function ClustersPage() {
                 )}
                 {!isLoading && clusters && clusters.length > 0 && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={columns}>
                       <NoMatches what="clusters" onClear={clearFilters} />
                     </td>
                   </tr>
