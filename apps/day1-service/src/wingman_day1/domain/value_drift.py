@@ -72,6 +72,8 @@ class ValueDrift:
     """Configs only: the names a sync removes (exact, ADR-0029)."""
     needs_decision: str | None = None
     """Why a sync cannot set this value until a person decides; ``None`` when it can."""
+    needs_hardware: bool = False
+    """The decision is the nodepool's network hardware type: a sync request can choose it."""
 
     @property
     def is_configs(self) -> bool:
@@ -205,6 +207,7 @@ def _configs_drift(
         added=tuple(added),
         removed=tuple(removed),
         needs_decision=decision,
+        needs_hardware=decision is not None,
     )
 
 

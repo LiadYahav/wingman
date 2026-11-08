@@ -161,7 +161,9 @@ Changes since the legacy services:
 | `POST` | `/api/day1/clusters/{name}/delete-workflow` | Start the delete-cluster workflow, with `{"confirm": true}` (admin; 501 until it exists) |
 | `GET` | `/api/day1/clusters/{name}/current-yaml` | The file's text on the default branch |
 | `GET` | `/api/day1/clusters/{name}/history` | Commits that changed the file |
-| `GET` | `/api/day1/clusters/{name}/drift` | The cluster against its spec's Day2 addons |
+| `GET` | `/api/day1/clusters/{name}/drift` | The cluster against its flavor: the locked values its file does not hold, and its missing Day2 add-ons |
+| `POST` | `/api/day1/clusters/{name}/sync/preview` | What syncing the cluster to its flavor would write: each locked value it does not hold, the configs removed, the nodepools whose nodes roll, and what blocks it (`hardware` choices when a nodepool's network config can't be read) |
+| `POST` | `/api/day1/clusters/{name}/sync` | Open one day1 MR that sets those values; refused unless `confirm_removals` names exactly the preview's removals |
 | `GET` | `/api/day1/clusters/{name}/status` | The HostedCluster and NodePools on the MCE hub (`?mce=`; 501 when live status is off) |
 | `GET` | `/api/day1/clusters/{name}/status/stream` | The same as server-sent events, every `DAY1_STATUS_POLL_SECONDS` |
 

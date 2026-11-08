@@ -62,6 +62,7 @@ from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
+from wingman_day1.application.sync import SyncService
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons
@@ -242,6 +243,7 @@ def build_context(
         audit=AuditService(repos),
         drift=drift,
         imports=ImportService(cluster_service, spec_catalog, drift, machine_configs, provisioner),
+        sync=SyncService(cluster_service, spec_catalog, drift, machine_configs, provisioner),
         auth=AuthService(
             session_tokens,
             identity=adapters.identity,

@@ -22,6 +22,8 @@ class ClusterAction(StrEnum):
     CREATE = "create"
     MODIFY = "modify"
     DELETE = "delete"
+    SYNC = "sync"
+    """Set the file's drifted locked values to its flavor's (ADR-0037); a modify by content."""
 
 
 class SpecAction(StrEnum):

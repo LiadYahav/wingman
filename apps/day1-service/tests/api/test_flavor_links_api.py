@@ -71,6 +71,7 @@ async def test_drift_lists_each_locked_value_the_file_does_not_hold(
         "added": [],
         "removed": ["worker-kubeletconfig-reserved"],
         "needs_decision": None,
+        "needs_hardware": False,
         "reboots": True,
     }
     assert (second["added"], second["removed"]) == (
@@ -109,6 +110,7 @@ async def test_a_value_the_file_lacks_is_null_and_not_in_file(
             "added": [],
             "removed": [],
             "needs_decision": None,
+            "needs_hardware": False,
             "reboots": False,
         }
     ]
@@ -246,3 +248,141 @@ async def test_import_is_for_admins(client: httpx.AsyncClient, auth: Auth, suppo
         headers=auth(support.VIEWER),
     )
     assert response.status_code == 403
+
+
+# ── Sync ─────────────────────────────────────────────────────────────────────
+
+
+async def test_the_sync_preview_says_what_changes_what_is_removed_and_what_rolls(
+    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    await link(client, support, gitlab, LARK, "agent-baseline")
+    response = await client.post(
+        f"/api/day1/clusters/{LARK}/sync/preview", json={}, headers=auth(support.ALICE)
+    )
+    assert response.status_code == 200, response.text
+    preview = response.json()
+    pools = [
+        {"index": 0, "name": "prod-lark-site1-dell-r660-site1-128c-1024gb-5tb"},
+        {"index": 1, "name": "prod-lark-site1-dell-r760-site1-64c-512gb-20tb"},
+    ]
+    assert {k: preview[k] for k in ("cluster", "site", "mce", "path", "spec_name")} == {
+        "cluster": LARK,
+        "site": "site1",
+        "mce": "ocp4-prod-mce-site1-a",
+        "path": f"{HOSTED}/{LARK}.yaml",
+        "spec_name": "agent-baseline",
+    }
+    assert (preview["spec_version"], preview["file_spec_version"]) == ("1.0.0", "1.0.0")
+    assert len(preview["last_commit_id"]) == 40
+    assert [c["file_key"] for c in preview["changes"]] == [
+        "nodepool[0].configs",
+        "nodepool[1].configs",
+    ]
+    assert preview["removals"] == [
+        {"nodepool": pools[0], "name": "worker-kubeletconfig-reserved"},
+        {"nodepool": pools[1], "name": "restored-example-config"},
+    ]
+    assert preview["rebooting"] == [
+        {
+            "nodepool": pools[0],
+            "replicas": 3,
+            "upgrade_type": None,
+            "max_unavailable": None,
+            "replaces_nodes": False,
+        },
+        {
+            "nodepool": pools[1],
+            "replicas": 2,
+            "upgrade_type": None,
+            "max_unavailable": None,
+            "replaces_nodes": False,
+        },
+    ]
+    assert (preview["problems"], preview["warnings"], preview["can_sync"]) == ([], [], True)
+    assert "-  - name: worker-kubeletconfig-reserved\n" in preview["diff"]
+    assert [a["addon_name"] for a in preview["addons_to_install"]] == ["cluster-roles"]
+    assert (preview["version_differences"], preview["addons_error"]) == ([], None)
+
+
+async def test_the_sync_opens_one_day1_mr_once_the_removals_are_confirmed(
+    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    await link(client, support, gitlab, LARK, "agent-baseline")
+    headers = auth(support.ALICE)
+    preview = (
+        await client.post(f"/api/day1/clusters/{LARK}/sync/preview", json={}, headers=headers)
+    ).json()
+    body: dict[str, Any] = {
+        "last_commit_id": preview["last_commit_id"],
+        "spec_version": preview["spec_version"],
+    }
+    refused = await client.post(f"/api/day1/clusters/{LARK}/sync", json=body, headers=headers)
+    assert refused.status_code == 422
+    assert len(refused.json()["details"]["problems"]) == 2
+    body["confirm_removals"] = [
+        {"nodepool": r["nodepool"]["index"], "name": r["name"]} for r in preview["removals"]
+    ]
+    response = await client.post(f"/api/day1/clusters/{LARK}/sync", json=body, headers=headers)
+    assert response.status_code == 201, response.text
+    mr = response.json()
+    assert (mr["repo"], mr["title"]) == (
+        "day1",
+        f"[Wingman/Day1] Sync cluster {LARK} to spec agent-baseline v1.0.0",
+    )
+    assert mr["labels"] == ["day1", "sync", "wingman"]
+    pid = await support.project_id(gitlab, support.DAY1)
+    content = gitlab.snapshot(pid, mr["source_branch"])[preview["path"]]
+    assert "worker-kubeletconfig-reserved\n  - name: nic" not in content
+
+
+async def test_sync_needs_an_admin_and_a_cluster_on_a_flavor(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    viewer = await client.post(
+        f"/api/day1/clusters/{LARK}/sync/preview", json={}, headers=auth(support.VIEWER)
+    )
+    assert viewer.status_code == 403
+    unlinked = await client.post(
+        f"/api/day1/clusters/{LARK}/sync/preview", json={}, headers=auth(support.ALICE)
+    )
+    assert unlinked.status_code == 422
+    assert unlinked.json()["details"]["problems"] == [
+        f"{LARK}: import it into a flavor first (POST /specs/<flavor>/import)"
+    ]
+    missing = await client.post(
+        "/api/day1/clusters/ocp4-prod-nope-site1/sync/preview", json={}, headers=auth(support.ALICE)
+    )
+    assert missing.status_code == 404
+    bad = await client.post(
+        f"/api/day1/clusters/{LARK}/sync/preview",
+        json={"hardware": [{"nodepool": -1, "hardware": "dell"}]},
+        headers=auth(support.ALICE),
+    )
+    assert bad.status_code == 422
+
+
+async def test_a_hardware_choice_is_sent_per_nodepool(
+    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    await link(client, support, gitlab, HERON, "agent-baseline")
+    headers = auth(support.ALICE)
+    waiting = (
+        await client.post(f"/api/day1/clusters/{HERON}/sync/preview", json={}, headers=headers)
+    ).json()
+    assert waiting["can_sync"] is False
+    assert [c["needs_hardware"] for c in waiting["changes"]] == [True, True]
+    chosen = (
+        await client.post(
+            f"/api/day1/clusters/{HERON}/sync/preview",
+            json={
+                "hardware": [
+                    {"nodepool": 0, "hardware": "dell"},
+                    {"nodepool": 1, "hardware": "dell"},
+                ]
+            },
+            headers=headers,
+        )
+    ).json()
+    assert (chosen["can_sync"], chosen["problems"]) == (True, [])
+    assert [c["needs_decision"] for c in chosen["changes"]] == [None, None]

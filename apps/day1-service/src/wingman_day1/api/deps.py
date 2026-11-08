@@ -23,6 +23,7 @@ from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
+from wingman_day1.application.sync import SyncService
 from wingman_day1.ports import ClusterDeleteWorkflow, RepoReads
 
 
@@ -37,6 +38,7 @@ class Day1Context:
     audit: AuditService
     drift: DriftService
     imports: ImportService
+    sync: SyncService
     auth: AuthService
     repos: Mapping[RepoKey, RepoReads]
     machine_configs: MachineConfigService

@@ -167,6 +167,7 @@ def test_a_position_the_file_does_not_have_needs_a_person(
     for path in ("nodepools[1].replicas", "nodepools[1].configs"):
         (found,) = drift([lock(path, 2)], values)
         assert found.needs_decision == decision
+        assert not found.needs_hardware  # no hardware choice can fix it
         assert found.cluster_value is MISSING
 
 
@@ -249,6 +250,7 @@ def test_a_nodepool_without_or_with_several_network_configs_needs_a_person() -> 
     # The rest of the nodepool is still compared; the network part waits.
     assert (none.added, none.removed) == (("nic-ring-buffer",), ("worker-kubeletconfig-reserved",))
     assert none.flavor_value[0] == {"name": "nm-conf"}  # ty: ignore[not-subscriptable]
+    assert none.needs_hardware and several.needs_hardware
     assert several.needs_decision == (
         "nodepool[1] has 2 network configs (nm-conf-prod-heron-site1-dell, "
         "nm-conf-prod-heron-site1-cisco); choose the hardware type it keeps"

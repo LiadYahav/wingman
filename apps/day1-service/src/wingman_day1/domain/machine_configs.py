@@ -383,6 +383,20 @@ def cluster_config_problems(
     return _nodepool_problems(inputs, _Rules(catalog, cluster_name))
 
 
+def network_choice_problems(
+    where: str, hardware: str, catalog: MachineConfigCatalog, *, cluster_name: str
+) -> list[str]:
+    """Why ``hardware`` cannot be a nodepool's network config for ``cluster_name``.
+
+    The type must exist, and the CI must read the expanded name
+    ``nm-conf-<clusterName>-<hw>`` as that type (an overlapping type can
+    capture it).
+    """
+    return _network_problems(
+        where, ConfigEntry(NETWORK_CONFIG, hardware), _Rules(catalog, cluster_name)
+    )
+
+
 def expand_network_configs(inputs: Mapping[str, object], *, cluster_name: str) -> dict[str, object]:
     """The inputs with each ``{name: nm-conf, hardware: <hw>}`` as ``{name: nm-conf-<c>-<hw>}``.
 

@@ -1,4 +1,4 @@
-# ADR-0037: Existing clusters join a flavor by one MR that writes only the link; Wingman edits a cluster file's text, never a YAML round trip
+# ADR-0037: Existing clusters join a flavor by one MR that writes only the link, and sync to it by one MR each; Wingman edits a cluster file's text, never a YAML round trip
 
 Date: 2026-11-08
 Status: Accepted
@@ -59,8 +59,40 @@ showed: a file that moved since fails the whole import, before or at the
 commit (ADR-0006), and nothing is opened. The MR description lists each
 cluster with what will show as drift after the merge.
 
-**The port.** Import is a cluster change, so it goes through
-`ClusterProvisioner` (ADR-0017) as `link`, beside `apply`.
+**Sync.** `POST /clusters/{name}/sync/preview` shows what one day1 MR
+would change on a linked cluster: every locked value its file does not hold
+(ADR-0036) set to the flavor's, and the header's `specVersion` moved to the
+flavor's current version; the diff; each config it removes; and each
+nodepool whose configs change. Presets are never synced, and missing add-ons
+are listed for the web to install through day2 (ADR-0016: day1 never writes
+day2). `POST /clusters/{name}/sync` opens the MR
+(`[Wingman/Day1] Sync cluster <name> to spec <flavor> v<version>`):
+
+- **Removals are confirmed.** The rule is exact (ADR-0029), so a sync can
+  remove configs. The request must name exactly the preview's removals in
+  `confirm_removals`, or it is refused; the MR description names them too.
+- **The roll is stated.** Changing a nodepool's configs rolls its nodes. The
+  preview and the MR say how, from the nodepool's own keys: drained and
+  rebooted in place, one node at a time or `inPlace.maxUnavailable` at a
+  time (the chart's default `upgradeType` is `InPlace`), or replaced with new
+  nodes (`upgradeType: Replace`).
+- **Wingman never guesses hardware.** A nodepool with no network config, or
+  several, blocks the sync until the request chooses its hardware type
+  (`hardware: [{nodepool, hardware}]`), checked like a create (ADR-0027). A
+  locked position the file does not have blocks it until a person edits the
+  file.
+- **Guards.** The request carries the preview's `last_commit_id` (the commit
+  the repo was read at, ADR-0035) and flavor version. The sync is stale only
+  if this file changed since that commit or the flavor moved; the write
+  carries the commit, so GitLab refuses a file that moves in between
+  (ADR-0006).
+- **A file with an explicit `mcFiles`** renders only what it names. Wingman
+  never writes `mcFiles`, so the preview warns when a config the sync adds is
+  not listed there.
+
+**The port.** Import and sync are cluster changes, so they go through
+`ClusterProvisioner` (ADR-0017): import as `link`, sync as `apply` with the
+`sync` action.
 
 ## Alternatives rejected
 
@@ -76,6 +108,11 @@ cluster with what will show as drift after the merge.
 
 ## Consequences
 
+- Sync fixes exactly the value drift that needs no decision, in one MR per
+  cluster; after it merges the cluster is in sync on its locked values, and
+  the web installs its missing add-ons through day2.
+- A sync that removes configs, or rolls nodes, says so three times: the
+  preview, the confirmation the request must carry, and the MR description.
 - Imported clusters are linked when the MR merges, and show their
   differences as drift; nothing on a cluster changes at import.
 - Two imports of the same cluster can both be opened; once one merges the
@@ -94,4 +131,10 @@ cluster with what will show as drift after the merge.
   flavor, an unparsable file.
 - `apps/day1-service/tests/unit/infrastructure/test_merge_requests.py`: one
   commit, the title, branch and footer, and a stale file committing nothing.
-- `apps/day1-service/tests/api/test_flavor_links_api.py`: the JSON.
+- `apps/day1-service/tests/unit/application/test_sync.py`: the exact
+  synced text on both fixture styles, hardware choices, the removals to
+  confirm, how a nodepool's nodes roll (`InPlace`, `maxUnavailable`,
+  `Replace`), the `mcFiles` warning, a stale file or flavor, another file
+  changing (not stale), nothing to sync, a header-only version move.
+- `apps/day1-service/tests/api/test_flavor_links_api.py`: the JSON of drift,
+  import and sync.

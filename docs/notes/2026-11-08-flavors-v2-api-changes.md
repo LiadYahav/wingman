@@ -1,11 +1,14 @@
-# Flavors v2, stage 1: day1 API changes the web app builds on (2026-11-08)
+# Flavors v2: day1 API changes the web app builds on (2026-11-08)
 
-Stage 1 of `docs/ideas/flavors-v2.md`: the machine-config catalogue, the
-nodepool defaults, config checks, enforced locks and numeric owners, all in
-day1 (`apps/day1-service`). This note is the contract the web stage builds
+Stages 1 and 2 of `docs/ideas/flavors-v2.md`, all in day1
+(`apps/day1-service`). Stage 1 (§1-§8): the machine-config catalogue, the
+nodepool defaults, config checks, enforced locks and numeric owners. Stage 2
+(§9-§12): the configs rule, drift on locked values, importing existing
+clusters and the sync MR. This note is the contract the web stage builds
 against; every new or changed endpoint and field is here. Decisions:
 ADR-0026 (locks), ADR-0027 (machine configs and defaults), ADR-0028
-(owners). "Flavor" is the UI's word for a spec (`/api/day1/specs`).
+(owners), ADR-0029 (the configs rule), ADR-0036 (drift), ADR-0037 (import
+and sync). "Flavor" is the UI's word for a spec (`/api/day1/specs`).
 
 Paths are relative to the day1 service. Errors are RFC 9457 problems as
 before (`docs/notes/2026-11-07-day1-api-changes.md` §1): every rule a
@@ -296,8 +299,8 @@ form starts with.
   (the cluster detail's legacy field; it does not come from the flavor).
 - Cluster edit (`PATCH /clusters/{name}`, the raw YAML editor) does not
   check config names yet; it writes the file's own `nm-conf-<...>` names.
-- Drift is still add-on drift only (ADR-0016, ADR-0025). Drift on locked
-  values, importing existing clusters and the sync MR are stage 2.
+- Stage 1 left drift as add-on drift only (ADR-0016, ADR-0025); stage 2
+  adds locked values (§10).
 
 ## 8. Fixtures the live suite can use
 
@@ -309,3 +312,176 @@ form starts with.
   they also prove the alias.
 - The live create in `e2e/tests/live-day1-flows.spec.ts` now types
   `workers-chrony-configuration` (it typed a name that does not exist).
+
+## 9. New: the configs rule `nodepools[*].configs` (ADR-0029)
+
+A lock path may use `[*]` for "every nodepool": `nodepools[*].configs` is
+the only rule. Its value is the `configs` of the flavor's nodepools in
+`spec.day1.values.nodepools`, which must all agree and name `nm-conf`
+exactly once. In the rule, `nm-conf` matches each nodepool's own hardware.
+Configs compare by name, each as often, in any order, and exactly: an extra
+config has drifted. At save, a rule beside a positional configs lock is
+refused. At create, a nodepool that sends configs must match the rule; one
+that sends none gets the rule's entries.
+
+## 10. Changed: drift on locked values (ADR-0036)
+
+`GET /clusters/{name}/drift` (and every drift inside the import preview)
+gains `value_drift`: each enforced lock whose value the cluster file does not
+hold. A cluster is `drifted` when it has value drift **or** a missing add-on;
+`version_differences` are still only reported. One item:
+
+```json
+{
+  "path": "nodepools[*].configs",
+  "file_key": "nodepool[1].configs",
+  "nodepool": {"index": 1, "name": "prod-lark-site1-dell-r760-site1-64c-512gb-20tb"},
+  "flavor_value": [{"name": "nm-conf-prod-lark-site1-dell-data"}, {"name": "workers-chrony-configuration"}, {"name": "nic-ring-buffer"}],
+  "cluster_value": [{"name": "nm-conf-prod-lark-site1-dell-data"}, {"name": "workers-chrony-configuration"}, {"name": "restored-example-config"}],
+  "in_file": true,
+  "added": ["nic-ring-buffer"],
+  "removed": ["restored-example-config"],
+  "needs_decision": null,
+  "needs_hardware": false,
+  "reboots": true
+}
+```
+
+- `path` is the flavor's lock; `file_key` is where the file holds it (the
+  table in §6), per nodepool for the rule.
+- `flavor_value` is in the file's form: `nm-conf` is expanded to
+  `nm-conf-<clusterName>-<hw>` where the nodepool's hardware is known, and
+  stays `{"name": "nm-conf"}` where it is not.
+- `cluster_value` is `null` with `in_file: false` when the key is absent.
+- `added` and `removed` (configs only) are what a sync would change.
+- `needs_decision` says why a sync can't set the value yet: a nodepool with
+  no network config or with several (`needs_hardware: true`; sync accepts a
+  hardware choice, §12), or a locked position the file does not have
+  (`needs_hardware: false`; a person edits the file).
+- `reboots` is `true` for a nodepool's configs: changing them rolls the
+  nodepool's nodes.
+
+## 11. New: import existing clusters (ADR-0037), admins only
+
+**`POST /specs/{name}/import/preview`**, body `{"clusters": [{"name": "...",
+"site": null, "mce": null}]}` (site and MCE only when a name is ambiguous; up
+to 500). Each cluster against the flavor:
+
+```json
+{
+  "spec_name": "agent-baseline",
+  "spec_version": "1.0.0",
+  "warnings": [],
+  "clusters": [
+    {
+      "name": "ocp4-prod-heron-site1", "site": "site1", "mce": "ocp4-prod-mce-site1-a",
+      "path": "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-heron-site1.yaml",
+      "last_commit_id": "0c904bfafde4c4ed24416190ea224ee25cdcf738",
+      "status": "ready",
+      "linked_spec": null,
+      "problems": [],
+      "drift": {"state": "drifted", "value_drift": ["..."], "addon_drift": ["..."], "...": "as §10"}
+    }
+  ]
+}
+```
+
+- `status`: `ready` (no flavor yet), `relink` (follows another flavor:
+  `linked_spec` says which), `linked` (follows this one: sync it instead),
+  `refused` (its file cannot be edited safely; `problems` says why).
+- `warnings` are about the flavor: a positional nodepool lock compares
+  whichever nodepool the file has at that position.
+- `drift` is what will show once the cluster is linked.
+
+**`POST /specs/{name}/import`** (201, the MR as other writes return it):
+
+```json
+{"spec_version": "1.0.0", "clusters": [{"name": "...", "site": "...", "mce": "...", "last_commit_id": "<from the preview>", "relink": false}]}
+```
+
+One day1 MR (`[Wingman/Day1] Import spec <flavor> into <n> clusters`, label
+`import`, at most 50 clusters) that writes only each file's header
+(`# specName`, `# specVersion`). Refusals: 422 for a `refused` or `linked`
+cluster, or a `relink` one without `relink: true`, one problem per cluster;
+409 `REVISION_CONFLICT` when a file changed since the preview's
+`last_commit_id` or the flavor's version is no longer `spec_version`
+(preview again). Another file changing does not make the import stale.
+
+## 12. New: sync a cluster to its flavor (ADR-0037), admins only
+
+**`POST /clusters/{name}/sync/preview`** (`?site=&mce=` optional), body
+`{"hardware": [{"nodepool": 1, "hardware": "dell"}]}` (empty `{}` when no
+nodepool needs a choice). What one day1 MR would change:
+
+```json
+{
+  "cluster": "ocp4-prod-lark-site1", "site": "site1", "mce": "ocp4-prod-mce-site1-a",
+  "path": "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-lark-site1.yaml",
+  "last_commit_id": "8bc410218818998ff47e641db7e97007162c678f",
+  "spec_name": "agent-baseline",
+  "spec_version": "1.0.0",
+  "file_spec_version": "1.0.0",
+  "changes": ["value drift items as §10, with the hardware choices applied"],
+  "diff": "--- a/sites/.../ocp4-prod-lark-site1.yaml\n+++ b/sites/...\n@@ -16,7 +16,6 @@\n...",
+  "removals": [
+    {"nodepool": {"index": 0, "name": "prod-lark-site1-dell-r660-site1-128c-1024gb-5tb"}, "name": "worker-kubeletconfig-reserved"},
+    {"nodepool": {"index": 1, "name": "prod-lark-site1-dell-r760-site1-64c-512gb-20tb"}, "name": "restored-example-config"}
+  ],
+  "rebooting": [
+    {"nodepool": {"index": 0, "name": "prod-lark-site1-dell-r660-site1-128c-1024gb-5tb"}, "replicas": 3, "upgrade_type": null, "max_unavailable": null, "replaces_nodes": false}
+  ],
+  "problems": [],
+  "warnings": [],
+  "can_sync": true,
+  "addons_to_install": [{"addon_name": "cluster-roles", "team": "redbull", "reason": "missing", "expected_version": "main", "override_values": {}}],
+  "version_differences": [],
+  "addons_error": null
+}
+```
+
+- `diff` is the file change as a unified diff; only locked values and the
+  header's `specVersion` change. Nothing else moves: not `vlanId`,
+  `dhcp_values`, `mcFiles`, `mcConfigMap`, the CI block or comments.
+- `removals`: show each one and ask the person to confirm it. Configs are
+  exact (§9), so a sync removes configs the flavor does not list.
+- `rebooting`: the nodepools whose configs change. Merging rolls their
+  nodes: drained and rebooted in place, one at a time (`upgrade_type` null or
+  `InPlace`; `max_unavailable` when the nodepool sets
+  `inPlace.maxUnavailable`), or replaced by new nodes
+  (`replaces_nodes: true`).
+- `problems` block the sync (`can_sync: false`): a nodepool whose hardware
+  must be chosen (send it in `hardware` and preview again), a locked position
+  the file lacks, a layout Wingman can't edit. `can_sync` is also `false`
+  when the file already holds every locked value and the header names the
+  current version.
+- `warnings` don't block: for example a file with an explicit `mcFiles` that
+  does not name a config the sync adds (check the CI adds it on the MR
+  branch before merging).
+- `addons_to_install` are not in the day1 MR: install them through day2 as
+  the drift fix does (`POST /api/day2/clusters/{id}/addons/bulk`, one MR per
+  team). `addons_error` is set when day2 did not answer.
+- 422 when the cluster follows no flavor, or a `hardware` choice is for a
+  nodepool that needs none or names an unknown or overlapping type.
+
+**`POST /clusters/{name}/sync`** (201, the MR):
+
+```json
+{
+  "last_commit_id": "<from the preview>",
+  "spec_version": "<from the preview>",
+  "hardware": [{"nodepool": 1, "hardware": "dell"}],
+  "confirm_removals": [{"nodepool": 0, "name": "worker-kubeletconfig-reserved"}, {"nodepool": 1, "name": "restored-example-config"}]
+}
+```
+
+One day1 MR, `[Wingman/Day1] Sync cluster <name> to spec <flavor> v<version>`,
+label `sync`. Its description lists each change, the removals, how each
+nodepool's nodes roll, and the add-ons day2 still has to install.
+Refusals:
+
+- 422 `the sync removes configs the request does not confirm` unless
+  `confirm_removals` names exactly the preview's removals (one problem per
+  missing or extra one);
+- 422 when the preview has problems, or nothing changes;
+- 409 `REVISION_CONFLICT` when the file changed since `last_commit_id` or
+  the flavor is no longer at `spec_version` (preview again).

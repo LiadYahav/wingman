@@ -1,8 +1,8 @@
 # Flavors v2
 
 **Status:** decided 2026-11-08, to build on its own branch after the
-ecosystem branch merges. Stage 1 (day1) is built: ADR-0026, ADR-0027,
-ADR-0028, and the API contract in
+ecosystem branch merges. Stages 1 and 2 (day1) are built: ADR-0026 to
+ADR-0029, ADR-0036, ADR-0037, and the API contract in
 `docs/notes/2026-11-08-flavors-v2-api-changes.md`. "Flavor" is what the code and the API call a
 cluster spec (`ClusterSpec`, `/api/day1/specs`, ADR-0013); the UI will say
 Flavor.
@@ -123,8 +123,9 @@ existing cluster's nodepools, which come in any number and order. The
 proposal is to lock configs as a rule for every nodepool ("every nodepool
 has these configs, plus `nm-conf` for its hardware") rather than by
 position. A position only means something for clusters the flavor creates.
-Stage 1 locks by position (`nodepools[0].configs`); the rule form, if it
-comes, is a new lockable shape and an ADR in stage 2.
+Stage 1 locks by position (`nodepools[0].configs`). *Settled in stage 2:*
+the rule `nodepools[*].configs` (ADR-0029), compared exactly by name in any
+order; a sync's removals are confirmed one by one (ADR-0037).
 
 ### The flavor page
 
@@ -156,7 +157,7 @@ cluster) is a question for the architect.
 
 1. Day1: the machine-config catalogue endpoint, nodepool defaults, config
    validation, enforced locks at create, owner validation. *Done.*
-2. Day1: import, day1 drift on locked values, the sync MR.
+2. Day1: import, day1 drift on locked values, the sync MR. *Done.*
 3. Web: the flavor page, the create form's config picker, import, and drift
    for day1 values.
 4. E2E: mocked tests for each, then the live suite against the seeded local

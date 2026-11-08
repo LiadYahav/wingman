@@ -336,7 +336,7 @@ def with_header(content: str, provenance: Provenance) -> str:
         patch.delete(index, index + 1)
     patch.insert(header[0] if header else 0, provenance_lines(provenance))
     edited = patch.render()
-    problems = _check(content, edited, _values_or_refuse(content))
+    problems = _check(content, edited, values_or_refuse(content))
     if _without_header(edited) != _without_header(content):
         problems.append("a line other than the flavor header would change")
     wanted = Provenance(provenance.spec_name, provenance.spec_version, provenance.requested_addons)
@@ -386,7 +386,8 @@ class SetConfigs:
 Edit = SetValue | SetConfigs
 
 
-def _values_or_refuse(content: str) -> dict[str, object]:
+def values_or_refuse(content: str) -> dict[str, object]:
+    """The file's values; ``UneditableFileError`` when it does not parse."""
     try:
         return load_values(content)
     except InvalidClusterFileError as exc:
@@ -669,7 +670,7 @@ def edit_values(content: str, edits: Sequence[Edit]) -> str:
     is not one the editor handles, or the result would not hold exactly the
     old values with these changes.
     """
-    values = _values_or_refuse(content)
+    values = values_or_refuse(content)
     lines = _split(content)
     editor = _Editor(lines, _frozen_from(lines), _Patch(lines))
     owners = {
