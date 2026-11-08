@@ -97,14 +97,14 @@ def chart_repo_findings(check: ChartRepoCheck, *, path: str, **where: str) -> li
     """What is wrong with the ``repourl`` that ``path`` sets: unreadable, or moved."""
     if check.problem is not None:
         return [error(Rule.CHART_REPO_UNREADABLE, check.problem, path=path, **where)]
-    moved_to = repourl_moved_to(check.repo_url, check.project) if check.project else None
-    if moved_to is None:
+    project = check.project
+    moved_to = repourl_moved_to(check.repo_url, project) if project else None
+    if project is None or moved_to is None:
         return []
     message = (
         f"{path} sets `repourl: {check.repo_url}`, but GitLab moved that project to "
-        f"{check.project.path_with_namespace if check.project else ''} (renamed or "
-        "transferred). The old path only redirects, until a new project takes it: "
-        f"set `repourl: {moved_to}`"
+        f"{project.path_with_namespace} (renamed or transferred). The old path only "
+        f"redirects, until a new project takes it: set `repourl: {moved_to}`"
     )
     return [warning(Rule.REPOURL_MOVED, message, path=path, **where)]
 
@@ -268,19 +268,17 @@ class CatalogService:
         if not repo_url:
             return None, None, []
         check = await check_chart_repo(self._charts, repo_url)
-        project = check.project
-        if with_versions and project is not None:
+        versions = None
+        if with_versions and check.project is not None:
             try:
-                branches = await self._charts.branches(project)
+                branches = await self._charts.branches(check.project)
             except GitUnavailableError:
                 raise
             except GitError as exc:
                 check = ChartRepoCheck(repo_url, None, unreadable(repo_url, exc))
-                project = None
             else:
-                versions = tuple(version_order(project.default_branch, branches))
-                return project, versions, chart_repo_findings(check, path=path, **where)
-        return project, None, chart_repo_findings(check, path=path, **where)
+                versions = tuple(version_order(check.project.default_branch, branches))
+        return check.project, versions, chart_repo_findings(check, path=path, **where)
 
     @staticmethod
     def _findings(team: str, chart: str, deploy: LoadedLayer, values: LoadedLayer) -> list[Finding]:

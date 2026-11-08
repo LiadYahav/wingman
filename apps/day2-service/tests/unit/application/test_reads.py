@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from wingman_core.domain.errors import GitUnavailableError, InvalidRequestError
-from wingman_core.domain.git import FileChange, Project, RepoPath
+from wingman_core.domain.errors import (
+    GitUnavailableError,
+    InvalidRequestError,
+    PermissionDeniedError,
+)
+from wingman_core.domain.git import Branch, FileChange, Project, RepoPath
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day2.application.services import Day2Services
 from wingman_day2.domain.clusters import ClusterKind, ClusterRef
@@ -207,6 +211,23 @@ async def test_one_unreadable_chart_repo_is_that_charts_problem_not_the_pages(
     assert entries[("redbull", "bmhgen")].versions is not None
     values = await services.catalog.default_values("redbull", "cluster-roles", "2.0.0")
     assert values.problem is not None and "could not be read" in values.problem
+
+
+async def test_a_chart_repo_whose_branches_are_refused_is_unreadable_too(
+    services: Day2Services, gitlab: InMemoryGitLab, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    roles = await gitlab.get_project("helm-charts/cluster-roles")
+    list_branches = gitlab.list_branches
+
+    async def refuse(project_id: int) -> list[Branch]:
+        if project_id == roles.id:
+            raise PermissionDeniedError("GET /projects/7/repository/branches: 403 Forbidden")
+        return await list_branches(project_id)
+
+    monkeypatch.setattr(gitlab, "list_branches", refuse)
+    entry = await services.catalog.entry("redbull", "cluster-roles")
+    assert entry.versions is None and entry.chart_project is None
+    assert [f.rule for f in entry.findings] == [Rule.CHART_REPO_UNREADABLE]
 
 
 async def test_an_unreachable_gitlab_still_fails_the_catalog(
