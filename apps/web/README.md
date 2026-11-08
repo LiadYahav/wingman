@@ -21,14 +21,15 @@ Next.js frontend for the Wingman Internal Developer Platform.
 ## Getting Started
 
 ```bash
-# Install dependencies
-npm install
+# Install dependencies, at the repository root (one lockfile, ADR-0003)
+npm ci
 
-# Start development server
+# Start the development server (from apps/web)
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) in your browser. Without the services behind it
+every API call fails: see [Running against local services](#running-against-local-services).
 
 ## Scripts
 
@@ -38,7 +39,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
 | `npm run lint` | Run ESLint |
-| `npm run test:e2e` | Run Playwright E2E tests |
+| `npm run test:e2e` | Run Playwright E2E tests (both projects) |
+| `npm run test:e2e:mocked` | Run the mocked project, as CI does |
 | `npm run test:e2e:ui` | Open Playwright interactive UI |
 | `npm run test:e2e:headed` | Run tests in visible browser |
 
@@ -125,13 +127,24 @@ app/
 
 components/
 ├── ui/                 # Base UI components (shadcn/ui)
-├── common/             # Shared components (dialogs, headers)
+├── common/             # Shared components (empty states, problems, diffs, review dialog)
+├── layout/             # The app shell, sidebar, user menu, providers
+├── clusters/           # Cluster facts, drift, live status, the template-driven form
 ├── addons/             # A destination's charts: values editor, cards, bulk install
 └── specs/              # Spec-specific components
+
+hooks/
+└── use-bulk-status.ts  # Live status of every listed cluster in one request
+
+stores/
+└── auth-store.ts       # The signed-in user and role (zustand)
 
 lib/
 ├── api-client.ts       # Typed API client; errors are RFC 9457 problems (ApiError)
 ├── approvals.ts        # How an MR is addressed: day1-<iid>, specs-<iid>, day2-<team>-<iid>
+├── clusters.ts         # Links to a cluster's pages
+├── specs.ts            # The rules day1 checks a spec against, and the document a spec write sends
+├── mr-toast.ts         # The "MR opened" toast, with a link to its review page
 ├── day2.ts             # Day2 paths, query keys, layer roles, problems
 ├── live-status.ts      # Live HostedCluster status (501 FEATURE_DISABLED = status is off)
 ├── values.ts           # Helm values as data: leaves, paths, YAML
@@ -184,7 +197,6 @@ never has the rewrites, see `next.config.ts`):
 # Both services on the in-memory GitLab seeded from dev/gitlab-fixtures (no network needed),
 # from the repository root; both need the same JWT_SECRET_KEY (32+ characters).
 export WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake \
-  GITLAB_URL=http://gitlab.invalid GITLAB_TOKEN=test-token-never-logged-0001 \
   JWT_SECRET_KEY=local-jwt-secret-at-least-32-characters \
   DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs \
   DAY2_SIGS_GROUP_PATH=sigs DAY2_SERVICE_URL=http://127.0.0.1:8002
@@ -197,14 +209,15 @@ WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1
 ```
 
 Sign in on `/login` with any lowercase username and the `DEV_AUTH_SECRET`. Approving needs a
-second user: nobody approves a change they requested.
+second user: nobody approves a change they requested. Each service seeds its own in-memory GitLab,
+so a change one makes is not seen by the other (DEVELOPMENT.md has the local GitLab instead).
 
-## Docker
+## Image
+
+Built from the repository root, so `npm ci` installs exactly what the root lockfile names
+(`docs/ops/images.md`):
 
 ```bash
-# Build image
-docker build -t wingman-web:latest .
-
-# Run container
-docker run -p 3000:3000 wingman-web:latest
+podman build -f apps/web/Dockerfile -t wingman-web:dev .
+podman run -p 3000:3000 wingman-web:dev
 ```
