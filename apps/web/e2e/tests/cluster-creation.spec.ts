@@ -414,7 +414,9 @@ test.describe("Searchable pickers", () => {
     await page.keyboard.press("Enter");
     await expect(form.siteSelect).toContainText("site2");
 
-    // ArrowDown opens too, and the search also matches an option's description (the MCE's version)
+    // ArrowDown opens too, and the search also matches an option's description (the MCE's version);
+    // the picker is disabled until site2's MCEs have loaded
+    await expect(form.mceSelect).toBeEnabled();
     await form.mceSelect.focus();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.type("4.18");
