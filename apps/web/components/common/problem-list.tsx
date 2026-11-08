@@ -31,7 +31,7 @@ export function ProblemList({
         <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
         <div className="min-w-0 space-y-1">
           {heading && <p className="font-medium break-words">{heading}</p>}
-          {lines.length === 1 && !heading ? (
+          {lines.length === 1 ? (
             <p className="break-words">{lines[0]}</p>
           ) : (
             <ul className="list-disc pl-4 space-y-0.5">

@@ -155,6 +155,13 @@ types/
   be. Options are `{ value, label, description?, group?, disabled? }`; the search matches the
   label, description and group. The trigger is the `combobox` and carries the `aria-label` and
   `data-testid` you pass.
+- **Every read has three more states.** Loading is `Skeleton`s shaped like what will be there
+  (rows, cards, lines). A list with nothing in it is an `EmptyState`
+  (`components/common/empty-state.tsx`): what would be here and, when the viewer can take it,
+  the next step (`EmptyStateLink`); `NoMatches` when search or filters emptied it. A failed read
+  is a `ProblemList` (`components/common/problem-list.tsx`) given the error itself, so it shows
+  the problem's detail, every broken rule and the request id: never `error.message` in a
+  string, and never an empty list or a missing section.
 
 ## Environment Variables
 
