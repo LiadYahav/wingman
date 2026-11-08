@@ -27,6 +27,7 @@ function listItem(name: string, overrides: Partial<ClusterStatus> = {}): Cluster
     path: `sites/${SITE}/mces/${MCE}/hostedClusters/${name}.yaml`,
     hosted_cluster: { cluster_name: name.replace(/^ocp4-/, ""), name: `openshift-${name.replace(/^ocp4-/, "")}`, namespace: `hcp-${name.replace(/^ocp4-/, "")}` },
     naming: { follows_convention: true, env: "prod", short_name: "x", sequence: null, problems: [] },
+    owner: { merkaz: "1234", anaf: "56", mador: "7" },
     problems: [],
     ...overrides,
   };
@@ -115,7 +116,7 @@ function drift(overrides: Partial<ClusterDrift> = {}): ClusterDrift {
   return {
     cluster: NAME, site: SITE, mce: MCE, state: "in_sync", is_drifted: false,
     spec_name: "agent-standard", spec_version: "1.0.0", current_spec_version: "1.0.0",
-    addon_drift: [], version_differences: [], error: null, ...overrides,
+    value_drift: [], addon_drift: [], version_differences: [], error: null, ...overrides,
   };
 }
 

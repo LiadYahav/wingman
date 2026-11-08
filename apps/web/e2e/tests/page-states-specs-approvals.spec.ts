@@ -18,7 +18,7 @@ const SPEC: SpecEntry = {
   kind: "ClusterSpec",
   metadata: { name: "agent-standard", description: "Bare-metal workers on the Agent platform", version: "1.0.0", labels: {} },
   spec: {
-    day1: { variables: [], structure: {}, immutable_paths: [], template: "", values: {} },
+    day1: { variables: [], structure: {}, locked_paths: [], template: "", values: {} },
     day2: { addons: [] },
   },
   load_error: null,

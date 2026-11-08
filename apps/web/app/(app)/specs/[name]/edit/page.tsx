@@ -234,7 +234,7 @@ export default function EditSpecPage() {
   const effectiveStructure = structure ?? (spec?.spec.day1.structure
     ? spec.spec.day1.structure as FormValues
     : (templateSchema.length > 0 ? initFormValues(templateSchema) : {}));
-  const effectiveImmutablePaths = immutablePaths ?? new Set<string>(spec?.spec.day1.immutable_paths ?? []);
+  const effectiveImmutablePaths = immutablePaths ?? new Set<string>(spec?.spec.day1.locked_paths ?? []);
 
   const handleToggleImmutable = (path: string) => {
     setImmutablePaths((prev) => {
@@ -324,7 +324,7 @@ export default function EditSpecPage() {
           structure: Object.fromEntries(
             Object.entries(effectiveStructure).filter(([k]) => !IDENTITY_VAR_NAMES.has(k))
           ) as Record<string, unknown>,
-          immutable_paths: [...effectiveImmutablePaths],
+          locked_paths: [...effectiveImmutablePaths],
         },
         day2: { addons: effectiveAddons },
       },

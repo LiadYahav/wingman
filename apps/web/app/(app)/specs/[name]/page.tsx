@@ -38,7 +38,7 @@ const STALE_SPEC =
 
 /** What a cluster of this spec starts from: preset values, list counts, locked fields. */
 function ClusterInputsCard({ spec }: { spec: ClusterSpec }) {
-  const { values = {}, structure, immutable_paths: locked, variables } = spec.spec.day1;
+  const { values = {}, structure, locked_paths: locked, variables } = spec.spec.day1;
   const presets = Object.entries(values);
   const shape = structureSummary(structure);
   return (

@@ -46,7 +46,7 @@ const SPECS = [
       day1: {
         variables: [],
         structure: { nodepools_count: 2 },
-        immutable_paths: ["cluster_name"],
+        locked_paths: ["cluster_name"],
         template: "",
       },
       day2: {
@@ -487,6 +487,7 @@ const TEST_CLUSTER: ClusterStatus = {
   path: "sites/site-east/mces/mce-east/hostedClusters/test-cluster.yaml",
   hosted_cluster: { cluster_name: "test-cluster", name: "openshift-test-cluster", namespace: "hcp-test-cluster" },
   naming: { follows_convention: false, env: null, short_name: null, sequence: null, problems: ["cluster 'test-cluster' does not follow ocp4-<env>-<name>-site-east[-<seq>]"] },
+  owner: {},
   problems: [],
 };
 

@@ -109,7 +109,7 @@ export const mockSpecs: ClusterSpec[] = [
       day1: {
         variables: [],
         structure: { nodepools_count: 2 },
-        immutable_paths: ["cluster_name"],
+        locked_paths: ["cluster_name"],
         template: "",
       },
       day2: {

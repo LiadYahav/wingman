@@ -47,7 +47,7 @@ const DETAIL: ClusterDetail = {
 const DRIFT: ClusterDrift = {
   cluster: NAME, site: SITE, mce: MCE, state: "not_linked", is_drifted: false,
   spec_name: null, spec_version: null, current_spec_version: null,
-  addon_drift: [], version_differences: [], error: null,
+  value_drift: [], addon_drift: [], version_differences: [], error: null,
 };
 
 const CHARTS: DestinationCharts = {
@@ -191,7 +191,7 @@ const SPEC: SpecEntry = {
   kind: "ClusterSpec",
   metadata: { name: "agent-standard", description: "Bare-metal workers on the Agent platform", version: "1.0.0", labels: {} },
   spec: {
-    day1: { variables: [], structure: { nodepools: [{}] }, immutable_paths: [], template: "# template", values: {} },
+    day1: { variables: [], structure: { nodepools: [{}] }, locked_paths: [], template: "# template", values: {} },
     day2: { addons: [] },
   },
   load_error: null,

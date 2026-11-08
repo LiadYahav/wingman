@@ -23,6 +23,7 @@ function cluster(name: string): ClusterStatus {
     path: `sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/${name}.yaml`,
     hosted_cluster: { cluster_name: name.replace(/^ocp4-/, ""), name: `openshift-${name.replace(/^ocp4-/, "")}`, namespace: `hcp-${name.replace(/^ocp4-/, "")}` },
     naming: { follows_convention: true, env: "prod", short_name: "x", sequence: null, problems: [] },
+    owner: { merkaz: "1234", anaf: "56", mador: "7" },
     problems: [],
   };
 }

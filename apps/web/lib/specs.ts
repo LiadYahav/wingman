@@ -57,7 +57,7 @@ export function specDocument(spec: ClusterSpec): ClusterSpec {
       day1: {
         variables: day1.variables ?? [],
         structure: day1.structure ?? {},
-        immutable_paths: day1.immutable_paths ?? [],
+        locked_paths: day1.locked_paths ?? [],
         template: "",
         values: day1.values ?? {},
       },

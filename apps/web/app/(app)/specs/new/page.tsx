@@ -416,7 +416,7 @@ export default function NewSpecPage() {
           structure: Object.fromEntries(
             Object.entries(structure).filter(([k]) => !IDENTITY_VAR_NAMES.has(k))
           ) as Record<string, unknown>,
-          immutable_paths: [...immutablePaths],
+          locked_paths: [...immutablePaths],
           template: "",
         },
         day2: { addons: selectedAddons },

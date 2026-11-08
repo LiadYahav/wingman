@@ -27,7 +27,7 @@ const STANDARD: SpecEntry = {
     day1: {
       variables: [],
       structure: { nodepools: [{ configs: [{}] }, { configs: [{}] }] },
-      immutable_paths: [],
+      locked_paths: [],
       template: "owner:\n  merkaz: \"{{ owner_merkaz }}\"\n",
       values: { owner_merkaz: "1234", platform: "kubevirt" },
     },
@@ -42,7 +42,7 @@ const BROKEN: SpecEntry = {
   kind: "ClusterSpec",
   metadata: { name: "broken-spec", description: "", version: "", labels: {} },
   spec: {
-    day1: { variables: [], structure: {}, immutable_paths: [], template: "", values: {} },
+    day1: { variables: [], structure: {}, locked_paths: [], template: "", values: {} },
     day2: { addons: [] },
   },
   load_error: "the spec is not a valid ClusterSpec",

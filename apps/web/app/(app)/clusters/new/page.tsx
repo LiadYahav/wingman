@@ -1144,7 +1144,7 @@ export default function NewClusterPage() {
                 values={formValues}
                 onChange={setDynamicValues}
                 mode="cluster-create"
-                immutablePaths={new Set(selectedSpec.spec.day1.immutable_paths ?? [])}
+                immutablePaths={new Set(selectedSpec.spec.day1.locked_paths ?? [])}
                 infraEnvOptions={infraEnvs ?? undefined}
                 infraEnvsLoading={infraEnvsLoading && Boolean(mce)}
               />
