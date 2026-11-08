@@ -15,7 +15,7 @@ import difflib
 import hashlib
 import itertools
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from wingman_core.domain.errors import (
@@ -100,6 +100,8 @@ class InMemoryGitLab:
         self._base_url = base_url.rstrip("/")
         self._projects: dict[int, _ProjectRecord] = {}
         self._by_path: dict[str, int] = {}
+        self._moved: dict[str, int] = {}
+        """Old paths of renamed projects; GitLab keeps them as redirects."""
         self._ids = itertools.count(1)
         self._sequence = itertools.count(1)
 
@@ -146,6 +148,23 @@ class InMemoryGitLab:
         record.branches[branch] = commit.id
         return Branch(branch, commit.id)
 
+    def rename_project(self, project_id: int, path_with_namespace: str) -> Project:
+        """Move a project to a new path; the old one keeps finding it, as in GitLab."""
+        record = self._project(project_id)
+        if path_with_namespace in self._by_path:
+            raise AlreadyExistsError(f"project {path_with_namespace} already exists")
+        old = record.project.path_with_namespace
+        del self._by_path[old]
+        self._moved[old] = project_id
+        self._moved.pop(path_with_namespace, None)
+        self._by_path[path_with_namespace] = project_id
+        record.project = replace(
+            record.project,
+            path_with_namespace=path_with_namespace,
+            web_url=f"{self._base_url}/{path_with_namespace}",
+        )
+        return record.project
+
     def snapshot(self, project_id: int, ref: str) -> dict[str, str]:
         """Every file at ``ref`` as ``{path: content}``; for assertions in tests."""
         record = self._project(project_id)
@@ -156,9 +175,10 @@ class InMemoryGitLab:
     async def get_project(self, project: int | str) -> Project:
         """See GitLabPort.get_project."""
         if isinstance(project, str):
-            if project not in self._by_path:
+            found = self._by_path.get(project, self._moved.get(project))
+            if found is None:
                 raise NotFoundError(f"project {project} not found")
-            project = self._by_path[project]
+            project = found
         return self._project(project).project
 
     async def list_group_projects(self, group: str) -> list[Project]:

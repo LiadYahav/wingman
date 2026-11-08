@@ -9,7 +9,7 @@ import pytest
 
 from wingman_core.domain.git import Project
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
-from wingman_core.testing.gitlab_contract import GitLabContract, NewProject
+from wingman_core.testing.gitlab_contract import GitLabContract, NewProject, RenameProject
 
 
 class TestInMemoryGitLabContract(GitLabContract):
@@ -25,3 +25,11 @@ class TestInMemoryGitLabContract(GitLabContract):
             return gitlab.create_project(f"contract/project-{next(counter)}", files)
 
         return make
+
+    @pytest.fixture
+    def rename_project(self, gitlab: InMemoryGitLab) -> RenameProject:
+        async def rename(project: Project, name: str) -> None:
+            namespace = project.path_with_namespace.rsplit("/", 1)[0]
+            gitlab.rename_project(project.id, f"{namespace}/{name}")
+
+        return rename

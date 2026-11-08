@@ -4,7 +4,9 @@ Subclass :class:`GitLabContract` in a test module and provide two fixtures:
 
 - ``gitlab``: the GitLabPort under test;
 - ``new_project``: an async factory ``(files) -> Project`` that creates a
-  fresh project whose default branch ``main`` holds ``files``.
+  fresh project whose default branch ``main`` holds ``files``;
+- ``rename_project``: an async ``(project, name) -> None`` that gives the
+  project a new last path segment, as a GitLab rename does.
 
 The suite runs against the in-memory fake on every test run and against a
 real GitLab when one is configured. A failure on the real one means the fake
@@ -28,6 +30,7 @@ from wingman_core.domain.merge_request import MergeRequestRef, MRState, NewMerge
 from wingman_core.ports.gitlab import GitLabPort
 
 NewProject = Callable[[Mapping[str, str]], Awaitable[Project]]
+RenameProject = Callable[[Project, str], Awaitable[None]]
 
 FILES = {
     "README.md": "# fixture\n",
@@ -479,3 +482,13 @@ class GitLabContract:
         assert (await gitlab.get_project(project.path_with_namespace)).id == project.id
         with pytest.raises(NotFoundError):
             await gitlab.get_project(f"{project.path_with_namespace}-missing")
+
+    async def test_a_renamed_project_is_found_by_its_old_path(
+        self, gitlab: GitLabPort, new_project: NewProject, rename_project: RenameProject
+    ) -> None:
+        project = await new_project(FILES)
+        old = project.path_with_namespace
+        await rename_project(project, f"{old.rsplit('/', 1)[-1]}-renamed")
+        found = await gitlab.get_project(old)
+        assert (found.id, found.path_with_namespace) == (project.id, f"{old}-renamed")
+        assert found.web_url.endswith(f"/{old}-renamed")
