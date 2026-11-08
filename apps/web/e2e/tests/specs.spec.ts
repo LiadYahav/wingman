@@ -264,7 +264,11 @@ test.describe("Spec edit", () => {
     const edit = new SpecEditPage(page);
     await edit.goto("agent-standard");
 
-    await expect(page.getByTestId("spec-presets")).toContainText("owner_merkaz: 1234");
+    // The presets load into their fields
+    await expect(page.getByLabel("Merkaz", { exact: true })).toHaveValue("1234");
+    await expect(
+      page.getByRole("radiogroup", { name: "Platform", exact: true }).getByRole("radio", { name: "KubeVirt" })
+    ).toHaveAttribute("aria-checked", "true");
     await edit.versionInput.fill("1.1.0");
     await edit.reviewAndConfirm();
 
@@ -287,7 +291,7 @@ test.describe("Spec edit", () => {
     expect(new URL(sentTo).search).toBe("");
   });
 
-  test("a refused update lists every problem next to the actions", async ({ page }) => {
+  test("a refused update shows every problem, at its field or at the top", async ({ page }) => {
     const problems = [
       "metadata.version: Value error, spec version 'x y' must be one word, like 1.2.0",
       "spec.day2.addons: addons listed twice: redbull/cluster-roles",
@@ -305,8 +309,13 @@ test.describe("Spec edit", () => {
     await edit.reviewAndConfirm();
 
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    const alert = problemAlert(page, problems[0]);
-    for (const line of problems) await expect(alert).toContainText(line);
+    // A problem that names a field is shown at it; one that names none, at the top
+    await expect(page.locator('[data-field="metadata.version"]')).toContainText(
+      "Value error, spec version 'x y' must be one word, like 1.2.0"
+    );
+    const top = problemAlert(page, "the spec is not a valid ClusterSpec");
+    await expect(top).toContainText(problems[1]);
+    await expect(top).toContainText("One more is shown at its field below.");
   });
 
   test("an update of a spec that changed meanwhile offers a reload", async ({ page }) => {
@@ -323,7 +332,7 @@ test.describe("Spec edit", () => {
     await edit.reviewAndConfirm();
 
     await expect(problemAlert(page, "changed since you opened it")).toBeVisible();
-    await page.getByRole("button", { name: /reload spec/i }).click();
+    await page.getByRole("button", { name: /reload flavor/i }).click();
     await expect(problemAlert(page, "changed since you opened it")).toHaveCount(0);
     await expect(edit.descriptionInput).toHaveValue(STANDARD.metadata.description!);
   });
@@ -386,7 +395,7 @@ test.describe("Spec writes carry the last_commit_id they read", () => {
     expect(puts[0].body).not.toHaveProperty("last_commit_id");
 
     const reloaded = reread(page);
-    await page.getByRole("button", { name: /reload spec/i }).click();
+    await page.getByRole("button", { name: /reload flavor/i }).click();
     await reloaded;
     await expect(problemAlert(page, "changed since you opened it")).toHaveCount(0);
     await edit.descriptionInput.fill("Changed again");
@@ -455,10 +464,11 @@ test.describe("Spec create", () => {
       json(r, problem(409, "ALREADY_EXISTS", "spec 'agent-standard' already exists"), 409)
     );
     await spec.fillBasicInfo("agent-standard", "1.0.0");
+    await spec.chooseNetworkHardware();
     await spec.reviewAndConfirm();
 
-    await expect(problemAlert(page, 'A spec named "agent-standard" already exists')).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open the existing spec" })).toHaveAttribute("href", "/specs/agent-standard");
+    await expect(problemAlert(page, 'A flavor named "agent-standard" already exists')).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open the existing flavor" })).toHaveAttribute("href", "/specs/agent-standard");
   });
 
   test("a refused create lists every field error", async ({ page }) => {
@@ -471,6 +481,7 @@ test.describe("Spec create", () => {
       }), 422)
     );
     await spec.fillBasicInfo("new-spec", "1.0.0");
+    await spec.chooseNetworkHardware();
     await spec.reviewAndConfirm();
 
     const alert = problemAlert(page, "The request is not valid.");
@@ -487,8 +498,8 @@ test.describe("Spec create", () => {
     await spec.fillBasicInfo("Bad_Name", "two words");
     await spec.submit();
 
-    await expect(page.getByText(/Lowercase letters, digits and '-', starting and ending/)).toBeVisible();
-    await expect(page.getByText(/One word of letters, digits/)).toBeVisible();
+    await expect(page.locator('[data-field="metadata.name"]').getByText(/Lowercase letters, digits and '-', starting and ending/)).toBeVisible();
+    await expect(page.locator('[data-field="metadata.version"]').getByText(/One word of letters, digits/)).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(posted).toBe(false);
   });
@@ -501,9 +512,10 @@ test.describe("Spec create", () => {
     });
     await spec.fillBasicInfo("new-spec", "2.0.0");
     await spec.descriptionInput.fill("For test clusters");
+    await spec.chooseNetworkHardware();
     await spec.reviewAndConfirm();
 
-    await expect(page.getByText("Spec MR !10 opened")).toBeVisible();
+    await expect(page.getByText("Flavor MR !10 opened")).toBeVisible();
     await page.waitForURL(/\/specs$/);
     expect(sent).toMatchObject({ metadata: { name: "new-spec", version: "2.0.0", description: "For test clusters" } });
   });
@@ -527,9 +539,10 @@ test.describe("Spec create", () => {
 
     await spec.selectAddon("redbull", "cluster-roles");
     await spec.fillBasicInfo("new-spec", "1.0.0");
+    await spec.chooseNetworkHardware();
     await spec.reviewAndConfirm();
 
-    await expect(page.getByText("Spec MR !11 opened")).toBeVisible();
+    await expect(page.getByText("Flavor MR !11 opened")).toBeVisible();
     expect((sent as unknown as SpecEntry).spec.day2.addons).toEqual([
       { team: "redbull", name: "cluster-roles", version: "HEAD", overrideable: [] },
     ]);

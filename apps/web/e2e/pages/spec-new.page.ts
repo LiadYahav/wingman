@@ -1,4 +1,4 @@
-import { Page, Locator } from "@playwright/test";
+import { expect, Page, Locator } from "@playwright/test";
 
 export class SpecNewPage {
   readonly page: Page;
@@ -29,6 +29,21 @@ export class SpecNewPage {
     if (version) {
       await this.versionInput.fill(version);
     }
+  }
+
+  /**
+   * Choose the hardware type of the first nodepool's `nm-conf`: a new flavor's
+   * nodepool starts with the nodepool defaults, and day1 refuses a flavor's
+   * `nm-conf` without one (flavors v2, §3).
+   */
+  async chooseNetworkHardware(hardware = "dell", nodepool = 0) {
+    await this.page
+      .getByTestId(`nodepool-${nodepool}-configs`)
+      .getByRole("combobox", { name: /entry 1 hardware type$/ })
+      .click();
+    await this.page.getByRole("option").filter({ has: this.page.getByText(hardware, { exact: true }) }).click();
+    // The list is a popup (role dialog) until its exit animation ends
+    await expect(this.page.getByRole("option")).toHaveCount(0);
   }
 
   getTeamHeader(team: string): Locator {
