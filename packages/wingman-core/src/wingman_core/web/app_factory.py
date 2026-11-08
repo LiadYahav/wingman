@@ -18,12 +18,11 @@ RFC 9457 errors (ADR-0004), request ids, metrics and ``/metrics``
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping
 from contextlib import AbstractAsyncContextManager
 from typing import Final
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from wingman_core.infrastructure.session_tokens import SessionTokens
@@ -50,30 +49,19 @@ def create_base_app(
     metrics: WingmanMetrics,
     session_tokens: SessionTokens,
     readiness: Mapping[str, ReadinessCheck] | None = None,
-    cors_origins: Sequence[str] = (),
     lifespan: Lifespan | None = None,
 ) -> FastAPI:
     """A FastAPI app with Wingman's middleware, handlers, metrics and health routes.
 
     ``api_prefix`` is where the service's routes live (``/api/day1``); the
     build route goes under it, so the proxy in front routes it like the rest.
-    ``cors_origins`` must be explicit origins: the web app is served from the
-    same origin as the API, so the default is no CORS at all, and ``*`` is
-    refused.
+    There is no CORS: the web app is served from the same origin as the API
+    (the legacy services allowed ``*`` with credentials).
     """
-    if "*" in cors_origins:
-        raise ValueError("CORS origins must be explicit; '*' is refused")
     app = FastAPI(title=title, version=version, lifespan=lifespan)
     app.state.metrics = metrics
     app.state.session_tokens = session_tokens
     install_metrics(app, metrics)
-    if cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=list(cors_origins),
-            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-            allow_headers=["authorization", "content-type", "x-request-id"],
-        )
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     _add_health_routes(app, dict(readiness or {}))

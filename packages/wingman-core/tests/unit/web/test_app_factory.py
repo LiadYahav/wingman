@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from datetime import timedelta
 
 import httpx
@@ -17,11 +17,7 @@ from wingman_core.web import app_factory
 from wingman_core.web.app_factory import ReadinessCheck, create_base_app
 
 
-def make_app(
-    *,
-    readiness: Mapping[str, ReadinessCheck] | None = None,
-    cors_origins: Sequence[str] = (),
-) -> FastAPI:
+def make_app(*, readiness: Mapping[str, ReadinessCheck] | None = None) -> FastAPI:
     return create_base_app(
         title="t",
         version="1.4.0",
@@ -30,7 +26,6 @@ def make_app(
         metrics=WingmanMetrics(CollectorRegistry(), component="t", version="0", commit="0"),
         session_tokens=SessionTokens("s" * 40, ttl=timedelta(hours=1)),
         readiness=readiness,
-        cors_origins=cors_origins,
     )
 
 
@@ -93,15 +88,10 @@ async def test_the_build_is_shown_to_a_logged_in_user_under_the_api_prefix() -> 
     )
 
 
-async def test_wildcard_cors_is_refused_and_explicit_origins_work() -> None:
-    with pytest.raises(ValueError, match="explicit"):
-        make_app(cors_origins=["*"])
-    app = make_app(cors_origins=["https://wingman.example"])
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://t"
-    ) as client:
-        response = await client.get("/healthz", headers={"origin": "https://wingman.example"})
-    assert response.headers["access-control-allow-origin"] == "https://wingman.example"
+async def test_no_origin_is_allowed_cross_origin() -> None:
+    # The legacy services answered CORS "*" with credentials; the web app is same-origin.
+    response = await get(make_app(), "/healthz")
+    assert "access-control-allow-origin" not in response.headers
 
 
 async def test_approval_errors_become_problems() -> None:
