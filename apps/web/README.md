@@ -58,7 +58,7 @@ e2e/
 ### Running Tests
 
 Two Playwright projects (`playwright.config.ts`): `mocked` is every spec but `live-*.spec.ts`,
-with every API call intercepted (`e2e/fixtures/`), and is what CI runs; `live` is the two
+with every API call intercepted (`e2e/fixtures/`), and is what CI runs; `live` is the three
 `live-*` specs, against a running stack.
 
 ```bash
@@ -83,6 +83,11 @@ WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3
 # page, install/update/remove/bulk, an MCE, a UPI fleet default, the hub, destinations, lints
 DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
   npx playwright test live-day2 --project=live
+# Flavors v2: a hand-written cluster joins a flavor (the flavor's page), a second admin merges
+# it, then it is synced from its Drift tab. Needs a freshly seeded GitLab: the fixture cluster
+# ocp4-prod-lark-site1 must follow no flavor yet (seed_gitlab.py --reset)
+WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test live-flavors --project=live
 ```
 
 `npm run test:e2e` runs both projects; without a stack the `live` specs skip (no secret) or fail.
