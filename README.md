@@ -157,6 +157,8 @@ Changes since the legacy services:
 | `GET` | `/api/day1/clusters/{name}` | The cluster's file, values and naming |
 | `PATCH` | `/api/day1/clusters/{name}` | Modify the cluster (opens the MR that replaces its file) |
 | `DELETE` | `/api/day1/clusters/{name}` | Delete the cluster (opens the MR that removes its file) |
+| `GET` | `/api/day1/clusters/{name}/delete-workflow` | The newest delete-cluster workflow run (501 until the workflow exists, ADR-0033) |
+| `POST` | `/api/day1/clusters/{name}/delete-workflow` | Start the delete-cluster workflow, with `{"confirm": true}` (admin; 501 until it exists) |
 | `GET` | `/api/day1/clusters/{name}/current-yaml` | The file's text on the default branch |
 | `GET` | `/api/day1/clusters/{name}/history` | Commits that changed the file |
 | `GET` | `/api/day1/clusters/{name}/drift` | The cluster against its spec's Day2 addons |
