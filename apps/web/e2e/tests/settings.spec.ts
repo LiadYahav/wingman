@@ -31,7 +31,8 @@ test.describe("Settings", () => {
     );
     await open(page);
 
-    await expect(page.getByTestId("build-day1")).toHaveText("1.4.0abc1234def5");
+    // The commit's first 12 characters
+    await expect(page.getByTestId("build-day1")).toHaveText("1.4.0abc1234def56");
     await expect(page.getByTestId("build-day2")).toHaveText("1.4.0");
     await expect(page.getByTestId("build-skew")).toHaveCount(0);
     await expect(page.getByText("1.0.0")).toHaveCount(0);
