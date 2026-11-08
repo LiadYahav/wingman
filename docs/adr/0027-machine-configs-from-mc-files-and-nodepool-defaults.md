@@ -45,6 +45,27 @@ template file not named `nm-conf-template-hw-<hw>.bu` are not offered and
 are listed in the response's `problems`. A day1 repo without `mc-files/`
 is an empty catalogue that says so: nothing resolves there.
 
+**An entry is `{name: <static config>}` or `{name: nm-conf, hardware: <hw>}`.**
+The second is the cluster's own network config. Day1 expands it to
+`{name: nm-conf-<clusterName>-<hw>}` before rendering, where clusterName is
+the chart's (the file stem minus `DAY1_CLUSTER_NAME_STRIP_PREFIX`,
+ADR-0015), so the shared `cluster-template.j2` (which renders
+`config.name`) and the file the CI reads keep their shape.
+
+**Checked at flavor save and at create.** On `POST /specs` and `PUT
+/specs/{name}`, every entry in `spec.day1.values.nodepools[i].configs` must
+resolve; a flavor has no cluster name, so a network entry names only a
+known hardware type, and a written-out `nm-conf-<...>-<hw>` is refused in
+favour of the structured form. On preview and create, every entry of the
+merged inputs must resolve for this cluster: the expanded network name must
+be one the CI reads as the chosen hardware type (an overlapping type can
+capture it), and a written-out name is accepted only when it is this
+cluster's own. Within one nodepool an entry may not repeat. Each broken
+entry is one line of the 422 problem's `details.problems`, at its
+template-input path (`nodepools[1].configs[0]: ...`), with a "did you
+mean" for a near miss. Flavor values must also pass the template's input
+check (ADR-0013) at save, not only at create.
+
 **Nodepool defaults.** `nodepool-defaults.yaml` at the root of the specs
 project (next to `cluster-template.j2`) is `configs: [<entry>, ...]`; there
 `nm-conf` may leave its hardware type to the nodepool. The team's file
@@ -93,3 +114,7 @@ in its `problems`; a failed GitLab read fails the request (ADR-0004).
   read propagating, and the cache.
 - `apps/day1-service/tests/api/test_machine_configs_api.py`: the response
   the web reads.
+- `apps/day1-service/tests/unit/application/test_flavor_rules.py` and
+  `apps/day1-service/tests/api/test_flavor_rules_api.py`: the expansion in
+  the rendered file (in both `DAY1_CLUSTER_NAME_STRIP_PREFIX` modes), and
+  the 422s at flavor save and at create.

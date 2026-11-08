@@ -4,7 +4,9 @@ Reads come from the day1 repo's default branch; changes go through the
 ``ClusterProvisioner`` (today a merge request, ADR-0017). A new cluster file
 is rendered from the shared template, then checked against the values-file
 contract before anything is written (ADR-0012), and its name against the
-naming rules (ADR-0014). A file that cannot be parsed is shown with its
+naming rules (ADR-0014). Its machine configs must resolve by the day1 CI's
+rule, and the cluster's network config entry is expanded to the name the CI
+reads before the template renders (ADR-0027). A file that cannot be parsed is shown with its
 error, never dropped from the list (ADR-0004).
 """
 
@@ -19,6 +21,7 @@ from wingman_core.domain.git import Commit, FileContent
 from wingman_core.domain.merge_request import MRState
 from wingman_core.domain.mr_conventions import Repo, ResourceType, Verb, parse_mr_title
 from wingman_core.domain.users import User
+from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import read_tree
@@ -44,6 +47,11 @@ from wingman_day1.domain.errors import (
     RenderError,
     ResourceNotFoundError,
     StaleError,
+)
+from wingman_day1.domain.machine_configs import (
+    MachineConfigCatalog,
+    cluster_config_problems,
+    expand_network_configs,
 )
 from wingman_day1.domain.names import (
     ClusterNaming,
@@ -109,6 +117,7 @@ class ClusterService:
         sites: SiteCatalog,
         specs: SpecCatalog,
         provisioner: ClusterProvisioner,
+        machine_configs: MachineConfigService,
         *,
         naming: HostedClusterNaming,
     ) -> None:
@@ -117,6 +126,7 @@ class ClusterService:
         self._sites = sites
         self._specs = specs
         self._provisioner = provisioner
+        self._machine_configs = machine_configs
         self._naming = naming
 
     # ── Reads ───────────────────────────────────────────────────────────────
@@ -184,7 +194,8 @@ class ClusterService:
                 f"v{request.spec_version}; reload the form"
             )
         addons = spec.requested_addons(request.addon_overrides)
-        content = self._render(ref, spec, request.variables)
+        catalog = await self._machine_configs.catalog()
+        content = self._render(ref, spec, request.variables, catalog)
         provenance = Provenance(spec.metadata.name, spec.metadata.version, tuple(addons))
         return RenderedCluster(ref, with_provenance(content, provenance), spec, tuple(addons))
 
@@ -264,22 +275,29 @@ class ClusterService:
 
     # ── Internals ───────────────────────────────────────────────────────────
 
-    def _render(self, ref: ClusterRef, spec: ClusterSpec, variables: Mapping[str, object]) -> str:
-        presets: dict[str, object] = {
-            v.name: v.default for v in spec.spec.day1.variables if v.default is not None
-        }
-        presets.update(spec.spec.day1.values)
+    def _render(
+        self,
+        ref: ClusterRef,
+        spec: ClusterSpec,
+        variables: Mapping[str, object],
+        catalog: MachineConfigCatalog,
+    ) -> str:
         inputs = build_inputs(
             variables=variables,
             cluster_name=ref.name,
             site=ref.site,
             mce=ref.mce,
             openshift_release_version=None,
-            presets=presets,
+            presets=spec.presets(),
         )
         problems = check_inputs(inputs)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
+        cluster_name = self._naming.for_file(ref.name).cluster_name
+        problems = cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
+        if problems:
+            raise InvalidInputError("the cluster's inputs are not acceptable", problems)
+        inputs = expand_network_configs(inputs, cluster_name=cluster_name)
         template = spec.spec.day1.template
         if not template.strip():
             raise RenderError("the specs project has no cluster-template.j2")

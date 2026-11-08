@@ -209,6 +209,7 @@ def build_context(
             MergeRequestWriter(gitlab, specs_repo, repo=Repo.SPECS, label="specs", clock=clock),
             specs_root=settings.specs_root_path,
         ),
+        machine_configs,
         specs_root=settings.specs_root_path,
     )
     cluster_service = ClusterService(
@@ -218,6 +219,7 @@ def build_context(
         GitClusterProvisioner(
             MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
         ),
+        machine_configs,
         naming=naming,
     )
     repos = {RepoKey.DAY1: day1, RepoKey.SPECS: specs_repo}

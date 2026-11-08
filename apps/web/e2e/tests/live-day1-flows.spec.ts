@@ -115,7 +115,7 @@ test("create a cluster from a spec opens an MR its requester cannot approve", as
   const infraEnvs = alice.getByPlaceholder("e.g. dell-r660-site1-128c-1024gb-5tb");
   for (let i = 0; i < (await infraEnvs.count()); i++) await infraEnvs.nth(i).fill(`dell-r660-site1-pool${i + 1}`);
   const configs = alice.getByPlaceholder("e.g. worker-kubeletconfig-reserved");
-  for (let i = 0; i < (await configs.count()); i++) await configs.nth(i).fill("worker-chrony-configuration");
+  for (let i = 0; i < (await configs.count()); i++) await configs.nth(i).fill("workers-chrony-configuration");
   // The spec's addon is found in the day2 catalog, so its full values can be edited
   await expect(alice.getByTestId("addon-redbull-cluster-roles").getByRole("button", { name: "Full Values" })).toBeVisible();
 

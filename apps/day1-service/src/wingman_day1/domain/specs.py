@@ -139,6 +139,14 @@ class ClusterSpec(_Strict):
     metadata: SpecMetadata
     spec: SpecBody = Field(default_factory=SpecBody)
 
+    def presets(self) -> dict[str, object]:
+        """The preset inputs: legacy variable defaults, then ``spec.day1.values`` over them."""
+        presets: dict[str, object] = {
+            v.name: v.default for v in self.spec.day1.variables if v.default is not None
+        }
+        presets.update(self.spec.day1.values)
+        return presets
+
     def requested_addons(
         self, overrides: Mapping[str, Mapping[str, object]]
     ) -> list[RequestedAddon]:
