@@ -57,6 +57,7 @@ async def test_the_list_carries_the_legacy_spec_shape_and_the_template(
     assert dell["locked_paths"] == ["nodepools[0].configs"]
     assert dell["values"]["nodepools"][0]["configs"][0] == {"name": "nm-conf", "hardware": "dell"}
     assert specs[1]["warnings"] == []
+    assert specs[1]["enforced_locks"] == ["nodepools[0].configs"]
 
 
 async def test_a_broken_spec_is_listed_with_its_error(

@@ -218,6 +218,10 @@ before (`the cluster template reads an undefined input`).
   Switch the editor to `locked_paths`.
 - **`spec.day1.values`** holds both presets and locked values. A path in
   `locked_paths` is locked; every other value is a preset.
+- **`enforced_locks`** (new, list items and detail): the `locked_paths` a
+  create enforces, as day1 decides them; a stored lock that breaks the rules
+  (listed in `warnings`) is not in it. Show a field as locked only when its
+  path is here.
 - **`warnings`** (new, list items and detail): the flavor rules a stored
   spec breaks; it still loads, but saving it unchanged would be refused.
   They cover values that could break the file, owners, and locks. (Config

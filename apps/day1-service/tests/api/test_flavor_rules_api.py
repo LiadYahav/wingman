@@ -135,3 +135,4 @@ async def test_a_flavor_with_a_lock_that_fixes_nothing_is_a_422_and_a_stored_one
         "locked_paths: cluster_name is set for each cluster at create (its name, site, MCE and "
         "OpenShift version) and cannot be locked"
     ]
+    assert old["enforced_locks"] == []  # a stored lock that breaks the rules is not enforced

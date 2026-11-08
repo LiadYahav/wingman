@@ -627,6 +627,8 @@ class SpecOut(ClusterSpec):
     """The commit that last changed the file: send it back with an edit or delete."""
     warnings: list[str] = Field(default_factory=list)
     """Flavor rules the stored spec breaks: it loads, but a save would be refused."""
+    enforced_locks: list[str] = Field(default_factory=list)
+    """The ``locked_paths`` a create enforces: a stored lock that breaks the rules is not one."""
 
     @classmethod
     def of(cls, entry: SpecEntry) -> SpecOut:
@@ -637,6 +639,7 @@ class SpecOut(ClusterSpec):
                     **entry.spec.model_dump(),
                     "last_commit_id": entry.last_commit_id,
                     "warnings": rule_problems(entry.spec),
+                    "enforced_locks": [str(lock.path) for lock in entry.spec.locks()],
                 }
             )
         error = entry.error
