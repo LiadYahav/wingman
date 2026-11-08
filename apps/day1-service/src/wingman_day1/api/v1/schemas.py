@@ -27,6 +27,7 @@ from wingman_day1.application.specs import SpecEntry
 from wingman_day1.domain.addons import AddonDrift, RequestedAddon, VersionDifference
 from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
+from wingman_day1.domain.openshift_versions import OpenShiftVersions
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata
 from wingman_day1.domain.status import LiveStatus
 from wingman_day1.domain.workflows import WorkflowRun
@@ -276,6 +277,22 @@ class MceOut(BaseModel):
             cluster_count=view.cluster_count,
             stray_files=list(view.stray_files),
             problems=list(view.problems),
+        )
+
+
+class OpenShiftVersionsOut(BaseModel):
+    """The releases a new cluster on an MCE may use, newest first (ADR-0034)."""
+
+    mce: str
+    versions: list[str]
+    problems: list[str]
+    """Why ``versions`` may be short or empty: a missing or broken ``upgrade/`` file."""
+
+    @classmethod
+    def of(cls, offered: OpenShiftVersions) -> OpenShiftVersionsOut:
+        """From the domain result."""
+        return cls(
+            mce=offered.mce, versions=list(offered.versions), problems=list(offered.problems)
         )
 
 

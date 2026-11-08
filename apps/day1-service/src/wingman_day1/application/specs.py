@@ -39,7 +39,7 @@ class SpecEntry:
 
 
 class SpecCatalog:
-    """Read specs, the template and the version list; propose spec changes."""
+    """Read specs and the template; propose spec changes."""
 
     def __init__(self, specs: RepoReads, changes: SpecChanges, *, specs_root: str) -> None:
         """Read through ``specs`` (cached) and write through ``changes``."""
@@ -60,18 +60,6 @@ class SpecCatalog:
         """The template's inputs, for the create form."""
         template = await self.template()
         return analyze_template(template, include_reserved=include_reserved) if template else []
-
-    async def versions(self) -> list[str]:
-        """OpenShift releases from ``openshift-versions.txt`` (``#`` comments ignored)."""
-        try:
-            content = (await self._specs.read(paths.VERSIONS_FILE)).content
-        except NotFoundError:
-            return []
-        return [
-            line.strip()
-            for line in content.splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
 
     async def entries(self) -> list[SpecEntry]:
         """Every ``<name>.yaml`` under the specs folder, with the template filled in."""

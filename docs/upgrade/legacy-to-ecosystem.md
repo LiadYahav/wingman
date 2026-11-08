@@ -126,8 +126,17 @@ or write it, and nothing in Wingman converts it. Report which repos.
 
 In `gitlab.specsProjectId`:
 - `cluster-template.j2` at the project root;
-- `openshift-versions.txt` at the root, one release per line, `#` comments;
 - the specs in `gitlab.specsRoot` (default `specs/`), one `<name>.yaml` each.
+
+`openshift-versions.txt` is no longer read; delete it once the new day1 is
+up. The OpenShift versions come from the day1 repo now (ADR-0034). In
+`gitlab.day1ProjectId`:
+- `upgrade/ladder.yaml`, the verified releases (`ladder[].version`);
+- one `upgrade/mces/<mce>.yaml` for every MCE that clusters are created on,
+  with the minors it can host (`mce.supportedHostedVersions`, quoted).
+
+An MCE without its file offers no versions, and the create form says so for
+that MCE. The day1 repo's `upgrade/README.md` describes both files.
 
 The new day1 checks every rendered file before it opens an MR (ADR-0012):
 - it needs a valid `mastertag` and a `nodepool[]` list;

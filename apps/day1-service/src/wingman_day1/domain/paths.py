@@ -8,11 +8,12 @@ ApplicationSets read (ADR-0012)::
     sites/<site>/mces/<mce>/values.yaml      # the MCE's defaults, incl. mastertag
     sites/<site>/mces/<mce>/version.yaml     # the hub's own version (day2 reads it)
     sites/<site>/mces/<mce>/hostedClusters/<cluster>.yaml
+    upgrade/ladder.yaml                      # the verified releases (ADR-0034)
+    upgrade/mces/<mce>.yaml                  # the minors each MCE can host
 
 Specs repo (``wingman/cluster-specs``)::
 
     cluster-template.j2
-    openshift-versions.txt
     specs/<spec>.yaml
 
 Every path is built through ``RepoPath.of``, so a name from a request can
@@ -29,9 +30,10 @@ from wingman_core.domain.git import RepoPath
 SITES: Final = RepoPath("sites")
 HOSTED_CLUSTERS_DIR: Final = "hostedClusters"
 CLUSTER_SUFFIX: Final = ".yaml"
+UPGRADE_LADDER: Final = RepoPath("upgrade/ladder.yaml")
+"""The releases the upgrade workflow steps through; the create form offers them (ADR-0034)."""
 
 TEMPLATE_FILE: Final = RepoPath("cluster-template.j2")
-VERSIONS_FILE: Final = RepoPath("openshift-versions.txt")
 SPEC_SUFFIX: Final = ".yaml"
 
 
@@ -53,6 +55,11 @@ def mce_values(site: str, mce: str) -> RepoPath:
 def mce_version(site: str, mce: str) -> RepoPath:
     """``sites/<site>/mces/<mce>/version.yaml``: the hub's own OCP version."""
     return mce_dir(site, mce).child("version.yaml")
+
+
+def upgrade_mce_rules(mce: str) -> RepoPath:
+    """``upgrade/mces/<mce>.yaml``: the OCP minors the MCE's HyperShift can host."""
+    return RepoPath.of("upgrade", "mces", f"{mce}.yaml")
 
 
 def hosted_clusters_dir(site: str, mce: str) -> RepoPath:
