@@ -33,7 +33,13 @@ from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
 from wingman_core.ports.gitlab import GitLabPort
-from wingman_core.settings import AuthSettings, GitBackend, GitLabSettings, RuntimeSettings
+from wingman_core.settings import (
+    AuthSettings,
+    GitBackend,
+    GitLabSettings,
+    RuntimeSettings,
+    project_ref,
+)
 from wingman_core.web.app_factory import create_base_app
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.api.errors import register_day1_error_handlers
@@ -95,11 +101,6 @@ class Adapters:
     identity: IdentityProvider | None = None
     """``None`` when OpenShift OAuth is not configured (dev login only)."""
     closers: tuple[Close, ...] = field(default=())
-
-
-def project_ref(value: str) -> int | str:
-    """A project setting: a numeric id, or a ``group/project`` path."""
-    return int(value) if value.isdigit() else value.strip("/")
 
 
 def build_adapters(

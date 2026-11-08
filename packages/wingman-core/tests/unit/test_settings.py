@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 from pydantic import AnyHttpUrl, SecretStr, ValidationError
 
-from wingman_core.settings import Environment, GitBackend, GitLabSettings, RuntimeSettings
+from wingman_core.settings import (
+    Environment,
+    GitBackend,
+    GitLabSettings,
+    RuntimeSettings,
+    project_ref,
+)
 
 
 def test_fake_backend_is_refused_in_production() -> None:
@@ -45,6 +51,19 @@ def test_a_local_run_says_it_is_no_release(monkeypatch: pytest.MonkeyPatch) -> N
         monkeypatch.delenv(name, raising=False)
     settings = RuntimeSettings()
     assert (settings.version, settings.commit, settings.fixtures_dir) == ("dev", "unknown", None)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("42", 42),
+        (" 42 ", 42),
+        ("gitops-day1/platform-config", "gitops-day1/platform-config"),
+        (" /a/b/ ", "a/b"),
+    ],
+)
+def test_a_project_setting_is_an_id_or_a_path(value: str, expected: int | str) -> None:
+    assert project_ref(value) == expected
 
 
 def test_empty_gitlab_token_is_refused() -> None:

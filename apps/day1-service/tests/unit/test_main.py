@@ -19,7 +19,7 @@ from wingman_core.testing.fixtures import default_fixture_root, load_fixture_pro
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
-from wingman_day1.main import Adapters, build_adapters, create_app, project_ref
+from wingman_day1.main import Adapters, build_adapters, create_app
 from wingman_day1.settings import Day1Settings
 
 DEV_SECRET = "d" * 40
@@ -45,14 +45,6 @@ def settings(**values: object) -> Day1Settings:
 async def close(adapters: Adapters) -> None:
     for closer in adapters.closers:
         await closer()
-
-
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [("42", 42), ("gitops-day1/platform-config", "gitops-day1/platform-config"), ("/a/b/", "a/b")],
-)
-def test_project_settings_are_an_id_or_a_path(value: str, expected: int | str) -> None:
-    assert project_ref(value) == expected
 
 
 async def test_the_fake_backend_is_seeded_with_every_fixture_project() -> None:

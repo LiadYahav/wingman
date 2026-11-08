@@ -49,6 +49,12 @@ class GitLabSettings(BaseSettings):
         return self
 
 
+def project_ref(value: str) -> int | str:
+    """A ``*_PROJECT_ID`` setting: a numeric project id, or a ``group/project`` path."""
+    value = value.strip().strip("/")
+    return int(value) if value.isdigit() else value
+
+
 MIN_JWT_SECRET_LENGTH = 32
 
 

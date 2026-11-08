@@ -19,7 +19,13 @@ from dataclasses import dataclass
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from wingman_core.settings import AuthSettings, GitBackend, GitLabSettings, RuntimeSettings
+from wingman_core.settings import (
+    AuthSettings,
+    GitBackend,
+    GitLabSettings,
+    RuntimeSettings,
+    project_ref,
+)
 
 FAKE_GITLAB_URL = "http://gitlab.fake"
 
@@ -37,8 +43,7 @@ class Day2Settings(BaseSettings):
     @property
     def day1_project(self) -> int | str:
         """The day1 project as GitLabPort.get_project takes it."""
-        value = self.day1_gitlab_project_id.strip()
-        return int(value) if value.isdigit() else value
+        return project_ref(self.day1_gitlab_project_id)
 
 
 @dataclass(frozen=True, slots=True)
