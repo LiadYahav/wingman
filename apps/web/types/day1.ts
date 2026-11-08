@@ -79,6 +79,8 @@ export interface SpecEntry extends ClusterSpec {
   load_problems?: string[];
   /** Rules the stored flavor breaks: it loads, but saving it unchanged is refused (§5). */
   warnings?: string[];
+  /** The `locked_paths` a create enforces (§5); a lock that breaks the rules is not in it. */
+  enforced_locks?: string[];
 }
 
 // ── Machine configs (§1, §3, ADR-0027) ──────────────────────────────────────
