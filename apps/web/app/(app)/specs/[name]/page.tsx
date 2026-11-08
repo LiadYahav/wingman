@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Edit2, Server, CheckCircle2, ExternalLink, GitCommitHorizontal, RotateCcw } from "lucide-react";
+import { ArrowLeft, Trash2, Edit2, Server, CheckCircle2, ExternalLink, GitCommitHorizontal, Import, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { api, isApiError, errorMessages } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
@@ -17,6 +17,7 @@ import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { DriftBadge } from "@/components/clusters/drift-badge";
 import { FlavorInputsCard, WarningPanel } from "@/components/specs/flavor-inputs";
+import { ImportClustersSheet } from "@/components/specs/import-clusters/import-sheet";
 import { clusterHref } from "@/lib/clusters";
 import { specApiPath } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
@@ -74,6 +75,7 @@ export default function SpecDetailPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"overview" | "clusters" | "drift" | "history">("overview");
   const [deleteReviewOpen, setDeleteReviewOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedSha, setSelectedSha] = useState<string | null>(null);
 
   const { data: spec, isLoading, error: specError, refetch: refetchSpec } = useQuery<SpecDetail>({
@@ -151,7 +153,7 @@ export default function SpecDetailPage() {
     ? "Checking which clusters follow this flavor…"
     : followers > 0
       ? `${plural(followers, "cluster")} follow${followers === 1 ? "s" : ""} this flavor, so it can't be deleted. ` +
-        "Move them to another flavor or delete them first."
+        "Move them to another flavor (Add existing clusters on that flavor's page) or delete them first."
       : null;
 
   const driftCounts = DRIFT_ORDER
@@ -159,6 +161,13 @@ export default function SpecDetailPage() {
     .filter((c) => c.count > 0);
   const allInSync = (driftResults?.length ?? 0) > 0 && driftResults!.every((r) => r.state === "in_sync");
   const anyDrifted = driftResults?.some((r) => r.state === "drifted") ?? false;
+
+  const canImport = isAdmin && !!spec;
+  const importAction = canImport && (
+    <button type="button" onClick={() => setImportOpen(true)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+      <Import className="h-3.5 w-3.5 mr-1.5" />Add existing clusters
+    </button>
+  );
 
   const tabs = [
     { id: "overview" as const, label: "Overview" },
@@ -188,6 +197,7 @@ export default function SpecDetailPage() {
         </div>
         {!isLoading && isAdmin && (spec || doesNotLoad) && (
           <div className="flex items-center gap-2 shrink-0">
+            {importAction}
             {spec && (
               <Link
                 href={`/specs/${encodeURIComponent(specName)}/edit`}
@@ -345,7 +355,12 @@ export default function SpecDetailPage() {
                           icon={Server}
                           title="No clusters follow this flavor yet"
                           description="A cluster created from this flavor, or an existing one added to it, is listed here with its drift state."
-                          action={isAdmin && <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>}
+                          action={isAdmin && (
+                            <>
+                              <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>
+                              {importAction}
+                            </>
+                          )}
                           data-testid="spec-clusters-empty"
                         />
                       </td>
@@ -405,7 +420,12 @@ export default function SpecDetailPage() {
               icon={Server}
               title="No clusters follow this flavor"
               description="There is nothing to drift until a cluster is created from it or added to it."
-              action={isAdmin && <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>}
+              action={isAdmin && (
+                <>
+                  <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>
+                  {importAction}
+                </>
+              )}
               bordered
               data-testid="spec-drift-empty"
             />
@@ -569,6 +589,8 @@ export default function SpecDetailPage() {
           </div>
         </div>
       )}
+
+      {canImport && <ImportClustersSheet flavor={specName} open={importOpen} onOpenChange={setImportOpen} />}
 
       {/* Delete review dialog */}
       <ReviewDialog
