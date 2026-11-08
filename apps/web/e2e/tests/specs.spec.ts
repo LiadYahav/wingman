@@ -151,19 +151,20 @@ test.describe("Spec detail", () => {
       await p.route("**/api/day1/specs/broken-spec", (r) =>
         json(r, problem(422, "VALIDATION_ERROR", "the spec is not a valid ClusterSpec", { problems: BROKEN.load_problems }), 422)
       );
+      await p.route("**/api/day1/specs/broken-spec/clusters", (r) => json(r, []));
     });
 
     const alert = problemAlert(page, "does not load");
     await expect(alert).toBeVisible();
     for (const line of BROKEN.load_problems!) await expect(alert).toContainText(line);
     await expect(page.getByRole("link", { name: /edit/i })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /delete/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /delete/i })).toBeEnabled();
   });
 
   test("overview shows preset values and the structure", async ({ page }) => {
     await open(page, "/specs/agent-standard");
 
-    await expect(page.getByText("Preset values (2)")).toBeVisible();
+    await expect(page.getByTestId("flavor-input-counts")).toHaveText("2 presets · 0 locked");
     await expect(page.getByText("owner_merkaz")).toBeVisible();
     await expect(page.getByText("kubevirt")).toBeVisible();
     await expect(page.getByText("2 nodepools")).toBeVisible();
@@ -190,7 +191,7 @@ test.describe("Spec detail", () => {
     await expect(page.getByTestId("spec-drift-count-drifted")).toContainText("1");
     await expect(page.getByTestId("spec-drift-count-unknown")).toContainText("1");
     await expect(page.getByTestId("spec-drift-count-in_sync")).toContainText("1");
-    await expect(page.getByTestId("spec-drift-summary")).not.toContainText("match the spec");
+    await expect(page.getByTestId("spec-drift-summary")).not.toContainText("match the flavor");
 
     const unknown = page.getByTestId("spec-drift-ocp4-prod-c-site1");
     await expect(unknown).toContainText("Unknown");
@@ -206,15 +207,15 @@ test.describe("Spec detail", () => {
     await open(page, "/specs/agent-standard", (p) => withDrift(p, DRIFT.slice(0, 1), CLUSTERS.slice(0, 1)));
     await page.getByRole("button", { name: "Drift", exact: true }).click();
 
-    await expect(page.getByText("The cluster matches the spec")).toBeVisible();
+    await expect(page.getByText("The cluster matches the flavor")).toBeVisible();
   });
 
   test("drift tab without clusters does not claim they are in sync", async ({ page }) => {
     await open(page, "/specs/agent-standard", (p) => withDrift(p, [], []));
     await page.getByRole("button", { name: "Drift", exact: true }).click();
 
-    await expect(page.getByText("No clusters use this spec")).toBeVisible();
-    await expect(page.getByText(/in sync|match the spec/i)).toHaveCount(0);
+    await expect(page.getByText("No clusters follow this flavor", { exact: true })).toBeVisible();
+    await expect(page.getByText(/in sync|match the flavor/i)).toHaveCount(0);
   });
 
   test("clusters tab shows each cluster's drift state", async ({ page }) => {
@@ -230,7 +231,8 @@ test.describe("Spec detail", () => {
   test("delete opens an MR and offers to review it", async ({ page }) => {
     let deleted = false;
     await open(page, "/specs/agent-standard", async (p) => {
-      await withDrift(p);
+      // No cluster follows it: a flavor in use can't be deleted (flavor-import.spec.ts)
+      await withDrift(p, [], []);
       await p.route("**/api/day1/specs/agent-standard", (r) => {
         if (r.request().method() !== "DELETE") return json(r, STANDARD);
         deleted = true;

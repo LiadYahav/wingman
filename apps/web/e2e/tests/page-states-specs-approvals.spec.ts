@@ -93,9 +93,10 @@ test.describe("Spec detail", () => {
   const CLUSTERS = "**/api/day1/specs/agent-standard/clusters";
   const HISTORY = "**/api/day1/specs/agent-standard/history";
 
-  /** The spec itself, then the routes a test adds. */
+  /** The flavor itself and no clusters following it (the page reads them on every tab), then the routes a test adds. */
   const withSpec = (more: (p: Page) => Promise<unknown> = async () => {}) => async (p: Page) => {
     await p.route("**/api/day1/specs/agent-standard", (r) => json(r, SPEC));
+    await p.route(CLUSTERS, (r) => json(r, []));
     await more(p);
   };
 
@@ -103,13 +104,13 @@ test.describe("Spec detail", () => {
     await open(page, "/specs/agent-standard", withSpec((p) => p.route(CLUSTERS, unreachable)));
     await page.getByRole("button", { name: /^Clusters/ }).click();
 
-    const alert = problem(page, "The clusters using this spec could not be loaded");
+    const alert = problem(page, "The clusters following this flavor could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
     await expect(page.getByRole("main").locator("table")).toHaveCount(0);
     await expect(page.getByTestId("spec-clusters-empty")).toHaveCount(0);
 
-    // The delete review cannot say how many clusters lose their spec: it says it does not know
+    // The delete review cannot say whether clusters follow the flavor: it says it does not know
     await page.getByRole("main").getByRole("button", { name: "Delete", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByTestId("spec-delete-clusters-unknown")).toContainText("Could not be checked");
@@ -121,7 +122,7 @@ test.describe("Spec detail", () => {
     await page.getByRole("button", { name: /^Clusters/ }).click();
 
     const empty = page.getByTestId("spec-clusters-empty");
-    await expect(empty).toContainText("No clusters created from this spec yet");
+    await expect(empty).toContainText("No clusters follow this flavor yet");
     await expect(empty.getByRole("link", { name: "New cluster" })).toHaveAttribute("href", "/clusters/new");
   });
 
@@ -137,7 +138,7 @@ test.describe("Spec detail", () => {
     await expect(skeletons.first()).toBeVisible();
     expect(await skeletons.count()).toBeGreaterThan(3); // a summary bar and several rows, not one block
     drift.release();
-    await expect(page.getByTestId("spec-drift-empty")).toContainText("No clusters use this spec");
+    await expect(page.getByTestId("spec-drift-empty")).toContainText("No clusters follow this flavor");
     await expect(skeletons).toHaveCount(0);
   });
 
@@ -145,7 +146,7 @@ test.describe("Spec detail", () => {
     await open(page, "/specs/agent-standard", withSpec((p) => p.route(HISTORY, unreachable)));
     await page.getByRole("button", { name: "History" }).click();
 
-    const alert = problem(page, "The spec's history could not be loaded");
+    const alert = problem(page, "The flavor's history could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
     await expect(page.getByTestId("spec-history-empty")).toHaveCount(0);
@@ -164,7 +165,7 @@ test.describe("Spec detail", () => {
     await page.getByRole("button", { name: "History" }).click();
     await page.getByRole("button", { name: /Update spec agent-standard/ }).click();
 
-    const alert = problem(page, "The spec at this commit could not be loaded");
+    const alert = problem(page, "The flavor at this commit could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
     await expect(page.getByRole("main").locator("pre")).toHaveCount(0);
