@@ -626,12 +626,13 @@ spec:
                 </CodeBlock>
               </div>
             </Callout>
-            <Callout type="warning" title="Editing a spec affects future clusters only">
+            <Callout type="warning" title="Editing a spec does not rewrite existing clusters">
               Changing a spec does not touch clusters that already exist: their files keep what they were
-              created with, and nothing re-renders them (the inputs of a create are not stored). Drift compares a
-              cluster with the spec version it was created from. To change an existing cluster, edit its file from
-              the cluster page. Deleting a spec leaves its clusters&apos; files as they are; their drift becomes{" "}
-              <strong>Unknown</strong>, because the spec they name is gone.
+              created with, and nothing re-renders them (the inputs of a create are not stored). Drift, though,
+              always compares a cluster with the spec as it is now: add an addon to a spec and every cluster
+              created from it shows <strong>Drifted</strong> until the addon is installed. To change an existing
+              cluster, edit its file from the cluster page. Deleting a spec leaves its clusters&apos; files as they
+              are; their drift becomes <strong>Unknown</strong>, because the spec they name is gone.
             </Callout>
           </div>
         </section>
@@ -954,9 +955,9 @@ cluster               …/{cluster}/{chart}/values.yaml
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             {[
-              { title: "In sync", desc: "Every addon of the spec version the cluster was created from is installed." },
+              { title: "In sync", desc: "Every addon the spec lists now (its current version, not necessarily the one the cluster was created from) is installed." },
               { title: "Drifted", desc: "An addon the spec lists is missing. The Drift tab lists each one with an Install button." },
-              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, or the spec is gone. It is never shown as in sync." },
+              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, or the spec is gone or does not parse. It is never shown as in sync." },
               { title: "Not linked", desc: "The cluster was not created from a spec, so there is nothing to drift from." },
             ].map(({ title, desc }) => (
               <div key={title} className="rounded-xl border bg-card p-4">
