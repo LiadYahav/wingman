@@ -230,7 +230,7 @@ class ClusterService:
     ) -> ProvisionResult:
         """Propose a new content for an existing file, guarded by the revision it was read at."""
         current = await self._read(ref)
-        expected = self._expect(ref, current, last_commit_id)
+        expected = await self._expect(ref, current, last_commit_id)
         if content == current.content:
             raise InvalidInputError("the edit changes nothing", ["the content is identical"])
         require_valid(edit_problems(current.content, content), message="the edit is not valid")
@@ -250,7 +250,7 @@ class ClusterService:
     ) -> ProvisionResult:
         """Propose removing the cluster's file (its Application, and so the cluster, goes)."""
         current = await self._read(ref)
-        expected = self._expect(ref, current, last_commit_id)
+        expected = await self._expect(ref, current, last_commit_id)
         return await self._provisioner.apply(
             ClusterChange(
                 action=ClusterAction.DELETE,
@@ -331,9 +331,12 @@ class ClusterService:
                 f"cluster {ref.name!r} does not exist under {ref.site}/{ref.mce}"
             ) from exc
 
-    @staticmethod
-    def _expect(ref: ClusterRef, current: FileContent, expected: str | None) -> str:
-        if expected is not None and expected != current.last_commit_id:
+    async def _expect(self, ref: ClusterRef, current: FileContent, expected: str | None) -> str:
+        if (
+            expected is not None
+            and expected != current.last_commit_id
+            and await self._day1.changed_since(ref.path, expected)
+        ):
             raise StaleError(
                 f"cluster {ref.name!r} changed since it was read ({expected[:8]} → "
                 f"{current.last_commit_id[:8]}); reload and try again"

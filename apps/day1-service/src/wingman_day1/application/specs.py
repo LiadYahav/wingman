@@ -186,7 +186,11 @@ class SpecCatalog:
             file = await self._specs.read(self._path(name))
         except NotFoundError as exc:
             raise ResourceNotFoundError(f"spec {name!r} does not exist") from exc
-        if expected is not None and expected != file.last_commit_id:
+        if (
+            expected is not None
+            and expected != file.last_commit_id
+            and await self._specs.changed_since(self._path(name), expected)
+        ):
             raise StaleError(
                 f"spec {name!r} changed since it was read ({expected[:8]} → "
                 f"{file.last_commit_id[:8]}); reload and try again"

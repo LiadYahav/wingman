@@ -39,7 +39,15 @@ class RepoReads(Protocol):
         ...
 
     async def read(self, path: RepoPath, *, ref: str | None = None) -> FileContent:
-        """A file's content and the last commit that changed it."""
+        """A file's content and the commit it was read at (its ``last_commit_id``)."""
+        ...
+
+    async def changed_since(self, path: RepoPath, commit_id: str) -> bool:
+        """Whether ``path`` changed on the default branch after ``commit_id``.
+
+        GitLab's own write guard asks the same (ADR-0035). An unknown commit
+        counts as changed: Wingman asks for a reload rather than guess.
+        """
         ...
 
     async def history(self, path: RepoPath, *, limit: int = 50) -> list[Commit]:

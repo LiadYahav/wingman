@@ -29,6 +29,7 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
 from wingman_core.infrastructure.session_tokens import SessionTokens
+from wingman_core.infrastructure.snapshots import RepoSnapshots
 from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
@@ -186,12 +187,14 @@ def build_context(
     """Wire the use cases onto the adapters."""
     ttl = settings.day1_cache_ttl_seconds
     gitlab = adapters.gitlab
+    snapshots = RepoSnapshots(gitlab, cache, ttl=ttl)
     day1 = CachedRepository(
         gitlab,
         cache,
         key=RepoKey.DAY1,
         project=project_ref(settings.day1_gitlab_project_id),
         ttl=ttl,
+        snapshots=snapshots,
     )
     specs_repo = CachedRepository(
         gitlab,
@@ -199,6 +202,7 @@ def build_context(
         key=RepoKey.SPECS,
         project=project_ref(settings.specs_gitlab_project_id),
         ttl=ttl,
+        snapshots=snapshots,
     )
     naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
     site_catalog = SiteCatalog(day1)
