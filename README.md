@@ -90,9 +90,10 @@ cluster-platform/
 │   └── values.minikube.yaml   # Local development overrides
 │
 └── scripts/                   # Development & build scripts
+    ├── gate.sh                # Everything CI runs, in CI's order
     ├── minikube-dev-setup.sh  # Local GitLab + minikube setup
-    ├── build-images.sh        # Docker image builds
-    └── seed-test-data.py      # Seed GitLab with test data
+    ├── build-images.sh        # Docker image builds into minikube
+    └── dev/                   # Local GitLab: gitlab-up.sh, seed_gitlab.py, day1_live_e2e.py
 ```
 
 ## Recent Features

@@ -10,7 +10,7 @@
 #   helm install wingman ./chart -f chart/values.minikube.yaml \
 #     --set gitlab.accessToken=<your-gitlab-token> \
 #     --set auth.jwtSecret=$(openssl rand -hex 32) \
-#     --set devAuth.secret=devpassword \
+#     --set devAuth.secret=$(openssl rand -hex 16) \
 #     -n wingman --create-namespace
 # ══════════════════════════════════════════════════════════════════════════════
 
