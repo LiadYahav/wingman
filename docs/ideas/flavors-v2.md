@@ -1,9 +1,9 @@
 # Flavors v2
 
-**Status:** decided 2026-11-08, to build on its own branch after the
-ecosystem branch merges. Stages 1 and 2 (day1) are built: ADR-0026 to
-ADR-0029, ADR-0036, ADR-0037, and the API contract in
-`docs/notes/2026-11-08-flavors-v2-api-changes.md`. "Flavor" is what the code and the API call a
+**Status:** built, 2026-11-08 (release 3.3): ADR-0026 to ADR-0029,
+ADR-0036, ADR-0037, the API contract in
+`docs/notes/2026-11-08-flavors-v2-api-changes.md`, the operator steps in
+`docs/upgrade/3.2-to-3.3.md`. Still open: see "Left for later" at the end. "Flavor" is what the code and the API call a
 cluster spec (`ClusterSpec`, `/api/day1/specs`, ADR-0013); the UI will say
 Flavor.
 
@@ -159,9 +159,31 @@ cluster) is a question for the architect.
    validation, enforced locks at create, owner validation. *Done.*
 2. Day1: import, day1 drift on locked values, the sync MR. *Done.*
 3. Web: the flavor page, the create form's config picker, import, and drift
-   for day1 values.
+   for day1 values. *Done:* the flavor editor in four parts, the create form's
+   locks, presets and picker, the flavor page with "Add existing clusters",
+   value drift and "Sync to flavor" on the cluster page, owner filters and
+   grouping on the cluster list; the UI says Flavor.
 4. E2E: mocked tests for each, then the live suite against the seeded local
-   GitLab (the fixtures need an `mc-files/` tree).
+   GitLab (the fixtures need an `mc-files/` tree). *Done:* `flavor-*.spec.ts`
+   (mocked), `live-flavors.spec.ts`, and `scripts/dev/day1_live_e2e.py`'s
+   import and sync on GitLab CE 19.5.3.
 
 Each stage lands with its ADR: locks, machine configs and defaults,
 import and sync.
+
+## Left for later
+
+- **A preview of an unsaved flavor.** `POST /clusters/preview` renders only a
+  flavor in the specs repo at its saved version, so a new flavor has no
+  cluster-file preview until it is merged (its edit page has one). It needs a
+  preview that takes the flavor document in the request.
+- **Missing add-ons in one MR per team.** Sync and the drift tab install them
+  one chart per MR through day2's per-chart install; day2's
+  `POST /clusters/{id}/addons/bulk` would make it one MR per team.
+- **The cluster-name prefix in the web.** The create form shows
+  `nm-conf-<clusterName>-<hw>` assuming day1 strips `ocp4-` (the default of
+  `DAY1_CLUSTER_NAME_STRIP_PREFIX`); on the sandbox (`""`) the hint is wrong,
+  and the preview shows day1's real name. Day1 could say its prefix.
+- **A rule's hardware.** Under `nodepools[*].configs` each flavor nodepool's
+  `nm-conf` needs a hardware type at save (a preset each cluster may change),
+  so a flavor cannot leave it for create time.
