@@ -1,7 +1,13 @@
 # ADR-0030: A release is a VERSION bump that only moves forward; images build on every PR and publish from main
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0031 (the version and the tag set)
+
+Since ADR-0031 (2026-11-08) `VERSION` is gone: every push to main is a
+release whose version is computed from the Conventional Commits, and images
+are tagged `X.Y.Z`, `X.Y`, `X`, `latest` and `sha-<short sha>`. The guard,
+the API tag, `publish` and the release notes below still hold. `v3.0.0` was
+the last release cut by `VERSION`.
 
 ## Context
 

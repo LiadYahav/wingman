@@ -10,6 +10,10 @@ stop and report instead of improvising, and how to go back.
 |---|---|---|
 | The legacy services (`src.main:app`, the chart before PR #17) | The rewrite on `wingman-core` (`wingman_day1`, `wingman_day2`) | [legacy-to-ecosystem.md](legacy-to-ecosystem.md) |
 
+Releases are named by version: from 3.0.1 on, every merge to main is a
+release whose version comes from its commits (ADR-0031), and you deploy that
+version (`3.0.1`) as the image tag of all three images.
+
 ## Rules for every upgrade
 
 1. **Read before you write.** Discover what runs and check every

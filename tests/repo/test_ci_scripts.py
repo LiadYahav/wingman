@@ -2,7 +2,7 @@
 
 They run only in CI or the gate, where a wrong answer publishes the wrong
 image or lets a vulnerability through, so the rules are pinned here
-(ADR-0030, ADR-0032).
+(ADR-0030, ADR-0031, ADR-0032).
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,29 +38,44 @@ OTHER = "b" * 40
 
 
 class TestReleasePlan:
-    def test_a_new_version_above_every_release_is_a_release(self) -> None:
-        plan = release.decide("3.0.0", {"v1.0.0": OTHER}, HEAD, {"v1.0.0", "latest", "abc1234"})
-        assert plan.release
-        assert plan.tag == "v3.0.0"
+    """The guard on the version semantic-version computes (ADR-0031)."""
+
+    def test_a_new_version_above_every_release_is_released(self) -> None:
+        plan = release.decide(
+            "3.0.1", {"v3.0.0": OTHER}, HEAD, {"v3.0.0", "latest", "abc1234", "sha-abc1234"}
+        )
+        assert plan.tag == "v3.0.1"
+        assert plan.version == "3.0.1"
+        assert "previous: v3.0.0" in plan.reason
 
     def test_the_first_release_has_nothing_to_compare_with(self) -> None:
-        assert release.decide("1.0.0", {}, HEAD, set()).release
+        assert release.decide("1.0.0", {}, HEAD, set()).tag == "v1.0.0"
 
-    def test_a_version_released_on_another_commit_is_not_released_again(self) -> None:
-        plan = release.decide("3.0.0", {"v3.0.0": OTHER}, HEAD, set())
-        assert not plan.release
-        assert "Bump VERSION" in plan.reason
+    def test_a_version_tagged_on_another_commit_is_refused(self) -> None:
+        with pytest.raises(release.PlanError, match="refusing to re-tag"):
+            release.decide("3.0.1", {"v3.0.1": OTHER}, HEAD, set())
 
-    def test_a_rerun_on_the_tagged_commit_releases_again(self) -> None:
-        assert release.decide("3.0.0", {"v3.0.0": HEAD}, HEAD, {"v3.0.0"}).release
+    def test_a_rerun_on_the_tagged_commit_is_allowed(self) -> None:
+        plan = release.decide("3.0.1", {"v3.0.1": HEAD}, HEAD, {"3.0.1", "3.0", "3"})
+        assert "re-run" in plan.reason
 
-    def test_a_registry_tag_without_a_git_tag_is_never_overwritten(self) -> None:
-        plan = release.decide("1.0.0", {}, HEAD, {"v1.0.0", "latest"})
-        assert not plan.release
+    def test_a_rerun_behind_a_newer_release_fails(self) -> None:
+        with pytest.raises(release.PlanError, match="below the newest release"):
+            release.decide("3.0.1", {"v3.0.1": HEAD, "v3.0.2": OTHER}, HEAD, set())
+
+    @pytest.mark.parametrize("published", ["v3.0.1", "3.0.1"])
+    def test_an_image_without_a_git_tag_is_never_overwritten(self, published: str) -> None:
+        with pytest.raises(release.PlanError, match="never re-pointed"):
+            release.decide("3.0.1", {"v3.0.0": OTHER}, HEAD, {published, "latest"})
 
     @pytest.mark.parametrize(
         ("git_tags", "registry"),
-        [({"v3.0.0": OTHER}, set()), ({}, {"v3.0.0"}), ({"v2.10.0": OTHER}, set())],
+        [
+            ({"v3.0.0": OTHER}, set()),
+            ({}, {"v3.0.0"}),
+            ({}, {"3.0.0"}),
+            ({"v2.10.0": OTHER}, set()),
+        ],
     )
     def test_a_version_below_the_newest_release_fails(
         self, git_tags: dict[str, str], registry: set[str]
@@ -68,16 +84,40 @@ class TestReleasePlan:
             release.decide("2.9.0", git_tags, HEAD, registry)
 
     def test_versions_compare_as_numbers_not_strings(self) -> None:
-        assert release.decide("1.10.0", {"v1.9.0": OTHER}, HEAD, set()).release
+        assert release.decide("1.10.0", {"v1.9.0": OTHER}, HEAD, {"1.9.0"}).tag == "v1.10.0"
 
     @pytest.mark.parametrize("version", ["3.0", "v3.0.0", "3.0.0-rc1", "03.0.0", ""])
     def test_a_malformed_version_fails(self, version: str) -> None:
         with pytest.raises(release.PlanError, match=r"X\.Y\.Z"):
             release.decide(version, {}, HEAD, set())
 
-    def test_non_version_tags_are_ignored(self) -> None:
-        plan = release.decide("1.0.0", {"vnext": OTHER, "v9": OTHER}, HEAD, {"latest", "v99.0"})
-        assert plan.release
+    def test_rolling_and_non_version_tags_are_ignored(self) -> None:
+        plan = release.decide(
+            "1.0.0", {"vnext": OTHER, "v9": OTHER}, HEAD, {"latest", "v99.0", "99", "sha-1234567"}
+        )
+        assert plan.tag == "v1.0.0"
+
+    def test_the_version_comes_from_the_command_line_not_a_file(self) -> None:
+        assert not (ROOT / "VERSION").exists()
+        with pytest.raises(SystemExit):
+            release.main(["plan"])  # --version is required
+
+
+class TestPublishedTags:
+    """The tags operators deploy by: server-scan's set (ADR-0031, docs/ops/images.md)."""
+
+    def test_publish_pushes_the_release_set(self) -> None:
+        workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+        steps = workflow["jobs"]["publish"]["steps"]
+        meta = next(s for s in steps if s.get("id") == "meta")
+        value = "value=${{ needs.release-plan.outputs.tag }}"
+        assert meta["with"]["tags"].splitlines() == [
+            f"type=semver,pattern={{{{version}}}},{value}",
+            f"type=semver,pattern={{{{major}}}}.{{{{minor}}}},{value}",
+            f"type=semver,pattern={{{{major}}}},{value}",
+            "type=raw,value=latest",
+            "type=sha,prefix=sha-",
+        ]
 
 
 class TestReleaseNotes:
@@ -103,7 +143,7 @@ class TestReleaseNotes:
         assert "pin zizmor" not in notes
         assert "split the router" not in notes
         assert "### Other\n\n- Merge-free subject without a type" in notes
-        assert "- `ghcr.io/team/wingman-web:v3.0.0`" in notes
+        assert "- `ghcr.io/team/wingman-web:3.0.0`" in notes
         assert notes.endswith("**Full changelog:** v2.0.0...v3.0.0\n")
 
     def test_a_release_with_nothing_operator_visible_says_so(self) -> None:

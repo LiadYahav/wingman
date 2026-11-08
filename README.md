@@ -380,25 +380,30 @@ Then start both services on the in-memory GitLab and the web dev server in front
 
 ### Docker Build
 
-Production images are tagged with the **git commit SHA** — not `latest` — so every
-release is traceable and rollbacks are one command. CI also builds them and publishes them
-from main (docs/ops/images.md).
+Every merge to main is a release: CI computes its version from the Conventional Commit
+subjects, tags it `v3.0.1`, and publishes the images as `3.0.1` (plus the moving `3.0`, `3`,
+`latest` and a `sha-<short sha>` tag). Production deploys a full version, never `latest`, so
+every release is traceable and rollbacks are one command (docs/ops/images.md).
+
+To build a release yourself, check out its tag and name the images by its version:
 
 ```bash
-SHA=$(git rev-parse --short HEAD)
+git checkout v3.0.1
+VERSION=3.0.1
+COMMIT=$(git rev-parse HEAD)
 
 # Build all three for production (linux/amd64, clean)
-docker buildx build --platform linux/amd64 --no-cache -t wingman-day1:$SHA -f apps/day1-service/Dockerfile . --load
-docker buildx build --platform linux/amd64 --no-cache -t wingman-day2:$SHA -f apps/day2-service/Dockerfile . --load
-docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA -f apps/web/Dockerfile . --load
+docker buildx build --platform linux/amd64 --no-cache --build-arg VERSION=$VERSION --build-arg COMMIT=$COMMIT -t wingman-day1:$VERSION -f apps/day1-service/Dockerfile . --load
+docker buildx build --platform linux/amd64 --no-cache --build-arg VERSION=$VERSION --build-arg COMMIT=$COMMIT -t wingman-day2:$VERSION -f apps/day2-service/Dockerfile . --load
+docker buildx build --platform linux/amd64 --no-cache --build-arg VERSION=$VERSION --build-arg COMMIT=$COMMIT -t wingman-web:$VERSION -f apps/web/Dockerfile . --load
 
 # Save for air-gapped / on-prem transfer
-docker save wingman-day1:$SHA | gzip > wingman-day1-$SHA.tar.gz
-docker save wingman-day2:$SHA | gzip > wingman-day2-$SHA.tar.gz
-docker save wingman-web:$SHA  | gzip > wingman-web-$SHA.tar.gz
+docker save wingman-day1:$VERSION | gzip > wingman-day1-$VERSION.tar.gz
+docker save wingman-day2:$VERSION | gzip > wingman-day2-$VERSION.tar.gz
+docker save wingman-web:$VERSION  | gzip > wingman-web-$VERSION.tar.gz
 ```
 
-Deploy them with `--set image.day1.tag=$SHA --set image.day2.tag=$SHA --set image.web.tag=$SHA`
+Deploy them with `--set image.day1.tag=$VERSION --set image.day2.tag=$VERSION --set image.web.tag=$VERSION`
 (or set the tags in your values file).
 
 ## Authentication & Authorization

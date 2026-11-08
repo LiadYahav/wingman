@@ -160,5 +160,7 @@ decision gets an ADR (template in `docs/adr/README.md`).
 ## Deployment
 
 `chart/README.md` installs the chart; `docs/ops/images.md` builds and publishes the images.
-Deploy a commit's images with `image.<component>.tag` (`image.day1.tag`, `image.day2.tag`,
-`image.web.tag`). Operating it: `docs/ops/metrics.md` and `docs/ops/runbook.md`.
+Every merge to main is a release, versioned from the commit subjects (ADR-0031). Deploy a
+release by its version, the same for every image, with `image.<component>.tag`
+(`image.day1.tag`, `image.day2.tag`, `image.web.tag`; for example `3.0.1`, never `latest`).
+Operating it: `docs/ops/metrics.md` and `docs/ops/runbook.md`.

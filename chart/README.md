@@ -57,7 +57,7 @@ helm upgrade --install wingman ./chart -n wingman \
   --set auth.jwtSecret=$(openssl rand -hex 32) \
   --set auth.oauthClientSecret=$(openssl rand -hex 32) \
   --set route.host=wingman.apps.example.com \
-  --set image.day1.tag=<sha> --set image.day2.tag=<sha> --set image.web.tag=<sha>
+  --set image.day1.tag=<version> --set image.day2.tag=<version> --set image.web.tag=<version>
 ```
 
 Keep the generated secrets for later upgrades (in a values file outside Git, passed with `-f`):
@@ -107,7 +107,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `openshiftRoute.enabled` | | `true` | A Route and the `OAuthClient`; `false` on plain Kubernetes |
 | `ingress.enabled` | | `false` | An Ingress instead (`ingress.host`, `ingress.className`) |
 | `image.registry` | | `""` | Prefix of every image: `<registry>/<repository>:<tag>` |
-| `image.{day1,day2,web,nginx}.{repository,tag,pullPolicy}` | | `latest` tags | Pin the tags to a commit SHA in production |
+| `image.{day1,day2,web,nginx}.{repository,tag,pullPolicy}` | | `latest` tags | In production, pin day1, day2 and web to one release (`3.0.1`, docs/ops/images.md) |
 | `replicaCount.{day1,day2,web,nginx}` | | `1` | |
 | `imagePullSecret` | | `""` | An existing registry Secret |
 | `monitoring.{serviceMonitor,prometheusRule,grafanaDashboard}.enabled` | | `false` | `docs/ops/metrics.md`, `docs/ops/runbook.md` |
@@ -123,13 +123,13 @@ image:
   registry: registry.example.com/wingman
   day1:
     repository: wingman-day1
-    tag: "<sha>"
+    tag: "<version>"     # a release, e.g. "3.0.1"
   day2:
     repository: wingman-day2
-    tag: "<sha>"
+    tag: "<version>"     # a release, e.g. "3.0.1"
   web:
     repository: wingman-web
-    tag: "<sha>"
+    tag: "<version>"     # a release, e.g. "3.0.1"
   nginx:
     repository: nginx      # mirror it too
     tag: "<pinned tag>"
@@ -158,21 +158,21 @@ MRs target. `docs/ops/runbook.md` (WingmanGitLabTokenRejected) says how to repla
 ## Loading Pre-built Images (Air-gapped)
 
 ```bash
-SHA=$(git rev-parse --short HEAD)
+VERSION=3.0.1   # the release, built as the README's Docker section shows
 
 # On build machine
-docker save wingman-day1:$SHA | gzip > wingman-day1-$SHA.tar.gz
-docker save wingman-day2:$SHA | gzip > wingman-day2-$SHA.tar.gz
-docker save wingman-web:$SHA | gzip > wingman-web-$SHA.tar.gz
+docker save wingman-day1:$VERSION | gzip > wingman-day1-$VERSION.tar.gz
+docker save wingman-day2:$VERSION | gzip > wingman-day2-$VERSION.tar.gz
+docker save wingman-web:$VERSION | gzip > wingman-web-$VERSION.tar.gz
 
 # Transfer to air-gapped environment, then:
-docker load < wingman-day1-$SHA.tar.gz
-docker load < wingman-day2-$SHA.tar.gz
-docker load < wingman-web-$SHA.tar.gz
+docker load < wingman-day1-$VERSION.tar.gz
+docker load < wingman-day2-$VERSION.tar.gz
+docker load < wingman-web-$VERSION.tar.gz
 
 # Tag and push to internal registry
-docker tag wingman-day1:$SHA registry.example.com/wingman/wingman-day1:$SHA
-docker push registry.example.com/wingman/wingman-day1:$SHA
+docker tag wingman-day1:$VERSION registry.example.com/wingman/wingman-day1:$VERSION
+docker push registry.example.com/wingman/wingman-day1:$VERSION
 # ... repeat for the other images
 ```
 

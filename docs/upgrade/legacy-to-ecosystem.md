@@ -7,9 +7,11 @@ nothing, finish the report (step 10) and hand it back.
 Throughout:
 - `<ns>` is the namespace Wingman runs in, and `<release>` its Helm release.
 - `<registry>` is the internal container registry.
-- `<tag>` is the image tag you deploy: the short commit sha, or `v<VERSION>`.
-- `$CHART` is the `chart/` directory of the repository copy at that same
-  commit.
+- `<tag>` is the release you deploy, as its image tag: a version such as `3.0.1`
+  (the GitHub release and git tag `v3.0.1`, without the `v`). Never `latest`,
+  `3.0`, `3` or a `sha-` tag: they move, or name no release (`docs/ops/images.md`).
+- `$CHART` is the `chart/` directory of the repository copy at that release
+  (git tag `v<tag>`).
 
 ## 1. What changes
 
@@ -39,15 +41,17 @@ Unchanged:
 
 ## 2. What to bring in from the connected side
 
-1. **The repository** at the commit you deploy, as an archive. You need
-   `chart/`, `docs/` and `dev/gitlab-fixtures/wingman/cluster-specs/cluster-template.j2`.
-2. **The three images** for that commit: `wingman-day1`, `wingman-day2` and
-   `wingman-web`. Choose one way:
+1. **The repository** at the release you deploy (git tag `v<tag>`), as an
+   archive. You need `chart/`, `docs/` and
+   `dev/gitlab-fixtures/wingman/cluster-specs/cluster-template.j2`.
+2. **The three images** of that release: `wingman-day1`, `wingman-day2` and
+   `wingman-web`, all with the same `<tag>`. Choose one way:
    - **Built by CI (preferred).** CI pushes `ghcr.io/<owner>/wingman-<name>:<tag>`
-     for every commit on main (`docs/ops/images.md`). On the connected side,
-     verify the provenance and save each image:
+     for every release, and every merge to main is one (`docs/ops/images.md`).
+     On the connected side, verify the provenance of the version tag and save
+     each image:
      ```bash
-     gh attestation verify oci://ghcr.io/<owner>/wingman-day1:<tag> --owner <owner>
+     gh attestation verify oci://ghcr.io/<owner>/wingman-day1:<tag> --owner <owner>   # <tag> = 3.0.1, say
      skopeo copy --all docker://ghcr.io/<owner>/wingman-day1:<tag> oci-archive:wingman-day1-<tag>.tar
      ```
      Inside, push each archive to the internal registry:
@@ -61,7 +65,8 @@ Unchanged:
      - an npm mirror for the root `package-lock.json`.
 
      Build from the repository root (`docs/ops/images.md`) with
-     `--build-arg VERSION=<VERSION> --build-arg COMMIT=<sha>`.
+     `--build-arg VERSION=<tag> --build-arg COMMIT=$(git rev-parse "v<tag>^{commit}")`,
+     and name each image `<tag>`.
 3. **Nothing else.** The nginx image the chart already uses stays.
 
 ## 3. Discover what runs (read-only)
