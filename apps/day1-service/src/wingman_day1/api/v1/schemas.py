@@ -30,7 +30,6 @@ from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata
 from wingman_day1.domain.status import LiveStatus
 
 MAX_FILE_BYTES = 256 * 1024
-NO_SPEC = None
 
 
 class _In(BaseModel):

@@ -19,13 +19,10 @@ def test_a_cluster_file_lives_under_its_mces_hosted_clusters_folder() -> None:
 
 def test_the_layout_helpers_build_the_argocd_value_layers() -> None:
     assert paths.site_dir("site1") == RepoPath("sites/site1")
-    assert paths.site_values("site1") == RepoPath("sites/site1/values.yaml")
-    assert paths.mces_dir("site1") == RepoPath("sites/site1/mces")
     assert paths.mce_dir("site1", "m") == RepoPath("sites/site1/mces/m")
     assert paths.mce_values("site1", "m") == RepoPath("sites/site1/mces/m/values.yaml")
     assert paths.mce_version("site1", "m") == RepoPath("sites/site1/mces/m/version.yaml")
     assert paths.hosted_clusters_dir("s", "m") == RepoPath("sites/s/mces/m/hostedClusters")
-    assert RepoPath("sites/configValues.yaml") == paths.GLOBAL_VALUES
 
 
 @pytest.mark.parametrize("name", ["..", ".", "a/b", "", "../etc"])

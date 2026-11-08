@@ -137,8 +137,3 @@ class Day1Settings(BaseSettings):
     def mce_tls_verify(self) -> bool | str:
         """``MCE_SSL_VERIFY`` parsed."""
         return tls_verify(self.mce_ssl_verify)
-
-    @property
-    def webhook_enabled(self) -> bool:
-        """The GitLab webhook endpoint exists only with a secret to check (fail closed)."""
-        return bool(self.gitlab_webhook_secret.get_secret_value())
