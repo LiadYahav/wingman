@@ -306,7 +306,7 @@ This is a proposal to discuss, not a decision. Each phase is usable on its own.
    - Check before the MR:
      - name rules and uniqueness
      - the InfraEnv exists and its pool is live
-     - config names exist in `mc-files/`
+     - config names exist in `mc-files/` (built: ADR-0027)
      - free segments exist at the site
    - After the push, track the CI pipeline and the `allocate-segment-HC-<cluster>` run, and only then mark the MR "ready to merge". Never force-push a branch that CI has committed to.
    - After the merge, show status from ArgoCD + HostedCluster + NodePools + herzi.

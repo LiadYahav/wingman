@@ -1,7 +1,9 @@
 # Flavors v2
 
 **Status:** decided 2026-11-08, to build on its own branch after the
-ecosystem branch merges. "Flavor" is what the code and the API call a
+ecosystem branch merges. Stage 1 (day1) is built: ADR-0026, ADR-0027,
+ADR-0028, and the API contract in
+`docs/notes/2026-11-08-flavors-v2-api-changes.md`. "Flavor" is what the code and the API call a
 cluster spec (`ClusterSpec`, `/api/day1/specs`, ADR-0013); the UI will say
 Flavor.
 
@@ -36,11 +38,17 @@ lock icon, but:
 - **Catalogue.** Day1 reads `mc-files/` in the day1 repo (`platform-config`)
   through `GitLabPort`. It never writes there. A new read endpoint lists:
   - static configs, which are files in the root and its subfolders (for example `kubevirt/`);
-  - per-cluster network configs, from `templates/nm-conf-template-<hw>.bu`. A
+  - per-cluster network configs, from `templates/nm-conf-template-hw-<hw>.bu`. A
     nodepool picks the hardware type `<hw>`, and the name written to the file
     is `nm-conf-<clusterName>-<hw>`, the convention the CI resolves.
   - Not `legacy/`: those are restored originals for clusters not yet
-    onboarded, not something to pick.
+    onboarded, not something to pick. *Built:* a name found only there is
+    refused at save and create, although the CI would resolve it.
+- **Entries** *(built)*: `{name: <static config>}` or `{name: nm-conf,
+  hardware: <hw>}`. A flavor stores the second as written; day1 expands it
+  to `nm-conf-<clusterName>-<hw>` before the shared template renders, and
+  refuses it when an overlapping hardware type (`dell` and `dell-data`)
+  would make the CI read the expanded name as another type.
 - **Picker.** The shared searchable combobox, grouped by kind, showing each
   name with its folder. A hardware type is chosen from the template list.
 - **Validation.** On flavor save and on create, each name must resolve by the
@@ -52,7 +60,9 @@ lock icon, but:
 - `nodepool-defaults.yaml` in the specs project lists the configs a new
   nodepool starts with: `nm-conf` (hardware type to choose),
   `workers-chrony-configuration` and `nic-ring-buffer`. The team changes it
-  by MR, like a flavor.
+  by MR, like a flavor. *Built:* `configs: [<entry>, ...]`, where `nm-conf`
+  may leave out its hardware; served by `GET /api/day1/machine-configs`; a
+  missing file is no defaults, a broken one is served with its error.
 - Defaults fill a nodepool when it is added, in the flavor editor and at
   create (unless the flavor locks the list). They are written into the
   file. Changing the defaults never changes an existing flavor or cluster.
@@ -67,15 +77,24 @@ lock icon, but:
   overriding them is allowed.
 - Specs already in GitLab keep loading: their `immutable_paths` are read as
   locked paths. The old wording ("can't change after create") goes away.
+  *Built:* the field is now `locked_paths`; `immutable_paths` is read as an
+  alias and never written. A lock needs a value in `spec.day1.values`; a
+  stored lock without one, or on an input that is not lockable, still
+  loads, is not enforced, and shows in the spec's `warnings`.
+- *Built:* a create that sends another value for a locked path is a 422;
+  one that leaves it out gets the flavor's value. Lockable: the owners,
+  `platform`, and per nodepool `replicas`, `configs` and `node_labels`.
 - Locked values are template inputs (`nodepools[0].configs`), but drift reads
   the file (`nodepool[0].configs`). Day1 keeps one table that maps each
   lockable input to its file key (owner, platform, replicas, configs,
-  labels), next to the shared template.
+  labels), next to the shared template. *Built:* `LOCKABLE` in
+  `wingman_day1.domain.locks`.
 
 ### Owners
 
 `owner_merkaz`, `owner_anaf` and `owner_mador` are digits only (validated by
-day1 and the form). A flavor can preset or lock them, for example for a
+day1 and the form). *Built:* a string of 1 to 10 ASCII digits, so a leading
+zero survives. A flavor can preset or lock them, for example for a
 flavor that belongs to one team. The cluster list can filter and group by
 the three numbers.
 
@@ -104,6 +123,8 @@ existing cluster's nodepools, which come in any number and order. The
 proposal is to lock configs as a rule for every nodepool ("every nodepool
 has these configs, plus `nm-conf` for its hardware") rather than by
 position. A position only means something for clusters the flavor creates.
+Stage 1 locks by position (`nodepools[0].configs`); the rule form, if it
+comes, is a new lockable shape and an ADR in stage 2.
 
 ### The flavor page
 
@@ -115,7 +136,7 @@ the defaults. A live preview shows the cluster file the flavor produces.
 ## Order of work
 
 1. Day1: the machine-config catalogue endpoint, nodepool defaults, config
-   validation, enforced locks at create, owner validation.
+   validation, enforced locks at create, owner validation. *Done.*
 2. Day1: import, day1 drift on locked values, the sync MR.
 3. Web: the flavor page, the create form's config picker, import, and drift
    for day1 values.
