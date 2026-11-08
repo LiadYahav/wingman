@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, FileWarning, TriangleAlert } from "lucide-react";
+import { Plus, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, FileWarning, Server, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { api } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
 import { DriftBadge } from "@/components/clusters/drift-badge";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
@@ -498,23 +499,21 @@ export default function ClustersPage() {
                     })}
                 {!isLoading && clusters?.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center text-muted-foreground">
-                      No clusters yet.{" "}
-                      {isAdmin && (
-                        <>
-                          <Link href="/clusters/new" className="text-primary hover:underline font-medium">
-                            Create your first cluster
-                          </Link>.
-                        </>
-                      )}
+                    <td colSpan={7}>
+                      <EmptyState
+                        icon={Server}
+                        title="No clusters yet"
+                        description="Every hosted cluster file in the day1 repo is listed here."
+                        action={isAdmin && <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>}
+                        data-testid="clusters-empty"
+                      />
                     </td>
                   </tr>
                 )}
                 {!isLoading && clusters && clusters.length > 0 && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground text-sm">
-                      No clusters match your filters.{" "}
-                      <button onClick={clearFilters} className="text-primary hover:underline">Clear filters</button>
+                    <td colSpan={7}>
+                      <NoMatches what="clusters" onClear={clearFilters} />
                     </td>
                   </tr>
                 )}

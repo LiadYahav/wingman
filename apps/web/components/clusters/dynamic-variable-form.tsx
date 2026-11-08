@@ -4,6 +4,7 @@ import { useState } from "react";
 import jsYaml from "js-yaml";
 import { Plus, X, ChevronDown, ChevronRight, Lock, Unlock, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Combobox } from "@/components/ui/combobox";
 import type { TemplateField } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -497,30 +498,25 @@ export function FieldEditor({
     // Scalar — in spec-build mode, no value input (structure phase only)
     if (mode === "spec-build") return null;
 
-    // Smart dropdown for infra_env: populated from MCE API when available
+    // infra_env is picked from the MCE hub's InfraEnvs when live status lists them
     if (field.name === "infra_env" && (mode === "cluster-create" || mode === "cluster-edit") && !isReadOnly) {
-      if (infraEnvsLoading) {
+      if (infraEnvsLoading || (infraEnvOptions && infraEnvOptions.length > 0)) {
         return (
-          <select disabled className={cn(inputCls, "opacity-50 cursor-wait")}>
-            <option>Loading…</option>
-          </select>
+          <Combobox
+            size="lg"
+            options={(infraEnvOptions ?? []).map((env) => ({ value: env, label: env }))}
+            value={typeof value === "string" ? value : null}
+            onValueChange={(env) => onChange(env ?? "")}
+            disabled={infraEnvsLoading}
+            placeholder={infraEnvsLoading ? "Loading infra envs…" : "Select infra env…"}
+            searchPlaceholder="Search infra envs…"
+            emptyMessage="No infra env matches."
+            aria-label={toLabel(field.name)}
+            data-testid={`infra-env-select-${path}`}
+          />
         );
       }
-      if (infraEnvOptions && infraEnvOptions.length > 0) {
-        return (
-          <select
-            className={inputCls}
-            value={value as string}
-            onChange={(e) => onChange(e.target.value)}
-          >
-            <option value="">— select infra env —</option>
-            {infraEnvOptions.map((env) => (
-              <option key={env} value={env}>{env}</option>
-            ))}
-          </select>
-        );
-      }
-      // Fall through: CLUSTER_STATUS_ENABLED=false or fetch failed → plain text input
+      // Live status is off or the list failed: type the name
     }
 
     return <ScalarInput field={field} value={value} onChange={onChange} readOnly={isReadOnly} />;

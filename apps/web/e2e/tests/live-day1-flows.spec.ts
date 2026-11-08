@@ -36,7 +36,8 @@ async function loginAs(browser: Browser, username: string): Promise<Page> {
   await page.goto("/login");
   await page.getByLabel("Username").fill(username);
   await page.getByLabel("Dev login secret").fill(SECRET);
-  await page.getByRole("combobox").selectOption("admin");
+  await page.getByRole("combobox", { name: "Role" }).click();
+  await page.getByRole("option", { name: "Admin" }).click();
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL((url) => url.pathname === "/");
   return page;

@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import type { ApprovalDetail, CommitRecord, MRDetail, FileDiff } from "@/types";
 
@@ -85,7 +86,7 @@ function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
 function CommitRow({ commit }: { commit: CommitRecord }) {
   const [expanded, setExpanded] = useState(false);
 
-  const { data: diffs, isLoading: diffsLoading, isError: diffsError } = useQuery<FileDiff[]>({
+  const { data: diffs, isLoading: diffsLoading, error: diffsError } = useQuery<FileDiff[]>({
     queryKey: ["audit", commit.repo, "commit-diff", commit.id],
     queryFn: () => api.get<FileDiff[]>(commitDiffPath(commit)),
     enabled: expanded,
@@ -133,7 +134,9 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
               <Skeleton className="h-3 w-64" />
             </div>
           ) : diffsError ? (
-            <p className="text-xs text-destructive italic px-6 pb-3">Failed to load diff</p>
+            <div className="px-6 pb-3">
+              <ProblemList error={diffsError} title="The commit's diff could not be loaded" />
+            </div>
           ) : (
             <DiffFileList diffs={diffs ?? []} />
           )}
@@ -158,7 +161,7 @@ function MRRow({ mr }: { mr: MRDetail }) {
     ? "bg-status-error/15"
     : "bg-status-ready/15";
 
-  const { data: detail, isLoading: detailLoading, isError: detailError } = useQuery<ApprovalDetail>({
+  const { data: detail, isLoading: detailLoading, error: detailError } = useQuery<ApprovalDetail>({
     queryKey: ["audit", "mr-diff", mrKey(mr)],
     queryFn: () => api.get<ApprovalDetail>(approvalApiPath(mrRef(mr))),
     enabled: expanded,
@@ -219,7 +222,9 @@ function MRRow({ mr }: { mr: MRDetail }) {
               <Skeleton className="h-3 w-64" />
             </div>
           ) : detailError ? (
-            <p className="text-xs text-destructive italic px-6 pb-3">Failed to load diff</p>
+            <div className="px-6 pb-3">
+              <ProblemList error={detailError} title="The merge request's diff could not be loaded" />
+            </div>
           ) : (
             <DiffFileList diffs={detail?.diffs ?? []} />
           )}
@@ -281,6 +286,10 @@ export default function AuditPage() {
 
   const commitsLoading = loadingD1C || loadingD2C;
   const mrsLoading = loadingD1M || loadingD2M;
+  // A source failed and the others hold nothing: its problem is the whole answer,
+  // so neither an empty state nor a count of zero claims the list is empty.
+  const commitsUnknown = !commitsLoading && Boolean(day1CommitsError || day2CommitsError) && allCommits.length === 0;
+  const mrsUnknown = !mrsLoading && Boolean(day1MrsError || day2MrsError) && allMrs.length === 0;
 
   // Filtered lists
   const filteredCommits = useMemo(() => {
@@ -322,10 +331,13 @@ export default function AuditPage() {
   function changeFilter<T>(setter: (v: T) => void) { return (v: T) => { setter(v); setPage(1); }; }
 
   const hasActiveFilters = search || repoFilter !== "all" || mrStateFilter !== "all";
+  function clearFilters() {
+    setSearch(""); setRepoFilter("all"); setMrStateFilter("all"); setPage(1);
+  }
 
   const tabs = [
-    { id: "commits" as const, label: "Commits", count: commitsLoading ? null : filteredCommits.length },
-    { id: "mrs" as const, label: "Merge Requests", count: mrsLoading ? null : filteredMrs.length },
+    { id: "commits" as const, label: "Commits", count: commitsLoading || commitsUnknown ? null : filteredCommits.length },
+    { id: "mrs" as const, label: "Merge Requests", count: mrsLoading || mrsUnknown ? null : filteredMrs.length },
   ];
 
   return (
@@ -434,7 +446,7 @@ export default function AuditPage() {
 
         {hasActiveFilters && (
           <button
-            onClick={() => { setSearch(""); setRepoFilter("all"); setMrStateFilter("all"); setPage(1); }}
+            onClick={clearFilters}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="h-3 w-3" />
@@ -469,45 +481,53 @@ export default function AuditPage() {
       {activeTab === "mrs" && day1MrsError && <ProblemList error={day1MrsError} title="Day1 and spec MRs could not be loaded" />}
       {activeTab === "mrs" && day2MrsError && <ProblemList error={day2MrsError} title="Day2 team MRs could not be loaded" />}
 
-      <div className="bg-card rounded-xl border shadow-sm px-4 py-1">
-        {activeTab === "commits" && (
-          <>
-            {commitsLoading
-              ? Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="py-3.5 border-b last:border-0">
-                    <Skeleton className="h-4 w-3/4 mb-1.5" />
-                    <Skeleton className="h-3 w-1/3" />
-                  </div>
-                ))
-              : paginatedCommits.length > 0
-              ? paginatedCommits.map((c) => <CommitRow key={`${c.repo}-${c.team ?? ""}-${c.id}`} commit={c} />)
-              : (
-                <p className="text-sm text-muted-foreground text-center py-12">
-                  {hasActiveFilters ? "No commits match your filters" : "No commits yet"}
-                </p>
-              )}
-          </>
-        )}
+      {activeTab === "commits" && !commitsUnknown && (
+        <div className="bg-card rounded-xl border shadow-sm px-4 py-1">
+          {commitsLoading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="py-3.5 border-b last:border-0">
+                  <Skeleton className="h-4 w-3/4 mb-1.5" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              ))
+            : paginatedCommits.length > 0
+            ? paginatedCommits.map((c) => <CommitRow key={`${c.repo}-${c.team ?? ""}-${c.id}`} commit={c} />)
+            : allCommits.length > 0
+            ? <NoMatches what="commits" onClear={clearFilters} data-testid="audit-commits-no-matches" />
+            : (
+              <EmptyState
+                icon={GitCommitHorizontal}
+                title="No commits yet"
+                description="Commits to the day1, specs and day2 team repos are listed here."
+                data-testid="audit-commits-empty"
+              />
+            )}
+        </div>
+      )}
 
-        {activeTab === "mrs" && (
-          <>
-            {mrsLoading
-              ? Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="py-3.5 border-b last:border-0">
-                    <Skeleton className="h-4 w-3/4 mb-1.5" />
-                    <Skeleton className="h-3 w-1/3" />
-                  </div>
-                ))
-              : paginatedMrs.length > 0
-              ? paginatedMrs.map((mr) => <MRRow key={mrKey(mr)} mr={mr} />)
-              : (
-                <p className="text-sm text-muted-foreground text-center py-12">
-                  {hasActiveFilters ? "No MRs match your filters" : "No merge requests yet"}
-                </p>
-              )}
-          </>
-        )}
-      </div>
+      {activeTab === "mrs" && !mrsUnknown && (
+        <div className="bg-card rounded-xl border shadow-sm px-4 py-1">
+          {mrsLoading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="py-3.5 border-b last:border-0">
+                  <Skeleton className="h-4 w-3/4 mb-1.5" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              ))
+            : paginatedMrs.length > 0
+            ? paginatedMrs.map((mr) => <MRRow key={mrKey(mr)} mr={mr} />)
+            : allMrs.length > 0
+            ? <NoMatches what="merge requests" onClear={clearFilters} data-testid="audit-mrs-no-matches" />
+            : (
+              <EmptyState
+                icon={GitPullRequest}
+                title="No merge requests yet"
+                description="Merge requests in the day1, specs and day2 team repos are listed here."
+                data-testid="audit-mrs-empty"
+              />
+            )}
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

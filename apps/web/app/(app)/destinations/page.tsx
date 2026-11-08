@@ -3,12 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, Search, X } from "lucide-react";
+import { MapPin, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { DESTINATION_KINDS, KIND_LABEL, chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { cn } from "@/lib/utils";
+import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
+import { ProblemList } from "@/components/common/problem-list";
 import { FindingsBadge } from "@/components/addons/findings";
 import { KindBadge } from "@/components/addons/destination-header";
 import type { Destination, DestinationKind } from "@/types/day2";
@@ -62,6 +65,7 @@ const unique = (values: string[]) => [...new Set(values.filter(Boolean))].sort()
 
 /** Every place a team can deploy charts to: the hub, MCEs, hosted clusters and UPI clusters (ADR-0020). */
 export default function DestinationsPage() {
+  const isAdmin = useIsAdmin();
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<DestinationKind | "all">("all");
   const [site, setSite] = useState<string>("all");
@@ -144,9 +148,7 @@ export default function DestinationsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load destinations. Please try again.
-        </div>
+        <ProblemList error={error} title="The destinations could not be loaded" />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <table className="w-full text-sm">
@@ -211,16 +213,17 @@ export default function DestinationsPage() {
                   ))}
               {!isLoading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={7}>
                     {all.length === 0 ? (
-                      "No destinations: day1 has no clusters and no team repo places one."
+                      <EmptyState
+                        icon={MapPin}
+                        title="No destinations yet"
+                        description="Day1 has no clusters and no team repo places one. Every hosted cluster in day1 is a destination."
+                        action={isAdmin && <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>}
+                        data-testid="destinations-empty"
+                      />
                     ) : (
-                      <>
-                        No destination matches.{" "}
-                        <button type="button" onClick={clear} className="text-primary hover:underline">
-                          Clear filters
-                        </button>
-                      </>
+                      <NoMatches what="destinations" onClear={clear} />
                     )}
                   </td>
                 </tr>

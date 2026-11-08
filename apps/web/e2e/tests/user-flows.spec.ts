@@ -8,7 +8,7 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
 import { catalogEntry } from "../fixtures/addons";
-import { hostedCharts, previewOf } from "../fixtures/day2";
+import { destination, hostedCharts, previewOf } from "../fixtures/day2";
 import type { ClusterStatus, CommitRecord } from "../../types";
 
 // ── Shared mock data (correct field shapes matching TypeScript types) ──────────
@@ -207,6 +207,15 @@ async function setupMocks(page: Page) {
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sigs_group_url: "https://gitlab.example.com/sigs" }) })
   );
 
+  // The charts page also reads the destination itself (its Argo instance, the way back). Unmocked,
+  // a dev server proxying /api/day2 answers 401 and the page goes to /login.
+  await page.route(/\/api\/day2\/clusters\/test-cluster(\?.*)?$/, (r: Route) =>
+    r.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(destination("hosted:site-east:prod:mce-east:test-cluster", { argo: "mce-east" })),
+    })
+  );
 }
 
 async function navigateTo(page: Page, path: string) {

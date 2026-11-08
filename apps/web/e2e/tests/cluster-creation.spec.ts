@@ -398,3 +398,77 @@ test.describe("Cluster create form", () => {
     await expect(page.getByText(/step 1 of 2/i)).toBeVisible();
   });
 });
+
+test.describe("Searchable pickers", () => {
+  test("a picker filters as you type and is chosen by keyboard alone", async ({ page }) => {
+    await setup(page);
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("agent-standard");
+
+    await form.siteSelect.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByPlaceholder("Search sites…")).toBeFocused();
+    await page.keyboard.type("2");
+    await expect(page.getByRole("option")).toHaveText(["site2"]);
+    // Typing highlights the first match; Enter chooses the highlighted option
+    await expect(page.getByRole("option", { name: "site2" })).toHaveAttribute("data-highlighted", "");
+    await page.keyboard.press("Enter");
+    await expect(form.siteSelect).toContainText("site2");
+
+    // ArrowDown opens too, and the search also matches an option's description (the MCE's version);
+    // the picker is disabled until site2's MCEs have loaded
+    await expect(form.mceSelect).toBeEnabled();
+    await form.mceSelect.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByPlaceholder("Search MCEs…")).toBeFocused();
+    await page.keyboard.type("4.18");
+    await expect(page.getByPlaceholder("Search MCEs…")).toHaveValue("4.18");
+    await expect(page.getByRole("option")).toHaveCount(1);
+    await expect(page.getByRole("option")).toHaveAttribute("data-highlighted", "");
+    await page.keyboard.press("Enter");
+    await expect(form.mceSelect).toContainText("ocp4-prep-mce-site2-a");
+    await expect(form.versionSelect).toContainText("4.18.22-x86_64");
+  });
+
+  test("a search that matches nothing says so; off-convention MCEs are listed apart", async ({ page }) => {
+    await setup(page);
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("agent-standard");
+    await form.selectSite("site1");
+
+    await form.mceSelect.click();
+    const offConvention = page.getByRole("group", { name: "Off convention" });
+    await expect(offConvention.getByRole("option")).toHaveText([/^ocp4-mce-workflow-test/]);
+    await expect(form.mceOption("ocp4-prod-mce-site1-a")).toContainText("env prod · OCP 4.16.27-x86_64 · 4 clusters");
+
+    await page.getByPlaceholder("Search MCEs…").fill("no-such-mce");
+    await expect(page.getByRole("option")).toHaveCount(0);
+    await expect(page.getByText("No MCE matches.")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(form.mceSelect).toContainText("Select MCE…");
+  });
+
+  test("infra envs the MCE hub lists are picked from a searchable list, and sent", async ({ page }) => {
+    const calls = await setup(page);
+    await page.route("**/api/day1/mces/*/infraenvs", (r) => json(r, ["dell-r660-site1", "dell-r750-site1", "hpe-dl380-site1"]));
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("agent-standard");
+    await form.fillName("ocp4-prod-herzi-site1");
+    await expect(form.mceSelect).toContainText("ocp4-prod-mce-site1-a");
+
+    const infraEnv = page.getByRole("combobox", { name: "Infra Env", exact: true });
+    await infraEnv.click();
+    await page.getByPlaceholder("Search infra envs…").fill("r750");
+    await expect(page.getByRole("option")).toHaveText(["dell-r750-site1"]);
+    await page.getByRole("option", { name: "dell-r750-site1" }).click();
+    await expect(infraEnv).toContainText("dell-r750-site1");
+
+    await form.templateInput("1234").fill("1234");
+    await form.review();
+    await expect(form.reviewDialog).toBeVisible();
+    expect(calls.previews[0].variables.nodepools).toEqual([{ infra_env: "dell-r750-site1", replicas: 2 }]);
+  });
+});

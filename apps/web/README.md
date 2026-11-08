@@ -145,6 +145,25 @@ types/
 └── day2.ts             # The day2 service's bodies (from its Pydantic schemas)
 ```
 
+## UI conventions
+
+- **Dropdowns** are `Select` (`components/ui/select.tsx`), never a native `<select>`: the
+  browser draws its arrow against the border. The arrow sits as far from the right border as
+  the text from the left; sizes `sm` and `default` match `Input`, `lg` the page forms' own
+  `px-3 py-2` inputs.
+- **A list that can grow** (sites, MCEs, infra envs, chart revisions, versions) is a `Combobox`
+  (`components/ui/combobox.tsx`): the same closed look plus a search box, keyboard only if need
+  be. Options are `{ value, label, description?, group?, disabled? }`; the search matches the
+  label, description and group. The trigger is the `combobox` and carries the `aria-label` and
+  `data-testid` you pass.
+- **Every read has three more states.** Loading is `Skeleton`s shaped like what will be there
+  (rows, cards, lines). A list with nothing in it is an `EmptyState`
+  (`components/common/empty-state.tsx`): what would be here and, when the viewer can take it,
+  the next step (`EmptyStateLink`); `NoMatches` when search or filters emptied it. A failed read
+  is a `ProblemList` (`components/common/problem-list.tsx`) given the error itself, so it shows
+  the problem's detail, every broken rule and the request id: never `error.message` in a
+  string, and never an empty list or a missing section.
+
 ## Environment Variables
 
 The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. In a deployment,

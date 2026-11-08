@@ -142,7 +142,7 @@ export function hostedCharts(): DestinationCharts {
   };
 }
 
-function destination(id: string, overrides: Partial<Destination> = {}): Destination {
+export function destination(id: string, overrides: Partial<Destination> = {}): Destination {
   const [kind, site = "", env = "", ...rest] = id.split(":");
   const name = id === "hub" ? "hub" : (rest[rest.length - 1] ?? "");
   return {

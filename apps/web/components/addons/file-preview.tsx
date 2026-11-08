@@ -1,6 +1,8 @@
 "use client";
 
+import { ProblemList } from "@/components/common/problem-list";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
+import { AMBIGUOUS_WRITE_HINT, isAmbiguousWrite, problemOf } from "@/lib/day2";
 import { asNewFile, computeFullFileDiff } from "@/lib/diff";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +49,18 @@ export function FilePreview({ file }: { file: PlannedFile }) {
   );
 }
 
-/** Why the service refused the change, inside the dialog that asked for it. */
-export function WriteError({ message }: { message: string }) {
+/** What a refused write means beyond its detail: an unconfirmed one (ADR-0006) may have happened. */
+function refusalTitle(error: unknown): string {
+  return isAmbiguousWrite(problemOf(error)) ? AMBIGUOUS_WRITE_HINT : "The change was refused";
+}
+
+/**
+ * Why the service refused the change, inside the dialog that asked for it.
+ * `error` is the thrown error itself, shown in full (every broken rule and
+ * the request id); `message` is a sentence already made from one.
+ */
+export function WriteError({ error, message }: { error?: unknown; message?: string }) {
+  if (error) return <ProblemList error={error} title={refusalTitle(error)} />;
   if (!message) return null;
   return (
     <p role="alert" className="whitespace-pre-line break-words rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">

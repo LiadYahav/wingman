@@ -27,7 +27,8 @@ export class ClusterNewPage {
     this.offConventionMces = page.getByTestId("off-convention-mces");
     this.formProblems = page.getByTestId("form-problems");
     this.reviewButton = page.getByTestId("review-button");
-    this.reviewDialog = page.getByRole("dialog");
+    // By name: an open (or closing) combobox popup is a dialog too
+    this.reviewDialog = page.getByRole("dialog", { name: /^Review/ });
   }
 
   /** Land on "/" first so the persisted session hydrates, then open the form. */

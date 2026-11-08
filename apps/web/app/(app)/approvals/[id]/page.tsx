@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X, ChevronDown, ChevronRight,
-  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX,
+  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, FileQuestionMark, Files,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, isApiError } from "@/lib/api-client";
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { computeLineDiff } from "@/lib/diff";
 import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
@@ -314,10 +315,20 @@ function MRDetailContent() {
 
   if (!ref) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive break-words">
-          Invalid MR ID: <code>{id}</code>. Expected <code>day1-123</code>, <code>specs-45</code> or <code>day2-&lt;team&gt;-67</code>.
-        </div>
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
+        <EmptyState
+          icon={FileQuestionMark}
+          title="Invalid MR ID"
+          description={
+            <>
+              <code className="break-all">{id}</code> names no merge request. Expected <code>day1-123</code>,{" "}
+              <code>specs-45</code> or <code>day2-&lt;team&gt;-67</code>.
+            </>
+          }
+          action={<EmptyStateLink href="/approvals">Back to approvals</EmptyStateLink>}
+          bordered
+          data-testid="approval-invalid-id"
+        />
       </div>
     );
   }
@@ -366,11 +377,42 @@ function MRDetailContent() {
       </div>
 
       {error ? (
-        <ProblemList error={error} title={isApiError(error, 404) ? "This merge request does not exist or is not a Wingman MR" : "Failed to load the MR"} />
+        <ProblemList error={error} title={isApiError(error, 404) ? "This merge request does not exist or is not a Wingman MR" : "The merge request could not be loaded"} />
       ) : isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-24 rounded-xl" />
-          <Skeleton className="h-48 rounded-xl" />
+        <div className="space-y-6" data-testid="approval-loading">
+          {/* The MR meta card: badges, then the five facts */}
+          <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Skeleton className="h-6 w-20 rounded-full" />
+              <Skeleton className="h-6 w-16 rounded-full" />
+              <Skeleton className="h-5 w-14 rounded-full" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3 w-14" />
+                  <Skeleton className="h-4 w-24 max-w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Changed files: each a path bar over a few diff lines */}
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-32" />
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <Skeleton className="h-3.5 w-3.5 shrink-0" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+                <div className="border-t px-4 py-3 space-y-2">
+                  {["w-1/2", "w-3/4", "w-2/5", "w-3/5"].map((w) => (
+                    <Skeleton key={w} className={cn("h-3", w)} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : mr ? (
         <>
@@ -471,9 +513,13 @@ function MRDetailContent() {
               Changed Files ({diffs.length})
             </h2>
             {diffs.length === 0 ? (
-              <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-                No file changes in this MR.
-              </div>
+              <EmptyState
+                icon={Files}
+                title="No changed files"
+                description="GitLab lists no file changes for this merge request."
+                bordered
+                data-testid="approval-no-files"
+              />
             ) : (
               diffs.map((diff, i) => <FileDiffCard key={i} diff={diff} />)
             )}

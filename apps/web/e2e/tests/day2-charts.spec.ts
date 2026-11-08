@@ -208,7 +208,8 @@ test.describe("A destination's charts", () => {
     await open(page, HOSTED_PAGE);
     const card = installedCard(page, "platform", "cert-manager");
     await card.getByRole("button", { name: /^cert-manager/ }).click();
-    await card.getByRole("combobox").selectOption("1.11.0");
+    await card.getByRole("combobox", { name: "Revision" }).click();
+    await page.getByRole("option", { name: "1.11.0", exact: true }).click();
 
     await expect(card).toContainText("emergency pin");
     const review = card.getByRole("button", { name: "Review update" });
