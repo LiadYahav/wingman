@@ -12,25 +12,18 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
-from pydantic import AliasChoices
-from pydantic_settings import BaseSettings
 
-from wingman_core.settings import AuthSettings, GitLabSettings, RuntimeSettings
-from wingman_day1.settings import Day1Settings
-from wingman_day2.settings import Day2Settings
+from wingman_core.settings import GitLabSettings
+
+sys.path.insert(0, str(Path(__file__).parent))
+from service_settings import env_names, read_by_services
 
 ROOT = Path(__file__).resolve().parents[2]
-SETTINGS: tuple[type[BaseSettings], ...] = (
-    GitLabSettings,
-    AuthSettings,
-    RuntimeSettings,
-    Day1Settings,
-    Day2Settings,
-)
 # Read by libraries, not by a settings class: httpx's CA bundle.
 LIBRARY_VARIABLES = {"SSL_CERT_FILE"}
 # Set by the image (docs/ops/images.md), not by the chart.
@@ -45,26 +38,6 @@ if HELM is None:
     if os.environ.get("CI"):
         raise RuntimeError("the chart env contract needs helm on PATH in CI")
     pytest.skip("helm is not installed", allow_module_level=True)
-
-
-def env_names(cls: type[BaseSettings]) -> dict[str, bool]:
-    """Every environment name ``cls`` reads, and whether the setting is required."""
-    prefix = str(cls.model_config.get("env_prefix", "")).upper()
-    names: dict[str, bool] = {}
-    for field_name, field in cls.model_fields.items():
-        alias = field.validation_alias
-        choices = alias.choices if isinstance(alias, AliasChoices) else [alias or field_name]
-        for choice in choices:
-            if isinstance(choice, str):
-                names[(choice if alias else prefix + choice).upper()] = field.is_required()
-    return names
-
-
-def read_by_services() -> dict[str, bool]:
-    names: dict[str, bool] = {}
-    for cls in SETTINGS:
-        names.update(env_names(cls))
-    return names
 
 
 def chart_variables(*extra: str) -> set[str]:
