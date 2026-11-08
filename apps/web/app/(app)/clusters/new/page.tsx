@@ -492,23 +492,6 @@ type FormError =
     }
   | { kind: "form"; lines: string[] };
 
-/** What the form itself caught before asking the service; styled like ProblemList. */
-function FormChecks({ lines }: { lines: string[] }) {
-  return (
-    <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-        <div className="min-w-0 space-y-1">
-          <p className="font-medium">Some fields need attention</p>
-          <ul className="list-disc pl-4 space-y-0.5">
-            {lines.map((line, i) => <li key={i} className="break-words">{line}</li>)}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function describeFailure(error: unknown, what: "preview" | "create"): FormError {
   const verb = what === "preview" ? "The cluster file could not be rendered" : "The merge request was not opened";
   if (isApiError(error, "ALREADY_EXISTS")) {
@@ -1227,7 +1210,7 @@ export default function NewClusterPage() {
           {formError && (
             <div ref={errorRef} className="space-y-2 scroll-mt-24" data-testid="form-problems">
               {formError.kind === "form" ? (
-                <FormChecks lines={formError.lines} />
+                <ProblemList lines={formError.lines} title="Some fields need attention" />
               ) : (
                 <ProblemList error={formError.error} title={formError.title} />
               )}

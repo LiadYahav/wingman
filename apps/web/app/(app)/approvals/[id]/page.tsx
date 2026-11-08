@@ -161,9 +161,13 @@ function EditMRPanel({
           : <ProblemList error={saveError} title={writeErrorTitle(saveError, "The edit was refused")} />
       )}
       {editableDiffs.length === 0 ? (
-        <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-          No file in this MR can be edited here.
-        </div>
+        <EmptyState
+          icon={FileEdit}
+          title="No file in this MR can be edited here"
+          description="Only the files a merge request adds can be edited on this page."
+          bordered
+          data-testid="approval-nothing-editable"
+        />
       ) : (
         <>
           <input

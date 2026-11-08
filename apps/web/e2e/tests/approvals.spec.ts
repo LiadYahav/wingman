@@ -265,6 +265,20 @@ test.describe("Approve with the reviewed sha", () => {
     await expect(page.getByText("11111111")).toBeVisible();
   });
 
+  test("an MR that only changes files has nothing to edit here, and says so", async ({ page }) => {
+    await open(page);
+    const changed = { ...NEW_FILE_DIFF, diff: "@@ -1 +1 @@\n-mastertag: 4.16.27-x86_64\n+mastertag: 4.18.22-x86_64\n", new_file: false };
+    await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ mr: DAY1_MR, diffs: [changed] }) })
+    );
+    await go(page, "/approvals/day1-42");
+
+    await page.getByRole("button", { name: /edit files/i }).click();
+    await expect(page.getByTestId("approval-nothing-editable")).toContainText("No file in this MR can be edited here");
+    await expect(page.getByText("1 changed file can only be edited")).toBeVisible();
+    await expect(page.getByRole("button", { name: /review & submit changes/i })).toHaveCount(0);
+  });
+
   test("an unknown id format is explained", async ({ page }) => {
     await open(page);
     await go(page, "/approvals/nope");
