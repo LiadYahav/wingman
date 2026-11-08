@@ -8,13 +8,14 @@ One section per alert in `chart/files/alerts.rules.yaml`; each alert's
 
 Prometheus has not scraped a Wingman service for 5 minutes.
 
-1. `oc -n <ns> get pods -l app.kubernetes.io/part-of=wingman`. A crash loop at
+1. `oc -n <ns> get pods -l app.kubernetes.io/name=wingman`. A crash loop at
    start-up is usually a settings validator refusing the configuration (it
    names the variable; ADR-0009): an empty `GITLAB_TOKEN`, a `JWT_SECRET_KEY`
    under 32 characters, or the fake Git backend in production.
 2. If the pod runs but is not scraped, check the ServiceMonitor selects the
    Service (`monitoring.serviceMonitor` values) and that `/metrics` answers on
-   the pod's port: `oc exec <pod> -- curl -s localhost:8001/metrics | head`.
+   the pod's port: `oc exec <pod> -- curl -s localhost:8001/metrics | head`
+   (day1's port; day2 listens on 8002).
 
 ## WingmanHighServerErrorRate
 
@@ -38,14 +39,15 @@ the air gap by hand, so one is usually missing.
 
 GitLab answered 401 or 403 to **Wingman's own token**. Every user is affected.
 
-1. Check the token in the `wingman-secrets` Secret (`GITLAB_ACCESS_TOKEN`): has
-   it expired or been revoked? GitLab shows its expiry under the owning
+1. Check the token in the `wingman-secrets` Secret (`GITLAB_TOKEN`, from the
+   Helm value `gitlab.accessToken`): has it expired or been revoked? GitLab shows its expiry under the owning
    account's access tokens.
 2. Check the account is still a member of the day1 project, the specs project
    and every team project in the sigs group, with at least Developer role (it
    pushes branches and opens merge requests) and the right to merge.
-3. Replace the token and restart both services; the alert clears 10 minutes
-   after the last denied call.
+3. Replace the token (`helm upgrade` with the new `gitlab.accessToken`: a
+   changed Secret restarts both services); the alert clears 10 minutes after
+   the last denied call.
 
 ## WingmanGitLabUnavailable
 
@@ -55,7 +57,8 @@ or 5xx after retries) for 10 minutes. No write was attempted for these.
 1. Is GitLab itself healthy? Check its status page or `/-/readiness` from
    inside the cluster.
 2. If GitLab is fine, check the path from the pod: DNS, proxy, and TLS
-   (`GITLAB_SSL_VERIFY` and the CA bundle in `tls.caBundle`).
+   (`GITLAB_VERIFY_TLS`, from `gitlab.verifyTls`, and the CA bundle in
+   `tls.caBundle`).
 3. `wingman_dependency_request_duration_seconds` shows whether calls time out
    (near the read timeout) or fail fast (refused connection).
 
