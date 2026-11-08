@@ -13,6 +13,10 @@
    approving the stale commit is refused; approves the new head as a second
    user; edits the merged file; approves the edit; opens the delete MR and
    approves it.
+   Then flavors v2 (ADR-0037): imports two hand-written clusters into
+   ``agent-baseline`` (only the header changes), syncs one after another file
+   moved (GitLab takes the older commit as the guard), and checks a sync of a
+   file that moved after its preview is refused.
 3. With a chart dir, renders the cluster file as the hcAppset does
    (``helm template`` with the four value layers and ``clusterName``/``site``/
    ``mce``) and checks a HostedCluster and NodePools come out.
@@ -296,7 +300,7 @@ async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str
         "addon overrides kept",
     )
     check(
-        detail["hosted_cluster"]["name"] == "openshift-prod-falcon-site1",
+        detail["hosted_cluster"]["name"] == "ocp4-prod-falcon-site1",
         f"HostedCluster {detail['hosted_cluster']}",
     )
     history = (await api.get(f"/api/day1/clusters/{CLUSTER}/history", headers=alice)).json()
@@ -337,6 +341,159 @@ async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str
         "   audit:", [(m["repo"], m["iid"], m["state"], m["author"]["username"]) for m in audit[:4]]
     )
     return final["yaml"]
+
+
+HOSTED = f"sites/{SITE}/mces/{MCE}/hostedClusters"
+LARK, HERON, HERZI = "ocp4-prod-lark-site1", "ocp4-prod-heron-site1", "ocp4-prod-herzi-site1"
+FLAVOR = "agent-baseline"
+CI_MARKER = "# === Added by CI ==="
+
+
+async def read_main(admin: httpx.AsyncClient, project: str, path: str) -> str:
+    """A file's text on main, read straight from GitLab."""
+    raw = await admin.get(
+        f"/projects/{quote(project, safe='')}/repository/files/{quote(path, safe='')}/raw",
+        params={"ref": "main"},
+    )
+    raw.raise_for_status()
+    return raw.text
+
+
+async def push_main(admin: httpx.AsyncClient, project: str, path: str, content: str) -> None:
+    """Commit ``content`` to ``path`` on main as a person would, outside Wingman."""
+    pushed = await admin.put(
+        f"/projects/{quote(project, safe='')}/repository/files/{quote(path, safe='')}",
+        json={"branch": "main", "content": content, "commit_message": f"edit {path} by hand"},
+    )
+    pushed.raise_for_status()
+
+
+async def flavor_flow(
+    api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str, str]
+) -> None:
+    """Import two hand-written clusters into a flavor, then sync one (ADR-0037)."""
+    alice, bob = await login(api, "alice"), await login(api, "bob")
+    day1 = paths["day1"]
+    lark_path, heron_path = f"{HOSTED}/{LARK}.yaml", f"{HOSTED}/{HERON}.yaml"
+    lark_before = await read_main(admin, day1, lark_path)
+    heron_before = await read_main(admin, day1, heron_path)
+
+    step(f"import {LARK} and {HERON} into {FLAVOR}")
+    preview = await api.post(
+        f"/api/day1/specs/{FLAVOR}/import/preview",
+        json={"clusters": [{"name": LARK}, {"name": HERON}]},
+        headers=alice,
+    )
+    check(
+        preview.status_code == 200, f"import preview ({preview.status_code} {preview.text[:200]})"
+    )
+    shown = preview.json()
+    check(
+        [c["status"] for c in shown["clusters"]] == ["ready", "ready"],
+        "both are ready to join the flavor",
+    )
+    imported = await api.post(
+        f"/api/day1/specs/{FLAVOR}/import",
+        json={
+            "spec_version": shown["spec_version"],
+            "clusters": [
+                {k: c[k] for k in ("name", "site", "mce", "last_commit_id")}
+                for c in shown["clusters"]
+            ],
+        },
+        headers=alice,
+    )
+    check(imported.status_code == 201, f"import MR opened ({imported.status_code})")
+    print(f"   {imported.json()['title']}")
+    await approve(api, imported.json()["iid"], bob)
+    await asyncio.sleep(1)
+    header = f'# specName: "{FLAVOR}"\n# specVersion: "1.0.0"\n'
+    check(
+        await read_main(admin, day1, lark_path) == header + lark_before
+        and await read_main(admin, day1, heron_path) == header + heron_before,
+        "the import wrote only the header: every other byte of both files is as it was",
+    )
+    drift = (await api.get(f"/api/day1/clusters/{LARK}/drift", headers=alice)).json()
+    check(
+        [d["file_key"] for d in drift["value_drift"]]
+        == ["nodepool[0].configs", "nodepool[1].configs"],
+        f"{LARK} drifts on both nodepools' configs (state {drift['state']})",
+    )
+
+    step(f"sync {LARK}, after someone else changed another file")
+    sync = await api.post(f"/api/day1/clusters/{LARK}/sync/preview", json={}, headers=alice)
+    check(sync.status_code == 200, f"sync preview ({sync.status_code} {sync.text[:200]})")
+    plan = sync.json()
+    check(plan["can_sync"] and len(plan["removals"]) == 2, f"removals {plan['removals']}")
+    herzi_path = f"{HOSTED}/{HERZI}.yaml"
+    await push_main(admin, day1, herzi_path, await read_main(admin, day1, herzi_path) + "# x\n")
+    body: dict[str, object] = {
+        "last_commit_id": plan["last_commit_id"],
+        "spec_version": plan["spec_version"],
+    }
+    unconfirmed = await api.post(f"/api/day1/clusters/{LARK}/sync", json=body, headers=alice)
+    check(unconfirmed.status_code == 422, "a sync that does not confirm its removals is refused")
+    body["confirm_removals"] = [
+        {"nodepool": r["nodepool"]["index"], "name": r["name"]} for r in plan["removals"]
+    ]
+    synced = await api.post(f"/api/day1/clusters/{LARK}/sync", json=body, headers=alice)
+    check(
+        synced.status_code == 201,
+        f"GitLab takes the preview's older commit as the guard ({synced.status_code} "
+        f"{synced.text[:200]})",
+    )
+    print(f"   {synced.json()['title']}")
+    await approve(api, synced.json()["iid"], bob)
+    await asyncio.sleep(1)
+    after = await read_main(admin, day1, lark_path)
+    check(
+        after.split(CI_MARKER)[1] == lark_before.split(CI_MARKER)[1]
+        and "vlanId: 1412" in after
+        and "restored-example-config  #" not in after,
+        "the sync changed the configs and left vlanId and the CI block as they were",
+    )
+    detail = (await api.get(f"/api/day1/clusters/{LARK}", headers=alice)).json()
+    check(
+        [p["configs"] for p in detail["values"]["nodepools"]]
+        == [
+            ["nm-conf-prod-lark-site1-dell", "nic-ring-buffer", "workers-chrony-configuration"],
+            [
+                "nm-conf-prod-lark-site1-dell-data",
+                "workers-chrony-configuration",
+                "nic-ring-buffer",
+            ],
+        ],
+        "each nodepool now holds exactly the flavor's configs",
+    )
+    drift = (await api.get(f"/api/day1/clusters/{LARK}/drift", headers=alice)).json()
+    check(drift["value_drift"] == [], f"no locked value differs now (state {drift['state']})")
+
+    step(f"a sync of {HERON} whose file moved after the preview")
+    hardware = {
+        "hardware": [{"nodepool": 0, "hardware": "dell"}, {"nodepool": 1, "hardware": "dell"}]
+    }
+    heron = await api.post(f"/api/day1/clusters/{HERON}/sync/preview", json=hardware, headers=alice)
+    check(
+        heron.status_code == 200 and heron.json()["can_sync"], "heron syncs once hardware is chosen"
+    )
+    plan = heron.json()
+    await push_main(admin, day1, heron_path, await read_main(admin, day1, heron_path) + "# y\n")
+    moved = await api.post(
+        f"/api/day1/clusters/{HERON}/sync",
+        json={
+            **hardware,
+            "last_commit_id": plan["last_commit_id"],
+            "spec_version": plan["spec_version"],
+            "confirm_removals": [
+                {"nodepool": r["nodepool"]["index"], "name": r["name"]} for r in plan["removals"]
+            ],
+        },
+        headers=alice,
+    )
+    check(
+        moved.status_code == 409 and moved.json()["code"] == "REVISION_CONFLICT",
+        f"the moved file is refused ({moved.status_code})",
+    )
 
 
 def helm_render(
@@ -436,6 +593,7 @@ async def main() -> int:
             async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}", timeout=60) as api:
                 await wait_ready(api)
                 final_yaml = await flow(api, admin, paths)
+                await flavor_flow(api, admin, paths)
         finally:
             service.terminate()
             service.wait(timeout=10)
