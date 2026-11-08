@@ -14,9 +14,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from wingman_core.application.approvals import describe
-from wingman_core.domain.git import Commit, FileDiff
+from wingman_core.domain.git import Commit
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.domain.users import User
+from wingman_core.web.schemas import FileDiffOut
 from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.audit import AuditCommit
 from wingman_day1.application.clusters import ClusterFile
@@ -30,13 +31,14 @@ from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
 from wingman_day1.domain.locks import MISSING
 from wingman_day1.domain.machine_configs import NETWORK_CONFIG
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
+from wingman_day1.domain.openshift_versions import OpenShiftVersions
 from wingman_day1.domain.paths import NODEPOOL_DEFAULTS_FILE
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata, rule_problems
 from wingman_day1.domain.status import LiveStatus
 from wingman_day1.domain.value_drift import ValueDrift
+from wingman_day1.domain.workflows import WorkflowRun
 
 MAX_FILE_BYTES = 256 * 1024
-NO_SPEC = None
 
 
 class _In(BaseModel):
@@ -163,29 +165,6 @@ def change_out(repo: RepoKey, merge_request: MergeRequest) -> MRDetailOut:
     return MRDetailOut.of(Change(repo, describe(merge_request)))
 
 
-class FileDiffOut(BaseModel):
-    """One file of a diff."""
-
-    old_path: str
-    new_path: str
-    diff: str
-    new_file: bool
-    renamed_file: bool
-    deleted_file: bool
-
-    @classmethod
-    def of(cls, diff: FileDiff) -> FileDiffOut:
-        """From a domain diff."""
-        return cls(
-            old_path=str(diff.old_path),
-            new_path=str(diff.new_path),
-            diff=diff.diff,
-            new_file=diff.new_file,
-            renamed_file=diff.renamed_file,
-            deleted_file=diff.deleted_file,
-        )
-
-
 class ApprovalDetailOut(BaseModel):
     """An MR and its diff."""
 
@@ -304,6 +283,22 @@ class MceOut(BaseModel):
             cluster_count=view.cluster_count,
             stray_files=list(view.stray_files),
             problems=list(view.problems),
+        )
+
+
+class OpenShiftVersionsOut(BaseModel):
+    """The releases a new cluster on an MCE may use, newest first (ADR-0034)."""
+
+    mce: str
+    versions: list[str]
+    problems: list[str]
+    """Why ``versions`` may be short or empty: a missing or broken ``upgrade/`` file."""
+
+    @classmethod
+    def of(cls, offered: OpenShiftVersions) -> OpenShiftVersionsOut:
+        """From the domain result."""
+        return cls(
+            mce=offered.mce, versions=list(offered.versions), problems=list(offered.problems)
         )
 
 
@@ -726,7 +721,6 @@ class AddonDriftOut(BaseModel):
     team: str
     reason: Literal["missing"]
     expected_version: str
-    installed_version: str
     override_values: dict[str, Any]
     """The values requested at create; install with them."""
 
@@ -738,7 +732,6 @@ class AddonDriftOut(BaseModel):
             team=drift.team,
             reason=drift.reason.value,
             expected_version=drift.expected_version,
-            installed_version=drift.installed_version,
             override_values=dict(drift.override_values),
         )
 
@@ -770,7 +763,7 @@ class NodepoolRefOut(BaseModel):
 
 
 class ValueDriftOut(BaseModel):
-    """A locked value the cluster file does not hold (ADR-0033)."""
+    """A locked value the cluster file does not hold (ADR-0036)."""
 
     path: str
     """The flavor's locked path: ``owner_anaf``, ``nodepools[0].configs`` or the rule."""
@@ -826,12 +819,11 @@ class ClusterDriftOut(BaseModel):
     spec_name: str | None
     spec_version: str | None
     current_spec_version: str | None
-    unified_diff: str = ""
-    value_drift: list[ValueDriftOut] = Field(default_factory=list)
+    value_drift: list[ValueDriftOut]
     """Locked values the file does not hold: one of the two things that make it ``drifted``."""
     addon_drift: list[AddonDriftOut]
     """Spec addons the cluster does not have: the other thing that makes it ``drifted``."""
-    version_differences: list[VersionDifferenceOut] = Field(default_factory=list)
+    version_differences: list[VersionDifferenceOut]
     """Spec addons at another version; reported only, never fixed (ADR-0025)."""
     error: str | None
 
@@ -1001,5 +993,35 @@ class SpecDriftOut(BaseModel):
     state: DriftStateOut
     is_drifted: bool | None
     spec_version: str | None
-    unified_diff: str = ""
     error: str | None
+
+
+# ── The delete-cluster workflow (ADR-0033) ──────────────────────────────────
+
+
+class WorkflowRunOut(BaseModel):
+    """One run of a workflow that acts on a cluster."""
+
+    workflow_id: str
+    status: str
+    phase: str | None
+    error: str | None
+
+    @classmethod
+    def of(cls, run: WorkflowRun) -> WorkflowRunOut:
+        """From a run."""
+        return cls(workflow_id=run.workflow_id, status=run.status, phase=run.phase, error=run.error)
+
+
+class DeleteWorkflowOut(BaseModel):
+    """``GET /clusters/{name}/delete-workflow``: the newest run, if any."""
+
+    run: WorkflowRunOut | None
+
+
+class StartDeleteWorkflowIn(BaseModel):
+    """``POST /clusters/{name}/delete-workflow``: deleting is not reversible, so say so."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirm: Literal[True]

@@ -34,7 +34,8 @@ test.describe("Dev login", () => {
 
     await page.getByLabel("Username").fill("alice");
     await page.getByLabel("Dev login secret").fill("test-dev-secret-never-real-000001");
-    await page.getByRole("combobox").selectOption("admin");
+    await page.getByRole("combobox", { name: "Role" }).click();
+    await page.getByRole("option", { name: "Admin" }).click();
     await page.getByRole("button", { name: "Sign in" }).click();
 
     expect((await login).postDataJSON()).toEqual({ username: "alice", role: "admin", secret: "test-dev-secret-never-real-000001" });

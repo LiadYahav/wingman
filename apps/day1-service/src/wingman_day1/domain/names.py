@@ -13,7 +13,7 @@ listed and flagged, never hidden; only new names are refused.
 
 What ArgoCD and the chart make of a cluster file stem is
 :class:`HostedClusterNaming`: production's ApplicationSet strips ``ocp4-``
-(``openshift-prod-x-site1`` in ``hcp-prod-x-site1``), the GitHub sandbox keeps
+(``ocp4-prod-x-site1`` in ``hcp-prod-x-site1``), the GitHub sandbox keeps
 the whole stem. Which one applies is a deployment setting (ADR-0015).
 """
 
@@ -26,6 +26,8 @@ from typing import Final
 
 CLUSTER_FILE_PREFIX: Final = "ocp4-"
 MAX_DNS_LABEL: Final = 63
+HOSTED_CLUSTER_PREFIX: Final = "ocp4-"
+"""What the chart puts before ``clusterName`` to name the HostedCluster."""
 
 _DNS_LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 _SEGMENT = r"[a-z0-9]+"
@@ -133,8 +135,13 @@ class HostedClusterRef:
 
     @property
     def name(self) -> str:
-        """The HostedCluster: ``openshift-<clusterName>``."""
-        return f"openshift-{self.cluster_name}"
+        """The HostedCluster: ``ocp4-<clusterName>``, the full file stem in production.
+
+        The team's hostedclusters-setup chart has always named it so (checked
+        live on several MCEs, 2026-11-08). Only the namespace takes the bare
+        ``clusterName``.
+        """
+        return f"{HOSTED_CLUSTER_PREFIX}{self.cluster_name}"
 
     @property
     def namespace(self) -> str:

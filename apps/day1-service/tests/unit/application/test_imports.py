@@ -1,4 +1,4 @@
-"""Importing existing clusters into a flavor, on the seeded in-memory GitLab (ADR-0034)."""
+"""Importing existing clusters into a flavor, on the seeded in-memory GitLab (ADR-0037)."""
 
 from __future__ import annotations
 
@@ -239,6 +239,23 @@ async def test_a_file_that_moved_since_the_preview_fails_the_whole_import(
         )
     assert str(caught.value).startswith("changed since the preview: ocp4-prod-heron-site1 (")
     assert await gitlab.list_merge_requests(pid, state=None) == []
+
+
+async def test_an_import_after_other_files_changed_is_not_stale(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    # The preview's last_commit_id is the commit the repo was read at (ADR-0035);
+    # a merge that touches only other files moves it, and the import still goes ahead.
+    pid = await support.project_id(gitlab, support.DAY1)
+    chosen = await picks(context, LARK)
+    herzi = await main_file(gitlab, support, HERZI)
+    await put(context, support, gitlab, HERZI, herzi.content + "# a later edit\n")
+    assert (await context.clusters.get(LARK)).last_commit_id != chosen[0].last_commit_id
+    result = await context.imports.import_clusters(
+        "agent-baseline", chosen, spec_version="1.0.0", user=support.ALICE
+    )
+    branch = gitlab.snapshot(pid, result.merge_request.source_branch)
+    assert branch[str(LARK.path)].startswith(HEADER)
 
 
 async def test_a_flavor_that_moved_since_the_preview_fails_the_import(

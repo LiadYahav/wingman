@@ -19,6 +19,7 @@ from wingman_day1.domain.auth import Identity
 from wingman_day1.domain.changes import ClusterChange, ImportChange, ProvisionResult, SpecChange
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
+from wingman_day1.domain.workflows import WorkflowRun
 
 
 class RepoReads(Protocol):
@@ -38,7 +39,23 @@ class RepoReads(Protocol):
         ...
 
     async def read(self, path: RepoPath, *, ref: str | None = None) -> FileContent:
-        """A file's content and the last commit that changed it."""
+        """A file's content and the commit it was read at (its ``last_commit_id``)."""
+        ...
+
+    async def last_change(self, path: RepoPath) -> Commit | None:
+        """The newest commit that changed ``path``, as of the commit files are read at.
+
+        A read's ``last_commit_id`` is that commit, not the file's own last
+        change (ADR-0035); this is the file's own, for "changed by, at".
+        """
+        ...
+
+    async def changed_since(self, path: RepoPath, commit_id: str) -> bool:
+        """Whether ``path`` changed on the default branch after ``commit_id``.
+
+        GitLab's own write guard asks the same (ADR-0035). An unknown commit
+        counts as changed: Wingman asks for a reload rather than guess.
+        """
         ...
 
     async def history(self, path: RepoPath, *, limit: int = 50) -> list[Commit]:
@@ -80,7 +97,24 @@ class ClusterProvisioner(Protocol):
         ...
 
     async def link(self, change: ImportChange) -> ProvisionResult:
-        """Propose linking several cluster files to a flavor in one commit (ADR-0034)."""
+        """Propose linking several cluster files to a flavor in one commit (ADR-0037)."""
+        ...
+
+
+class ClusterDeleteWorkflow(Protocol):
+    """The delete-cluster workflow (ADR-0033). Not built yet: no adapter exists.
+
+    It owns the ordered teardown: drain, remove the cluster's files, wait for
+    ArgoCD to prune, wait for the released nodes to be wiped, delete the DHCP
+    scope, and release the segment last.
+    """
+
+    async def latest_run(self, ref: ClusterRef) -> WorkflowRun | None:
+        """The newest run for ``ref``, or ``None`` when it never ran."""
+        ...
+
+    async def start(self, ref: ClusterRef, *, requested_by: User) -> WorkflowRun:
+        """Start a run for ``ref``; the orchestrator refuses a second one while one runs."""
         ...
 
 

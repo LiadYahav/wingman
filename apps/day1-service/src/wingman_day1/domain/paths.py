@@ -9,11 +9,12 @@ ApplicationSets read (ADR-0012)::
     sites/<site>/mces/<mce>/version.yaml     # the hub's own version (day2 reads it)
     sites/<site>/mces/<mce>/hostedClusters/<cluster>.yaml
     mc-files/...                             # machine-config sources CI renders (read only)
+    upgrade/ladder.yaml                      # the verified releases (ADR-0034)
+    upgrade/mces/<mce>.yaml                  # the minors each MCE can host
 
 Specs repo (``wingman/cluster-specs``)::
 
     cluster-template.j2
-    openshift-versions.txt
     nodepool-defaults.yaml                   # the configs a new nodepool starts with
     specs/<spec>.yaml
 
@@ -29,13 +30,13 @@ from typing import Final
 from wingman_core.domain.git import RepoPath
 
 SITES: Final = RepoPath("sites")
-GLOBAL_VALUES: Final = RepoPath("sites/configValues.yaml")
 HOSTED_CLUSTERS_DIR: Final = "hostedClusters"
 CLUSTER_SUFFIX: Final = ".yaml"
 MC_FILES: Final = RepoPath("mc-files")
+UPGRADE_LADDER: Final = RepoPath("upgrade/ladder.yaml")
+"""The releases the upgrade workflow steps through; the create form offers them (ADR-0034)."""
 
 TEMPLATE_FILE: Final = RepoPath("cluster-template.j2")
-VERSIONS_FILE: Final = RepoPath("openshift-versions.txt")
 NODEPOOL_DEFAULTS_FILE: Final = RepoPath("nodepool-defaults.yaml")
 SPEC_SUFFIX: Final = ".yaml"
 
@@ -43,16 +44,6 @@ SPEC_SUFFIX: Final = ".yaml"
 def site_dir(site: str) -> RepoPath:
     """``sites/<site>``."""
     return RepoPath.of("sites", site)
-
-
-def site_values(site: str) -> RepoPath:
-    """``sites/<site>/values.yaml``."""
-    return RepoPath.of("sites", site, "values.yaml")
-
-
-def mces_dir(site: str) -> RepoPath:
-    """``sites/<site>/mces``."""
-    return RepoPath.of("sites", site, "mces")
 
 
 def mce_dir(site: str, mce: str) -> RepoPath:
@@ -68,6 +59,11 @@ def mce_values(site: str, mce: str) -> RepoPath:
 def mce_version(site: str, mce: str) -> RepoPath:
     """``sites/<site>/mces/<mce>/version.yaml``: the hub's own OCP version."""
     return mce_dir(site, mce).child("version.yaml")
+
+
+def upgrade_mce_rules(mce: str) -> RepoPath:
+    """``upgrade/mces/<mce>.yaml``: the OCP minors the MCE's HyperShift can host."""
+    return RepoPath.of("upgrade", "mces", f"{mce}.yaml")
 
 
 def hosted_clusters_dir(site: str, mce: str) -> RepoPath:

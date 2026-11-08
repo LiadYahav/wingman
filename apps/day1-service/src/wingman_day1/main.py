@@ -29,11 +29,18 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
 from wingman_core.infrastructure.session_tokens import SessionTokens
+from wingman_core.infrastructure.snapshots import RepoSnapshots
 from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
 from wingman_core.ports.gitlab import GitLabPort
-from wingman_core.settings import AuthSettings, GitBackend, GitLabSettings, RuntimeSettings
+from wingman_core.settings import (
+    AuthSettings,
+    GitBackend,
+    GitLabSettings,
+    RuntimeSettings,
+    project_ref,
+)
 from wingman_core.web.app_factory import create_base_app
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.api.errors import register_day1_error_handlers
@@ -66,7 +73,7 @@ from wingman_day1.infrastructure.merge_requests import (
 )
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.repositories import CachedRepository
-from wingman_day1.ports import Day2Addons, HubApi, IdentityProvider
+from wingman_day1.ports import ClusterDeleteWorkflow, Day2Addons, HubApi, IdentityProvider
 from wingman_day1.settings import Day1Settings
 
 SERVICE = "day1"
@@ -98,12 +105,9 @@ class Adapters:
     """``None`` when ``CLUSTER_STATUS_ENABLED`` is off."""
     identity: IdentityProvider | None = None
     """``None`` when OpenShift OAuth is not configured (dev login only)."""
+    delete_workflow: ClusterDeleteWorkflow | None = None
+    """``None`` until the delete-cluster workflow exists (ADR-0033)."""
     closers: tuple[Close, ...] = field(default=())
-
-
-def project_ref(value: str) -> int | str:
-    """A project setting: a numeric id, or a ``group/project`` path."""
-    return int(value) if value.isdigit() else value.strip("/")
 
 
 def build_adapters(
@@ -127,7 +131,7 @@ def build_adapters(
         )
 
         fake = InMemoryGitLab(clock=clock)
-        root = settings.wingman_fixtures_dir or default_fixture_root()
+        root = runtime.fixtures_dir or default_fixture_root()
         seed_fake(fake, load_fixture_projects(root))
         inner: GitLabPort = fake
     else:
@@ -187,12 +191,14 @@ def build_context(
     """Wire the use cases onto the adapters."""
     ttl = settings.day1_cache_ttl_seconds
     gitlab = adapters.gitlab
+    snapshots = RepoSnapshots(gitlab, cache, ttl=ttl)
     day1 = CachedRepository(
         gitlab,
         cache,
         key=RepoKey.DAY1,
         project=project_ref(settings.day1_gitlab_project_id),
         ttl=ttl,
+        snapshots=snapshots,
     )
     specs_repo = CachedRepository(
         gitlab,
@@ -200,6 +206,7 @@ def build_context(
         key=RepoKey.SPECS,
         project=project_ref(settings.specs_gitlab_project_id),
         ttl=ttl,
+        snapshots=snapshots,
     )
     naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
     site_catalog = SiteCatalog(day1)
@@ -244,6 +251,7 @@ def build_context(
         ),
         repos=repos,
         machine_configs=machine_configs,
+        delete_workflow=adapters.delete_workflow,
         status=(
             StatusService(
                 adapters.hub,
@@ -274,8 +282,8 @@ def create_app(
     metrics = WingmanMetrics(
         CollectorRegistry(),
         component=SERVICE,
-        version=settings.wingman_version,
-        commit=settings.wingman_commit,
+        version=runtime.version,
+        commit=runtime.commit,
     )
     secret = auth.jwt_secret_key.get_secret_value()
     session_tokens = SessionTokens(secret, ttl=timedelta(hours=auth.jwt_expiry_hours), clock=clock)
@@ -304,12 +312,22 @@ def create_app(
 
     gitlab = adapters.gitlab
     day1_project = project_ref(settings.day1_gitlab_project_id)
+    specs_project = project_ref(settings.specs_gitlab_project_id)
+
+    async def gitlab_ready() -> None:
+        # Both projects: a wrong SPECS_GITLAB_PROJECT_ID (or a token without
+        # access, which GitLab answers 404) must not look like an empty specs list.
+        await gitlab.get_project(day1_project)
+        await gitlab.get_project(specs_project)
+
     app = create_base_app(
         title="Wingman day1",
-        version=settings.wingman_version,
+        version=runtime.version,
+        commit=runtime.commit,
+        api_prefix="/api/day1",
         metrics=metrics,
         session_tokens=session_tokens,
-        readiness={"gitlab": lambda: gitlab.get_project(day1_project)},
+        readiness={"gitlab": gitlab_ready},
         lifespan=lifespan,
     )
     app.state.day1 = context

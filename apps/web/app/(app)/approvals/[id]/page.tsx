@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X, ChevronDown, ChevronRight,
-  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX,
+  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, Files,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, isApiError } from "@/lib/api-client";
@@ -14,12 +14,14 @@ import { approvalApiPath, parseApprovalId, type MRRef } from "@/lib/approvals";
 import { useAuthStore, useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { computeLineDiff } from "@/lib/diff";
+import { writeErrorTitle } from "@/lib/write-errors";
 import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
 
 /** 409 REVISION_CONFLICT on approve or edit: the head is not the one reviewed. */
@@ -113,9 +115,8 @@ function EditMRPanel({
       const files: UpdateMRFile[] = editableDiffs
         .filter((d) => fileContents[d.new_path] !== newFileContent(d))
         .map((d) => ({ path: d.new_path, content: fileContents[d.new_path] ?? "" }));
-      // day1 refuses the commit if the branch moved past the head reviewed here
-      const body = mrRef.service === "day1" ? { files, message, sha: mr.sha } : { files, message };
-      return api.put<ApprovalDetail>(approvalApiPath(mrRef), body);
+      // Both services refuse the commit if the branch moved past the head reviewed here (ADR-0006)
+      return api.put<ApprovalDetail>(approvalApiPath(mrRef), { files, message, sha: mr.sha });
     },
     onSuccess: (detail) => {
       toast.success("Changes committed to the MR branch — review them again before approving");
@@ -156,12 +157,16 @@ function EditMRPanel({
       {saveError !== null && (
         isApiError(saveError, "REVISION_CONFLICT")
           ? <ProblemList error={saveError} title={BRANCH_MOVED} />
-          : <ProblemList error={saveError} title="The edit was refused" />
+          : <ProblemList error={saveError} title={writeErrorTitle(saveError, "The edit was refused")} />
       )}
       {editableDiffs.length === 0 ? (
-        <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-          No file in this MR can be edited here.
-        </div>
+        <EmptyState
+          icon={FileEdit}
+          title="No file in this MR can be edited here"
+          description="Only the files a merge request adds can be edited on this page."
+          bordered
+          data-testid="approval-nothing-editable"
+        />
       ) : (
         <>
           <input
@@ -236,7 +241,7 @@ function ActionError({ error, onReload }: { error: unknown; onReload: () => void
   if (isApiError(error, "NOT_MERGEABLE")) {
     return <ProblemList error={error} title="GitLab cannot merge this MR right now" />;
   }
-  return <ProblemList error={error} title="The action failed" />;
+  return <ProblemList error={error} title={writeErrorTitle(error, "The action failed")} />;
 }
 
 function MRDetailContent() {
@@ -312,12 +317,17 @@ function MRDetailContent() {
     await refetch();
   };
 
+  // An address that names no MR is an error to correct, not an empty list
   if (!ref) {
     return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive break-words">
-          Invalid MR ID: <code>{id}</code>. Expected <code>day1-123</code>, <code>specs-45</code> or <code>day2-&lt;team&gt;-67</code>.
-        </div>
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-4" data-testid="approval-invalid-id">
+        <ProblemList
+          title="Invalid MR ID"
+          lines={[`"${id}" names no merge request. Expected day1-123, specs-45 or day2-<team>-67.`]}
+        />
+        <Link href="/approvals" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <ArrowLeft className="h-4 w-4 mr-1.5" />Back to approvals
+        </Link>
       </div>
     );
   }
@@ -366,11 +376,42 @@ function MRDetailContent() {
       </div>
 
       {error ? (
-        <ProblemList error={error} title={isApiError(error, 404) ? "This merge request does not exist or is not a Wingman MR" : "Failed to load the MR"} />
+        <ProblemList error={error} title={isApiError(error, 404) ? "This merge request does not exist or is not a Wingman MR" : "The merge request could not be loaded"} />
       ) : isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-24 rounded-xl" />
-          <Skeleton className="h-48 rounded-xl" />
+        <div className="space-y-6" data-testid="approval-loading">
+          {/* The MR meta card: badges, then the five facts */}
+          <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Skeleton className="h-6 w-20 rounded-full" />
+              <Skeleton className="h-6 w-16 rounded-full" />
+              <Skeleton className="h-5 w-14 rounded-full" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3 w-14" />
+                  <Skeleton className="h-4 w-24 max-w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Changed files: each a path bar over a few diff lines */}
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-32" />
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <Skeleton className="h-3.5 w-3.5 shrink-0" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+                <div className="border-t px-4 py-3 space-y-2">
+                  {["w-1/2", "w-3/4", "w-2/5", "w-3/5"].map((w) => (
+                    <Skeleton key={w} className={cn("h-3", w)} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : mr ? (
         <>
@@ -401,7 +442,7 @@ function MRDetailContent() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">{mr.merged_at ? "Merged" : "Created"}</p>
-                <p className="font-medium">{new Date(mr.merged_at ?? mr.created_at).toLocaleDateString("en-GB")}</p>
+                <p className="font-medium">{formatDate(mr.merged_at ?? mr.created_at)}</p>
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground mb-0.5">Source branch</p>
@@ -471,9 +512,13 @@ function MRDetailContent() {
               Changed Files ({diffs.length})
             </h2>
             {diffs.length === 0 ? (
-              <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-                No file changes in this MR.
-              </div>
+              <EmptyState
+                icon={Files}
+                title="No changed files"
+                description="GitLab lists no file changes for this merge request."
+                bordered
+                data-testid="approval-no-files"
+              />
             ) : (
               diffs.map((diff, i) => <FileDiffCard key={i} diff={diff} />)
             )}

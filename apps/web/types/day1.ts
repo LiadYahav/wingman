@@ -104,7 +104,7 @@ export interface ClusterNaming {
   problems: string[];
 }
 
-/** What the chart renders: `openshift-<clusterName>` in `hcp-<clusterName>` (ADR-0015). */
+/** What the chart renders: `ocp4-<clusterName>` in `hcp-<clusterName>` (ADR-0015). */
 export interface HostedClusterRef {
   cluster_name: string;
   name: string;
@@ -120,12 +120,21 @@ export interface Mce {
   letter: string | null;
   follows_convention: boolean;
   naming_problems: string[];
-  /** The MCE's values.yaml mastertag: the create form's OCP version default. */
+  /** The MCE's values.yaml mastertag: the create form's OCP version default, when the MCE offers it. */
   default_mastertag: string | null;
   hub_version: string | null;
   cluster_count: number;
   /** Files in hostedClusters/ that break the MCE's ApplicationSet. */
   stray_files: string[];
+  problems: string[];
+}
+
+/** `GET /api/day1/mces/{mce}/openshift-versions` (ADR-0034). */
+export interface OpenShiftVersions {
+  mce: string;
+  /** The upgrade ladder's releases in the minors the MCE can host, newest first, bare (`4.20.44`). */
+  versions: string[];
+  /** Why `versions` is short or empty: a missing or broken file under the day1 repo's `upgrade/`. */
   problems: string[];
 }
 
@@ -280,7 +289,6 @@ export interface AddonDrift {
   team: string;
   reason: "missing";
   expected_version: string;
-  installed_version: string;
   /** The values requested at create; install with them. */
   override_values: Record<string, unknown>;
 }
@@ -339,4 +347,21 @@ export interface SpecDrift {
   is_drifted: boolean | null;
   spec_version: string | null;
   error: string | null;
+}
+
+// ── The delete-cluster workflow (ADR-0033) ──────────────────────────────────
+
+/** One run of a workflow that acts on a cluster, as the orchestrator reports it. */
+export interface WorkflowRun {
+  workflow_id: string;
+  /** The orchestrator's status, lowercase: `running`, `completed`, `failed`, ... */
+  status: string;
+  /** The step it is on, for example `awaiting-prune`. */
+  phase: string | null;
+  error: string | null;
+}
+
+/** `GET /clusters/{name}/delete-workflow` (501 FEATURE_DISABLED until the workflow exists). */
+export interface DeleteWorkflowState {
+  run: WorkflowRun | null;
 }

@@ -4,9 +4,9 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Package, Edit2, Eye, X, ExternalLink, GitCommitHorizontal, RotateCcw, Lock } from "lucide-react";
+import { ArrowLeft, Trash2, Package, Edit2, Eye, X, ExternalLink, GitCommitHorizontal, History, RotateCcw, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { api, getToken, isApiError } from "@/lib/api-client";
+import { api, errorMessages, getToken, isApiError } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,8 +14,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState } from "@/components/common/empty-state";
 import { DriftBadge } from "@/components/clusters/drift-badge";
 import { ClusterDriftPanel } from "@/components/clusters/cluster-drift";
+import { DeleteWorkflowPanel } from "@/components/clusters/delete-workflow-panel";
 import { LiveStatusCard } from "@/components/clusters/live-status-card";
 import {
   ClusterInfoCard, FileProblems, HostedClusterCard, NamingNotice, NodePoolsCard, SpecCard,
@@ -24,9 +26,12 @@ import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
 import { chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { fetchLiveStatus } from "@/lib/live-status";
+import { formatDate } from "@/lib/utils";
 import { toastMrOpened } from "@/lib/mr-toast";
+import { writeErrorTitle } from "@/lib/write-errors";
 import type {
   AddonDrift, CatalogEntry, ChangeResult, ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts, MRDetail,
+  ModifyClusterRequest,
 } from "@/types";
 
 interface CommitEntry {
@@ -39,9 +44,36 @@ interface CommitEntry {
   team?: string;
 }
 
-function CommitList({ commits, isLoading, teamColumn }: { commits?: CommitEntry[]; isLoading: boolean; teamColumn?: boolean }) {
+/** One source's commits: skeleton rows, its problem when the read failed, or an empty state. */
+function CommitList({
+  commits,
+  isLoading,
+  error,
+  errorTitle,
+  empty,
+  teamColumn,
+}: {
+  commits?: CommitEntry[];
+  isLoading: boolean;
+  error: unknown;
+  errorTitle: string;
+  empty: { title: string; description: string; testId: string };
+  teamColumn?: boolean;
+}) {
   if (isLoading) return <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>;
-  if (!commits?.length) return <p className="text-sm text-muted-foreground py-4">No history available.</p>;
+  if (error) return <ProblemList error={error} title={errorTitle} />;
+  if (!commits?.length) {
+    return (
+      <EmptyState
+        icon={History}
+        title={empty.title}
+        description={empty.description}
+        bordered
+        className="py-8"
+        data-testid={empty.testId}
+      />
+    );
+  }
   return (
     <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border">
       {commits.map((c) => (
@@ -54,7 +86,7 @@ function CommitList({ commits, isLoading, teamColumn }: { commits?: CommitEntry[
               <span>·</span>
               <span>{c.author}</span>
               <span>·</span>
-              <span>{new Date(c.date).toLocaleDateString()}</span>
+              <span>{formatDate(c.date)}</span>
               {teamColumn && c.team && <><span>·</span><span className="text-primary/70">{c.team}</span></>}
             </div>
           </div>
@@ -100,7 +132,8 @@ function ClusterDetailContent() {
   const where = clusterQuery(site, mce);
   const path = `/api/day1/clusters/${encodeURIComponent(name)}`;
 
-  const { data: liveStatus, isLoading: liveStatusLoading } = useQuery<ClusterLiveStatus | null>({
+  // `null` is status off (501 FEATURE_DISABLED); any other failure is an error to show.
+  const { data: liveStatus, isLoading: liveStatusLoading, error: liveStatusError } = useQuery<ClusterLiveStatus | null>({
     queryKey: ["clusters", name, "live-status", mce],
     queryFn: () => fetchLiveStatus(name, mce),
     enabled: Boolean(mce),
@@ -194,14 +227,14 @@ function ClusterDetailContent() {
   const isEditing = editBase !== null;
   const [writeError, setWriteError] = useState<unknown>(null);
 
-  const { data: clusterHistory, isLoading: clusterHistoryLoading } = useQuery<CommitEntry[]>({
+  const { data: clusterHistory, isLoading: clusterHistoryLoading, error: clusterHistoryError } = useQuery<CommitEntry[]>({
     queryKey: ["clusters", name, "history", "day1"],
     queryFn: () => api.get(`${path}/history${where}`),
     enabled: Boolean(cluster) && activeTab === "history",
     staleTime: 60_000,
   });
 
-  const { data: addonHistory, isLoading: addonHistoryLoading } = useQuery<CommitEntry[]>({
+  const { data: addonHistory, isLoading: addonHistoryLoading, error: addonHistoryError } = useQuery<CommitEntry[]>({
     queryKey: day2Keys.history(name, mce),
     queryFn: () => api.get(day2Api.history(name, mce)),
     enabled: Boolean(mce) && activeTab === "history",
@@ -230,7 +263,7 @@ function ClusterDetailContent() {
       setFixingAddon(null);
       queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });
     },
-    onError: (e) => toast.error(`Fix failed: ${e.message}`),
+    onError: (e) => toast.error(writeErrorTitle(e, "Fix failed"), { description: errorMessages(e).join(" · ") }),
   });
 
   const fixAllMutation = useMutation({
@@ -246,7 +279,7 @@ function ClusterDetailContent() {
       queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });
     },
     onError: (e) => {
-      toast.error(`A fix failed: ${e.message}`);
+      toast.error(writeErrorTitle(e, "A fix failed"), { description: errorMessages(e).join(" · ") });
       queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });
     },
   });
@@ -276,8 +309,9 @@ function ClusterDetailContent() {
     setReviewOpen(false);
     setDeleteReviewOpen(false);
     setWriteError(e);
+    // The page shows the problem itself (below the header); the toast only points at it.
     if (!isApiError(e, "REVISION_CONFLICT") && !isApiError(e, "VALIDATION_ERROR")) {
-      toast.error(`${what} failed: ${(e as Error).message}`);
+      toast.error(writeErrorTitle(e, `${what} failed`), { description: "The problem is shown on the page." });
     }
   };
 
@@ -301,7 +335,7 @@ function ClusterDetailContent() {
         updated_yaml: editYaml,
         change_summary: `Modify cluster ${name} via Wingman`,
         last_commit_id: editBase!.lastCommitId,
-      }),
+      } satisfies ModifyClusterRequest),
     onSuccess: (mr) => {
       toastMrOpened(mr, router.push, "Modify MR");
       setReviewOpen(false);
@@ -408,7 +442,7 @@ function ClusterDetailContent() {
             </button>
           </div>
         ) : (
-          <ProblemList error={writeError} title="The change was refused" />
+          <ProblemList error={writeError} title={writeErrorTitle(writeError)} />
         )
       )}
 
@@ -460,7 +494,11 @@ function ClusterDetailContent() {
               {cluster.values && <NodePoolsCard values={cluster.values} />}
               <SpecCard cluster={cluster} />
               {/* Only when the deployment reads HostedClusters from the hubs */}
-              {(liveStatusLoading || statusOn) && (
+              {liveStatusError ? (
+                <div data-testid="live-status-error">
+                  <ProblemList error={liveStatusError} title="Live status could not be read from the MCE hub" />
+                </div>
+              ) : (liveStatusLoading || statusOn) && (
                 <LiveStatusCard status={liveStatus ?? undefined} isLoading={liveStatusLoading} />
               )}
             </>
@@ -508,13 +546,34 @@ function ClusterDetailContent() {
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
               Cluster file (day1 repo)
             </h3>
-            <CommitList commits={clusterHistory} isLoading={clusterHistoryLoading} />
+            <CommitList
+              commits={clusterHistory}
+              isLoading={clusterHistoryLoading}
+              error={clusterHistoryError}
+              errorTitle="The cluster file's history could not be loaded"
+              empty={{
+                title: "No history yet",
+                description: "No commit to this cluster file was found in the day1 repo.",
+                testId: "history-day1-empty",
+              }}
+            />
           </div>
           <div>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
               Addon values (day2 team repos)
             </h3>
-            <CommitList commits={addonHistory} isLoading={addonHistoryLoading} teamColumn />
+            <CommitList
+              commits={addonHistory}
+              isLoading={addonHistoryLoading}
+              error={addonHistoryError}
+              errorTitle="The addon values' history could not be loaded"
+              empty={{
+                title: "No addon value changes yet",
+                description: "No team repo has a commit to this cluster's addon values.",
+                testId: "history-day2-empty",
+              }}
+              teamColumn
+            />
           </div>
         </TabsContent>
       </Tabs>
@@ -545,8 +604,9 @@ function ClusterDetailContent() {
         <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm space-y-1">
           <p className="break-words">Deleting cluster <strong>{name}</strong> from site <strong>{site}</strong> / MCE <strong>{mce}</strong>.</p>
           {cluster && <p className="font-mono text-xs text-muted-foreground break-all">{cluster.path}</p>}
-          <p className="text-muted-foreground text-xs">Once merged, ArgoCD removes the HostedCluster.</p>
+          <p className="text-muted-foreground text-xs">Once merged, ArgoCD removes the HostedCluster. The network segment is not released: that is the delete-cluster workflow&apos;s job.</p>
         </div>
+        <DeleteWorkflowPanel name={name} where={where} isAdmin={isAdmin} />
       </ReviewDialog>
 
       {fixingAddon && (

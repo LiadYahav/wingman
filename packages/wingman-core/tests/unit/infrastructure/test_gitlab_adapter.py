@@ -117,6 +117,52 @@ async def test_project_paths_are_encoded() -> None:
     assert rec.requests[0].url.raw_path == b"/api/v4/projects/g%2Fp"
 
 
+MOVED = {
+    "id": 314,
+    "path_with_namespace": "helm-charts/new-name",
+    "default_branch": "main",
+    "web_url": "http://gitlab.test/helm-charts/new-name",
+}
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "http://gitlab.test/api/v4/projects/314",
+        # Behind a proxy GitLab may name its external URL; only the id is used.
+        "https://gitlab.example.invalid/api/v4/projects/314",
+    ],
+)
+async def test_a_renamed_project_is_followed_to_its_id_on_this_gitlab(location: str) -> None:
+    rec = Recorder(reply(301, None, {"location": location}), reply(200, MOVED))
+    project = await rec.adapter().get_project("helm-charts/old-name")
+    assert project.path_with_namespace == "helm-charts/new-name"
+    old, new = rec.requests
+    assert old.url.raw_path == b"/api/v4/projects/helm-charts%2Fold-name"
+    assert (new.url.host, new.url.raw_path) == ("gitlab.test", b"/api/v4/projects/314")
+    assert new.headers["PRIVATE-TOKEN"] == TOKEN
+
+
+@pytest.mark.parametrize(
+    "location", ["http://gitlab.test/users/sign_in", "http://gitlab.test/api/v4/projects/x", ""]
+)
+async def test_a_redirect_that_names_no_project_is_not_followed(location: str) -> None:
+    rec = Recorder(reply(301, None, {"location": location} if location else None))
+    with pytest.raises(InvalidRequestError, match="moved this project or group"):
+        await rec.adapter().get_project("g/p")
+    assert len(rec.requests) == 1
+
+
+async def test_only_get_project_follows_a_redirect() -> None:
+    # GitLab's redirect for a file read through an old path appends the extension
+    # again (values.yaml.yaml), so following it would turn a moved repo into a 404.
+    location = "http://gitlab.test/api/v4/projects/314/repository/branches"
+    rec = Recorder(reply(301, None, {"location": location}))
+    with pytest.raises(InvalidRequestError, match=r"301 to .*/projects/314/repository/branches"):
+        await rec.adapter().list_group_projects("helm-charts")
+    assert len(rec.requests) == 1
+
+
 async def test_non_utf8_file_is_rejected() -> None:
     rec = Recorder(
         reply(200, {"content": base64.b64encode(b"\xff\xfe").decode(), "last_commit_id": "c"})

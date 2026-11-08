@@ -8,10 +8,11 @@ import { api } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { approvalHref, mrKey } from "@/lib/approvals";
 import { useAuthStore } from "@/stores/auth-store";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { MRDetail } from "@/types";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -64,6 +65,13 @@ export default function ApprovalsPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
   const hasActiveFilters = search || repoFilter !== "all";
+  // A source failed and the others hold nothing: the problems above are the whole
+  // answer, so neither an empty table nor a count of zero claims the list is empty.
+  const nothingKnown = !isLoading && allMrs.length === 0 && Boolean(day1Error || day2Error);
+
+  function clearFilters() {
+    setSearch(""); setRepoFilter("all"); setPage(1);
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
@@ -75,9 +83,15 @@ export default function ApprovalsPage() {
           >
             Pending Approvals
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isLoading ? "Loading..." : `${filtered.length}${hasActiveFilters ? ` of ${allMrs.length}` : ""} merge request${allMrs.length !== 1 ? "s" : ""} awaiting review`}
-          </p>
+          {isLoading ? (
+            <Skeleton className="mt-1.5 h-4 w-56" />
+          ) : (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {nothingKnown
+                ? "Merge requests awaiting review"
+                : `${filtered.length}${hasActiveFilters ? ` of ${allMrs.length}` : ""} merge request${allMrs.length !== 1 ? "s" : ""} awaiting review`}
+            </p>
+          )}
         </div>
         <button
           onClick={() => queryClient.invalidateQueries({ queryKey: ["approvals"] })}
@@ -119,7 +133,7 @@ export default function ApprovalsPage() {
         </div>
         {hasActiveFilters && (
           <button
-            onClick={() => { setSearch(""); setRepoFilter("all"); setPage(1); }}
+            onClick={clearFilters}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="h-3 w-3" />Clear
@@ -144,107 +158,106 @@ export default function ApprovalsPage() {
       {day1Error && <ProblemList error={day1Error} title="Day1 and spec MRs could not be loaded" />}
       {day2Error && <ProblemList error={day2Error} title="Day2 team MRs could not be loaded" />}
 
-      <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/30">
-              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Title</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Repo</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Author</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Created</th>
-              <th className="w-10 px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading
-              ? Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 5 }).map((_, j) => (
-                      <td key={j} className="px-4 py-3">
-                        <Skeleton className="h-4 w-full" />
+      {!nothingKnown && (
+        <div className="bg-card rounded-xl border shadow-sm overflow-x-auto" data-testid="approvals-table">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Title</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Repo</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Author</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Created</th>
+                <th className="w-10 px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    <tr key={i}>
+                      {Array.from({ length: 5 }).map((_, j) => (
+                        <td key={j} className="px-4 py-3">
+                          <Skeleton className="h-4 w-full" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                : paginated.map((mr) => (
+                    <tr key={mrKey(mr)} className="hover:bg-primary/[0.03] transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Link
+                            href={approvalHref(mr)}
+                            className="font-semibold text-foreground hover:text-primary transition-colors break-words"
+                          >
+                            {mr.title}
+                          </Link>
+                          {mr.has_conflicts === true && (
+                            <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-status-error/10 text-status-error">
+                              Conflicted
+                            </span>
+                          )}
+                        </div>
+                        {mr.labels.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {mr.labels.map((label) => (
+                              <span key={label} className="rounded-full px-2 py-0.5 text-xs bg-muted text-muted-foreground">
+                                {label}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
-                    ))}
-                  </tr>
-                ))
-              : paginated.map((mr) => (
-                  <tr key={mrKey(mr)} className="hover:bg-primary/[0.03] transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Link
-                          href={approvalHref(mr)}
-                          className="font-semibold text-foreground hover:text-primary transition-colors break-words"
-                        >
-                          {mr.title}
-                        </Link>
-                        {mr.has_conflicts === true && (
-                          <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-status-error/10 text-status-error">
-                            Conflicted
+                      <td className="px-4 py-3">
+                        <RepoBadge repo={mr.repo} team={mr.team} />
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                        {mr.author.username}
+                        {mr.author.username === username && (
+                          <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium bg-muted text-muted-foreground" title="You requested this change; another admin approves it">
+                            you
                           </span>
                         )}
-                      </div>
-                      {mr.labels.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {mr.labels.map((label) => (
-                            <span key={label} className="rounded-full px-2 py-0.5 text-xs bg-muted text-muted-foreground">
-                              {label}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <RepoBadge repo={mr.repo} team={mr.team} />
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {mr.author.username}
-                      {mr.author.username === username && (
-                        <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium bg-muted text-muted-foreground" title="You requested this change; another admin approves it">
-                          you
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {new Date(mr.created_at).toLocaleDateString("en-GB")}
-                    </td>
-                    <td className="px-4 py-3">
-                      <a
-                        href={mr.web_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                        title="Open in GitLab"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-            {!isLoading && allMrs.length === 0 && !day1Error && !day2Error && (
-              <tr>
-                <td colSpan={5} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="rounded-full bg-status-ready/15 p-3">
-                      <CheckCircle2 className="h-7 w-7 text-status-ready" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">All caught up!</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">No pending approvals</p>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {!isLoading && allMrs.length > 0 && filtered.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground text-sm">
-                  No MRs match your filters.{" "}
-                  <button onClick={() => { setSearch(""); setRepoFilter("all"); setPage(1); }} className="text-primary hover:underline">Clear filters</button>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {formatDate(mr.created_at)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <a
+                          href={mr.web_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground transition-colors"
+                          title="Open in GitLab"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+              {!isLoading && allMrs.length === 0 && !day1Error && !day2Error && (
+                <tr>
+                  <td colSpan={5}>
+                    <EmptyState
+                      icon={CheckCircle2}
+                      tone="success"
+                      title="All caught up"
+                      description="No merge request is waiting for an approval."
+                      data-testid="approvals-empty"
+                    />
+                  </td>
+                </tr>
+              )}
+              {!isLoading && allMrs.length > 0 && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <NoMatches what="merge requests" onClear={clearFilters} data-testid="approvals-no-matches" />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

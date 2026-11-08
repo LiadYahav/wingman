@@ -6,7 +6,8 @@ Status: Accepted (the team question it encodes is open)
 ## Context
 
 The chart names the HostedCluster `openshift-<clusterName>` in namespace
-`hcp-<clusterName>`. Where `clusterName` comes from differs:
+`hcp-<clusterName>`. (Corrected 2026-11-08, see the end: the HostedCluster is
+`ocp4-<clusterName>`.) Where `clusterName` comes from differs:
 
 - production's ApplicationSet (`gitops-day1/argocd-platform`) passes the
   file's own `clusterName` key if set, else the file name minus `.yaml` and
@@ -49,3 +50,21 @@ convention is canonical is open question 2 in `docs/ecosystem/README.md`.
 `apps/day1-service/tests/unit/domain/test_names.py` (both modes, explicit
 key) and `apps/day1-service/tests/unit/application/test_status.py` (the hub
 is asked for the right object in each mode).
+
+## Correction (2026-11-08)
+
+The team's hostedclusters-setup chart names the HostedCluster
+`ocp4-<clusterName>`, which is the full file stem in production. Only the
+namespace takes the bare `clusterName`, `hcp-<clusterName>`. This was
+checked live on several MCEs, against renders from both the legacy and the
+3.0.1 template. The legacy service read the HostedCluster by the full stem,
+so it matched. 3.0.1 asked for `openshift-<clusterName>`, so
+`GET /clusters/{name}/status` was a 404 for every cluster on every MCE.
+The `openshift-` in this ADR came from the sanitized production export.
+
+The namespace derivation and the strip-prefix setting stand.
+`HostedClusterRef.name` is now `ocp4-<clusterName>`
+(`HOSTED_CLUSTER_PREFIX`), and the control-plane namespace
+`hcp-<cn>-ocp4-<cn>` limits `clusterName` to 26 characters, not 24. This
+answers the HostedCluster half of open question 2 in
+`docs/ecosystem/README.md`.

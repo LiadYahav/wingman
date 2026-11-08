@@ -1,11 +1,13 @@
-# Servers per hosted cluster, and moving nodes
+# Servers per hosted cluster, waiting for workers, and moving capacity
 
-**Status:** proposed.
+**Status:** proposed. Checked against [architecture-fit.md](architecture-fit.md):
+server-scan is the platform's state tracker for servers and VMs (AD15), and
+nodes come from shared pools, not from named servers (AD21).
 
 ## Servers per hosted cluster
 
-server-scan is the source of truth for servers. On a hosted cluster's page,
-list the servers under it from server-scan's servers-by-cluster read:
+On a hosted cluster's page, list the servers under it, read from server-scan's
+servers-by-cluster read:
 - name, MCE, InfraEnv;
 - hardware (model, CPU, memory, disks);
 - health.
@@ -14,34 +16,50 @@ A server's name links to its page in server-scan. This is read-only, through a
 `ServerInventory` port with an adapter and a fake; it needs a server-scan
 viewer token in a Secret.
 
-The same read gives the free hosts per InfraEnv. That count is shown on the
-create form as information. The check that refuses a create belongs to the
-`create-cluster` workflow (workflow-runs.md), not to Wingman.
+## Why a cluster waits for workers
 
-## Moving nodes between clusters
+Creating or scaling a cluster writes demand and stops. Workers arrive when
+the inventory controller sees the demand and fills the pool. With an empty
+pool, the cluster sits with zero workers, and the create procedure says
+"nothing here will tell the customer why". Wingman can:
 
-The idea: take a server out of cluster A's nodepool and give it to cluster
-B. Two existing pieces are involved:
-- the server-lifecycle workflows (`uninstall-server-from-hc`, `add-server-to-mce`);
-- the InfraEnv pools herzi keeps filled.
+- show each NodePool's wanted and ready counts;
+- show, for each pool it draws on (node type and zone), the spare count and
+  the add-server runs filling it;
+- say it in words: "waiting for 2 workers in pool `32-128-zone-1`; 2
+  servers are being added".
 
-A move means:
-1. scale A's nodepool down by one, with that server named;
-2. return the server to its InfraEnv pool;
-3. scale B up.
+All of it is read-only and observed (server-scan, the orchestrator's runs,
+the hub's NodePools). Wingman never checks or reserves capacity: the create
+and scale workflows' admission step will refuse with a reason or give an
+estimate (not built yet), and Wingman shows that answer.
 
-Wingman shows both clusters' servers, lets an admin pick the server and the
-target, and starts the steps. The steps themselves are workflows, not Wingman
-code.
+## Moving capacity between clusters
+
+The original idea was to take a server out of cluster A and give it to
+cluster B. The platform doesn't work with named servers: a pool is shared,
+and indifferent to who claims a node. Moving capacity is therefore:
+
+1. lower A's total for that node type;
+2. raise B's total.
+
+That is two absolute requests through the scale workflow (update-nodepool,
+procedure 04), one per cluster. The released node goes back to the pool,
+after its disk is reset because it held A's data, and B's NodePool claims
+whatever is spare. If the pool is short, the inventory controller adds a
+server.
+
+Wingman's part is one form ("move 2 nodes of type X from A to B") that
+starts both runs and shows them. A bad hypervisor or a broken server is the
+platform team's concern, not a tenant move.
 
 ### Open questions
 
-- **A named server.** Does a nodepool scale-down choose which Agent leaves?
-  Today the NodePool releases any one. A move may need the workflow to
-  cordon, drain and remove a named Agent.
-- **The same InfraEnv.** Must both clusters use the same InfraEnv? If not, the
-  server is re-installed into another pool, and that is
-  `remove-server-from-mce` plus `add-server-to-mce`.
-- **One workflow or many.** A `move-server` workflow would own the steps,
-  their order and the rollback. Wingman then starts one run and shows it
-  (workflow-runs.md).
+- **The order of the two requests.** Raise B first, which needs spare
+  capacity, or lower A first, which takes A's capacity before B has its own?
+  The architecture's surge rule (new before old) suggests raising B first.
+- **Bare metal today.** The current fleet is bare-metal Agents in per-hardware
+  InfraEnvs, not VM pools. A move between two clusters on different InfraEnvs
+  is not a move: it is a server leaving one pool and joining another
+  (remove-server, then add-server), which the inventory controller does on
+  its own when demand shifts.

@@ -9,6 +9,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
+import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { structureSummary } from "@/lib/specs";
 import type { SpecEntry } from "@/types";
 
@@ -137,14 +139,18 @@ export default function SpecsPage() {
             className="text-2xl font-bold tracking-tight"
             style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
           >Cluster Specs</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isLoading
-              ? "Loading..."
-              : `${filtered.length}${hasActiveFilters ? ` of ${total}` : ""} spec${total !== 1 ? "s" : ""}`}
-            {brokenCount > 0 && (
-              <span className="text-destructive"> · {brokenCount} do{brokenCount === 1 ? "es" : ""} not load</span>
-            )}
-          </p>
+          {isLoading ? (
+            <Skeleton className="mt-1.5 h-4 w-24" />
+          ) : (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {specs
+                ? `${filtered.length}${hasActiveFilters ? ` of ${total}` : ""} spec${total !== 1 ? "s" : ""}`
+                : "Cluster specs in the specs repo"}
+              {brokenCount > 0 && (
+                <span className="text-destructive"> · {brokenCount} do{brokenCount === 1 ? "es" : ""} not load</span>
+              )}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -207,9 +213,7 @@ export default function SpecsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load specs: {error.message}
-        </div>
+        <ProblemList error={error} title="The specs could not be loaded" />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {isLoading
@@ -222,20 +226,24 @@ export default function SpecsPage() {
                   : <SpecCard key={spec.metadata.name} spec={spec} />
               )}
           {!isLoading && specs?.length === 0 && (
-            <div className="col-span-full bg-card rounded-xl border p-16 text-center text-muted-foreground">
-              No specs yet.
-              {isAdmin && (
-                <>
-                  {" "}<Link href="/specs/new" className="text-primary hover:underline">Create your first spec</Link>.
-                </>
-              )}
-            </div>
+            <EmptyState
+              icon={Layers}
+              title="No specs yet"
+              description="A spec presets a cluster's values, nodepool shape and addons; clusters are created from one."
+              action={isAdmin && <EmptyStateLink href="/specs/new">New spec</EmptyStateLink>}
+              bordered
+              className="col-span-full"
+              data-testid="specs-empty"
+            />
           )}
           {!isLoading && specs && specs.length > 0 && filtered.length === 0 && (
-            <div className="col-span-full bg-card rounded-xl border p-12 text-center text-muted-foreground text-sm">
-              No specs match your search.{" "}
-              <button onClick={() => setSearch("")} className="text-primary hover:underline">Clear search</button>
-            </div>
+            <NoMatches
+              what="specs"
+              clearLabel="Clear search"
+              onClear={() => setSearch("")}
+              bordered
+              className="col-span-full"
+            />
           )}
         </div>
       )}

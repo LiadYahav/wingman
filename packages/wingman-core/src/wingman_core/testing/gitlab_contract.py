@@ -4,7 +4,9 @@ Subclass :class:`GitLabContract` in a test module and provide two fixtures:
 
 - ``gitlab``: the GitLabPort under test;
 - ``new_project``: an async factory ``(files) -> Project`` that creates a
-  fresh project whose default branch ``main`` holds ``files``.
+  fresh project whose default branch ``main`` holds ``files``;
+- ``rename_project``: an async ``(project, name) -> None`` that gives the
+  project a new last path segment, as a GitLab rename does.
 
 The suite runs against the in-memory fake on every test run and against a
 real GitLab when one is configured. A failure on the real one means the fake
@@ -19,6 +21,7 @@ import pytest
 
 from wingman_core.domain.errors import (
     AlreadyExistsError,
+    InvalidRequestError,
     NotFoundError,
     NotMergeableError,
     RevisionConflictError,
@@ -28,6 +31,7 @@ from wingman_core.domain.merge_request import MergeRequestRef, MRState, NewMerge
 from wingman_core.ports.gitlab import GitLabPort
 
 NewProject = Callable[[Mapping[str, str]], Awaitable[Project]]
+RenameProject = Callable[[Project, str], Awaitable[None]]
 
 FILES = {
     "README.md": "# fixture\n",
@@ -379,9 +383,10 @@ class GitLabContract:
     ) -> None:
         """``git log -- <path>`` skips a merge whose path matches a parent's.
 
-        So the newest history entry is the commit that changed the file, the
-        same commit the file's ``last_commit_id`` names; the fake once listed
-        the merge commit first.
+        So the history holds no merge commit, and the file's ``last_commit_id``
+        names the commit that changed it; the fake once listed the merge commit
+        first. The order is not checked: on a fast GitLab two commits made in
+        the same second come back in either order (git sorts by commit date).
         """
         project = await new_project(FILES)
         await _branch_with_change(gitlab, project, "b1", "README.md", "# merged\n")
@@ -391,7 +396,9 @@ class GitLabContract:
         await gitlab.merge_merge_request(mr.ref)
         history = await gitlab.list_commits(project.id, ref="main", path=_p("README.md"))
         file = await gitlab.read_file(project.id, _p("README.md"), "main")
-        assert history[0].id == change.id == file.last_commit_id
+        assert file.last_commit_id == change.id
+        assert change.id in {c.id for c in history}
+        assert all(len(c.parent_ids) < 2 for c in history)
 
     async def test_merge_with_stale_sha_is_revision_conflict(
         self, gitlab: GitLabPort, new_project: NewProject
@@ -479,3 +486,79 @@ class GitLabContract:
         assert (await gitlab.get_project(project.path_with_namespace)).id == project.id
         with pytest.raises(NotFoundError):
             await gitlab.get_project(f"{project.path_with_namespace}-missing")
+
+    async def test_a_renamed_project_is_found_by_its_old_path(
+        self, gitlab: GitLabPort, new_project: NewProject, rename_project: RenameProject
+    ) -> None:
+        project = await new_project(FILES)
+        old = project.path_with_namespace
+        await rename_project(project, f"{old.rsplit('/', 1)[-1]}-renamed")
+        found = await gitlab.get_project(old)
+        assert (found.id, found.path_with_namespace) == (project.id, f"{old}-renamed")
+        assert found.web_url.endswith(f"/{old}-renamed")
+
+    # ── Reading a repo at one commit (ADR-0035) ─────────────────────────────
+
+    async def test_get_branch_gives_its_head_and_a_missing_one_is_not_found(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        head = await gitlab.get_branch(project.id, "main")
+        assert head in await gitlab.list_branches(project.id)
+        with pytest.raises(NotFoundError):
+            await gitlab.get_branch(project.id, "no-such-branch")
+
+    async def test_an_archive_holds_every_file_at_its_commit(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        head = await gitlab.get_branch(project.id, "main")
+        await _branch_with_change(gitlab, project, "main", "README.md", "# later\n")
+        archive = await gitlab.read_archive(project.id, head.commit_id, max_bytes=1_000_000)
+        assert archive.commit_id == head.commit_id
+        assert {path: content.decode() for path, content in archive.files.items()} == FILES
+
+    async def test_an_archive_larger_than_allowed_is_refused(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        head = await gitlab.get_branch(project.id, "main")
+        with pytest.raises(InvalidRequestError):
+            await gitlab.read_archive(project.id, head.commit_id, max_bytes=8)
+
+    async def test_any_commit_a_file_was_read_at_guards_its_update(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        read_at = (await gitlab.get_branch(project.id, "main")).commit_id
+        # Another file changes: README.md is still as it was at read_at.
+        await _branch_with_change(gitlab, project, "main", "sites/site1/values.yaml", "a: 2\n")
+        readme = _p("README.md")
+        await gitlab.commit(
+            project.id,
+            branch="main",
+            message="mine",
+            changes=[FileChange.update(readme, "# mine\n", last_commit_id=read_at)],
+        )
+        # Now README.md changed after read_at.
+        with pytest.raises(RevisionConflictError):
+            await gitlab.commit(
+                project.id,
+                branch="main",
+                message="mine again",
+                changes=[FileChange.update(readme, "# again\n", last_commit_id=read_at)],
+            )
+
+    async def test_an_unknown_commit_as_the_guard_lets_the_write_through(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        # GitLab finds no "last change as of" an unknown commit, so it cannot
+        # call the file changed. Wingman's own stale checks must not rely on it.
+        project = await new_project(FILES)
+        await gitlab.commit(
+            project.id,
+            branch="main",
+            message="guarded by nothing GitLab knows",
+            changes=[FileChange.update(_p("README.md"), "# x\n", last_commit_id="0" * 40)],
+        )
+        assert (await gitlab.read_file(project.id, _p("README.md"), "main")).content == "# x\n"

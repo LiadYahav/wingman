@@ -14,8 +14,8 @@ from __future__ import annotations
 import difflib
 import hashlib
 import itertools
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from wingman_core.domain.errors import (
@@ -35,6 +35,7 @@ from wingman_core.domain.git import (
     FileContent,
     FileDiff,
     Project,
+    RepoArchive,
     RepoPath,
     TreeEntry,
 )
@@ -100,6 +101,8 @@ class InMemoryGitLab:
         self._base_url = base_url.rstrip("/")
         self._projects: dict[int, _ProjectRecord] = {}
         self._by_path: dict[str, int] = {}
+        self._moved: dict[str, int] = {}
+        """Old paths of renamed projects; GitLab keeps them as redirects."""
         self._ids = itertools.count(1)
         self._sequence = itertools.count(1)
 
@@ -146,6 +149,23 @@ class InMemoryGitLab:
         record.branches[branch] = commit.id
         return Branch(branch, commit.id)
 
+    def rename_project(self, project_id: int, path_with_namespace: str) -> Project:
+        """Move a project to a new path; the old one keeps finding it, as in GitLab."""
+        record = self._project(project_id)
+        if path_with_namespace in self._by_path:
+            raise AlreadyExistsError(f"project {path_with_namespace} already exists")
+        old = record.project.path_with_namespace
+        del self._by_path[old]
+        self._moved[old] = project_id
+        self._moved.pop(path_with_namespace, None)
+        self._by_path[path_with_namespace] = project_id
+        record.project = replace(
+            record.project,
+            path_with_namespace=path_with_namespace,
+            web_url=f"{self._base_url}/{path_with_namespace}",
+        )
+        return record.project
+
     def snapshot(self, project_id: int, ref: str) -> dict[str, str]:
         """Every file at ``ref`` as ``{path: content}``; for assertions in tests."""
         record = self._project(project_id)
@@ -156,9 +176,10 @@ class InMemoryGitLab:
     async def get_project(self, project: int | str) -> Project:
         """See GitLabPort.get_project."""
         if isinstance(project, str):
-            if project not in self._by_path:
+            found = self._by_path.get(project, self._moved.get(project))
+            if found is None:
                 raise NotFoundError(f"project {project} not found")
-            project = self._by_path[project]
+            project = found
         return self._project(project).project
 
     async def list_group_projects(self, group: str) -> list[Project]:
@@ -209,6 +230,21 @@ class InMemoryGitLab:
         record = self._project(project_id)
         return [Branch(name, commit_id) for name, commit_id in sorted(record.branches.items())]
 
+    async def get_branch(self, project_id: int, name: str) -> Branch:
+        """See GitLabPort.get_branch."""
+        record = self._project(project_id)
+        if name not in record.branches:
+            raise NotFoundError(f"branch {name} not found")
+        return Branch(name, record.branches[name])
+
+    async def read_archive(self, project_id: int, sha: str, *, max_bytes: int) -> RepoArchive:
+        """See GitLabPort.read_archive."""
+        commit = self._resolve(self._project(project_id), sha)
+        archive = RepoArchive(commit.id, {p: c.encode() for p, c in commit.files.items()})
+        if archive.size > max_bytes:
+            raise InvalidRequestError(f"the archive of {sha[:8]} is larger than {max_bytes} bytes")
+        return archive
+
     async def create_branch(self, project_id: int, name: str, ref: str) -> Branch:
         """See GitLabPort.create_branch."""
         record = self._project(project_id)
@@ -239,7 +275,7 @@ class InMemoryGitLab:
             raise NotFoundError(f"branch {branch} not found")
         files = dict(base.files)
         for change in changes:
-            _apply(files, base.file_commits, change)
+            _apply(files, base.file_commits, change, self._file_commits_at(record))
         commit = self._new_commit(
             record,
             parents=(base.id,),
@@ -404,6 +440,17 @@ class InMemoryGitLab:
             return record.commits[record.branches[ref]]
         return self._commit_by_sha(record, ref)
 
+    def _file_commits_at(self, record: _ProjectRecord) -> Callable[[str], Mapping[str, str] | None]:
+        """Each file's last change as of a commit; ``None`` for a commit GitLab cannot find."""
+
+        def at(sha: str) -> Mapping[str, str] | None:
+            try:
+                return self._commit_by_sha(record, sha).file_commits
+            except NotFoundError:
+                return None
+
+        return at
+
     def _commit_by_sha(self, record: _ProjectRecord, sha: str) -> _CommitRecord:
         if len(sha) >= 7:
             matches = [c for cid, c in record.commits.items() if cid.startswith(sha)]
@@ -548,7 +595,27 @@ def _changed_within(before: Mapping[str, str], after: Mapping[str, str], path: R
     )
 
 
-def _apply(files: dict[str, str], file_commits: Mapping[str, str], change: FileChange) -> None:
+def _changed_since(
+    key: str, file_commits: Mapping[str, str], then: Mapping[str, str] | None
+) -> bool:
+    """GitLab's ``last_commit_id`` check (``Files::BaseService#file_has_changed?``).
+
+    The file's last change on the branch must be its last change as of the
+    commit the caller names. So any commit the file was read at works as the
+    guard, not only the file's own last commit. A commit GitLab cannot find,
+    or one without the file, passes.
+    """
+    if then is None or key not in then:
+        return False
+    return file_commits.get(key) != then[key]
+
+
+def _apply(
+    files: dict[str, str],
+    file_commits: Mapping[str, str],
+    change: FileChange,
+    file_commits_at: Callable[[str], Mapping[str, str] | None],
+) -> None:
     """Apply one change in place, with GitLab's failure modes."""
     key = str(change.path)
     if change.kind is ChangeKind.CREATE:
@@ -567,7 +634,9 @@ def _apply(files: dict[str, str], file_commits: Mapping[str, str], change: FileC
         return
     if key not in files:
         raise NotFoundError(f"a file with this name doesn't exist: {key}")
-    if change.last_commit_id is not None and file_commits.get(key) != change.last_commit_id:
+    if change.last_commit_id is not None and _changed_since(
+        key, file_commits, file_commits_at(change.last_commit_id)
+    ):
         raise RevisionConflictError(f"{key} has changed since {change.last_commit_id[:8]}")
     if change.kind is ChangeKind.DELETE:
         del files[key]

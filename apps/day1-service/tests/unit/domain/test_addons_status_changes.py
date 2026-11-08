@@ -20,7 +20,6 @@ from wingman_day1.domain.changes import (
     ClusterChange,
     SpecAction,
     SpecChange,
-    commit_author,
 )
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.status import (
@@ -49,9 +48,7 @@ def test_a_missing_addon_carries_the_values_requested_at_create() -> None:
     expected = [RequestedAddon("redbull", "cluster-roles", "main")]
     requested = [RequestedAddon("redbull", "cluster-roles", "main", {"replicas": 3})]
     assert compare_addons(expected, [], requested=requested).missing == (
-        AddonDrift(
-            "redbull", "cluster-roles", AddonDriftReason.MISSING, "main", "", {"replicas": 3}
-        ),
+        AddonDrift("redbull", "cluster-roles", AddonDriftReason.MISSING, "main", {"replicas": 3}),
     )
 
 
@@ -119,7 +116,7 @@ def test_a_true_forbidden_condition_is_a_problem() -> None:
 
 def test_live_status_applies_the_hostedcluster_and_nodepool_rules() -> None:
     hosted = HostedClusterObservation(
-        name="openshift-x",
+        name="ocp4-x",
         namespace="hcp-x",
         phase="Completed",
         version="4.18.22",
@@ -132,7 +129,7 @@ def test_live_status_applies_the_hostedcluster_and_nodepool_rules() -> None:
     status = live_status("ocp4-x", hosted, pools)
     assert (status.cluster_name, status.hosted_cluster, status.namespace) == (
         "ocp4-x",
-        "openshift-x",
+        "ocp4-x",
         "hcp-x",
     )
     assert (status.hc_phase, status.ocp_version, status.error) == ("Completed", "4.18.22", None)
@@ -152,7 +149,7 @@ def test_live_status_applies_the_hostedcluster_and_nodepool_rules() -> None:
 
 def test_a_nodepool_read_failure_is_a_hostedcluster_problem_not_silence() -> None:
     hosted = HostedClusterObservation(
-        "openshift-x", "hcp-x", None, None, (Condition("Available", "True"),)
+        "ocp4-x", "hcp-x", None, None, (Condition("Available", "True"),)
     )
     status = live_status("ocp4-x", hosted, [], node_pool_error="403 Forbidden")
     assert status.hc_problems == ("NodePool fetch failed: 403 Forbidden",)
@@ -191,26 +188,3 @@ def test_spec_changes_have_the_same_invariants() -> None:
         SpecChange(SpecAction.UPDATE, "s", "1.0.0", ALICE, "why", content="x")
     with pytest.raises(ValueError, match="last_commit_id"):
         SpecChange(SpecAction.DELETE, "s", "1.0.0", ALICE, "why")
-
-
-def test_the_commit_author_is_the_requesting_user() -> None:
-    author = commit_author(ALICE)
-    assert (author.name, author.email) == ("Alice Admin", "alice@openshift.local")
-
-
-def test_the_commit_author_falls_back_to_the_username() -> None:
-    author = commit_author(User(username="bob", role=Role.ADMIN))
-    assert (author.name, author.email) == ("bob", "bob@openshift.local")
-
-
-def test_the_commit_author_cannot_forge_header_lines() -> None:
-    sneaky = User(username="eve\nX-Evil: 1", role=Role.ADMIN, full_name="Eve <eve@evil>\r\nx")
-    author = commit_author(sneaky)
-    for value in (author.name, author.email):
-        assert not set(value) & set("\r\n<>")
-    assert author.email == "eve-X-Evil: 1@openshift.local"
-
-
-def test_a_username_of_only_forbidden_characters_still_gives_an_author() -> None:
-    author = commit_author(User(username="<>", role=Role.ADMIN, full_name="\n"))
-    assert (author.name, author.email) == ("-", "-@openshift.local")

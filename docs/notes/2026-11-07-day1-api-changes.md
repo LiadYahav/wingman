@@ -97,19 +97,28 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     `mastertag`, or changes nothing.
 14. **Delete `DELETE /clusters/{name}`**: optional `last_commit_id` query.
 15. **Removed: `POST /clusters/{name}/sync-yaml`** (405). Nothing is stored
-    to re-render from (ADR-0016); drop the "Sync" button. Drift's
-    `unified_diff` is always `""`.
+    to re-render from (ADR-0016); drop the "Sync" button. Drift has no
+    `unified_diff` any more.
 16. **Drift `GET /clusters/{name}/drift`**: new `site`, `mce`, `state`
     (`in_sync | drifted | unknown | not_linked`), `current_spec_version`,
     `error`; `is_drifted` is `null` when unknown (day2 did not answer, the
     spec is gone); `addon_drift[]` items gain `override_values` (pass them
     to day2's install as `override_values` instead of `{}`). The legacy
     `reason: "No spec associated"` field is gone (`state: not_linked`).
+    Only a missing spec addon is drift (ADR-0025): an `addon_drift[]`
+    item's `reason` is only `"missing"` (`"version_mismatch"` is gone), and
+    its fix installs it at the team default version: send day2's install
+    no `version` (any other is refused as an unconfirmed emergency pin,
+    ADR-0022); the item has no `installed_version` (there is none). A
+    spec addon installed at another version is listed in
+    the new `version_differences[{addon_name, team, spec_version,
+    installed_version}]`, does not make the cluster `drifted`, and has no
+    fix: show it as information.
 17. **`GET /clusters/drift-summary`** items gain `site`, `mce`, `state`,
     `error`; `is_drifted` may be `null`. Count unknowns separately.
 18. **Status** (`/clusters/{name}/status`, `/status/stream`, `/bulk-status`):
     bodies gain `hosted_cluster` and `namespace` (the HostedCluster is now
-    `openshift-<clusterName>` in `hcp-<clusterName>`, ADR-0015).
+    `ocp4-<clusterName>` in `hcp-<clusterName>`, ADR-0015 and its 2026-11-08 correction).
     `bulk-status` answers for every requested cluster, with `error` set on
     failures (it used to omit them). Off → 501 `FEATURE_DISABLED` problem
     (was a plain 501).
@@ -132,7 +141,7 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
 23. `GET /specs/{name}/clusters` items gain `state`, `error`;
     `GET /specs/{name}/drift` now returns real results (it always returned
     `[]`), items `{cluster, site, mce, state, is_drifted, spec_version,
-    unified_diff: "", error}`.
+    error}`.
 
 ## Approvals (`/approvals`)
 
@@ -159,6 +168,8 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     for day1-service items, and expand an MR with
     `/api/day1/approvals/{iid}?repo={repo}` (the page calls
     `/api/${repo}/approvals/...`, which for a specs MR is not even a route).
+    Only Wingman's MRs are listed (the `wingman` label), as day2 does: an MR
+    opened by hand is not one an approval detail can open.
 29. `GET /audit/commits/{repo}/{sha}/diff`: unknown SHA → 404 problem;
     a wrong `repo` hint is still tolerated.
 
@@ -169,6 +180,24 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     empty (it accepted anyone) and 401 on a wrong token.
 32. New: `GET /health/live`, `GET /health/ready` (GitLab reachable),
     `GET /metrics` (service port only); `/healthz` is kept.
+33. New: `GET /api/day1/build` (any logged-in user): `{version, commit}`,
+    the `WINGMAN_VERSION` and `WINGMAN_COMMIT` the service runs (the
+    settings page shows them).
+34. New: `GET` and `POST /clusters/{name}/delete-workflow` (ADR-0033). Both
+    answer 501 `FEATURE_DISABLED` ("not available yet") until the
+    delete-cluster workflow exists. Then `GET` returns `{"run": null | {workflow_id,
+    status, phase, error}}`, and `POST {"confirm": true}` (admin) returns 202 with the run.
+35. **The OpenShift versions are per MCE now** (ADR-0034). New:
+    `GET /mces/{mce}/openshift-versions` → `{mce, versions[], problems[]}`,
+    the day1 repo's `upgrade/ladder.yaml` rungs in the minors that
+    `upgrade/mces/<mce>.yaml` says the MCE can host, newest first, bare
+    (`4.20.44`). An MCE without its file, or a missing or broken ladder, is
+    200 with `versions: []` and the reason in `problems`; an unknown MCE is
+    404. **Removed: `GET /specs/versions/openshift`** (404) and the specs
+    project's `openshift-versions.txt`. Create and preview answer 422 with
+    `details.problems` naming the allowed list when the version is not one the
+    MCE offers (`4.20.44-x86_64` counts as `4.20.44`). The web reads the list
+    for the chosen MCE and shows `problems` under the field.
 
 ## Deployment (chart) changes
 

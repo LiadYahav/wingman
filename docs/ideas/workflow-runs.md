@@ -1,6 +1,8 @@
 # Workflow runs on the cluster page
 
-**Status:** proposed.
+**Status:** proposed. Checked against [architecture-fit.md](architecture-fit.md):
+workflows own every multi-step operation; Wingman starts the customer ones
+and shows them.
 
 ## The problem
 
@@ -30,14 +32,34 @@ render" check.
 
 ## OCP upgrades
 
-The orchestrator's `upgrade-cluster` workflow is the upgrade flow, so the
-flavor doesn't hold the version (flavors-v2.md). On the cluster page:
-- the current version and the allowed targets (its upgrade-targets read);
-- "Upgrade", which starts a run;
-- the run's gates (approve, continue per nodepool, confirm day2) as buttons, admin only.
+The flavor doesn't hold the version (flavors-v2.md). Upgrades are workflows,
+and the architecture splits them on purpose: the control plane first
+(procedure 14), then the workers per node type (procedure 13), so a slow
+workload drain can never hold the API back. The tenant chooses the window.
+On the cluster page:
+- the current version and the allowed targets (the orchestrator's
+  upgrade-targets read; a hosted cluster can't go beyond what its MCE
+  supports);
+- "Upgrade control plane", then "Upgrade workers" per node type, each
+  starting a run;
+- a run's gates (approve, continue) as buttons, admin only.
 
-The confirm-day2 gate is where add-on compatibility can be checked before
-day2 continues.
+The workers' run checks that the pool can supply the surge nodes; Wingman
+shows its refusal, it doesn't check. A version the MCE can't reach is a
+version band move (procedure 18), which is a rebuild on another MCE, not an
+upgrade.
+
+The sandbox's `upgrade-cluster` workflow (one run with human gates) and
+procedures 13 and 14 differ; which one Wingman drives is a question for the
+architect (architecture-fit.md).
+
+## The merge
+
+Every customer workflow ends its Git part with "merge to main" by a person.
+Wingman's approvals page already reviews and merges day1 and day2 MRs, so a
+workflow's branch can be reviewed there too: the diff, the pipeline, the
+run that wrote it. Whether the merge for workflow branches happens in Wingman
+or in GitLab is a question for the architect.
 
 ## Open questions
 

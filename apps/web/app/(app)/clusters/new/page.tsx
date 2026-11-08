@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,15 +14,18 @@ import { approvalHref } from "@/lib/approvals";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { writeErrorTitle } from "@/lib/write-errors";
 import { buttonVariants } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { GitLabFileList } from "@/components/common/gitlab-file-list";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
 import type {
-  CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OverrideableField, SpecEntry, TemplateField,
+  CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OpenShiftVersions, OverrideableField, SpecEntry,
+  TemplateField,
 } from "@/types";
 import { DynamicVariableForm, seedFromStructure, type FieldValue, type FormValues } from "@/components/clusters/dynamic-variable-form";
 
@@ -76,6 +79,34 @@ function nameProblems(name: string, site: string, mce: Mce | undefined, siteMces
 function siteFromName(name: string, sites: string[]): string | null {
   const matches = sites.filter((s) => clusterNamePattern(s).test(name));
   return matches.sort((a, b) => b.length - a.length)[0] ?? null;
+}
+
+/** An MCE to choose: what it hosts under; one off the convention is listed apart and cannot be chosen. */
+function mceOption(mce: Mce): ComboboxOption {
+  if (!mce.follows_convention) {
+    return {
+      value: mce.name,
+      label: mce.name,
+      description: `Does not follow ocp4-<env>-mce-${mce.site}-<letter>`,
+      group: "Off convention",
+      disabled: true,
+    };
+  }
+  const facts = [
+    mce.env && `env ${mce.env}`,
+    mce.default_mastertag && `OCP ${mce.default_mastertag}`,
+    `${mce.cluster_count} cluster${mce.cluster_count === 1 ? "" : "s"}`,
+  ];
+  return { value: mce.name, label: mce.name, description: facts.filter(Boolean).join(" · ") };
+}
+
+const asOption = (value: string): ComboboxOption => ({ value, label: value });
+
+/** The entry of `offered` that `version` names (`4.18.56-x86_64` is `4.18.56`), or `null`. */
+function offeredRelease(version: unknown, offered: string[]): string | null {
+  if (typeof version !== "string" || !version.trim()) return null;
+  const bare = version.trim().replace(/-x86_64$/, "");
+  return offered.includes(bare) ? bare : null;
 }
 
 /** The one conventional MCE of the site whose env the name carries. */
@@ -469,23 +500,6 @@ type FormError =
     }
   | { kind: "form"; lines: string[] };
 
-/** What the form itself caught before asking the service; styled like ProblemList. */
-function FormChecks({ lines }: { lines: string[] }) {
-  return (
-    <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-        <div className="min-w-0 space-y-1">
-          <p className="font-medium">Some fields need attention</p>
-          <ul className="list-disc pl-4 space-y-0.5">
-            {lines.map((line, i) => <li key={i} className="break-words">{line}</li>)}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function describeFailure(error: unknown, what: "preview" | "create"): FormError {
   const verb = what === "preview" ? "The cluster file could not be rendered" : "The merge request was not opened";
   if (isApiError(error, "ALREADY_EXISTS")) {
@@ -509,7 +523,7 @@ function describeFailure(error: unknown, what: "preview" | "create"): FormError 
   if (isApiError(error, "NOT_FOUND")) {
     return { kind: "server", error, title: verb, hint: "The site, MCE or spec no longer exists in GitLab. Reload the page." };
   }
-  return { kind: "server", error, title: verb };
+  return { kind: "server", error, title: writeErrorTitle(error, verb) };
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -521,6 +535,10 @@ export default function NewClusterPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const errorRef = useRef<HTMLDivElement>(null);
+  // The visible labels name the site, MCE and version controls
+  const siteLabelId = useId();
+  const mceLabelId = useId();
+  const versionLabelId = useId();
 
   const [step, setStep] = useState<"spec" | "vars">("spec");
   const [selectedSpec, setSelectedSpec] = useState<SpecEntry | null>(null);
@@ -528,7 +546,7 @@ export default function NewClusterPage() {
   // `null` = not chosen: the value is detected from the cluster name.
   const [siteChoice, setSiteChoice] = useState<string | null>(null);
   const [mceChoice, setMceChoice] = useState<string | null>(null);
-  // `null` = not chosen: the spec's preset, else the MCE's default mastertag.
+  // `null` = not chosen: the spec's preset, else the MCE's default mastertag, when the MCE offers it.
   const [ocpChoice, setOcpChoice] = useState<string | null>(null);
   // `null` = untouched: the form shows the spec's structure and presets.
   const [dynamicValues, setDynamicValues] = useState<FormValues | null>(null);
@@ -546,7 +564,7 @@ export default function NewClusterPage() {
   });
 
   // Template schema — parsed server-side from the Jinja2 AST; drives the dynamic form
-  const { data: templateSchema, isLoading: schemaLoading } = useQuery<TemplateField[]>({
+  const { data: templateSchema, isLoading: schemaLoading, error: schemaError } = useQuery<TemplateField[]>({
     queryKey: ["specs", "template-schema"],
     queryFn: () => api.get<TemplateField[]>("/api/day1/specs/template/schema"),
     staleTime: 300_000,
@@ -561,7 +579,7 @@ export default function NewClusterPage() {
     enabled: step === "vars",
   });
 
-  const { data: sites = [], isLoading: sitesLoading } = useQuery<string[]>({
+  const { data: sites = [], isLoading: sitesLoading, error: sitesError } = useQuery<string[]>({
     queryKey: ["sites"],
     queryFn: () => api.get<string[]>("/api/day1/sites"),
     staleTime: 60_000,
@@ -572,7 +590,7 @@ export default function NewClusterPage() {
   const detectedSite = trimmedName ? siteFromName(trimmedName, sites) : null;
   const site = siteChoice ?? detectedSite ?? "";
 
-  const { data: mces = [], isLoading: mcesLoading } = useQuery<Mce[]>({
+  const { data: mces = [], isLoading: mcesLoading, error: mcesError } = useQuery<Mce[]>({
     queryKey: ["mces", site],
     queryFn: () => api.get<Mce[]>(`/api/day1/mces?site=${encodeURIComponent(site)}`),
     enabled: Boolean(site),
@@ -584,12 +602,16 @@ export default function NewClusterPage() {
   const selectedMce = mces.find((m) => m.name === mce);
   const offConventionMces = mces.filter((m) => !m.follows_convention);
 
-  const { data: ocpVersions = [] } = useQuery<string[]>({
-    queryKey: ["openshift-versions"],
-    queryFn: () => api.get<string[]>("/api/day1/specs/versions/openshift"),
-    staleTime: 300_000,
-    enabled: step === "vars",
+  // The releases a new cluster on this MCE may use: the day1 repo's upgrade ladder in the
+  // minors the MCE can host (ADR-0034). `problems` says why the list is short or empty.
+  const { data: offered, isLoading: versionsLoading, error: versionsError } = useQuery<OpenShiftVersions>({
+    queryKey: ["mce-openshift-versions", mce],
+    queryFn: () => api.get<OpenShiftVersions>(`/api/day1/mces/${encodeURIComponent(mce)}/openshift-versions`),
+    enabled: Boolean(mce) && step === "vars",
+    staleTime: 60_000,
   });
+  const ocpVersions = offered?.versions ?? [];
+  const versionProblems = offered?.problems ?? [];
 
   // InfraEnvs on the MCE hub; `null` when live status is off (then the field is free text).
   const { data: infraEnvs, isLoading: infraEnvsLoading, error: infraEnvsError } = useQuery<string[] | null>({
@@ -607,14 +629,23 @@ export default function NewClusterPage() {
     retry: false,
   });
 
+  // A preset prefills only a release the MCE offers; one it can't host leaves the field empty.
   const presetVersion = selectedSpec?.spec.day1.values?.openshift_release_version;
-  const versionDefault = typeof presetVersion === "string" && presetVersion
-    ? { value: presetVersion, source: `preset by spec ${selectedSpec?.metadata.name}` }
-    : selectedMce?.default_mastertag
-    ? { value: selectedMce.default_mastertag, source: `default of ${selectedMce.name}` }
+  const hasPreset = typeof presetVersion === "string" && presetVersion.trim() !== "";
+  const presetOffered = offeredRelease(presetVersion, ocpVersions);
+  const mceDefaultOffered = offeredRelease(selectedMce?.default_mastertag, ocpVersions);
+  const versionDefault = hasPreset
+    ? presetOffered ? { value: presetOffered, source: `preset by spec ${selectedSpec?.metadata.name}` } : null
+    : mceDefaultOffered && selectedMce
+    ? { value: mceDefaultOffered, source: `default of ${selectedMce.name}` }
     : null;
-  const ocpVersion = ocpChoice ?? versionDefault?.value ?? "";
-  const versionOptions = ocpVersion && !ocpVersions.includes(ocpVersion) ? [ocpVersion, ...ocpVersions] : ocpVersions;
+  const presetNotOffered = hasPreset && offered !== undefined && !presetOffered;
+  // Typed when the list could not be read; otherwise a choice made for another MCE counts only if this one offers it.
+  const chosenVersion = versionsError ? ocpChoice : ocpChoice !== null && ocpVersions.includes(ocpChoice) ? ocpChoice : null;
+  const ocpVersion = chosenVersion ?? versionDefault?.value ?? "";
+  const versionOptions = ocpVersions.map(asOption);
+  const siteOptions = sites.map(asOption);
+  const mceOptions = mces.map(mceOption);
 
   const seededValues = useMemo(
     () => (selectedSpec ? seedForm(selectedSpec, schema) : {}),
@@ -623,8 +654,9 @@ export default function NewClusterPage() {
   const formValues = dynamicValues ?? seededValues;
   const presetKeys = Object.keys(selectedSpec?.spec.day1.values ?? {});
 
+  // A failed MCE read is not "no MCE of this env": check the name only against MCEs that loaded.
   const namingIssues = trimmedName
-    ? nameProblems(trimmedName, site, selectedMce, site && !mcesLoading ? mces : undefined)
+    ? nameProblems(trimmedName, site, selectedMce, site && !mcesLoading && !mcesError ? mces : undefined)
     : [];
   const namePlaceholder = `ocp4-${selectedMce?.env ?? "<env>"}-<name>-${site || "<site>"}`;
 
@@ -715,6 +747,9 @@ export default function NewClusterPage() {
     if (!mce) problems.push("Choose an MCE");
     if (!trimmedName) problems.push("Enter a cluster name");
     if (!ocpVersion.trim()) problems.push("Choose an OpenShift version");
+    // Without the template's inputs the form can neither show nor check them: never send without them.
+    if (schemaError) problems.push("The cluster template's inputs could not be loaded: reload the page to try again");
+    else if (!templateSchema) problems.push("The cluster template's inputs are still loading");
     problems.push(...missingRequired(schema, formValues).map((path) => `${labelForPath(path)} is required`));
     const { overrides, problems: overrideProblems } = collectOverrides();
     problems.push(...overrideProblems);
@@ -807,10 +842,14 @@ export default function NewClusterPage() {
           ) : specsError ? (
             <ProblemList error={specsError} title="The specs could not be loaded" />
           ) : specs?.length === 0 ? (
-            <div className="bg-card rounded-xl border p-8 text-center text-muted-foreground">
-              No specs available.{" "}
-              <Link href="/specs/new" className="text-primary hover:underline">Create a spec first</Link>.
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No specs yet"
+              description="A cluster is created from a cluster spec. Create one first."
+              action={<EmptyStateLink href="/specs/new">New spec</EmptyStateLink>}
+              bordered
+              data-testid="specs-empty"
+            />
           ) : (
             specs?.map((spec) =>
               spec.load_error ? (
@@ -883,66 +922,61 @@ export default function NewClusterPage() {
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 min-w-0">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <label id={siteLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     Site <span className="text-destructive">*</span>
                   </label>
-                  <Select
+                  <Combobox
+                    size="lg"
+                    options={siteOptions}
                     value={site || null}
-                    onValueChange={(v) => { setSiteChoice(v ?? null); setMceChoice(null); }}
+                    onValueChange={(v) => { setSiteChoice(v); setMceChoice(null); }}
                     disabled={sitesLoading || sites.length === 0}
-                  >
-                    <SelectTrigger className="w-full" data-testid="site-select" aria-label="Site">
-                      <SelectValue placeholder={sitesLoading ? "Loading sites…" : sites.length === 0 ? "No sites in the day1 repo" : "Select site…"} />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {sites.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      sitesLoading ? "Loading sites…"
+                        : sitesError ? "Sites could not be loaded"
+                        : sites.length === 0 ? "No sites in the day1 repo"
+                        : "Select site…"
+                    }
+                    searchPlaceholder="Search sites…"
+                    emptyMessage="No site matches."
+                    data-testid="site-select"
+                    aria-labelledby={siteLabelId}
+                  />
                   {!siteChoice && detectedSite && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
                   )}
+                  {Boolean(sitesError) && <ProblemList error={sitesError} title="The sites could not be loaded" />}
                 </div>
                 <div className="space-y-1.5 min-w-0">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <label id={mceLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     MCE <span className="text-destructive">*</span>
                   </label>
-                  <Select
+                  <Combobox
+                    size="lg"
+                    options={mceOptions}
                     value={mce || null}
                     onValueChange={(v) => {
                       // Choosing an MCE pins its site too, so editing the name no longer moves either.
                       setSiteChoice(site);
-                      setMceChoice(v ?? null);
+                      setMceChoice(v);
                     }}
                     disabled={!site || mcesLoading || mces.length === 0}
-                  >
-                    <SelectTrigger className="w-full" data-testid="mce-select" aria-label="MCE">
-                      <SelectValue
-                        placeholder={
-                          !site ? "Select site first…"
-                            : mcesLoading ? "Loading MCEs…"
-                            : mces.length === 0 ? "No MCEs on this site"
-                            : "Select MCE…"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {mces.map((m) => (
-                        <SelectItem key={m.name} value={m.name} disabled={!m.follows_convention}>
-                          <span className="truncate">{m.name}</span>
-                          {m.env ? (
-                            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{m.env}</span>
-                          ) : (
-                            <span className="text-[10px] text-status-warning-fg">off convention</span>
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      !site ? "Select site first…"
+                        : mcesLoading ? "Loading MCEs…"
+                        : mcesError ? "MCEs could not be loaded"
+                        : mces.length === 0 ? "No MCEs on this site"
+                        : "Select MCE…"
+                    }
+                    searchPlaceholder="Search MCEs…"
+                    emptyMessage="No MCE matches."
+                    data-testid="mce-select"
+                    aria-labelledby={mceLabelId}
+                  />
                   {!mceChoice && detectedMce && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
                   )}
+                  {Boolean(mcesError) && <ProblemList error={mcesError} title={`The MCEs of ${site} could not be loaded`} />}
                 </div>
               </div>
 
@@ -1015,34 +1049,63 @@ export default function NewClusterPage() {
               </div>
 
               <div className="space-y-1.5 border-t pt-4">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label id={versionLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   OpenShift Version <span className="text-destructive">*</span>
                 </label>
-                {versionOptions.length > 0 ? (
-                  <Select value={ocpVersion || null} onValueChange={(v) => setOcpChoice(v ?? null)}>
-                    <SelectTrigger className="w-full" data-testid="ocp-version-select" aria-label="OpenShift version">
-                      <SelectValue placeholder="Select OpenShift version…" />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {versionOptions.map((v) => (
-                        <SelectItem key={v} value={v}>{v}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
+                {/* The MCE's releases; free text only when they could not be read (create still checks) */}
+                {versionsError ? (
                   <input
                     type="text"
-                    data-testid="ocp-version-input" aria-label="OpenShift version"
+                    data-testid="ocp-version-input" aria-labelledby={versionLabelId}
                     className={cn(inputCls, "font-mono")}
-                    placeholder="e.g. 4.16.27-x86_64"
+                    placeholder="e.g. 4.18.56"
                     value={ocpVersion}
                     onChange={(e) => setOcpChoice(e.target.value)}
                   />
+                ) : (
+                  <Combobox
+                    size="lg"
+                    options={versionOptions}
+                    value={ocpVersion || null}
+                    onValueChange={setOcpChoice}
+                    disabled={!mce || versionsLoading || versionOptions.length === 0}
+                    placeholder={
+                      !mce ? "Choose an MCE first"
+                        : versionsLoading ? "Loading versions…"
+                        : versionOptions.length === 0 ? `No versions offered on ${mce}`
+                        : "Select OpenShift version…"
+                    }
+                    searchPlaceholder="Search versions…"
+                    emptyMessage="No version matches."
+                    data-testid="ocp-version-select"
+                    aria-labelledby={versionLabelId}
+                  />
+                )}
+                {Boolean(versionsError) && (
+                  <ProblemList error={versionsError} title={`The OpenShift versions of ${mce} could not be listed: type the version`} />
+                )}
+                {versionProblems.length > 0 && (
+                  <div data-testid="ocp-version-problems">
+                    <ProblemList
+                      lines={versionProblems}
+                      title={ocpVersions.length > 0 ? `Some of ${mce}'s upgrade files need attention` : `${mce} offers no OpenShift version`}
+                    />
+                  </div>
+                )}
+                {presetNotOffered && (
+                  <p className="text-[11px] text-status-warning-fg flex items-start gap-1.5" data-testid="ocp-version-preset-note">
+                    <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                    <span className="break-words">
+                      Spec {selectedSpec?.metadata.name} presets {String(presetVersion)}, which {mce} can&apos;t host: choose a version it offers.
+                    </span>
+                  </p>
                 )}
                 <p className="text-[11px] text-muted-foreground" data-testid="ocp-version-source">
-                  {ocpChoice === null && versionDefault
+                  {chosenVersion === null && versionDefault
                     ? `Becomes the file's mastertag; ${versionDefault.source}.`
-                    : "Becomes the file's mastertag."}
+                    : mce
+                    ? `Becomes the file's mastertag. The releases ${mce} can host, from the day1 repo's upgrade/ folder.`
+                    : "Becomes the file's mastertag. Each MCE offers the releases it can host."}
                 </p>
               </div>
             </div>
@@ -1051,6 +1114,8 @@ export default function NewClusterPage() {
           {/* Cluster Configuration — structure from spec, values filled here */}
           {schemaLoading ? (
             <Skeleton className="h-48 rounded-xl" />
+          ) : schemaError ? (
+            <ProblemList error={schemaError} title="The cluster template's inputs could not be loaded" />
           ) : schema.length === 0 ? (
             <div className="rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm text-status-warning-fg flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -1070,12 +1135,9 @@ export default function NewClusterPage() {
                 )}
               </div>
               {infraEnvsError && (
-                <p className="text-xs text-muted-foreground flex items-start gap-1.5" data-testid="infraenv-hint">
-                  <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
-                  <span className="break-words">
-                    InfraEnvs could not be listed from {mce} ({infraEnvsError.message}); type their names.
-                  </span>
-                </p>
+                <div data-testid="infraenv-hint">
+                  <ProblemList error={infraEnvsError} title={`InfraEnvs could not be listed from ${mce}; type their names below`} />
+                </div>
               )}
               <DynamicVariableForm
                 schema={schema}
@@ -1194,7 +1256,7 @@ export default function NewClusterPage() {
           {formError && (
             <div ref={errorRef} className="space-y-2 scroll-mt-24" data-testid="form-problems">
               {formError.kind === "form" ? (
-                <FormChecks lines={formError.lines} />
+                <ProblemList lines={formError.lines} title="Some fields need attention" />
               ) : (
                 <ProblemList error={formError.error} title={formError.title} />
               )}

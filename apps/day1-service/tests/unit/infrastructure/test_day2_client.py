@@ -63,7 +63,7 @@ async def test_installed_addons_are_read_with_the_service_token() -> None:
     ]
     request = requests[0]
     assert request.url.path == "/api/day2/clusters/ocp4-prod-hawk-site1/addons"
-    assert dict(request.url.params) == {"mce": CLUSTER.mce, "site": CLUSTER.site}
+    assert dict(request.url.params) == {"mce": CLUSTER.mce}
     assert request.headers["authorization"] == f"Bearer {TOKEN}"
     assert request.url.host == "wingman-day2.test"
     await client.aclose()

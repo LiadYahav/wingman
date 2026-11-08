@@ -7,7 +7,9 @@ import { api } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RepoBadge } from "@/components/common/repo-badge";
-import { cn } from "@/lib/utils";
+import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
+import { cn, formatDate } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
@@ -28,7 +30,7 @@ function StatCard({
   };
   const c = colorMap[color];
   return (
-    <Link href={href} className="block group">
+    <Link href={href} className="block group" data-testid={`stat-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       <div className="bg-card rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all p-5 cursor-pointer h-full">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
@@ -51,7 +53,7 @@ function StatCard({
 export default function DashboardPage() {
   const isAdmin = useIsAdmin();
 
-  const { data: clusters, isLoading: clustersLoading } = useQuery<ClusterStatus[]>({
+  const { data: clusters, isLoading: clustersLoading, error: clustersError } = useQuery<ClusterStatus[]>({
     queryKey: ["clusters"],
     queryFn: () => api.get<ClusterStatus[]>("/api/day1/clusters"),
   });
@@ -62,21 +64,21 @@ export default function DashboardPage() {
     queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
   });
 
-  const { data: approvalsDay1, isError: day1ApprovalsFailed } = useQuery<MRDetail[]>({
+  const { data: approvalsDay1, isPending: day1ApprovalsPending, error: day1ApprovalsError } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day1"],
     queryFn: () => api.get<MRDetail[]>("/api/day1/approvals"),
     staleTime: 60_000,
   });
 
-  const { data: approvalsDay2, isError: day2ApprovalsFailed } = useQuery<MRDetail[]>({
+  const { data: approvalsDay2, isPending: day2ApprovalsPending, error: day2ApprovalsError } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day2"],
     queryFn: () => api.get<MRDetail[]>("/api/day2/approvals"),
     staleTime: 60_000,
   });
 
-  const { data: liveStatuses, isLoading: statusLoading } = useBulkStatus(clusters);
+  const { data: liveStatuses, isLoading: statusLoading, error: statusError } = useBulkStatus(clusters);
 
-  const { data: driftSummary, isLoading: driftLoading } = useQuery<DriftSummaryItem[]>({
+  const { data: driftSummary, isLoading: driftLoading, isError: driftFailed } = useQuery<DriftSummaryItem[]>({
     queryKey: ["clusters", "drift-summary"],
     queryFn: () => api.get<DriftSummaryItem[]>("/api/day1/clusters/drift-summary"),
     staleTime: 60_000, // drift asks day2 about every linked cluster
@@ -101,9 +103,12 @@ export default function DashboardPage() {
   const recentApprovals = [...allApprovals]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 6);
-  const approvalsLoading = !approvalsDay1 && !approvalsDay2 && !day1ApprovalsFailed && !day2ApprovalsFailed;
-  const unavailableApprovals = [day1ApprovalsFailed && "day1", day2ApprovalsFailed && "day2"].filter(Boolean);
+  // Until both sources answered (or failed), a count or "all caught up" would be one source's.
+  const approvalsLoading = day1ApprovalsPending || day2ApprovalsPending;
+  const unavailableApprovals = [day1ApprovalsError && "day1", day2ApprovalsError && "day2"].filter(Boolean);
   const totalApprovals = allApprovals.length;
+  // Neither source answered: there is no count to show, not a count of zero.
+  const allApprovalsFailed = Boolean(day1ApprovalsError && day2ApprovalsError);
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -121,24 +126,28 @@ export default function DashboardPage() {
         <StatCard
           title="Total Clusters"
           value={clusters?.length}
-          hint={specs ? `${specs.length} spec${specs.length !== 1 ? "s" : ""}` : undefined}
+          hint={clustersError ? "Could not be loaded" : specs ? `${specs.length} spec${specs.length !== 1 ? "s" : ""}` : undefined}
           icon={Server} href="/clusters" loading={clustersLoading} color="blue"
         />
         <StatCard
           title="Ready"
-          value={statusOff ? undefined : health.ready}
-          hint={statusOff ? "Live status is off" : undefined}
+          value={statusOff || clustersError || statusError ? undefined : health.ready}
+          hint={statusOff ? "Live status is off" : statusError ? "Could not be read" : undefined}
           icon={CheckCircle2} href="/clusters" loading={clustersLoading || statusLoading} color="green"
         />
         <StatCard
-          title="Pending Approvals" value={totalApprovals}
-          hint={unavailableApprovals.length > 0 ? `${unavailableApprovals.join(" and ")} unavailable` : undefined}
+          title="Pending Approvals" value={allApprovalsFailed ? undefined : totalApprovals}
+          hint={
+            allApprovalsFailed ? "Could not be loaded"
+              : unavailableApprovals.length > 0 ? `${unavailableApprovals.join(" and ")} unavailable`
+              : undefined
+          }
           icon={GitPullRequest} href="/approvals" loading={approvalsLoading}
           color={totalApprovals > 0 ? "orange" : "blue"}
         />
         <StatCard
           title="Drifted" value={driftSummary ? drifted : undefined}
-          hint={driftUnknown > 0 ? `${driftUnknown} unknown` : undefined}
+          hint={driftFailed ? "Could not be loaded" : driftUnknown > 0 ? `${driftUnknown} unknown` : undefined}
           icon={AlertTriangle} href="/clusters" loading={driftLoading}
           color={drifted > 0 ? "red" : "blue"}
         />
@@ -155,16 +164,24 @@ export default function DashboardPage() {
           </div>
           {clustersLoading || statusLoading ? (
             <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-11 w-full rounded-lg" />)}</div>
+          ) : clustersError ? (
+            <ProblemList error={clustersError} title="The clusters could not be loaded" />
+          ) : clusters?.length === 0 ? (
+            <EmptyState
+              icon={Server}
+              title="No clusters yet"
+              description="Their health shows here once the day1 repo has hosted clusters."
+              action={isAdmin && <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>}
+              data-testid="health-empty"
+            />
           ) : statusOff ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="rounded-full bg-muted p-3 mb-3">
-                <Activity className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-semibold">Live status is off</p>
-              <p className="text-xs text-muted-foreground mt-0.5 max-w-xs">
-                This deployment does not read HostedClusters from the MCE hubs (CLUSTER_STATUS_ENABLED).
-              </p>
-            </div>
+            <EmptyState
+              icon={Activity}
+              title="Live status is off"
+              description="This deployment does not read HostedClusters from the MCE hubs (CLUSTER_STATUS_ENABLED)."
+            />
+          ) : statusError ? (
+            <ProblemList error={statusError} title="Live status could not be read from the MCE hubs" />
           ) : (
             <div className="space-y-2">
               {[
@@ -195,6 +212,12 @@ export default function DashboardPage() {
               View all <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
+          {(day1ApprovalsError || day2ApprovalsError) && (
+            <div className="mb-3 space-y-2">
+              {day1ApprovalsError && <ProblemList error={day1ApprovalsError} title="Day1 and spec MRs could not be loaded" />}
+              {day2ApprovalsError && <ProblemList error={day2ApprovalsError} title="Day2 team MRs could not be loaded" />}
+            </div>
+          )}
           {approvalsLoading ? (
             <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}</div>
           ) : recentApprovals.length > 0 ? (
@@ -205,25 +228,21 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{mr.title}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      by {mr.author.username} · {new Date(mr.created_at).toLocaleDateString("en-GB")}
+                      by {mr.author.username} · {formatDate(mr.created_at)}
                     </p>
                   </div>
                   <RepoBadge repo={mr.repo} className="ml-3 shrink-0" />
                 </Link>
               ))}
             </div>
-          ) : unavailableApprovals.length > 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              Approvals could not be loaded from {unavailableApprovals.join(" and ")}.
-            </p>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="rounded-full bg-status-ready/15 p-3 mb-3">
-                <CheckCircle2 className="h-6 w-6 text-status-ready" />
-              </div>
-              <p className="text-sm font-semibold">All caught up!</p>
-              <p className="text-xs text-muted-foreground mt-0.5">No pending approvals</p>
-            </div>
+          ) : unavailableApprovals.length > 0 ? null : (
+            <EmptyState
+              icon={CheckCircle2}
+              tone="success"
+              title="All caught up"
+              description="No merge request is waiting for an approval."
+              data-testid="approvals-empty"
+            />
           )}
         </div>
       </div>

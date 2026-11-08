@@ -82,7 +82,7 @@ def create_body(name: str = "ocp4-prod-falcon-site1", **overrides: object) -> di
             "owner_merkaz": "1234",
             "owner_anaf": "56",
             "owner_mador": "7",
-            "openshift_release_version": "4.18.22-x86_64",
+            "openshift_release_version": "4.18.56-x86_64",
             "nodepools": nodepools("dell-r660-site1-128c-1024gb-5tb", "hp-gen11-site1-64c"),
         },
     }
@@ -118,7 +118,7 @@ def hub() -> FakeHubApi:
         hosted_clusters={
             PROD_MCE: [
                 HostedClusterObservation(
-                    name="openshift-prod-herzi-site1",
+                    name="ocp4-prod-herzi-site1",
                     namespace="hcp-prod-herzi-site1",
                     phase=None,
                     version="4.16.27",

@@ -50,7 +50,7 @@ class SpecEntry:
 
 
 class SpecCatalog:
-    """Read specs, the template and the version list; propose spec changes."""
+    """Read specs and the template; propose spec changes."""
 
     def __init__(
         self,
@@ -79,18 +79,6 @@ class SpecCatalog:
         """The template's inputs, for the create form."""
         template = await self.template()
         return analyze_template(template, include_reserved=include_reserved) if template else []
-
-    async def versions(self) -> list[str]:
-        """OpenShift releases from ``openshift-versions.txt`` (``#`` comments ignored)."""
-        try:
-            content = (await self._specs.read(paths.VERSIONS_FILE)).content
-        except NotFoundError:
-            return []
-        return [
-            line.strip()
-            for line in content.splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
 
     async def entries(self) -> list[SpecEntry]:
         """Every ``<name>.yaml`` under the specs folder, with the template filled in."""
@@ -227,7 +215,11 @@ class SpecCatalog:
             file = await self._specs.read(self._path(name))
         except NotFoundError as exc:
             raise ResourceNotFoundError(f"spec {name!r} does not exist") from exc
-        if expected is not None and expected != file.last_commit_id:
+        if (
+            expected is not None
+            and expected != file.last_commit_id
+            and await self._specs.changed_since(self._path(name), expected)
+        ):
             raise StaleError(
                 f"spec {name!r} changed since it was read ({expected[:8]} → "
                 f"{file.last_commit_id[:8]}); reload and try again"

@@ -6,7 +6,7 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { go, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
 import {
   HOSTED_ID,
   HOSTED_NAME,
@@ -28,13 +28,6 @@ test.beforeEach(async ({ page }) => {
   requests = await mockDay2World(page);
 });
 
-async function open(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
-}
-
 /** The legacy link from the day1 cluster page: a bare name and its MCE. */
 const HOSTED_PAGE = `/clusters/${HOSTED_NAME}/addons?site=site1&mce=mce-a`;
 
@@ -43,7 +36,7 @@ const availableCard = (page: Page, team: string, name: string) => page.getByTest
 
 test.describe("A destination's charts", () => {
   test("lists its own charts and fleet defaults, and says Wingman cannot see ArgoCD", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
 
     await expect(page.getByRole("heading", { name: new RegExp(HOSTED_NAME) })).toBeVisible();
     await expect(page.getByText(HOSTED_ID)).toBeVisible();
@@ -58,7 +51,7 @@ test.describe("A destination's charts", () => {
   });
 
   test("the values preview says which layer set each value", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     const card = installedCard(page, "platform", "cert-manager");
     await card.getByRole("button", { name: /^cert-manager/ }).click();
 
@@ -79,7 +72,7 @@ test.describe("A destination's charts", () => {
   });
 
   test("an update sends last_commit_id and shows the MR with its notes", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     const card = installedCard(page, "platform", "cert-manager");
     await card.getByRole("button", { name: /^cert-manager/ }).click();
 
@@ -97,7 +90,7 @@ test.describe("A destination's charts", () => {
   });
 
   test("a stale update reloads the chart instead of overwriting the newer file", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     const charts = hostedCharts();
     const moved = {
       ...charts,
@@ -126,7 +119,7 @@ test.describe("A destination's charts", () => {
   });
 
   test("removing a chart says the workload keeps running", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     const card = installedCard(page, "platform", "cert-manager");
     await card.getByRole("button", { name: "Actions for cert-manager" }).click();
     await page.getByRole("button", { name: /Remove from this cluster/ }).click();
@@ -145,14 +138,14 @@ test.describe("A destination's charts", () => {
   });
 
   test("a fleet default points at exclusions.yaml instead of a remove", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     await installedCard(page, "platform", "external-secrets").getByRole("button", { name: "Actions for external-secrets" }).click();
     await expect(page.getByText("defaults/hosted-clusters/exclusions.yaml")).toBeVisible();
     await expect(page.getByRole("button", { name: /Remove from/ })).toHaveCount(0);
   });
 
   test("an install writes only the values set, with no version pin", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     const card = availableCard(page, "observability", "grafana");
     await card.getByRole("button", { name: "Install" }).click();
     await card.getByTestId("value-row-persistence.size").getByRole("textbox").fill("20Gi");
@@ -176,7 +169,7 @@ test.describe("A destination's charts", () => {
           )
         : route.fallback(),
     );
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     const card = availableCard(page, "observability", "grafana");
     await card.getByRole("button", { name: "Install" }).click();
     await card.getByRole("button", { name: "Review install" }).click();
@@ -186,7 +179,7 @@ test.describe("A destination's charts", () => {
   });
 
   test("a chart with only the miscased repoUrl needs a repourl to install", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     const card = availableCard(page, "security", "kyverno");
     await card.getByRole("button", { name: "Install" }).click();
     await expect(card).toContainText("repourl-miscased");
@@ -205,10 +198,11 @@ test.describe("A destination's charts", () => {
   });
 
   test("choosing another revision is an emergency pin that must be confirmed", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     const card = installedCard(page, "platform", "cert-manager");
     await card.getByRole("button", { name: /^cert-manager/ }).click();
-    await card.getByRole("combobox").selectOption("1.11.0");
+    await card.getByRole("combobox", { name: "Revision" }).click();
+    await page.getByRole("option", { name: "1.11.0", exact: true }).click();
 
     await expect(card).toContainText("emergency pin");
     const review = card.getByRole("button", { name: "Review update" });
@@ -226,7 +220,7 @@ test.describe("A destination's charts", () => {
   });
 
   test("a bulk install opens one MR per team", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     await availableCard(page, "observability", "grafana").getByRole("checkbox").click();
     await availableCard(page, "networking", "ingress-nginx").getByRole("checkbox").click();
     await page.getByRole("button", { name: "Install selected" }).click();
@@ -242,21 +236,21 @@ test.describe("A destination's charts", () => {
   });
 
   test("the upgrade check lists charts that would lose their OCP pin", async ({ page }) => {
-    await open(page, HOSTED_PAGE);
+    await go(page, HOSTED_PAGE);
     await page.getByLabel("Upgrade check", { exact: true }).fill("4.19.3");
     await page.getByRole("button", { name: "Check", exact: true }).click();
     await expect(page.getByText(/no ocp-versions\/4\.19\.3\//)).toBeVisible();
   });
 
   test("a name two destinations share asks which one", async ({ page }) => {
-    await open(page, "/clusters/twin/addons");
+    await go(page, "/clusters/twin/addons");
     await expect(page.getByText("twin names 2 destinations")).toBeVisible();
     await page.getByRole("link", { name: TWIN_IDS[1] }).click();
     await expect(page).toHaveURL(new RegExp(`/clusters/${encodeURIComponent(TWIN_IDS[1])}/addons`));
   });
 
   test("the hub is a destination too, without an OCP version", async ({ page }) => {
-    await open(page, "/clusters/hub/addons");
+    await go(page, "/clusters/hub/addons");
     await expect(page.getByRole("heading", { name: /hub/ })).toBeVisible();
     await expect(page.getByText("Hub", { exact: true })).toBeVisible();
     await expect(page.getByText(/No team deploys a chart to hub yet/)).toBeVisible();
@@ -266,7 +260,7 @@ test.describe("A destination's charts", () => {
 
 test.describe("Destinations", () => {
   test("lists all four kinds and filters by kind", async ({ page }) => {
-    await open(page, "/destinations");
+    await go(page, "/destinations");
     const rows = page.locator("tbody tr");
     await expect(rows).toHaveCount(6);
     await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: /MCE/ }).click();
@@ -279,7 +273,7 @@ test.describe("Destinations", () => {
 
 test.describe("Lints", () => {
   test("lists findings worst first and filters by severity", async ({ page }) => {
-    await open(page, "/lints");
+    await go(page, "/lints");
     const rows = page.locator("tbody tr");
     await expect(rows).toHaveCount(3);
     await expect(rows.first()).toContainText("repourl-missing");
@@ -291,7 +285,7 @@ test.describe("Lints", () => {
 
 test.describe("Catalog", () => {
   test("shows fleet-default scopes, OCP pins and the miscased repoUrl", async ({ page }) => {
-    await open(page, "/addons");
+    await go(page, "/addons");
     await expect(page.getByText("6 charts across 4 teams · 1 with warnings")).toBeVisible();
     await expect(page.getByText("No lowercase repourl")).toBeVisible();
     await page.getByRole("button", { name: /prometheus/ }).click();

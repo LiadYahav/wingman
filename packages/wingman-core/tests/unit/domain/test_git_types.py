@@ -7,7 +7,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from wingman_core.domain.errors import InvalidRepoPathError
-from wingman_core.domain.git import ChangeKind, CommitAuthor, FileChange, RepoPath
+from wingman_core.domain.git import ChangeKind, CommitAuthor, FileChange, RepoPath, commit_author
+from wingman_core.domain.users import Role, User
 
 
 @pytest.mark.parametrize("value", ["/abs", "a//b", "a/../b", "..", "./a", "a/", "a\\b", "a\x00b"])
@@ -84,3 +85,26 @@ def test_file_change_rejects_impossible_combinations(
 def test_commit_author_rejects_empty_or_header_breaking_values(name: str, email: str) -> None:
     with pytest.raises(ValueError, match="invalid commit author"):
         CommitAuthor(name, email)
+
+
+def test_the_commit_author_is_the_requesting_user() -> None:
+    author = commit_author(User(username="alice", role=Role.ADMIN, full_name="Alice Admin"))
+    assert (author.name, author.email) == ("Alice Admin", "alice@openshift.local")
+
+
+def test_the_commit_author_falls_back_to_the_username() -> None:
+    author = commit_author(User(username="bob", role=Role.ADMIN))
+    assert (author.name, author.email) == ("bob", "bob@openshift.local")
+
+
+def test_the_commit_author_cannot_forge_header_lines() -> None:
+    sneaky = User(username="eve\nX-Evil: 1", role=Role.ADMIN, full_name="Eve <eve@evil>\r\nx")
+    author = commit_author(sneaky)
+    for value in (author.name, author.email):
+        assert not set(value) & set("\r\n<>")
+    assert author.email == "eve-X-Evil: 1@openshift.local"
+
+
+def test_a_username_of_only_forbidden_characters_still_gives_an_author() -> None:
+    author = commit_author(User(username="<>", role=Role.ADMIN, full_name="\n"))
+    assert (author.name, author.email) == ("-", "-@openshift.local")

@@ -33,6 +33,7 @@ import pytest
 
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
+from wingman_core.infrastructure.snapshots import RepoSnapshots
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects
 from wingman_day2.application.apps import load_deploy
 from wingman_day2.application.topology import Topology, TopologyService
@@ -64,6 +65,25 @@ def _render_chain() -> ModuleType:
 
 RC = _render_chain()
 
+# The rules render_chain.py itself fails a snapshot on; Wingman's own lints are not here.
+RENDER_CHAIN_RULES = frozenset(
+    {
+        Rule.ENV_NOT_ALLOWED,
+        Rule.DAY1_VERSION_MISSING,
+        Rule.MASTERTAG_MISSING,
+        Rule.MASTERTAG_INVALID,
+        Rule.UPI_NAME_IN_CLUSTER,
+        Rule.UPI_NAME_REUSED,
+        Rule.UPI_VERSION_FILE_INVALID,
+        Rule.LEGACY_LAYOUT,
+        Rule.EXCLUSIONS_HUB,
+        Rule.EXCLUSIONS_SCHEMA,
+        Rule.EXCLUSIONS_UNKNOWN_CHART,
+        Rule.EXCLUSIONS_UNKNOWN_TARGET,
+        Rule.DUPLICATE_APP,
+    }
+)
+
 
 def fixture_files() -> Files:
     return {
@@ -85,8 +105,9 @@ async def wingman(files: Files) -> tuple[Topology, GitLabSigsRepository]:
     for project, tree in files.items():
         gitlab.create_project(project, tree)
     cache = TtlCache()
-    sigs = GitLabSigsRepository(gitlab, cache, group="sigs", branch="main", ttl=60)
-    day1 = GitLabDay1Repository(gitlab, cache, project=DAY1, branch="main", ttl=60)
+    snapshots = RepoSnapshots(gitlab, cache, ttl=60)
+    sigs = GitLabSigsRepository(gitlab, cache, snapshots, group="sigs", branch="main", ttl=60)
+    day1 = GitLabDay1Repository(gitlab, cache, snapshots, project=DAY1, branch="main", ttl=60)
     return await TopologyService(sigs, day1).load(), sigs
 
 
@@ -334,7 +355,7 @@ async def test_broken_trees_fail_the_same_rules(name: str, tmp_path: Path) -> No
     mine = {
         f.rule
         for f in topology.team(team).findings
-        if f.severity is Severity.ERROR and f.rule.render_chain
+        if f.severity is Severity.ERROR and f.rule in RENDER_CHAIN_RULES
     }
     assert oracle_rules(snapshot["check_failures"]) == mine == rules
     if renders:

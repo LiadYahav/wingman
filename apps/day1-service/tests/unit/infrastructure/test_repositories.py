@@ -1,4 +1,7 @@
-"""CachedRepository: which reads are cached, for how long, and what each write clears."""
+"""CachedRepository: which reads are cached, for how long, and what each write clears.
+
+Files and trees at the default branch come from one archive per commit (ADR-0035).
+"""
 
 from __future__ import annotations
 
@@ -9,11 +12,13 @@ import pytest
 
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import (
+    Branch,
     Commit,
     FileChange,
     FileContent,
     FileDiff,
     Project,
+    RepoArchive,
     RepoPath,
     TreeEntry,
 )
@@ -49,6 +54,14 @@ class CountingGitLab(InMemoryGitLab):
     async def read_file(self, project_id: int, path: RepoPath, ref: str) -> FileContent:
         self.calls["read_file"] += 1
         return await super().read_file(project_id, path, ref)
+
+    async def get_branch(self, project_id: int, name: str) -> Branch:
+        self.calls["get_branch"] += 1
+        return await super().get_branch(project_id, name)
+
+    async def read_archive(self, project_id: int, sha: str, *, max_bytes: int) -> RepoArchive:
+        self.calls["read_archive"] += 1
+        return await super().read_archive(project_id, sha, max_bytes=max_bytes)
 
     async def list_commits(
         self, project_id: int, *, ref: str, path: RepoPath | None = None, limit: int = 50
@@ -132,13 +145,23 @@ async def test_every_read_family_is_cached(
     assert repo.key == "day1"
 
 
-async def test_the_cache_expires_after_its_ttl(
+async def test_after_the_ttl_only_the_head_is_checked_until_the_branch_moves(
     repo: CachedRepository, counting: CountingGitLab, clock: Clock
 ) -> None:
     await repo.read(VALUES)
     clock.now += 31
     await repo.read(VALUES)
-    assert counting.calls["read_file"] == 2
+    assert (counting.calls["get_branch"], counting.calls["read_archive"]) == (2, 1)
+    project = await repo.project()
+    await counting.commit(
+        project.id,
+        branch="main",
+        message="m",
+        changes=[FileChange.update(VALUES, "changed: true\n", last_commit_id=None)],
+    )
+    clock.now += 31
+    assert (await repo.read(VALUES)).content == "changed: true\n"
+    assert (counting.calls["read_archive"], counting.calls["read_file"]) == (2, 0)
 
 
 async def test_reads_at_another_ref_are_never_cached(
@@ -154,17 +177,41 @@ async def test_reads_at_another_ref_are_never_cached(
     assert counting.calls["read_file"] == 2, "the default branch by name is the cached read"
 
 
-async def test_a_failed_read_is_not_cached(
+async def test_a_missing_file_or_directory_is_not_found_without_a_call(
     repo: CachedRepository, counting: CountingGitLab
 ) -> None:
-    missing = RepoPath("sites/nope.yaml")
+    await repo.project()
     for _ in range(2):
         with pytest.raises(NotFoundError):
-            await repo.read(missing)
-    assert counting.calls["read_file"] == 2
+            await repo.read(RepoPath("sites/nope.yaml"))
+        with pytest.raises(NotFoundError):
+            await repo.tree(RepoPath("nope"))
+    assert counting.calls["read_archive"] == 1
+    assert counting.calls["read_file"] == counting.calls["list_tree"] == 0
 
 
-async def test_forget_files_clears_trees_files_and_history_but_not_mrs_or_commits(
+async def test_changed_since_asks_what_gitlabs_write_guard_asks(
+    repo: CachedRepository, counting: CountingGitLab
+) -> None:
+    project = await repo.project()
+    read_at = (await repo.read(VALUES)).last_commit_id
+
+    async def change(path: RepoPath) -> None:
+        await counting.commit(
+            project.id,
+            branch="main",
+            message=f"change {path}",
+            changes=[FileChange.update(path, "x: 1\n", last_commit_id=None)],
+        )
+
+    await change(HERZI)  # the head moves; VALUES does not change
+    assert not await repo.changed_since(VALUES, read_at)
+    await change(VALUES)
+    assert await repo.changed_since(VALUES, read_at)
+    assert await repo.changed_since(VALUES, "0" * 40)  # unknown: reload
+
+
+async def test_forget_files_checks_the_head_and_history_again_but_not_mrs_or_commits(
     repo: CachedRepository, counting: CountingGitLab
 ) -> None:
     sha = (await repo.read(HERZI)).last_commit_id
@@ -172,7 +219,7 @@ async def test_forget_files_clears_trees_files_and_history_but_not_mrs_or_commit
     counting.calls.clear()
     repo.forget_files()
     await _read_everything(repo, sha)
-    assert counting.calls == Counter({"list_tree": 2, "read_file": 1, "list_commits": 2})
+    assert counting.calls == Counter({"get_branch": 1, "list_commits": 2})
 
 
 async def test_forget_merge_requests_clears_only_mr_lists(
@@ -215,15 +262,12 @@ async def test_two_repositories_share_one_cache_without_clearing_each_other(
     specs.forget_files()
     await day1.read(VALUES)
     await specs.read(RepoPath("cluster-template.j2"))
-    assert counting.calls["read_file"] == 1
+    assert counting.calls == Counter({"get_branch": 1})
 
 
 def test_cache_keys_put_each_family_under_its_prefix() -> None:
     path = RepoPath("a/b.yaml")
     for key in (
-        keys.tree("day1", path, recursive=True),
-        keys.tree("day1", path, recursive=False),
-        keys.file("day1", path),
         keys.history("day1", path, limit=5),
         keys.commits("day1", limit=5),
     ):

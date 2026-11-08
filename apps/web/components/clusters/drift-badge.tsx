@@ -8,13 +8,13 @@ const DRIFT: Record<DriftState, { label: string; Icon: typeof CheckCircle2; clas
     label: "In sync",
     Icon: CheckCircle2,
     className: "bg-status-ready/10 text-status-ready-fg",
-    hint: "Every addon the spec lists is installed at the spec's version",
+    hint: "Every addon the spec lists is installed",
   },
   drifted: {
     label: "Drifted",
     Icon: AlertTriangle,
     className: "bg-status-warning/10 text-status-warning-fg",
-    hint: "An addon the spec lists is missing or at another version",
+    hint: "An addon the spec lists is not installed",
   },
   unknown: {
     label: "Unknown",

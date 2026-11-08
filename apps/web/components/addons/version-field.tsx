@@ -1,7 +1,9 @@
 "use client";
 
+import { useId } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import type { ValueLayer } from "@/types/day2";
 
 /**
@@ -45,24 +47,28 @@ export function VersionField({
   onEmergencyPinChange: (pin: boolean) => void;
   clusterName: string;
 }) {
-  const options = [...new Set([inherited, value, ...versions])];
+  const labelId = useId();
+  // The chart repo's branches: a list that grows, so it is searchable
+  const options: ComboboxOption[] = [...new Set([inherited, value, ...versions])].map((v) => ({
+    value: v,
+    label: v === inherited ? `${v} (inherited${v === "HEAD" && versions[0] ? `: ${versions[0]}` : ""})` : v,
+  }));
   const pins = value !== inherited;
   return (
     <div className="space-y-2">
-      <label className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="font-semibold uppercase tracking-wide text-muted-foreground">Revision</span>
-        <select
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span id={labelId} className="font-semibold uppercase tracking-wide text-muted-foreground">Revision</span>
+        <Combobox
+          size="sm"
+          options={options}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-7 min-w-32 rounded-md border bg-background px-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
-        >
-          {options.map((v) => (
-            <option key={v} value={v}>
-              {v === inherited ? `${v} (inherited${v === "HEAD" && versions[0] ? `: ${versions[0]}` : ""})` : v}
-            </option>
-          ))}
-        </select>
-      </label>
+          onValueChange={(v) => v && onChange(v)}
+          searchPlaceholder="Search branches…"
+          emptyMessage="No branch matches."
+          aria-labelledby={labelId}
+          className="w-auto min-w-40 max-w-72 font-mono text-xs"
+        />
+      </div>
       {pins ? (
         <div className="rounded-lg border border-status-warning/30 bg-status-warning/8 p-3 text-xs">
           <p className="flex items-start gap-2 text-status-warning-fg">

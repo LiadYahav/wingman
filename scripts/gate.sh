@@ -69,21 +69,10 @@ deptry_all() {
   done
 }
 
-legacy_ruff() {
-  ((${#LEGACY[@]} == 0)) || uv run ruff check "${LEGACY[@]}"
-}
-
-legacy_mypy() {
-  local dir
-  for dir in "${LEGACY_MYPY[@]}"; do
-    uv run mypy "$dir" --ignore-missing-imports || return 1
-  done
-}
-
 helm_template_all() {
   local values
-  for values in chart/ci/*.yaml; do
-    helm template wingman chart --namespace wingman -f "$values" >/dev/null || {
+  for values in deploy/helm/wingman/ci/*.yaml; do
+    helm template wingman deploy/helm/wingman --namespace wingman -f "$values" >/dev/null || {
       echo "failed: $values"
       return 1
     }
@@ -109,15 +98,13 @@ if [[ $scope == all || $scope == python ]]; then
   step "pytest (coverage >= 90%)" uv run pytest --cov --cov-fail-under=90 -q
   step "pip-audit" uv run --with pip-audit==2.10.1 pip-audit --skip-editable --progress-spinner off
   step "deptry" deptry_all
-  step "legacy ruff" legacy_ruff
-  step "legacy mypy" legacy_mypy
 fi
 
 if [[ $scope == all || $scope == chart ]]; then
-  step "helm lint --strict" helm lint --strict chart
-  step "helm template (every chart/ci fixture)" helm_template_all
-  step "promtool check rules" promtool check rules chart/files/alerts.rules.yaml
-  step "promtool test rules" promtool test rules chart/tests/alerts.test.yaml
+  step "helm lint --strict" helm lint --strict deploy/helm/wingman
+  step "helm template (every deploy/helm/wingman/ci fixture)" helm_template_all
+  step "promtool check rules" promtool check rules deploy/helm/wingman/files/alerts.rules.yaml
+  step "promtool test rules" promtool test rules deploy/helm/wingman/tests/alerts.test.yaml
 fi
 
 if [[ $scope == all || $scope == web || $scope == e2e ]]; then

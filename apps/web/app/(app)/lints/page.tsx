@@ -9,6 +9,8 @@ import { bySeverity, chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, NoMatches } from "@/components/common/empty-state";
+import { ProblemList } from "@/components/common/problem-list";
 import { severityTone } from "@/components/addons/findings";
 import type { Finding } from "@/types/day2";
 
@@ -52,6 +54,11 @@ export default function LintsPage() {
     .sort((a, b) => bySeverity(a, b) || a.team.localeCompare(b.team) || a.rule.localeCompare(b.rule));
   const filtering = Boolean(needle) || team !== "all" || severity !== "all";
   const count = (s: string) => all.filter((f) => f.severity === s).length;
+  const clear = () => {
+    setSearch("");
+    setTeam("all");
+    setSeverity("all");
+  };
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4 p-6 lg:p-8">
@@ -110,11 +117,7 @@ export default function LintsPage() {
         {filtering && (
           <button
             type="button"
-            onClick={() => {
-              setSearch("");
-              setTeam("all");
-              setSeverity("all");
-            }}
+            onClick={clear}
             className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <X className="h-3 w-3" />
@@ -124,15 +127,16 @@ export default function LintsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load the lints. Please try again.
-        </div>
+        <ProblemList error={error} title="The lints could not be loaded" />
       ) : !isLoading && all.length === 0 ? (
-        <div className="rounded-xl border bg-card p-12 text-center shadow-sm">
-          <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-status-ready" />
-          <p className="text-sm font-semibold">No findings</p>
-          <p className="mt-1 text-xs text-muted-foreground">Every team repo passes every check.</p>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          tone="success"
+          bordered
+          title="No findings"
+          description="Every team repo passes every check."
+          data-testid="lints-empty"
+        />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <table className="w-full text-sm">
@@ -187,8 +191,8 @@ export default function LintsPage() {
                   })}
               {!isLoading && rows.length === 0 && all.length > 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                    No finding matches your filters.
+                  <td colSpan={4}>
+                    <NoMatches what="findings" onClear={clear} />
                   </td>
                 </tr>
               )}

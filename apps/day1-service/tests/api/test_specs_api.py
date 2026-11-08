@@ -83,8 +83,8 @@ async def test_versions_template_and_schema(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     headers = auth(support.VIEWER)
-    versions = (await client.get("/api/day1/specs/versions/openshift", headers=headers)).json()
-    assert versions[0] == "4.16.27-x86_64"
+    gone = await client.get("/api/day1/specs/versions/openshift", headers=headers)
+    assert gone.status_code == 404  # each MCE's upgrade/ files say it now (ADR-0034)
     template = (await client.get("/api/day1/specs/template", headers=headers)).json()
     assert isinstance(template, str)
     assert "nodepool:" in template
@@ -200,4 +200,3 @@ async def test_a_specs_clusters_and_their_drift(
     drift = (await client.get("/api/day1/specs/agent-standard/drift", headers=bob)).json()
     assert drift[0]["cluster"] == "ocp4-prod-falcon-site1"
     assert drift[0]["spec_version"] == "1.0.0"
-    assert drift[0]["unified_diff"] == ""

@@ -13,25 +13,22 @@ way must keep every automation-owned key as the branch has it.
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
 from wingman_core.application.approvals import Approvals, PendingChange, describe
 from wingman_core.domain.errors import NotFoundError
-from wingman_core.domain.git import FileChange, FileDiff, RepoPath
+from wingman_core.domain.git import FileChange, FileDiff, RepoPath, commit_author
 from wingman_core.domain.merge_request import MergeRequestRef, MRState
+from wingman_core.domain.mr_conventions import WINGMAN_LABEL
 from wingman_core.domain.users import User
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_day1.domain import paths
-from wingman_day1.domain.changes import commit_author
 from wingman_day1.domain.cluster_file import edit_problems
 from wingman_day1.domain.errors import InvalidInputError, InvalidSpecError, StaleError
 from wingman_day1.domain.specs import parse_spec
 from wingman_day1.ports import RepoReads
-
-WINGMAN_LABEL = "wingman"
 
 
 class RepoKey(StrEnum):
@@ -78,15 +75,13 @@ class ApprovalService:
         )
 
     async def get(self, repo: RepoKey, iid: int) -> tuple[Change, list[FileDiff]]:
-        """One MR and what it changes; ``sha`` is the head the diff was taken at.
+        """One MR and what it changes; ``sha`` is the branch head, read before the diff.
 
-        GitLab updates an MR's own ``sha`` in a background job after a push,
-        so for an open MR the branch head is read instead, *before* the diff:
-        approving that ``sha`` can then only merge what the reviewer saw, or
-        less, never more.
+        See ``Approvals.get``: approving that ``sha`` can only merge what the
+        reviewer saw, or less, never more.
         """
         ref = await self._ref(repo, iid)
-        change = await self._current(ref)
+        change = await self._approvals.get(ref, managed=await self._managed())
         diffs = await self._gitlab.merge_request_diff(ref)
         return Change(repo, change), diffs
 
@@ -120,7 +115,7 @@ class ApprovalService:
     ) -> tuple[Change, list[FileDiff]]:
         """Commit edited files onto the MR's branch, on top of whatever is there."""
         ref = await self._ref(repo, iid)
-        change = await self._current(ref)
+        change = await self._approvals.get(ref, managed=await self._managed())
         merge_request = change.merge_request
         if merge_request.state is not MRState.OPENED:
             raise StaleError(f"{ref} is {merge_request.state}; only an open MR can be edited")
@@ -162,22 +157,6 @@ class ApprovalService:
     async def _managed(self) -> set[int]:
         projects = await asyncio.gather(*(reads.project() for reads in self._repos.values()))
         return {p.id for p in projects}
-
-    async def _current(self, ref: MergeRequestRef) -> PendingChange:
-        """The MR, with ``sha`` set to its source branch's real head while it is open."""
-        change = await self._approvals.get(ref, managed=await self._managed())
-        merge_request = change.merge_request
-        if merge_request.state is not MRState.OPENED:
-            return change
-        try:
-            head = await self._gitlab.list_commits(
-                ref.project_id, ref=merge_request.source_branch, limit=1
-            )
-        except NotFoundError:
-            return change
-        if not head or head[0].id == merge_request.sha:
-            return change
-        return describe(dataclasses.replace(merge_request, sha=head[0].id))
 
     async def _guarded_update(
         self, repo: RepoKey, ref: MergeRequestRef, path: RepoPath, content: str, *, at: str

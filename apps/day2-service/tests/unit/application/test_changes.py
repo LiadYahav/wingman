@@ -410,9 +410,18 @@ async def test_remove_refuses_a_fleet_default_and_points_at_exclusions(
 async def test_a_stale_remove_conflicts(
     services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
 ) -> None:
+    redbull = (await gitlab.get_project("sigs/redbull")).id
+    read_at = (await gitlab.get_branch(redbull, "main")).commit_id
+    values = RepoPath(f"{HERZI_DIR}/cluster-roles/values.yaml")
+    await gitlab.commit(
+        redbull,
+        branch="main",
+        message="changed after the read",
+        changes=[FileChange.update(values, "aggregateToView: false\n", last_commit_id=None)],
+    )
     with pytest.raises(RevisionConflictError):
         await services.changes.remove(
-            HERZI, "redbull", "cluster-roles", jane_user, last_commit_id="0" * 40
+            HERZI, "redbull", "cluster-roles", jane_user, last_commit_id=read_at
         )
 
 

@@ -1,8 +1,10 @@
 "use client";
 
+import { ProblemList } from "@/components/common/problem-list";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { asNewFile, computeFullFileDiff } from "@/lib/diff";
 import { cn } from "@/lib/utils";
+import { writeErrorTitle } from "@/lib/write-errors";
 
 /** A file a change will write, as the review dialog shows it before the MR opens. */
 export interface PlannedFile {
@@ -47,8 +49,14 @@ export function FilePreview({ file }: { file: PlannedFile }) {
   );
 }
 
-/** Why the service refused the change, inside the dialog that asked for it. */
-export function WriteError({ message }: { message: string }) {
+/**
+ * Why the service refused the change (or that GitLab did not confirm it),
+ * inside the dialog that asked for it. `error` is the thrown error itself,
+ * shown in full (every broken rule and the request id); `message` is a
+ * sentence already made from one.
+ */
+export function WriteError({ error, message }: { error?: unknown; message?: string }) {
+  if (error) return <ProblemList error={error} title={writeErrorTitle(error)} />;
   if (!message) return null;
   return (
     <p role="alert" className="whitespace-pre-line break-words rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">

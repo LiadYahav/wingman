@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Final
 
 from fastapi import FastAPI, Request
@@ -68,16 +68,35 @@ def problem(
     )
 
 
+def app_error_response(request: Request, error: AppError) -> JSONResponse:
+    """The problem for ``error``. A 5xx is logged: a dependency failed, and someone should know."""
+    if error.status >= 500:
+        logger.warning("%s on %s: %s", error.code, request.url.path, error.detail)
+    return problem(
+        request, status=error.status, code=error.code, detail=error.detail, details=error.details
+    )
+
+
+def register_domain_errors[E: Exception](
+    app: FastAPI, base: type[E], to_app_error: Callable[[E], AppError]
+) -> None:
+    """Render a service's own errors (``base`` and its subclasses) the way core renders its own.
+
+    ``to_app_error`` maps one to the problem it becomes; the response then
+    takes the same path as an ``AppError`` raised anywhere, logging included.
+    """
+
+    @app.exception_handler(base)
+    async def handle_domain_error(request: Request, exc: E) -> JSONResponse:
+        return app_error_response(request, to_app_error(exc))
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Route every exception, ours and the framework's, through :func:`problem`."""
 
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
-        if exc.status >= 500:
-            logger.warning("%s on %s: %s", exc.code, request.url.path, exc.detail)
-        return problem(
-            request, status=exc.status, code=exc.code, detail=exc.detail, details=exc.details
-        )
+        return app_error_response(request, exc)
 
     @app.exception_handler(GitError)
     async def handle_git_error(request: Request, exc: GitError) -> JSONResponse:

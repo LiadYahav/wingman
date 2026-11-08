@@ -16,7 +16,7 @@
  */
 
 import Cookies from "js-cookie";
-import type { ErrorCode, Problem, ProblemDetails, RequestFieldError } from "@/types/problem";
+import type { ErrorCode, Problem, ProblemDetails, ProblemItem, RequestFieldError } from "@/types/problem";
 
 const TOKEN_COOKIE = "wingman-token";
 
@@ -69,10 +69,10 @@ export class ApiError extends Error {
     return this.request_id;
   }
 
-  /** `details.problems`: every rule the request broke. */
+  /** `details.problems`: every rule the request broke, one line each. */
   get problems(): string[] {
     const problems = this.details.problems;
-    return Array.isArray(problems) ? problems.map(String) : [];
+    return Array.isArray(problems) ? problems.map(formatProblem) : [];
   }
 
   /** `details.errors`: FastAPI's field-level validation errors. */
@@ -86,6 +86,20 @@ export class ApiError extends Error {
     const lines = [...this.problems, ...this.fieldErrors.map(formatFieldError)];
     return lines.length > 0 ? lines : [this.message];
   }
+}
+
+/**
+ * One `details.problems` entry as a line. day1 sends sentences; day2's bulk
+ * install sends `{team, chart, detail, ...}` per refused item, shown as
+ * `team/chart: detail`.
+ */
+function formatProblem(entry: unknown): string {
+  if (typeof entry === "string") return entry;
+  if (typeof entry !== "object" || entry === null) return String(entry);
+  const item = entry as ProblemItem;
+  if (typeof item.detail !== "string") return JSON.stringify(entry);
+  const subject = [item.team, item.chart].filter((part) => typeof part === "string" && part).join("/");
+  return subject ? `${subject}: ${item.detail}` : item.detail;
 }
 
 /** `["body", "variables", "x"]` → `variables.x: <msg>`. */

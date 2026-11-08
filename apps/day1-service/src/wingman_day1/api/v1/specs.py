@@ -37,12 +37,6 @@ async def list_specs(context: Context, user: CurrentUser) -> list[SpecOut]:
     return [SpecOut.of(entry) for entry in await context.specs.entries()]
 
 
-@router.get("/versions/openshift")
-async def openshift_versions(context: Context, user: CurrentUser) -> list[str]:
-    """Releases offered on the create form (``openshift-versions.txt``)."""
-    return await context.specs.versions()
-
-
 @router.get("/template")
 async def shared_template(context: Context, user: CurrentUser) -> str:
     """The shared ``cluster-template.j2`` (a JSON string, as before)."""

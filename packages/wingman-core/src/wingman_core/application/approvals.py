@@ -16,15 +16,15 @@ merged unseen (ADR-0006).
 
 from __future__ import annotations
 
-import asyncio
+import dataclasses
 import logging
 from collections.abc import Collection
 from dataclasses import dataclass
-from typing import Final
 
-from wingman_core.domain.errors import PermissionDeniedError
+from wingman_core.domain.errors import NotFoundError, PermissionDeniedError
 from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef, MRState
 from wingman_core.domain.mr_conventions import (
+    WINGMAN_LABEL,
     MRMetadata,
     ParsedTitle,
     parse_mr_description,
@@ -34,8 +34,6 @@ from wingman_core.domain.users import User
 from wingman_core.ports.gitlab import GitLabPort
 
 logger = logging.getLogger(__name__)
-
-WINGMAN_LABEL: Final = "wingman"
 
 
 class SelfApprovalError(Exception):
@@ -68,33 +66,40 @@ def describe(merge_request: MergeRequest) -> PendingChange:
 
 
 class Approvals:
-    """List, approve and reject Wingman MRs in a set of projects."""
+    """Read, approve and reject Wingman MRs in a set of projects."""
 
     def __init__(self, gitlab: GitLabPort) -> None:
         """Act through ``gitlab`` (Wingman's service account)."""
         self._gitlab = gitlab
 
-    async def pending(self, project_ids: Collection[int]) -> list[PendingChange]:
-        """Open Wingman MRs across ``project_ids``, newest first."""
-        per_project = await asyncio.gather(
-            *(
-                self._gitlab.list_merge_requests(pid, state=MRState.OPENED, labels=(WINGMAN_LABEL,))
-                for pid in sorted(project_ids)
-            )
-        )
-        changes = [describe(mr) for mrs in per_project for mr in mrs]
-        return sorted(
-            changes, key=lambda c: (c.merge_request.created_at, c.merge_request.ref), reverse=True
-        )
-
     async def get(self, ref: MergeRequestRef, *, managed: Collection[int]) -> PendingChange:
-        """One Wingman MR in a managed project."""
+        """One Wingman MR in a managed project; while it is open, ``sha`` is its branch head.
+
+        GitLab updates an MR's ``sha`` in a background job after a push, so it
+        can still name the commit before the last one. A reviewer must approve
+        what the branch holds (the merge compares the branch head), so the
+        head is read instead; read the diff after this, and approving that
+        ``sha`` merges what the reviewer saw, or less, never more.
+        """
         if ref.project_id not in managed:
             raise UnmanagedProjectError(f"project {ref.project_id} is not managed here")
         merge_request = await self._gitlab.get_merge_request(ref)
         if WINGMAN_LABEL not in merge_request.labels:
             raise UnmanagedProjectError(f"{ref} is not a Wingman merge request")
-        return describe(merge_request)
+        return describe(await self._at_branch_head(merge_request))
+
+    async def _at_branch_head(self, merge_request: MergeRequest) -> MergeRequest:
+        if merge_request.state is not MRState.OPENED:
+            return merge_request
+        try:
+            head = await self._gitlab.list_commits(
+                merge_request.ref.project_id, ref=merge_request.source_branch, limit=1
+            )
+        except NotFoundError:
+            return merge_request
+        if not head or head[0].id == merge_request.sha:
+            return merge_request
+        return dataclasses.replace(merge_request, sha=head[0].id)
 
     async def approve(
         self,

@@ -46,6 +46,32 @@ function VersionDifferences({ differences }: { differences: VersionDifference[] 
   );
 }
 
+/** What the panel looks like while drift is read: the notice line, then a few addon rows. */
+function DriftSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-2 py-4">
+        <Skeleton className="h-4 w-4 shrink-0 rounded-full" />
+        <Skeleton className="h-4 w-72 max-w-full" />
+      </div>
+      <div className="rounded-lg border p-4 space-y-2">
+        <Skeleton className="h-3 w-28" />
+        <div className="divide-y">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between gap-3 py-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+              <Skeleton className="h-3 w-24" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Drift is the spec's day2 addons against what day2 has installed (the file
  * itself is never re-rendered: nothing is stored to re-render from). Only a
@@ -68,20 +94,22 @@ export function ClusterDriftPanel({
   onFixAll: () => void;
   fixAllPending: boolean;
 }) {
-  if (isLoading) return <Skeleton className="h-32 w-full" />;
+  if (isLoading) return <DriftSkeleton />;
   if (error) return <ProblemList error={error} title="Drift could not be loaded" />;
   if (!drift) return null;
 
+  // The version compared against: the spec's current one, else (it is gone) the one created from
+  const comparedVersion = drift.current_spec_version ?? drift.spec_version;
   const specLabel = (
     <>
-      <strong>{drift.spec_name}</strong>{drift.spec_version && <> v{drift.spec_version}</>}
+      <strong>{drift.spec_name}</strong>{comparedVersion && <> v{comparedVersion}</>}
     </>
   );
   const newerSpec =
     drift.current_spec_version && drift.spec_version && drift.current_spec_version !== drift.spec_version ? (
       <p className="text-xs text-muted-foreground mt-1">
-        The spec is now at v{drift.current_spec_version}; this cluster was created from v{drift.spec_version}.
-        Drift compares against the version it was created from.
+        This cluster was created from v{drift.spec_version}; drift compares against the spec as it is now,
+        v{drift.current_spec_version}.
       </p>
     ) : null;
 

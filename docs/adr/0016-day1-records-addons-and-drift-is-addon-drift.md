@@ -1,7 +1,7 @@
 # ADR-0016: Day1 records a spec's addons and their overrides; it never writes day2, and unknown drift is not "in sync"
 
 Date: 2026-11-07
-Status: Accepted; superseded in part by ADR-0025 (version differences) and ADR-0033 (drift also compares the flavor's locked values)
+Status: Accepted; superseded in part by ADR-0025 (version differences) and ADR-0036 (drift also compares the flavor's locked values)
 
 ## Context
 

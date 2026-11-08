@@ -38,15 +38,16 @@ def status_of(app: Any) -> StatusService:
     return context.status
 
 
-async def test_production_reads_the_hosted_cluster_without_the_ocp4_prefix(
+async def test_production_reads_the_hosted_cluster_the_chart_names_after_the_file(
     context: Day1Context,
 ) -> None:
-    # Legacy: it read HostedCluster "ocp4-prod-herzi-site1" in "hcp-prod-herzi-site1";
-    # the chart creates "openshift-prod-herzi-site1" there, so status was always "not found".
+    # The chart names the HostedCluster ocp4-<clusterName> (the file stem) in
+    # hcp-<clusterName>. 3.0.1 asked for openshift-<clusterName>, so every
+    # status read was a 404 on every MCE.
     assert context.status is not None
     status = await context.status.status(HERZI, MCE)
     assert (status.hosted_cluster, status.namespace) == (
-        "openshift-prod-herzi-site1",
+        "ocp4-prod-herzi-site1",
         "hcp-prod-herzi-site1",
     )
     assert status.error is None
@@ -58,7 +59,7 @@ async def test_production_reads_the_hosted_cluster_without_the_ocp4_prefix(
 async def test_the_sandbox_keeps_the_whole_file_stem(
     support: Any, gitlab: InMemoryGitLab, identity: Any, clock: Any
 ) -> None:
-    hub = hub_with("openshift-ocp4-prod-herzi-site1", "hcp-ocp4-prod-herzi-site1")
+    hub = hub_with("ocp4-ocp4-prod-herzi-site1", "hcp-ocp4-prod-herzi-site1")
     app = support.build_app(
         gitlab=gitlab,
         hub=hub,
@@ -84,19 +85,19 @@ async def test_a_clustername_key_in_the_file_wins(
     )
     app = support.build_app(
         gitlab=gitlab,
-        hub=hub_with("openshift-herzi-special", "hcp-herzi-special"),
+        hub=hub_with("ocp4-herzi-special", "hcp-herzi-special"),
         identity=identity,
         day2=FakeDay2Addons(),
         clock=clock,
     )
     status = await status_of(app).status(HERZI, MCE)
-    assert (status.hosted_cluster, status.error) == ("openshift-herzi-special", None)
+    assert (status.hosted_cluster, status.error) == ("ocp4-herzi-special", None)
 
 
 async def test_a_cluster_not_merged_yet_derives_its_name(context: Day1Context) -> None:
     assert context.status is not None
     target = await context.status.hosted_cluster_of("ocp4-prod-new-site1", MCE)
-    assert (target.name, target.namespace) == ("openshift-prod-new-site1", "hcp-prod-new-site1")
+    assert (target.name, target.namespace) == ("ocp4-prod-new-site1", "hcp-prod-new-site1")
 
 
 @pytest.mark.parametrize(
@@ -116,7 +117,7 @@ async def test_a_hub_failure_is_reported_in_the_status(
     status = await status_of(app).status(HERZI, MCE)
     assert status.error is not None
     assert status.error.startswith(f"{kind}:")
-    assert status.hosted_cluster == "openshift-prod-herzi-site1"
+    assert status.hosted_cluster == "ocp4-prod-herzi-site1"
 
 
 class _NodePoolsDown(FakeHubApi):
@@ -131,7 +132,7 @@ async def test_a_node_pool_failure_is_a_hosted_cluster_problem(
         hosted_clusters={
             MCE: [
                 HostedClusterObservation(
-                    "openshift-prod-herzi-site1", "hcp-prod-herzi-site1", None, None, HEALTHY
+                    "ocp4-prod-herzi-site1", "hcp-prod-herzi-site1", None, None, HEALTHY
                 )
             ]
         }
@@ -160,7 +161,7 @@ async def test_unhealthy_conditions_become_problems(
         hosted_clusters={
             MCE: [
                 HostedClusterObservation(
-                    "openshift-prod-herzi-site1",
+                    "ocp4-prod-herzi-site1",
                     "hcp-prod-herzi-site1",
                     None,
                     None,

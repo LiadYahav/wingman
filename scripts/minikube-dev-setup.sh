@@ -3,8 +3,8 @@
 # Run once to get a working local environment.
 #
 # Prerequisites:
-#   brew install minikube helm kubectl docker python3
-#   python-gitlab is installed automatically (via venv) if missing
+#   brew install minikube helm kubectl docker uv
+#   The seed is scripts/dev/seed_gitlab.py (the dev/gitlab-fixtures repos), run with uv.
 #
 # Usage:
 #   ./scripts/minikube-dev-setup.sh [--skip-gitlab] [--skip-seed] [--skip-build]
@@ -35,17 +35,9 @@ error()   { echo -e "${RED}ERROR:${NC} $*"; exit 1; }
 
 # ── Check prerequisites ────────────────────────────────────────────────────────
 info "Checking prerequisites..."
-for cmd in minikube helm kubectl docker python3; do
+for cmd in minikube helm kubectl docker uv openssl; do
   command -v "$cmd" >/dev/null 2>&1 || error "$cmd is required but not installed"
 done
-
-# Always use an isolated venv for the seed script — avoids externally-managed-environment errors
-if [ ! -f "$REPO_ROOT/.venv-seed/bin/python3" ]; then
-  info "Creating seed venv..."
-  python3 -m venv "$REPO_ROOT/.venv-seed"
-  "$REPO_ROOT/.venv-seed/bin/pip" install --quiet python-gitlab
-fi
-PYTHON="$REPO_ROOT/.venv-seed/bin/python3"
 
 # ── Start minikube ─────────────────────────────────────────────────────────────
 info "Starting minikube (4 CPUs, 6GB RAM)..."
@@ -195,13 +187,10 @@ if [ "$SKIP_SEED" = false ]; then
 
   if [ -n "$GITLAB_TOKEN" ]; then
     info "Seeding test data..."
-    "$PYTHON" scripts/seed-test-data.py \
-      --gitlab-url http://localhost:8929 \
-      --token "$GITLAB_TOKEN" \
-      --no-wait
+    uv run python scripts/dev/seed_gitlab.py --url http://localhost:8929 --token "$GITLAB_TOKEN"
   else
     warn "Skipping seed — no token provided. Run manually:"
-    warn "  python3 scripts/seed-test-data.py --gitlab-url http://localhost:8929 --token <token>"
+    warn "  uv run python scripts/dev/seed_gitlab.py --url http://localhost:8929 --token <token>"
   fi
 fi
 
@@ -214,11 +203,12 @@ fi
 # ── Deploy Helm chart ──────────────────────────────────────────────────────────
 if [ -n "$GITLAB_TOKEN" ]; then
   JWT_SECRET=$(openssl rand -hex 32)
-  DEV_SECRET="devpassword"
+  # day1 refuses a DEV_AUTH_SECRET shorter than 32 characters (ADR-0009).
+  DEV_SECRET=$(openssl rand -hex 16)
 
   info "Deploying Helm chart..."
-  helm upgrade --install wingman ./chart \
-    -f chart/values.minikube.yaml \
+  helm upgrade --install wingman ./deploy/helm/wingman \
+    -f deploy/helm/wingman/values.minikube.yaml \
     --set gitlab.accessToken="$GITLAB_TOKEN" \
     --set auth.jwtSecret="$JWT_SECRET" \
     --set devAuth.secret="$DEV_SECRET" \
@@ -236,7 +226,7 @@ if [ -n "$GITLAB_TOKEN" ]; then
   echo "  Wingman is running!"
   echo ""
   echo "  URL:          http://wingman.local"
-  echo "  Login:        dev mode — username: admin, password: ${DEV_SECRET}"
+  echo "  Login:        dev mode — username: admin, secret: ${DEV_SECRET}"
   echo "  Role:         admin (full access)"
   echo ""
   echo "  Dev login endpoint: POST /api/auth/dev-login"
@@ -245,9 +235,9 @@ if [ -n "$GITLAB_TOKEN" ]; then
 else
   warn "Skipping Helm deploy — no GitLab token."
   warn "Once you have a token, run:"
-  warn "  helm upgrade --install wingman ./chart -f chart/values.minikube.yaml \\"
+  warn "  helm upgrade --install wingman ./deploy/helm/wingman -f deploy/helm/wingman/values.minikube.yaml \\"
   warn "    --set gitlab.accessToken=<token> \\"
   warn "    --set auth.jwtSecret=\$(openssl rand -hex 32) \\"
-  warn "    --set devAuth.secret=devpassword \\"
+  warn "    --set devAuth.secret=\$(openssl rand -hex 16) \\"
   warn "    -n wingman --create-namespace"
 fi

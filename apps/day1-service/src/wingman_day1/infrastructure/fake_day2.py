@@ -1,4 +1,4 @@
-"""FakeDay2Addons: a Day2Addons over a fixed table, for tests and ``WINGMAN_GIT_BACKEND=fake``."""
+"""FakeDay2Addons: a Day2Addons over a fixed table, for tests."""
 
 from __future__ import annotations
 

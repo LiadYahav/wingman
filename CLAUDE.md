@@ -4,8 +4,10 @@ Orients a Claude Code session on this repo. `README.md` is the human
 quickstart; `docs/ecosystem/README.md` is how Wingman fits the team-redbull
 platform (read it before changing day1 or day2); `docs/adr/` holds the
 decisions and their reasons; `docs/ops/` holds the operator contracts
-(metrics); `docs/ideas/` holds what could come next and the decisions it
-waits on. The session history is `docs/notes/session-log.md`. Personal,
+(metrics); `docs/upgrade/` tells an agent inside the disconnected
+environment how to upgrade a deployed Wingman (a release that needs
+operator steps adds a guide there); `docs/ideas/` holds what could come
+next and the decisions it waits on. The session history is `docs/notes/session-log.md`. Personal,
 untracked notes (live sandbox URLs, local tokens) are in `CLAUDE.local.md`.
 This file is loaded every session, so it stays short.
 
@@ -21,10 +23,9 @@ workflows, herzi, the hostedclusters-setup chart, the reworked gitops-day2
 layout); the rewrite is in progress (see Current status).
 
 Monorepo: `apps/web` (Next.js 16), `apps/day1-service` and
-`apps/day2-service` (FastAPI), `packages/wingman-core` (the new shared core),
-`packages/shared-python` (legacy shared code, being replaced), `chart/`
-(Helm), `dev/gitlab-fixtures` (production-shaped repo trees for tests and
-local GitLab).
+`apps/day2-service` (FastAPI), `packages/wingman-core` (the shared core),
+`deploy/helm/wingman/` (Helm), `dev/gitlab-fixtures` (production-shaped repo trees for
+tests and local GitLab).
 
 ## Standing project conventions — follow without being re-told
 
@@ -36,7 +37,11 @@ Explicit user instructions; violating one is a real mistake, not style.
 2. **Git: commit and push after each completed stage**, on a feature branch,
    with Conventional Commit subjects (`feat:`, `fix:`, `docs:`, `ci:`,
    `test:`, `refactor:`). One unit of work per commit. Never push to `main`
-   directly; merges go through a PR.
+   directly; merges go through a PR. The subjects since the last release set
+   the next version (ADR-0031): any `feat:`/`feat(<scope>):` makes the merge a
+   minor, any `!` before the colon (`feat!:`, `fix(day1)!:`) a major,
+   otherwise a patch. Only subjects count: a `BREAKING CHANGE:` footer alone
+   does not.
 3. **This repo is public.** Never commit live URLs, tokens, internal hostnames,
    or findings about private systems (e.g. the production export in
    `~/Downloads/stack-export`). Put them in the git-ignored `CLAUDE.local.md`.
@@ -44,8 +49,8 @@ Explicit user instructions; violating one is a real mistake, not style.
    infrastructure/observability → web. `uv run lint-imports` must pass. New
    external systems get a port, an adapter and a fake; never a client call
    from a router.
-5. **GitLab only through `GitLabPort`** (ADR-0002). New code never imports
-   python-gitlab or `wingman_shared.gitlab_client`.
+5. **GitLab only through `GitLabPort`** (ADR-0002). Service code reaches
+   GitLab through the port and its adapter; nothing imports python-gitlab.
 6. **Writes are guarded and never retried** (ADR-0006): updates carry the
    read's `last_commit_id`, merges carry the reviewed `sha`, and an
    `AmbiguousWriteError` is surfaced, not retried.
@@ -75,7 +80,7 @@ Explicit user instructions; violating one is a real mistake, not style.
   (`dev/gitlab-fixtures/wingman/cluster-specs/cluster-template.j2`, verified
   with `helm template` against both chart copies); fixtures; the
   `wingman-core` foundation (GitLab port, httpx adapter, in-memory fake,
-  contract suite passing 29/29 on the fake and on GitLab CE 19.5.3, RFC 9457
+  contract suite passing 30/30 on the fake and on GitLab CE 19.5.3, RFC 9457
   errors, metrics, settings, auth, cache, approvals); CI and
   `scripts/gate.sh`; ADRs 0001-0011; monitoring in the chart (ServiceMonitor,
   7 promtool-tested alerts with a runbook, a Grafana dashboard, all off by
@@ -90,19 +95,28 @@ Explicit user instructions; violating one is a real mistake, not style.
   lints, one MR per team; ADRs 0020-0024), held to the team's
   `render_chain.py` by an oracle test and run against GitLab CE 19.5.3.
   Web-visible API changes: `docs/notes/2026-11-07-day2-api-changes.md`.
-- Done: CI's supply chain and releases (ADR-0030, ADR-0032): hash-pinned
-  per-service exports, the web image from the root lock, build on every PR,
-  publish and release from main, a blocking npm audit, a nightly live-GitLab
-  run.
+- Done: CI's supply chain and releases (ADR-0030, ADR-0031, ADR-0032):
+  hash-pinned per-service exports, the web image from the root lock, build on
+  every PR, every merge to main a release versioned from its commits, a
+  blocking npm audit, a nightly live-GitLab run.
 - Done: both service images install only from the hash-pinned exports
   (`docs/ops/images.md`); the chart sets exactly the variables the services
   read (`tests/repo/test_chart_env_contract.py`) and probes
   `/health/live`/`/health/ready`.
-- **Not done yet, in order:** (1) web pages for the new data and both API
-  change notes; (2) end-to-end check of the whole stack against the seeded
-  local GitLab; (3) chart hardening (a values schema, a pinned nginx image);
-  (4) ecosystem features (servers per hosted cluster from server-scan,
-  workflow runs).
+- Done (2026-11-08): the web on both new APIs (shared dropdown, searchable
+  combobox, empty, loading and error states); the whole stack checked live
+  against the seeded local GitLab; report-only version drift (ADR-0025); the
+  legacy `wingman-shared` removed; the delete dialog ready for the
+  delete-cluster workflow (ADR-0033); OpenShift versions per MCE from the
+  day1 repo's upgrade ladder; `docs/ideas/`, `docs/upgrade/`.
+- Done (2026-11-08): the day1, specs and team repos are read once per commit
+  from GitLab's archive (ADR-0035); the catalog on a production-sized repo went
+  from 9 s and 357 GitLab calls per load to 0.03 s cached, 0.46 s after the TTL.
+- **Not done yet, in order:** (1) flavors v2 (`docs/ideas/flavors-v2.md`;
+  stages 1 and 2 on `roiblum/feat-flavors-v2`, the web pages to build);
+  (2) the architect's
+  answers (`docs/ideas/architecture-fit.md`); (3) chart hardening (a values
+  schema, a pinned nginx image); (4) ecosystem features (`docs/ideas/`).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -115,7 +129,7 @@ Explicit user instructions; violating one is a real mistake, not style.
   workflow on the MR branch; `mcFiles`/`mcConfigMap` by CI. Wingman writes
   none of them, and must expect those commits on its MR branches.
 - **`clusterName` differs**: production's ApplicationSet strips `ocp4-` from
-  the file name (`openshift-prod-x-site1` in `hcp-prod-x-site1`); the GitHub
+  the file name (HostedCluster `ocp4-prod-x-site1` in `hcp-prod-x-site1`); the GitHub
   sandbox keeps it. Day1 follows `DAY1_CLUSTER_NAME_STRIP_PREFIX` (default
   `ocp4-`; `""` for the sandbox; ADR-0015). See `docs/ecosystem/README.md`.
 - **Naming convention** `ocp4-<env>-<name>-<site>[-<seq>]`; the chart derives
@@ -126,6 +140,11 @@ Explicit user instructions; violating one is a real mistake, not style.
   and its `sha` after a push are computed by background jobs, and a merged
   source branch is deleted later. The adapter handles the first three (a
   merge checks the branch head itself); don't assume the fourth.
+- **A read's `last_commit_id` is the commit the repo was read at**, not the
+  file's own last change (ADR-0035: repos are read once per commit, from
+  GitLab's archive). It is a valid write guard, since GitLab checks "changed
+  since that commit". Never decide staleness with `expected != current`: use
+  `RepoReads.changed_since`. For "changed by, at", use `last_change`.
 - **ty honours only `# type: ignore` or `# ty: ignore[rule]`**, never a
   mypy-style `# type: ignore[code]` (ADR-0008).
 - **Next.js 16 / React 19 / Tailwind 4 / zod 4** differ from older docs. Read
@@ -170,7 +189,7 @@ any unmocked endpoint's 401 redirects to `/login`.
 
 The live GitLab contract runs nightly in CI (`.github/workflows/live-gitlab.yml`)
 and fails unless every live test ran. Only GitHub can run the publish jobs
-(tag, push, release notes; ADR-0030).
+(the computed version, tag, push, release notes; ADR-0030, ADR-0031).
 
 Then the step no command covers: re-read the docs your change made wrong.
 
@@ -186,7 +205,10 @@ ADR-0032). The pass:
    one more `gh api repos/<o>/<r>/git/tags/<sha> --jq .object.sha`). Never
    copy a SHA from a README; server-scan was broken twice by tags that do not
    exist. Then `scripts/gate.sh ci`: zizmor refuses a tag pin and a comment that
-   names another tag.
+   names another tag. `PaulHatch/semantic-version`'s defaults are the
+   versioning rule (convention 2, ADR-0031): before bumping it, check that its
+   `action.yml` defaults (`major_pattern`, `minor_pattern`,
+   `search_commit_body`, `bump_each_commit`) did not change.
 2. **Downloaded tools.** `scripts/ci-tools.sh` (actionlint, zizmor,
    shellcheck), `scripts/install-helm.sh` and the promtool step in `ci.yml`:
    new version plus every checksum, from the release's checksum file or the
@@ -224,12 +246,16 @@ ADR-0032). The pass:
 - Roles come from OpenShift groups (`WINGMAN_ADMIN_GROUPS` /
   `WINGMAN_VIEWER_GROUPS`) and travel in the app JWT; both services share
   `JWT_SECRET_KEY`. `AdminUser` guards writes, `CurrentUser` reads.
-- Images (docs/ops/images.md, ADR-0030): CI builds all three on every PR and
-  pushes `ghcr.io/<owner>/wingman-{day1,day2,web}` from main as `<short_sha>`
-  and `latest`; `v<VERSION>` only when VERSION names a new, higher version
-  (that commit is the release: git tag, signed provenance, release notes).
-  Never re-point or lower a version. Manual production builds are tagged with
-  the commit SHA.
+- Images (docs/ops/images.md, ADR-0030, ADR-0031): CI builds all three on
+  every PR. Every merge to main is a release: `PaulHatch/semantic-version`
+  computes `X.Y.Z` from the commit subjects since the last `v*` tag
+  (convention 2), `scripts/release.py plan` refuses one that exists or moves
+  backwards, and CI creates the git tag `v<X.Y.Z>`, pushes
+  `ghcr.io/<owner>/wingman-{day1,day2,web}` as `X.Y.Z`, `X.Y`, `X`, `latest`
+  and `sha-<short_sha>` with signed provenance, and writes the release notes.
+  There is no `VERSION` file (retired after v3.0.0). Deploy `X.Y.Z`, never
+  `latest` or a `sha-` tag; a manual production build is of a release tag and
+  named by its version.
 
 ## Where to continue right now
 
@@ -237,18 +263,24 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-07 — integration of day1, day2 and CI.** Branch
-`roiblum/feat-ecosystem-day1-day2`. Merged the three agent branches: day1
-(`wingman_day1`, ADRs 0012-0019), day2 (`wingman_day2`, ADRs 0020-0024) and
-CI (ADRs 0030-0032). Session tokens now expire by the injected clock. All
-Python packages except the legacy `wingman-shared` are on the strict bar
-(`scripts/python-packages.sh`). Run locally: day1 `uv run uvicorn
-wingman_day1.main:app --port 8001`, day2 `uv run uvicorn
-wingman_day2.main:app --port 8002` (env in each `settings.py`; both read
-`GITLAB_TOKEN`; `WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake`
-for the fixtures). **Next:** the web pages for both API change notes
-(`docs/notes/2026-11-07-day{1,2}-api-changes.md`), the chart env, an
-end-to-end run of the whole stack. **Deferred:** ArgoCD sync/status (no Argo
-API access), `exclusions.yaml` edits, OCP-version pin MRs. **Open:** team
-questions 2 (`clusterName`) and 3 (off-convention MCEs) in
-`docs/ecosystem/README.md`.
+**2026-11-08 — PR #20 released 3.1.0; repos read once per commit (ADR-0035).**
+PR #20: a renamed chart repo no longer fails the catalog (`get_project` follows
+GitLab's rename redirect, `chart-repo-unreadable`, `repourl-moved` on the Lints
+page); the ladder is read without `schemaVersion`; CI retries tool downloads.
+Then, on `roiblum/feat-repo-snapshots` (the user chose it):
+- `GitLabPort.get_branch` and `read_archive`, with `RepoSnapshots` in core;
+- day1 and day2 read files and trees through them;
+- a read's `last_commit_id` is now the commit read at (see the key facts);
+- day1's stale check asks `changed_since`, and "changed by" comes from
+  `last_change`.
+Old and new answers were compared on scaled local data and are identical.
+
+**Next:**
+- day1's first cluster list after a merge still costs one history lookup per
+  cluster; carry unchanged files forward from a compare (ADR-0035,
+  Consequences);
+- flavors v2 on `roiblum/feat-flavors-v2`: stage 2's sync is half done in the
+  worktree `agent-a35695ba357fd9bb2` as a WIP commit; then stage 3, the web
+  pages and the flavor page redesign (apple-design skill); an upgrade guide
+  for its operator steps. Merge main into it first: its ADRs 0033 and 0034
+  collide with main's and become 0036 and 0037.

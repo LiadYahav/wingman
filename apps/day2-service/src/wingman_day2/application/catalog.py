@@ -11,7 +11,7 @@ import asyncio
 import re
 from dataclasses import dataclass, field
 
-from wingman_core.domain.errors import InvalidRepoPathError
+from wingman_core.domain.errors import GitError, GitUnavailableError, InvalidRepoPathError
 from wingman_core.domain.git import Project, RepoPath
 from wingman_day2.application.apps import LoadedLayer, load_layers
 from wingman_day2.application.topology import TeamState, TopologyService
@@ -26,6 +26,7 @@ from wingman_day2.domain.deploy_config import (
     SYNC_POLICY,
     TARGET_REVISION,
     miscased_repourl_keys,
+    repourl_moved_to,
     truthy,
 )
 from wingman_day2.domain.errors import UnknownChartError
@@ -62,13 +63,62 @@ def _chart_path(text: str) -> RepoPath:
     return RepoPath.root() if text in ("", DEFAULT_PATH) else RepoPath(text.strip("/"))
 
 
+def unreadable(repo_url: str, exc: GitError) -> str:
+    """Why one chart repo could not be read, for that chart alone.
+
+    A chart repo GitLab refuses (no access, an answer Wingman does not expect)
+    is a problem of that chart, shown on it; the rest of the page still loads.
+    GitLab being unreachable is not caught: then every read fails, and the page
+    says so (ADR-0004).
+    """
+    return f"{repo_url} could not be read, so its versions and default values are not shown: {exc}"
+
+
+@dataclass(frozen=True, slots=True)
+class ChartRepoCheck:
+    """A ``repourl`` looked up: its project, or why it could not be read."""
+
+    repo_url: str
+    project: Project | None
+    problem: str | None = None
+
+
+async def check_chart_repo(charts: ChartRepository, repo_url: str) -> ChartRepoCheck:
+    """Look ``repo_url`` up; only GitLab being unreachable raises (see :func:`unreadable`)."""
+    try:
+        return ChartRepoCheck(repo_url, await charts.resolve(repo_url))
+    except GitUnavailableError:
+        raise
+    except GitError as exc:
+        return ChartRepoCheck(repo_url, None, unreadable(repo_url, exc))
+
+
+def chart_repo_findings(check: ChartRepoCheck, *, path: str, **where: str) -> list[Finding]:
+    """What is wrong with the ``repourl`` that ``path`` sets: unreadable, or moved."""
+    if check.problem is not None:
+        return [error(Rule.CHART_REPO_UNREADABLE, check.problem, path=path, **where)]
+    project = check.project
+    moved_to = repourl_moved_to(check.repo_url, project) if project else None
+    if project is None or moved_to is None:
+        return []
+    message = (
+        f"{path} sets `repourl: {check.repo_url}`, but GitLab moved that project to "
+        f"{project.path_with_namespace} (renamed or transferred). The old path only "
+        f"redirects, until a new project takes it: set `repourl: {moved_to}`"
+    )
+    return [warning(Rule.REPOURL_MOVED, message, path=path, **where)]
+
+
 async def chart_values(
     charts: ChartRepository, repo_url: str, revision: str, path: str
 ) -> ChartValues:
     """The chart's ``values.yaml`` at ``revision`` under ``path``, from its repo on this GitLab."""
     if not repo_url:
         return ChartValues(None, revision, path, problem="no repourl: the chart repo is unknown")
-    project = await charts.resolve(repo_url)
+    check = await check_chart_repo(charts, repo_url)
+    project = check.project
+    if check.problem is not None:
+        return ChartValues(None, revision, path, problem=check.problem)
     if project is None:
         return ChartValues(
             None,
@@ -80,7 +130,12 @@ async def chart_values(
         folder = _chart_path(path)
     except InvalidRepoPathError:
         return ChartValues(project, revision, path, problem=f"invalid chart path {path!r}")
-    file = await charts.values(project, revision, folder)
+    try:
+        file = await charts.values(project, revision, folder)
+    except GitUnavailableError:
+        raise
+    except GitError as exc:
+        return ChartValues(project, revision, path, problem=unreadable(repo_url, exc))
     if file is None:
         return ChartValues(
             project,
@@ -187,12 +242,13 @@ class CatalogService:
         )
         findings = self._findings(state.team.name, chart, deploy, values)
         repo_url = deploy.values.get(REPOURL)
-        project = await self._charts.resolve(str(repo_url)) if truthy(repo_url) else None
-        versions = None
-        if with_versions and project is not None:
-            versions = tuple(
-                version_order(project.default_branch, await self._charts.branches(project))
-            )
+        project, versions, repo_findings = await self._chart_repo(
+            str(repo_url) if truthy(repo_url) else "",
+            with_versions=with_versions,
+            path=str(deploy.layer.path),
+            where={"team": state.team.name, "chart": chart},
+        )
+        findings += repo_findings
         return CatalogEntry(
             state.team.name,
             chart,
@@ -204,6 +260,25 @@ class CatalogService:
             project,
             tuple(findings),
         )
+
+    async def _chart_repo(
+        self, repo_url: str, *, with_versions: bool, path: str, where: dict[str, str]
+    ) -> tuple[Project | None, tuple[str, ...] | None, list[Finding]]:
+        """The chart repo, its versions, and what is wrong with the ``repourl``."""
+        if not repo_url:
+            return None, None, []
+        check = await check_chart_repo(self._charts, repo_url)
+        versions = None
+        if with_versions and check.project is not None:
+            try:
+                branches = await self._charts.branches(check.project)
+            except GitUnavailableError:
+                raise
+            except GitError as exc:
+                check = ChartRepoCheck(repo_url, None, unreadable(repo_url, exc))
+            else:
+                versions = tuple(version_order(check.project.default_branch, branches))
+        return check.project, versions, chart_repo_findings(check, path=path, **where)
 
     @staticmethod
     def _findings(team: str, chart: str, deploy: LoadedLayer, values: LoadedLayer) -> list[Finding]:

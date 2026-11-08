@@ -1,6 +1,6 @@
 """Drift: does a cluster still match its flavor?
 
-Two things make a linked cluster ``drifted`` (ADR-0033):
+Two things make a linked cluster ``drifted`` (ADR-0036):
 
 - **value drift**: a value the flavor locks that the cluster file does not
   hold (``wingman_day1.domain.value_drift``). Presets never drift.
@@ -63,7 +63,7 @@ class ClusterDrift:
     """The flavor version the file's header names (the one it was created or synced from)."""
     current_spec_version: str | None = None
     value_drift: tuple[ValueDrift, ...] = ()
-    """Locked values the cluster file does not hold (ADR-0033)."""
+    """Locked values the cluster file does not hold (ADR-0036)."""
     addon_drift: tuple[AddonDrift, ...] = ()
     """Flavor add-ons the cluster does not have, which day2 can install."""
     version_differences: tuple[VersionDifference, ...] = ()

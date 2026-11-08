@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 
 from wingman_core.web.errors import (
     AlreadyExists,
@@ -11,7 +10,7 @@ from wingman_core.web.errors import (
     NotFound,
     ValidationFailed,
 )
-from wingman_core.web.exception_handlers import problem
+from wingman_core.web.exception_handlers import register_domain_errors
 from wingman_day2.domain.errors import (
     AmbiguousClusterError,
     ChangeRefusedError,
@@ -46,14 +45,4 @@ def as_app_error(error: Day2Error) -> AppError:
 
 def register_day2_errors(app: FastAPI) -> None:
     """Render every ``Day2Error`` as a problem document."""
-
-    @app.exception_handler(Day2Error)
-    async def handle_day2_error(request: Request, exc: Day2Error) -> JSONResponse:
-        error = as_app_error(exc)
-        return problem(
-            request,
-            status=error.status,
-            code=error.code,
-            detail=error.detail,
-            details=error.details,
-        )
+    register_domain_errors(app, Day2Error, as_app_error)

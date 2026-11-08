@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from typing import Any
+
 import pytest
 
 from wingman_core.application.approvals import SelfApprovalError, UnmanagedProjectError
@@ -15,7 +18,6 @@ from wingman_day2.application.approvals import FileEdit
 from wingman_day2.application.changes import ChangeResult, InstallSpec
 from wingman_day2.application.services import Day2Services
 from wingman_day2.domain.errors import ChangeRefusedError, UnknownTeamError
-from wingman_day2.infrastructure import cache_keys
 
 HERZI = "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1"
 HERZI_DIR = "sites/site1/prod/mces/ocp4-prod-mce-site1-a/ocp4-prod-herzi-site1"
@@ -76,7 +78,7 @@ async def test_nobody_approves_their_own_change_and_a_moved_branch_is_not_merged
 async def test_detail_edit_and_reject(
     services: Day2Services, gitlab: InMemoryGitLab, jane_user: User, bob_user: User
 ) -> None:
-    await install(services, jane_user, "redbull", "bmhgen")
+    installed = await install(services, jane_user, "redbull", "bmhgen")
     change, diffs = await services.approvals.detail("redbull", 1)
     path = f"{HERZI_DIR}/bmhgen/values.yaml"
     assert [str(d.new_path) for d in diffs] == [path]
@@ -93,9 +95,11 @@ async def test_detail_edit_and_reject(
     assert gitlab.snapshot(edited.change.merge_request.ref.project_id, branch)[path] == (
         "replicas: 5\n"
     )
+    # Read at the install commit; bob's edit changed the file after it.
+    stale = installed.merge_request.sha
     with pytest.raises(RevisionConflictError):
         await services.approvals.edit(
-            "redbull", 1, [FileEdit(path, "replicas: 6\n", "0" * 40)], "", bob_user
+            "redbull", 1, [FileEdit(path, "replicas: 6\n", stale)], "", bob_user
         )
     closed = await services.approvals.reject("redbull", 1)
     assert closed.state is MRState.CLOSED
@@ -149,6 +153,19 @@ async def test_history_commits_mrs_and_diffs_across_teams(
     assert await services.audit.cluster_history("ocp4-upgrade-demo") == []
 
 
+async def test_audit_mrs_are_newest_created_first_whatever_was_updated_last(
+    services: Day2Services, jane_user: User, bob_user: User
+) -> None:
+    # As day1's audit and the web's merged list: by creation, not by update.
+    older = await install(services, jane_user, "redbull", "bmhgen")
+    await install(services, jane_user, "lynx", "backup")
+    await services.approvals.approve("redbull", 1, sha=older.merge_request.sha, approver=bob_user)
+    mrs = await services.audit.merge_requests(per_page=10, page=1)
+    assert [m.team for m in mrs] == ["lynx", "redbull"]
+    [first] = await services.audit.merge_requests(per_page=1, page=1)
+    assert first.team == "lynx"
+
+
 # ── cache invalidation: each fails if its write path stops invalidating ─────
 
 
@@ -180,13 +197,42 @@ async def test_rejecting_clears_the_pending_list(services: Day2Services, jane_us
 
 
 async def test_writes_clear_exactly_the_project_they_changed(
-    services: Day2Services, cache: TtlCache, gitlab: InMemoryGitLab, jane_user: User
+    services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
 ) -> None:
     await services.topology.load()
-    redbull = (await gitlab.get_project("sigs/redbull")).id
-    lynx = (await gitlab.get_project("sigs/lynx")).id
-    assert cache.invalidate_prefix(cache_keys.project_prefix(lynx)) > 0
-    await services.topology.load()
+    # Changes Wingman did not make: each repo shows them only once its head is checked again.
+    for team in ("redbull", "lynx"):
+        await gitlab.commit(
+            (await gitlab.get_project(f"sigs/{team}")).id,
+            branch="main",
+            message="outside Wingman",
+            changes=[FileChange.create(RepoPath("operators/outside/outside.yaml"), "a: 1\n")],
+        )
     await install(services, jane_user, "redbull", "bmhgen")
-    assert cache.invalidate_prefix(cache_keys.project_prefix(redbull)) == 0
-    assert cache.invalidate_prefix(cache_keys.project_prefix(lynx)) > 0
+    topology = await services.topology.load()
+    seen = {s.team.name: s.repo.tree.is_dir(RepoPath("operators/outside")) for s in topology.teams}
+    assert (seen["redbull"], seen["lynx"]) == (True, False)
+
+
+async def test_each_repo_is_read_once_per_commit(
+    services: Day2Services, gitlab: InMemoryGitLab, cache: TtlCache, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: Counter[str] = Counter()
+    for name in ("get_branch", "read_archive", "read_file", "list_tree"):
+        method = getattr(gitlab, name)
+
+        def counted(*args: object, _name: str = name, _method: Any = method, **kw: object) -> Any:
+            calls[_name] += 1
+            return _method(*args, **kw)
+
+        monkeypatch.setattr(gitlab, name, counted)
+    await services.catalog.entries()
+    repos = calls["read_archive"]
+    assert repos == len(await gitlab.list_group_projects("sigs")) + 1  # the teams and day1
+    assert calls["read_file"] == calls["list_tree"] == 0
+    calls.clear()
+    await services.catalog.entries()
+    assert calls == Counter()  # within the TTL: nothing
+    cache.invalidate_prefix("snapshot-head:")  # as when the TTL runs out
+    await services.catalog.entries()
+    assert calls == Counter(get_branch=repos)  # one head check per repo, no file read

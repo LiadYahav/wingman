@@ -1,4 +1,5 @@
 import { Page, Locator } from "@playwright/test";
+import { go } from "../fixtures/api-handlers";
 
 /** The two-step create form at /clusters/new: choose a spec, then configure the cluster. */
 export class ClusterNewPage {
@@ -10,6 +11,8 @@ export class ClusterNewPage {
   readonly versionSelect: Locator;
   readonly versionInput: Locator;
   readonly versionSource: Locator;
+  readonly versionProblems: Locator;
+  readonly versionPresetNote: Locator;
   readonly offConventionMces: Locator;
   readonly formProblems: Locator;
   readonly reviewButton: Locator;
@@ -24,18 +27,18 @@ export class ClusterNewPage {
     this.versionSelect = page.getByTestId("ocp-version-select");
     this.versionInput = page.getByTestId("ocp-version-input");
     this.versionSource = page.getByTestId("ocp-version-source");
+    this.versionProblems = page.getByTestId("ocp-version-problems");
+    this.versionPresetNote = page.getByTestId("ocp-version-preset-note");
     this.offConventionMces = page.getByTestId("off-convention-mces");
     this.formProblems = page.getByTestId("form-problems");
     this.reviewButton = page.getByTestId("review-button");
-    this.reviewDialog = page.getByRole("dialog");
+    // By name: an open (or closing) combobox popup is a dialog too
+    this.reviewDialog = page.getByRole("dialog", { name: /^Review/ });
   }
 
   /** Land on "/" first so the persisted session hydrates, then open the form. */
   async goto() {
-    await this.page.goto("/");
-    await this.page.waitForLoadState("domcontentloaded");
-    await this.page.goto("/clusters/new");
-    await this.page.waitForLoadState("domcontentloaded");
+    await go(this.page, "/clusters/new");
   }
 
   specCard(name: string): Locator {

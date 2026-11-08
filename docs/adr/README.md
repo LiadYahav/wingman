@@ -31,9 +31,9 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0008](0008-ty-type-checker.md) | ty is the type checker, as in server-scan |
 | [0009](0009-settings-fail-closed.md) | Settings refuse insecure or fake-in-production configurations at start-up |
 | [0010](0010-metrics-are-a-contract.md) | Metrics follow one catalogue with bounded labels, served off the public Route |
-| [0011](0011-per-replica-read-cache.md) | GitLab reads are cached per replica for seconds; writes clear what they made stale |
+| [0011](0011-per-replica-read-cache.md) | GitLab reads are cached per replica for seconds; writes clear what they made stale (files and trees: ADR-0035) |
 | [0012](0012-day1-values-file-and-key-ownership.md) | A cluster file is a chart values file; people and automation own disjoint keys |
-| [0013](0013-sandboxed-template-and-spec-presets.md) | The cluster file is rendered from the shared template in a sandbox; specs are value presets |
+| [0013](0013-sandboxed-template-and-spec-presets.md) | The cluster file is rendered from the shared template in a sandbox; specs are value presets (its release list superseded by ADR-0034) |
 | [0014](0014-cluster-and-mce-naming-rules.md) | New cluster names follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing ones are flagged, not hidden |
 | [0015](0015-cluster-name-derivation-setting.md) | How a file stem becomes the chart's `clusterName` is a setting; production's rule is the default |
 | [0016](0016-day1-records-addons-and-drift-is-addon-drift.md) | Day1 records a spec's addons and overrides, never writes day2, and unknown drift is not "in sync" |
@@ -50,8 +50,11 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0027](0027-machine-configs-from-mc-files-and-nodepool-defaults.md) | Machine configs come from mc-files and are checked; new nodepools start from the team's defaults |
 | [0028](0028-owner-fields-are-numbers.md) | The owner fields are numbers |
 | [0029](0029-a-configs-rule-locks-every-nodepool.md) | A flavor can lock every nodepool's configs as one rule (`nodepools[*].configs`), compared exactly by name, in any order |
-| [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main |
-| [0031](0031-commit-derived-versions.md) | (Proposed) Derive the version from Conventional Commits, as server-scan and herzi do |
+| [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main (superseded in part by 0031) |
+| [0031](0031-commit-derived-versions.md) | Every merge to main is a release whose version comes from Conventional Commits, as in server-scan |
 | [0032](0032-ci-supply-chain.md) | CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks |
-| [0033](0033-day1-drift-is-locked-values-and-missing-addons.md) | Day1 drift is the flavor's locked values the file does not hold, and its missing add-ons; unknown is never in sync |
-| [0034](0034-import-and-sync-edit-the-cluster-file-text.md) | Existing clusters join a flavor by one MR that writes only the link; cluster files are edited as text, checked, never round-tripped |
+| [0033](0033-delete-cluster-workflow-contract.md) | The delete-cluster workflow has a contract and a ready web panel; both say "not available yet" until it exists |
+| [0034](0034-openshift-versions-from-the-upgrade-ladder.md) | A new cluster's OpenShift versions come from the upgrade ladder, per MCE; an MCE without its file offers none |
+| [0035](0035-read-each-repo-once-per-commit.md) | The day1, specs and team repos are read once per commit, from GitLab's archive; a read's `last_commit_id` is the commit read at |
+| [0036](0036-day1-drift-is-locked-values-and-missing-addons.md) | Day1 drift is the flavor's locked values the file does not hold, and its missing add-ons; unknown is never in sync |
+| [0037](0037-import-and-sync-edit-the-cluster-file-text.md) | Existing clusters join a flavor by one MR that writes only the link; cluster files are edited as text, checked, never round-tripped |

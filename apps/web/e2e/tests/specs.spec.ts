@@ -7,7 +7,7 @@
 
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { catalogEntry } from "../fixtures/addons";
-import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { go, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
 import { SpecEditPage } from "../pages/spec-edit.page";
 import { SpecNewPage } from "../pages/spec-new.page";
 import type { CatalogEntry, ErrorCode, MRDetail, SpecCluster, SpecDrift, SpecEntry } from "../../types";
@@ -114,10 +114,7 @@ async function open(page: Page, path: string, routes: (page: Page) => Promise<vo
   await page.route("**/api/day1/specs/template/schema**", (r) => json(r, SCHEMA));
   await page.route("**/api/day1/specs/agent-standard", (r) => json(r, STANDARD));
   await routes(page);
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
+  await go(page, path);
 }
 
 // ── List ─────────────────────────────────────────────────────────────────────

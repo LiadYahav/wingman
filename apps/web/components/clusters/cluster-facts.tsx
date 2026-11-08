@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Clock3, ExternalLink, FileWarning, TriangleAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/utils";
 import type { ClusterDetail, ClusterValues } from "@/types";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -89,7 +90,7 @@ export function ClusterInfoCard({ cluster }: { cluster: ClusterDetail }) {
         <Row label="Last change">
           {cluster.metadata.created_by || "—"}
           {cluster.metadata.created_at && (
-            <span className="text-muted-foreground font-normal"> · {new Date(cluster.metadata.created_at).toLocaleDateString("en-GB")}</span>
+            <span className="text-muted-foreground font-normal"> · {formatDate(cluster.metadata.created_at)}</span>
           )}
         </Row>
         <div className="pt-1 border-t border-border/50">

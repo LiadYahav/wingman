@@ -18,6 +18,7 @@ from wingman_core.domain.users import Role, User
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.infrastructure.session_tokens import SessionTokens
+from wingman_core.infrastructure.snapshots import RepoSnapshots
 from wingman_core.settings import AuthSettings, Environment, GitBackend, RuntimeSettings
 from wingman_core.testing.fixtures import (
     FixtureProject,
@@ -79,14 +80,19 @@ def cache() -> TtlCache:
 
 
 @pytest.fixture
-def sigs(gitlab: InMemoryGitLab, cache: TtlCache) -> GitLabSigsRepository:
-    return GitLabSigsRepository(gitlab, cache, group="sigs", branch="main", ttl=30)
+def snapshots(gitlab: InMemoryGitLab, cache: TtlCache) -> RepoSnapshots:
+    return RepoSnapshots(gitlab, cache, ttl=30)
 
 
 @pytest.fixture
-def day1(gitlab: InMemoryGitLab, cache: TtlCache) -> GitLabDay1Repository:
+def sigs(gitlab: InMemoryGitLab, cache: TtlCache, snapshots: RepoSnapshots) -> GitLabSigsRepository:
+    return GitLabSigsRepository(gitlab, cache, snapshots, group="sigs", branch="main", ttl=30)
+
+
+@pytest.fixture
+def day1(gitlab: InMemoryGitLab, cache: TtlCache, snapshots: RepoSnapshots) -> GitLabDay1Repository:
     return GitLabDay1Repository(
-        gitlab, cache, project="gitops-day1/platform-config", branch="main", ttl=30
+        gitlab, cache, snapshots, project="gitops-day1/platform-config", branch="main", ttl=30
     )
 
 
@@ -142,7 +148,8 @@ ClientFor = Callable[[User | None], httpx.AsyncClient]
 @pytest.fixture
 async def client_for(app: FastAPI) -> AsyncIterator[ClientFor]:
     """A factory of API clients logged in as a user (``None``: no token)."""
-    tokens = SessionTokens(SECRET, ttl=timedelta(hours=1))
+    # The app's own tokens: they run on its injected clock, as the services do.
+    tokens: SessionTokens = app.state.session_tokens
     clients: list[httpx.AsyncClient] = []
 
     def make(user: User | None) -> httpx.AsyncClient:

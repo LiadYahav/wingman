@@ -1,4 +1,4 @@
-"""Value drift: a flavor's locked values against a cluster file (ADR-0033)."""
+"""Value drift: a flavor's locked values against a cluster file (ADR-0036)."""
 
 from __future__ import annotations
 

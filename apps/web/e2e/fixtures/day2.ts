@@ -1,5 +1,6 @@
-import type { Page, Route } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { mockAddons } from "./addons";
+import { json } from "./api-handlers";
 import type {
   BulkBody,
   BulkResult,
@@ -29,7 +30,7 @@ export const TWIN_IDS = ["hosted:site1:prod:mce-a:twin", "hosted:site2:prep:mce-
 
 const HOSTED_FOLDER = `sites/site1/prod/mces/mce-a/${HOSTED_NAME}`;
 
-export function finding(overrides: Partial<Finding> & Pick<Finding, "rule" | "message">): Finding {
+function finding(overrides: Partial<Finding> & Pick<Finding, "rule" | "message">): Finding {
   return { severity: "warning", team: "", path: "", cluster: "", chart: "", ...overrides };
 }
 
@@ -142,7 +143,7 @@ export function hostedCharts(): DestinationCharts {
   };
 }
 
-function destination(id: string, overrides: Partial<Destination> = {}): Destination {
+export function destination(id: string, overrides: Partial<Destination> = {}): Destination {
   const [kind, site = "", env = "", ...rest] = id.split(":");
   const name = id === "hub" ? "hub" : (rest[rest.length - 1] ?? "");
   return {
@@ -161,7 +162,7 @@ function destination(id: string, overrides: Partial<Destination> = {}): Destinat
   };
 }
 
-export const destinations: Destination[] = [
+const destinations: Destination[] = [
   destination("hub", { teams: ["platform", "observability"] }),
   destination(MCE_ID),
   destination(HOSTED_ID, { teams: ["platform", "observability"] }),
@@ -169,7 +170,7 @@ export const destinations: Destination[] = [
   ...TWIN_IDS.map((id) => destination(id)),
 ];
 
-export const lints: Finding[] = [
+const lints: Finding[] = [
   finding({
     rule: "repourl-missing",
     severity: "error",
@@ -266,7 +267,7 @@ export function previewOf(team: string, chart: string, override?: Values): Value
 
 let iid = 40;
 
-export function changeResult(team: string, verb: string, chart: string, files: ChangeResult["files"], notes: string[]): ChangeResult {
+function changeResult(team: string, verb: string, chart: string, files: ChangeResult["files"], notes: string[]): ChangeResult {
   iid += 1;
   return {
     iid,
@@ -305,9 +306,6 @@ export function problem(status: number, code: string, detail: string, details: R
     body: JSON.stringify({ type: `/problems/${code.toLowerCase()}`, title: code, status, detail, instance: "", code, request_id: "req_test", details }),
   };
 }
-
-const json = (route: Route, body: unknown, status = 200) =>
-  route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
 /** Requests the page made, for assertions on what it sent. */
 export interface Day2Requests {

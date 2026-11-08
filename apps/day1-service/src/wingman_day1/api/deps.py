@@ -23,7 +23,7 @@ from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
-from wingman_day1.ports import RepoReads
+from wingman_day1.ports import ClusterDeleteWorkflow, RepoReads
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +45,8 @@ class Day1Context:
     webhook_secret: str | None = None
     """``None`` when ``GITLAB_WEBHOOK_SECRET`` is empty: the webhook route answers 404."""
     status_poll_seconds: float = 30.0
+    delete_workflow: ClusterDeleteWorkflow | None = None
+    """``None`` until the delete-cluster workflow exists: its routes answer 501 (ADR-0033)."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -61,5 +63,21 @@ def status_service(context: Annotated[Day1Context, Depends(day1_context)]) -> St
     return context.status
 
 
+DELETE_WORKFLOW_NOT_AVAILABLE = (
+    "The delete-cluster workflow is not available yet. Until it exists, deleting a cluster "
+    "opens an MR that removes its file, and the cluster's network segment is not released."
+)
+
+
+def delete_workflow(
+    context: Annotated[Day1Context, Depends(day1_context)],
+) -> ClusterDeleteWorkflow:
+    """The delete-cluster workflow, or 501 while it does not exist (ADR-0033)."""
+    if context.delete_workflow is None:
+        raise FeatureDisabled(DELETE_WORKFLOW_NOT_AVAILABLE)
+    return context.delete_workflow
+
+
 Context = Annotated[Day1Context, Depends(day1_context)]
+DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
 Status = Annotated[StatusService, Depends(status_service)]

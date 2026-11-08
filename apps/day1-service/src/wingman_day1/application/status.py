@@ -1,6 +1,6 @@
 """Live cluster status and InfraEnvs, read from the MCE hubs (``CLUSTER_STATUS_ENABLED``).
 
-The HostedCluster is ``openshift-<clusterName>`` in ``hcp-<clusterName>``,
+The HostedCluster is ``ocp4-<clusterName>`` in ``hcp-<clusterName>``,
 where ``clusterName`` is the file's own ``clusterName`` key or, by default,
 the file stem with the deployment's prefix stripped (ADR-0015). The legacy
 service looked for a HostedCluster named after the full stem, which the

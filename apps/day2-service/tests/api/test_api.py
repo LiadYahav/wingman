@@ -141,6 +141,8 @@ async def test_install_approve_update_and_remove_on_a_hosted_cluster(
     problem(await approve(jane, "redbull", change["iid"], change["sha"]), 403, "SELF_APPROVAL")
     merged = ok(await approve(bob, "redbull", change["iid"], change["sha"]))
     assert merged["state"] == "merged"
+    # The requester, not the service account that opened the MR or bob who merged it.
+    assert (merged["author"]["username"], merged["gitlab_author"]) == ("jane", "wingman-bot")
     assert ok(await jane.get("/api/day2/approvals")) == []
 
     charts = await installed(jane, HERZI)
@@ -305,6 +307,29 @@ async def test_an_approval_of_a_moved_branch_is_a_conflict(
     problem(await approve(bob, "redbull", change["iid"], "f" * 40), 409, "REVISION_CONFLICT")
 
 
+async def test_an_edit_of_a_branch_that_moved_since_review_writes_nothing(
+    jane: httpx.AsyncClient, bob: httpx.AsyncClient, gitlab: InMemoryGitLab
+) -> None:
+    # ADR-0006: the editor reviewed one head; a commit pushed after it (by a
+    # person, CI or a workflow) must not be overwritten unseen.
+    change = ok(await install(jane, "redbull", "bmhgen", {"override_values": {"a": 1}}), 201)
+    reviewed = ok(await bob.get(f"/api/day2/approvals/redbull/{change['iid']}"))["mr"]["sha"]
+    team = await gitlab.get_project("sigs/redbull")
+    await gitlab.commit(
+        team.id,
+        branch=change["source_branch"],
+        message="a bot pushes after the review",
+        changes=[FileChange.create(RepoPath("bot.yaml"), "x: 1\n")],
+    )
+    edit = {"files": [{"path": BMHGEN_VALUES, "content": "a: 2\n"}], "sha": reviewed}
+    url = f"/api/day2/approvals/redbull/{change['iid']}"
+    problem(await bob.put(url, json=edit), 409, "REVISION_CONFLICT")
+    now = ok(await bob.get(url))
+    assert "+a: 1" in next(d for d in now["diffs"] if d["new_path"] == BMHGEN_VALUES)["diff"]
+    edited = ok(await bob.put(url, json={**edit, "sha": now["mr"]["sha"]}))
+    assert "+a: 2" in next(d for d in edited["diffs"] if d["new_path"] == BMHGEN_VALUES)["diff"]
+
+
 async def test_mr_detail_edit_and_reject(jane: httpx.AsyncClient, bob: httpx.AsyncClient) -> None:
     change = ok(await install(jane, "redbull", "bmhgen", {"override_values": {"a": 1}}), 201)
     detail = ok(await jane.get(f"/api/day2/approvals/redbull/{change['iid']}"))
@@ -338,6 +363,7 @@ async def test_mr_detail_edit_and_reject(jane: httpx.AsyncClient, bob: httpx.Asy
     )
     closed = ok(await bob.post(f"/api/day2/approvals/redbull/{change['iid']}/reject"))
     assert closed["state"] == "closed"
+    assert closed["author"]["username"] == change["author"]["username"]
     body = problem(
         await bob.put(
             f"/api/day2/approvals/redbull/{change['iid']}",
@@ -514,6 +540,20 @@ async def test_audit_lists_commits_and_merge_requests_and_diffs(
     mrs = ok(await jane.get("/api/day2/audit/merge-requests"))
     assert [(m["team"], m["iid"]) for m in mrs] == [("redbull", change["iid"])]
     assert ok(await jane.get("/api/day2/audit/merge-requests?page=2")) == []
+
+
+async def test_history_names_the_requester_not_the_service_account(
+    jane: httpx.AsyncClient, bob: httpx.AsyncClient
+) -> None:
+    # As day1's: the MR's author is the footer's requester, and its commit is
+    # authored by them (GitLab keeps the service account as the committer).
+    change = ok(await install(jane, "redbull", "bmhgen"), 201)
+    ok(await approve(bob, "redbull", change["iid"], change["sha"]))
+    [mr] = ok(await jane.get("/api/day2/audit/merge-requests"))
+    assert (mr["author"]["username"], mr["gitlab_author"]) == ("jane", "wingman-bot")
+    commits = ok(await jane.get("/api/day2/audit/commits?per_page=10"))
+    [installed] = [c for c in commits if c["title"].startswith("Install bmhgen")]
+    assert (installed["author_name"], installed["author_email"]) == ("jane", "jane@openshift.local")
 
 
 # ── operations endpoints ────────────────────────────────────────────────────

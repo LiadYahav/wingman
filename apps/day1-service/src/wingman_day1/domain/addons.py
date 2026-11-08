@@ -64,7 +64,6 @@ class AddonDrift:
     name: str
     reason: AddonDriftReason
     expected_version: str
-    installed_version: str = ""
     override_values: Mapping[str, object] = field(default_factory=dict)
     """What the user asked for at create, so installing it later keeps their values."""
 
@@ -116,7 +115,6 @@ def compare_addons(
                     addon.name,
                     AddonDriftReason.MISSING,
                     addon.version,
-                    "",
                     overrides.get(addon.key, {}),
                 )
             )

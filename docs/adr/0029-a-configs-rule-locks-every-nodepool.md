@@ -43,7 +43,7 @@ that config. The user's decision is that a lock is a fixed value; a subset
 would let extra configs (a copied `legacy/` config, another cluster's
 network config) accumulate unseen, and drift would never report them. The
 cost is that sync removes configs, which reboots nodes and may drop
-something a team relies on; ADR-0034 makes every removal explicit in the
+something a team relies on; ADR-0037 makes every removal explicit in the
 preview, the confirmation and the MR.
 
 **`nm-conf` is each nodepool's own.** In the rule, `nm-conf` matches any
@@ -53,7 +53,7 @@ cluster the hardware is read from the nodepool's network-config entry: the
 one config name a hardware template captures (`nm-conf-<clusterName>-<hw>`,
 by the CI's longest-suffix rule, ADR-0027). A nodepool with none, or with
 several, needs a person to choose the hardware; Wingman reports it and never
-guesses (ADR-0033).
+guesses (ADR-0036).
 
 **At create.** A nodepool that sends configs must match the rule (by name, in
 any order, `nm-conf` with any known hardware); otherwise the create is a 422

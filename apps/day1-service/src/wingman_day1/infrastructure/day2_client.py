@@ -67,7 +67,7 @@ class HttpDay2Addons:
         try:
             response = await self._client.get(
                 path,
-                params={"mce": cluster.mce, "site": cluster.site},
+                params={"mce": cluster.mce},
                 headers={"Authorization": f"Bearer {self._token()}"},
             )
         except httpx.TransportError as exc:

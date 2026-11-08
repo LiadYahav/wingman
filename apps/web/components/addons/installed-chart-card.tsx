@@ -5,11 +5,13 @@ import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ExternalLink, Layers, MoreVertical, Package, Pin, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
-import { day2Api, isRevisionConflict, problemOf, writeErrorMessage } from "@/lib/day2";
+import { day2Api, isRevisionConflict, problemOf } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { sameValues, toYaml, type Values } from "@/lib/values";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProblemList } from "@/components/common/problem-list";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
 import { ValuesEditor } from "@/components/addons/values-editor";
@@ -29,6 +31,22 @@ export interface DestinationRef {
 /** `defaults/<scope>/exclusions.yaml` for a fleet default's folder `defaults/<scope>/<chart>`. */
 function exclusionsFile(folder: string): string {
   return `${folder.split("/").slice(0, -1).join("/")}/exclusions.yaml`;
+}
+
+/** The Layers tab while the preview loads: rows shaped like `ValueLayers`'. */
+function LayersSkeleton() {
+  return (
+    <div className="divide-y overflow-hidden rounded-lg border" aria-busy="true" data-testid="layers-loading">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="grid grid-cols-[1.5rem_8.5rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2">
+          <Skeleton className="h-3 w-3" />
+          <Skeleton className="h-4 w-16 rounded-full" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-12" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /** The edit's starting point: the file's content and the commit it was read at (ADR-0006). */
@@ -73,7 +91,7 @@ export function InstalledChartCard({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [writeError, setWriteError] = useState("");
+  const [writeError, setWriteError] = useState<unknown>(null);
 
   const valuesEdited = !sameValues(draft, session.baseline);
   // Follow the listing while nothing is edited; an edit keeps the commit it started from.
@@ -150,7 +168,7 @@ export function InstalledChartCard({
       setRemoveOpen(false);
       return;
     }
-    setWriteError(writeErrorMessage(problem));
+    setWriteError(error);
   }
 
   const update = useMutation({
@@ -163,7 +181,7 @@ export function InstalledChartCard({
       };
       return api.put<ChangeResult>(day2Api.chart(destination.id, chart.team, chart.name), body);
     },
-    onMutate: () => setWriteError(""),
+    onMutate: () => setWriteError(null),
     onSuccess: (mr) => {
       onOpened({ verb: "Update", results: [mr], failed: [] });
       setReviewOpen(false);
@@ -176,7 +194,7 @@ export function InstalledChartCard({
   const remove = useMutation({
     mutationFn: () =>
       api.del<ChangeResult>(day2Api.remove(destination.id, chart.team, chart.name, session.commitId)),
-    onMutate: () => setWriteError(""),
+    onMutate: () => setWriteError(null),
     onSuccess: (mr) => {
       onOpened({ verb: "Remove", results: [mr], failed: [] });
       setRemoveOpen(false);
@@ -296,9 +314,7 @@ export function InstalledChartCard({
               </p>
             )}
             {preview.error && !data ? (
-              <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-                Could not load the values: {problemOf(preview.error).detail}
-              </p>
+              <ProblemList error={preview.error} title="The values could not be loaded" />
             ) : (
               <Tabs defaultValue="values">
                 <TabsList>
@@ -355,7 +371,7 @@ export function InstalledChartCard({
                   )}
                 </TabsContent>
                 <TabsContent value="layers" className="pt-2">
-                  {data && <ValueLayers preview={data} editedPath={chart.override_path} />}
+                  {data ? <ValueLayers preview={data} editedPath={chart.override_path} /> : <LayersSkeleton />}
                 </TabsContent>
                 <TabsContent value="deploy" className="pt-2">
                   <DeploySummary deploy={chart.deploy} />
@@ -370,7 +386,7 @@ export function InstalledChartCard({
         open={reviewOpen}
         onOpenChange={(open) => {
           setReviewOpen(open);
-          setWriteError("");
+          setWriteError(null);
         }}
         title={`Update ${chart.name} on ${destination.name}`}
         description={`Opens a merge request on ${chart.team}'s repo. Nothing changes on the cluster until it is merged${chart.deploy.auto_sync ? "" : " and someone syncs the app"}.`}
@@ -383,7 +399,7 @@ export function InstalledChartCard({
             <FilePreview key={file.path} file={file} />
           ))}
           <MessageField value={message} onChange={setMessage} />
-          <WriteError message={writeError} />
+          <WriteError error={writeError} />
         </div>
       </ReviewDialog>
 
@@ -391,7 +407,7 @@ export function InstalledChartCard({
         open={removeOpen}
         onOpenChange={(open) => {
           setRemoveOpen(open);
-          setWriteError("");
+          setWriteError(null);
         }}
         error={writeError}
         chart={chart}
@@ -416,7 +432,8 @@ function RemoveDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  error: string;
+  /** The refused removal, or null. */
+  error: unknown;
   chart: InstalledChart;
   destination: DestinationRef;
   lastOfTeam: boolean;
@@ -473,7 +490,7 @@ function RemoveDialog({
             className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-destructive/50"
           />
         </label>
-        <WriteError message={error} />
+        <WriteError error={error} />
       </div>
     </ReviewDialog>
   );

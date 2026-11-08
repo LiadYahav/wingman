@@ -1,11 +1,11 @@
-"""Existing clusters joining a flavor (ADR-0034).
+"""Existing clusters joining a flavor (ADR-0037).
 
 A cluster Wingman did not create has no flavor link. Import writes the link
 (the comment header Wingman writes at create, ADR-0012) into each picked
 cluster file, all in one day1 merge request, and changes nothing else in
 them: the text edit keeps every other byte, the CI block included
 (``wingman_day1.domain.cluster_text``). After the merge the clusters follow
-the flavor, and what differs shows as drift (ADR-0033); sync fixes it.
+the flavor, and what differs shows as drift (ADR-0036); sync fixes it.
 
 The preview compares each picked cluster with the flavor first. A cluster
 already linked to another flavor is refused unless the request says to
@@ -154,9 +154,9 @@ class ImportService:
     ) -> ProvisionResult:
         """One day1 MR that links every picked cluster to the flavor, or none at all.
 
-        Each file must still be at the ``last_commit_id`` the preview showed;
-        the commit carries it, so a file that moves before the commit fails
-        the whole MR (ADR-0006).
+        No file may have changed since the ``last_commit_id`` the preview showed
+        (the commit it was read at, ADR-0035); the commit carries it, so a file
+        that moves before the commit fails the whole MR (ADR-0006).
         """
         spec = await self._specs.get(flavor)
         if spec.metadata.version != spec_version:
@@ -166,10 +166,13 @@ class ImportService:
             )
         _require_picks([p.ref for p in picks])
         clusters = await asyncio.gather(*(self._clusters.get(p.ref) for p in picks))
+        moved = await asyncio.gather(
+            *(self._clusters.changed_since(p.ref, p.last_commit_id) for p in picks)
+        )
         stale = [
             f"{c.ref.name} ({pick.last_commit_id[:8]} → {c.last_commit_id[:8]})"
-            for pick, c in zip(picks, clusters, strict=True)
-            if pick.last_commit_id != c.last_commit_id
+            for pick, c, changed in zip(picks, clusters, moved, strict=True)
+            if changed
         ]
         if stale:
             raise StaleError(

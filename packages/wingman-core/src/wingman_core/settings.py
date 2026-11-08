@@ -8,6 +8,7 @@ starting degraded.
 from __future__ import annotations
 
 from enum import StrEnum
+from pathlib import Path
 from typing import Self
 
 from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
@@ -48,6 +49,12 @@ class GitLabSettings(BaseSettings):
         return self
 
 
+def project_ref(value: str) -> int | str:
+    """A ``*_PROJECT_ID`` setting: a numeric project id, or a ``group/project`` path."""
+    value = value.strip().strip("/")
+    return int(value) if value.isdigit() else value
+
+
 MIN_JWT_SECRET_LENGTH = 32
 
 
@@ -84,12 +91,21 @@ def _split(value: str) -> tuple[str, ...]:
 
 
 class RuntimeSettings(BaseSettings):
-    """Where and how a service runs. Environment variables ``WINGMAN_*``."""
+    """Where and how a service runs, and which build it is. Environment variables ``WINGMAN_*``.
+
+    ``WINGMAN_VERSION`` and ``WINGMAN_COMMIT`` are set by the image
+    (docs/ops/images.md): ``wingman_build_info`` reports them, so the
+    version-skew alert compares like with like. ``WINGMAN_FIXTURES_DIR`` is the
+    tree the fake backend is seeded from (default ``dev/gitlab-fixtures``).
+    """
 
     model_config = SettingsConfigDict(env_prefix="WINGMAN_", extra="ignore")
 
     environment: Environment = Environment.PRODUCTION
     git_backend: GitBackend = GitBackend.GITLAB
+    version: str = Field(default="dev", min_length=1)
+    commit: str = Field(default="unknown", min_length=1)
+    fixtures_dir: Path | None = None
 
     @model_validator(mode="after")
     def _no_fake_in_production(self) -> Self:

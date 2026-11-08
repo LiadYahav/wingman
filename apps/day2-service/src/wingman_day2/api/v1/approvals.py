@@ -38,13 +38,14 @@ async def get_approval(team: str, iid: int, user: CurrentUser, day2: Services) -
 async def edit_approval(
     team: str, iid: int, body: EditMergeRequestBody, user: AdminUser, day2: Services
 ) -> ApprovalDetailOut:
-    """Push edits of files the MR changes onto its branch (409 if a file moved on)."""
+    """Push edits of files the MR changes onto its branch (409 if it moved since review)."""
     change, diffs = await day2.approvals.edit(
         team,
         iid,
         [FileEdit(f.path, f.content, f.last_commit_id) for f in body.files],
         body.message,
         user,
+        sha=body.sha,
     )
     return ApprovalDetailOut(
         mr=MRDetailOut.of_change(team, change.change), diffs=[FileDiffOut.of(d) for d in diffs]
@@ -88,7 +89,7 @@ async def audit_merge_requests(
     per_page: int = Query(default=50, ge=1, le=100),
     page: int = Query(default=1, ge=1, le=20),
 ) -> list[MRDetailOut]:
-    """Wingman MRs in any state across team repos, newest update first."""
+    """Wingman MRs in any state across team repos, newest first."""
     return [
         MRDetailOut.of(m.team, m.merge_request)
         for m in await day2.audit.merge_requests(per_page=per_page, page=page)

@@ -10,12 +10,15 @@ import { api, isApiError, errorMessages } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { DriftBadge } from "@/components/clusters/drift-badge";
+import { clusterHref } from "@/lib/clusters";
 import { formatPreset, specApiPath, structureSummary } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
+import { writeErrorTitle } from "@/lib/write-errors";
 import type { ClusterSpec, DriftState, MRDetail, SpecCluster, SpecCommit, SpecDetail, SpecDrift } from "@/types";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -25,10 +28,6 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-sm font-medium text-right min-w-0 break-words">{value}</span>
     </div>
   );
-}
-
-function clusterHref(name: string, site: string, mce: string) {
-  return `/clusters/${encodeURIComponent(name)}?site=${encodeURIComponent(site)}&mce=${encodeURIComponent(mce)}`;
 }
 
 const DRIFT_ORDER: DriftState[] = ["drifted", "unknown", "in_sync", "not_linked"];
@@ -126,7 +125,7 @@ export default function SpecDetailPage() {
   // A spec file that does not parse answers 422 with every problem; it can still be deleted.
   const doesNotLoad = isApiError(specError, "VALIDATION_ERROR");
 
-  const { data: clusters, isLoading: clustersLoading } = useQuery<SpecCluster[]>({
+  const { data: clusters, isLoading: clustersLoading, error: clustersError } = useQuery<SpecCluster[]>({
     queryKey: ["specs", specName, "clusters"],
     queryFn: () => api.get<SpecCluster[]>(`/api/day1/specs/${encodeURIComponent(specName)}/clusters`),
     enabled: activeTab === "clusters" || activeTab === "drift" || deleteReviewOpen,
@@ -141,14 +140,14 @@ export default function SpecDetailPage() {
     staleTime: 60_000,
   });
 
-  const { data: history, isLoading: historyLoading } = useQuery<SpecCommit[]>({
+  const { data: history, isLoading: historyLoading, error: historyError } = useQuery<SpecCommit[]>({
     queryKey: ["spec-history", specName],
     queryFn: () => api.get<SpecCommit[]>(`/api/day1/specs/${encodeURIComponent(specName)}/history`),
     enabled: activeTab === "history",
     staleTime: 60_000,
   });
 
-  const { data: specAtSha, isLoading: specAtShaLoading } = useQuery<string>({
+  const { data: specAtSha, isLoading: specAtShaLoading, error: specAtShaError } = useQuery<string>({
     queryKey: ["spec-at-sha", specName, selectedSha],
     queryFn: () => api.getText(`/api/day1/specs/${encodeURIComponent(specName)}/at/${selectedSha}`),
     enabled: !!selectedSha && activeTab === "history",
@@ -170,7 +169,7 @@ export default function SpecDetailPage() {
         setDeleteReviewOpen(false);
         return;
       }
-      toast.error("Could not open the delete MR", { description: errorMessages(err).join(" · ") });
+      toast.error(writeErrorTitle(err, "Could not open the delete MR"), { description: errorMessages(err).join(" · ") });
     },
   });
   const deleteConflict = isApiError(deleteMutation.error, "REVISION_CONFLICT");
@@ -318,7 +317,10 @@ export default function SpecDetailPage() {
       )}
 
       {/* Clusters tab */}
-      {activeTab === "clusters" && (
+      {activeTab === "clusters" && clustersError && (
+        <ProblemList error={clustersError} title="The clusters using this spec could not be loaded" />
+      )}
+      {activeTab === "clusters" && !clustersError && (
         <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -337,8 +339,14 @@ export default function SpecDetailPage() {
                   ))
                 : clusters?.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-4 py-12 text-center text-muted-foreground">
-                        No clusters created from this spec yet.
+                      <td colSpan={3}>
+                        <EmptyState
+                          icon={Server}
+                          title="No clusters created from this spec yet"
+                          description="A cluster created from this spec is listed here with its drift state."
+                          action={isAdmin && <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>}
+                          data-testid="spec-clusters-empty"
+                        />
                       </td>
                     </tr>
                   )
@@ -346,7 +354,7 @@ export default function SpecDetailPage() {
                     <tr key={`${c.site}/${c.mce}/${c.name}`} data-testid={`spec-cluster-${c.name}`} className="hover:bg-primary/[0.03] transition-colors">
                       <td className="px-4 py-3">
                         <Link
-                          href={clusterHref(c.name, c.site, c.mce)}
+                          href={clusterHref(c)}
                           className="font-semibold hover:text-primary transition-colors inline-flex items-center gap-1 break-all"
                         >
                           {c.name}
@@ -369,15 +377,37 @@ export default function SpecDetailPage() {
       {activeTab === "drift" && (
         <div className="space-y-4">
           {driftLoading ? (
-            <Skeleton className="h-32 w-full rounded-xl" />
+            <>
+              {/* The summary bar, then one row per cluster */}
+              <div className="bg-card rounded-xl border shadow-sm px-5 py-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-5 w-24 rounded-full" />
+                <Skeleton className="h-5 w-24 rounded-full" />
+              </div>
+              <div className="bg-card rounded-xl border shadow-sm divide-y divide-border overflow-hidden">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-start gap-3 px-5 py-3.5">
+                    <Skeleton className="h-4 w-4 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-3 w-64 max-w-full" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-full shrink-0" />
+                  </div>
+                ))}
+              </div>
+            </>
           ) : driftError ? (
             <ProblemList error={driftError} title="Could not compute drift for this spec's clusters." />
           ) : driftResults?.length === 0 ? (
-            <div className="bg-card rounded-xl border shadow-sm p-8 text-center">
-              <Server className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-              <p className="text-sm font-semibold">No clusters use this spec</p>
-              <p className="text-xs text-muted-foreground mt-1">There is nothing to drift until a cluster is created from it.</p>
-            </div>
+            <EmptyState
+              icon={Server}
+              title="No clusters use this spec"
+              description="There is nothing to drift until a cluster is created from it."
+              action={isAdmin && <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>}
+              bordered
+              data-testid="spec-drift-empty"
+            />
           ) : (
             <>
               <div className="bg-card rounded-xl border shadow-sm px-5 py-4 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="spec-drift-summary">
@@ -408,7 +438,7 @@ export default function SpecDetailPage() {
                       <Server className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <Link
-                          href={clusterHref(r.cluster, r.site, r.mce)}
+                          href={clusterHref({ name: r.cluster, site: r.site, mce: r.mce })}
                           className="text-sm font-semibold hover:text-primary transition-colors break-all"
                         >
                           {r.cluster}
@@ -447,8 +477,17 @@ export default function SpecDetailPage() {
                     <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
+              ) : historyError ? (
+                <div className="p-4">
+                  <ProblemList error={historyError} title="The spec's history could not be loaded" />
+                </div>
               ) : history?.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8 px-4">No history available.</p>
+                <EmptyState
+                  icon={GitCommitHorizontal}
+                  title="No history yet"
+                  description="No commit in the specs repo has changed this spec's file."
+                  data-testid="spec-history-empty"
+                />
               ) : (
                 <div className="divide-y divide-border">
                   {history?.map((commit) => (
@@ -480,7 +519,7 @@ export default function SpecDetailPage() {
                       <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
                         <span>{commit.author}</span>
                         <span>·</span>
-                        <span>{new Date(commit.date).toLocaleDateString()}</span>
+                        <span>{formatDate(commit.date)}</span>
                       </div>
                     </button>
                   ))}
@@ -512,6 +551,8 @@ export default function SpecDetailPage() {
                     <Skeleton key={i} className="h-4 w-full" />
                   ))}
                 </div>
+              ) : specAtShaError ? (
+                <ProblemList error={specAtShaError} title="The spec at this commit could not be loaded" />
               ) : (
                 <pre className="text-xs font-mono text-zinc-300 bg-zinc-950 rounded-lg p-4 overflow-auto leading-5 whitespace-pre-wrap">
                   {specAtSha}
@@ -542,11 +583,23 @@ export default function SpecDetailPage() {
             <span className="text-muted-foreground w-24 shrink-0">Version</span>
             <span className="font-medium">{spec?.metadata.version ?? "— (does not load)"}</span>
           </div>
-          {clusters && clusters.length > 0 && (
+          {clustersLoading ? (
+            <div className="flex gap-3">
+              <span className="text-muted-foreground w-24 shrink-0">Used by</span>
+              <Skeleton className="h-4 w-48 mt-0.5" />
+            </div>
+          ) : clustersError ? (
+            <div className="flex gap-3" data-testid="spec-delete-clusters-unknown">
+              <span className="text-muted-foreground w-24 shrink-0">⚠ Used by</span>
+              <span className="font-medium text-status-warning-fg">
+                Could not be checked — any cluster created from this spec keeps its file but is no longer linked to a spec
+              </span>
+            </div>
+          ) : clusters && clusters.length > 0 && (
             <div className="flex gap-3">
               <span className="text-muted-foreground w-24 shrink-0">⚠ Used by</span>
               <span className="font-medium text-status-warning-fg">
-                {clusters.length} cluster{clusters.length !== 1 ? "s" : ""} — they keep their files but are no longer linked to a spec
+                {clusters.length} cluster{clusters.length !== 1 ? "s" : ""} — they keep their files, and their drift shows Unknown because the spec they name is gone
               </span>
             </div>
           )}
@@ -554,6 +607,9 @@ export default function SpecDetailPage() {
             This action is irreversible once the MR is merged.
           </p>
         </div>
+        {clustersError && (
+          <ProblemList error={clustersError} title="The clusters using this spec could not be loaded" />
+        )}
         {deleteMutation.error && <ProblemList error={deleteMutation.error} />}
       </ReviewDialog>
     </div>

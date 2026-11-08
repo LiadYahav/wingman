@@ -9,6 +9,7 @@ import {
   GitPullRequest,
   ClipboardList,
   Shield,
+  ShieldAlert,
   AlertTriangle,
   CheckCircle,
   ChevronRight,
@@ -26,13 +27,16 @@ import {
   FileCode2,
   GitBranch,
   Settings2,
+  Pin,
+  Pencil,
+  XCircle,
 } from "lucide-react";
 
 // ── Low-level primitives ──────────────────────────────────────────────────────
 
 function InlineCode({ children }: { children: React.ReactNode }) {
   return (
-    <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-foreground whitespace-nowrap">{children}</code>
+    <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-mono text-foreground break-words">{children}</code>
   );
 }
 
@@ -138,6 +142,41 @@ function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementTy
   );
 }
 
+/** A titled card in the "Special features" list. */
+function FeaturePanel({ icon: Icon, tint, title, where, children }: {
+  icon: React.ElementType;
+  tint: string;
+  title: string;
+  where: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
+        <div className={`flex h-7 w-7 items-center justify-center rounded-lg shrink-0 ${tint}`}>
+          <Icon className="h-3.5 w-3.5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="text-xs text-muted-foreground">{where}</p>
+        </div>
+      </div>
+      <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">{children}</div>
+    </div>
+  );
+}
+
+/** One file in the "File Locations" lists. */
+function FileRow({ file, where, desc }: { file: string; where: string; desc: string }) {
+  return (
+    <div className="px-5 py-3 space-y-1">
+      <p className="text-xs font-mono text-foreground font-semibold break-all">{file}</p>
+      <p className="text-[10px] text-muted-foreground/60">{where}</p>
+      <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const NAV_SECTIONS = [
@@ -146,14 +185,67 @@ const NAV_SECTIONS = [
   { id: "roles", label: "Roles & Access" },
   { id: "gitops", label: "GitOps Workflow" },
   { id: "specs", label: "Specs" },
-  { id: "clusters", label: "Creating a Cluster" },
+  { id: "clusters", label: "Clusters" },
   { id: "addons", label: "Day2 Addons" },
   { id: "drift", label: "Drift Detection" },
   { id: "approvals", label: "Approvals" },
   { id: "audit", label: "Audit Log" },
+  { id: "errors", label: "When a Change Is Refused" },
   { id: "special-features", label: "Special Features" },
   { id: "filelocations", label: "File Locations" },
   { id: "troubleshooting", label: "Troubleshooting" },
+] as const;
+
+/** What a refusal looks like, why it happens and what to do (ADR-0004: match on `code`). */
+const REFUSALS = [
+  {
+    code: "409 REVISION_CONFLICT",
+    see: "“… changed since you opened it”, or “The branch moved since you loaded this MR”: most pages offer Reload, and a chart's values editor reloads itself and says so",
+    why: "Someone committed to the file or the MR branch after you loaded it: another person, the day1 CI or the allocate-segment workflow. Nothing was written or merged.",
+    fix: "Reload if the page has not, look at what changed, and make your change (or review) again.",
+  },
+  {
+    code: "409 ALREADY_EXISTS",
+    see: "“This cluster name is taken”, “A spec named … already exists”, or a chart that is already on the destination",
+    why: "The name is used by a cluster anywhere in the day1 repo or by an open create MR; the spec exists; the chart is already installed there, or is a fleet default of that kind.",
+    fix: "Pick another name, or edit what exists. For a fleet default, edit its values for this cluster instead.",
+  },
+  {
+    code: "422 VALIDATION_ERROR",
+    see: "A red box headed “… fix the following” (or “The change was refused”) listing every problem",
+    why: "The change breaks one or more rules: the naming convention, an automation-owned key, an unconfirmed emergency pin, a lint error the change would add. All of them are listed at once.",
+    fix: "Fix every listed problem, then submit again.",
+  },
+  {
+    code: "403 FORBIDDEN",
+    see: "“This needs the admin role.”, or at sign-in “You are not in a Wingman group. Ask an admin for access.”",
+    why: "You are a Viewer. At sign-in, the same code means you are in no Wingman group. (A Viewer who opens a create page is shown “Insufficient permissions” without any request being made.)",
+    fix: "Ask your platform team to add you to an admin group, then sign in again.",
+  },
+  {
+    code: "403 SELF_APPROVAL",
+    see: "“You requested this change, so another admin must approve it.”",
+    why: "Nobody approves their own change. The Review & Approve button is disabled on your own MRs.",
+    fix: "Ask another admin to review it.",
+  },
+  {
+    code: "409 NOT_MERGEABLE",
+    see: "“GitLab cannot merge this MR right now”",
+    why: "The branch conflicts with the target (the Conflicted badge), or GitLab refused the merge.",
+    fix: "Open the MR in GitLab to see why; for a conflict, Reject it and make the change again.",
+  },
+  {
+    code: "501 FEATURE_DISABLED",
+    see: "“Live status is off”, “Live status is off in this deployment”",
+    why: "This deployment does not read HostedClusters from the MCE hubs. It is not an error.",
+    fix: "Nothing to fix. InfraEnv names are typed instead of picked.",
+  },
+  {
+    code: "504 AMBIGUOUS_WRITE",
+    see: "A message that GitLab did not confirm the change, so it may or may not have been made",
+    why: "GitLab timed out after receiving the write, so it may or may not have happened. Wingman never retries a write.",
+    fix: "Check the Approvals page (or the repo in GitLab) for the MR before trying again.",
+  },
 ] as const;
 
 export default function DocsPage() {
@@ -174,7 +266,7 @@ export default function DocsPage() {
   }, []);
 
   return (
-    <div className="flex gap-10 max-w-7xl mx-auto px-6 py-8">
+    <div className="flex gap-10 max-w-7xl mx-auto px-4 sm:px-6 py-8">
 
       {/* Left sticky nav */}
       <aside className="hidden xl:block w-56 shrink-0">
@@ -194,7 +286,7 @@ export default function DocsPage() {
       <div className="flex-1 min-w-0 space-y-14">
 
         {/* Hero */}
-        <div className="relative rounded-2xl border bg-gradient-to-br from-primary/5 via-primary/3 to-transparent p-8 overflow-hidden">
+        <div className="relative rounded-2xl border bg-gradient-to-br from-primary/5 via-primary/3 to-transparent p-6 sm:p-8 overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           <div className="relative">
             <div className="flex items-center gap-2 text-primary text-sm font-medium mb-3">
@@ -203,9 +295,9 @@ export default function DocsPage() {
             </div>
             <h1 className="text-3xl font-bold mb-3">Wingman Platform</h1>
             <p className="text-muted-foreground max-w-2xl leading-relaxed mb-5">
-              A GitOps-based Internal Developer Platform for provisioning and managing OpenShift clusters.
-              Wingman uses GitLab as its single source of truth — every action you take in the UI creates
-              a Merge Request that must be reviewed and merged before any change takes effect.
+              The team&apos;s self-service portal for OpenShift hosted clusters. GitLab is Wingman&apos;s only
+              store: every action you take in the UI opens a merge request, and nothing changes until another
+              admin approves it and it is merged. ArgoCD applies what is merged.
             </p>
             <div className="flex flex-wrap gap-3">
               {[
@@ -227,59 +319,66 @@ export default function DocsPage() {
         <section>
           <SectionHeader id="overview" icon={BookOpen} title="Platform Overview" subtitle="What Wingman does and how it fits into your workflow" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-            Wingman manages the full lifecycle of OpenShift clusters — from templating and provisioning
-            (Day1) to operator installation and configuration (Day2). There is no application database:
-            all state lives in Git repositories hosted on GitLab.
+            Wingman covers <strong>Day1</strong>, creating, editing and deleting a hosted cluster, and{" "}
+            <strong>Day2</strong>, installing and configuring teams&apos; charts on the hub, the MCEs and the
+            clusters. There is no application database: all state lives in Git repositories on GitLab.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             <FeatureCard
               icon={Layers}
-              title="Day1 — Cluster Provisioning"
-              description="Create new OpenShift clusters from spec templates. Wingman generates the AgentCluster, NodePool, and MachineConfig manifests and commits them to GitLab for the provisioner to consume."
+              title="Day1 — Hosted Clusters"
+              description="Create, edit and delete hosted clusters. A cluster is one short values file for the hostedclusters-setup chart (owner, mastertag, nodepools), proposed as a merge request into the day1 repo."
             />
             <FeatureCard
               icon={Package}
-              title="Day2 — Addon Management"
-              description="Install, configure, and remove operators on existing clusters via ArgoCD. Addon defaults are owned by teams; per-cluster values are layered on top."
+              title="Day2 — Charts"
+              description="Install, configure and remove teams' charts on the hub, MCEs, hosted and UPI clusters. Every value shows the layer that set it, and lints check every team repo before a change is proposed."
             />
             <FeatureCard
               icon={RefreshCw}
               title="Drift Detection"
-              description="Automatically detects when a running cluster's actual state diverges from its spec. Drifted clusters are highlighted in red with a unified diff."
+              description="Checks that a cluster has every addon its spec lists. A version that differs from the spec is reported, never changed. When Wingman cannot tell, it says unknown, never in sync."
             />
             <FeatureCard
               icon={GitPullRequest}
               title="Approval Workflow"
-              description="Every mutation opens a GitLab Merge Request. The Approvals page aggregates open MRs from all repositories so admins can review in one place."
+              description="The Approvals page lists the open merge requests of the day1, specs and team repos. Approving merges exactly the commit you reviewed, and nobody approves their own change."
             />
           </div>
 
           {/* Architecture diagram */}
-          <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="rounded-xl border bg-card overflow-hidden mb-5">
             <div className="px-5 py-3 border-b bg-muted/30">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">How it fits together</p>
             </div>
             <div className="p-5 font-mono text-xs text-muted-foreground leading-loose">
               <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-foreground font-semibold">User (Admin)</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-foreground font-semibold">You</span>
                   <ArrowRight className="h-3 w-3" />
                   <span className="text-primary">Wingman UI</span>
                   <ArrowRight className="h-3 w-3" />
                   <span className="text-emerald-500">GitLab MR</span>
                   <ArrowRight className="h-3 w-3" />
-                  <span className="text-blue-500">Merge</span>
+                  <span className="text-blue-500">Approve &amp; merge</span>
                   <ArrowRight className="h-3 w-3" />
                   <span className="text-foreground">ArgoCD (Day1 + Day2)</span>
                 </div>
                 <div className="mt-3 pl-4 border-l-2 border-muted space-y-1">
-                  <p><span className="text-primary">Day1 repo</span>  — cluster manifests (AgentCluster, NodePool, MachineConfig)</p>
-                  <p><span className="text-blue-500">Day2 repos</span> — per-team operator defaults + per-cluster overrides</p>
-                  <p><span className="text-amber-500">Specs repo</span> — Jinja2 templates + openshift-versions.txt</p>
+                  <p><span className="text-primary">Day1 repo</span>  — one values file per hosted cluster, and the upgrade ladder: the OpenShift versions each MCE offers</p>
+                  <p><span className="text-amber-500">Specs repo</span> — the shared cluster template and the specs</p>
+                  <p><span className="text-blue-500">Team repos</span> — one per team under the sigs group: chart defaults, fleet defaults, a folder per destination</p>
                 </div>
               </div>
             </div>
           </div>
+
+          <Callout type="info" title="Provisioning today, and what is planned">
+            Today Wingman provisions a cluster by merge request: it opens the MR, the day1 CI runs the
+            allocate-segment workflow on the MR branch, and a person&apos;s merge is the approval. The team
+            plans a <InlineCode>create-cluster</InlineCode> workflow (on Temporal) to take this over. It does
+            not exist yet; when it does, Wingman will start that workflow instead of committing the file itself.
+          </Callout>
         </section>
 
         {/* Core Concepts */}
@@ -290,42 +389,48 @@ export default function DocsPage() {
               {
                 term: "Spec",
                 color: "bg-purple-500/10 text-purple-500",
-                description: "A Jinja2 template (cluster-template.j2) combined with a YAML config that defines the structure of clusters: number of nodepools, which MachineConfigs apply, which Day2 addons are pre-configured, and which fields become immutable after a cluster is created. Multiple clusters share one spec.",
-                example: 'prod-dok-ha — 2 nodepools, high-availability hardware profile, monitoring addons pre-configured',
+                description: "A preset for creating clusters. It sets the shape the create form starts with (how many nodepools), can preset template inputs, and lists the day2 addons clusters of this spec should have, with the values a creator may set for each. Every spec fills the same shared template; a spec has no template of its own.",
+                example: "agent-standard — two nodepools on the Agent platform, with the redbull team's cluster-roles addon",
               },
               {
                 term: "Cluster",
                 color: "bg-blue-500/10 text-blue-500",
-                description: "A running OpenShift cluster created from a spec. Its identity (cluster name, site, MCE) is set once at creation time and is permanently immutable — a cluster cannot be renamed or moved.",
-                example: 'prod-dok-nova — built from prod-dok-ha spec, zone-a and zone-b nodepools, 9 total replicas',
+                description: "A hosted cluster: one values file in the day1 repo, at sites/{site}/mces/{mce}/hostedClusters/{cluster}.yaml. Its name, site and MCE come from that path, so a cluster cannot be renamed or moved: that would be a delete and a create.",
+                example: "ocp4-prod-herzi-site1 — sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-herzi-site1.yaml",
               },
               {
                 term: "Site",
                 color: "bg-amber-500/10 text-amber-500",
-                description: "A physical location — a datacenter, room, or zone. Sites are the top-level geographic grouping; one site can host multiple MCEs. In the Day1 repository, sites live under sites/{site}/.",
-                example: 'nova — a physical datacenter; its clusters are at sites/nova/mces/.../hostedClusters/',
+                description: "A location: a folder under sites/ in the day1 repo. Wingman lists sites and never creates them.",
+                example: "site1 — its MCEs are at sites/site1/mces/",
               },
               {
                 term: "MCE",
                 color: "bg-emerald-500/10 text-emerald-500",
-                description: "Multi-Cluster Engine — a logical management plane that lives within a Site. Groups clusters sharing the same management infrastructure. In the Day1 repository: sites/{site}/mces/{mce}/hostedClusters/{cluster}.yaml.",
-                example: 'prod-dok — a logical MCE inside the nova site, at sites/nova/mces/prod-dok/',
+                description: "A multicluster engine hub that runs hosted clusters' control planes: a folder at sites/{site}/mces/{mce}/. Its values.yaml holds the default mastertag for new clusters. MCE names follow ocp4-{env}-mce-{site}-{letter}. Read-only in Wingman: MCE onboarding happens elsewhere.",
+                example: "ocp4-prod-mce-site1-a — a prod MCE on site1",
+              },
+              {
+                term: "Destination",
+                color: "bg-cyan-500/10 text-cyan-500",
+                description: "Anywhere Day2 deploys charts: the hub, an MCE, a hosted cluster or a UPI cluster. Each has an id that says where it is, and the Destinations page lists them all.",
+                example: "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1 — a hosted cluster's id",
               },
               {
                 term: "Merge Request",
                 color: "bg-pink-500/10 text-pink-500",
-                description: "Every create / edit / delete operation in Wingman produces a GitLab MR. The change is not applied until the MR is merged by an approver. This gives you a full audit trail and allows peer review of infrastructure changes.",
-                example: 'Creating prod-dok-nova opens MR #47 in the day1 repo',
+                description: "Every create, edit and delete in Wingman opens a GitLab MR from a platform/{you}/… branch. Nothing changes until another admin approves it, which merges it. The MR and its commit name the person who asked for the change.",
+                example: "Creating ocp4-prod-herzi-site1 opens “[Wingman/Day1] Create cluster ocp4-prod-herzi-site1 from spec agent-standard”",
               },
             ].map(({ term, color, description, example }) => (
               <div key={term} className="rounded-xl border bg-card p-5">
-                <div className="flex items-start gap-4">
+                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
                   <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold font-mono mt-0.5 ${color}`}>{term}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground leading-relaxed mb-2">{description}</p>
                     <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2">
                       <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-0.5 shrink-0">Example</span>
-                      <p className="text-xs text-muted-foreground min-w-0">{example}</p>
+                      <p className="text-xs text-muted-foreground min-w-0 break-words">{example}</p>
                     </div>
                   </div>
                 </div>
@@ -336,7 +441,7 @@ export default function DocsPage() {
 
         {/* Roles */}
         <section>
-          <SectionHeader id="roles" icon={Shield} title="Roles & Access" subtitle="Access is controlled by OpenShift group membership" />
+          <SectionHeader id="roles" icon={Shield} title="Roles & Access" subtitle="Sign in with OpenShift; your OpenShift groups decide your role" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
             <div className="rounded-xl border bg-card p-5">
               <div className="flex items-center gap-2 mb-4">
@@ -345,16 +450,16 @@ export default function DocsPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-bold">Admin</p>
-                  <p className="text-xs text-muted-foreground">Full read-write access</p>
+                  <p className="text-xs text-muted-foreground">Proposes and approves changes</p>
                 </div>
               </div>
               <ul className="space-y-2">
                 {[
-                  "Create / edit / delete specs",
-                  "Create clusters from specs",
-                  "Install and remove addons",
-                  "Approve and merge GitLab MRs",
-                  "Access all audit and drift views",
+                  "Create, edit and delete specs and clusters",
+                  "Install, edit and remove charts",
+                  "Install a spec's missing addons from a cluster's Drift tab",
+                  "Approve, edit or reject other people's MRs",
+                  "Everything a Viewer can do",
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
                     <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
@@ -375,11 +480,11 @@ export default function DocsPage() {
               </div>
               <ul className="space-y-2">
                 {[
-                  "Browse clusters, specs, and addons",
-                  "View drift reports",
-                  "Read audit history",
-                  "Open-in-GitLab links on any resource",
-                  "View addon configurations",
+                  "Browse clusters, specs, destinations and charts",
+                  "See drift, lints and live status",
+                  "Read pending approvals and their diffs",
+                  "Read the audit log",
+                  "Open anything in GitLab",
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
                     <CheckCircle className="h-3.5 w-3.5 text-blue-500 shrink-0" />
@@ -389,26 +494,37 @@ export default function DocsPage() {
               </ul>
             </div>
           </div>
-          <Callout type="info" title="How roles are assigned">
-            Your role is derived from your <strong>OpenShift group membership</strong> and embedded in
-            your login session at authentication time. If you need admin access, ask your platform team
-            to add you to the appropriate OpenShift group. Your role updates on your next login.
-          </Callout>
+          <div className="space-y-3">
+            <Callout type="info" title="Signing in and how roles are assigned">
+              <strong>Log in via OpenShift</strong> sends you to your organisation&apos;s OpenShift OAuth server.
+              Your role comes from your <strong>OpenShift groups</strong>: the deployment&apos;s admin groups
+              (<InlineCode>WINGMAN_ADMIN_GROUPS</InlineCode>) make you an Admin, its viewer groups
+              (<InlineCode>WINGMAN_VIEWER_GROUPS</InlineCode>) a Viewer; Admin wins if you are in both. Someone in
+              neither is turned away: &quot;You are not in a Wingman group&quot;. The role is fixed when you sign
+              in, so after a group change sign out and in again (a session lasts 8 hours by default).
+            </Callout>
+            <Callout type="warning" title="Dev login is for local development only">
+              A local stack can run without OpenShift: the login page then shows a <strong>Dev mode</strong> banner,
+              and you sign in with any lowercase username and the server&apos;s dev login secret. It exists only when
+              the day1 service runs with <InlineCode>DEV_AUTH_ENABLED</InlineCode> and a{" "}
+              <InlineCode>DEV_AUTH_SECRET</InlineCode> of at least 32 characters. A shared deployment uses OpenShift.
+            </Callout>
+          </div>
         </section>
 
         {/* GitOps workflow */}
         <section>
           <SectionHeader id="gitops" icon={GitBranch} title="GitOps Workflow" subtitle="Every action in Wingman is a Git commit" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            Wingman never applies changes directly. Every create, update, or delete operation renders
-            YAML manifests and commits them to GitLab as a Merge Request branch. This means:
+            Wingman never applies changes directly. Every create, edit or delete writes files as one commit on a
+            new branch and opens a merge request. This means:
           </p>
           <div className="space-y-3 mb-5">
             {[
-              { icon: GitPullRequest, text: "Peer review is built in — a second admin can review the manifest diff before merging." },
-              { icon: ClipboardList, text: "Full audit trail — every change is a git commit with author and timestamp." },
-              { icon: RefreshCw, text: "Rollback is trivial — revert the commit in GitLab and ArgoCD reconciles automatically on its next sync." },
-              { icon: Shield, text: "No shadow changes — if something changed in your cluster and it is not in Git, Wingman will flag it as drift." },
+              { icon: GitPullRequest, text: "Peer review is built in: another admin reviews the diff and approves it. Nobody approves their own change." },
+              { icon: ClipboardList, text: "Full audit trail: every change is a commit that names the person who asked for it." },
+              { icon: RefreshCw, text: "Rollback is a revert: revert the merge in GitLab, and ArgoCD applies the revert like any other change." },
+              { icon: Shield, text: "Other writers are respected: the allocate-segment workflow and the day1 CI commit to cluster MR branches. A Wingman edit or approval based on an older read is refused instead of overwriting them." },
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-start gap-3 rounded-lg border bg-card px-4 py-3">
                 <Icon className="h-4 w-4 text-primary shrink-0 mt-0.5" />
@@ -417,257 +533,252 @@ export default function DocsPage() {
             ))}
           </div>
           <Callout type="warning" title="Changes are not immediate">
-            Merging an MR commits manifests to Git. Actual cluster provisioning and addon sync both
-            happen asynchronously — ArgoCD handles both Day1 and Day2, picking up changes on its next
-            reconcile loop. You can trigger a manual sync from the ArgoCD dashboard if needed.
+            Merging an MR changes Git only. For Day1, the ApplicationSet on the MCE turns each cluster file into an
+            ArgoCD Application and HyperShift brings the cluster up. For Day2, ArgoCD generates the chart&apos;s
+            app; most of these apps are manual-sync and deploy nothing until someone syncs them. Wingman has no
+            ArgoCD access, so it never shows sync or health: use the ArgoCD UI, where you can also sync by hand.
           </Callout>
         </section>
 
         {/* Specs */}
         <section>
-          <SectionHeader id="specs" icon={Layers} title="Specs" subtitle="Define the shape of your clusters before you build them" />
+          <SectionHeader id="specs" icon={Layers} title="Specs" subtitle="Presets for the clusters you create" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            A Spec is a reusable cluster template. It defines the nodepool structure, hardware profiles,
-            MachineConfigs, and which Day2 addons are pre-configured. Think of it as a &quot;cluster class&quot; —
-            you create one spec for &quot;high-availability bare metal Dell nodes&quot; and then create multiple
-            clusters from it.
+            A spec is a reusable preset: think of it as a &quot;cluster class&quot;. It sets how many nodepools the
+            create form starts with, may preset some template inputs, and lists the Day2 addons its clusters should
+            have. Every spec fills the same shared template, <InlineCode>cluster-template.j2</InlineCode> in the
+            specs repo, so specs differ in values, not in templates.
           </p>
 
           <h3 className="text-base font-semibold mb-4">Creating a spec — worked example</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            We will walk through creating the <InlineCode>prod-dok-ha</InlineCode> spec used by the{" "}
-            <InlineCode>prod-dok-nova</InlineCode> cluster.
+            We will walk through creating <InlineCode>agent-standard</InlineCode>, a spec for clusters with two
+            nodepools on the Agent platform.
           </p>
           <div className="space-y-4 mb-6">
             <Step n={1} title="Name the spec">
-              Navigate to <strong>Specs</strong> → <strong>New Spec</strong>. Enter the spec name{" "}
-              <InlineCode>prod-dok-ha</InlineCode>. This names the template — not a cluster. Cluster-specific
-              fields like cluster name, site, MCE, and OpenShift version are set later when creating
-              a cluster from this spec.
+              Go to <strong>Specs</strong> → <strong>New Spec</strong>. Enter the <strong>Spec Name</strong>{" "}
+              <InlineCode>agent-standard</InlineCode> (a lowercase DNS label; it cannot be changed later), a
+              version and a description. This names the preset, not a cluster: the cluster&apos;s name, site, MCE
+              and OpenShift version are chosen when a cluster is created.
             </Step>
-            <Step n={2} title="Define the cluster structure">
-              In the <strong>Cluster Structure</strong> section, add <strong>2 nodepools</strong> by clicking
-              the + button. For each nodepool you can expand and configure sub-fields
-              (labels, nodeLabels, agentLabelSelector, configs, tuningConfig, workerTag).
-              The count you set here is locked — clusters built from this spec will always have exactly 2 nodepools.
+            <Step n={2} title="Shape the form">
+              In <strong>Cluster Structure</strong>, add <strong>2 nodepools</strong> with the + button, and their
+              sub-entries (such as configs). Clusters created from this spec get exactly 2 nodepools: their create
+              form fills in the values, but cannot add or remove one. The shared template is shown read-only under{" "}
+              <strong>Cluster Template — shared across all specs</strong>.
             </Step>
-            <Step n={3} title="Mark fields as immutable">
-              Click the <Lock className="inline h-3 w-3" /> toggle next to any field to mark it immutable.
-              Immutable fields cannot be edited after a cluster is created from this spec. Cluster identity
-              fields (<InlineCode>clusterName</InlineCode>, <InlineCode>site</InlineCode>,{" "}
-              <InlineCode>MCE</InlineCode>) are always immutable — they never appear here. For{" "}
-              <InlineCode>prod-dok-ha</InlineCode> we additionally lock:{" "}
-              <InlineCode>platform</InlineCode> and <InlineCode>masterTag</InlineCode>.
+            <Step n={3} title="Lock fields (a hint)">
+              The <Lock className="inline h-3 w-3" /> toggle marks a field as one that should not change after
+              create; the create form shows it as <strong>immutable after create</strong>. It is a hint for people:
+              an edit of the cluster&apos;s file is not checked against it.
             </Step>
-            <Step n={4} title="Pre-configure Day2 addons">
-              In the <strong>Day2 Addons</strong> section, browse the marketplace and select addons.
-              For each addon, click <strong>Configure</strong> to choose which fields are
-              overrideable — those are the fields cluster operators can set differently per cluster.
-              Fields not marked as overrideable will always use the addon&apos;s team default.
+            <Step n={4} title="Pick the Day2 addons">
+              In <strong>Day 2 — Addons</strong>, pick charts from <strong>Available Addons</strong> and drag them
+              into order. The gear opens <strong>Configure Overrideable Fields</strong>: the values a cluster&apos;s
+              creator may set for that addon. Everything else comes from the chart&apos;s defaults.
             </Step>
             <Step n={5} title="Review and submit">
-              Click <strong>Create Spec</strong>. Wingman renders the spec YAML and opens a GitLab MR.
-              Merge it to activate the spec.
+              <strong>Preview variables</strong> shows the structure the spec passes to the template.{" "}
+              <strong>Review &amp; Create</strong> shows the spec file, and <strong>Confirm — Create Spec MR</strong>{" "}
+              opens the MR in the specs repo. The spec can be used once it is merged.
             </Step>
           </div>
 
-          <CodeBlock language="Rendered spec YAML — prod-dok-ha">
-{`name: prod-dok-ha
+          <CodeBlock language="The spec file — specs/agent-standard.yaml">
+{`apiVersion: wingman.io/v1
+kind: ClusterSpec
+metadata:
+  name: agent-standard
+  description: Bare-metal workers on the Agent platform, two nodepools
+  version: "1.0.0"
 spec:
   day1:
-    immutable_paths:
-      - platform
-      - masterTag
-    structure:
-      nodepool:
-        - {}
-        - {}
-
+    structure:              # the create form starts with two nodepools
+      nodepools:
+        - configs: [{}]
+        - configs: [{}]
+    immutable_paths: []     # the "immutable after create" hints
+    values:                 # presets, merged under what the creator enters
+      owner_merkaz: "1234"
   day2:
     addons:
-      - team: monitoring
-        name: prometheus-stack
-        overrideable_fields:
-          - retention
-          - storageClass
-      - team: networking
-        name: cert-manager
-        overrideable_fields: []`}
+      - team: redbull
+        name: cluster-roles
+        version: main
+        overrideable: []    # the values a creator may set`}
           </CodeBlock>
 
           <div className="mt-5 space-y-4">
-            <Callout type="tip" title="# Example comments in the template">
-              Platform operators can add a <InlineCode># Example: value</InlineCode> comment on the
-              line immediately before any <InlineCode>{`{{ variable }}`}</InlineCode> in the Jinja2
-              template. Wingman detects these comments and shows them as hints in the cluster creation
-              form — helping operators fill in fields correctly without needing to read the raw template.
+            <Callout type="info" title="Preset values">
+              <InlineCode>spec.day1.values</InlineCode> presets template inputs: a creator&apos;s own values win
+              (maps are merged). Presets are written in the spec file in the specs repo; the spec pages show them
+              read-only (<strong>Preset values</strong>).
+            </Callout>
+            <Callout type="tip" title="Example comments in the template">
+              A <InlineCode># Example: value</InlineCode> or <InlineCode>{"{# Example: value #}"}</InlineCode> comment
+              on a line just before an input in <InlineCode>cluster-template.j2</InlineCode> becomes that field&apos;s
+              hint in the create form.
               <div className="mt-2">
                 <CodeBlock language="cluster-template.j2 snippet">
-{`# Example: high-perf-tuned
-tuningConfig: {{ np.tuning_config | default("") }}`}
+{`  {# Example: dell-r660-site1-128c-1024gb-5tb #}
+  - infraEnvName: {{ np.infra_env }}`}
                 </CodeBlock>
               </div>
             </Callout>
-            <Callout type="warning" title="Editing a spec affects future clusters only">
+            <Callout type="warning" title="Editing a spec does not rewrite existing clusters">
               Changing a spec does not touch clusters that already exist: their files keep what they were
-              rendered with, and nothing re-renders them (the inputs of a render are not stored). To change
-              an existing cluster, edit its file from the cluster page.
+              created with, and nothing re-renders them (the inputs of a create are not stored). Drift, though,
+              always compares a cluster with the spec as it is now: add an addon to a spec and every cluster
+              created from it shows <strong>Drifted</strong> until the addon is installed. To change an existing
+              cluster, edit its file from the cluster page. Deleting a spec leaves its clusters&apos; files as they
+              are; their drift becomes <strong>Unknown</strong>, because the spec they name is gone.
             </Callout>
           </div>
         </section>
 
-        {/* Creating a cluster */}
+        {/* Clusters */}
         <section>
-          <SectionHeader id="clusters" icon={Server} title="Creating a Cluster" subtitle="Pick a spec, fill in the values, open the MR" />
+          <SectionHeader id="clusters" icon={Server} title="Clusters" subtitle="Create a hosted cluster from a spec, then edit or delete it by MR" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            Creating a cluster is a two-phase form. Phase one locks in the shape (from the spec);
-            phase two fills in the values. No field can be added or removed at cluster-creation time —
-            only the values change.
+            Creating a cluster is a two-step form: choose a spec, then fill in the values. The spec fixes the
+            shape (how many nodepools); the form only changes values.
           </p>
 
-          <h3 className="text-base font-semibold mb-4">Worked example — prod-dok-nova</h3>
+          <h3 className="text-base font-semibold mb-4">Worked example — ocp4-prod-herzi-site1</h3>
           <div className="space-y-4 mb-6">
-            <Step n={1} title="Pick the spec">
-              Navigate to <strong>Clusters</strong> → <strong>New Cluster</strong>. Select{" "}
-              <InlineCode>prod-dok-ha</InlineCode> from the spec dropdown. The form immediately shows
-              exactly 2 nodepool cards — locked to the spec structure.
+            <Step n={1} title="Choose the spec">
+              Go to <strong>Clusters</strong> → <strong>New Cluster</strong> and pick{" "}
+              <InlineCode>agent-standard</InlineCode>. A spec is required; a spec file that does not parse is shown
+              but cannot be picked.
             </Step>
-            <Step n={2} title="Fill in cluster identity">
-              These three fields are set once, forever:
+            <Step n={2} title="Cluster details">
               <ul className="mt-2 space-y-1 list-none">
-                <li><InlineCode>Site</InlineCode> → select <InlineCode>site1</InlineCode></li>
-                <li><InlineCode>MCE</InlineCode> → select <InlineCode>ocp4-prod-mce-site1-a</InlineCode></li>
-                <li><InlineCode>Cluster name</InlineCode> → <InlineCode>ocp4-prod-nova-site1</InlineCode></li>
+                <li><InlineCode>Site</InlineCode> → <InlineCode>site1</InlineCode></li>
+                <li><InlineCode>MCE</InlineCode> → <InlineCode>ocp4-prod-mce-site1-a</InlineCode></li>
+                <li><InlineCode>Cluster Name</InlineCode> → <InlineCode>ocp4-prod-herzi-site1</InlineCode></li>
+                <li><InlineCode>OpenShift Version</InlineCode> → <InlineCode>4.18.56</InlineCode></li>
               </ul>
-              Sites and MCEs are read from the day1 repository and are read-only: Wingman never creates
-              them (MCE onboarding happens elsewhere). Names follow{" "}
-              <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, and the env must be the MCE&apos;s;
-              the form says why a name is refused. The OpenShift version defaults to the MCE&apos;s mastertag.
-              The cluster is stored at{" "}
-              <InlineCode>sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-nova-site1.yaml</InlineCode>.
-              The VLAN and DHCP network are not yours to fill: the allocate-segment workflow commits them to
-              the MR branch, and the cluster page shows them as pending until then.
+              <p className="mt-2">
+                Sites and MCEs are the day1 repo&apos;s folders and are read-only: Wingman never creates them. An MCE
+                whose name is off its convention is shown but disabled. New names must follow{" "}
+                <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, with the MCE&apos;s env and the site
+                you picked; the form lists every problem with a name as you type, and fills in site and MCE when it
+                can detect them from the name. The version list is the chosen MCE&apos;s: the releases in the day1
+                repo&apos;s upgrade ladder that the MCE can host, so the picker waits for an MCE. It defaults to the
+                spec&apos;s preset, else the MCE&apos;s mastertag, but only when the MCE offers it. The release becomes
+                the file&apos;s <InlineCode>mastertag</InlineCode>.
+              </p>
             </Step>
-            <Step n={3} title="Fill in global fields">
-              <ul className="mt-1 space-y-1 list-none">
-                <li><InlineCode>platform</InlineCode> → <InlineCode>agent</InlineCode></li>
-                <li><InlineCode>hostInventory</InlineCode> → <InlineCode>inventory</InlineCode></li>
-                <li><InlineCode>masterTag</InlineCode> → <InlineCode>4.14.0-x86_64</InlineCode></li>
-                <li><InlineCode>openshift_release_version</InlineCode> → <InlineCode>4.14.0-x86_64</InlineCode></li>
-              </ul>
+            <Step n={3} title="Cluster configuration">
+              The fields are the inputs of the shared template. With the default template: the owner unit (merkaz,
+              anaf, mador) and, per nodepool, its InfraEnv, replicas, configs, node labels and tuning config. Map and
+              list fields take plain YAML. Fields the spec presets are filled in already.
             </Step>
-            <Step n={4} title="Fill in nodepool details">
-              Each nodepool card corresponds to one nodepool in the spec structure. For nodepool 1:
+            <Step n={4} title="Addon configuration">
+              If the spec lists addons, set the values it lets you set for each (or switch to{" "}
+              <strong>Full Values</strong> for YAML). They are recorded in the cluster file&apos;s header and used
+              when the addons are installed: installing them is a Day2 change, from the cluster&apos;s Drift tab.
+            </Step>
+            <Step n={5} title="Review and open the MR">
+              <strong>Review &amp; Create</strong> runs every check a create runs and opens{" "}
+              <strong>Review: Create Cluster</strong>, which shows the exact file the MR adds.{" "}
+              <strong>Confirm — Create Cluster MR</strong> opens it and takes you to its approval page.
             </Step>
           </div>
 
-          <CodeBlock language="Nodepool 1 — zone-a values">
-{`name: prod-dok-nova-prod-dok-nova-a-dell-r660-128c-1024gb-10tb-nodepool-zone-a
-replicas: 6
+          <CodeBlock language="The file the MR adds — ocp4-prod-herzi-site1.yaml">
+{`# specName: "agent-standard"
+# specVersion: "1.0.0"
+# wingmanAddons: [{"name": "cluster-roles", "override_values": {}, "team": "redbull", "version": "main"}]
+owner:
+  merkaz: "1234"
+  anaf: "56"
+  mador: "7"
 
-labels:
-  minReplicas: "5"
-  maxReplicas: "6"
-  allowDeletion: "false"
-
-nodeLabels:
-  node-role.kubernetes.io/worker: ""
-  topology.kubernetes.io/zone: zone-a
-
-agentLabelSelector:
-  nodeLabelKey: infraenvs.agent-install.openshift.io
-  nodeLabelValue: prod-dok-nova-a-dell-r660-128c-1024gb-10tb
-
-configs:
-  - name: nm-conf-prod-dok-nova-a-dell-r660-128c-1024gb-10tb
-  - name: worker-chrony-configuration
-  - name: worker-kubeletconfig-high-mem
-  - name: special-nic-config
-  - name: audit-policy-config
-
-tuningConfig: high-perf-tuned       # bare scalar — typed directly, no JSON braces needed
-workerTag: 4.14.0-x86_64`}
-          </CodeBlock>
-
-          <div className="mt-4 mb-4">
-            <Callout type="tip" title="YAML fields accept any YAML">
-              Object/map fields like <InlineCode>agentLabelSelector</InlineCode> accept plain YAML — no
-              JSON required. A bare scalar like <InlineCode>high-perf-tuned</InlineCode> is perfectly valid.
-              A multiline map is also valid:
-              <div className="mt-2">
-                <InlineCode>name: high-perf-tuned{"\n"}level: aggressive</InlineCode>
-              </div>
-            </Callout>
-          </div>
-
-          <p className="text-sm text-muted-foreground mb-3">And the full rendered cluster manifest that goes into the Day1 repository:</p>
-
-          <CodeBlock language="Rendered cluster manifest — prod-dok-nova">
-{`clusterName: prod-dok-nova
-platform: agent
-
-hostInventory: inventory
-
-masterTag: 4.14.0-x86_64
+mastertag: 4.16.27-x86_64
 
 nodepool:
-  - name: prod-dok-nova-prod-dok-nova-a-dell-r660-128c-1024gb-10tb-nodepool-zone-a
-    replicas: 6
-    labels:
-      minReplicas: "5"
-      maxReplicas: "6"
-      allowDeletion: "false"
-    nodeLabels:
-      node-role.kubernetes.io/worker: ""
-      topology.kubernetes.io/zone: zone-a
-    agentLabelSelector:
-      nodeLabelKey: infraenvs.agent-install.openshift.io
-      nodeLabelValue: prod-dok-nova-a-dell-r660-128c-1024gb-10tb
-    configs:
-      - name: nm-conf-prod-dok-nova-a-dell-r660-128c-1024gb-10tb
-      - name: worker-chrony-configuration
-      - name: worker-kubeletconfig-high-mem
-      - name: special-nic-config      # ← from extra_configs
-      - name: audit-policy-config     # ← from additional_configs (all nodepools)
-    tuningConfig: high-perf-tuned
-    workerTag: 4.14.0-x86_64
-
-  - name: prod-dok-nova-prod-dok-nova-b-dell-r660-128c-1024gb-nodepool-zone-b
+  - infraEnvName: dell-r660-site1-128c-1024gb-5tb
     replicas: 3
     labels:
-      minReplicas: "2"
-      maxReplicas: "3"
-      allowDeletion: "false"
-    nodeLabels:
-    agentLabelSelector:
-      nodeLabelKey: infraenvs.agent-install.openshift.io
-      nodeLabelValue: prod-dok-nova-b-dell-r660-128c-1024gb
+      allowDeletion: false
     configs:
-      - name: nm-conf-prod-dok-nova-b-dell-r660-128c-1024gb
-      - name: worker-chrony-configuration
       - name: worker-kubeletconfig-reserved
-      - name: custom-bond-interface   # ← from extra_configs
-      - name: audit-policy-config     # ← from additional_configs (all nodepools)
-    tuningConfig:
-    workerTag: 4.14.0-x86_64
-
-mcFiles:
-  - nm-conf-prod-dok-nova-a-dell-r660-128c-1024gb-10tb
-  - worker-chrony-configuration
-  - worker-kubeletconfig-high-mem
-  - special-nic-config
-  - audit-policy-config
-  - nm-conf-prod-dok-nova-b-dell-r660-128c-1024gb
-  - worker-kubeletconfig-reserved
-  - custom-bond-interface`}
+  - infraEnvName: dell-r660-site1-64c-512gb
+    replicas: 2
+    labels:
+      allowDeletion: false`}
           </CodeBlock>
 
-          <div className="mt-5">
-            <Callout type="info" title="Review before submitting">
-              Click <strong>Review</strong> to open a dialog showing the full rendered YAML and all GitLab
-              file paths that will be created. Verify everything looks correct before clicking
-              <strong> Create Cluster</strong>.
-            </Callout>
+          <h3 className="text-base font-semibold mt-6 mb-3">Who writes which key</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+            The cluster file is the values file of the hostedclusters-setup chart. People and automation own
+            separate keys, and both commit to the MR branch before it is approved:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+            {[
+              {
+                who: "You, through Wingman",
+                keys: "owner, mastertag, nodepool[] (infraEnvName, replicas, labels.allowDeletion, configs, name, nodeLabels, tuningConfig), and optional keys such as platform: kubevirt",
+              },
+              {
+                who: "Automation, on the MR branch",
+                keys: "vlanId and dhcp_values (the allocate-segment workflow); mcConfigMap and mcFiles (the day1 CI). Wingman never writes them, and an edit that changes or removes one is refused.",
+              },
+              {
+                who: "The file's path",
+                keys: "clusterName, site and mce come from where the file is. Wingman writes none of them; the comment header (# specName, …) is Wingman's own bookkeeping, which Helm ignores.",
+              },
+            ].map(({ who, keys }) => (
+              <div key={who} className="rounded-xl border bg-card p-4">
+                <p className="text-sm font-semibold mb-1">{who}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{keys}</p>
+              </div>
+            ))}
+          </div>
+          <Callout type="info" title="VLAN and DHCP show as pending">
+            The cluster page shows <strong>VLAN</strong> and <strong>DHCP network</strong> as{" "}
+            <strong>pending</strong> until the allocate-segment workflow has written them. Approve a create MR once
+            the workflow and CI have committed to its branch: the review dialog says so too.
+          </Callout>
+
+          <h3 className="text-base font-semibold mt-6 mb-3">The cluster page</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+            The tabs are <strong>Overview</strong> (the cluster, its HostedCluster and network, nodepools, spec and,
+            when it is on, live status), <strong>YAML</strong>, <strong>Drift</strong> and <strong>History</strong>{" "}
+            (the cluster file&apos;s commits in the day1 repo, and its chart values&apos; commits in the team repos).
+            The header has <strong>GitLab</strong> (the file), <strong>Addons</strong> (its charts) and, for admins,{" "}
+            <strong>Edit</strong> and <strong>Delete</strong>. A name off the naming convention is flagged{" "}
+            <strong>Off the naming convention</strong>, here and in the list, never hidden: existing clusters keep
+            working, and only new names are refused.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex gap-4 rounded-xl border bg-card p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <Pencil className="h-4 w-4 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold mb-1">Edit</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Edit the file as YAML, then <strong>Review &amp; Submit</strong> shows the diff and opens a modify MR.
+                  Keep the automation keys as they are. If the file changed since you opened it (CI or the workflow
+                  committed), the MR is refused and nothing is overwritten: <strong>Reload</strong> and edit again.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-4 rounded-xl border bg-card p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
+                <XCircle className="h-4 w-4 text-red-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold mb-1">Delete</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <strong>Confirm — Delete Cluster MR</strong> opens an MR that removes the cluster file. Once it is
+                  merged, the file and with it the cluster&apos;s ArgoCD Application are gone.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -687,57 +798,89 @@ mce      sites/{site}/{env}/mces/{mce}/in-cluster/{chart}/
 hosted   sites/{site}/{env}/mces/{mce}/{cluster}/{chart}/
 upi      sites/{site}/{env}/upi/{cluster}/{chart}/`}
           </CodeBlock>
+          <p className="text-sm text-muted-foreground leading-relaxed mt-3 mb-5">
+            The <strong>Destinations</strong> page lists every destination, including day1 clusters no team deploys
+            to yet, with its kind, site and env, MCE, OCP version, teams and findings; click one to open its charts.
+            The <strong>Addons</strong> page (<strong>Addon Catalog</strong>) lists every team&apos;s charts with their
+            team values, deploy config and versions; it is read-only.
+          </p>
 
           <h3 className="text-base font-semibold mt-6 mb-3">Value layering</h3>
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            The platform merges up to ten files, as Helm does (a later layer wins; <InlineCode>null</InlineCode>{" "}
-            deletes a key). For a hosted cluster:
+            On top of the chart&apos;s own defaults, the platform merges up to ten files from the team&apos;s repo,
+            as Helm does: a later layer wins, and <InlineCode>null</InlineCode> deletes a key, even a chart default.
+            For a hosted cluster, with the names the UI shows:
           </p>
           <CodeBlock language="Hosted-cluster value stack (lowest → highest)">
-{`chart             the chart's own values.yaml, at the resolved revision
-team              operators/{chart}/values.yaml
-team-ocp-version  operators/{chart}/ocp-versions/{ocp}/values.yaml
-site, site-env    sites/{site}/values.yaml, sites/{site}/{env}/values.yaml
-fleet …           defaults/hosted-clusters/{chart}/values[-{env}|-{cluster}].yaml
-mce               sites/{site}/{env}/mces/{mce}/values.yaml
-cluster-wide      …/{cluster}/values.yaml
-cluster           …/{cluster}/{chart}/values.yaml
-                  ↑ the file Wingman writes when you edit a chart's values`}
+{`chart                 the chart's own values.yaml, at the resolved revision
+team                  operators/{chart}/values.yaml
+team · ocp            operators/{chart}/ocp-versions/{ocp}/values.yaml
+site                  sites/{site}/values.yaml
+site · env            sites/{site}/{env}/values.yaml
+fleet                 defaults/hosted-clusters/{chart}/values.yaml
+fleet · env           defaults/hosted-clusters/{chart}/values-{env}.yaml
+fleet · this cluster  defaults/hosted-clusters/{chart}/values-{cluster}.yaml
+mce                   sites/{site}/{env}/mces/{mce}/values.yaml
+cluster-wide          …/{cluster}/values.yaml
+cluster               …/{cluster}/{chart}/values.yaml
+                      ↑ the file Wingman writes when you edit a chart's values`}
           </CodeBlock>
           <p className="text-sm text-muted-foreground leading-relaxed mt-3 mb-5">
-            The values table shows every merged value with the layer that set it (<strong>Set by</strong>);
-            the <strong>Layers</strong> tab lists the stack file by file. Editing a value writes it into the
-            cluster&apos;s file; <em>inherit</em> takes it out again.
+            MCEs, UPI clusters (with an <InlineCode>upi-wide</InlineCode> layer) and the hub have stacks of their own.
+            A chart&apos;s values table shows every merged value with the layer that set it (<strong>Set by</strong>);
+            its <strong>Layers</strong> tab lists the stack file by file, and <strong>Deployment</strong> shows the
+            ArgoCD app it generates. Editing a value writes it into the destination&apos;s file; <em>inherit</em>{" "}
+            takes it out again.
           </p>
 
           <h3 className="text-base font-semibold mt-6 mb-4">Installing a chart</h3>
           <div className="space-y-3 mb-5">
             <Step n={1} title="Open the destination's charts">
-              From a cluster&apos;s page (<strong>Addons</strong>), or any destination on the <strong>Destinations</strong> page.
+              From a cluster&apos;s page (<strong>Addons</strong>), or any destination on the <strong>Destinations</strong>{" "}
+              page. The charts page lists what is <strong>Installed</strong> and what is <strong>Available</strong>.
             </Step>
             <Step n={2} title="Pick a chart under Available">
-              Click <strong>Install</strong>, or select several and use <strong>Install selected</strong>: one MR per team,
-              and if any chart is refused, none is opened.
+              Click <strong>Install</strong>, or select several and use <strong>Install selected</strong>: one MR per
+              team. Every chart is checked first, and if one is refused, none is opened. A chart that needs its own
+              repourl is installed on its own.
             </Step>
             <Step n={3} title="Set only what differs">
               The form shows the values the chart would get; change only what this destination needs. The revision is
-              inherited from the team; choosing another one is an <strong>emergency pin</strong> that detaches the
-              destination from future upgrades, so it must be confirmed.
+              inherited (the team default, its OCP-version pin, or a fleet default; else <InlineCode>HEAD</InlineCode>,
+              the chart repo&apos;s default branch).
             </Step>
             <Step n={4} title="Review and open the MR">
-              The review shows the files the MR creates. After it is merged, ArgoCD generates the app;
-              a manual-sync app deploys nothing until someone syncs it. Wingman has no ArgoCD access, so it never
-              shows sync or health.
+              <strong>Review install</strong> shows the files the MR creates, with an optional note for the approver.
+              After it is merged, ArgoCD generates the app; a manual-sync app deploys nothing until someone syncs it.
+              Wingman has no ArgoCD access, so it never shows sync or health.
             </Step>
+          </div>
+
+          <h3 className="text-base font-semibold mb-3">Emergency pins</h3>
+          <div className="flex gap-4 rounded-xl border bg-card p-4 mb-5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
+              <Pin className="h-4 w-4 text-amber-500" />
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed min-w-0">
+              Choosing a <strong>Revision</strong> other than the inherited one writes a{" "}
+              <InlineCode>targetRevision</InlineCode> into the destination&apos;s folder: an{" "}
+              <strong>emergency pin</strong>. The destination then stops following the team default and its
+              OCP-version pins until someone removes the pin, so you must tick <strong>Pin … anyway</strong> first.
+              On every destination but the hub, a pinned chart shows a <strong>pinned</strong> badge; choosing the
+              inherited revision again removes the pin. This is the only way Wingman holds one cluster at a version.
+            </p>
           </div>
 
           <h3 className="text-base font-semibold mb-3">Fleet defaults</h3>
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            A chart in a team&apos;s <InlineCode>defaults/{"{scope}"}/</InlineCode> is deployed to every destination of
-            that kind. It appears as <strong>fleet default</strong>; editing it writes{" "}
-            <InlineCode>defaults/{"{scope}"}/{"{chart}"}/values-{"{cluster}"}.yaml</InlineCode>. It cannot be removed
-            from one cluster or installed into a cluster folder as well (that would generate the app twice): exclude
-            the cluster in <InlineCode>defaults/{"{scope}"}/exclusions.yaml</InlineCode> instead.
+            A chart in a team&apos;s <InlineCode>defaults/{"{scope}"}/</InlineCode> (<InlineCode>mces</InlineCode>,{" "}
+            <InlineCode>hosted-clusters</InlineCode> or <InlineCode>upi</InlineCode>) is deployed to every destination
+            of that kind the team&apos;s repo has a folder for. It appears as <strong>fleet default</strong>; editing it
+            writes <InlineCode>defaults/{"{scope}"}/{"{chart}"}/values-{"{cluster}"}.yaml</InlineCode>. It cannot be
+            removed or pinned for one cluster, nor installed into a cluster folder as well (that would generate the
+            app twice): exclude the cluster in <InlineCode>defaults/{"{scope}"}/exclusions.yaml</InlineCode> instead,
+            in GitLab (Wingman does not edit that file). An excluded fleet default is listed as such, and can then be
+            installed into the cluster&apos;s own folder.
           </p>
 
           <h3 className="text-base font-semibold mb-3">The chart&apos;s ⋮ menu</h3>
@@ -749,7 +892,8 @@ cluster           …/{cluster}/{chart}/values.yaml
               <div className="min-w-0">
                 <p className="text-sm font-semibold mb-1">Open folder in GitLab</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Opens the chart&apos;s folder in the team repository. Visible to all users, including Viewers.
+                  Opens the chart&apos;s folder in the team repository (for a fleet default, its{" "}
+                  <InlineCode>defaults/{"{scope}"}/{"{chart}"}</InlineCode> folder). Visible to all users, including Viewers.
                 </p>
               </div>
             </div>
@@ -758,37 +902,69 @@ cluster           …/{cluster}/{chart}/values.yaml
                 <AlertTriangle className="h-4 w-4 text-red-500" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold mb-1">Remove</p>
+                <p className="text-sm font-semibold mb-1">Remove from this cluster (on the hub: Remove from the hub)</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Opens an MR deleting the chart&apos;s folder, which deletes its ArgoCD Application, but ArgoCD{" "}
+                  Opens an MR deleting the chart&apos;s folder (type the chart&apos;s name, then{" "}
+                  <strong>Open removal MR</strong>). That deletes its ArgoCD Application, but ArgoCD{" "}
                   <strong>orphans the workload: it keeps running</strong>. A teardown needs{" "}
-                  <InlineCode>argocd app delete {"<app>"} --cascade</InlineCode> after the merge. Admin-only.
+                  <InlineCode>argocd app delete {"<app>"} --cascade</InlineCode> after the merge. Admin-only; a fleet
+                  default shows how to exclude it instead.
                 </p>
               </div>
             </div>
           </div>
 
+          <h3 className="text-base font-semibold mb-3">Lints</h3>
+          <div className="flex gap-4 rounded-xl border bg-card p-4 mb-5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <ShieldAlert className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0 space-y-2 text-xs text-muted-foreground leading-relaxed">
+              <p>
+                The <strong>Lints</strong> page lists every finding in every team repo, by severity. Errors include
+                every check the platform&apos;s own render check fails on: an env folder other than{" "}
+                <InlineCode>prod</InlineCode>, <InlineCode>prep</InlineCode> or <InlineCode>test</InlineCode>, a cluster
+                folder day1 has no version for, a malformed or misspelled <InlineCode>exclusions.yaml</InlineCode>, a
+                chart that is both a fleet default and in a cluster&apos;s folder. Wingman adds checks of its own: errors
+                for a deploy config with no lowercase <InlineCode>repourl</InlineCode> or a file that is not valid YAML,
+                and warnings for a miscased <InlineCode>repoUrl</InlineCode>, a chart pinned per OCP version with no pin
+                for a cluster&apos;s version, a fleet default&apos;s <InlineCode>targetRevision</InlineCode> that
+                overrides the OCP-version pins, and a cluster name placed at more than one position across team repos.
+                An emergency pin is listed as information. Every chart repo a <InlineCode>repourl</InlineCode> names is
+                checked too: a repo GitLab renamed or moved is a warning that gives the URL to write, and a repo GitLab
+                refuses is an error on that chart alone; the rest of the catalog still loads.
+              </p>
+              <p>
+                Findings also appear on the destinations, charts and catalog. Before any Day2 MR opens, the team repo
+                is checked as it would be after the change: a change that adds an error is refused, while existing
+                errors do not block unrelated changes. On every charts page but the hub&apos;s,{" "}
+                <strong>Upgrade check</strong> lists the charts a new OCP version would leave without an OCP-version pin.
+              </p>
+            </div>
+          </div>
+
           <Callout type="tip" title="Addon override example">
-            Say <InlineCode>monitoring/prometheus-stack</InlineCode> has a team default of{" "}
-            <InlineCode>retention: 30d</InlineCode>. For <InlineCode>prod-dok-nova</InlineCode> you set{" "}
-            <InlineCode>retention: 90d</InlineCode>. Only that value is written, to{" "}
-            <InlineCode>sites/nova/prod/mces/prod-dok/prod-dok-nova/prometheus-stack/values.yaml</InlineCode> in the
-            monitoring team&apos;s repository; the team default is unaffected.
+            Say the redbull team&apos;s <InlineCode>cluster-roles</InlineCode> chart has a team default of{" "}
+            <InlineCode>aggregateToView: true</InlineCode>. For <InlineCode>ocp4-prod-herzi-site1</InlineCode> you set{" "}
+            <InlineCode>aggregateToView: false</InlineCode>. Only that value is written, to{" "}
+            <InlineCode>sites/site1/prod/mces/ocp4-prod-mce-site1-a/ocp4-prod-herzi-site1/cluster-roles/values.yaml</InlineCode>{" "}
+            in the redbull repository; the team default is unaffected.
           </Callout>
         </section>
 
         {/* Drift */}
         <section>
-          <SectionHeader id="drift" icon={RefreshCw} title="Drift Detection" subtitle="Know when your clusters diverge from their spec" />
+          <SectionHeader id="drift" icon={RefreshCw} title="Drift Detection" subtitle="Know when a cluster lacks what its spec lists" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            A cluster linked to a spec is <strong>drifted</strong> when an addon its spec lists is missing
-            on the cluster or installed at another version. Every cluster has one of four states:
+            A cluster created from a spec is <strong>drifted</strong> when an addon its spec lists is not installed
+            on it, as Day2 reports. A spec addon installed at another version than the spec names is not drift:
+            Wingman lists it as information and never changes it. Every cluster has one of four states:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             {[
-              { title: "In sync", desc: "Every addon of the spec version the cluster was created from is installed at that version." },
-              { title: "Drifted", desc: "An addon is missing or at another version. The Drift tab lists each one with a fix." },
-              { title: "Unknown", desc: "Drift could not be determined: day2 did not answer, or the spec is gone. It is never shown as in sync." },
+              { title: "In sync", desc: "Every addon the spec lists now (its current version, not necessarily the one the cluster was created from) is installed." },
+              { title: "Drifted", desc: "An addon the spec lists is missing. The Drift tab lists each one with an Install button." },
+              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, or the spec is gone or does not parse. It is never shown as in sync." },
               { title: "Not linked", desc: "The cluster was not created from a spec, so there is nothing to drift from." },
             ].map(({ title, desc }) => (
               <div key={title} className="rounded-xl border bg-card p-4">
@@ -799,62 +975,76 @@ cluster           …/{cluster}/{chart}/values.yaml
           </div>
 
           <h3 className="text-base font-semibold mb-3">Viewing and resolving drift</h3>
-          <div className="space-y-3">
+          <div className="space-y-3 mb-5">
             <Step n={1} title="Find drifted clusters">
               The <strong>Clusters</strong> list shows each cluster&apos;s drift state and filters by it;
-              the dashboard counts drifted and unknown clusters separately. A spec&apos;s detail page lists
-              the drift of every cluster created from it.
+              the dashboard counts drifted and unknown clusters separately. A spec&apos;s <strong>Drift</strong> tab
+              lists every cluster created from it.
             </Step>
             <Step n={2} title="Review the addons">
-              Open the cluster → <strong>Drift</strong> tab to see which addons are missing or at another
-              version, and what the spec requires.
+              Open the cluster → <strong>Drift</strong> tab to see which spec addons are missing, and which are
+              installed at a version other than the spec&apos;s.
             </Step>
-            <Step n={3} title="Resolve">
-              Install or update each addon from the Drift tab (with the values requested at create). Each
-              fix opens a day2 MR for approval.
+            <Step n={3} title="Install what is missing">
+              Each missing addon has an <strong>Install</strong> button (admins). It opens a Day2 MR that installs the
+              chart at the team&apos;s default version, with the values requested when the cluster was created.
             </Step>
           </div>
+          <Callout type="info" title="Version differences are information only">
+            Wingman never offers to move an installed addon to the spec&apos;s version: a cluster follows its
+            team&apos;s default. To hold one cluster at a version on purpose, use an <strong>emergency pin</strong> on
+            its charts page (see Day2 Addons).
+          </Callout>
         </section>
 
         {/* Approvals */}
         <section>
           <SectionHeader id="approvals" icon={GitPullRequest} title="Approvals" subtitle="Review and merge platform Merge Requests" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            The <strong>Approvals</strong> page aggregates all open MRs from all platform repositories
-            (Day1 cluster repo + all Day2 team repos) in a single view. Admins use this page to:
+            The <strong>Approvals</strong> page lists every open Wingman MR in the day1 repo, the specs repo and every
+            team repo. Search by title or author, or filter by repo (day1, specs, day2). A <strong>you</strong> chip
+            marks your own requests. Open an MR to see its author, branches, head commit, description and the diff of
+            every changed file; admins then have three actions:
           </p>
           <div className="space-y-2 mb-5">
             {[
-              "Review the manifest diff before merging a cluster creation",
-              "Approve addon installs from multiple teams without switching between GitLab projects",
-              "Identify and close stale or abandoned MRs",
-            ].map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-lg border bg-card px-4 py-3">
+              { title: "Review & Approve", text: "Approves and merges exactly the commit you reviewed (the Head shown on the page)." },
+              { title: "Edit Files", text: "Changes a file the MR adds. Your commit goes on top of the branch, never a force-push, and the MR needs a fresh review." },
+              { title: "Reject", text: "Closes the MR without merging. The requester makes the change again to retry." },
+            ].map(({ title, text }) => (
+              <div key={title} className="flex items-start gap-3 rounded-lg border bg-card px-4 py-3">
                 <GitMerge className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <p className="text-sm text-muted-foreground min-w-0">{item}</p>
+                <p className="text-sm text-muted-foreground min-w-0"><strong>{title}</strong>: {text}</p>
               </div>
             ))}
           </div>
-          <Callout type="info" title="You approve the commit you reviewed">
-            Approving names the head commit shown on the review page. If anything was pushed to the branch
-            since (the day1 CI or the allocate-segment workflow commit to cluster MRs), nothing is merged and
-            Wingman asks you to reload and review the new diff. Nobody approves a change they requested
-            themselves.
-          </Callout>
-          <div className="h-3" />
-          <Callout type="danger" title="MRs expire">
-            Wingman does not auto-merge MRs. If an MR sits unmerged for a long time, the branch may
-            conflict with subsequent changes. Close stale MRs and re-create them from the Wingman UI.
-          </Callout>
+          <div className="space-y-3">
+            <Callout type="info" title="You approve the commit you reviewed">
+              If anything was pushed to the branch since you loaded it (the day1 CI and the allocate-segment workflow
+              commit to cluster MRs), nothing is merged: <strong>Reload</strong> and review the new diff. Nobody
+              approves a change they requested themselves; the button is disabled on your own MRs.
+            </Callout>
+            <Callout type="tip" title="Each MR has its own address">
+              GitLab numbers MRs per repository, so every team&apos;s repo has its own !5. Wingman&apos;s links name
+              the repo: <InlineCode>/approvals/day1-12</InlineCode>, <InlineCode>/approvals/specs-4</InlineCode>,{" "}
+              <InlineCode>/approvals/day2-redbull-7</InlineCode>.
+            </Callout>
+            <Callout type="danger" title="MRs go stale">
+              Wingman never merges on its own. An MR left open can conflict with later changes (the{" "}
+              <strong>Conflicted</strong> badge): Reject it and make the change again from the Wingman UI.
+            </Callout>
+          </div>
         </section>
 
         {/* Audit */}
         <section>
-          <SectionHeader id="audit" icon={ClipboardList} title="Audit Log" subtitle="Track every platform action to its author" />
+          <SectionHeader id="audit" icon={ClipboardList} title="Audit Log" subtitle="Track every platform change to its author" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            The <strong>Audit</strong> page shows recent Git commits and merged MRs across all platform
-            repositories. Every action Wingman takes on your behalf appears here with author, timestamp,
-            and a link to the exact commit in GitLab.
+            The <strong>Audit Log</strong> page has two tabs. <strong>Commits</strong> lists the newest commits on the
+            default branches of the day1, specs and team repos; <strong>Merge Requests</strong> lists the MRs Wingman
+            opened on them (the ones labelled <InlineCode>wingman</InlineCode>), open, merged or closed. Click a row to see its diff; each row links to GitLab, and an open MR to its review page.
+            Day1 and spec commits are authored by the person who asked for them; Day2 commits name them in the message
+            (&quot;Requested by … via Wingman&quot;).
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="rounded-xl border bg-card p-4">
@@ -863,7 +1053,7 @@ cluster           …/{cluster}/{chart}/values.yaml
                 Captured
               </p>
               <ul className="space-y-1 text-xs text-muted-foreground">
-                {["Spec create / edit / delete", "Cluster creation", "Addon install / remove", "MR merge events", "Value override changes"].map((i) => (
+                {["Spec create / edit / delete", "Cluster create / edit / delete", "Chart install / update / remove", "Merges", "Commits made directly in GitLab on these repos"].map((i) => (
                   <li key={i} className="flex items-center gap-1.5"><ArrowRight className="h-2.5 w-2.5 text-muted-foreground/50" />{i}</li>
                 ))}
               </ul>
@@ -874,7 +1064,7 @@ cluster           …/{cluster}/{chart}/values.yaml
                 Not captured here
               </p>
               <ul className="space-y-1 text-xs text-muted-foreground">
-                {["Direct GitLab edits outside Wingman", "ArgoCD sync events", "Cluster controller logs", "GitLab CI/CD pipeline runs"].map((i) => (
+                {["ArgoCD syncs and health", "Events on the clusters and hubs", "GitLab CI/CD pipeline runs", "Other repositories, such as chart repos"].map((i) => (
                   <li key={i} className="flex items-center gap-1.5"><ArrowRight className="h-2.5 w-2.5 text-muted-foreground/50" />{i}</li>
                 ))}
               </ul>
@@ -882,303 +1072,193 @@ cluster           …/{cluster}/{chart}/values.yaml
           </div>
         </section>
 
+        {/* Errors */}
+        <section>
+          <SectionHeader id="errors" icon={XCircle} title="When a Change Is Refused" subtitle="What Wingman tells you, why, and what to do" />
+          <p className="text-sm text-muted-foreground leading-relaxed mb-5">
+            A refused change writes nothing. Wingman says why on the page you are on; the code below is what the
+            service returned, and the <strong>request</strong> id under an error ties it to the service&apos;s log:
+            quote it when you report a problem.
+          </p>
+          <div className="space-y-3">
+            {REFUSALS.map(({ code, see, why, fix }) => (
+              <div key={code} className="rounded-xl border bg-card p-4">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                  <span className="inline-flex shrink-0 items-center rounded-md bg-muted px-2 py-0.5 text-[11px] font-mono font-semibold text-foreground sm:w-48">{code}</span>
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-medium text-foreground">{see}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{why}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed"><strong>What to do:</strong> {fix}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* Special Features */}
         <section>
-          <SectionHeader id="special-features" icon={Zap} title="Special Features" subtitle="Power-user capabilities that are easy to miss" />
+          <SectionHeader id="special-features" icon={Zap} title="Special Features" subtitle="Capabilities that are easy to miss" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-6">
             These features exist throughout the UI but are not always obvious at first glance.
-            Knowing about them can save significant time when working with clusters and specs day-to-day.
           </p>
 
           <div className="space-y-5">
 
-            {/* Live cluster status */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 shrink-0">
-                  <RefreshCw className="h-3.5 w-3.5 text-emerald-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">Live cluster status streaming</p>
-                  <p className="text-xs text-muted-foreground">Cluster detail page</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  When you open a cluster&apos;s detail page, Wingman opens a persistent streaming connection
-                  to the backend that pushes live status updates every ~30 seconds — no manual refresh needed.
-                  The <strong>Phase</strong> badge (e.g. <InlineCode>Running</InlineCode>,{" "}
-                  <InlineCode>Degraded</InlineCode>) and the <strong>OCP version</strong> badge update
-                  automatically as the cluster progresses through provisioning.
-                </p>
-                <p>
-                  If the stream is interrupted (network blip, pod restart), the frontend retries automatically
-                  up to 5 times with exponential back-off. You do not need to reload the page.
-                </p>
-                <Callout type="tip">
-                  To verify the stream is active, open DevTools → Network and look for a long-lived request
-                  to <InlineCode>/api/day1/clusters/{"{name}"}/status/stream</InlineCode> with status{" "}
-                  <strong>pending</strong>. The EventStream column shows each parsed frame.
-                </Callout>
-              </div>
-            </div>
+            <FeaturePanel icon={RefreshCw} tint="bg-emerald-500/10 text-emerald-500" title="Live cluster status" where="Cluster page, Clusters list, Dashboard — only when the deployment turns it on">
+              <p>
+                When the deployment reads HostedClusters from the MCE hubs (<InlineCode>CLUSTER_STATUS_ENABLED</InlineCode>),
+                the cluster page&apos;s <strong>Live Status</strong> card shows the HostedCluster&apos;s phase, OCP
+                version and problems, and each node pool&apos;s ready replicas. It updates itself (every 30 seconds
+                by default) and reconnects after a network blip, up to 5 times. The Clusters list shows each
+                cluster&apos;s health, and the Dashboard counts them.
+              </p>
+              <p>
+                The HostedCluster of <InlineCode>ocp4-prod-herzi-site1</InlineCode> is{" "}
+                <InlineCode>openshift-prod-herzi-site1</InlineCode> in <InlineCode>hcp-prod-herzi-site1</InlineCode>:
+                the file name minus the deployment&apos;s <InlineCode>DAY1_CLUSTER_NAME_STRIP_PREFIX</InlineCode>{" "}
+                (<InlineCode>ocp4-</InlineCode> by default).
+              </p>
+              <Callout type="tip">
+                When live status is off, the Dashboard says <strong>Live status is off</strong>, the list shows a dash
+                (&quot;Live status is off in this deployment&quot;), and the cluster page has no Live Status card.
+                That is a deployment choice, not an error.
+              </Callout>
+            </FeaturePanel>
 
-            {/* Preview Variables */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 shrink-0">
-                  <Eye className="h-3.5 w-3.5 text-blue-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">Preview Variables</p>
-                  <p className="text-xs text-muted-foreground">Spec create / edit page</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  The <strong>Preview Variables</strong> button on the spec form shows exactly which
-                  Jinja2 variables are detected in the cluster template at that moment, together with
-                  their inferred types and whether they are required. This is the same analysis the
-                  backend runs when a cluster creation form is loaded — so what you see here is what
-                  your cluster operators will need to fill in.
-                </p>
-                <p>
-                  Use it before saving a spec to catch missing or mis-typed variable names in the
-                  template before any cluster is created from it.
-                </p>
-              </div>
-            </div>
+            <FeaturePanel icon={Eye} tint="bg-blue-500/10 text-blue-500" title="Preview variables" where="New Spec page">
+              <p>
+                <strong>Preview variables</strong> shows, as YAML, the structure the spec passes to the cluster
+                template. Identity fields (cluster name, site, MCE) are not in it: they are chosen when a cluster is
+                created. Use it to check the shape before you open the MR.
+              </p>
+            </FeaturePanel>
 
-            {/* Spec history + at-SHA */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10 shrink-0">
-                  <GitBranch className="h-3.5 w-3.5 text-purple-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">Spec history & time travel</p>
-                  <p className="text-xs text-muted-foreground">Spec detail page → History tab</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  Every spec has a <strong>History</strong> tab listing every Git commit that touched it.
-                  Clicking a commit row expands the full YAML of the spec <em>at that exact commit</em> —
-                  without affecting the live spec. This is useful for:
-                </p>
-                <ul className="space-y-1 pl-4 list-disc marker:text-muted-foreground/40">
-                  <li>Auditing what changed between two spec versions</li>
-                  <li>Recovering a previous value that was overwritten</li>
-                  <li>Understanding why a cluster created at a particular time has certain structure</li>
-                </ul>
-                <p>
-                  The backend serves these historical snapshots from the GitLab repository&apos;s commit
-                  tree — no separate version storage is needed.
-                </p>
-              </div>
-            </div>
+            <FeaturePanel icon={GitBranch} tint="bg-purple-500/10 text-purple-500" title="Spec history & time travel" where="Spec page → History tab">
+              <p>
+                Every spec has a <strong>History</strong> tab listing every commit that touched it. Selecting a commit
+                shows the spec <em>at that exact commit</em>, without affecting the current spec. This is useful for:
+              </p>
+              <ul className="space-y-1 pl-4 list-disc marker:text-muted-foreground/40">
+                <li>Auditing what changed between two spec versions</li>
+                <li>Recovering a previous value that was overwritten</li>
+                <li>Understanding what a cluster created at a particular time got</li>
+              </ul>
+            </FeaturePanel>
 
-            {/* YAML / Form toggle */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 shrink-0">
-                  <FileCode2 className="h-3.5 w-3.5 text-amber-500" />
+            <FeaturePanel icon={FileCode2} tint="bg-amber-500/10 text-amber-500" title="Form ↔ YAML toggle for chart values" where="A chart's values editor">
+              <p>A chart&apos;s values editor has two views:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-2">
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold mb-1">Form</p>
+                  <p className="text-xs leading-relaxed">
+                    Every merged value with the layer that set it. Numbers stay numbers, booleans are switches, lists
+                    and maps are YAML. It edits keys the merge already has.
+                  </p>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">Form ↔ YAML toggle for addon overrides</p>
-                  <p className="text-xs text-muted-foreground">A chart&apos;s install form and values editor</p>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold mb-1">YAML</p>
+                  <p className="text-xs leading-relaxed">
+                    The values the change writes into the file, and nothing inherited. Needed for new keys or a{" "}
+                    <InlineCode>null</InlineCode> that deletes a default. Comments in the file are not kept.
+                  </p>
                 </div>
               </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  A chart&apos;s values editor has two views:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-2">
-                  <div className="rounded-lg border bg-muted/30 p-3">
-                    <p className="text-xs font-semibold mb-1">Form mode</p>
-                    <p className="text-xs leading-relaxed">
-                      Every merged value with the layer that set it. Numbers stay numbers, booleans
-                      are switches, lists and maps are YAML. Good for routine value changes.
-                    </p>
-                  </div>
-                  <div className="rounded-lg border bg-muted/30 p-3">
-                    <p className="text-xs font-semibold mb-1">YAML mode</p>
-                    <p className="text-xs leading-relaxed">
-                      The file the change writes, verbatim. Necessary for new keys, multi-line strings,
-                      or a <InlineCode>null</InlineCode> that deletes a default. Values sync back to the
-                      form when you switch.
-                    </p>
-                  </div>
-                </div>
-                <p>
-                  All object and map fields accept plain YAML directly — no JSON braces needed.
-                  A bare scalar like <InlineCode>high-perf-tuned</InlineCode> is valid; so is a
-                  multi-line map.
-                </p>
-              </div>
-            </div>
+              <p>
+                Edits in one view show in the other. While the YAML does not parse, the Form view is unavailable.
+              </p>
+            </FeaturePanel>
 
-            {/* Addon value layers */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-pink-500/10 shrink-0">
-                  <Layers className="h-3.5 w-3.5 text-pink-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">Addon value layers view</p>
-                  <p className="text-xs text-muted-foreground">Cluster addons page → expand an addon → Layers tab</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  Every value in a chart&apos;s values table carries the layer that set it:
-                </p>
-                <CodeBlock language="Value provenance example">
+            <FeaturePanel icon={Layers} tint="bg-pink-500/10 text-pink-500" title="Chart value layers view" where="A destination's charts page → a chart → Layers tab">
+              <p>Every value in a chart&apos;s values table carries the layer that set it:</p>
+              <CodeBlock language="Value provenance example">
 {`replicas:   2              ← cluster    (this cluster's values.yaml)
 retention:  30d            ← team       (operators/{chart}/values.yaml)
 namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
-                </CodeBlock>
-                <p>
-                  The <strong>Layers</strong> tab lists the whole stack in merge order, with the files that do not
-                  exist dimmed, so you can see which layer is winning for each key. The merge is the service&apos;s,
-                  the same one ArgoCD&apos;s Helm runs.
-                </p>
-              </div>
-            </div>
+              </CodeBlock>
+              <p>
+                The <strong>Layers</strong> tab lists the whole stack in merge order, starting with the chart&apos;s own
+                defaults. Files that do not exist are dimmed (<strong>no file</strong>), and the file an edit writes is
+                tagged. The stack (which files, in which order) is the platform&apos;s own, checked against the
+                platform&apos;s <InlineCode>render_chain.py</InlineCode> simulation.
+              </p>
+            </FeaturePanel>
 
-            {/* MR conflict detection */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/10 shrink-0">
-                  <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">MR conflict detection</p>
-                  <p className="text-xs text-muted-foreground">Approvals page</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  The Approvals page shows a <strong>Conflicted</strong> badge on any MR whose branch
-                  has merge conflicts with the target branch. This happens when two concurrent changes
-                  touch the same file — for example, two operators creating clusters in the same MCE
-                  directory simultaneously.
-                </p>
-                <p>
-                  A conflicted MR cannot be merged until the conflict is resolved. Options:
-                </p>
-                <ul className="space-y-1 pl-4 list-disc marker:text-muted-foreground/40">
-                  <li>Close the conflicted MR and re-create the change from the Wingman UI (recommended)</li>
-                  <li>Resolve the conflict directly in GitLab if you are comfortable with the raw YAML</li>
-                </ul>
-              </div>
-            </div>
+            <FeaturePanel icon={AlertTriangle} tint="bg-red-500/10 text-red-500" title="MR conflict detection" where="Approvals page">
+              <p>
+                The Approvals page shows a <strong>Conflicted</strong> badge on any MR whose branch conflicts with its
+                target. This happens when two changes touch the same file, for example two edits of one cluster.
+              </p>
+              <p>A conflicted MR cannot be merged until the conflict is resolved. Options:</p>
+              <ul className="space-y-1 pl-4 list-disc marker:text-muted-foreground/40">
+                <li>Reject the conflicted MR and make the change again from the Wingman UI (recommended)</li>
+                <li>Resolve the conflict directly in GitLab if you are comfortable with the raw YAML</li>
+              </ul>
+            </FeaturePanel>
 
-            {/* Open in GitLab shortcuts */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-                  <ExternalLink className="h-3.5 w-3.5 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">Open in GitLab — everywhere</p>
-                  <p className="text-xs text-muted-foreground">Available on clusters, specs, addons, and MRs</p>
-                </div>
+            <FeaturePanel icon={ExternalLink} tint="bg-primary/10 text-primary" title="Open in GitLab — everywhere" where="Clusters, specs, charts, approvals and the audit log">
+              <p className="mb-1">These links open in a new tab and are available to all users, including Viewers:</p>
+              <div className="space-y-2">
+                {[
+                  { where: "Cluster page → GitLab", what: "The cluster's values file in the day1 repo" },
+                  { where: "Spec page → History", what: "Each commit of the spec in the specs repo" },
+                  { where: "Chart → ⋮ menu", what: "Open folder in GitLab: the chart's folder in the team repo" },
+                  { where: "Approvals → MR", what: "The MR in GitLab" },
+                  { where: "Audit Log → row", what: "The exact commit or MR in GitLab" },
+                ].map(({ where, what }) => (
+                  <div key={where} className="flex flex-col sm:flex-row gap-1 sm:gap-3 rounded-lg bg-muted/30 px-3 py-2.5">
+                    <p className="text-xs font-medium text-foreground sm:w-44 sm:shrink-0">{where}</p>
+                    <p className="text-xs text-muted-foreground min-w-0">{what}</p>
+                  </div>
+                ))}
               </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed">
-                <p className="mb-3">
-                  Almost every resource in Wingman has a direct link to its underlying GitLab file or
-                  directory. These links open in a new tab and are available to all users including Viewers:
-                </p>
-                <div className="space-y-2">
-                  {[
-                    { where: "Cluster detail page", what: "Opens the rendered cluster YAML in the Day1 repository" },
-                    { where: "Spec detail page", what: "Opens the spec YAML in the Specs repository" },
-                    { where: "Installed addon → ⋮ menu", what: "Opens the per-cluster override directory in the team repository" },
-                    { where: "Approvals page → MR row", what: "Opens the GitLab MR diff view directly" },
-                    { where: "Audit log → commit row", what: "Opens the exact commit in GitLab via the external link icon" },
-                  ].map(({ where, what }) => (
-                    <div key={where} className="flex gap-3 rounded-lg bg-muted/30 px-3 py-2.5">
-                      <div className="w-44 shrink-0">
-                        <p className="text-xs font-medium text-foreground">{where}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground min-w-0">{what}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            </FeaturePanel>
 
-            {/* OCP versions from file */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 shrink-0">
-                  <Settings2 className="h-3.5 w-3.5 text-indigo-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">OpenShift version list is repo-driven</p>
-                  <p className="text-xs text-muted-foreground">Cluster creation → OpenShift version dropdown</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-2">
-                <p>
-                  The OpenShift version dropdown is not hardcoded. It is populated from a plain text file,{" "}
-                  <InlineCode>openshift-versions.txt</InlineCode>, in the Specs repository — one version
-                  string per line.
-                </p>
-                <p>
-                  To add or remove available versions, edit that file directly in GitLab (or via a
-                  Wingman MR). The dropdown updates immediately on the next page load — no code
-                  deployment required.
-                </p>
-                <CodeBlock language="openshift-versions.txt">
-{`4.16.12
-4.15.30
-4.14.20`}
-                </CodeBlock>
-              </div>
-            </div>
+            <FeaturePanel icon={Settings2} tint="bg-indigo-500/10 text-indigo-500" title="OpenShift versions come from the upgrade ladder, per MCE" where="New Cluster → OpenShift Version">
+              <p>
+                Not every MCE can host every OpenShift release, so the list depends on the MCE you choose, and the
+                picker stays disabled until you choose one. It offers the releases in the day1 repo&apos;s{" "}
+                <InlineCode>upgrade/ladder.yaml</InlineCode> whose minor is in the MCE&apos;s{" "}
+                <InlineCode>upgrade/mces/&lt;mce&gt;.yaml</InlineCode>, newest first. These are the same files the
+                cluster-upgrade workflow reads. The release goes into the cluster file&apos;s{" "}
+                <InlineCode>mastertag</InlineCode>, and the chart adds <InlineCode>-x86_64</InlineCode> to it.
+              </p>
+              <CodeBlock language="upgrade/mces/ocp4-prod-mce-site1-a.yaml">
+{`mce:
+  version: 2.8.2
+  supportedHostedVersions: ["4.18", "4.17", "4.16"]   # quoted: 4.20 unquoted is a number
+maxConcurrentControlPlanes: 1`}
+              </CodeBlock>
+              <p>
+                If an MCE has no file, or the ladder is missing or broken, the form offers no version and shows the
+                reason under the field. Wingman never falls back to every release. A spec&apos;s preset version
+                prefills only when the MCE offers it. Create refuses a release the MCE can&apos;t host. To offer
+                another release, add a rung to the ladder or a minor to the MCE&apos;s file, through a merge request
+                in the day1 repo.
+              </p>
+            </FeaturePanel>
 
-            {/* InfraEnv dropdown */}
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b bg-muted/30">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 shrink-0">
-                  <Network className="h-3.5 w-3.5 text-emerald-500" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">InfraEnv smart dropdown</p>
-                  <p className="text-xs text-muted-foreground">Cluster creation → template variables step</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 text-sm text-muted-foreground leading-relaxed space-y-3">
-                <p>
-                  When a spec template defines an <InlineCode>infra_env</InlineCode> Jinja2 variable,
-                  the cluster creation form automatically renders it as a dropdown instead of a free-text
-                  input. The dropdown is populated by querying <InlineCode>InfraEnv</InlineCode> CRDs
-                  directly from the selected MCE hosting cluster via the Kubernetes API.
-                </p>
-                <p>
-                  This prevents typos in the agent label selector value — the field that determines which
-                  bare-metal nodes are assigned to the cluster:
-                </p>
-                <CodeBlock language="nodepool snippet">
-{`agentLabelSelector:
-  nodeLabelKey: infraenvs.agent-install.openshift.io
-  nodeLabelValue: {{ infra_env }}   # populated from the dropdown`}
-                </CodeBlock>
-                <p>
-                  The dropdown is only active when <InlineCode>CLUSTER_STATUS_ENABLED=true</InlineCode>{" "}
-                  and the selected MCE has a configured SA token. If the feature is disabled or the
-                  fetch fails, the field falls back to a plain text input transparently — no change to
-                  spec templates or cluster data is required.
-                </p>
-                <Callout type="tip" title="Controlling which namespace is queried">
-                  By default, InfraEnvs are listed across all namespaces. Set{" "}
-                  <InlineCode>MCE_INFRAENV_NAMESPACE</InlineCode> to restrict the query to a specific
-                  namespace (e.g. <InlineCode>openshift-machine-api</InlineCode>).
-                </Callout>
-              </div>
-            </div>
+            <FeaturePanel icon={Network} tint="bg-emerald-500/10 text-emerald-500" title="InfraEnv dropdown" where="New Cluster → nodepool fields">
+              <p>
+                A template input named <InlineCode>infra_env</InlineCode> becomes a dropdown of the InfraEnvs on the
+                chosen MCE&apos;s hub, which prevents typos in the field that decides which bare-metal hosts the
+                nodepool gets:
+              </p>
+              <CodeBlock language="cluster-template.j2 snippet">
+{`nodepool:
+{% for np in nodepools %}
+  - infraEnvName: {{ np.infra_env }}   # picked from the dropdown`}
+              </CodeBlock>
+              <p>
+                It needs live status to be on and the MCE to have a hub token configured. Otherwise the field is plain
+                text; if listing fails, the form says why and you type the names.
+              </p>
+              <Callout type="tip" title="Which namespace is listed">
+                By default, InfraEnvs are listed across the whole hub. The day1 service&apos;s{" "}
+                <InlineCode>MCE_INFRAENV_NAMESPACE</InlineCode> restricts the list to one namespace; the Helm chart does
+                not set it yet.
+              </Callout>
+            </FeaturePanel>
 
           </div>
         </section>
@@ -1187,12 +1267,11 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
         <section>
           <SectionHeader id="filelocations" icon={FileCode2} title="File Locations" subtitle="Where every important file lives in GitLab" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            All platform state is stored as plain files in GitLab. Below is the authoritative map of
-            which repository each file lives in and what path it uses. Repository identifiers and path
-            templates are configured via Helm values and exposed to the services as environment variables.
+            All platform state is stored as plain files in GitLab. Which repository is which is set by the
+            deployment (Helm values, passed to the services as environment variables); the layout inside each is
+            the platform&apos;s.
           </p>
 
-          {/* Specs repo */}
           <div className="space-y-4 mb-6">
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
@@ -1201,57 +1280,38 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">Specs repository</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground break-words">
                     Helm: <InlineCode>gitlab.specsProjectId</InlineCode> → env: <InlineCode>SPECS_GITLAB_PROJECT_ID</InlineCode>
                   </p>
                 </div>
               </div>
               <div className="divide-y">
-                {[
-                  { file: "cluster-template.j2", desc: "Jinja2 template that renders every cluster manifest. Shared across all specs.", path: "/" },
-                  { file: "openshift-versions.txt", desc: "One version string per line. Populates the OpenShift version dropdown in cluster creation.", path: "/" },
-                  { file: "specs/{name}.yaml", desc: "One file per spec. Contains nodepool structure, immutable paths, and pre-configured addon list.", path: "SPECS_ROOT_PATH (default: specs/)" },
-                ].map(({ file, desc, path }) => (
-                  <div key={file} className="px-5 py-3 space-y-1">
-                    <p className="text-xs font-mono text-foreground font-semibold break-all">{file}</p>
-                    <p className="text-[10px] text-muted-foreground/60">{path}</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-                  </div>
-                ))}
+                <FileRow file="cluster-template.j2" where="repository root" desc="The shared template every cluster file is rendered from (sandboxed). Its inputs are the create form's fields." />
+                <FileRow file="specs/{name}.yaml" where="Helm gitlab.specsRoot → SPECS_ROOT_PATH (default: specs)" desc="One file per spec: nodepool structure, preset values, locked-field hints and the Day2 addons." />
               </div>
             </div>
 
-            {/* Day1 repo */}
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 shrink-0">
                   <Server className="h-3.5 w-3.5 text-blue-500" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold">Day1 configuration repository</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm font-semibold">Day1 repository</p>
+                  <p className="text-xs text-muted-foreground break-words">
                     Helm: <InlineCode>gitlab.day1ProjectId</InlineCode> → env: <InlineCode>DAY1_GITLAB_PROJECT_ID</InlineCode>
                   </p>
                 </div>
               </div>
               <div className="divide-y">
-                {[
-                  {
-                    file: "{DAY1_CLUSTERS_PATH_TEMPLATE}/{cluster}.yaml",
-                    desc: "Rendered cluster manifest (AgentCluster, NodePool, MachineConfig). One file per cluster.",
-                    path: "default: sites/{site}/mces/{mce}/hostedClusters/{cluster}.yaml",
-                  },
-                ].map(({ file, desc, path }) => (
-                  <div key={file} className="px-5 py-3 space-y-1">
-                    <p className="text-xs font-mono text-foreground font-semibold break-all">{file}</p>
-                    <p className="text-[10px] text-muted-foreground/60">{path}</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-                  </div>
-                ))}
+                <FileRow file="sites/{site}/mces/{mce}/hostedClusters/{cluster}.yaml" where="fixed by the MCE's ApplicationSet" desc="One values file per hosted cluster, the only file Wingman writes here. Every file in hostedClusters/ becomes an ArgoCD Application, so anything else there is flagged as a stray file." />
+                <FileRow file="sites/{site}/mces/{mce}/values.yaml" where="read only" desc="The MCE's values: its mastertag is the default OpenShift version for new clusters, when the MCE offers it." />
+                <FileRow file="sites/{site}/mces/{mce}/version.yaml" where="read only" desc="The MCE hub's own version." />
+                <FileRow file="upgrade/ladder.yaml" where="read only" desc="The verified releases, at least one per minor. The create form offers them." />
+                <FileRow file="upgrade/mces/{mce}.yaml" where="read only" desc="The OpenShift minors the MCE can host. Without this file the MCE offers no version." />
               </div>
             </div>
 
-            {/* Day2 repos */}
             <div className="rounded-xl border bg-card overflow-hidden">
               <div className="flex items-center gap-3 px-5 py-3 border-b bg-muted/30">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 shrink-0">
@@ -1259,50 +1319,24 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">Day2 team repositories</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground break-words">
                     Helm: <InlineCode>gitlab.day2SigsGroupPath</InlineCode> → env: <InlineCode>DAY2_SIGS_GROUP_PATH</InlineCode>
                     {" "}— one GitLab project per team under this group
                   </p>
                 </div>
               </div>
               <div className="divide-y">
-                {[
-                  {
-                    file: "operators/{chart}/{chart}.yaml, values.yaml",
-                    desc: "The team default: where the chart comes from (repourl, targetRevision, path) and its values. Maintained by the owning team.",
-                    path: "per-team project root",
-                  },
-                  {
-                    file: "sites/{site}/{env}/mces/{mce}/{cluster}/{chart}/values.yaml",
-                    desc: "A hosted cluster's values for the chart, written by Wingman on install and update. MCEs use …/mces/{mce}/in-cluster/{chart}/, UPI clusters sites/{site}/{env}/upi/{cluster}/{chart}/, the hub defaults/hub/{chart}/.",
-                    path: "per-team project root",
-                  },
-                  {
-                    file: "…/{chart}/{chart}.yaml",
-                    desc: "Written only when the cluster needs a deploy-config key it does not inherit: a repourl, or an emergency targetRevision pin.",
-                    path: "per-team project root",
-                  },
-                  {
-                    file: "defaults/{scope}/{chart}/values-{cluster}.yaml",
-                    desc: "A fleet default's values for one cluster, written when you edit a fleet default. The layout is the platform's contract, not configurable.",
-                    path: "per-team project root",
-                  },
-                ].map(({ file, desc, path }) => (
-                  <div key={file} className="px-5 py-3 space-y-1">
-                    <p className="text-xs font-mono text-foreground font-semibold break-all">{file}</p>
-                    <p className="text-[10px] text-muted-foreground/60">{path}</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-                  </div>
-                ))}
+                <FileRow file="operators/{chart}/{chart}.yaml, values.yaml" where="per-team project root" desc="The team default: where the chart comes from (repourl, targetRevision, path) and its values. Maintained by the owning team; operators/{chart}/ocp-versions/{ocp}/ holds per-OCP-version pins." />
+                <FileRow file="sites/{site}/{env}/mces/{mce}/{cluster}/{chart}/values.yaml" where="per-team project root" desc="A hosted cluster's values for the chart, written by Wingman on install and update. MCEs use …/mces/{mce}/in-cluster/{chart}/, UPI clusters sites/{site}/{env}/upi/{cluster}/{chart}/, the hub defaults/hub/{chart}/." />
+                <FileRow file="…/{chart}/{chart}.yaml" where="per-team project root" desc="Written only when the destination needs a deploy-config key it does not inherit: a repourl (when no layer sets a lowercase one) or an emergency targetRevision pin. Choosing the inherited revision again removes the pin, and deletes the file if nothing else is left in it." />
+                <FileRow file="defaults/{scope}/{chart}/values-{cluster}.yaml" where="per-team project root" desc="A fleet default's values for one cluster, written when you edit a fleet default there." />
               </div>
             </div>
           </div>
 
-          <Callout type="info" title="All paths are configurable">
-            Path templates (like <InlineCode>DAY1_CLUSTERS_PATH_TEMPLATE</InlineCode>) are set in
-            the Helm chart under <InlineCode>paths:</InlineCode> and can be overridden per deployment
-            in your <InlineCode>values.yaml</InlineCode>. The defaults shown above match the chart
-            defaults in <InlineCode>chart/values.yaml</InlineCode>.
+          <Callout type="info" title="The layouts are the platform's contract">
+            The paths inside each repository are fixed by the platform&apos;s ApplicationSets, not by Wingman&apos;s
+            settings. A deployment chooses only which projects to use, the specs folder and the branch Day2 targets.
           </Callout>
         </section>
 
@@ -1312,26 +1346,27 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
           <div className="space-y-4">
             {[
               {
-                q: 'Template rendering fails with "undefined variable"',
+                q: "“The cluster file could not be rendered: fix the following”",
                 a: (
                   <>
-                    The Jinja2 template uses <InlineCode>StrictUndefined</InlineCode> — every variable
-                    referenced in the template must have a value. Check the preview error message for the
-                    exact variable name and ensure it is filled in the cluster form.
+                    The template is rendered in a sandbox with strict undefined variables, and the result must be a valid
+                    cluster file. Every problem is listed: fill in each named field, and keep values on one line, at most
+                    253 characters, without double quotes or backslashes.
                   </>
                 ),
               },
               {
                 q: "Cluster shows as drifted right after creation",
-                a: "Drift compares the spec's addons with what day2 has installed. Until the addon MRs are opened and merged, a new cluster's spec addons are missing: install them from the cluster's Drift tab.",
+                a: "Drift compares the spec's addons with what Day2 has installed. A new cluster's spec addons are not installed until someone installs them: once the cluster's MR is merged, install them from its Drift tab.",
               },
               {
                 q: "MR was merged but cluster is still not provisioned",
                 a: (
                   <>
-                    Day1 provisioning is asynchronous. The MR commits manifests to Git; ArgoCD picks them up on
-                    its next reconcile loop. Check the ArgoCD Application for the cluster and look for sync errors
-                    in the ArgoCD UI. You can also trigger a manual sync if you need the change applied immediately.
+                    Provisioning is asynchronous. The MCE&apos;s ApplicationSet makes an ArgoCD Application for the file,
+                    which may need a manual sync; HyperShift then brings up the control plane and the nodepools claim hosts
+                    from their InfraEnv. Look at the Application in ArgoCD for sync errors. When live status is on, the
+                    cluster page shows the HostedCluster and its node pools.
                   </>
                 ),
               },
@@ -1342,31 +1377,26 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                     Most leaf apps are manual-sync: after the merge ArgoCD generates the app, but nothing
                     deploys until someone syncs it in ArgoCD (Wingman has no ArgoCD access). Use{" "}
                     <strong>Open folder in GitLab</strong> from the chart&apos;s menu to confirm the folder is on{" "}
-                    <InlineCode>main</InlineCode>, then sync the app named in the MR&apos;s notes.
+                    the branch the platform reads (the one Day2 targets), then sync the app named on the chart&apos;s{" "}
+                    <strong>Deployment</strong> tab.
                   </>
                 ),
               },
               {
-                q: 'Site / MCE dropdown shows "No options"',
-                a: "Wingman reads sites and MCEs from the day1 repository's folders and never creates them. An empty list means the repository has no site or MCE folder yet: MCE onboarding happens outside Wingman.",
+                q: "“No sites in the day1 repo”, “No MCEs on this site”, or an MCE I cannot pick",
+                a: "Wingman reads sites and MCEs from the day1 repository's folders and never creates them: onboarding a site or MCE happens outside Wingman. An MCE marked off convention cannot host new clusters, because the env a new name must carry cannot be checked against it.",
               },
               {
-                q: "I cannot see Create / Install / Remove buttons",
-                a: (
-                  <>
-                    You have <strong>Viewer</strong> role. Write operations require <strong>Admin</strong>{" "}
-                    role. Contact your platform team to request access.
-                  </>
-                ),
+                q: "An install asks me to confirm an emergency pin",
+                a: "You chose a revision other than the inherited one. Pick the inherited revision to follow the team default, or confirm the pin if this destination really must stay on that version.",
               },
               {
-                q: "tuningConfig shows as {name: value} instead of plain value",
+                q: "I cannot see Create / Install / Remove / Approve buttons",
                 a: (
                   <>
-                    This happened with an older version of the form that required JSON syntax. The form
-                    now accepts bare YAML scalars — type <InlineCode>high-perf-tuned</InlineCode> without
-                    any braces. If you see this in an existing cluster, edit the cluster and re-enter the
-                    field as a plain value to clean it up.
+                    You have the <strong>Viewer</strong> role. Write operations require the <strong>Admin</strong>{" "}
+                    role: ask your platform team, then sign in again. On your own MR, <strong>Review &amp; Approve</strong>{" "}
+                    is shown but disabled: another admin must approve it.
                   </>
                 ),
               },
@@ -1376,7 +1406,7 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                   <Zap className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                   <p className="text-sm font-semibold min-w-0 break-words">{q}</p>
                 </div>
-                <div className="px-5 py-4 pl-12">
+                <div className="px-5 py-4 sm:pl-12">
                   <p className="text-sm text-muted-foreground leading-relaxed">{a}</p>
                 </div>
               </div>
@@ -1389,10 +1419,11 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
               <p className="text-sm font-semibold">Still stuck?</p>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              The platform is fully transparent — every resource is a plain YAML or Jinja2 file in GitLab.
-              Every cluster, spec, and addon has an{" "}<strong>Open in GitLab</strong>{" "}link so you can
-              browse or edit the underlying files directly. The platform team is also reachable via
-              your organisation&apos;s internal channels.
+              The platform is fully transparent: every resource is a plain YAML or Jinja2 file in GitLab, and
+              clusters, specs, charts and MRs link to theirs. See{" "}
+              <a href="#errors" className="text-primary underline underline-offset-2 hover:no-underline">When a Change Is Refused</a>{" "}
+              for what each refusal means. The platform team is also reachable via your organisation&apos;s internal
+              channels; quote the request id an error shows.
             </p>
           </div>
 
@@ -1403,7 +1434,7 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
             </div>
             <p className="text-xs text-muted-foreground pl-6">
               See the <a href="#filelocations" className="text-primary underline underline-offset-2 hover:no-underline">File Locations</a> section above for
-              the full map of repositories, env vars, and exact file paths.
+              the map of repositories and exact file paths.
             </p>
           </div>
         </section>

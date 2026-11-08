@@ -12,9 +12,10 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from wingman_core.application.approvals import PendingChange
-from wingman_core.domain.git import Commit, FileChange, FileDiff
+from wingman_core.application.approvals import PendingChange, describe
+from wingman_core.domain.git import Commit, FileChange
 from wingman_core.domain.merge_request import MergeRequest
+from wingman_core.web.schemas import FileDiffOut
 from wingman_day2.application.catalog import CatalogEntry, ChartValues
 from wingman_day2.application.changes import ChangeResult
 from wingman_day2.application.installed import ClusterCharts, InstalledChart
@@ -105,10 +106,11 @@ class EditedFile(_Input):
 
 
 class EditMergeRequestBody(_Input):
-    """Push edits onto an MR's branch."""
+    """Push edits onto an MR's branch; ``sha`` is the head the editor reviewed (409 if it moved)."""
 
     files: list[EditedFile] = Field(min_length=1)
     message: str = ""
+    sha: str | None = Field(default=None, min_length=7, max_length=64)
 
 
 # ── Responses ───────────────────────────────────────────────────────────────
@@ -517,16 +519,19 @@ class MRDetailOut(BaseModel):
     gitlab_author: str
 
     @classmethod
-    def of(
-        cls, team: str, merge_request: MergeRequest, requested_by: str | None = None
-    ) -> MRDetailOut:
-        """From an MR; ``requested_by`` is the footer's author."""
-        mr = merge_request
+    def of(cls, team: str, merge_request: MergeRequest) -> MRDetailOut:
+        """From an MR. ``author`` is the requester its footer names (ADR-0007), not GitLab's."""
+        return cls.of_change(team, describe(merge_request))
+
+    @classmethod
+    def of_change(cls, team: str, change: PendingChange) -> MRDetailOut:
+        """From a described Wingman MR; ``gitlab_author`` keeps the account that opened it."""
+        mr = change.merge_request
         return cls(
             iid=mr.ref.iid,
             title=mr.title,
             description=mr.description,
-            author=MRAuthorOut(username=requested_by or mr.author_username),
+            author=MRAuthorOut(username=change.requested_by),
             state=str(mr.state),
             created_at=mr.created_at.isoformat(),
             updated_at=mr.updated_at.isoformat(),
@@ -540,11 +545,6 @@ class MRDetailOut(BaseModel):
             sha=mr.sha,
             gitlab_author=mr.author_username,
         )
-
-    @classmethod
-    def of_change(cls, team: str, change: PendingChange) -> MRDetailOut:
-        """From a described Wingman MR."""
-        return cls.of(team, change.merge_request, change.requested_by)
 
 
 class FileChangeOut(BaseModel):
@@ -569,9 +569,9 @@ class ChangeOut(MRDetailOut):
     notes: list[str]
 
     @classmethod
-    def of_result(cls, result: ChangeResult, requested_by: str) -> ChangeOut:
-        """From the change result."""
-        base = MRDetailOut.of(result.team, result.merge_request, requested_by)
+    def of_result(cls, result: ChangeResult) -> ChangeOut:
+        """From the change result (its MR's footer names the requester)."""
+        base = MRDetailOut.of(result.team, result.merge_request)
         return cls(
             **base.model_dump(),
             cluster=result.cluster.ref.id,
@@ -595,29 +595,6 @@ class BulkOut(BaseModel):
 
     merge_requests: list[ChangeOut]
     failed: list[BulkFailureOut]
-
-
-class FileDiffOut(BaseModel):
-    """How one file differs."""
-
-    old_path: str
-    new_path: str
-    diff: str
-    new_file: bool
-    renamed_file: bool
-    deleted_file: bool
-
-    @classmethod
-    def of(cls, diff: FileDiff) -> FileDiffOut:
-        """From the core diff."""
-        return cls(
-            old_path=str(diff.old_path),
-            new_path=str(diff.new_path),
-            diff=diff.diff,
-            new_file=diff.new_file,
-            renamed_file=diff.renamed_file,
-            deleted_file=diff.deleted_file,
-        )
 
 
 class ApprovalDetailOut(BaseModel):

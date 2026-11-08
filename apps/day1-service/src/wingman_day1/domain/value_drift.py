@@ -1,4 +1,4 @@
-"""Value drift: each locked value a cluster file does not hold (ADR-0033).
+"""Value drift: each locked value a cluster file does not hold (ADR-0036).
 
 A flavor's locks are template inputs (``nodepools[0].configs``); the file
 holds what the shared template wrote for them (``nodepool[0].configs``),

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
+
 from wingman_core.domain.git import FileChange, RepoPath
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.api.deps import Day1Context
@@ -101,6 +103,35 @@ async def test_an_addon_at_another_version_is_reported_and_in_sync(
     assert (difference.name, difference.installed_version) == ("cluster-roles", "2.0.0")
 
 
+async def test_the_drift_api_shows_a_version_difference_as_information_only(
+    support: Any, gitlab: InMemoryGitLab, hub: Any, identity: Any, clock: Any
+) -> None:
+    # ADR-0025 at the HTTP boundary: dropping the mapping would answer an empty list.
+    day2 = FakeDay2Addons({NEW: [InstalledAddon("redbull", "cluster-roles", "2.0.0")]})
+    app = support.build_app(gitlab=gitlab, hub=hub, identity=identity, day2=day2, clock=clock)
+    await create_merged(app.state.day1, support)
+    token = app.state.session_tokens.issue(support.VIEWER)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://day1",
+        headers={"authorization": f"Bearer {token}"},
+    ) as client:
+        response = await client.get(
+            f"/api/day1/clusters/{NEW}/drift", params={"site": REF.site, "mce": REF.mce}
+        )
+    body = response.json()
+    assert response.status_code == 200, body
+    assert (body["state"], body["is_drifted"], body["addon_drift"]) == ("in_sync", False, [])
+    assert body["version_differences"] == [
+        {
+            "addon_name": "cluster-roles",
+            "team": "redbull",
+            "spec_version": "main",
+            "installed_version": "2.0.0",
+        }
+    ]
+
+
 async def test_day2_down_makes_drift_unknown_not_in_sync(
     context: Day1Context, support: Any, day2: FakeDay2Addons
 ) -> None:
@@ -163,7 +194,7 @@ async def test_a_specs_clusters_are_the_ones_its_header_names(
     assert await context.drift.for_spec("agent-single") == []
 
 
-# ── Value drift: the flavor's locked values (ADR-0033) ──────────────────────
+# ── Value drift: the flavor's locked values (ADR-0036) ──────────────────────
 
 LARK = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-lark-site1")
 HERON = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-heron-site1")

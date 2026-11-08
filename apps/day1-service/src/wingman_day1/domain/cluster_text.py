@@ -1,4 +1,4 @@
-"""Editing a cluster file's text so that everything else stays byte for byte (ADR-0034).
+"""Editing a cluster file's text so that everything else stays byte for byte (ADR-0037).
 
 A cluster file is written by several hands: people (with their comments),
 Wingman, the allocate-segment workflow (``vlanId``, ``dhcp_values``) and the

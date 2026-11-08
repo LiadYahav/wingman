@@ -19,7 +19,7 @@ from wingman_core.testing.fixtures import default_fixture_root, load_fixture_pro
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
-from wingman_day1.main import Adapters, build_adapters, create_app, project_ref
+from wingman_day1.main import Adapters, build_adapters, create_app
 from wingman_day1.settings import Day1Settings
 
 DEV_SECRET = "d" * 40
@@ -47,14 +47,6 @@ async def close(adapters: Adapters) -> None:
         await closer()
 
 
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [("42", 42), ("gitops-day1/platform-config", "gitops-day1/platform-config"), ("/a/b/", "a/b")],
-)
-def test_project_settings_are_an_id_or_a_path(value: str, expected: int | str) -> None:
-    assert project_ref(value) == expected
-
-
 async def test_the_fake_backend_is_seeded_with_every_fixture_project() -> None:
     adapters = build_adapters(settings(), FAKE, metrics=metrics(), service_token=lambda: "t")
     try:
@@ -73,9 +65,8 @@ async def test_the_fake_backend_can_be_seeded_from_another_directory(tmp_path: P
     project = tmp_path / "group" / "proj"
     project.mkdir(parents=True)
     (project / "README.md").write_text("# hi\n", encoding="utf-8")
-    adapters = build_adapters(
-        settings(wingman_fixtures_dir=tmp_path), FAKE, metrics=metrics(), service_token=lambda: "t"
-    )
+    runtime = FAKE.model_copy(update={"fixtures_dir": tmp_path})
+    adapters = build_adapters(settings(), runtime, metrics=metrics(), service_token=lambda: "t")
     try:
         assert (await adapters.gitlab.get_project("group/proj")).path_with_namespace == "group/proj"
     finally:
@@ -144,10 +135,10 @@ def test_the_app_serves_the_legacy_paths_and_no_site_or_mce_creation(app: FastAP
         ("/api/day1/sites", "GET"),
         ("/api/day1/sites/{site}/mces", "GET"),
         ("/api/day1/mces", "GET"),
+        ("/api/day1/mces/{mce}/openshift-versions", "GET"),
         ("/api/day1/mces/{mce}/infraenvs", "GET"),
         ("/api/day1/specs", "GET"),
         ("/api/day1/specs", "POST"),
-        ("/api/day1/specs/versions/openshift", "GET"),
         ("/api/day1/specs/template", "GET"),
         ("/api/day1/specs/template/schema", "GET"),
         ("/api/day1/specs/{name}", "GET"),
@@ -173,11 +164,28 @@ def test_the_app_serves_the_legacy_paths_and_no_site_or_mce_creation(app: FastAP
     assert not any("sync-yaml" in path for path, _ in routes)
 
 
-async def test_readiness_asks_gitlab_for_the_day1_project(client: httpx.AsyncClient) -> None:
+async def test_readiness_asks_gitlab_for_both_projects(client: httpx.AsyncClient) -> None:
     response = await client.get("/health/ready")
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "checks": {"gitlab": "ok"}}
     assert (await client.get("/metrics")).status_code == 200
+
+
+async def test_without_the_specs_project_day1_is_not_ready() -> None:
+    gitlab = InMemoryGitLab()
+    gitlab.create_project("gitops-day1/platform-config", {"README.md": "day1"})
+    app = create_app(
+        settings=settings(),
+        auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
+        runtime=FAKE,
+        adapters=Adapters(gitlab=gitlab, day2=FakeDay2Addons(), closers=()),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://day1"
+    ) as client:
+        response = await client.get("/health/ready")
+    assert response.status_code == 503
+    assert response.json()["checks"] == {"gitlab": "error: NotFoundError"}
 
 
 async def test_shutting_down_closes_every_adapter() -> None:

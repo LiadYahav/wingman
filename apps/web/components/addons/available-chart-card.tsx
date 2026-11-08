@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Package, Plus } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { day2Api, problemOf, writeErrorMessage } from "@/lib/day2";
+import { day2Api } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { toYaml, type Values } from "@/lib/values";
 import { buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ProblemList } from "@/components/common/problem-list";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
 import { ValuesEditor } from "@/components/addons/values-editor";
@@ -101,9 +102,7 @@ export function InstallForm({
         />
       )}
       {preview.error && !data ? (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-          Could not load the values: {problemOf(preview.error).detail}
-        </p>
+        <ProblemList error={preview.error} title="The values could not be loaded" />
       ) : (
         <ValuesEditor
           preview={data}
@@ -182,7 +181,7 @@ export function AvailableChartCard({
   const [choice, setChoice] = useState<InstallChoice>(DEFAULT_CHOICE);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [writeError, setWriteError] = useState("");
+  const [writeError, setWriteError] = useState<unknown>(null);
   const preview = useInstallPreview(entry, destination, choice, open);
   const blocker = installBlocker(entry, choice, preview.data);
 
@@ -192,7 +191,7 @@ export function AvailableChartCard({
         ...installBody(choice),
         ...(message.trim() ? { message: message.trim() } : {}),
       } satisfies InstallBody),
-    onMutate: () => setWriteError(""),
+    onMutate: () => setWriteError(null),
     onSuccess: (mr) => {
       onOpened({ verb: "Install", results: [mr], failed: [] });
       setReviewOpen(false);
@@ -200,7 +199,7 @@ export function AvailableChartCard({
       setChoice(DEFAULT_CHOICE);
       setMessage("");
     },
-    onError: (error) => setWriteError(writeErrorMessage(problemOf(error))),
+    onError: (error) => setWriteError(error),
   });
 
   return (
@@ -291,7 +290,7 @@ export function AvailableChartCard({
         open={reviewOpen}
         onOpenChange={(next) => {
           setReviewOpen(next);
-          setWriteError("");
+          setWriteError(null);
         }}
         title={`Install ${entry.name} on ${destination.name}`}
         description={`Opens a merge request on ${entry.team}'s repo. Nothing deploys until it is merged, and a manual-sync app until someone syncs it.`}
@@ -304,7 +303,7 @@ export function AvailableChartCard({
             <FilePreview key={file.path} file={file} />
           ))}
           <MessageField value={message} onChange={setMessage} />
-          <WriteError message={writeError} />
+          <WriteError error={writeError} />
         </div>
       </ReviewDialog>
     </>

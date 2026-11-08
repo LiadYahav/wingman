@@ -5,6 +5,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, isApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
 import type { UserInfo } from "@/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type DevRole = "admin" | "viewer";
+
+/** The roles a dev login can ask for; `items` lets the trigger show the label, not the value. */
+const ROLES: { value: DevRole; label: string }[] = [
+  { value: "viewer", label: "Viewer" },
+  { value: "admin", label: "Admin" },
+];
 
 /** The day1 service's rule for dev-login usernames (application/auth.py). */
 const DEV_USERNAME = /^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$/;
@@ -58,7 +67,7 @@ function LoginContent() {
   const [devAuthEnabled, setDevAuthEnabled] = useState(false);
   const [devUsername, setDevUsername] = useState("");
   const [devSecret, setDevSecret] = useState("");
-  const [devRole, setDevRole] = useState<"admin" | "viewer">("viewer");
+  const [devRole, setDevRole] = useState<DevRole>("viewer");
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -219,14 +228,16 @@ function LoginContent() {
                 onChange={(e) => setDevSecret(e.target.value)}
                 className="w-full rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
               />
-              <select
-                value={devRole}
-                onChange={(e) => setDevRole(e.target.value as "admin" | "viewer")}
-                className="w-full rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-              >
-                <option value="viewer">Viewer</option>
-                <option value="admin">Admin</option>
-              </select>
+              <Select value={devRole} onValueChange={(role) => role && setDevRole(role)} items={ROLES}>
+                <SelectTrigger size="lg" className="w-full" aria-label="Role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  {ROLES.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <button
                 type="submit"
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-60"

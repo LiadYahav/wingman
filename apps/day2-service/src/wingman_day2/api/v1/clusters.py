@@ -126,7 +126,7 @@ async def bulk_install(
         message=body.custom_message,
     )
     return BulkOut(
-        merge_requests=[ChangeOut.of_result(r, user.username) for r in result.results],
+        merge_requests=[ChangeOut.of_result(r) for r in result.results],
         failed=[
             BulkFailureOut(team=team, error=type(exc).__name__, detail=str(exc))
             for team, exc in result.failed
@@ -155,7 +155,7 @@ async def install(
         project_namespace=body.project_namespace,
     )
     result = await day2.changes.install(cluster, spec, user, mce=mce, message=body.message)
-    return ChangeOut.of_result(result, user.username)
+    return ChangeOut.of_result(result)
 
 
 @router.put("/clusters/{cluster}/addons/{team}/{addon}")
@@ -181,7 +181,7 @@ async def update(
         mce=mce,
         message=body.message,
     )
-    return ChangeOut.of_result(result, user.username)
+    return ChangeOut.of_result(result)
 
 
 @router.delete("/clusters/{cluster}/addons/{team}/{addon}")
@@ -198,7 +198,7 @@ async def remove(
     result = await day2.changes.remove(
         cluster, team, addon, user, last_commit_id=last_commit_id, mce=mce
     )
-    return ChangeOut.of_result(result, user.username)
+    return ChangeOut.of_result(result)
 
 
 @router.get("/clusters/{cluster}/history")

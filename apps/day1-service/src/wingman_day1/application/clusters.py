@@ -3,12 +3,13 @@
 Reads come from the day1 repo's default branch; changes go through the
 ``ClusterProvisioner`` (today a merge request, ADR-0017). A new cluster file
 is rendered from the shared template, then checked against the values-file
-contract before anything is written (ADR-0012), and its name against the
-naming rules (ADR-0014). The spec's locked values are used and may not be
-sent different (ADR-0026), its owners must be numbers (ADR-0028), its machine
-configs must resolve by the day1 CI's rule, and the cluster's network config
-entry is expanded to the name the CI reads before the template renders
-(ADR-0027). A file that cannot be parsed is shown with its
+contract before anything is written (ADR-0012), its name against the
+naming rules (ADR-0014), and its release against what the MCE can host
+(ADR-0034). The spec's locked values are used and may not be sent different
+(ADR-0026), its owners must be numbers (ADR-0028), its machine configs must
+resolve by the day1 CI's rule, and the cluster's network config entry is
+expanded to the name the CI reads before the template renders (ADR-0027). A
+file that cannot be parsed is shown with its
 error, never dropped from the list (ADR-0004).
 """
 
@@ -63,6 +64,7 @@ from wingman_day1.domain.names import (
     describe_cluster,
     new_cluster_problems,
 )
+from wingman_day1.domain.openshift_versions import unhostable_problems
 from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
@@ -176,6 +178,17 @@ class ClusterService:
         """Commits that changed the cluster's file, newest first."""
         return await self._day1.history(ref.path)
 
+    async def changed_since(self, ref: ClusterRef, commit_id: str) -> bool:
+        """Whether the cluster's file changed after ``commit_id``, a commit it was read at.
+
+        A read's ``last_commit_id`` is the commit the repo was read at (ADR-0035):
+        another id now means the repo moved, not that this file did.
+        """
+        current = await self._read(ref)
+        return commit_id != current.last_commit_id and await self._day1.changed_since(
+            ref.path, commit_id
+        )
+
     async def web_url(self, ref: ClusterRef) -> str:
         """The file in GitLab's UI, at the default branch."""
         project = await self._day1.project()
@@ -200,6 +213,7 @@ class ClusterService:
         addons = spec.requested_addons(request.addon_overrides)
         catalog = await self._machine_configs.catalog()
         content = self._render(ref, spec, request.variables, catalog)
+        await self._require_hostable(ref.mce, content)
         provenance = Provenance(spec.metadata.name, spec.metadata.version, tuple(addons))
         return RenderedCluster(ref, with_provenance(content, provenance), spec, tuple(addons))
 
@@ -242,7 +256,7 @@ class ClusterService:
     ) -> ProvisionResult:
         """Propose a new content for an existing file, guarded by the revision it was read at."""
         current = await self._read(ref)
-        expected = self._expect(ref, current, last_commit_id)
+        expected = await self._expect(ref, current, last_commit_id)
         if content == current.content:
             raise InvalidInputError("the edit changes nothing", ["the content is identical"])
         require_valid(edit_problems(current.content, content), message="the edit is not valid")
@@ -262,7 +276,7 @@ class ClusterService:
     ) -> ProvisionResult:
         """Propose removing the cluster's file (its Application, and so the cluster, goes)."""
         current = await self._read(ref)
-        expected = self._expect(ref, current, last_commit_id)
+        expected = await self._expect(ref, current, last_commit_id)
         return await self._provisioner.apply(
             ClusterChange(
                 action=ClusterAction.DELETE,
@@ -316,6 +330,13 @@ class ClusterService:
         )
         return rendered
 
+    async def _require_hostable(self, mce: str, content: str) -> None:
+        """The new file's ``mastertag`` must be a release the MCE can host (ADR-0034)."""
+        version = str(load_values(content).get("mastertag", ""))
+        problems = unhostable_problems(version, await self._sites.openshift_versions(mce))
+        if problems:
+            raise InvalidInputError(f"OpenShift {version} is not offered on MCE {mce}", problems)
+
     async def _require_unused(self, ref: ClusterRef) -> None:
         """Cluster names are unique across the whole repo, and across open create MRs."""
         existing = (await read_tree(self._day1)).find(ref.name)
@@ -347,9 +368,12 @@ class ClusterService:
                 f"cluster {ref.name!r} does not exist under {ref.site}/{ref.mce}"
             ) from exc
 
-    @staticmethod
-    def _expect(ref: ClusterRef, current: FileContent, expected: str | None) -> str:
-        if expected is not None and expected != current.last_commit_id:
+    async def _expect(self, ref: ClusterRef, current: FileContent, expected: str | None) -> str:
+        if (
+            expected is not None
+            and expected != current.last_commit_id
+            and await self._day1.changed_since(ref.path, expected)
+        ):
             raise StaleError(
                 f"cluster {ref.name!r} changed since it was read ({expected[:8]} → "
                 f"{current.last_commit_id[:8]}); reload and try again"
@@ -366,7 +390,7 @@ class ClusterService:
             problems.extend(exc.problems or [str(exc)])
         provenance = read_provenance(file.content)
         problems.extend(provenance.problems)
-        last_change = await self._day1.commit(file.last_commit_id) if with_commit else None
+        last_change = await self._day1.last_change(ref.path) if with_commit else None
         explicit = values.cluster_name if values else None
         return ClusterFile(
             ref=ref,

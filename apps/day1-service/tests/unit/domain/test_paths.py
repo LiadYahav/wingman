@@ -19,13 +19,10 @@ def test_a_cluster_file_lives_under_its_mces_hosted_clusters_folder() -> None:
 
 def test_the_layout_helpers_build_the_argocd_value_layers() -> None:
     assert paths.site_dir("site1") == RepoPath("sites/site1")
-    assert paths.site_values("site1") == RepoPath("sites/site1/values.yaml")
-    assert paths.mces_dir("site1") == RepoPath("sites/site1/mces")
     assert paths.mce_dir("site1", "m") == RepoPath("sites/site1/mces/m")
     assert paths.mce_values("site1", "m") == RepoPath("sites/site1/mces/m/values.yaml")
     assert paths.mce_version("site1", "m") == RepoPath("sites/site1/mces/m/version.yaml")
     assert paths.hosted_clusters_dir("s", "m") == RepoPath("sites/s/mces/m/hostedClusters")
-    assert RepoPath("sites/configValues.yaml") == paths.GLOBAL_VALUES
 
 
 @pytest.mark.parametrize("name", ["..", ".", "a/b", "", "../etc"])
@@ -77,4 +74,12 @@ def test_spec_files_live_under_the_specs_root() -> None:
     with pytest.raises(InvalidRepoPathError):
         paths.spec_file("specs", "../x")
     assert RepoPath("cluster-template.j2") == paths.TEMPLATE_FILE
-    assert RepoPath("openshift-versions.txt") == paths.VERSIONS_FILE
+
+
+def test_upgrade_rules_live_in_the_day1_repo_upgrade_folder() -> None:
+    assert RepoPath("upgrade/ladder.yaml") == paths.UPGRADE_LADDER
+    assert paths.upgrade_mce_rules("ocp4-prod-mce-site1-a") == RepoPath(
+        "upgrade/mces/ocp4-prod-mce-site1-a.yaml"
+    )
+    with pytest.raises(InvalidRepoPathError):
+        paths.upgrade_mce_rules("../x")

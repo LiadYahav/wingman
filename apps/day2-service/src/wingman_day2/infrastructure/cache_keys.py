@@ -21,16 +21,6 @@ def project_prefix(project_id: int) -> str:
     return f"day2:project:{project_id}:"
 
 
-def tree(project_id: int, ref: str) -> str:
-    """A project's recursive file list at ``ref``."""
-    return f"{project_prefix(project_id)}tree:{ref}"
-
-
-def file(project_id: int, ref: str, path: RepoPath) -> str:
-    """One file (or its absence) at ``ref``."""
-    return f"{project_prefix(project_id)}file:{ref}:{path}"
-
-
 def open_merge_requests(project_id: int) -> str:
     """Open Wingman MRs of a project."""
     return f"{project_prefix(project_id)}mrs:open"
@@ -46,9 +36,14 @@ def commits(project_id: int, ref: str, path: RepoPath | None, limit: int) -> str
     return f"{project_prefix(project_id)}commits:{ref}:{path or ''}:{limit}"
 
 
-def day1_index(project: int | str, ref: str) -> str:
-    """The day1 repo's MCEs, hosted clusters and versions."""
-    return f"day2:day1:{project}:{ref}"
+def day1_project(project: int | str) -> str:
+    """The day1 project, by the id or path in the settings."""
+    return f"day2:day1-project:{project}"
+
+
+def day1_index(project_id: int, commit_id: str) -> str:
+    """The day1 repo's MCEs, hosted clusters and versions at one commit."""
+    return f"day2:day1:{project_id}:{commit_id}"
 
 
 def chart_project(path: str) -> str:

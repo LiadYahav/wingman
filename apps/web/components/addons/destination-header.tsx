@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpCircle, CheckCircle2, Info, Loader2 } from "lucide-react";
+import { ArrowUpCircle, CheckCircle2, Info } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { KIND_LABEL, day2Api, day2Keys, problemOf } from "@/lib/day2";
+import { KIND_LABEL, day2Api, day2Keys } from "@/lib/day2";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ProblemList } from "@/components/common/problem-list";
 import { FindingsList } from "@/components/addons/findings";
 import type { Destination, DestinationCharts, DestinationKind, UpgradeCheck } from "@/types/day2";
 
@@ -109,13 +111,13 @@ export function UpgradeCheckPanel({ clusterId, from }: { clusterId: string; from
           Check
         </button>
       </form>
-      {check.isFetching ? (
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Checking…
-        </p>
+      {check.isLoading ? (
+        <div className="space-y-1.5 py-0.5" aria-busy="true" data-testid="upgrade-check-loading">
+          <Skeleton className="h-3.5 w-2/3" />
+          <Skeleton className="h-3.5 w-1/2" />
+        </div>
       ) : check.error ? (
-        <p className="text-xs text-destructive">{problemOf(check.error).detail}</p>
+        <ProblemList error={check.error} title={`The upgrade check to ${to} could not be run`} />
       ) : check.data ? (
         check.data.warnings.length === 0 ? (
           <p className="flex items-center gap-2 text-xs text-status-ready-fg">

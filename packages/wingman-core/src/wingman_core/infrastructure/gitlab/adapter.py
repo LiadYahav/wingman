@@ -17,6 +17,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import io
+import re
+import tarfile
+import zlib
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
@@ -44,6 +48,7 @@ from wingman_core.domain.git import (
     FileContent,
     FileDiff,
     Project,
+    RepoArchive,
     RepoPath,
     TreeEntry,
 )
@@ -60,6 +65,7 @@ _PAGE_SIZE: Final = 100
 _RETRYABLE_STATUS: Final = frozenset({429, 502, 503, 504})
 _MERGE_CHECKING: Final = frozenset({"checking", "unchecked", "preparing", "approvals_syncing"})
 _MAX_RETRY_AFTER_SECONDS: Final = 10.0
+_MOVED_PROJECT: Final = re.compile(r"/api/v4/projects/([0-9]+)$")
 
 JSON = Any
 """A decoded GitLab JSON value; narrowed by the parsers below."""
@@ -96,8 +102,16 @@ class GitLabHttpAdapter:
     # ── Projects and files ──────────────────────────────────────────────────
 
     async def get_project(self, project: int | str) -> Project:
-        """See GitLabPort.get_project."""
-        return _project(await self._get(f"/projects/{_id(project)}"))
+        """See GitLabPort.get_project.
+
+        GitLab answers a renamed or moved project's old path with a 301 to
+        ``/api/v4/projects/<id>``; that one redirect is followed. Others are not:
+        GitLab's redirect for a file read through an old path appends the
+        extension again (``values.yaml.yaml``) and so leads to a wrong 404, and
+        every other read here takes the project id.
+        """
+        response = await self._read("GET", f"/projects/{_id(project)}", {}, follow_moved=True)
+        return _project(response.json())
 
     async def list_group_projects(self, group: str) -> list[Project]:
         """See GitLabPort.list_group_projects."""
@@ -146,6 +160,23 @@ class GitLabHttpAdapter:
         """See GitLabPort.list_branches."""
         raw = await self._get_pages(f"/projects/{project_id}/repository/branches", {})
         return sorted((Branch(b["name"], b["commit"]["id"]) for b in raw), key=lambda b: b.name)
+
+    async def get_branch(self, project_id: int, name: str) -> Branch:
+        """See GitLabPort.get_branch."""
+        raw = await self._get(f"/projects/{project_id}/repository/branches/{quote(name, safe='')}")
+        return Branch(raw["name"], raw["commit"]["id"])
+
+    async def read_archive(self, project_id: int, sha: str, *, max_bytes: int) -> RepoArchive:
+        """See GitLabPort.read_archive: ``/repository/archive.tar.gz?sha=``, read in memory."""
+        response = await self._read(
+            "GET",
+            f"/projects/{project_id}/repository/archive.tar.gz",
+            {"sha": sha},
+            headers={"Accept": "application/gzip"},
+        )
+        if len(response.content) > max_bytes:
+            raise InvalidRequestError(f"the archive of {sha[:8]} is larger than {max_bytes} bytes")
+        return _archive(response.content, sha, max_bytes=max_bytes)
 
     async def create_branch(self, project_id: int, name: str, ref: str) -> Branch:
         """See GitLabPort.create_branch."""
@@ -337,12 +368,27 @@ class GitLabHttpAdapter:
             page = response.headers.get("x-next-page", "")
         return items
 
-    async def _read(self, method: str, path: str, params: Mapping[str, str]) -> httpx.Response:
-        """Send a read, retrying transient failures."""
+    async def _read(
+        self,
+        method: str,
+        path: str,
+        params: Mapping[str, str],
+        *,
+        follow_moved: bool = False,
+        headers: Mapping[str, str] | None = None,
+    ) -> httpx.Response:
+        """Send a read, retrying transient failures.
+
+        With ``follow_moved``, a 301 for a renamed or moved project is followed
+        once (see :meth:`get_project`).
+        """
         for attempt in range(1, self._read_attempts + 1):
             last = attempt == self._read_attempts
             try:
-                response = await self._client.request(method, path, params=params)
+                response = await self._client.request(method, path, params=params, headers=headers)
+                moved = _moved_project(response) if follow_moved else None
+                if moved is not None:
+                    response = await self._client.request(method, moved)
             except httpx.TransportError as exc:
                 if last:
                     raise GitUnavailableError(
@@ -491,8 +537,56 @@ def _retry_delay(response: httpx.Response, default: float) -> float:
         return default
 
 
+def _archive(data: bytes, sha: str, *, max_bytes: int) -> RepoArchive:
+    """The files of a GitLab ``archive.tar.gz``, without its top folder (``<project>-<sha>/``).
+
+    Nothing touches the disk. Directories and anything that is not a file or a
+    symlink are skipped, and reading stops once the files pass ``max_bytes``.
+    """
+    files: dict[str, bytes] = {}
+    total = 0
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+            for member in tar:
+                path = member.name.partition("/")[2]
+                if not path:
+                    continue
+                if member.issym():
+                    files[path] = member.linkname.encode()
+                elif member.isfile():
+                    total += member.size
+                    if total > max_bytes:
+                        raise InvalidRequestError(
+                            f"the archive of {sha[:8]} is larger than {max_bytes} bytes"
+                        )
+                    extracted = tar.extractfile(member)
+                    files[path] = extracted.read() if extracted is not None else b""
+    except (tarfile.TarError, OSError, EOFError, zlib.error) as exc:
+        raise InvalidRequestError(f"the archive of {sha[:8]} is not a readable tar.gz") from exc
+    return RepoArchive(sha, files)
+
+
+def _moved_project(response: httpx.Response) -> str | None:
+    """``/projects/<id>`` when a 301 answers for a renamed or moved project, else ``None``.
+
+    Only the id is taken from the ``Location``; the request goes to this
+    client's own GitLab, so the token never travels to a host a response names
+    (behind a proxy GitLab may also name its external URL there).
+    """
+    if response.status_code != 301:
+        return None
+    found = _MOVED_PROJECT.search(httpx.URL(response.headers.get("location", "")).path)
+    return f"/projects/{found[1]}" if found else None
+
+
 def _error(response: httpx.Response, *, writing: bool, merging: bool = False) -> GitError:
     status = response.status_code
+    if response.is_redirect:
+        where = f"{response.request.method} {response.request.url.path}: {status}"
+        return InvalidRequestError(
+            f"{where} to {response.headers.get('location', '?')}: GitLab moved this project "
+            "or group (renamed or transferred); point the setting or repourl at its new path"
+        )
     message = _message(response)
     text = message.lower()
     where = f"{response.request.method} {response.request.url.path}: {status} {message}"

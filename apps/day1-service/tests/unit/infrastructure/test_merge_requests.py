@@ -296,11 +296,18 @@ async def linking(gitlab: InMemoryGitLab, *refs: ClusterRef, stale: bool = False
     files = []
     for ref in refs:
         current = await gitlab.read_file(project.id, ref.path, "main")
+        if stale:  # someone changes the file after it was read
+            await gitlab.commit(
+                project.id,
+                branch="main",
+                message=f"edit {ref.name}",
+                changes=[
+                    FileChange.update(ref.path, current.content + "# edited\n", last_commit_id=None)
+                ],
+            )
         files.append(
             FileUpdate(
-                ref,
-                f'# specName: "agent-baseline"\n{current.content}',
-                "0" * 40 if stale else current.last_commit_id,
+                ref, f'# specName: "agent-baseline"\n{current.content}', current.last_commit_id
             )
         )
     return ImportChange("agent-baseline", "1.0.0", tuple(files), ALICE, "Linking.")
