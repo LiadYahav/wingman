@@ -16,15 +16,14 @@ merged unseen (ADR-0006).
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Collection
 from dataclasses import dataclass
-from typing import Final
 
 from wingman_core.domain.errors import PermissionDeniedError
-from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef, MRState
+from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef
 from wingman_core.domain.mr_conventions import (
+    WINGMAN_LABEL,
     MRMetadata,
     ParsedTitle,
     parse_mr_description,
@@ -34,8 +33,6 @@ from wingman_core.domain.users import User
 from wingman_core.ports.gitlab import GitLabPort
 
 logger = logging.getLogger(__name__)
-
-WINGMAN_LABEL: Final = "wingman"
 
 
 class SelfApprovalError(Exception):
@@ -68,24 +65,11 @@ def describe(merge_request: MergeRequest) -> PendingChange:
 
 
 class Approvals:
-    """List, approve and reject Wingman MRs in a set of projects."""
+    """Read, approve and reject Wingman MRs in a set of projects."""
 
     def __init__(self, gitlab: GitLabPort) -> None:
         """Act through ``gitlab`` (Wingman's service account)."""
         self._gitlab = gitlab
-
-    async def pending(self, project_ids: Collection[int]) -> list[PendingChange]:
-        """Open Wingman MRs across ``project_ids``, newest first."""
-        per_project = await asyncio.gather(
-            *(
-                self._gitlab.list_merge_requests(pid, state=MRState.OPENED, labels=(WINGMAN_LABEL,))
-                for pid in sorted(project_ids)
-            )
-        )
-        changes = [describe(mr) for mrs in per_project for mr in mrs]
-        return sorted(
-            changes, key=lambda c: (c.merge_request.created_at, c.merge_request.ref), reverse=True
-        )
 
     async def get(self, ref: MergeRequestRef, *, managed: Collection[int]) -> PendingChange:
         """One Wingman MR in a managed project."""

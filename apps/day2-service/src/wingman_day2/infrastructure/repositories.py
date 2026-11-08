@@ -11,10 +11,10 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from urllib.parse import urlsplit
 
-from wingman_core.application.approvals import WINGMAN_LABEL
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, EntryKind, FileContent, Project, RepoPath
 from wingman_core.domain.merge_request import MergeRequest, MRState
+from wingman_core.domain.mr_conventions import WINGMAN_LABEL
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_day2.domain.day1 import Day1Index, build_day1_index, day1_version_files

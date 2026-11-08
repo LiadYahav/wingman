@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from wingman_core.application.approvals import (
-    WINGMAN_LABEL,
     Approvals,
     SelfApprovalError,
     UnmanagedProjectError,
@@ -16,6 +15,7 @@ from wingman_core.domain.errors import RevisionConflictError
 from wingman_core.domain.git import FileChange, Project, RepoPath
 from wingman_core.domain.merge_request import MergeRequest, MRState, NewMergeRequest
 from wingman_core.domain.mr_conventions import (
+    WINGMAN_LABEL,
     MRMetadata,
     Repo,
     ResourceType,
@@ -72,20 +72,21 @@ def gitlab() -> InMemoryGitLab:
     return InMemoryGitLab(clock=Clock())
 
 
-async def test_pending_lists_wingman_mrs_across_projects_newest_first(
+async def test_get_reads_the_requester_and_title_of_a_wingman_mr(
     gitlab: InMemoryGitLab,
 ) -> None:
-    team_a = gitlab.create_project("sigs/a", {"README.md": "a"})
-    team_b = gitlab.create_project("sigs/b", {"README.md": "b"})
-    await open_change(gitlab, team_a, branch="one", requester="jane", labels=(WINGMAN_LABEL,))
-    await open_change(gitlab, team_b, branch="two", requester="bob", labels=(WINGMAN_LABEL, "day2"))
-    await open_change(gitlab, team_b, branch="manual", requester="x", labels=("other",))
-    pending = await Approvals(gitlab).pending([team_a.id, team_b.id])
-    assert [(c.merge_request.source_branch, c.requested_by) for c in pending] == [
-        ("two", "bob"),
-        ("one", "jane"),
-    ]
-    assert pending[0].title is not None and pending[0].title.resource_name == "two"
+    team = gitlab.create_project("sigs/b", {"README.md": "b"})
+    mr = await open_change(gitlab, team, branch="two", requester="bob", labels=(WINGMAN_LABEL,))
+    change = await Approvals(gitlab).get(mr.ref, managed={team.id})
+    assert change.requested_by == "bob"
+    assert change.title is not None and change.title.resource_name == "two"
+
+
+async def test_get_refuses_an_mr_without_the_wingman_label(gitlab: InMemoryGitLab) -> None:
+    team = gitlab.create_project("sigs/b", {"README.md": "b"})
+    mr = await open_change(gitlab, team, branch="manual", requester="x", labels=("other",))
+    with pytest.raises(UnmanagedProjectError, match="not a Wingman merge request"):
+        await Approvals(gitlab).get(mr.ref, managed={team.id})
 
 
 async def test_same_number_in_two_projects_acts_on_the_right_one(gitlab: InMemoryGitLab) -> None:
@@ -165,8 +166,8 @@ async def test_a_change_without_a_footer_is_attributed_to_the_gitlab_author(
         message="m",
         changes=[FileChange.create(RepoPath("raw.yaml"), "x")],
     )
-    await gitlab.create_merge_request(
+    mr = await gitlab.create_merge_request(
         project.id, NewMergeRequest("raw", "main", "Hand-made", labels=(WINGMAN_LABEL,))
     )
-    [change] = await Approvals(gitlab).pending([project.id])
+    change = await Approvals(gitlab).get(mr.ref, managed={project.id})
     assert (change.requested_by, change.metadata, change.title) == ("wingman-bot", None, None)

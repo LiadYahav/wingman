@@ -22,6 +22,7 @@ from wingman_core.application.approvals import Approvals, PendingChange, describ
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import FileChange, FileDiff, RepoPath
 from wingman_core.domain.merge_request import MergeRequestRef, MRState
+from wingman_core.domain.mr_conventions import WINGMAN_LABEL
 from wingman_core.domain.users import User
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_day1.domain import paths
@@ -30,8 +31,6 @@ from wingman_day1.domain.cluster_file import edit_problems
 from wingman_day1.domain.errors import InvalidInputError, InvalidSpecError, StaleError
 from wingman_day1.domain.specs import parse_spec
 from wingman_day1.ports import RepoReads
-
-WINGMAN_LABEL = "wingman"
 
 
 class RepoKey(StrEnum):

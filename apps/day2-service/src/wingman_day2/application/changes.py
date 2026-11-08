@@ -26,11 +26,11 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from wingman_core.application.approvals import WINGMAN_LABEL
 from wingman_core.domain.errors import GitError, RevisionConflictError
 from wingman_core.domain.git import FileChange, FileContent, RepoPath
 from wingman_core.domain.merge_request import MergeRequest, NewMergeRequest
 from wingman_core.domain.mr_conventions import (
+    WINGMAN_LABEL,
     MRMetadata,
     Repo,
     ResourceType,

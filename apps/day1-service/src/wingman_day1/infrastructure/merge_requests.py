@@ -28,6 +28,7 @@ from typing import Final
 from wingman_core.domain.git import FileChange
 from wingman_core.domain.merge_request import MergeRequest, NewMergeRequest
 from wingman_core.domain.mr_conventions import (
+    WINGMAN_LABEL,
     MRMetadata,
     Repo,
     ResourceType,
@@ -49,8 +50,6 @@ from wingman_day1.domain.changes import (
     commit_author,
 )
 from wingman_day1.infrastructure.repositories import CachedRepository
-
-WINGMAN_LABEL: Final = "wingman"
 
 
 class MergeRequestWriter:
