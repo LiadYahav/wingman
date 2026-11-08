@@ -8,13 +8,13 @@ const DRIFT: Record<DriftState, { label: string; Icon: typeof CheckCircle2; clas
     label: "In sync",
     Icon: CheckCircle2,
     className: "bg-status-ready/10 text-status-ready-fg",
-    hint: "Every addon the spec lists is installed",
+    hint: "The file holds every value the flavor locks, and every add-on it lists is installed",
   },
   drifted: {
     label: "Drifted",
     Icon: AlertTriangle,
     className: "bg-status-warning/10 text-status-warning-fg",
-    hint: "An addon the spec lists is not installed",
+    hint: "A value the flavor locks differs in the file, or an add-on it lists is not installed",
   },
   unknown: {
     label: "Unknown",
@@ -26,7 +26,7 @@ const DRIFT: Record<DriftState, { label: string; Icon: typeof CheckCircle2; clas
     label: "Not linked",
     Icon: Unlink,
     className: "text-muted-foreground",
-    hint: "The cluster is not linked to a spec, so there is nothing to drift from",
+    hint: "The cluster follows no flavor, so there is nothing to drift from",
   },
 };
 
