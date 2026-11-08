@@ -38,13 +38,14 @@ async def get_approval(team: str, iid: int, user: CurrentUser, day2: Services) -
 async def edit_approval(
     team: str, iid: int, body: EditMergeRequestBody, user: AdminUser, day2: Services
 ) -> ApprovalDetailOut:
-    """Push edits of files the MR changes onto its branch (409 if a file moved on)."""
+    """Push edits of files the MR changes onto its branch (409 if it moved since review)."""
     change, diffs = await day2.approvals.edit(
         team,
         iid,
         [FileEdit(f.path, f.content, f.last_commit_id) for f in body.files],
         body.message,
         user,
+        sha=body.sha,
     )
     return ApprovalDetailOut(
         mr=MRDetailOut.of_change(team, change.change), diffs=[FileDiffOut.of(d) for d in diffs]

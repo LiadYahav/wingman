@@ -117,7 +117,10 @@ with `details.rule`.
   reviewed (`MRDetail.sha`); a branch that moved since is 409. Approving your
   own change is 403 `SELF_APPROVAL`.
 - `PUT /approvals/{team}/{iid}` edits only files the MR already changes
-  (422 `path-not-in-mr`); each file may carry `last_commit_id`.
+  (422 `path-not-in-mr`); each file may carry `last_commit_id`. Send the
+  reviewed `sha` (`MRDetail.sha`) too, as for day1: a branch that moved
+  since is 409 and nothing is written; files without a `last_commit_id` are
+  guarded at that `sha`.
 - `MRDetail` gains `team, project_id, sha, gitlab_author`. `author.username`
   is the requester from the description footer everywhere, audit included
   (audit used to show GitLab's author, the service account).

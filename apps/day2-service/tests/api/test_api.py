@@ -307,6 +307,29 @@ async def test_an_approval_of_a_moved_branch_is_a_conflict(
     problem(await approve(bob, "redbull", change["iid"], "f" * 40), 409, "REVISION_CONFLICT")
 
 
+async def test_an_edit_of_a_branch_that_moved_since_review_writes_nothing(
+    jane: httpx.AsyncClient, bob: httpx.AsyncClient, gitlab: InMemoryGitLab
+) -> None:
+    # ADR-0006: the editor reviewed one head; a commit pushed after it (by a
+    # person, CI or a workflow) must not be overwritten unseen.
+    change = ok(await install(jane, "redbull", "bmhgen", {"override_values": {"a": 1}}), 201)
+    reviewed = ok(await bob.get(f"/api/day2/approvals/redbull/{change['iid']}"))["mr"]["sha"]
+    team = await gitlab.get_project("sigs/redbull")
+    await gitlab.commit(
+        team.id,
+        branch=change["source_branch"],
+        message="a bot pushes after the review",
+        changes=[FileChange.create(RepoPath("bot.yaml"), "x: 1\n")],
+    )
+    edit = {"files": [{"path": BMHGEN_VALUES, "content": "a: 2\n"}], "sha": reviewed}
+    url = f"/api/day2/approvals/redbull/{change['iid']}"
+    problem(await bob.put(url, json=edit), 409, "REVISION_CONFLICT")
+    now = ok(await bob.get(url))
+    assert "+a: 1" in next(d for d in now["diffs"] if d["new_path"] == BMHGEN_VALUES)["diff"]
+    edited = ok(await bob.put(url, json={**edit, "sha": now["mr"]["sha"]}))
+    assert "+a: 2" in next(d for d in edited["diffs"] if d["new_path"] == BMHGEN_VALUES)["diff"]
+
+
 async def test_mr_detail_edit_and_reject(jane: httpx.AsyncClient, bob: httpx.AsyncClient) -> None:
     change = ok(await install(jane, "redbull", "bmhgen", {"override_values": {"a": 1}}), 201)
     detail = ok(await jane.get(f"/api/day2/approvals/redbull/{change['iid']}"))

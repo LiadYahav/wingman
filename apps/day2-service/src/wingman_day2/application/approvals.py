@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from wingman_core.application.approvals import Approvals, PendingChange, describe
-from wingman_core.domain.errors import InvalidRepoPathError
+from wingman_core.domain.errors import InvalidRepoPathError, RevisionConflictError
 from wingman_core.domain.git import FileChange, FileDiff, RepoPath, commit_author
 from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef, MRState
 from wingman_core.domain.users import User
@@ -79,9 +79,22 @@ class ApprovalService:
         return TeamChange(owner, change), await self._gitlab.merge_request_diff(ref)
 
     async def edit(
-        self, team: str, iid: int, files: Sequence[FileEdit], message: str, user: User
+        self,
+        team: str,
+        iid: int,
+        files: Sequence[FileEdit],
+        message: str,
+        user: User,
+        *,
+        sha: str | None = None,
     ) -> tuple[TeamChange, list[FileDiff]]:
-        """Commit new content for files the MR already changes, onto its branch."""
+        """Commit new content for files the MR already changes, onto its branch.
+
+        ``sha`` is the branch head the editor reviewed (ADR-0006): if the branch
+        moved since, nothing is written (409). Each file is guarded at the
+        commit it was read at: its ``last_commit_id``, else its last change as
+        of ``sha``, so a commit pushed after the review is never overwritten.
+        """
         current, diffs = await self.detail(team, iid)
         merge_request = current.change.merge_request
         if merge_request.state is not MRState.OPENED:
@@ -89,6 +102,12 @@ class ApprovalService:
                 f"!{iid} is {merge_request.state}; only an open MR can be edited",
                 details={"rule": "mr-not-open"},
             )
+        if sha is not None and sha != merge_request.sha:
+            raise RevisionConflictError(
+                f"!{iid} moved since it was reviewed ({sha[:8]} → {merge_request.sha[:8]}); "
+                "reload it before editing"
+            )
+        reviewed = sha or merge_request.sha
         editable = {str(d.new_path) for d in diffs if not d.deleted_file}
         changes = []
         for edit in files:
@@ -106,9 +125,7 @@ class ApprovalService:
             guard = (
                 edit.last_commit_id
                 or (
-                    await self._gitlab.read_file(
-                        current.team.project.id, path, merge_request.source_branch
-                    )
+                    await self._gitlab.read_file(current.team.project.id, path, reviewed)
                 ).last_commit_id
             )
             changes.append(FileChange.update(path, edit.content, last_commit_id=guard))

@@ -105,10 +105,11 @@ class EditedFile(_Input):
 
 
 class EditMergeRequestBody(_Input):
-    """Push edits onto an MR's branch."""
+    """Push edits onto an MR's branch; ``sha`` is the head the editor reviewed (409 if it moved)."""
 
     files: list[EditedFile] = Field(min_length=1)
     message: str = ""
+    sha: str | None = Field(default=None, min_length=7, max_length=64)
 
 
 # ── Responses ───────────────────────────────────────────────────────────────
