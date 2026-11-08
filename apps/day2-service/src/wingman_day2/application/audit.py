@@ -58,7 +58,12 @@ class AuditService:
         return _page(found, per_page, page)
 
     async def merge_requests(self, *, per_page: int, page: int) -> list[TeamMergeRequest]:
-        """Wingman MRs in any state across team repos, newest update first, one page."""
+        """Wingman MRs in any state across team repos, newest first, one page.
+
+        Ordered by creation, as GitLab lists them and as day1's audit and the
+        web's merged list order them: a page by update time would skip MRs a
+        page by creation shows.
+        """
         teams = await self._sigs.teams()
         per_team = await asyncio.gather(
             *(self._sigs.merge_requests(t, limit=per_page * page) for t in teams)
@@ -68,7 +73,7 @@ class AuditService:
             for team, mrs in zip(teams, per_team, strict=True)
             for mr in mrs
         ]
-        found.sort(key=lambda m: m.merge_request.updated_at, reverse=True)
+        found.sort(key=lambda m: (m.merge_request.created_at, m.merge_request.ref), reverse=True)
         return _page(found, per_page, page)
 
     async def commit_diff(self, sha: str, *, team: str | None = None) -> tuple[str, list[FileDiff]]:

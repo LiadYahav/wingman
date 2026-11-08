@@ -89,7 +89,7 @@ async def audit_merge_requests(
     per_page: int = Query(default=50, ge=1, le=100),
     page: int = Query(default=1, ge=1, le=20),
 ) -> list[MRDetailOut]:
-    """Wingman MRs in any state across team repos, newest update first."""
+    """Wingman MRs in any state across team repos, newest first."""
     return [
         MRDetailOut.of(m.team, m.merge_request)
         for m in await day2.audit.merge_requests(per_page=per_page, page=page)
