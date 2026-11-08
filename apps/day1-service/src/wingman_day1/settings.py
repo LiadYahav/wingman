@@ -42,9 +42,9 @@ class Day1Settings(BaseSettings):
 
     # ── How a cluster file name becomes the chart's clusterName (ADR-0015) ───
     # Production strips "ocp4-" (openshift-prod-x-site1 in hcp-prod-x-site1);
-    # the GitHub sandbox keeps the whole stem: set it to "" there. The legacy
-    # MCE_CLUSTER_NAME_PREFIX (the chart's clusterStatus.clusterNamePrefix) is
-    # accepted for the same value.
+    # the GitHub sandbox keeps the whole stem: set it to "" there. The chart
+    # sets it from day1.clusterNameStripPrefix; the legacy MCE_CLUSTER_NAME_PREFIX
+    # is still accepted for the same value.
     day1_cluster_name_strip_prefix: str = Field(
         default="ocp4-",
         validation_alias=AliasChoices("DAY1_CLUSTER_NAME_STRIP_PREFIX", "MCE_CLUSTER_NAME_PREFIX"),
