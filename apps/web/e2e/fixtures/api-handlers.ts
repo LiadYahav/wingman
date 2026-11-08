@@ -29,7 +29,7 @@ export function mockMR(overrides: Partial<MRDetail> = {}): MRDetail {
 }
 
 /** An RFC 9457 problem body (`application/problem+json`). */
-export function problemBody(
+function problemBody(
   status: number,
   code: ErrorCode,
   detail: string,
@@ -62,7 +62,7 @@ export function fulfillProblem(
   });
 }
 
-export function mockMce(overrides: Partial<Mce> = {}): Mce {
+function mockMce(overrides: Partial<Mce> = {}): Mce {
   return {
     name: "ocp4-prod-mce-site1-a",
     site: "site1",
@@ -79,7 +79,7 @@ export function mockMce(overrides: Partial<Mce> = {}): Mce {
   };
 }
 
-export const mockMces: Mce[] = [
+const mockMces: Mce[] = [
   mockMce(),
   mockMce({ name: "ocp4-prep-mce-site1-a", env: "prep", default_mastertag: "4.20.9-x86_64", hub_version: "4.20.9-x86_64" }),
   mockMce({ name: "ocp4-prod-mce-site2-a", site: "site2" }),
@@ -146,7 +146,7 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day2/approvals", (route: Route) => json(route, []));
 }
 
-export async function mockDay2Api(page: Page) {
+async function mockDay2Api(page: Page) {
   await page.route("**/api/day2/addons", (route: Route) => json(route, mockAddons));
 
   await page.route("**/api/day2/addons/*/**", async (route: Route) => {
@@ -170,7 +170,7 @@ export async function mockDay2Api(page: Page) {
   });
 }
 
-export async function mockDay1Api(page: Page) {
+async function mockDay1Api(page: Page) {
   await page.route("**/api/day1/specs", async (route: Route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON();
