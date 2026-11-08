@@ -6,11 +6,14 @@ them from backend responses; application code never handles raw JSON.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Final
 
 from wingman_core.domain.errors import InvalidRepoPathError
+from wingman_core.domain.users import User
 
 _FORBIDDEN_SEGMENTS = frozenset({"", ".", ".."})
 
@@ -209,6 +212,18 @@ class CommitAuthor:
         for value in (self.name, self.email):
             if not value.strip() or any(c in value for c in "\r\n<>"):
                 raise ValueError(f"invalid commit author field {value!r}")
+
+
+COMMIT_EMAIL_DOMAIN: Final = "openshift.local"
+"""As the legacy service: ``<username>@openshift.local``, an address that receives nothing."""
+_NOT_IN_AUTHOR = re.compile(r"[\r\n<>]+")
+
+
+def commit_author(user: User) -> CommitAuthor:
+    """The Git author of a change ``user`` asked for (GitLab keeps the bot as committer)."""
+    username = _NOT_IN_AUTHOR.sub("-", user.username).strip() or "unknown"
+    name = _NOT_IN_AUTHOR.sub(" ", user.full_name).strip() or username
+    return CommitAuthor(name=name, email=f"{username}@{COMMIT_EMAIL_DOMAIN}")
 
 
 @dataclass(frozen=True, slots=True)

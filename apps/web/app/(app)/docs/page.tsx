@@ -200,9 +200,9 @@ const NAV_SECTIONS = [
 const REFUSALS = [
   {
     code: "409 REVISION_CONFLICT",
-    see: "“… changed since you opened it”, or “The branch moved since you loaded this MR”, with a Reload button",
+    see: "“… changed since you opened it”, or “The branch moved since you loaded this MR”: most pages offer Reload, and a chart's values editor reloads itself and says so",
     why: "Someone committed to the file or the MR branch after you loaded it: another person, the day1 CI or the allocate-segment workflow. Nothing was written or merged.",
-    fix: "Reload, look at what changed, and make your change (or review) again.",
+    fix: "Reload if the page has not, look at what changed, and make your change (or review) again.",
   },
   {
     code: "409 ALREADY_EXISTS",
@@ -218,8 +218,8 @@ const REFUSALS = [
   },
   {
     code: "403 FORBIDDEN",
-    see: "“This needs the admin role.”, or “Insufficient permissions” on a create page",
-    why: "You are a Viewer. At sign-in, the same code means you are in no Wingman group.",
+    see: "“This needs the admin role.”, or at sign-in “You are not in a Wingman group. Ask an admin for access.”",
+    why: "You are a Viewer. At sign-in, the same code means you are in no Wingman group. (A Viewer who opens a create page is shown “Insufficient permissions” without any request being made.)",
     fix: "Ask your platform team to add you to an admin group, then sign in again.",
   },
   {
@@ -242,7 +242,7 @@ const REFUSALS = [
   },
   {
     code: "504 AMBIGUOUS_WRITE",
-    see: "GitLab did not confirm the change",
+    see: "A message that GitLab did not confirm the change, so it may or may not have been made",
     why: "GitLab timed out after receiving the write, so it may or may not have happened. Wingman never retries a write.",
     fix: "Check the Approvals page (or the repo in GitLab) for the MR before trying again.",
   },
@@ -626,12 +626,13 @@ spec:
                 </CodeBlock>
               </div>
             </Callout>
-            <Callout type="warning" title="Editing a spec affects future clusters only">
+            <Callout type="warning" title="Editing a spec does not rewrite existing clusters">
               Changing a spec does not touch clusters that already exist: their files keep what they were
-              created with, and nothing re-renders them (the inputs of a create are not stored). Drift compares a
-              cluster with the spec version it was created from. To change an existing cluster, edit its file from
-              the cluster page. Deleting a spec leaves its clusters&apos; files as they are; their drift becomes{" "}
-              <strong>Unknown</strong>, because the spec they name is gone.
+              created with, and nothing re-renders them (the inputs of a create are not stored). Drift, though,
+              always compares a cluster with the spec as it is now: add an addon to a spec and every cluster
+              created from it shows <strong>Drifted</strong> until the addon is installed. To change an existing
+              cluster, edit its file from the cluster page. Deleting a spec leaves its clusters&apos; files as they
+              are; their drift becomes <strong>Unknown</strong>, because the spec they name is gone.
             </Callout>
           </div>
         </section>
@@ -864,8 +865,8 @@ cluster               …/{cluster}/{chart}/values.yaml
               <InlineCode>targetRevision</InlineCode> into the destination&apos;s folder: an{" "}
               <strong>emergency pin</strong>. The destination then stops following the team default and its
               OCP-version pins until someone removes the pin, so you must tick <strong>Pin … anyway</strong> first.
-              A pinned chart shows a <strong>pinned</strong> badge; choosing the inherited revision again removes the
-              pin. This is the only way Wingman holds one cluster at a version.
+              On every destination but the hub, a pinned chart shows a <strong>pinned</strong> badge; choosing the
+              inherited revision again removes the pin. This is the only way Wingman holds one cluster at a version.
             </p>
           </div>
 
@@ -900,7 +901,7 @@ cluster               …/{cluster}/{chart}/values.yaml
                 <AlertTriangle className="h-4 w-4 text-red-500" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold mb-1">Remove from this cluster</p>
+                <p className="text-sm font-semibold mb-1">Remove from this cluster (on the hub: Remove from the hub)</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Opens an MR deleting the chart&apos;s folder (type the chart&apos;s name, then{" "}
                   <strong>Open removal MR</strong>). That deletes its ArgoCD Application, but ArgoCD{" "}
@@ -919,18 +920,22 @@ cluster               …/{cluster}/{chart}/values.yaml
             </div>
             <div className="min-w-0 space-y-2 text-xs text-muted-foreground leading-relaxed">
               <p>
-                The <strong>Lints</strong> page lists every finding in every team repo, by severity. Errors are the
-                checks the platform itself fails on: an env folder other than <InlineCode>prod</InlineCode>,{" "}
-                <InlineCode>prep</InlineCode> or <InlineCode>test</InlineCode>, a cluster folder day1 has no version for, a
-                malformed or misspelled <InlineCode>exclusions.yaml</InlineCode>, a chart that is both a fleet default
-                and in a cluster&apos;s folder. Warnings are Wingman&apos;s own: a miscased{" "}
-                <InlineCode>repoUrl</InlineCode>, a chart pinned per OCP version with no pin for a cluster&apos;s version.
+                The <strong>Lints</strong> page lists every finding in every team repo, by severity. Errors include
+                every check the platform&apos;s own render check fails on: an env folder other than{" "}
+                <InlineCode>prod</InlineCode>, <InlineCode>prep</InlineCode> or <InlineCode>test</InlineCode>, a cluster
+                folder day1 has no version for, a malformed or misspelled <InlineCode>exclusions.yaml</InlineCode>, a
+                chart that is both a fleet default and in a cluster&apos;s folder. Wingman adds checks of its own: errors
+                for a deploy config with no lowercase <InlineCode>repourl</InlineCode> or a file that is not valid YAML,
+                and warnings for a miscased <InlineCode>repoUrl</InlineCode>, a chart pinned per OCP version with no pin
+                for a cluster&apos;s version, a fleet default&apos;s <InlineCode>targetRevision</InlineCode> that
+                overrides the OCP-version pins, and a cluster name placed at more than one position across team repos.
+                An emergency pin is listed as information.
               </p>
               <p>
                 Findings also appear on the destinations, charts and catalog. Before any Day2 MR opens, the team repo
                 is checked as it would be after the change: a change that adds an error is refused, while existing
-                errors do not block unrelated changes. On a charts page, <strong>Upgrade check</strong> lists the
-                charts a new OCP version would leave without an OCP-version pin.
+                errors do not block unrelated changes. On every charts page but the hub&apos;s,{" "}
+                <strong>Upgrade check</strong> lists the charts a new OCP version would leave without an OCP-version pin.
               </p>
             </div>
           </div>
@@ -954,9 +959,9 @@ cluster               …/{cluster}/{chart}/values.yaml
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             {[
-              { title: "In sync", desc: "Every addon of the spec version the cluster was created from is installed." },
+              { title: "In sync", desc: "Every addon the spec lists now (its current version, not necessarily the one the cluster was created from) is installed." },
               { title: "Drifted", desc: "An addon the spec lists is missing. The Drift tab lists each one with an Install button." },
-              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, or the spec is gone. It is never shown as in sync." },
+              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, or the spec is gone or does not parse. It is never shown as in sync." },
               { title: "Not linked", desc: "The cluster was not created from a spec, so there is nothing to drift from." },
             ].map(({ title, desc }) => (
               <div key={title} className="rounded-xl border bg-card p-4">
@@ -1033,8 +1038,8 @@ cluster               …/{cluster}/{chart}/values.yaml
           <SectionHeader id="audit" icon={ClipboardList} title="Audit Log" subtitle="Track every platform change to its author" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
             The <strong>Audit Log</strong> page has two tabs. <strong>Commits</strong> lists the newest commits on the
-            default branches of the day1, specs and team repos; <strong>Merge Requests</strong> lists their MRs, open,
-            merged or closed. Click a row to see its diff; each row links to GitLab, and an open MR to its review page.
+            default branches of the day1, specs and team repos; <strong>Merge Requests</strong> lists the MRs Wingman
+            opened on them (the ones labelled <InlineCode>wingman</InlineCode>), open, merged or closed. Click a row to see its diff; each row links to GitLab, and an open MR to its review page.
             Day1 and spec commits are authored by the person who asked for them; Day2 commits name them in the message
             (&quot;Requested by … via Wingman&quot;).
           </p>
@@ -1171,7 +1176,8 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
               <p>
                 The <strong>Layers</strong> tab lists the whole stack in merge order, starting with the chart&apos;s own
                 defaults. Files that do not exist are dimmed (<strong>no file</strong>), and the file an edit writes is
-                tagged. The merge is the platform&apos;s own, checked against the team&apos;s render tool.
+                tagged. The stack (which files, in which order) is the platform&apos;s own, checked against the
+                platform&apos;s <InlineCode>render_chain.py</InlineCode> simulation.
               </p>
             </FeaturePanel>
 
@@ -1235,8 +1241,9 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                 text; if listing fails, the form says why and you type the names.
               </p>
               <Callout type="tip" title="Which namespace is listed">
-                By default, InfraEnvs are listed across the whole hub. The deployment&apos;s{" "}
-                <InlineCode>MCE_INFRAENV_NAMESPACE</InlineCode> restricts the list to one namespace.
+                By default, InfraEnvs are listed across the whole hub. The day1 service&apos;s{" "}
+                <InlineCode>MCE_INFRAENV_NAMESPACE</InlineCode> restricts the list to one namespace; the Helm chart does
+                not set it yet.
               </Callout>
             </FeaturePanel>
 
@@ -1307,7 +1314,7 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
               <div className="divide-y">
                 <FileRow file="operators/{chart}/{chart}.yaml, values.yaml" where="per-team project root" desc="The team default: where the chart comes from (repourl, targetRevision, path) and its values. Maintained by the owning team; operators/{chart}/ocp-versions/{ocp}/ holds per-OCP-version pins." />
                 <FileRow file="sites/{site}/{env}/mces/{mce}/{cluster}/{chart}/values.yaml" where="per-team project root" desc="A hosted cluster's values for the chart, written by Wingman on install and update. MCEs use …/mces/{mce}/in-cluster/{chart}/, UPI clusters sites/{site}/{env}/upi/{cluster}/{chart}/, the hub defaults/hub/{chart}/." />
-                <FileRow file="…/{chart}/{chart}.yaml" where="per-team project root" desc="Written only when the destination needs a deploy-config key it does not inherit: a repourl, a projectNamespace, or an emergency targetRevision pin." />
+                <FileRow file="…/{chart}/{chart}.yaml" where="per-team project root" desc="Written only when the destination needs a deploy-config key it does not inherit: a repourl (when no layer sets a lowercase one) or an emergency targetRevision pin. Choosing the inherited revision again removes the pin, and deletes the file if nothing else is left in it." />
                 <FileRow file="defaults/{scope}/{chart}/values-{cluster}.yaml" where="per-team project root" desc="A fleet default's values for one cluster, written when you edit a fleet default there." />
               </div>
             </div>
@@ -1330,7 +1337,7 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                   <>
                     The template is rendered in a sandbox with strict undefined variables, and the result must be a valid
                     cluster file. Every problem is listed: fill in each named field, and keep values on one line, at most
-                    253 characters, without quotes or backslashes.
+                    253 characters, without double quotes or backslashes.
                   </>
                 ),
               },
@@ -1356,7 +1363,8 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                     Most leaf apps are manual-sync: after the merge ArgoCD generates the app, but nothing
                     deploys until someone syncs it in ArgoCD (Wingman has no ArgoCD access). Use{" "}
                     <strong>Open folder in GitLab</strong> from the chart&apos;s menu to confirm the folder is on{" "}
-                    the default branch, then sync the app named on the chart&apos;s <strong>Deployment</strong> tab.
+                    the branch the platform reads (the one Day2 targets), then sync the app named on the chart&apos;s{" "}
+                    <strong>Deployment</strong> tab.
                   </>
                 ),
               },
@@ -1372,8 +1380,9 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                 q: "I cannot see Create / Install / Remove / Approve buttons",
                 a: (
                   <>
-                    You have the <strong>Viewer</strong> role, or the MR is your own. Write operations require the{" "}
-                    <strong>Admin</strong> role: ask your platform team, then sign in again.
+                    You have the <strong>Viewer</strong> role. Write operations require the <strong>Admin</strong>{" "}
+                    role: ask your platform team, then sign in again. On your own MR, <strong>Review &amp; Approve</strong>{" "}
+                    is shown but disabled: another admin must approve it.
                   </>
                 ),
               },

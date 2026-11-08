@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
@@ -30,7 +30,7 @@ function StatCard({
   };
   const c = colorMap[color];
   return (
-    <Link href={href} className="block group">
+    <Link href={href} className="block group" data-testid={`stat-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       <div className="bg-card rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all p-5 cursor-pointer h-full">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
@@ -64,13 +64,13 @@ export default function DashboardPage() {
     queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
   });
 
-  const { data: approvalsDay1, error: day1ApprovalsError } = useQuery<MRDetail[]>({
+  const { data: approvalsDay1, isPending: day1ApprovalsPending, error: day1ApprovalsError } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day1"],
     queryFn: () => api.get<MRDetail[]>("/api/day1/approvals"),
     staleTime: 60_000,
   });
 
-  const { data: approvalsDay2, error: day2ApprovalsError } = useQuery<MRDetail[]>({
+  const { data: approvalsDay2, isPending: day2ApprovalsPending, error: day2ApprovalsError } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day2"],
     queryFn: () => api.get<MRDetail[]>("/api/day2/approvals"),
     staleTime: 60_000,
@@ -103,9 +103,12 @@ export default function DashboardPage() {
   const recentApprovals = [...allApprovals]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 6);
-  const approvalsLoading = !approvalsDay1 && !approvalsDay2 && !day1ApprovalsError && !day2ApprovalsError;
+  // Until both sources answered (or failed), a count or "all caught up" would be one source's.
+  const approvalsLoading = day1ApprovalsPending || day2ApprovalsPending;
   const unavailableApprovals = [day1ApprovalsError && "day1", day2ApprovalsError && "day2"].filter(Boolean);
   const totalApprovals = allApprovals.length;
+  // Neither source answered: there is no count to show, not a count of zero.
+  const allApprovalsFailed = Boolean(day1ApprovalsError && day2ApprovalsError);
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -128,13 +131,17 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Ready"
-          value={statusOff || clustersError ? undefined : health.ready}
-          hint={statusOff ? "Live status is off" : undefined}
+          value={statusOff || clustersError || statusError ? undefined : health.ready}
+          hint={statusOff ? "Live status is off" : statusError ? "Could not be read" : undefined}
           icon={CheckCircle2} href="/clusters" loading={clustersLoading || statusLoading} color="green"
         />
         <StatCard
-          title="Pending Approvals" value={totalApprovals}
-          hint={unavailableApprovals.length > 0 ? `${unavailableApprovals.join(" and ")} unavailable` : undefined}
+          title="Pending Approvals" value={allApprovalsFailed ? undefined : totalApprovals}
+          hint={
+            allApprovalsFailed ? "Could not be loaded"
+              : unavailableApprovals.length > 0 ? `${unavailableApprovals.join(" and ")} unavailable`
+              : undefined
+          }
           icon={GitPullRequest} href="/approvals" loading={approvalsLoading}
           color={totalApprovals > 0 ? "orange" : "blue"}
         />
@@ -221,7 +228,7 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{mr.title}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      by {mr.author.username} · {new Date(mr.created_at).toLocaleDateString("en-GB")}
+                      by {mr.author.username} · {formatDate(mr.created_at)}
                     </p>
                   </div>
                   <RepoBadge repo={mr.repo} className="ml-3 shrink-0" />

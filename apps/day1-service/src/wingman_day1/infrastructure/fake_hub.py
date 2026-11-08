@@ -1,4 +1,4 @@
-"""FakeHubApi: a HubApi over seeded objects, for tests and ``WINGMAN_GIT_BACKEND=fake``.
+"""FakeHubApi: a HubApi over seeded objects, for tests.
 
 It raises the same domain errors as ``HttpHubApi``: an MCE it does not know
 is not configured, one marked unavailable fails as an unreachable hub would,

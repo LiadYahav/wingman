@@ -64,6 +64,25 @@ def _render_chain() -> ModuleType:
 
 RC = _render_chain()
 
+# The rules render_chain.py itself fails a snapshot on; Wingman's own lints are not here.
+RENDER_CHAIN_RULES = frozenset(
+    {
+        Rule.ENV_NOT_ALLOWED,
+        Rule.DAY1_VERSION_MISSING,
+        Rule.MASTERTAG_MISSING,
+        Rule.MASTERTAG_INVALID,
+        Rule.UPI_NAME_IN_CLUSTER,
+        Rule.UPI_NAME_REUSED,
+        Rule.UPI_VERSION_FILE_INVALID,
+        Rule.LEGACY_LAYOUT,
+        Rule.EXCLUSIONS_HUB,
+        Rule.EXCLUSIONS_SCHEMA,
+        Rule.EXCLUSIONS_UNKNOWN_CHART,
+        Rule.EXCLUSIONS_UNKNOWN_TARGET,
+        Rule.DUPLICATE_APP,
+    }
+)
+
 
 def fixture_files() -> Files:
     return {
@@ -334,7 +353,7 @@ async def test_broken_trees_fail_the_same_rules(name: str, tmp_path: Path) -> No
     mine = {
         f.rule
         for f in topology.team(team).findings
-        if f.severity is Severity.ERROR and f.rule.render_chain
+        if f.severity is Severity.ERROR and f.rule in RENDER_CHAIN_RULES
     }
     assert oracle_rules(snapshot["check_failures"]) == mine == rules
     if renders:

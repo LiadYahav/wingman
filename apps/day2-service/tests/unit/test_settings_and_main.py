@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import ValidationError
 
+from wingman_core.domain.users import Role, User
 from wingman_core.settings import (
     AuthSettings,
     Environment,
@@ -93,6 +96,21 @@ async def test_create_app_without_a_gitlab_seeds_the_fake_from_the_fixtures(
     assert app.state.day2.info.sigs_group == "sigs"
     teams = await app.state.day2.topology.load()
     assert [t.team.name for t in teams.teams] == ["falcon", "lynx", "orca", "redbull"]
+
+
+async def test_a_session_expires_by_the_clock_the_app_was_given(env: pytest.MonkeyPatch) -> None:
+    now = [datetime(2026, 11, 7, tzinfo=UTC)]
+    config = load_config()
+    app = main.create_app(config, clock=lambda: now[0])
+    token = app.state.session_tokens.issue(User("jane", Role.ADMIN))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://day2",
+        headers={"authorization": f"Bearer {token}"},
+    ) as client:
+        assert (await client.get("/api/day2/teams")).status_code == 200
+        now[0] += timedelta(hours=config.auth.jwt_expiry_hours, seconds=1)
+        assert (await client.get("/api/day2/teams")).status_code == 401
 
 
 def test_the_module_app_is_built_once_from_the_environment(env: pytest.MonkeyPatch) -> None:

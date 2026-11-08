@@ -2,9 +2,9 @@
 
 import { ProblemList } from "@/components/common/problem-list";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
-import { AMBIGUOUS_WRITE_HINT, isAmbiguousWrite, problemOf } from "@/lib/day2";
 import { asNewFile, computeFullFileDiff } from "@/lib/diff";
 import { cn } from "@/lib/utils";
+import { writeErrorTitle } from "@/lib/write-errors";
 
 /** A file a change will write, as the review dialog shows it before the MR opens. */
 export interface PlannedFile {
@@ -49,18 +49,14 @@ export function FilePreview({ file }: { file: PlannedFile }) {
   );
 }
 
-/** What a refused write means beyond its detail: an unconfirmed one (ADR-0006) may have happened. */
-function refusalTitle(error: unknown): string {
-  return isAmbiguousWrite(problemOf(error)) ? AMBIGUOUS_WRITE_HINT : "The change was refused";
-}
-
 /**
- * Why the service refused the change, inside the dialog that asked for it.
- * `error` is the thrown error itself, shown in full (every broken rule and
- * the request id); `message` is a sentence already made from one.
+ * Why the service refused the change (or that GitLab did not confirm it),
+ * inside the dialog that asked for it. `error` is the thrown error itself,
+ * shown in full (every broken rule and the request id); `message` is a
+ * sentence already made from one.
  */
 export function WriteError({ error, message }: { error?: unknown; message?: string }) {
-  if (error) return <ProblemList error={error} title={refusalTitle(error)} />;
+  if (error) return <ProblemList error={error} title={writeErrorTitle(error)} />;
   if (!message) return null;
   return (
     <p role="alert" className="whitespace-pre-line break-words rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">

@@ -23,7 +23,7 @@ from wingman_core.web.errors import (
     Unauthorized,
     ValidationFailed,
 )
-from wingman_core.web.exception_handlers import problem
+from wingman_core.web.exception_handlers import app_error_response, register_domain_errors
 from wingman_day1.domain.errors import (
     AlreadyInUseError,
     AmbiguousNameError,
@@ -71,19 +71,8 @@ def to_app_error(error: Day1Error) -> AppError:
 
 def register_day1_error_handlers(app: FastAPI) -> None:
     """Route day1 errors (and invalid repo paths from user input) through the problem shape."""
-
-    @app.exception_handler(Day1Error)
-    async def handle_day1_error(request: Request, exc: Day1Error) -> JSONResponse:
-        error = to_app_error(exc)
-        return problem(
-            request,
-            status=error.status,
-            code=error.code,
-            detail=error.detail,
-            details=error.details,
-        )
+    register_domain_errors(app, Day1Error, to_app_error)
 
     @app.exception_handler(InvalidRepoPathError)
     async def handle_bad_path(request: Request, exc: InvalidRepoPathError) -> JSONResponse:
-        error = ValidationFailed(f"not a valid name: {exc}")
-        return problem(request, status=error.status, code=error.code, detail=error.detail)
+        return app_error_response(request, ValidationFailed(f"not a valid name: {exc}"))

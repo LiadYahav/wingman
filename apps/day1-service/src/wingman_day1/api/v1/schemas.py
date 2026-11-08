@@ -14,9 +14,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from wingman_core.application.approvals import describe
-from wingman_core.domain.git import Commit, FileDiff
+from wingman_core.domain.git import Commit
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.domain.users import User
+from wingman_core.web.schemas import FileDiffOut
 from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.audit import AuditCommit
 from wingman_day1.application.clusters import ClusterFile
@@ -31,7 +32,6 @@ from wingman_day1.domain.status import LiveStatus
 from wingman_day1.domain.workflows import WorkflowRun
 
 MAX_FILE_BYTES = 256 * 1024
-NO_SPEC = None
 
 
 class _In(BaseModel):
@@ -156,29 +156,6 @@ class MRDetailOut(BaseModel):
 def change_out(repo: RepoKey, merge_request: MergeRequest) -> MRDetailOut:
     """The response for an MR a change just opened."""
     return MRDetailOut.of(Change(repo, describe(merge_request)))
-
-
-class FileDiffOut(BaseModel):
-    """One file of a diff."""
-
-    old_path: str
-    new_path: str
-    diff: str
-    new_file: bool
-    renamed_file: bool
-    deleted_file: bool
-
-    @classmethod
-    def of(cls, diff: FileDiff) -> FileDiffOut:
-        """From a domain diff."""
-        return cls(
-            old_path=str(diff.old_path),
-            new_path=str(diff.new_path),
-            diff=diff.diff,
-            new_file=diff.new_file,
-            renamed_file=diff.renamed_file,
-            deleted_file=diff.deleted_file,
-        )
 
 
 class ApprovalDetailOut(BaseModel):
@@ -646,7 +623,6 @@ class AddonDriftOut(BaseModel):
     team: str
     reason: Literal["missing"]
     expected_version: str
-    installed_version: str
     override_values: dict[str, Any]
     """The values requested at create; install with them."""
 
@@ -658,7 +634,6 @@ class AddonDriftOut(BaseModel):
             team=drift.team,
             reason=drift.reason.value,
             expected_version=drift.expected_version,
-            installed_version=drift.installed_version,
             override_values=dict(drift.override_values),
         )
 
@@ -697,10 +672,9 @@ class ClusterDriftOut(BaseModel):
     spec_name: str | None
     spec_version: str | None
     current_spec_version: str | None
-    unified_diff: str = ""
     addon_drift: list[AddonDriftOut]
     """Spec addons the cluster does not have: what makes it ``drifted``."""
-    version_differences: list[VersionDifferenceOut] = Field(default_factory=list)
+    version_differences: list[VersionDifferenceOut]
     """Spec addons at another version; reported only, never fixed (ADR-0025)."""
     error: str | None
 
@@ -766,7 +740,6 @@ class SpecDriftOut(BaseModel):
     state: DriftStateOut
     is_drifted: bool | None
     spec_version: str | None
-    unified_diff: str = ""
     error: str | None
 
 

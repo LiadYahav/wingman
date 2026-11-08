@@ -11,6 +11,7 @@
  */
 
 import { test, expect, type Page, type Request } from "@playwright/test";
+import { go } from "../fixtures/api-handlers";
 
 const BASE = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:8080";
 const SECRET = process.env.DEV_AUTH_SECRET ?? "";
@@ -36,13 +37,6 @@ async function login(page: Page) {
   );
 }
 
-async function open(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
-}
-
 const opened = (page: Page) => page.getByRole("region", { name: "Opened merge requests" });
 
 test.beforeEach(async ({ page }) => {
@@ -50,13 +44,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("the catalog flags the miscased repoUrl", async ({ page }) => {
-  await open(page, "/addons");
+  await go(page, "/addons");
   await expect(page.getByText(/charts? across \d+ teams/)).toBeVisible();
   await expect(page.getByRole("button", { name: /kyverno/ })).toContainText("No lowercase repourl");
 });
 
 test("the catalog sorts, folds a team, and shows team values as YAML", async ({ page }) => {
-  await open(page, "/addons");
+  await go(page, "/addons");
   const redbull = page.locator("section").filter({ has: page.getByRole("button", { name: /^redbull/ }) });
   await expect(redbull.locator("h3")).toHaveText(["bmhgen", "cluster-roles", "kyverno"]);
 
@@ -83,7 +77,7 @@ test("a hosted cluster's day1 page links to its charts, read from the listing it
   page.on("request", (r: Request) => {
     if (new URL(r.url()).pathname === `/api/day2/clusters/${HAWK}/addons`) listings += 1;
   });
-  await open(page, `/clusters/${HAWK}?site=site1&mce=ocp4-prod-mce-site1-a`);
+  await go(page, `/clusters/${HAWK}?site=site1&mce=ocp4-prod-mce-site1-a`);
   await expect(page.getByRole("heading", { name: HAWK })).toBeVisible();
   await page.getByRole("tab", { name: "History" }).click();
   await expect(page.getByText("Addon values (day2 team repos)")).toBeVisible();
@@ -96,7 +90,7 @@ test("a hosted cluster's day1 page links to its charts, read from the listing it
 });
 
 test("a hosted cluster from a day1 link: provenance, then an update guarded by last_commit_id", async ({ page }) => {
-  await open(page, `/clusters/${HAWK}/addons?site=site1&mce=ocp4-prod-mce-site1-a`);
+  await go(page, `/clusters/${HAWK}/addons?site=site1&mce=ocp4-prod-mce-site1-a`);
   const card = page.getByTestId("installed-falcon-cluster-roles");
   await card.getByRole("button", { name: /^cluster-roles/ }).click();
   await expect(card.getByTestId("value-row-team")).toContainText("team");
@@ -114,7 +108,7 @@ test("a hosted cluster from a day1 link: provenance, then an update guarded by l
 });
 
 test("install, remove (orphans) and bulk install on a hosted cluster", async ({ page }) => {
-  await open(page, `/clusters/${HAWK}/addons?mce=ocp4-prod-mce-site1-a`);
+  await go(page, `/clusters/${HAWK}/addons?mce=ocp4-prod-mce-site1-a`);
 
   const bmhgen = page.getByTestId("available-redbull-bmhgen");
   await bmhgen.getByRole("button", { name: "Install" }).click();
@@ -142,7 +136,7 @@ test("install, remove (orphans) and bulk install on a hosted cluster", async ({ 
 });
 
 test("an MCE shows its fleet defaults and the chart with no repourl", async ({ page }) => {
-  await open(page, `/clusters/${encodeURIComponent(MCE)}/addons`);
+  await go(page, `/clusters/${encodeURIComponent(MCE)}/addons`);
   await expect(page.getByText("MCE", { exact: true })).toBeVisible();
   await expect(page.getByTestId("installed-falcon-mce-agent")).toContainText("fleet default");
   const kyverno = page.getByTestId("installed-redbull-kyverno");
@@ -152,7 +146,7 @@ test("an MCE shows its fleet defaults and the chart with no repourl", async ({ p
 });
 
 test("a UPI fleet default edits its values-<cluster>.yaml", async ({ page }) => {
-  await open(page, `/clusters/${encodeURIComponent(UPI)}/addons`);
+  await go(page, `/clusters/${encodeURIComponent(UPI)}/addons`);
   const metrics = page.getByTestId("installed-orca-metrics");
   await metrics.getByRole("button", { name: /^metrics/ }).click();
   await expect(metrics.getByText("defaults/upi/metrics/values-ocp4-dok-site1.yaml").first()).toBeVisible();
@@ -160,15 +154,15 @@ test("a UPI fleet default edits its values-<cluster>.yaml", async ({ page }) => 
 });
 
 test("the hub, the destinations list and the lints", async ({ page }) => {
-  await open(page, "/clusters/hub/addons");
+  await go(page, "/clusters/hub/addons");
   await expect(page.getByTestId("installed-falcon-hub-reporter")).toBeVisible();
   await expect(page.getByText("Upgrade check")).toHaveCount(0);
 
-  await open(page, "/destinations");
+  await go(page, "/destinations");
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: /UPI/ }).click();
   await expect(page.locator("tbody tr")).toHaveCount(2);
 
-  await open(page, "/lints");
+  await go(page, "/lints");
   await page.getByRole("group", { name: "Severity" }).getByRole("button", { name: /error/ }).click();
   await expect(page.locator("tbody tr").first()).toContainText("repourl-missing");
 });

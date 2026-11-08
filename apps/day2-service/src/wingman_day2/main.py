@@ -49,7 +49,7 @@ def seeded_fake(config: Config, clock: Clock) -> InMemoryGitLab:
     )
 
     gitlab = InMemoryGitLab(clock=clock, base_url=FAKE_GITLAB_URL)
-    root = config.day2.wingman_fixtures_dir or default_fixture_root()
+    root = config.runtime.fixtures_dir or default_fixture_root()
     seed_fake(gitlab, load_fixture_projects(root, substitutions={"GITLAB_URL": FAKE_GITLAB_URL}))
     return gitlab
 
@@ -66,8 +66,8 @@ def create_app(
     metrics = WingmanMetrics(
         registry or CollectorRegistry(),
         component="day2",
-        version=config.day2.wingman_version,
-        commit=config.day2.wingman_commit,
+        version=config.runtime.version,
+        commit=config.runtime.commit,
     )
     client: httpx.AsyncClient | None = None
     if gitlab is None:
@@ -100,11 +100,14 @@ def create_app(
 
     app = create_base_app(
         title="Wingman day2",
-        version=config.day2.wingman_version,
+        version=config.runtime.version,
+        commit=config.runtime.commit,
+        api_prefix="/api/day2",
         metrics=metrics,
         session_tokens=SessionTokens(
             config.auth.jwt_secret_key.get_secret_value(),
             ttl=timedelta(hours=config.auth.jwt_expiry_hours),
+            clock=clock,
         ),
         readiness={"gitlab": gitlab_ready},
         lifespan=lifespan,

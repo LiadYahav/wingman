@@ -7,7 +7,7 @@
  */
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
 import type { ApprovalDetail, CommitRecord, MRDetail } from "../../types";
 
 const DAY1_MR = mockMR({ iid: 42, title: "[Wingman/Day1] Create cluster ocp4-prod-nova-site1", author: { username: "alice", name: "alice", avatar_url: "" } });
@@ -43,13 +43,6 @@ async function open(page: Page, username = "test-admin") {
   await page.route("**/api/day2/approvals", (r: Route) =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([DAY2_MR]) })
   );
-}
-
-async function go(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
 }
 
 test.describe("Approvals list", () => {
@@ -177,6 +170,24 @@ test.describe("Approve with the reviewed sha", () => {
     await expect(page.getByText("You requested this change, so another admin must approve it.")).toBeVisible();
   });
 
+  test("a merge GitLab did not confirm says it may have happened, not that it failed", async ({ page }) => {
+    await open(page);
+    await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail(DAY1_MR)) })
+    );
+    await page.route("**/api/day1/approvals/42/approve?repo=day1", (r: Route) =>
+      fulfillProblem(r, 504, "AMBIGUOUS_WRITE", "GitLab did not answer the merge request")
+    );
+    await go(page, "/approvals/day1-42");
+
+    await page.getByRole("button", { name: /review & approve/i }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Approve & Merge" }).click();
+    const alert = page.getByRole("alert").filter({ hasText: "GitLab did not answer the merge request" });
+    await expect(alert).toContainText("GitLab did not confirm the change, so it may or may not have been made");
+    await expect(alert).toContainText("request req_e2e0000000000001");
+    await expect(page.getByText("The action failed")).toHaveCount(0);
+  });
+
   test("your own MR cannot be approved from the page", async ({ page }) => {
     await open(page, "alice");
     await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>
@@ -245,6 +256,42 @@ test.describe("Approve with the reviewed sha", () => {
       sha: DAY1_MR.sha,
     });
     await expect(page.getByText("11111111")).toBeVisible();
+  });
+
+  test("a day2 MR's edit carries the reviewed sha too", async ({ page }) => {
+    // day2 guards an edit at the reviewed head as day1 does (ADR-0006): without
+    // the sha it would overwrite a commit pushed after the review.
+    await open(page);
+    await page.route("**/api/day2/approvals/redbull/7", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail(DAY2_MR)) })
+    );
+    await go(page, "/approvals/day2-redbull-7");
+
+    await page.getByRole("button", { name: /edit files/i }).click();
+    await page.getByLabel(NEW_FILE_DIFF.new_path).fill("replicas: 3\n");
+    await page.getByRole("button", { name: /review & submit changes/i }).click();
+    const put = page.waitForRequest((req: Request) => req.method() === "PUT");
+    await page.getByRole("dialog").getByRole("button", { name: "Submit Changes" }).click();
+
+    expect((await put).postDataJSON()).toEqual({
+      files: [{ path: NEW_FILE_DIFF.new_path, content: "replicas: 3\n" }],
+      message: "",
+      sha: DAY2_MR.sha,
+    });
+  });
+
+  test("an MR that only changes files has nothing to edit here, and says so", async ({ page }) => {
+    await open(page);
+    const changed = { ...NEW_FILE_DIFF, diff: "@@ -1 +1 @@\n-mastertag: 4.16.27-x86_64\n+mastertag: 4.18.22-x86_64\n", new_file: false };
+    await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ mr: DAY1_MR, diffs: [changed] }) })
+    );
+    await go(page, "/approvals/day1-42");
+
+    await page.getByRole("button", { name: /edit files/i }).click();
+    await expect(page.getByTestId("approval-nothing-editable")).toContainText("No file in this MR can be edited here");
+    await expect(page.getByText("1 changed file can only be edited")).toBeVisible();
+    await expect(page.getByRole("button", { name: /review & submit changes/i })).toHaveCount(0);
   });
 
   test("an unknown id format is explained", async ({ page }) => {

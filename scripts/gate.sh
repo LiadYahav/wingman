@@ -69,17 +69,6 @@ deptry_all() {
   done
 }
 
-legacy_ruff() {
-  ((${#LEGACY[@]} == 0)) || uv run ruff check "${LEGACY[@]}"
-}
-
-legacy_mypy() {
-  local dir
-  for dir in "${LEGACY_MYPY[@]}"; do
-    uv run mypy "$dir" --ignore-missing-imports || return 1
-  done
-}
-
 helm_template_all() {
   local values
   for values in chart/ci/*.yaml; do
@@ -109,8 +98,6 @@ if [[ $scope == all || $scope == python ]]; then
   step "pytest (coverage >= 90%)" uv run pytest --cov --cov-fail-under=90 -q
   step "pip-audit" uv run --with pip-audit==2.10.1 pip-audit --skip-editable --progress-spinner off
   step "deptry" deptry_all
-  step "legacy ruff" legacy_ruff
-  step "legacy mypy" legacy_mypy
 fi
 
 if [[ $scope == all || $scope == chart ]]; then

@@ -142,7 +142,8 @@ ClientFor = Callable[[User | None], httpx.AsyncClient]
 @pytest.fixture
 async def client_for(app: FastAPI) -> AsyncIterator[ClientFor]:
     """A factory of API clients logged in as a user (``None``: no token)."""
-    tokens = SessionTokens(SECRET, ttl=timedelta(hours=1))
+    # The app's own tokens: they run on its injected clock, as the services do.
+    tokens: SessionTokens = app.state.session_tokens
     clients: list[httpx.AsyncClient] = []
 
     def make(user: User | None) -> httpx.AsyncClient:

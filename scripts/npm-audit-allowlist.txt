@@ -6,36 +6,13 @@
 # and the fix, as for each group below.
 #
 # Recorded 2026-11-07, after in-range lockfile updates (no package.json
-# change) cleared 83 of the 147 advisories reported before.
-
-# Reached only through monaco-editor 0.56.0 (the peer @monaco-editor/react installs),
-# which pins dompurify exactly. Fixed by a monaco-editor update, a runtime UI change
-# that belongs in a web change with the editor checked by hand.
-GHSA-39q2-94rc-95cp  dompurify                  moderate  fix: an in-range update  # DOMPurify's ADD_TAGS function form bypasses FORBID_TAGS due to short-circuit evaluation
-GHSA-55q2-fjhq-7xh7  dompurify                  moderate  fix: an in-range update  # DOMPurify: IN_PLACE hook removal leaves a detached subtree executable, causing XSS
-GHSA-6688-9rhm-gjv2  dompurify                  low       fix: an in-range update  # DOMPurify: IN_PLACE returns a force-removed rawtext root whose text carries attacker markup — pure HTML reparse executes
-GHSA-76mc-f452-cxcm  dompurify                  moderate  fix: an in-range update  # DOMPurify: Hook mutation of `data.allowedTags` / `data.allowedAttributes` permanently pollutes `DEFAULT_ALLOWED_TAGS` / `DEFAULT_ALLOWED_ATTR`
-GHSA-c2j3-45gr-mqc4  dompurify                  low       fix: an in-range update  # DOMPurify: `CUSTOM_ELEMENT_HANDLING` bypasses `afterSanitizeElements` for allowed custom elements.
-GHSA-c6gr-qvv4-5v3f  dompurify                  low       fix: an in-range update  # DOMPurify: SMIL attributeName=href guard is skipped when PARSER_MEDIA_TYPE is application/xhtml+xml
-GHSA-cj63-jhhr-wcxv  dompurify                  moderate  fix: an in-range update  # DOMPurify USE_PROFILES prototype pollution allows event handlers
-GHSA-cjmm-f4jc-qw8r  dompurify                  moderate  fix: an in-range update  # DOMPurify ADD_ATTR predicate skips URI validation
-GHSA-cmwh-pvxp-8882  dompurify                  moderate  fix: an in-range update  # DOMPurify: Permanent `ALLOWED_ATTR` pollution via `setConfig()` bypassing the hook clone-guard (incomplete fix of the 3.4.7 hook-pollution patch)
-GHSA-crv5-9vww-q3g8  dompurify                  moderate  fix: an in-range update  # DOMPurify has a SAFE_FOR_TEMPLATES bypass in RETURN_DOM mode
-GHSA-gvmj-g25r-r7wr  dompurify                  low       fix: an in-range update  # DOMPurify: SAFE_FOR_TEMPLATES bypass - template expressions survive sanitization inside <template> content when using DOM output modes
-GHSA-h7mw-gpvr-xq4m  dompurify                  moderate  fix: an in-range update  # DOMPurify: FORBID_TAGS bypassed by function-based ADD_TAGS predicate (asymmetry with FORBID_ATTR fix)
-GHSA-h8r8-wccr-v5f2  dompurify                  moderate  fix: an in-range update  # DOMPurify is vulnerable to mutation-XSS via Re-Contextualization 
-GHSA-hpcv-96wg-7vj8  dompurify                  moderate  fix: an in-range update  # DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks
-GHSA-mrv2-3pqr-j5jr  dompurify                  high      fix: an in-range update  # DOMPurify IN_PLACE: hook that removes a parent or sibling leaves the detached subtree's event handlers armed (incomplete fix for GHSA-p98j-92pf-mc4p)
-GHSA-r47g-fvhr-h676  dompurify                  moderate  fix: an in-range update  # DOMPurify: IN_PLACE mode preserves attributes of a clobbered root element, allowing XSS via attacker-controlled root DOM
-GHSA-rp9w-3fw7-7cwq  dompurify                  moderate  fix: an in-range update  # DOMPurify IN_PLACE Sanitization Bypass via Attached Shadow Root Inside <template>.content
-GHSA-v2wj-7wpq-c8vv  dompurify                  moderate  fix: an in-range update  # DOMPurify contains a Cross-site Scripting vulnerability
-GHSA-v9jr-rg53-9pgp  dompurify                  moderate  fix: an in-range update  # DOMPurify: Prototype Pollution to XSS Bypass via CUSTOM_ELEMENT_HANDLING Fallback
-GHSA-vxr8-fq34-vvx9  dompurify                  low       fix: an in-range update  # DOMPurify: Trusted Types policy survives `clearConfig()` and can poison later `RETURN_TRUSTED_TYPE` output
-GHSA-x4vx-rjvf-j5p4  dompurify                  low       fix: an in-range update  # DOMPurify: `IN_PLACE` mode trusts attacker-controlled `nodeName` on live non-form nodes, allowing script retention and XSS via attacker-supplied DOM objects
+# change) cleared 83 of the 147 advisories reported before. The 21 dompurify
+# advisories left on 2026-11-08 with @monaco-editor/react, which nothing used.
 
 # Through the shadcn CLI (apps/web/package.json `dependencies`, though only its
-# tailwind.css is used at build time) and zod. npm's suggested fix (shadcn@1.0.0) is a
-# downgrade; the real fix is a shadcn release that moves them, or zod > 4.3.x.
+# tailwind.css is used at build time); zod also through eslint-config-next's
+# react-hooks plugin. npm's suggested fix (shadcn@1.0.0) is a downgrade; the real
+# fix is a shadcn release that moves them, or zod > 4.3.x.
 GHSA-gcqx-w48m-w2h4  deepmerge                  low       fix: shadcn@1.0.0 (semver major)  # deepmerge mergeObject() allows prototype poisoning of returned objects
 GHSA-g3hv-75wg-m249  minimatch                  moderate  fix: shadcn@1.0.0 (semver major)  # minimatch has potential denial of service via globparts amplification
 GHSA-mrhx-c7xc-m3w5  zod                        high      fix: shadcn@1.0.0 (semver major)  # Zod can exhaust memory while validating oversized constrained collections

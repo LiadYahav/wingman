@@ -97,8 +97,8 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     `mastertag`, or changes nothing.
 14. **Delete `DELETE /clusters/{name}`**: optional `last_commit_id` query.
 15. **Removed: `POST /clusters/{name}/sync-yaml`** (405). Nothing is stored
-    to re-render from (ADR-0016); drop the "Sync" button. Drift's
-    `unified_diff` is always `""`.
+    to re-render from (ADR-0016); drop the "Sync" button. Drift has no
+    `unified_diff` any more.
 16. **Drift `GET /clusters/{name}/drift`**: new `site`, `mce`, `state`
     (`in_sync | drifted | unknown | not_linked`), `current_spec_version`,
     `error`; `is_drifted` is `null` when unknown (day2 did not answer, the
@@ -109,7 +109,8 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     item's `reason` is only `"missing"` (`"version_mismatch"` is gone), and
     its fix installs it at the team default version: send day2's install
     no `version` (any other is refused as an unconfirmed emergency pin,
-    ADR-0022). A spec addon installed at another version is listed in
+    ADR-0022); the item has no `installed_version` (there is none). A
+    spec addon installed at another version is listed in
     the new `version_differences[{addon_name, team, spec_version,
     installed_version}]`, does not make the cluster `drifted`, and has no
     fix: show it as information.
@@ -140,7 +141,7 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
 23. `GET /specs/{name}/clusters` items gain `state`, `error`;
     `GET /specs/{name}/drift` now returns real results (it always returned
     `[]`), items `{cluster, site, mce, state, is_drifted, spec_version,
-    unified_diff: "", error}`.
+    error}`.
 
 ## Approvals (`/approvals`)
 
@@ -167,6 +168,8 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     for day1-service items, and expand an MR with
     `/api/day1/approvals/{iid}?repo={repo}` (the page calls
     `/api/${repo}/approvals/...`, which for a specs MR is not even a route).
+    Only Wingman's MRs are listed (the `wingman` label), as day2 does: an MR
+    opened by hand is not one an approval detail can open.
 29. `GET /audit/commits/{repo}/{sha}/diff`: unknown SHA → 404 problem;
     a wrong `repo` hint is still tolerated.
 
@@ -177,7 +180,10 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     empty (it accepted anyone) and 401 on a wrong token.
 32. New: `GET /health/live`, `GET /health/ready` (GitLab reachable),
     `GET /metrics` (service port only); `/healthz` is kept.
-33. New: `GET` and `POST /clusters/{name}/delete-workflow` (ADR-0033). Both
+33. New: `GET /api/day1/build` (any logged-in user): `{version, commit}`,
+    the `WINGMAN_VERSION` and `WINGMAN_COMMIT` the service runs (the
+    settings page shows them).
+34. New: `GET` and `POST /clusters/{name}/delete-workflow` (ADR-0033). Both
     answer 501 `FEATURE_DISABLED` ("not available yet") until the
     delete-cluster workflow exists. Then `GET` returns `{"run": null | {workflow_id,
     status, phase, error}}`, and `POST {"confirm": true}` (admin) returns 202 with the run.

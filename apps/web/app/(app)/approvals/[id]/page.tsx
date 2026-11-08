@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X, ChevronDown, ChevronRight,
-  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, FileQuestionMark, Files,
+  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, Files,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, isApiError } from "@/lib/api-client";
@@ -14,13 +14,14 @@ import { approvalApiPath, parseApprovalId, type MRRef } from "@/lib/approvals";
 import { useAuthStore, useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
-import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
+import { EmptyState } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { computeLineDiff } from "@/lib/diff";
+import { writeErrorTitle } from "@/lib/write-errors";
 import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
 
 /** 409 REVISION_CONFLICT on approve or edit: the head is not the one reviewed. */
@@ -114,9 +115,8 @@ function EditMRPanel({
       const files: UpdateMRFile[] = editableDiffs
         .filter((d) => fileContents[d.new_path] !== newFileContent(d))
         .map((d) => ({ path: d.new_path, content: fileContents[d.new_path] ?? "" }));
-      // day1 refuses the commit if the branch moved past the head reviewed here
-      const body = mrRef.service === "day1" ? { files, message, sha: mr.sha } : { files, message };
-      return api.put<ApprovalDetail>(approvalApiPath(mrRef), body);
+      // Both services refuse the commit if the branch moved past the head reviewed here (ADR-0006)
+      return api.put<ApprovalDetail>(approvalApiPath(mrRef), { files, message, sha: mr.sha });
     },
     onSuccess: (detail) => {
       toast.success("Changes committed to the MR branch — review them again before approving");
@@ -157,12 +157,16 @@ function EditMRPanel({
       {saveError !== null && (
         isApiError(saveError, "REVISION_CONFLICT")
           ? <ProblemList error={saveError} title={BRANCH_MOVED} />
-          : <ProblemList error={saveError} title="The edit was refused" />
+          : <ProblemList error={saveError} title={writeErrorTitle(saveError, "The edit was refused")} />
       )}
       {editableDiffs.length === 0 ? (
-        <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
-          No file in this MR can be edited here.
-        </div>
+        <EmptyState
+          icon={FileEdit}
+          title="No file in this MR can be edited here"
+          description="Only the files a merge request adds can be edited on this page."
+          bordered
+          data-testid="approval-nothing-editable"
+        />
       ) : (
         <>
           <input
@@ -237,7 +241,7 @@ function ActionError({ error, onReload }: { error: unknown; onReload: () => void
   if (isApiError(error, "NOT_MERGEABLE")) {
     return <ProblemList error={error} title="GitLab cannot merge this MR right now" />;
   }
-  return <ProblemList error={error} title="The action failed" />;
+  return <ProblemList error={error} title={writeErrorTitle(error, "The action failed")} />;
 }
 
 function MRDetailContent() {
@@ -313,22 +317,17 @@ function MRDetailContent() {
     await refetch();
   };
 
+  // An address that names no MR is an error to correct, not an empty list
   if (!ref) {
     return (
-      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
-        <EmptyState
-          icon={FileQuestionMark}
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-4" data-testid="approval-invalid-id">
+        <ProblemList
           title="Invalid MR ID"
-          description={
-            <>
-              <code className="break-all">{id}</code> names no merge request. Expected <code>day1-123</code>,{" "}
-              <code>specs-45</code> or <code>day2-&lt;team&gt;-67</code>.
-            </>
-          }
-          action={<EmptyStateLink href="/approvals">Back to approvals</EmptyStateLink>}
-          bordered
-          data-testid="approval-invalid-id"
+          lines={[`"${id}" names no merge request. Expected day1-123, specs-45 or day2-<team>-67.`]}
         />
+        <Link href="/approvals" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <ArrowLeft className="h-4 w-4 mr-1.5" />Back to approvals
+        </Link>
       </div>
     );
   }
@@ -443,7 +442,7 @@ function MRDetailContent() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">{mr.merged_at ? "Merged" : "Created"}</p>
-                <p className="font-medium">{new Date(mr.merged_at ?? mr.created_at).toLocaleDateString("en-GB")}</p>
+                <p className="font-medium">{formatDate(mr.merged_at ?? mr.created_at)}</p>
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground mb-0.5">Source branch</p>

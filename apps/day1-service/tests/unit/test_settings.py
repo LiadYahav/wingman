@@ -144,11 +144,6 @@ def test_tls_settings_are_verified_by_default() -> None:
     assert loaded.openshift_tls_verify == "/ca.pem"
 
 
-def test_the_webhook_exists_only_with_a_secret() -> None:
-    assert not dev().webhook_enabled
-    assert dev(gitlab_webhook_secret=SecretStr("hook")).webhook_enabled
-
-
 def test_bounded_settings_refuse_values_out_of_range() -> None:
     with pytest.raises(ValidationError):
         dev(day1_cache_ttl_seconds=61)

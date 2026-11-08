@@ -8,6 +8,7 @@
  * keep working (ADR-0020). `?mce=` narrows a bare name.
  */
 
+import { AMBIGUOUS_WRITE_HINT, isAmbiguousWrite } from "@/lib/write-errors";
 import type { CatalogEntry, DestinationKind, Finding, LayerRole } from "@/types/day2";
 
 // ── Addressing ───────────────────────────────────────────────────────────────
@@ -198,8 +199,12 @@ export function uniqueFindings(findings: readonly Finding[]): Finding[] {
 
 // ── Problems (RFC 9457, ADR-0004) ────────────────────────────────────────────
 
-/** What a refused request says, read from whatever `lib/api-client` threw. */
-export interface Problem {
+/**
+ * What a refused request says, read from whatever `lib/api-client` threw:
+ * the members the day2 pages act on, not the whole RFC 9457 document
+ * (`Problem` in types/problem.ts).
+ */
+export interface ProblemSummary {
   status?: number;
   code?: string;
   detail: string;
@@ -217,7 +222,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
  * `problem`/`body` member on it, so it works with any client that keeps them;
  * a plain `Error` gives just its message.
  */
-export function problemOf(error: unknown): Problem {
+export function problemOf(error: unknown): ProblemSummary {
   const outer = record(error) ?? {};
   const doc = record(outer.problem) ?? record(outer.body) ?? outer;
   const pick = (key: string) => doc[key] ?? outer[key];
@@ -240,17 +245,12 @@ export function problemOf(error: unknown): Problem {
 }
 
 /** A stale `last_commit_id`: someone changed the file since it was read. */
-export function isRevisionConflict(problem: Problem): boolean {
+export function isRevisionConflict(problem: ProblemSummary): boolean {
   return problem.code === "REVISION_CONFLICT";
 }
 
-/** GitLab did not confirm a write; it may have happened. Never retried (ADR-0006). */
-export function isAmbiguousWrite(problem: Problem): boolean {
-  return problem.code === "AMBIGUOUS_WRITE";
-}
-
 /** `details.candidates` of an ambiguous bare name: the ids it could mean. */
-export function candidatesOf(problem: Problem): string[] {
+export function candidatesOf(problem: ProblemSummary): string[] {
   const candidates = problem.details.candidates;
   return Array.isArray(candidates) ? candidates.filter((c): c is string => typeof c === "string") : [];
 }
@@ -262,7 +262,7 @@ export interface BulkProblem {
   detail: string;
 }
 
-export function bulkProblemsOf(problem: Problem): BulkProblem[] {
+export function bulkProblemsOf(problem: ProblemSummary): BulkProblem[] {
   const items = problem.details.problems;
   if (!Array.isArray(items)) return [];
   return items.map((item) => {
@@ -271,11 +271,7 @@ export function bulkProblemsOf(problem: Problem): BulkProblem[] {
   });
 }
 
-/** The sentence to show for a refused write. */
-export function writeErrorMessage(problem: Problem): string {
+/** The sentence to show for a refused write; an unconfirmed one says it may have happened. */
+export function writeErrorMessage(problem: ProblemSummary): string {
   return isAmbiguousWrite(problem) ? `${AMBIGUOUS_WRITE_HINT} ${problem.detail}` : problem.detail;
 }
-
-/** What an unconfirmed write (ADR-0006) means for the person who asked for it. */
-export const AMBIGUOUS_WRITE_HINT =
-  "GitLab did not confirm the change, so it may or may not have been made. Check the team repo for the MR before trying again.";

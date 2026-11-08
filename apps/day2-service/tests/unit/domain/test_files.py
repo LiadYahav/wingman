@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 
 from wingman_core.domain.git import FileChange, RepoPath
 from wingman_day2.domain.clusters import ClusterRef
+from wingman_day2.domain.day1 import build_day1_index, day1_version_files
 from wingman_day2.domain.deploy_config import leaf_application, miscased_repourl_keys, truthy
 from wingman_day2.domain.tree import RepoTree
 from wingman_day2.domain.versions import mastertag_problem, ocp_version, read_version_file
@@ -198,3 +199,25 @@ def test_go_template_truthiness(value: object, expected: bool) -> None:
         )
         == "HEAD"
     )
+
+
+# ── the day1 index ──────────────────────────────────────────────────────────
+
+
+def test_the_day1_index_reads_hosted_clusters_as_day1_does() -> None:
+    # A dotted stem is not a cluster name: day1 reports the legacy
+    # <cluster>.wingman.yaml sidecar as stray, so day2 must not list a
+    # hosted cluster "falcon.wingman" either.
+    folder = "sites/site1/mces/m/hostedClusters"
+    tree = RepoTree.of(
+        [
+            f"{folder}/ocp4-prod-falcon-site1.yaml",
+            f"{folder}/ocp4-prod-falcon-site1.wingman.yaml",
+            f"{folder}/.yaml",
+            f"{folder}/notes.txt",
+            f"{folder}/nested/ocp4-prod-lynx-site1.yaml",
+        ]
+    )
+    index = build_day1_index(tree, {})
+    assert list(index.hosted) == [("site1", "m", "ocp4-prod-falcon-site1")]
+    assert [str(p) for p in day1_version_files(tree)] == [f"{folder}/ocp4-prod-falcon-site1.yaml"]

@@ -12,7 +12,7 @@ import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { approvalHref, mrKey } from "@/lib/approvals";
 import { useAuthStore } from "@/stores/auth-store";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import type { MRDetail } from "@/types";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -219,7 +219,7 @@ export default function ApprovalsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {new Date(mr.created_at).toLocaleDateString("en-GB")}
+                        {formatDate(mr.created_at)}
                       </td>
                       <td className="px-4 py-3">
                         <a

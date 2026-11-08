@@ -7,7 +7,7 @@
  */
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
 import type { ClusterDetail, ClusterDrift, ClusterStatus, DestinationCharts, DriftSummaryItem, InstalledChart } from "../../types";
 
 const SITE = "site1";
@@ -117,13 +117,6 @@ function drift(overrides: Partial<ClusterDrift> = {}): ClusterDrift {
     spec_name: "agent-standard", spec_version: "1.0.0", current_spec_version: "1.0.0",
     addon_drift: [], version_differences: [], error: null, ...overrides,
   };
-}
-
-async function go(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
 }
 
 async function statusOff(page: Page) {
@@ -330,10 +323,19 @@ test.describe("Cluster detail", () => {
     await expect(page.getByText(/in sync/i)).toHaveCount(0);
   });
 
+  test("a cluster of an older spec version is checked against the spec as it is now", async ({ page }) => {
+    await openDetail(page, drift({ spec_version: "1.0.0", current_spec_version: "1.1.0" }));
+
+    await page.getByRole("tab", { name: "Drift" }).click();
+    await expect(page.getByText("Every addon of agent-standard v1.1.0 is installed.")).toBeVisible();
+    await expect(page.getByText("This cluster was created from v1.0.0; drift compares against the spec as it is now, v1.1.0."))
+      .toBeVisible();
+  });
+
   test("drifted addons are fixed with the values requested at create; there is no YAML sync", async ({ page }) => {
     await openDetail(page, drift({
       state: "drifted", is_drifted: true,
-      addon_drift: [{ addon_name: "cluster-roles", team: "redbull", reason: "missing", expected_version: "main", installed_version: "", override_values: { replicas: 2 } }],
+      addon_drift: [{ addon_name: "cluster-roles", team: "redbull", reason: "missing", expected_version: "main", override_values: { replicas: 2 } }],
     }));
     const install = page.waitForRequest((req: Request) => req.method() === "POST" && req.url().includes("/addons/redbull/cluster-roles"));
     await page.route(`**/api/day2/clusters/${encodeURIComponent(HOSTED_ID)}/addons/redbull/cluster-roles`, (r: Route) =>

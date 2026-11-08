@@ -7,7 +7,7 @@
 #
 # requirements-<service>.txt is what uv.lock resolves for one service: its
 # runtime dependencies, each with --hash lines, no dev dependencies and no
-# workspace members (wingman-core, shared-python, the service itself), which
+# workspace members (wingman-core, the service itself), which
 # the image builds from this checkout. requirements-build.txt is the root
 # `build` group: the build backend those members need, so the image builds
 # their wheels with no index at all.

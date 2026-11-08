@@ -27,7 +27,7 @@ function avatarColor(initial: string) {
 export function UserMenu() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
 
   const handleLogout = () => {
     logout();
@@ -38,7 +38,8 @@ export function UserMenu() {
 
   const initial = user.username.charAt(0).toUpperCase();
   const bgColor = avatarColor(initial);
-  const isDark = theme === "dark";
+  // The theme in effect: "system" resolves to the OS's.
+  const isDark = resolvedTheme === "dark";
 
   return (
     <Popover>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import { approvalHref } from "@/lib/approvals";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { writeErrorTitle } from "@/lib/write-errors";
 import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { ReviewDialog } from "@/components/common/review-dialog";
@@ -491,23 +492,6 @@ type FormError =
     }
   | { kind: "form"; lines: string[] };
 
-/** What the form itself caught before asking the service; styled like ProblemList. */
-function FormChecks({ lines }: { lines: string[] }) {
-  return (
-    <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-        <div className="min-w-0 space-y-1">
-          <p className="font-medium">Some fields need attention</p>
-          <ul className="list-disc pl-4 space-y-0.5">
-            {lines.map((line, i) => <li key={i} className="break-words">{line}</li>)}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function describeFailure(error: unknown, what: "preview" | "create"): FormError {
   const verb = what === "preview" ? "The cluster file could not be rendered" : "The merge request was not opened";
   if (isApiError(error, "ALREADY_EXISTS")) {
@@ -531,7 +515,7 @@ function describeFailure(error: unknown, what: "preview" | "create"): FormError 
   if (isApiError(error, "NOT_FOUND")) {
     return { kind: "server", error, title: verb, hint: "The site, MCE or spec no longer exists in GitLab. Reload the page." };
   }
-  return { kind: "server", error, title: verb };
+  return { kind: "server", error, title: writeErrorTitle(error, verb) };
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -543,6 +527,10 @@ export default function NewClusterPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const errorRef = useRef<HTMLDivElement>(null);
+  // The visible labels name the site, MCE and version controls
+  const siteLabelId = useId();
+  const mceLabelId = useId();
+  const versionLabelId = useId();
 
   const [step, setStep] = useState<"spec" | "vars">("spec");
   const [selectedSpec, setSelectedSpec] = useState<SpecEntry | null>(null);
@@ -740,6 +728,9 @@ export default function NewClusterPage() {
     if (!mce) problems.push("Choose an MCE");
     if (!trimmedName) problems.push("Enter a cluster name");
     if (!ocpVersion.trim()) problems.push("Choose an OpenShift version");
+    // Without the template's inputs the form can neither show nor check them: never send without them.
+    if (schemaError) problems.push("The cluster template's inputs could not be loaded: reload the page to try again");
+    else if (!templateSchema) problems.push("The cluster template's inputs are still loading");
     problems.push(...missingRequired(schema, formValues).map((path) => `${labelForPath(path)} is required`));
     const { overrides, problems: overrideProblems } = collectOverrides();
     problems.push(...overrideProblems);
@@ -912,7 +903,7 @@ export default function NewClusterPage() {
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 min-w-0">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <label id={siteLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     Site <span className="text-destructive">*</span>
                   </label>
                   <Combobox
@@ -930,7 +921,7 @@ export default function NewClusterPage() {
                     searchPlaceholder="Search sites…"
                     emptyMessage="No site matches."
                     data-testid="site-select"
-                    aria-label="Site"
+                    aria-labelledby={siteLabelId}
                   />
                   {!siteChoice && detectedSite && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
@@ -938,7 +929,7 @@ export default function NewClusterPage() {
                   {Boolean(sitesError) && <ProblemList error={sitesError} title="The sites could not be loaded" />}
                 </div>
                 <div className="space-y-1.5 min-w-0">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <label id={mceLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     MCE <span className="text-destructive">*</span>
                   </label>
                   <Combobox
@@ -961,7 +952,7 @@ export default function NewClusterPage() {
                     searchPlaceholder="Search MCEs…"
                     emptyMessage="No MCE matches."
                     data-testid="mce-select"
-                    aria-label="MCE"
+                    aria-labelledby={mceLabelId}
                   />
                   {!mceChoice && detectedMce && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
@@ -1039,7 +1030,7 @@ export default function NewClusterPage() {
               </div>
 
               <div className="space-y-1.5 border-t pt-4">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label id={versionLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   OpenShift Version <span className="text-destructive">*</span>
                 </label>
                 {/* The list when it loads; free text when it is empty or could not be read */}
@@ -1054,12 +1045,12 @@ export default function NewClusterPage() {
                     searchPlaceholder="Search versions…"
                     emptyMessage="No version matches."
                     data-testid="ocp-version-select"
-                    aria-label="OpenShift version"
+                    aria-labelledby={versionLabelId}
                   />
                 ) : (
                   <input
                     type="text"
-                    data-testid="ocp-version-input" aria-label="OpenShift version"
+                    data-testid="ocp-version-input" aria-labelledby={versionLabelId}
                     className={cn(inputCls, "font-mono")}
                     placeholder="e.g. 4.16.27-x86_64"
                     value={ocpVersion}
@@ -1223,7 +1214,7 @@ export default function NewClusterPage() {
           {formError && (
             <div ref={errorRef} className="space-y-2 scroll-mt-24" data-testid="form-problems">
               {formError.kind === "form" ? (
-                <FormChecks lines={formError.lines} />
+                <ProblemList lines={formError.lines} title="Some fields need attention" />
               ) : (
                 <ProblemList error={formError.error} title={formError.title} />
               )}

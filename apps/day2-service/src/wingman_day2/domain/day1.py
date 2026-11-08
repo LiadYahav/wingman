@@ -63,12 +63,18 @@ def day1_version_files(tree: RepoTree) -> list[RepoPath]:
 
 
 def _hosted_files(tree: RepoTree, site: str, mce: str) -> list[tuple[str, RepoPath]]:
+    """The hosted-cluster files of an MCE, by cluster name, as day1 reads them.
+
+    A cluster name has no dot, so ``<name>.yaml`` with a dotted stem (the
+    legacy ``<cluster>.wingman.yaml`` sidecar, a dotfile) is not a cluster.
+    """
     folder = layout.day1_mce_dir(site, mce).child(layout.HOSTED_CLUSTERS)
-    return [
-        (file.name.removesuffix(".yaml"), file)
-        for file in tree.files_under(folder)
-        if file.parent == folder and file.name.endswith(".yaml") and not file.name.startswith(".")
-    ]
+    found = []
+    for file in tree.files_under(folder):
+        stem = file.name.removesuffix(".yaml")
+        if file.parent == folder and stem != file.name and stem and "." not in stem:
+            found.append((stem, file))
+    return found
 
 
 def build_day1_index(tree: RepoTree, contents: Mapping[str, str]) -> Day1Index:

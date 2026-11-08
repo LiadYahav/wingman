@@ -29,7 +29,7 @@ export function mockMR(overrides: Partial<MRDetail> = {}): MRDetail {
 }
 
 /** An RFC 9457 problem body (`application/problem+json`). */
-export function problemBody(
+function problemBody(
   status: number,
   code: ErrorCode,
   detail: string,
@@ -62,7 +62,7 @@ export function fulfillProblem(
   });
 }
 
-export function mockMce(overrides: Partial<Mce> = {}): Mce {
+function mockMce(overrides: Partial<Mce> = {}): Mce {
   return {
     name: "ocp4-prod-mce-site1-a",
     site: "site1",
@@ -79,28 +79,57 @@ export function mockMce(overrides: Partial<Mce> = {}): Mce {
   };
 }
 
-export const mockMces: Mce[] = [
+const mockMces: Mce[] = [
   mockMce(),
   mockMce({ name: "ocp4-prep-mce-site1-a", env: "prep", default_mastertag: "4.20.9-x86_64", hub_version: "4.20.9-x86_64" }),
   mockMce({ name: "ocp4-prod-mce-site2-a", site: "site2" }),
 ];
 
-const json = (route: Route, body: unknown, status = 200) =>
+/** Answer a route with a JSON body. */
+export const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+
+/**
+ * A response held until `release()`, so the page's loading state stays on
+ * screen meanwhile: `answer(body)` is a route handler that answers once
+ * released; `released` is the promise, for a handler of one's own.
+ */
+export function held() {
+  let release: () => void = () => {};
+  const released = new Promise<void>((resolve) => (release = resolve));
+  return {
+    released,
+    release: () => release(),
+    answer: (body: unknown) => async (route: Route) => {
+      await released;
+      await json(route, body);
+    },
+  };
+}
+
+/** Land on "/" first so the persisted session hydrates (see injectAdminAuth), then open `path`. */
+export async function go(page: Page, path: string) {
+  await page.goto("/");
+  await page.waitForLoadState("domcontentloaded");
+  if (path !== "/") {
+    await page.goto(path);
+    await page.waitForLoadState("domcontentloaded");
+  }
+}
 
 /**
  * Inject a fake authenticated admin user into localStorage/cookie so the app
  * doesn't redirect to /login.  Must be called before page.goto().
  *
  * IMPORTANT: After calling this, you must navigate to "/" first to establish
- * auth state, then navigate to your target page.  Direct navigation to a
- * sub-route may fail because Zustand's persist hydration is asynchronous.
+ * auth state, then navigate to your target page (`go()` does both).  Direct
+ * navigation to a sub-route may fail because Zustand's persist hydration is
+ * asynchronous.
  *
  * Usage:
  *   await injectAdminAuth(page);
  *   // ... register your route mocks ...
- *   await page.goto("/");           // establish auth
- *   await page.goto("/approvals");  // now navigate to target
+ *   await go(page, "/approvals");   // "/" first, then the target
  */
 export async function injectAdminAuth(page: Page, username = "test-admin") {
   // Route the auth config check so it doesn't 401
@@ -150,7 +179,7 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day2/approvals", (route: Route) => json(route, []));
 }
 
-export async function mockDay2Api(page: Page) {
+async function mockDay2Api(page: Page) {
   await page.route("**/api/day2/addons", (route: Route) => json(route, mockAddons));
 
   await page.route("**/api/day2/addons/*/**", async (route: Route) => {
@@ -174,7 +203,7 @@ export async function mockDay2Api(page: Page) {
   });
 }
 
-export async function mockDay1Api(page: Page) {
+async function mockDay1Api(page: Page) {
   await page.route("**/api/day1/specs", async (route: Route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON();

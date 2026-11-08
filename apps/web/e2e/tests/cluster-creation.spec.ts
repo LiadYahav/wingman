@@ -349,6 +349,30 @@ test.describe("Cluster create form", () => {
     await expect(form.reviewDialog).not.toBeVisible();
   });
 
+  test("a problem that names its item is listed by item, not as an object", async ({ page }) => {
+    await setup(page, {
+      preview: (r) =>
+        json(
+          r,
+          problem(422, "VALIDATION_ERROR", "2 of the requested charts cannot be installed", {
+            problems: [
+              { team: "redbull", chart: "cluster-roles", detail: "version 9.9.9 is not released", rule: "version" },
+              { team: "redbull", detail: "the team repo has no cluster folder" },
+            ],
+          }),
+          422
+        ),
+    });
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await fillValidForm(form);
+
+    await form.review();
+    await expect(form.formProblems).toContainText("redbull/cluster-roles: version 9.9.9 is not released");
+    await expect(form.formProblems).toContainText("redbull: the team repo has no cluster folder");
+    await expect(form.formProblems).not.toContainText("[object Object]");
+  });
+
   test("FastAPI's field errors are listed by field", async ({ page }) => {
     await setup(page, {
       preview: (r) =>

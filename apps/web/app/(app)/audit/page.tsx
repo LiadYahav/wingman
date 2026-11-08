@@ -8,7 +8,7 @@ import { api } from "@/lib/api-client";
 import { approvalApiPath, approvalHref, mrKey, mrRef } from "@/lib/approvals";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
@@ -107,7 +107,7 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
             <RepoBadge repo={commit.repo} team={commit.team} />
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-            {commit.author_name} · {new Date(commit.authored_date).toLocaleString("en-GB")} · {commit.short_id}
+            {commit.author_name} · {formatDateTime(commit.authored_date)} · {commit.short_id}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -185,7 +185,7 @@ function MRRow({ mr }: { mr: MRDetail }) {
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {mr.author.username} · {new Date(mr.created_at).toLocaleString("en-GB")}
+            {mr.author.username} · {formatDateTime(mr.created_at)}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

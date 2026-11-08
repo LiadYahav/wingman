@@ -26,6 +26,7 @@ changed. Request bodies now refuse unknown fields (422).
 | `GET /api/day2/clusters/{id}` | one of those |
 | `GET /api/day2/clusters/{id}/upgrade-check?to=<version>` | `{cluster, from_version, to_version, warnings}`: pinned charts lacking `ocp-versions/<to>/` |
 | `GET /api/day2/lints[?team=]` | every finding `{rule, severity, message, team, path, cluster, chart}` |
+| `GET /api/day2/build` | `{version, commit}`: the `WINGMAN_VERSION` and `WINGMAN_COMMIT` the service runs |
 | `GET /health/live`, `/health/ready`, `/metrics` | probes and Prometheus (not under `/api`) |
 
 Removed: `GET /api/day2/cache/stats`.
@@ -116,7 +117,10 @@ with `details.rule`.
   reviewed (`MRDetail.sha`); a branch that moved since is 409. Approving your
   own change is 403 `SELF_APPROVAL`.
 - `PUT /approvals/{team}/{iid}` edits only files the MR already changes
-  (422 `path-not-in-mr`); each file may carry `last_commit_id`.
+  (422 `path-not-in-mr`); each file may carry `last_commit_id`. Send the
+  reviewed `sha` (`MRDetail.sha`) too, as for day1: a branch that moved
+  since is 409 and nothing is written; files without a `last_commit_id` are
+  guarded at that `sha`.
 - `MRDetail` gains `team, project_id, sha, gitlab_author`. `author.username`
   is the requester from the description footer everywhere, audit included
   (audit used to show GitLab's author, the service account).

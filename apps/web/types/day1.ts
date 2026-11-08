@@ -280,7 +280,6 @@ export interface AddonDrift {
   team: string;
   reason: "missing";
   expected_version: string;
-  installed_version: string;
   /** The values requested at create; install with them. */
   override_values: Record<string, unknown>;
 }

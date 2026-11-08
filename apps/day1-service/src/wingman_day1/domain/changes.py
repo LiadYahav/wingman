@@ -8,26 +8,12 @@ can start that workflow instead (ADR-0017).
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final
 
-from wingman_core.domain.git import CommitAuthor
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.domain.users import User
 from wingman_day1.domain.paths import ClusterRef
-
-COMMIT_EMAIL_DOMAIN: Final = "openshift.local"
-"""As the legacy service: ``<username>@openshift.local``, an address that receives nothing."""
-_NOT_IN_AUTHOR = re.compile(r"[\r\n<>]+")
-
-
-def commit_author(user: User) -> CommitAuthor:
-    """The Git author of a change ``user`` asked for (GitLab keeps the bot as committer)."""
-    username = _NOT_IN_AUTHOR.sub("-", user.username).strip() or "unknown"
-    name = _NOT_IN_AUTHOR.sub(" ", user.full_name).strip() or username
-    return CommitAuthor(name=name, email=f"{username}@{COMMIT_EMAIL_DOMAIN}")
 
 
 class ClusterAction(StrEnum):

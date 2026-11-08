@@ -23,7 +23,11 @@ from urllib.parse import quote, urlparse
 
 import httpx
 
-from wingman_core.testing.fixtures import FixtureProject, default_fixture_root, load_fixture_projects
+from wingman_core.testing.fixtures import (
+    FixtureProject,
+    default_fixture_root,
+    load_fixture_projects,
+)
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "gitlab.local"}
 
@@ -31,7 +35,9 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "gitlab.local"}
 async def _group_id(client: httpx.AsyncClient, path: str) -> int:
     response = await client.get(f"/groups/{quote(path, safe='')}")
     if response.status_code == 404:
-        response = await client.post("/groups", json={"name": path, "path": path, "visibility": "private"})
+        response = await client.post(
+            "/groups", json={"name": path, "path": path, "visibility": "private"}
+        )
     response.raise_for_status()
     return int(response.json()["id"])
 
@@ -79,10 +85,16 @@ async def _seed_project(client: httpx.AsyncClient, fixture: FixtureProject, *, r
     )
     created.raise_for_status()
     project_id = created.json()["id"]
-    actions = [{"action": "create", "file_path": p, "content": c} for p, c in sorted(fixture.files.items())]
+    actions = [
+        {"action": "create", "file_path": p, "content": c} for p, c in sorted(fixture.files.items())
+    ]
     commit = await client.post(
         f"/projects/{project_id}/repository/commits",
-        json={"branch": "main", "commit_message": "Seed from dev/gitlab-fixtures", "actions": actions},
+        json={
+            "branch": "main",
+            "commit_message": "Seed from dev/gitlab-fixtures",
+            "actions": actions,
+        },
     )
     commit.raise_for_status()
     for branch in fixture.branches:
@@ -92,22 +104,34 @@ async def _seed_project(client: httpx.AsyncClient, fixture: FixtureProject, *, r
             for p, c in sorted(files.items())
             if fixture.files.get(p) != c
         ]
-        body: dict[str, object] = {"branch": branch, "start_branch": "main", "commit_message": f"Release {branch}"}
+        body: dict[str, object] = {
+            "branch": branch,
+            "start_branch": "main",
+            "commit_message": f"Release {branch}",
+        }
         if changed:
-            response = await client.post(f"/projects/{project_id}/repository/commits", json={**body, "actions": changed})
+            response = await client.post(
+                f"/projects/{project_id}/repository/commits", json={**body, "actions": changed}
+            )
         else:
             response = await client.post(
-                f"/projects/{project_id}/repository/branches", json={"branch": branch, "ref": "main"}
+                f"/projects/{project_id}/repository/branches",
+                json={"branch": branch, "ref": "main"},
             )
         response.raise_for_status()
     return "created"
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    """Parse the arguments and seed every fixture project."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--url", default=os.environ.get("GITLAB_URL", "http://localhost:8929"))
     parser.add_argument("--token", default=os.environ.get("GITLAB_TOKEN", ""))
-    parser.add_argument("--reset", action="store_true", help="delete and recreate projects that exist")
+    parser.add_argument(
+        "--reset", action="store_true", help="delete and recreate projects that exist"
+    )
     parser.add_argument("--any-host", action="store_true", help="allow a non-local GitLab")
     args = parser.parse_args()
     if not args.token:
@@ -115,10 +139,14 @@ async def main() -> int:
     if urlparse(args.url).hostname not in LOCAL_HOSTS and not args.any_host:
         parser.error(f"{args.url} is not a local GitLab; pass --any-host if you mean it")
 
-    projects = load_fixture_projects(default_fixture_root(), substitutions={"GITLAB_URL": args.url.rstrip("/")})
+    projects = load_fixture_projects(
+        default_fixture_root(), substitutions={"GITLAB_URL": args.url.rstrip("/")}
+    )
     started = time.monotonic()
     async with httpx.AsyncClient(
-        base_url=f"{args.url.rstrip('/')}/api/v4", headers={"PRIVATE-TOKEN": args.token}, timeout=120
+        base_url=f"{args.url.rstrip('/')}/api/v4",
+        headers={"PRIVATE-TOKEN": args.token},
+        timeout=120,
     ) as client:
         for fixture in projects:
             outcome = await _seed_project(client, fixture, reset=args.reset)

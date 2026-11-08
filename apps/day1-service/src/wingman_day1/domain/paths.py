@@ -27,7 +27,6 @@ from typing import Final
 from wingman_core.domain.git import RepoPath
 
 SITES: Final = RepoPath("sites")
-GLOBAL_VALUES: Final = RepoPath("sites/configValues.yaml")
 HOSTED_CLUSTERS_DIR: Final = "hostedClusters"
 CLUSTER_SUFFIX: Final = ".yaml"
 
@@ -39,16 +38,6 @@ SPEC_SUFFIX: Final = ".yaml"
 def site_dir(site: str) -> RepoPath:
     """``sites/<site>``."""
     return RepoPath.of("sites", site)
-
-
-def site_values(site: str) -> RepoPath:
-    """``sites/<site>/values.yaml``."""
-    return RepoPath.of("sites", site, "values.yaml")
-
-
-def mces_dir(site: str) -> RepoPath:
-    """``sites/<site>/mces``."""
-    return RepoPath.of("sites", site, "mces")
 
 
 def mce_dir(site: str, mce: str) -> RepoPath:

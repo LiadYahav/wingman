@@ -8,23 +8,12 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
 import type { ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts, Mce, SpecEntry, TemplateField } from "../../types";
 
 const SITE = "site1";
 const MCE = "ocp4-prod-mce-site1-a";
 const NAME = "ocp4-prod-herzi-site1";
-
-const json = (route: Route, body: unknown, status = 200) =>
-  route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-
-/** Land on "/" first so the persisted session hydrates, then open the page. */
-async function go(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
-}
 
 // ── Cluster detail ──────────────────────────────────────────────────────────
 
@@ -108,7 +97,6 @@ test.describe("Cluster detail", () => {
     await expect(page.getByTestId("history-day1-empty")).toHaveCount(0);
     // The other source read fine and is empty: it says so on its own
     await expect(page.getByTestId("history-day2-empty")).toContainText("No addon value changes yet");
-    await expect(page.getByText("No history available.")).toHaveCount(0);
   });
 
   test("an empty history is an empty state for each source", async ({ page }) => {
@@ -119,6 +107,26 @@ test.describe("Cluster detail", () => {
     await expect(page.getByTestId("history-day1-empty")).toContainText("No history yet");
     await expect(page.getByTestId("history-day2-empty")).toContainText("No addon value changes yet");
     await expect(problems(page)).toHaveCount(0);
+  });
+
+  test.describe("in an en-US browser", () => {
+    test.use({ locale: "en-US" });
+
+    test("a commit's date is en-GB like every other date, not the browser's format", async ({ page }) => {
+      await mockDetail(page);
+      await page.route(`**/api/day1/clusters/${NAME}/history?**`, (r) =>
+        json(r, [{
+          sha: "0c904bfafde4c4ed24416190ea224ee25cdcf738", short_sha: "0c904bfa", message: "Create cluster",
+          author: "alice", date: "2026-11-07T10:00:00+00:00", web_url: "https://gitlab.example.com/c/0c904bfa",
+        }])
+      );
+      await go(page, `/clusters/${NAME}?site=${SITE}&mce=${MCE}`);
+      await page.getByRole("tab", { name: "History" }).click();
+
+      await expect(page.getByText("0c904bfa")).toBeVisible();
+      await expect(page.getByText("07/11/2026", { exact: true })).toBeVisible();
+      await expect(page.getByText("11/7/2026")).toHaveCount(0);
+    });
   });
 
   test("a failed live status read shows the problem in place of the card", async ({ page }) => {
@@ -155,6 +163,24 @@ test.describe("Cluster detail", () => {
 
     await expect(liveStatusCard(page)).toBeVisible();
     await expect(page.getByTestId("live-status-no-node-pools")).toHaveText("No node pools reported");
+  });
+
+  test("a delete GitLab did not confirm says it may have happened, not that it was refused", async ({ page }) => {
+    await mockDetail(page);
+    await page.route(`**/api/day1/clusters/${NAME}?**`, (r) =>
+      r.request().method() === "DELETE"
+        ? fulfillProblem(r, 504, "AMBIGUOUS_WRITE", "GitLab did not answer the commit request")
+        : r.fallback()
+    );
+    await go(page, `/clusters/${NAME}?site=${SITE}&mce=${MCE}`);
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /Delete Cluster MR/ }).click();
+
+    const alert = page.getByRole("alert").filter({ hasText: "GitLab did not answer the commit request" });
+    await expect(alert).toContainText("GitLab did not confirm the change, so it may or may not have been made");
+    await expect(alert).toContainText("request req_e2e0000000000001");
+    await expect(page.getByText("The change was refused")).toHaveCount(0);
+    await expect(page.getByText("Delete failed")).toHaveCount(0);
   });
 });
 
@@ -221,6 +247,15 @@ test.describe("Cluster create form", () => {
     await expect(empty.getByRole("link", { name: "New spec" })).toHaveAttribute("href", "/specs/new");
   });
 
+  test("the site, MCE and version controls are named by their visible labels", async ({ page }) => {
+    await mockCreateForm(page);
+    await openForm(page);
+
+    await expect(page.getByRole("combobox", { name: /^site\b/i })).toHaveAttribute("data-testid", "site-select");
+    await expect(page.getByRole("combobox", { name: /^mce\b/i })).toHaveAttribute("data-testid", "mce-select");
+    await expect(page.getByRole("combobox", { name: /^openshift version\b/i })).toHaveAttribute("data-testid", "ocp-version-select");
+  });
+
   test("a failed sites read shows the problem, not \"No sites in the day1 repo\"", async ({ page }) => {
     await mockCreateForm(page);
     await page.route("**/api/day1/sites", (r) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));
@@ -263,6 +298,30 @@ test.describe("Cluster create form", () => {
     const problem = page.getByRole("alert").filter({ hasText: "The cluster template's inputs could not be loaded" });
     await expect(problem).toContainText("The specs project could not be read", { timeout: 10_000 });
     await expect(page.getByText(/takes no inputs/)).toHaveCount(0);
+  });
+
+  test("without the template's inputs Review refuses, and nothing is sent", async ({ page }) => {
+    await mockCreateForm(page);
+    await page.route("**/api/day1/specs/template/schema", (r) =>
+      fulfillProblem(r, 503, "GIT_UNAVAILABLE", "The specs project could not be read")
+    );
+    let previews = 0;
+    await page.route("**/api/day1/clusters/preview", (r) => {
+      previews += 1;
+      return json(r, { path: DETAIL.path, yaml: DETAIL.yaml });
+    });
+    await openForm(page);
+    // Everything else is filled: the site, MCE and version follow from the name
+    await page.getByTestId("cluster-name-input").fill(NAME);
+    await expect(page.getByTestId("mce-select")).toContainText(MCE);
+    await expect(page.getByRole("alert").filter({ hasText: "The cluster template's inputs could not be loaded" }))
+      .toContainText("The specs project could not be read", { timeout: 10_000 });
+
+    await page.getByTestId("review-button").click();
+    const checks = page.getByTestId("form-problems");
+    await expect(checks).toContainText("The cluster template's inputs could not be loaded: reload the page to try again");
+    await expect(page.getByRole("dialog", { name: /^Review/ })).toHaveCount(0);
+    expect(previews).toBe(0);
   });
 
   test("infra envs that could not be listed are a problem, and their names are typed", async ({ page }) => {

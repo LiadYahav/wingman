@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from wingman_core.domain.merge_request import NewMergeRequest
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 
@@ -206,6 +207,27 @@ async def test_audit_lists_carry_the_repo_and_paginate(
     assert [c["id"] for c in page_two] == [commits[1]["id"]]
     too_big = await client.get("/api/day1/audit/commits?per_page=500", headers=viewer)
     assert too_big.status_code == 422
+
+
+async def test_audit_lists_only_wingman_mrs_and_each_one_expands(
+    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    # An MR someone opened by hand in the day1 repo is not Wingman's: listing
+    # it made the audit page offer an expand that could only fail.
+    mr = await open_cluster_mr(client, auth, support)
+    pid = await support.project_id(gitlab, support.DAY1)
+    await gitlab.create_branch(pid, "by-hand", "main")
+    await gitlab.create_merge_request(
+        pid, NewMergeRequest(source_branch="by-hand", target_branch="main", title="Bump a value")
+    )
+    viewer = auth(support.VIEWER)
+    mrs = (await client.get("/api/day1/audit/merge-requests", headers=viewer)).json()
+    assert [m["iid"] for m in mrs] == [mr["iid"]]
+    for listed in mrs:
+        expanded = await client.get(
+            f"/api/day1/approvals/{listed['iid']}?repo={listed['repo']}", headers=viewer
+        )
+        assert expanded.status_code == 200, expanded.text
 
 
 async def test_audit_commit_diffs_and_unknown_commits(

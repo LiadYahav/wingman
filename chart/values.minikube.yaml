@@ -10,7 +10,7 @@
 #   helm install wingman ./chart -f chart/values.minikube.yaml \
 #     --set gitlab.accessToken=<your-gitlab-token> \
 #     --set auth.jwtSecret=$(openssl rand -hex 32) \
-#     --set devAuth.secret=devpassword \
+#     --set devAuth.secret=$(openssl rand -hex 16) \
 #     -n wingman --create-namespace
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -23,7 +23,7 @@ image:
   web:
     pullPolicy: Never
   nginx:
-    pullPolicy: IfNotPresent   # nginx:alpine pulled from Docker Hub (or mirror)
+    pullPolicy: IfNotPresent   # nginx:latest (values.yaml) pulled from Docker Hub (or a mirror)
 
 # Local only: allows weak dev login (ADR-0009).
 environment: "development"

@@ -46,30 +46,6 @@ class Rule(StrEnum):
     CLUSTER_POSITION_CONFLICT = "cluster-position-conflict"
     ENV_UNKNOWN = "env-unknown"
 
-    @property
-    def render_chain(self) -> bool:
-        """Whether ``render_chain.py`` fails a snapshot on this rule."""
-        return self in _RENDER_CHAIN
-
-
-_RENDER_CHAIN = frozenset(
-    {
-        Rule.ENV_NOT_ALLOWED,
-        Rule.DAY1_VERSION_MISSING,
-        Rule.MASTERTAG_MISSING,
-        Rule.MASTERTAG_INVALID,
-        Rule.UPI_NAME_IN_CLUSTER,
-        Rule.UPI_NAME_REUSED,
-        Rule.UPI_VERSION_FILE_INVALID,
-        Rule.LEGACY_LAYOUT,
-        Rule.EXCLUSIONS_HUB,
-        Rule.EXCLUSIONS_SCHEMA,
-        Rule.EXCLUSIONS_UNKNOWN_CHART,
-        Rule.EXCLUSIONS_UNKNOWN_TARGET,
-        Rule.DUPLICATE_APP,
-    }
-)
-
 
 @dataclass(frozen=True, slots=True, order=True)
 class Finding:

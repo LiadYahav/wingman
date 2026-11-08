@@ -5,8 +5,8 @@
  * is the service's RFC 9457 problem (detail and request id), never an empty list.
  */
 
-import { test, expect, type Page, type Route } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { test, expect, type Route } from "@playwright/test";
+import { fulfillProblem, go, held, injectAdminAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
 import type { ClusterStatus } from "../../types";
 
 function cluster(name: string): ClusterStatus {
@@ -25,16 +25,6 @@ function cluster(name: string): ClusterStatus {
     naming: { follows_convention: true, env: "prod", short_name: "x", sequence: null, problems: [] },
     problems: [],
   };
-}
-
-/** Land on "/" first so the persisted session hydrates, then open the page. */
-async function go(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  if (path !== "/") {
-    await page.goto(path);
-    await page.waitForLoadState("domcontentloaded");
-  }
 }
 
 test.describe("Clusters and the dashboard", () => {
@@ -57,17 +47,13 @@ test.describe("Clusters and the dashboard", () => {
   test("while the list loads its rows are skeletons", async ({ page }) => {
     await injectAdminAuth(page);
     await mockDashboardApis(page);
-    let answer: () => void = () => {};
-    const answered = new Promise<void>((resolve) => (answer = resolve));
-    await page.route("**/api/day1/clusters", async (r: Route) => {
-      await answered;
-      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([cluster("ocp4-prod-alpha-site1")]) });
-    });
-    await page.goto("/clusters");
+    const clusters = held();
+    await page.route("**/api/day1/clusters", clusters.answer([cluster("ocp4-prod-alpha-site1")]));
+    await go(page, "/clusters");
 
     await expect(page.locator("tbody [data-slot=skeleton]").first()).toBeVisible();
     await expect(page.getByTestId("clusters-empty")).toHaveCount(0);
-    answer();
+    clusters.release();
     await expect(page.getByTestId("cluster-row-ocp4-prod-alpha-site1")).toBeVisible();
     await expect(page.locator("tbody [data-slot=skeleton]")).toHaveCount(0);
   });
@@ -75,15 +61,33 @@ test.describe("Clusters and the dashboard", () => {
   test("filters that match nothing say so and clear in one click", async ({ page }) => {
     await injectAdminAuth(page);
     await mockDashboardApis(page);
-    await page.route("**/api/day1/clusters", (r: Route) =>
-      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([cluster("ocp4-prod-alpha-site1")]) })
-    );
+    await page.route("**/api/day1/clusters", (r: Route) => json(r, [cluster("ocp4-prod-alpha-site1")]));
     await go(page, "/clusters");
 
     await page.getByPlaceholder("Search clusters...").fill("no-such-cluster");
     await expect(page.getByText("No clusters match")).toBeVisible();
     await page.getByRole("button", { name: "Clear filters" }).last().click();
     await expect(page.getByTestId("cluster-row-ocp4-prod-alpha-site1")).toBeVisible();
+  });
+
+  test("approvals say all caught up only once both sources answered", async ({ page }) => {
+    await injectAdminAuth(page);
+    await mockDashboardApis(page);
+    const day2 = held();
+    await page.route("**/api/day2/approvals", day2.answer([]));
+    const day1Approvals = page.waitForResponse("**/api/day1/approvals");
+    await go(page, "/");
+    await day1Approvals;
+
+    // The day1 reads answered and rendered; day2's is still out
+    await expect(page.getByTestId("health-empty")).toBeVisible();
+    await expect(page.getByTestId("approvals-empty")).toHaveCount(0);
+    const pending = page.getByTestId("stat-pending-approvals");
+    await expect(pending.locator("[data-slot=skeleton]")).toBeVisible();
+    day2.release();
+    await expect(page.getByTestId("approvals-empty")).toContainText("All caught up");
+    await expect(pending).toContainText("0");
+    await expect(pending.locator("[data-slot=skeleton]")).toHaveCount(0);
   });
 
   test("a failed read shows the problem, never an empty list", async ({ page }) => {
@@ -102,7 +106,28 @@ test.describe("Clusters and the dashboard", () => {
     await expect(page.getByText("Could not be loaded", { exact: true })).toBeVisible();
 
     await page.goto("/clusters");
-    await expect(alerts.filter({ hasText: "Failed to load clusters" })).toContainText("GitLab could not be reached", { timeout: 10_000 });
+    await expect(alerts.filter({ hasText: "The clusters could not be loaded" })).toContainText("GitLab could not be reached", { timeout: 10_000 });
     await expect(page.getByTestId("clusters-empty")).toHaveCount(0);
+  });
+
+  test("a stat whose reads failed shows no value, never zero", async ({ page }) => {
+    await injectAdminAuth(page);
+    await mockDashboardApis(page);
+    await page.route("**/api/day1/clusters", (r: Route) => json(r, [cluster("ocp4-prod-alpha-site1")]));
+    await page.route("**/api/day1/clusters/bulk-status", (r: Route) => fulfillProblem(r, 503, "DEPENDENCY_UNAVAILABLE", "The MCE hub did not answer"));
+    await page.route("**/api/day1/approvals", (r: Route) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));
+    await page.route("**/api/day2/approvals", (r: Route) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));
+    await go(page, "/");
+
+    const ready = page.getByTestId("stat-ready");
+    await expect(ready).toContainText("Could not be read");
+    await expect(ready).toContainText("—");
+    await expect(ready).not.toContainText("0");
+
+    // The default query retries twice (1s, 2s) before the error shows
+    const pending = page.getByTestId("stat-pending-approvals");
+    await expect(pending).toContainText("Could not be loaded", { timeout: 10_000 });
+    await expect(pending).toContainText("—");
+    await expect(pending).not.toContainText("0");
   });
 });

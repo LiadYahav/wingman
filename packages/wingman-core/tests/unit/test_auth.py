@@ -112,7 +112,14 @@ def test_auth_settings_refuse_a_short_secret_and_split_groups() -> None:
 async def client() -> AsyncIterator[httpx.AsyncClient]:
     session = SessionTokens(SECRET, ttl=timedelta(hours=8))
     metrics = WingmanMetrics(CollectorRegistry(), component="t", version="0", commit="0")
-    app: FastAPI = create_base_app(title="t", version="0", metrics=metrics, session_tokens=session)
+    app: FastAPI = create_base_app(
+        title="t",
+        version="0",
+        commit="0",
+        api_prefix="/api/t",
+        metrics=metrics,
+        session_tokens=session,
+    )
 
     @app.get("/read")
     async def read(user: CurrentUser) -> dict[str, str]:

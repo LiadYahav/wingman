@@ -42,9 +42,9 @@ class Day1Settings(BaseSettings):
 
     # ── How a cluster file name becomes the chart's clusterName (ADR-0015) ───
     # Production strips "ocp4-" (openshift-prod-x-site1 in hcp-prod-x-site1);
-    # the GitHub sandbox keeps the whole stem: set it to "" there. The legacy
-    # MCE_CLUSTER_NAME_PREFIX (the chart's clusterStatus.clusterNamePrefix) is
-    # accepted for the same value.
+    # the GitHub sandbox keeps the whole stem: set it to "" there. The chart
+    # sets it from day1.clusterNameStripPrefix; the legacy MCE_CLUSTER_NAME_PREFIX
+    # is still accepted for the same value.
     day1_cluster_name_strip_prefix: str = Field(
         default="ocp4-",
         validation_alias=AliasChoices("DAY1_CLUSTER_NAME_STRIP_PREFIX", "MCE_CLUSTER_NAME_PREFIX"),
@@ -80,14 +80,6 @@ class Day1Settings(BaseSettings):
     mce_ssl_verify: str = "true"
     mce_infraenv_namespace: str = ""
     mce_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
-
-    # ── Build identity (wingman_build_info) ──────────────────────────────────
-    wingman_version: str = "0.2.0"
-    wingman_commit: str = "unknown"
-
-    # ── WINGMAN_GIT_BACKEND=fake only: the repo trees to seed it with ────────
-    wingman_fixtures_dir: Path | None = None
-    """Defaults to ``dev/gitlab-fixtures`` of the checkout."""
 
     # ── Live status stream ───────────────────────────────────────────────────
     day1_status_poll_seconds: float = Field(default=30.0, ge=5, le=600)
@@ -145,8 +137,3 @@ class Day1Settings(BaseSettings):
     def mce_tls_verify(self) -> bool | str:
         """``MCE_SSL_VERIFY`` parsed."""
         return tls_verify(self.mce_ssl_verify)
-
-    @property
-    def webhook_enabled(self) -> bool:
-        """The GitLab webhook endpoint exists only with a secret to check (fail closed)."""
-        return bool(self.gitlab_webhook_secret.get_secret_value())

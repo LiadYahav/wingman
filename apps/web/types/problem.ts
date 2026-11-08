@@ -28,9 +28,17 @@ export interface RequestFieldError {
   type: string;
 }
 
+/** One item a day2 bulk install refused: the item and why. */
+export interface ProblemItem {
+  team?: string;
+  chart?: string;
+  detail?: string;
+  [key: string]: unknown;
+}
+
 export interface ProblemDetails {
-  /** Every rule a request broke (a service's own validation). */
-  problems?: string[];
+  /** Every rule a request broke: day1 sends sentences, day2's bulk install one item each. */
+  problems?: (string | ProblemItem)[];
   /** FastAPI's request validation: a missing or malformed field. */
   errors?: RequestFieldError[];
   /** day2: the rule a refused write broke. */

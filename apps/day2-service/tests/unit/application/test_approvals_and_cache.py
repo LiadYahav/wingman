@@ -149,6 +149,19 @@ async def test_history_commits_mrs_and_diffs_across_teams(
     assert await services.audit.cluster_history("ocp4-upgrade-demo") == []
 
 
+async def test_audit_mrs_are_newest_created_first_whatever_was_updated_last(
+    services: Day2Services, jane_user: User, bob_user: User
+) -> None:
+    # As day1's audit and the web's merged list: by creation, not by update.
+    older = await install(services, jane_user, "redbull", "bmhgen")
+    await install(services, jane_user, "lynx", "backup")
+    await services.approvals.approve("redbull", 1, sha=older.merge_request.sha, approver=bob_user)
+    mrs = await services.audit.merge_requests(per_page=10, page=1)
+    assert [m.team for m in mrs] == ["lynx", "redbull"]
+    [first] = await services.audit.merge_requests(per_page=1, page=1)
+    assert first.team == "lynx"
+
+
 # ── cache invalidation: each fails if its write path stops invalidating ─────
 
 

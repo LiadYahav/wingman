@@ -10,6 +10,8 @@ Branch:       ``platform/{username}/{action}-{resource}-{YYYYmmddTHHMMSS}``
 Title:        ``[Wingman/{repo}] {Verb} {resource_type} {resource_name}[ {extra}]``
 Description:  the human text, then a ``---`` line, then ``Author:``,
               ``Action:``, ``Resource: {type}/{name}`` and ``Repo:`` lines.
+Label:        ``wingman`` on every MR Wingman opens; approvals act only on MRs
+              that carry it, and the lists filter on it.
 """
 
 from __future__ import annotations
@@ -18,6 +20,10 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Final
+
+WINGMAN_LABEL: Final = "wingman"
+"""The label every Wingman MR carries."""
 
 _UNSAFE_BRANCH_CHARS = re.compile(r"[^a-zA-Z0-9._-]")
 _DOTS = re.compile(r"\.{2,}")

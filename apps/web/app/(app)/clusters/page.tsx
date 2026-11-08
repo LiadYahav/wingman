@@ -8,7 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { api } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
 import { DriftBadge } from "@/components/clusters/drift-badge";
 import { ProblemList } from "@/components/common/problem-list";
@@ -403,7 +403,7 @@ export default function ClustersPage() {
       </div>
 
       {error ? (
-        <ProblemList error={error} title="Failed to load clusters" />
+        <ProblemList error={error} title="The clusters could not be loaded" />
       ) : (
         <>
           <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
@@ -487,7 +487,7 @@ export default function ClustersPage() {
                             <div className="leading-snug">
                               <p className="text-sm">{cluster.created_by ?? "—"}</p>
                               <p className="text-xs">
-                                {cluster.created_at ? new Date(cluster.created_at).toLocaleDateString("en-GB") : ""}
+                                {cluster.created_at ? formatDate(cluster.created_at) : ""}
                               </p>
                             </div>
                           </td>

@@ -49,7 +49,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           {children}

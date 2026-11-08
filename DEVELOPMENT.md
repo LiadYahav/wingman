@@ -1,337 +1,164 @@
 # Wingman Development Guide
 
-This guide covers everything developers need to know to contribute to the Wingman platform.
+How the code is laid out, how to run it locally, and how to add to it. The decisions behind
+it, with their reasons, are the ADRs in `docs/adr/`; this guide links them rather than
+repeating them. How Wingman fits the rest of the platform is `docs/ecosystem/README.md`.
 
-## Architecture Overview
+## Architecture
 
-Wingman is a GitOps-based Internal Developer Platform (IDP) for OpenShift cluster provisioning. It follows a no-database architecture where all state is stored in GitLab repositories.
+GitLab is Wingman's only store: there is no database. Every change is a merge request into
+the day1 project, the specs project or a team's project in the sigs group, and ArgoCD applies
+what is merged.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (Next.js)                       │
-│                        apps/web/                                 │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   Day1 Service  │  │   Day2 Service  │  │   Auth Service  │
-│   (FastAPI)     │  │   (FastAPI)     │  │   (via nginx)   │
-│  apps/day1-*/   │  │  apps/day2-*/   │  │                 │
-└────────┬────────┘  └────────┬────────┘  └─────────────────┘
-         │                    │
-         ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐
-│ GitLab: day1    │  │ GitLab: sigs/*  │
-│ (clusters/specs)│  │ (team addons)   │
-└─────────────────┘  └─────────────────┘
-```
-
-### Services
-
-| Service | Port | Purpose |
+| Process | Port | Purpose |
 |---------|------|---------|
-| `day1-service` | 8001 | Cluster provisioning, specs management |
-| `day2-service` | 8002 | Addon catalog, cluster addon management |
-| `web` | 3000 | Next.js frontend |
-| `nginx` | 8080 | Reverse proxy, OAuth handling |
+| `day1-service` (`wingman_day1`) | 8001 | Hosted clusters, specs, approvals and audit of those two projects, login (OpenShift OAuth) |
+| `day2-service` (`wingman_day2`) | 8002 | Charts on the hub, MCEs, hosted and UPI clusters, through the team projects |
+| `web` (Next.js) | 3000 | The UI; it holds no state of its own |
+| `nginx` (in the chart) | 8080 | Routes `/api/auth`, `/api/day1`, `/api/webhooks` to day1, `/api/day2` to day2, the rest to web |
 
-### Shared Package
+Both services are built on `packages/wingman-core` (`wingman_core`): the GitLab port with its
+httpx adapter and in-memory fake, RFC 9457 errors, auth, metrics, the read cache and settings.
 
-`packages/shared-python/` contains common utilities:
-- `gitlab_client.py` - Async GitLab API wrapper
-- `cache.py` - In-memory LRU cache with TTL
-- `yaml_utils.py` - YAML parsing with error handling
-- `models.py` - Pydantic models shared across services
-- `path_resolver.py` - GitLab path construction
-- `mr_conventions.py` - MR title/description formatting
+### Layers (ADR-0001)
 
-## Local Development Setup
+Each service is `src/wingman_dayN/` with the same layers, and `uv run lint-imports` enforces
+the direction (domain → ports → application → infrastructure → api):
 
-### Prerequisites
+| Where | What |
+|-------|------|
+| `domain/` | Pure rules and types: no I/O, no FastAPI |
+| `ports.py` | The service's own ports (protocols); GitLab is core's `GitLabPort` (ADR-0002) |
+| `application/` | Use cases, written against ports only |
+| `infrastructure/` | Adapters for the ports, and their fakes |
+| `api/` | FastAPI routers (`api/v1/`), the dependencies that hand them the use cases, error mapping |
+| `settings.py` | Every environment variable the service reads (ADR-0009) |
+| `main.py` | The composition root: the only place adapters are built and wired |
 
-- Python 3.13+
-- Node.js 24+
-- Docker & Docker Compose
-- Minikube (for local Kubernetes)
-- GitLab instance with test repositories
+A new external system gets a port, an adapter and a fake; a router never calls a client.
 
-### Backend (Python Services)
+## Running locally
 
 ```bash
-# Install uv (Python package manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Day1 Service (from the repo root; env in apps/day1-service/src/wingman_day1/settings.py)
 uv sync --locked --all-packages --all-groups --all-extras
-WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake JWT_SECRET_KEY=<32+ chars> \
+npm ci                      # at the repository root: one lockfile (ADR-0003)
+```
+
+### On the in-memory GitLab (no network)
+
+`WINGMAN_GIT_BACKEND=fake` seeds an in-memory GitLab from `dev/gitlab-fixtures`. Each service
+seeds its own, so a change one service makes is not seen by the other; use the local GitLab
+below when that matters.
+
+```bash
+# Both terminals, from the repository root
+export WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake \
+  JWT_SECRET_KEY=local-jwt-secret-at-least-32-characters \
   DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs \
-  DEV_AUTH_ENABLED=true DEV_AUTH_SECRET=<32+ chars> \
-  uv run uvicorn wingman_day1.main:app --reload --port 8001   # fake: the dev/gitlab-fixtures repos
+  DAY2_SIGS_GROUP_PATH=sigs DAY2_SERVICE_URL=http://127.0.0.1:8002
 
-# Day2 Service (separate terminal, from the repo root; env in apps/day2-service/src/wingman_day2/settings.py)
-uv sync --locked --all-packages --all-groups --all-extras
-WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake JWT_SECRET_KEY=<32+ chars> \
-  DAY2_SIGS_GROUP_PATH=sigs DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config \
-  uv run uvicorn wingman_day2.main:app --reload --port 8002   # fake: the dev/gitlab-fixtures repos
+# Terminal 1: day1, with dev login
+DEV_AUTH_ENABLED=true DEV_AUTH_SECRET=local-dev-login-secret-32-characters \
+  uv run uvicorn wingman_day1.main:app --reload --port 8001
+
+# Terminal 2: day2
+uv run uvicorn wingman_day2.main:app --reload --port 8002
+
+# Terminal 3: the web dev server, proxying /api/* to them
+WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1:8002 \
+  npm run dev --workspace=web
 ```
 
-### Frontend (Next.js)
+`DAY2_SERVICE_URL` matters: without it day1 asks the chart's `http://wingman-day2:8002`, and
+every cluster's drift is Unknown. The web dev server proxies only when both
+`WINGMAN_DEV_*_URL` are set (`apps/web/next.config.ts`); a production build never proxies.
+Sign in on `http://localhost:3000/login` with any lowercase username and the
+`DEV_AUTH_SECRET`. Approving needs a second user: nobody approves their own change.
+
+### On a local GitLab
 
 ```bash
-cd apps/web
-npm install
-npm run dev  # Starts on port 3000
+scripts/dev/gitlab-up.sh token     # GitLab CE in podman on http://localhost:8929, and a dev token
+uv run python scripts/dev/seed_gitlab.py --token wingman-local-dev-token-0001
 ```
 
-### Running Tests
+Then run the services as above without `WINGMAN_GIT_BACKEND=fake`, with
+`GITLAB_URL=http://localhost:8929` and `GITLAB_TOKEN=wingman-local-dev-token-0001`. Every
+variable is listed in the README's [Environment Variables](README.md#environment-variables).
 
-```bash
-# Python lint + type check
-uvx ruff check apps/day1-service packages/shared-python
-uvx mypy apps/day1-service/src --ignore-missing-imports
-scripts/gate.sh python   # day2 and wingman-core: ruff, ty, import-linter, pytest (incl. the render_chain oracle), deptry
+## Adding an endpoint
 
-# Frontend lint + build
-cd apps/web && npm run lint && npm run build
+1. **The rule**, if there is one, goes in `domain/`; **the use case** in `application/`, over
+   the ports in `ports.py` (GitLab through `GitLabPort`). GitLab reads go through the service's
+   cached repositories, which use `TtlCache.get_or_fetch` (`wingman_core.infrastructure.cache`)
+   with the service's TTL (ADR-0011); a write clears what it changed.
+2. **Wire it** in `main.py`: day1's `build_context` builds the `Day1Context`
+   (`api/deps.py`); day2's `Day2Services.build` (`application/services.py`) builds day2's.
+3. **The router** goes in `api/v1/`. It takes the use cases from `Context` (day1, `api/deps.py`)
+   or `Services` (day2, `api/v1/dependencies.py`), and the user from `CurrentUser` (reads) or
+   `AdminUser` (writes; `wingman_core.web.auth`). For example, from day1's `api/v1/sites.py`:
 
-# Mocked E2E tests (no backend required)
-cd apps/web && npm run test:e2e:mocked
+   ```python
+   @sites_router.get("/{site}/mces")
+   async def list_site_mces(site: Name, context: Context, user: CurrentUser) -> list[str]:
+       """MCE folder names under a site."""
+       return await context.sites.mce_names(site)
+   ```
 
-# Live E2E tests against a running stack whose GitLab is disposable (the in-memory
-# fake or the seeded local GitLab CE): every write opens a real MR. See apps/web/README.md.
-WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
-  npx playwright test live-day1-flows --project=live
-DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
-  npx playwright test live-day2 --project=live
-```
+   A new router is registered in day1's `main.py` (`ROUTERS`) or in
+   `wingman_day2/api/v1/__init__.py`.
+4. **Errors**: raise an `AppError` subclass (`wingman_core.web.errors`) or a domain error the
+   service maps to one (day1's `api/errors.py`, day2's `api/v1/errors.py`); never FastAPI's
+   `HTTPException`, and never swallow a read error (ADR-0004). Writes carry the read's `last_commit_id` and are never retried
+   (ADR-0006).
+5. **Document it**: a row in the README's API Reference (`tests/repo/test_web_docs_contract.py`
+   fails until the README and the routes agree), and the web types in `apps/web/types/`.
 
-## Adding New Features
-
-### Adding a New API Endpoint
-
-1. **Create the route** in `src/routers/<domain>.py`:
-
-```python
-from fastapi import APIRouter, Query
-from pydantic import BaseModel
-
-router = APIRouter(prefix="/api/day1", tags=["my-feature"])
-
-class MyRequest(BaseModel):
-    name: str
-    value: int
-
-@router.post("/my-endpoint")
-async def my_endpoint(
-    body: MyRequest,
-    user: CurrentUser,  # Injected auth
-    my_service: MyServiceDep,  # Injected service
-) -> dict:
-    return await my_service.do_something(body.name, body.value)
-```
-
-2. **Create the service** in `src/services/<domain>_service.py`:
-
-```python
-class MyService:
-    def __init__(self, gl: GitLabClient, cache: CacheManager):
-        self.gl = gl
-        self.cache = cache
-
-    async def do_something(self, name: str, value: int) -> dict:
-        # Use async GitLab methods to avoid blocking
-        content, _ = await self.gl.aread_file(f"path/{name}.yaml")
-        return {"result": content}
-```
-
-3. **Register the router** in `src/main.py`:
-
-```python
-from .routers import my_feature
-app.include_router(my_feature.router)
-```
-
-4. **Add dependency injection** in `src/dependencies.py`:
-
-```python
-def get_my_service() -> MyService:
-    return MyService(gl=get_gitlab_client(), cache=get_cache())
-
-MyServiceDep = Annotated[MyService, Depends(get_my_service)]
-```
-
-### Adding a New Frontend Page
-
-> **Existing pages for reference**: `/clusters`, `/specs`, `/addons`, `/approvals`, `/audit`, `/docs`
-> (see `apps/web/app/(app)/`). The `/docs` page is a good example of a pure TSX content page that uses
-> no external markdown renderer.
-
-1. **Create the page** in `app/(app)/<route>/page.tsx`:
-
-```tsx
-"use client";
-
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
-
-export default function MyPage() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["my-data"],
-    queryFn: () => api.get("/api/day1/my-endpoint"),
-  });
-
-  if (isLoading) return <Skeleton />;
-  return <div>{JSON.stringify(data)}</div>;
-}
-```
-
-2. **Add types** in `types/index.ts`:
-
-```typescript
-export interface MyData {
-  name: string;
-  value: number;
-}
-```
-
-### Adding Shared Python Code
-
-1. Add code to `packages/shared-python/src/wingman_shared/`
-2. Export in `__init__.py`
-3. Both services import from `wingman_shared`
-
-## Code Conventions
-
-### Python
-
-- **Async GitLab calls**: Always use `await gl.aread_file()` not `gl.read_file()` to avoid blocking the event loop
-- **Error handling**: Catch `NotFoundError`, `GitLabError` from `wingman_shared.exceptions`
-- **Caching**: Use `CacheManager.get_or_fetch()` for expensive operations
-- **Types**: Use type hints everywhere, run `mypy` to verify
-
-### TypeScript/React
-
-- **Data fetching**: Use `@tanstack/react-query` with appropriate `staleTime`
-- **Forms**: Use controlled components with validation
-- **Styling**: Tailwind CSS with `cn()` utility for conditional classes
-
-### Git Workflow
-
-- Branch naming: `<username>/<action>-<resource>-<name>`
-- Commit messages: Descriptive, include "Co-Authored-By: Claude" if AI-assisted
-- All changes via MR, even for ops (GitOps philosophy)
-
-## Performance Considerations
-
-### Backend
-
-1. **Use async GitLab methods**: The `python-gitlab` library is synchronous. Our wrapper uses `asyncio.to_thread()` internally, but you must call the `a`-prefixed methods (`aread_file`, `alist_directories`, etc.)
-
-2. **Batch operations**: When fetching multiple items, use `asyncio.gather()`:
-```python
-results = await asyncio.gather(
-    *[self.fetch_item(id) for id in ids],
-    return_exceptions=True
-)
-```
-
-3. **Cache aggressively**: Use the cache for anything fetched from GitLab:
-```python
-return await self.cache.get_or_fetch(
-    f"prefix:{key}", 
-    fetch_function, 
-    ttl=60.0
-)
-```
-
-### Frontend
-
-1. **Batch API calls**: Avoid N+1 queries. Create bulk endpoints if needed.
-2. **Use proper staleTime**: Don't set `staleTime: 0` unless truly necessary.
-3. **Lazy load**: Use `enabled` flag in useQuery for conditional fetching.
+A new setting goes in the service's `settings.py`, the chart (`chart/templates/configmap.yaml`
+or `secret.yaml`; `tests/repo/test_chart_env_contract.py` compares them) and the README's
+settings list. Metric names and labels are a contract (ADR-0010, `docs/ops/metrics.md`).
 
 ## Testing
 
-### Unit Tests
-
-```python
-# tests/test_my_service.py
-import pytest
-from unittest.mock import AsyncMock
-
-async def test_my_feature():
-    mock_gl = AsyncMock()
-    mock_gl.aread_file.return_value = ("content", "sha")
-    
-    service = MyService(gl=mock_gl, cache=CacheManager())
-    result = await service.do_something("test", 42)
-    
-    assert result["status"] == "ok"
+```bash
+uv run pytest -q              # every Python test; the live GitLab ones skip without their variables
+scripts/gate.sh python        # ruff, ty, import-linter, pytest with coverage, pip-audit, deptry
+scripts/gate.sh web           # npm ci, npm audit, lint, typecheck, build
+scripts/gate.sh e2e           # the mocked Playwright suite on a production build
+scripts/gate.sh               # everything CI runs, in CI's order
 ```
 
-### Integration Tests
+- **Unit and API tests** run on `InMemoryGitLab` (`wingman_core.infrastructure.fake_gitlab`),
+  seeded from `dev/gitlab-fixtures` by each service's `tests/conftest.py`, which also builds the
+  app on fakes and gives signed-in clients (day1's `client` and `token`, day2's `jane`, `bob` and
+  `vic`). Tests run with
+  `--import-mode=importlib`, so share helpers as fixtures, not imports.
+- **The GitLab contract** (`packages/wingman-core/tests/contract`) runs on the fake and, with
+  these variables, on a real GitLab (CI runs it nightly):
 
-Use the local minikube setup with test GitLab repositories.
+  ```bash
+  scripts/dev/gitlab-up.sh token
+  uv run python scripts/dev/seed_gitlab.py --token wingman-local-dev-token-0001
+  WINGMAN_TEST_GITLAB_URL=http://localhost:8929 WINGMAN_TEST_GITLAB_TOKEN=wingman-local-dev-token-0001 \
+    uv run pytest -m live_gitlab
+  ```
+
+- **day2's oracle** (`apps/day2-service/tests/oracle`) holds Wingman's discovery to the
+  platform's `render_chain.py`; it needs `helm`.
+- **Web**: the mocked Playwright suite needs no backend; the `live` specs run against a
+  running stack on a disposable GitLab (`apps/web/README.md`).
+
+Type checking is ty (ADR-0008): it honours only `# type: ignore` or `# ty: ignore[rule]`.
+
+## Git workflow
+
+Work on a feature branch and merge through a pull request; never push to `main`. Commit after
+each completed stage, one unit of work per commit, with a Conventional Commit subject (`feat:`,
+`fix:`, `docs:`, `ci:`, `test:`, `refactor:`). Docs change in the same commit as the code; a new
+decision gets an ADR (template in `docs/adr/README.md`).
 
 ## Deployment
 
-See `chart/README.md` for Helm deployment instructions.
-
-### Building Images
-
-Production images are tagged with the **git commit SHA** so every deployment is
-traceable. Use `latest` only for quick local testing.
-
-```bash
-SHA=$(git rev-parse --short HEAD)
-
-# Build for local/minikube (native arch)
-docker build -t wingman-day1:$SHA -f apps/day1-service/Dockerfile .
-docker build -t wingman-day2:$SHA -f apps/day2-service/Dockerfile .
-docker build -t wingman-web:$SHA -f apps/web/Dockerfile .
-
-# Build all three for production (amd64, clean)
-docker buildx build --platform linux/amd64 --no-cache -t wingman-day1:$SHA -f apps/day1-service/Dockerfile . --load
-docker buildx build --platform linux/amd64 --no-cache -t wingman-day2:$SHA -f apps/day2-service/Dockerfile . --load
-docker buildx build --platform linux/amd64 --no-cache -t wingman-web:$SHA -f apps/web/Dockerfile . --load
-
-# Save for air-gapped transfer
-docker save wingman-day1:$SHA | gzip > wingman-day1-$SHA.tar.gz
-docker save wingman-day2:$SHA | gzip > wingman-day2-$SHA.tar.gz
-docker save wingman-web:$SHA  | gzip > wingman-web-$SHA.tar.gz
-```
-
-Update `image.tag` in `chart/values.yaml` (or `--set image.tag=$SHA`) when deploying.
-
-### Environment Variables
-
-| Variable | Service | Description |
-|----------|---------|-------------|
-| `GITLAB_URL` | all | GitLab instance URL |
-| `GITLAB_DAY1_TOKEN` | day1 | Token for day1 repo |
-| `GITLAB_DAY2_TOKEN` | day2 | Token for sigs group |
-| `GITLAB_SPECS_TOKEN` | day1 | Token for specs repo |
-| `LOG_LEVEL` | all | DEBUG, INFO, WARNING, ERROR |
-| `CACHE_*_TTL` | all | Cache TTL settings |
-
-## Troubleshooting
-
-### "coroutine was never awaited"
-
-You called a sync GitLab method in async context. Use the `a`-prefixed version:
-```python
-# Wrong
-content = gl.read_file(path)
-
-# Correct
-content = await gl.aread_file(path)
-```
-
-### Health checks timing out
-
-The event loop is blocked. Ensure all GitLab calls use async methods.
-
-### Cache not updating
-
-Check TTL settings and call `cache.invalidate(key)` after mutations.
+`chart/README.md` installs the chart; `docs/ops/images.md` builds and publishes the images.
+Deploy a commit's images with `image.<component>.tag` (`image.day1.tag`, `image.day2.tag`,
+`image.web.tag`). Operating it: `docs/ops/metrics.md` and `docs/ops/runbook.md`.

@@ -33,7 +33,13 @@ from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
 from wingman_core.ports.gitlab import GitLabPort
-from wingman_core.settings import AuthSettings, GitBackend, GitLabSettings, RuntimeSettings
+from wingman_core.settings import (
+    AuthSettings,
+    GitBackend,
+    GitLabSettings,
+    RuntimeSettings,
+    project_ref,
+)
 from wingman_core.web.app_factory import create_base_app
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.api.errors import register_day1_error_handlers
@@ -99,11 +105,6 @@ class Adapters:
     closers: tuple[Close, ...] = field(default=())
 
 
-def project_ref(value: str) -> int | str:
-    """A project setting: a numeric id, or a ``group/project`` path."""
-    return int(value) if value.isdigit() else value.strip("/")
-
-
 def build_adapters(
     settings: Day1Settings,
     runtime: RuntimeSettings,
@@ -125,7 +126,7 @@ def build_adapters(
         )
 
         fake = InMemoryGitLab(clock=clock)
-        root = settings.wingman_fixtures_dir or default_fixture_root()
+        root = runtime.fixtures_dir or default_fixture_root()
         seed_fake(fake, load_fixture_projects(root))
         inner: GitLabPort = fake
     else:
@@ -268,8 +269,8 @@ def create_app(
     metrics = WingmanMetrics(
         CollectorRegistry(),
         component=SERVICE,
-        version=settings.wingman_version,
-        commit=settings.wingman_commit,
+        version=runtime.version,
+        commit=runtime.commit,
     )
     secret = auth.jwt_secret_key.get_secret_value()
     session_tokens = SessionTokens(secret, ttl=timedelta(hours=auth.jwt_expiry_hours), clock=clock)
@@ -298,12 +299,22 @@ def create_app(
 
     gitlab = adapters.gitlab
     day1_project = project_ref(settings.day1_gitlab_project_id)
+    specs_project = project_ref(settings.specs_gitlab_project_id)
+
+    async def gitlab_ready() -> None:
+        # Both projects: a wrong SPECS_GITLAB_PROJECT_ID (or a token without
+        # access, which GitLab answers 404) must not look like an empty specs list.
+        await gitlab.get_project(day1_project)
+        await gitlab.get_project(specs_project)
+
     app = create_base_app(
         title="Wingman day1",
-        version=settings.wingman_version,
+        version=runtime.version,
+        commit=runtime.commit,
+        api_prefix="/api/day1",
         metrics=metrics,
         session_tokens=session_tokens,
-        readiness={"gitlab": lambda: gitlab.get_project(day1_project)},
+        readiness={"gitlab": gitlab_ready},
         lifespan=lifespan,
     )
     app.state.day1 = context

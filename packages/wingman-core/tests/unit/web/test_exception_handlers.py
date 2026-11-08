@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 
 import httpx
@@ -17,7 +18,11 @@ from wingman_core.web.errors import (
     FeatureDisabled,
     ValidationFailed,
 )
-from wingman_core.web.exception_handlers import PROBLEM_JSON, register_exception_handlers
+from wingman_core.web.exception_handlers import (
+    PROBLEM_JSON,
+    register_domain_errors,
+    register_exception_handlers,
+)
 from wingman_core.web.request_context import RequestIdMiddleware
 
 
@@ -132,3 +137,26 @@ async def test_non_git_dependency_errors_have_their_own_codes(
         response = await c.get("/dependency")
     assert (response.status_code, response.json()["code"]) == (status, code)
     assert response.json()["type"] == f"/problems/{code.lower().replace('_', '-')}"
+
+
+class HubDown(Exception):
+    """A service's own error, as day1's and day2's domains define them."""
+
+
+async def test_a_services_own_errors_take_the_app_error_path_and_a_5xx_is_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = make_app()
+    register_domain_errors(app, HubDown, lambda exc: DependencyUnavailable(f"hub: {exc}"))
+
+    @app.get("/hub")
+    async def hub() -> None:
+        raise HubDown("timed out")
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        with caplog.at_level(logging.WARNING, logger="wingman_core.web.exception_handlers"):
+            response = await client.get("/hub")
+    assert (response.status_code, response.json()["code"]) == (502, "DEPENDENCY_UNAVAILABLE")
+    assert response.json()["detail"] == "hub: timed out"
+    assert "DEPENDENCY_UNAVAILABLE on /hub: hub: timed out" in caplog.text
