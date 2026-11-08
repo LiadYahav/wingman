@@ -24,7 +24,8 @@ import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
 import type {
-  CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OverrideableField, SpecEntry, TemplateField,
+  CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OpenShiftVersions, OverrideableField, SpecEntry,
+  TemplateField,
 } from "@/types";
 import { DynamicVariableForm, seedFromStructure, type FieldValue, type FormValues } from "@/components/clusters/dynamic-variable-form";
 
@@ -100,6 +101,13 @@ function mceOption(mce: Mce): ComboboxOption {
 }
 
 const asOption = (value: string): ComboboxOption => ({ value, label: value });
+
+/** The entry of `offered` that `version` names (`4.18.56-x86_64` is `4.18.56`), or `null`. */
+function offeredRelease(version: unknown, offered: string[]): string | null {
+  if (typeof version !== "string" || !version.trim()) return null;
+  const bare = version.trim().replace(/-x86_64$/, "");
+  return offered.includes(bare) ? bare : null;
+}
 
 /** The one conventional MCE of the site whose env the name carries. */
 function mceFromName(name: string, site: string, mces: Mce[]): string | null {
@@ -538,7 +546,7 @@ export default function NewClusterPage() {
   // `null` = not chosen: the value is detected from the cluster name.
   const [siteChoice, setSiteChoice] = useState<string | null>(null);
   const [mceChoice, setMceChoice] = useState<string | null>(null);
-  // `null` = not chosen: the spec's preset, else the MCE's default mastertag.
+  // `null` = not chosen: the spec's preset, else the MCE's default mastertag, when the MCE offers it.
   const [ocpChoice, setOcpChoice] = useState<string | null>(null);
   // `null` = untouched: the form shows the spec's structure and presets.
   const [dynamicValues, setDynamicValues] = useState<FormValues | null>(null);
@@ -594,12 +602,16 @@ export default function NewClusterPage() {
   const selectedMce = mces.find((m) => m.name === mce);
   const offConventionMces = mces.filter((m) => !m.follows_convention);
 
-  const { data: ocpVersions = [], isLoading: versionsLoading, error: versionsError } = useQuery<string[]>({
-    queryKey: ["openshift-versions"],
-    queryFn: () => api.get<string[]>("/api/day1/specs/versions/openshift"),
-    staleTime: 300_000,
-    enabled: step === "vars",
+  // The releases a new cluster on this MCE may use: the day1 repo's upgrade ladder in the
+  // minors the MCE can host (ADR-0034). `problems` says why the list is short or empty.
+  const { data: offered, isLoading: versionsLoading, error: versionsError } = useQuery<OpenShiftVersions>({
+    queryKey: ["mce-openshift-versions", mce],
+    queryFn: () => api.get<OpenShiftVersions>(`/api/day1/mces/${encodeURIComponent(mce)}/openshift-versions`),
+    enabled: Boolean(mce) && step === "vars",
+    staleTime: 60_000,
   });
+  const ocpVersions = offered?.versions ?? [];
+  const versionProblems = offered?.problems ?? [];
 
   // InfraEnvs on the MCE hub; `null` when live status is off (then the field is free text).
   const { data: infraEnvs, isLoading: infraEnvsLoading, error: infraEnvsError } = useQuery<string[] | null>({
@@ -617,14 +629,21 @@ export default function NewClusterPage() {
     retry: false,
   });
 
+  // A preset prefills only a release the MCE offers; one it can't host leaves the field empty.
   const presetVersion = selectedSpec?.spec.day1.values?.openshift_release_version;
-  const versionDefault = typeof presetVersion === "string" && presetVersion
-    ? { value: presetVersion, source: `preset by spec ${selectedSpec?.metadata.name}` }
-    : selectedMce?.default_mastertag
-    ? { value: selectedMce.default_mastertag, source: `default of ${selectedMce.name}` }
+  const hasPreset = typeof presetVersion === "string" && presetVersion.trim() !== "";
+  const presetOffered = offeredRelease(presetVersion, ocpVersions);
+  const mceDefaultOffered = offeredRelease(selectedMce?.default_mastertag, ocpVersions);
+  const versionDefault = hasPreset
+    ? presetOffered ? { value: presetOffered, source: `preset by spec ${selectedSpec?.metadata.name}` } : null
+    : mceDefaultOffered && selectedMce
+    ? { value: mceDefaultOffered, source: `default of ${selectedMce.name}` }
     : null;
-  const ocpVersion = ocpChoice ?? versionDefault?.value ?? "";
-  const versionOptions = (ocpVersion && !ocpVersions.includes(ocpVersion) ? [ocpVersion, ...ocpVersions] : ocpVersions).map(asOption);
+  const presetNotOffered = hasPreset && offered !== undefined && !presetOffered;
+  // Typed when the list could not be read; otherwise a choice made for another MCE counts only if this one offers it.
+  const chosenVersion = versionsError ? ocpChoice : ocpChoice !== null && ocpVersions.includes(ocpChoice) ? ocpChoice : null;
+  const ocpVersion = chosenVersion ?? versionDefault?.value ?? "";
+  const versionOptions = ocpVersions.map(asOption);
   const siteOptions = sites.map(asOption);
   const mceOptions = mces.map(mceOption);
 
@@ -1033,37 +1052,60 @@ export default function NewClusterPage() {
                 <label id={versionLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   OpenShift Version <span className="text-destructive">*</span>
                 </label>
-                {/* The list when it loads; free text when it is empty or could not be read */}
-                {versionsLoading || (versionOptions.length > 0 && !versionsError) ? (
+                {/* The MCE's releases; free text only when they could not be read (create still checks) */}
+                {versionsError ? (
+                  <input
+                    type="text"
+                    data-testid="ocp-version-input" aria-labelledby={versionLabelId}
+                    className={cn(inputCls, "font-mono")}
+                    placeholder="e.g. 4.18.56"
+                    value={ocpVersion}
+                    onChange={(e) => setOcpChoice(e.target.value)}
+                  />
+                ) : (
                   <Combobox
                     size="lg"
                     options={versionOptions}
                     value={ocpVersion || null}
                     onValueChange={setOcpChoice}
-                    disabled={versionsLoading}
-                    placeholder={versionsLoading ? "Loading versions…" : "Select OpenShift version…"}
+                    disabled={!mce || versionsLoading || versionOptions.length === 0}
+                    placeholder={
+                      !mce ? "Choose an MCE first"
+                        : versionsLoading ? "Loading versions…"
+                        : versionOptions.length === 0 ? `No versions offered on ${mce}`
+                        : "Select OpenShift version…"
+                    }
                     searchPlaceholder="Search versions…"
                     emptyMessage="No version matches."
                     data-testid="ocp-version-select"
                     aria-labelledby={versionLabelId}
                   />
-                ) : (
-                  <input
-                    type="text"
-                    data-testid="ocp-version-input" aria-labelledby={versionLabelId}
-                    className={cn(inputCls, "font-mono")}
-                    placeholder="e.g. 4.16.27-x86_64"
-                    value={ocpVersion}
-                    onChange={(e) => setOcpChoice(e.target.value)}
-                  />
                 )}
                 {Boolean(versionsError) && (
-                  <ProblemList error={versionsError} title="The OpenShift versions could not be listed: type the version" />
+                  <ProblemList error={versionsError} title={`The OpenShift versions of ${mce} could not be listed: type the version`} />
+                )}
+                {versionProblems.length > 0 && (
+                  <div data-testid="ocp-version-problems">
+                    <ProblemList
+                      lines={versionProblems}
+                      title={ocpVersions.length > 0 ? `Some of ${mce}'s upgrade files need attention` : `${mce} offers no OpenShift version`}
+                    />
+                  </div>
+                )}
+                {presetNotOffered && (
+                  <p className="text-[11px] text-status-warning-fg flex items-start gap-1.5" data-testid="ocp-version-preset-note">
+                    <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                    <span className="break-words">
+                      Spec {selectedSpec?.metadata.name} presets {String(presetVersion)}, which {mce} can&apos;t host: choose a version it offers.
+                    </span>
+                  </p>
                 )}
                 <p className="text-[11px] text-muted-foreground" data-testid="ocp-version-source">
-                  {ocpChoice === null && versionDefault
+                  {chosenVersion === null && versionDefault
                     ? `Becomes the file's mastertag; ${versionDefault.source}.`
-                    : "Becomes the file's mastertag."}
+                    : mce
+                    ? `Becomes the file's mastertag. The releases ${mce} can host, from the day1 repo's upgrade/ folder.`
+                    : "Becomes the file's mastertag. Each MCE offers the releases it can host."}
                 </p>
               </div>
             </div>

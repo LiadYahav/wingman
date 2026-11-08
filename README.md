@@ -108,7 +108,7 @@ wingman/
 | **Marketplace addon picker** | Browse and select Day2 addons from a marketplace UI on the spec creation/edit pages. Configure which fields are overrideable per cluster. |
 | **YAML fields everywhere** | Dynamic form fields accept plain YAML — no JSON syntax required. Scalars (`high-perf-tuned`), maps, and lists all work naturally. |
 | **Sites and MCEs from GitLab folders** | Site and MCE dropdowns list the day1 repo's folders. They are read-only: Wingman never creates a site or an MCE (ADR-0018). |
-| **OCP versions from repo** | OpenShift version dropdown is sourced from `openshift-versions.txt` in the specs repo — no hardcoded list. |
+| **OCP versions per MCE** | The OpenShift version dropdown offers the day1 repo's upgrade ladder (`upgrade/ladder.yaml`) in the minors the chosen MCE can host (`upgrade/mces/<mce>.yaml`); an MCE without its file offers none, and create refuses a version the MCE can't host. |
 | **Open folder in GitLab** | Each installed chart's ⋮ menu links to its folder in the team repo. |
 | **In-app documentation** | `/docs` route with full platform guide, concept explanations, worked examples, and troubleshooting. |
 | **Aggregated approvals** | Approvals page aggregates open MRs from the day1, specs and every Day2 team repo in one view. |
@@ -172,6 +172,7 @@ Changes since the legacy services:
 | `GET` | `/api/day1/sites` | Site folders of the day1 repo |
 | `GET` | `/api/day1/sites/{site}/mces` | MCE folder names under a site |
 | `GET` | `/api/day1/mces` | Every MCE (or one site's, `?site=`), with its default mastertag, hub version and naming |
+| `GET` | `/api/day1/mces/{mce}/openshift-versions` | The releases a new cluster on the MCE may use (`upgrade/` in the day1 repo), newest first, with `problems` when its files are missing or broken |
 | `GET` | `/api/day1/mces/{mce}/infraenvs` | InfraEnv names on the MCE hub (501 when live status is off) |
 
 #### Specs (presets for the create form)
@@ -180,7 +181,6 @@ Changes since the legacy services:
 |--------|----------|-------------|
 | `GET` | `/api/day1/specs` | Every spec; one that does not parse carries `load_error` instead of vanishing |
 | `POST` | `/api/day1/specs` | Create a spec (opens an MR) |
-| `GET` | `/api/day1/specs/versions/openshift` | The releases the create form offers (`openshift-versions.txt`) |
 | `GET` | `/api/day1/specs/template` | The shared `cluster-template.j2` |
 | `GET` | `/api/day1/specs/template/schema` | The template's inputs as a form schema; reserved inputs only with `?include_reserved=true` |
 | `GET` | `/api/day1/specs/{name}` | One spec, with the shared template filled in |
@@ -436,18 +436,20 @@ neither group cannot sign in; admin wins over viewer.
 
 ```
 gitops-day1/platform-config/            # DAY1_GITLAB_PROJECT_ID
-└── sites/
-    ├── configValues.yaml
-    └── {site}/
-        ├── values.yaml
-        └── mces/{mce}/
-            ├── values.yaml                     # the MCE's defaults: its mastertag is a new cluster's default version
-            ├── version.yaml                    # the hub's own version
-            └── hostedClusters/{cluster}.yaml   # one values file per hosted cluster: the only file Wingman writes here
+├── sites/
+│   ├── configValues.yaml
+│   └── {site}/
+│       ├── values.yaml
+│       └── mces/{mce}/
+│           ├── values.yaml                     # the MCE's defaults: its mastertag prefills a new cluster's version, when the MCE offers it
+│           ├── version.yaml                    # the hub's own version
+│           └── hostedClusters/{cluster}.yaml   # one values file per hosted cluster: the only file Wingman writes here
+└── upgrade/                            # read by the cluster-upgrade workflow and by Wingman (ADR-0034)
+    ├── ladder.yaml                     # the verified releases, one or more per minor
+    └── mces/{mce}.yaml                 # the minors the MCE can host: the create form offers the ladder's rungs in them
 
 wingman/cluster-specs/                  # SPECS_GITLAB_PROJECT_ID
 ├── cluster-template.j2                 # the shared template every cluster file is rendered from
-├── openshift-versions.txt              # the versions the create form offers
 └── specs/{name}.yaml                   # one file per spec (SPECS_ROOT_PATH)
 ```
 

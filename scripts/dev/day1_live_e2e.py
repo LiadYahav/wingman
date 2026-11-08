@@ -203,6 +203,11 @@ async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str
         f"{MCE} default mastertag {prod['default_mastertag']}",
     )
     check(prod["hub_version"] == "4.16.27-x86_64", f"{MCE} hub version {prod['hub_version']}")
+    offered = (await api.get(f"/api/day1/mces/{MCE}/openshift-versions", headers=alice)).json()
+    check(
+        offered["versions"] == ["4.18.56", "4.17.58", "4.16.55"] and not offered["problems"],
+        f"{MCE} offers {offered}",
+    )
     clusters = (await api.get("/api/day1/clusters", headers=alice)).json()
     flagged = [c["name"] for c in clusters if not c["naming"]["follows_convention"]]
     check(len(clusters) == 12, f"{len(clusters)} clusters listed; off-convention: {flagged}")
@@ -218,7 +223,7 @@ async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str
             "owner_merkaz": "1234",
             "owner_anaf": "56",
             "owner_mador": "7",
-            "openshift_release_version": "4.18.22-x86_64",
+            "openshift_release_version": "4.18.56-x86_64",
             "nodepools": [
                 {
                     "infra_env": "dell-r660-site1-128c-1024gb-5tb",

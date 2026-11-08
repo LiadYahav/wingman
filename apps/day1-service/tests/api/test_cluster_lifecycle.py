@@ -91,7 +91,7 @@ async def test_create_approve_edit_delete(
     assert {p: c for p, c in branch.items() if p in before} == before
     assert gitlab.snapshot(day1, "main") == before
     values = yaml.safe_load(branch[NEW_PATH])
-    assert values["mastertag"] == "4.18.22-x86_64"
+    assert values["mastertag"] == "4.18.56-x86_64"
     assert [np["infraEnvName"] for np in values["nodepool"]] == [
         "dell-r660-site1-128c-1024gb-5tb",
         "hp-gen11-site1-64c",
@@ -129,7 +129,7 @@ async def test_create_approve_edit_delete(
     assert cluster["metadata"]["requested_addons"] == [
         {"team": "redbull", "name": "cluster-roles", "version": "main", "override_values": {}}
     ]
-    assert cluster["values"]["mastertag"] == "4.18.22-x86_64"
+    assert cluster["values"]["mastertag"] == "4.18.56-x86_64"
 
     # Automation commits vlanId/dhcp_values to main (as CI would after the workflow).
     content = cluster["yaml"] + "vlanId: 412\ndhcp_values:\n  network: 10.20.99.0\n"
@@ -140,7 +140,7 @@ async def test_create_approve_edit_delete(
     stale = await client.patch(
         f"/api/day1/clusters/{NEW}",
         json={
-            "updated_yaml": cluster["yaml"].replace("4.18.22", "4.18.23"),
+            "updated_yaml": cluster["yaml"].replace("4.18.56", "4.18.57"),
             "last_commit_id": cluster["last_commit_id"],
         },
         headers=alice,
@@ -169,7 +169,7 @@ async def test_create_approve_edit_delete(
     edited = await client.patch(
         f"/api/day1/clusters/{NEW}",
         json={
-            "updated_yaml": fresh["yaml"].replace("4.18.22", "4.18.23"),
+            "updated_yaml": fresh["yaml"].replace("4.18.56", "4.18.57"),
             "last_commit_id": fresh["last_commit_id"],
         },
         headers=alice,

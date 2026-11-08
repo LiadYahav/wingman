@@ -365,8 +365,8 @@ export default function DocsPage() {
                   <span className="text-foreground">ArgoCD (Day1 + Day2)</span>
                 </div>
                 <div className="mt-3 pl-4 border-l-2 border-muted space-y-1">
-                  <p><span className="text-primary">Day1 repo</span>  — one values file per hosted cluster</p>
-                  <p><span className="text-amber-500">Specs repo</span> — the shared cluster template, the OpenShift version list, the specs</p>
+                  <p><span className="text-primary">Day1 repo</span>  — one values file per hosted cluster, and the upgrade ladder: the OpenShift versions each MCE offers</p>
+                  <p><span className="text-amber-500">Specs repo</span> — the shared cluster template and the specs</p>
                   <p><span className="text-blue-500">Team repos</span> — one per team under the sigs group: chart defaults, fleet defaults, a folder per destination</p>
                 </div>
               </div>
@@ -657,16 +657,17 @@ spec:
                 <li><InlineCode>Site</InlineCode> → <InlineCode>site1</InlineCode></li>
                 <li><InlineCode>MCE</InlineCode> → <InlineCode>ocp4-prod-mce-site1-a</InlineCode></li>
                 <li><InlineCode>Cluster Name</InlineCode> → <InlineCode>ocp4-prod-herzi-site1</InlineCode></li>
-                <li><InlineCode>OpenShift Version</InlineCode> → <InlineCode>4.16.27-x86_64</InlineCode></li>
+                <li><InlineCode>OpenShift Version</InlineCode> → <InlineCode>4.18.56</InlineCode></li>
               </ul>
               <p className="mt-2">
                 Sites and MCEs are the day1 repo&apos;s folders and are read-only: Wingman never creates them. An MCE
                 whose name is off its convention is shown but disabled. New names must follow{" "}
                 <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, with the MCE&apos;s env and the site
                 you picked; the form lists every problem with a name as you type, and fills in site and MCE when it
-                can detect them from the name. The version list is the specs repo&apos;s; it defaults to the
-                spec&apos;s preset, else the MCE&apos;s mastertag, and becomes the file&apos;s{" "}
-                <InlineCode>mastertag</InlineCode>.
+                can detect them from the name. The version list is the chosen MCE&apos;s: the releases in the day1
+                repo&apos;s upgrade ladder that the MCE can host, so the picker waits for an MCE. It defaults to the
+                spec&apos;s preset, else the MCE&apos;s mastertag, but only when the MCE offers it. The release becomes
+                the file&apos;s <InlineCode>mastertag</InlineCode>.
               </p>
             </Step>
             <Step n={3} title="Cluster configuration">
@@ -1211,18 +1212,28 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
               </div>
             </FeaturePanel>
 
-            <FeaturePanel icon={Settings2} tint="bg-indigo-500/10 text-indigo-500" title="OpenShift version list is repo-driven" where="New Cluster → OpenShift Version">
+            <FeaturePanel icon={Settings2} tint="bg-indigo-500/10 text-indigo-500" title="OpenShift versions come from the upgrade ladder, per MCE" where="New Cluster → OpenShift Version">
               <p>
-                The OpenShift version list is not hardcoded: it is <InlineCode>openshift-versions.txt</InlineCode> in
-                the specs repo, one release per line, written to the cluster file&apos;s{" "}
-                <InlineCode>mastertag</InlineCode> as is. To offer another version, edit that file in GitLab: the form
-                offers it shortly after, with no deployment.
+                Not every MCE can host every OpenShift release, so the list depends on the MCE you choose, and the
+                picker stays disabled until you choose one. It offers the releases in the day1 repo&apos;s{" "}
+                <InlineCode>upgrade/ladder.yaml</InlineCode> whose minor is in the MCE&apos;s{" "}
+                <InlineCode>upgrade/mces/&lt;mce&gt;.yaml</InlineCode>, newest first. These are the same files the
+                cluster-upgrade workflow reads. The release goes into the cluster file&apos;s{" "}
+                <InlineCode>mastertag</InlineCode>, and the chart adds <InlineCode>-x86_64</InlineCode> to it.
               </p>
-              <CodeBlock language="openshift-versions.txt">
-{`4.16.27-x86_64
-4.18.22-x86_64
-4.21.40-x86_64`}
+              <CodeBlock language="upgrade/mces/ocp4-prod-mce-site1-a.yaml">
+{`mce:
+  version: 2.8.2
+  supportedHostedVersions: ["4.18", "4.17", "4.16"]   # quoted: 4.20 unquoted is a number
+maxConcurrentControlPlanes: 1`}
               </CodeBlock>
+              <p>
+                If an MCE has no file, or the ladder is missing or broken, the form offers no version and shows the
+                reason under the field. Wingman never falls back to every release. A spec&apos;s preset version
+                prefills only when the MCE offers it. Create refuses a release the MCE can&apos;t host. To offer
+                another release, add a rung to the ladder or a minor to the MCE&apos;s file, through a merge request
+                in the day1 repo.
+              </p>
             </FeaturePanel>
 
             <FeaturePanel icon={Network} tint="bg-emerald-500/10 text-emerald-500" title="InfraEnv dropdown" where="New Cluster → nodepool fields">
@@ -1274,7 +1285,6 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
               </div>
               <div className="divide-y">
                 <FileRow file="cluster-template.j2" where="repository root" desc="The shared template every cluster file is rendered from (sandboxed). Its inputs are the create form's fields." />
-                <FileRow file="openshift-versions.txt" where="repository root" desc="One release per line: the OpenShift versions the create form offers." />
                 <FileRow file="specs/{name}.yaml" where="Helm gitlab.specsRoot → SPECS_ROOT_PATH (default: specs)" desc="One file per spec: nodepool structure, preset values, locked-field hints and the Day2 addons." />
               </div>
             </div>
@@ -1293,8 +1303,10 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
               </div>
               <div className="divide-y">
                 <FileRow file="sites/{site}/mces/{mce}/hostedClusters/{cluster}.yaml" where="fixed by the MCE's ApplicationSet" desc="One values file per hosted cluster, the only file Wingman writes here. Every file in hostedClusters/ becomes an ArgoCD Application, so anything else there is flagged as a stray file." />
-                <FileRow file="sites/{site}/mces/{mce}/values.yaml" where="read only" desc="The MCE's values: its mastertag is the default OpenShift version for new clusters." />
+                <FileRow file="sites/{site}/mces/{mce}/values.yaml" where="read only" desc="The MCE's values: its mastertag is the default OpenShift version for new clusters, when the MCE offers it." />
                 <FileRow file="sites/{site}/mces/{mce}/version.yaml" where="read only" desc="The MCE hub's own version." />
+                <FileRow file="upgrade/ladder.yaml" where="read only" desc="The verified releases, at least one per minor. The create form offers them." />
+                <FileRow file="upgrade/mces/{mce}.yaml" where="read only" desc="The OpenShift minors the MCE can host. Without this file the MCE offers no version." />
               </div>
             </div>
 

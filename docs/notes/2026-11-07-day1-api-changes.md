@@ -187,6 +187,17 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     answer 501 `FEATURE_DISABLED` ("not available yet") until the
     delete-cluster workflow exists. Then `GET` returns `{"run": null | {workflow_id,
     status, phase, error}}`, and `POST {"confirm": true}` (admin) returns 202 with the run.
+35. **The OpenShift versions are per MCE now** (ADR-0034). New:
+    `GET /mces/{mce}/openshift-versions` → `{mce, versions[], problems[]}`,
+    the day1 repo's `upgrade/ladder.yaml` rungs in the minors that
+    `upgrade/mces/<mce>.yaml` says the MCE can host, newest first, bare
+    (`4.20.44`). An MCE without its file, or a missing or broken ladder, is
+    200 with `versions: []` and the reason in `problems`; an unknown MCE is
+    404. **Removed: `GET /specs/versions/openshift`** (404) and the specs
+    project's `openshift-versions.txt`. Create and preview answer 422 with
+    `details.problems` naming the allowed list when the version is not one the
+    MCE offers (`4.20.44-x86_64` counts as `4.20.44`). The web reads the list
+    for the chosen MCE and shows `problems` under the field.
 
 ## Deployment (chart) changes
 

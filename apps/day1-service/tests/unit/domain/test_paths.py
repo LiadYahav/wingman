@@ -74,4 +74,12 @@ def test_spec_files_live_under_the_specs_root() -> None:
     with pytest.raises(InvalidRepoPathError):
         paths.spec_file("specs", "../x")
     assert RepoPath("cluster-template.j2") == paths.TEMPLATE_FILE
-    assert RepoPath("openshift-versions.txt") == paths.VERSIONS_FILE
+
+
+def test_upgrade_rules_live_in_the_day1_repo_upgrade_folder() -> None:
+    assert RepoPath("upgrade/ladder.yaml") == paths.UPGRADE_LADDER
+    assert paths.upgrade_mce_rules("ocp4-prod-mce-site1-a") == RepoPath(
+        "upgrade/mces/ocp4-prod-mce-site1-a.yaml"
+    )
+    with pytest.raises(InvalidRepoPathError):
+        paths.upgrade_mce_rules("../x")

@@ -104,7 +104,7 @@ async def test_addon_overrides_given_at_create_are_kept_in_the_file_header(
     header = [line for line in content.splitlines() if line.startswith("#")]
     assert header[:2] == ['# specName: "agent-standard"', '# specVersion: "1.0.0"']
     assert '"override_values": {"a": 1, "nested": {"b": "two"}}' in header[2]
-    assert yaml.safe_load(content)["mastertag"] == "4.18.22-x86_64"
+    assert yaml.safe_load(content)["mastertag"] == "4.18.56-x86_64"
 
 
 async def test_an_override_for_an_addon_the_spec_lacks_is_refused(
@@ -161,7 +161,7 @@ async def test_a_name_used_under_another_mce_is_already_in_use(
         support.DAY1,
         branch="main",
         file=f"sites/site2/mces/ocp4-prod-mce-site2-a/hostedClusters/{NEW}.yaml",
-        content="mastertag: 4.18.22-x86_64\n",
+        content="mastertag: 4.18.56-x86_64\n",
     )
     with pytest.raises(AlreadyInUseError, match="already exists under site2"):
         await context.clusters.preview(request(support))

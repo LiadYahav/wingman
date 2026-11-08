@@ -221,7 +221,9 @@ async function mockCreateForm(page: Page) {
   await mockDashboardApis(page);
   await page.route("**/api/day1/specs", (r) => json(r, [SPEC]));
   await page.route("**/api/day1/specs/template/schema", (r) => json(r, SCHEMA));
-  await page.route("**/api/day1/specs/versions/openshift", (r) => json(r, ["4.16.27-x86_64"]));
+  await page.route("**/api/day1/mces/*/openshift-versions", (r) =>
+    json(r, { mce: MCE, versions: ["4.16.27"], problems: [] })
+  );
   await page.route("**/api/day2/addons", (r) => json(r, []));
   await page.route("**/api/day1/sites", (r) => json(r, [SITE]));
   await page.route(/\/api\/day1\/mces(\?.*)?$/, (r) => json(r, MCES));
@@ -268,12 +270,9 @@ test.describe("Cluster create form", () => {
     await expect(page.getByText("No sites in the day1 repo")).toHaveCount(0);
   });
 
-  test("failed MCE and version reads say so; the version is then typed", async ({ page }) => {
+  test("a failed MCE read says so, and the version waits for an MCE", async ({ page }) => {
     await mockCreateForm(page);
     await page.route(/\/api\/day1\/mces(\?.*)?$/, (r) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));
-    await page.route("**/api/day1/specs/versions/openshift", (r) =>
-      fulfillProblem(r, 503, "GIT_UNAVAILABLE", "The specs project could not be read")
-    );
     await openForm(page);
     await page.getByTestId("site-select").click();
     await page.getByRole("option", { name: SITE }).click();
@@ -282,9 +281,23 @@ test.describe("Cluster create form", () => {
     await expect(mceProblem).toContainText("GitLab could not be reached", { timeout: 10_000 });
     await expect(page.getByTestId("mce-select")).toContainText("MCEs could not be loaded");
     await expect(page.getByText("No MCEs on this site")).toHaveCount(0);
+    await expect(page.getByTestId("ocp-version-select")).toBeDisabled();
+    await expect(page.getByTestId("ocp-version-select")).toContainText("Choose an MCE first");
+  });
 
-    const versionProblem = page.getByRole("alert").filter({ hasText: "The OpenShift versions could not be listed" });
-    await expect(versionProblem).toContainText("The specs project could not be read", { timeout: 10_000 });
+  test("a failed version read says so; the version is then typed", async ({ page }) => {
+    await mockCreateForm(page);
+    await page.route("**/api/day1/mces/*/openshift-versions", (r) =>
+      fulfillProblem(r, 503, "GIT_UNAVAILABLE", "The day1 repo could not be read")
+    );
+    await openForm(page);
+    await page.getByTestId("site-select").click();
+    await page.getByRole("option", { name: SITE }).click();
+    await page.getByTestId("mce-select").click();
+    await page.getByRole("option", { name: MCE }).click();
+
+    const versionProblem = page.getByRole("alert").filter({ hasText: `The OpenShift versions of ${MCE} could not be listed` });
+    await expect(versionProblem).toContainText("The day1 repo could not be read", { timeout: 10_000 });
     await expect(page.getByTestId("ocp-version-input")).toBeVisible();
   });
 
