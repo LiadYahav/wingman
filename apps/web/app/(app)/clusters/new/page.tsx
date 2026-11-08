@@ -19,6 +19,7 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { GitLabFileList } from "@/components/common/gitlab-file-list";
 import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
 import type {
@@ -567,7 +568,7 @@ export default function NewClusterPage() {
   });
 
   // Template schema — parsed server-side from the Jinja2 AST; drives the dynamic form
-  const { data: templateSchema, isLoading: schemaLoading } = useQuery<TemplateField[]>({
+  const { data: templateSchema, isLoading: schemaLoading, error: schemaError } = useQuery<TemplateField[]>({
     queryKey: ["specs", "template-schema"],
     queryFn: () => api.get<TemplateField[]>("/api/day1/specs/template/schema"),
     staleTime: 300_000,
@@ -582,7 +583,7 @@ export default function NewClusterPage() {
     enabled: step === "vars",
   });
 
-  const { data: sites = [], isLoading: sitesLoading } = useQuery<string[]>({
+  const { data: sites = [], isLoading: sitesLoading, error: sitesError } = useQuery<string[]>({
     queryKey: ["sites"],
     queryFn: () => api.get<string[]>("/api/day1/sites"),
     staleTime: 60_000,
@@ -593,7 +594,7 @@ export default function NewClusterPage() {
   const detectedSite = trimmedName ? siteFromName(trimmedName, sites) : null;
   const site = siteChoice ?? detectedSite ?? "";
 
-  const { data: mces = [], isLoading: mcesLoading } = useQuery<Mce[]>({
+  const { data: mces = [], isLoading: mcesLoading, error: mcesError } = useQuery<Mce[]>({
     queryKey: ["mces", site],
     queryFn: () => api.get<Mce[]>(`/api/day1/mces?site=${encodeURIComponent(site)}`),
     enabled: Boolean(site),
@@ -605,7 +606,7 @@ export default function NewClusterPage() {
   const selectedMce = mces.find((m) => m.name === mce);
   const offConventionMces = mces.filter((m) => !m.follows_convention);
 
-  const { data: ocpVersions = [] } = useQuery<string[]>({
+  const { data: ocpVersions = [], isLoading: versionsLoading, error: versionsError } = useQuery<string[]>({
     queryKey: ["openshift-versions"],
     queryFn: () => api.get<string[]>("/api/day1/specs/versions/openshift"),
     staleTime: 300_000,
@@ -646,8 +647,9 @@ export default function NewClusterPage() {
   const formValues = dynamicValues ?? seededValues;
   const presetKeys = Object.keys(selectedSpec?.spec.day1.values ?? {});
 
+  // A failed MCE read is not "no MCE of this env": check the name only against MCEs that loaded.
   const namingIssues = trimmedName
-    ? nameProblems(trimmedName, site, selectedMce, site && !mcesLoading ? mces : undefined)
+    ? nameProblems(trimmedName, site, selectedMce, site && !mcesLoading && !mcesError ? mces : undefined)
     : [];
   const namePlaceholder = `ocp4-${selectedMce?.env ?? "<env>"}-<name>-${site || "<site>"}`;
 
@@ -830,10 +832,14 @@ export default function NewClusterPage() {
           ) : specsError ? (
             <ProblemList error={specsError} title="The specs could not be loaded" />
           ) : specs?.length === 0 ? (
-            <div className="bg-card rounded-xl border p-8 text-center text-muted-foreground">
-              No specs available.{" "}
-              <Link href="/specs/new" className="text-primary hover:underline">Create a spec first</Link>.
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No specs yet"
+              description="A cluster is created from a cluster spec. Create one first."
+              action={<EmptyStateLink href="/specs/new">New spec</EmptyStateLink>}
+              bordered
+              data-testid="specs-empty"
+            />
           ) : (
             specs?.map((spec) =>
               spec.load_error ? (
@@ -915,7 +921,12 @@ export default function NewClusterPage() {
                     value={site || null}
                     onValueChange={(v) => { setSiteChoice(v); setMceChoice(null); }}
                     disabled={sitesLoading || sites.length === 0}
-                    placeholder={sitesLoading ? "Loading sites…" : sites.length === 0 ? "No sites in the day1 repo" : "Select site…"}
+                    placeholder={
+                      sitesLoading ? "Loading sites…"
+                        : sitesError ? "Sites could not be loaded"
+                        : sites.length === 0 ? "No sites in the day1 repo"
+                        : "Select site…"
+                    }
                     searchPlaceholder="Search sites…"
                     emptyMessage="No site matches."
                     data-testid="site-select"
@@ -924,6 +935,7 @@ export default function NewClusterPage() {
                   {!siteChoice && detectedSite && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
                   )}
+                  {Boolean(sitesError) && <ProblemList error={sitesError} title="The sites could not be loaded" />}
                 </div>
                 <div className="space-y-1.5 min-w-0">
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -942,6 +954,7 @@ export default function NewClusterPage() {
                     placeholder={
                       !site ? "Select site first…"
                         : mcesLoading ? "Loading MCEs…"
+                        : mcesError ? "MCEs could not be loaded"
                         : mces.length === 0 ? "No MCEs on this site"
                         : "Select MCE…"
                     }
@@ -953,6 +966,7 @@ export default function NewClusterPage() {
                   {!mceChoice && detectedMce && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
                   )}
+                  {Boolean(mcesError) && <ProblemList error={mcesError} title={`The MCEs of ${site} could not be loaded`} />}
                 </div>
               </div>
 
@@ -1028,13 +1042,15 @@ export default function NewClusterPage() {
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   OpenShift Version <span className="text-destructive">*</span>
                 </label>
-                {versionOptions.length > 0 ? (
+                {/* The list when it loads; free text when it is empty or could not be read */}
+                {versionsLoading || (versionOptions.length > 0 && !versionsError) ? (
                   <Combobox
                     size="lg"
                     options={versionOptions}
                     value={ocpVersion || null}
                     onValueChange={setOcpChoice}
-                    placeholder="Select OpenShift version…"
+                    disabled={versionsLoading}
+                    placeholder={versionsLoading ? "Loading versions…" : "Select OpenShift version…"}
                     searchPlaceholder="Search versions…"
                     emptyMessage="No version matches."
                     data-testid="ocp-version-select"
@@ -1050,6 +1066,9 @@ export default function NewClusterPage() {
                     onChange={(e) => setOcpChoice(e.target.value)}
                   />
                 )}
+                {Boolean(versionsError) && (
+                  <ProblemList error={versionsError} title="The OpenShift versions could not be listed: type the version" />
+                )}
                 <p className="text-[11px] text-muted-foreground" data-testid="ocp-version-source">
                   {ocpChoice === null && versionDefault
                     ? `Becomes the file's mastertag; ${versionDefault.source}.`
@@ -1062,6 +1081,8 @@ export default function NewClusterPage() {
           {/* Cluster Configuration — structure from spec, values filled here */}
           {schemaLoading ? (
             <Skeleton className="h-48 rounded-xl" />
+          ) : schemaError ? (
+            <ProblemList error={schemaError} title="The cluster template's inputs could not be loaded" />
           ) : schema.length === 0 ? (
             <div className="rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm text-status-warning-fg flex items-start gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -1081,12 +1102,9 @@ export default function NewClusterPage() {
                 )}
               </div>
               {infraEnvsError && (
-                <p className="text-xs text-muted-foreground flex items-start gap-1.5" data-testid="infraenv-hint">
-                  <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
-                  <span className="break-words">
-                    InfraEnvs could not be listed from {mce} ({infraEnvsError.message}); type their names.
-                  </span>
-                </p>
+                <div data-testid="infraenv-hint">
+                  <ProblemList error={infraEnvsError} title={`InfraEnvs could not be listed from ${mce}; type their names below`} />
+                </div>
               )}
               <DynamicVariableForm
                 schema={schema}

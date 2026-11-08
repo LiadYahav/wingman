@@ -4,7 +4,38 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ClusterLiveStatus } from "@/types";
 
-/** The HostedCluster and NodePools on the MCE hub, as the status stream reports them. */
+/** The card's rows while the first read is out: phase and version, the HostedCluster, two node pools. */
+function LiveStatusSkeleton() {
+  return (
+    <>
+      <div className="flex items-center gap-4 flex-wrap">
+        <Skeleton className="h-5 w-28" />
+        <Skeleton className="h-5 w-40" />
+      </div>
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-4 w-28 shrink-0" />
+        <Skeleton className="h-4 w-20" />
+      </div>
+      <div>
+        <Skeleton className="h-4 w-20 mb-1.5" />
+        <div className="divide-y divide-border rounded-md border overflow-hidden">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The HostedCluster and NodePools on the MCE hub, as the status stream reports them.
+ * `status` is undefined only while the first read is out: the page shows a failed
+ * read as a problem instead of this card.
+ */
 export function LiveStatusCard({ status, isLoading }: { status: ClusterLiveStatus | undefined; isLoading: boolean }) {
   return (
     <Card>
@@ -22,7 +53,7 @@ export function LiveStatusCard({ status, isLoading }: { status: ClusterLiveStatu
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {isLoading || !status ? (
-          Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />)
+          <LiveStatusSkeleton />
         ) : status.error ? (
           <div className="flex items-start gap-2 text-status-error-fg text-xs">
             <XCircle className="h-4 w-4 shrink-0" />
@@ -77,7 +108,9 @@ export function LiveStatusCard({ status, isLoading }: { status: ClusterLiveStatu
               )}
             </div>
 
-            {status.node_pools.length > 0 && (
+            {status.node_pools.length === 0 ? (
+              <p className="text-muted-foreground" data-testid="live-status-no-node-pools">No node pools reported</p>
+            ) : (
               <div>
                 <p className="text-muted-foreground mb-1.5">Node Pools</p>
                 <div className="divide-y divide-border rounded-md border overflow-hidden">
