@@ -113,12 +113,15 @@ function ruleEntries(values: Record<string, unknown>): ConfigEntry[] | null {
   return first.map((name) => ({ name }));
 }
 
-/** The locks day1 enforces for this flavor, as `enforced_locks` decides them. */
+/**
+ * The locks day1 enforces for this flavor: its `enforced_locks` (§5). A day1
+ * that predates that field is answered by the same rules, repeated here.
+ */
 export function flavorLocks(spec: SpecEntry): FlavorLocks {
   const values = spec.spec.day1.values ?? {};
   const locked = new Map<string, unknown>();
   let rule: ConfigEntry[] | null = null;
-  for (const path of spec.spec.day1.locked_paths ?? []) {
+  for (const path of spec.enforced_locks ?? spec.spec.day1.locked_paths ?? []) {
     if (path === CONFIGS_RULE) {
       rule = ruleEntries(values);
       continue;
