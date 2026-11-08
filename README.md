@@ -104,7 +104,7 @@ wingman/
 
 | Feature | Description |
 |---------|-------------|
-| **Two-phase spec/cluster form** | Specs define structure + "immutable after create" hints; clusters fill values. The form adapts to the spec shape at cluster-creation time — nodepool count is locked by the spec. |
+| **Two-phase spec/cluster form** | Specs (flavors) set the nodepools a cluster starts with, presets and locked values; clusters fill the rest. The create form shows a locked value read-only, prefills presets, starts each nodepool (and one added at create) with the team's machine-config defaults, picks configs and hardware types from `mc-files/`, and shows day1's problems at their fields (ADR-0026 to ADR-0029). |
 | **Marketplace addon picker** | Browse and select Day2 addons from a marketplace UI on the spec creation/edit pages. Configure which fields are overrideable per cluster. |
 | **YAML fields everywhere** | Dynamic form fields accept plain YAML — no JSON syntax required. Scalars (`high-perf-tuned`), maps, and lists all work naturally. |
 | **Sites and MCEs from GitLab folders** | Site and MCE dropdowns list the day1 repo's folders. They are read-only: Wingman never creates a site or an MCE (ADR-0018). |

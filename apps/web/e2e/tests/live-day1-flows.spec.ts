@@ -96,7 +96,7 @@ test("the dashboard counts the clusters and specs; the sidebar and the docs are 
   await expect(clusters).toContainText(/\d+/);
   await expect(clusters).toContainText(/\d+ specs?/);
   const nav = alice.getByLabel("Main");
-  for (const page of ["Clusters", "Specs", "Addons", "Approvals", "Audit", "Documentation"]) {
+  for (const page of ["Clusters", "Flavors", "Addons", "Approvals", "Audit", "Documentation"]) {
     await expect(nav.getByRole("link", { name: new RegExp(`^${page}`) })).toBeVisible();
   }
 
@@ -118,8 +118,15 @@ test("create a cluster from a spec opens an MR its requester cannot approve", as
   await alice.getByPlaceholder("e.g. 7").fill("7");
   const infraEnvs = alice.getByPlaceholder("e.g. dell-r660-site1-128c-1024gb-5tb");
   for (let i = 0; i < (await infraEnvs.count()); i++) await infraEnvs.nth(i).fill(`dell-r660-site1-pool${i + 1}`);
-  const configs = alice.getByPlaceholder("e.g. worker-kubeletconfig-reserved");
-  for (let i = 0; i < (await configs.count()); i++) await configs.nth(i).fill("workers-chrony-configuration");
+  // Each nodepool starts with the nodepool defaults (nm-conf, workers-chrony-configuration,
+  // nic-ring-buffer); its nm-conf needs the nodepool's hardware type
+  const hardwareTypes = alice.getByRole("combobox", { name: /configs: entry \d+ hardware type$/ });
+  await expect(hardwareTypes.first()).toBeVisible();
+  for (let i = 0; i < (await hardwareTypes.count()); i++) {
+    await hardwareTypes.nth(i).click();
+    await alice.getByRole("option").filter({ has: alice.getByText("dell", { exact: true }) }).click();
+    await expect(alice.getByRole("option")).toHaveCount(0);
+  }
   // The spec's addon is found in the day2 catalog, so its full values can be edited
   await expect(alice.getByTestId("addon-redbull-cluster-roles").getByRole("button", { name: "Full Values" })).toBeVisible();
 

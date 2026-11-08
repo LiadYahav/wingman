@@ -17,6 +17,7 @@ import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState } from "@/components/common/empty-state";
 import { DriftBadge } from "@/components/clusters/drift-badge";
 import { ClusterDriftPanel } from "@/components/clusters/cluster-drift";
+import { SyncDialog } from "@/components/clusters/sync-dialog";
 import { DeleteWorkflowPanel } from "@/components/clusters/delete-workflow-panel";
 import { LiveStatusCard } from "@/components/clusters/live-status-card";
 import {
@@ -146,7 +147,10 @@ function ClusterDetailContent() {
     queryKey: ["clusters", name, "drift"],
     queryFn: () => api.get<ClusterDrift>(`${path}/drift${where}`),
     enabled: Boolean(cluster),
-    staleTime: 60_000,
+    // A sync or install merged by someone else changes it: ask again on every visit,
+    // showing the last answer (from the stored cache, too) meanwhile. Not
+    // refetchOnMount: the query is still disabled when the page mounts.
+    staleTime: 0,
   });
 
   // The cluster's charts as day2 lists them (a bare name, narrowed by its MCE):
@@ -243,6 +247,7 @@ function ClusterDetailContent() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [deleteReviewOpen, setDeleteReviewOpen] = useState(false);
   const [fixingAddon, setFixingAddon] = useState<AddonDrift | null>(null);
+  const [syncOpen, setSyncOpen] = useState(false);
 
   /**
    * Install a missing spec addon on day2 with the values requested at create,
@@ -266,10 +271,11 @@ function ClusterDetailContent() {
     onError: (e) => toast.error(writeErrorTitle(e, "Fix failed"), { description: errorMessages(e).join(" · ") }),
   });
 
+  /** One day2 MR per missing addon: the drift tab's Fix all, and what a sync leaves to day2. */
   const fixAllMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (entries: AddonDrift[]) => {
       const opened: ChangeResult[] = [];
-      for (const entry of drift?.addon_drift ?? []) opened.push(await fixAddon(entry));
+      for (const entry of entries) opened.push(await fixAddon(entry));
       return opened;
     },
     onSuccess: (mrs) => {
@@ -536,8 +542,9 @@ function ClusterDetailContent() {
             error={driftError}
             isAdmin={isAdmin}
             onFix={setFixingAddon}
-            onFixAll={() => fixAllMutation.mutate()}
+            onFixAll={() => fixAllMutation.mutate(drift?.addon_drift ?? [])}
             fixAllPending={fixAllMutation.isPending}
+            onSync={() => setSyncOpen(true)}
           />
         </TabsContent>
 
@@ -608,6 +615,15 @@ function ClusterDetailContent() {
         </div>
         <DeleteWorkflowPanel name={name} where={where} isAdmin={isAdmin} />
       </ReviewDialog>
+
+      {syncOpen && (
+        <SyncDialog
+          name={name}
+          where={where}
+          onClose={() => setSyncOpen(false)}
+          onInstallAddons={(entries) => fixAllMutation.mutateAsync(entries)}
+        />
+      )}
 
       {fixingAddon && (
         <ReviewDialog

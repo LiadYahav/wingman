@@ -12,7 +12,7 @@ const navGroups = [
       { label: "Dashboard", href: "/", icon: LayoutDashboard, exact: true },
       { label: "Clusters", href: "/clusters", icon: Server },
       { label: "Destinations", href: "/destinations", icon: Network },
-      { label: "Specs", href: "/specs", icon: Layers },
+      { label: "Flavors", href: "/specs", icon: Layers },
       { label: "Addons", href: "/addons", icon: Package },
     ],
   },

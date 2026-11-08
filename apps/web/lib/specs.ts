@@ -66,11 +66,15 @@ export function specDocument(spec: ClusterSpec): ClusterSpec {
   };
 }
 
-/** `nodepools: [{}, {}]` → `["2 nodepools"]`: the list counts every cluster of the spec gets. */
+/** `nodepools: [{}, {}]` → `["2 nodepools"]`, `[{}]` → `["1 nodepool"]`: the list counts every cluster of the flavor gets. */
 export function structureSummary(structure: Record<string, unknown> | undefined): string[] {
   return Object.entries(structure ?? {})
     .filter(([, value]) => Array.isArray(value))
-    .map(([key, value]) => `${(value as unknown[]).length} ${key.replace(/_/g, " ")}`);
+    .map(([key, value]) => {
+      const count = (value as unknown[]).length;
+      const noun = key.replace(/_/g, " ");
+      return `${count} ${count === 1 ? noun.replace(/s$/, "") : noun}`;
+    });
 }
 
 /** A preset value as one line: scalars as is, lists and maps as compact JSON. */

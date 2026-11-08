@@ -262,14 +262,14 @@ export default function DashboardPage() {
             href="/specs/new"
             className={buttonVariants({ variant: "outline", size: "sm" })}
           >
-            New Spec
+            New Flavor
           </Link>
         )}
         <Link
           href="/specs"
           className={buttonVariants({ variant: "ghost", size: "sm" })}
         >
-          Browse Specs
+          Browse Flavors
         </Link>
       </div>
     </div>

@@ -337,7 +337,7 @@ export default function DocsPage() {
             <FeatureCard
               icon={RefreshCw}
               title="Drift Detection"
-              description="Checks that a cluster has every addon its spec lists. A version that differs from the spec is reported, never changed. When Wingman cannot tell, it says unknown, never in sync."
+              description="Checks that a cluster holds every value its flavor locks and has every add-on it lists, and syncs it back in one MR. A version that differs from the flavor is reported, never changed. When Wingman cannot tell, it says unknown, never in sync."
             />
             <FeatureCard
               icon={GitPullRequest}
@@ -671,9 +671,15 @@ spec:
               </p>
             </Step>
             <Step n={3} title="Cluster configuration">
-              The fields are the inputs of the shared template. With the default template: the owner unit (merkaz,
-              anaf, mador) and, per nodepool, its InfraEnv, replicas, configs, node labels and tuning config. Map and
-              list fields take plain YAML. Fields the spec presets are filled in already.
+              The fields are the inputs of the shared template. With the default template: the owner numbers
+              (merkaz, anaf, mador: digits only) and, per nodepool, its InfraEnv, replicas, machine configs, node
+              labels and tuning config. A field the flavor <strong>presets</strong> is filled in and can be changed;
+              a field it <strong>locks</strong> is shown read-only with the flavor&apos;s value. Machine configs come
+              from a picker of the day1 repo&apos;s <InlineCode>mc-files/</InlineCode>: a static config by name, or{" "}
+              <InlineCode>nm-conf</InlineCode> with a hardware type, the cluster&apos;s own network config, written as{" "}
+              <InlineCode>{"nm-conf-<clusterName>-<hardware>"}</InlineCode>. A nodepool you add starts with the
+              team&apos;s defaults (<InlineCode>nodepool-defaults.yaml</InlineCode> in the specs repo), unless the
+              flavor locks its configs. Every refusal shows at its field.
             </Step>
             <Step n={4} title="Addon configuration">
               If the spec lists addons, set the values it lets you set for each (or switch to{" "}
@@ -954,18 +960,20 @@ cluster               …/{cluster}/{chart}/values.yaml
 
         {/* Drift */}
         <section>
-          <SectionHeader id="drift" icon={RefreshCw} title="Drift Detection" subtitle="Know when a cluster lacks what its spec lists" />
+          <SectionHeader id="drift" icon={RefreshCw} title="Drift Detection" subtitle="Know when a cluster differs from its flavor, and sync it back" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            A cluster created from a spec is <strong>drifted</strong> when an addon its spec lists is not installed
-            on it, as Day2 reports. A spec addon installed at another version than the spec names is not drift:
-            Wingman lists it as information and never changes it. Every cluster has one of four states:
+            A cluster that follows a flavor is <strong>drifted</strong> when its file does not hold a value the
+            flavor <strong>locks</strong> (someone edited it by hand, or the cluster was written before it joined
+            the flavor), or when an add-on the flavor lists is not installed on it, as Day2 reports. Presets never
+            drift: changing them is allowed. An add-on installed at another version than the flavor names is not
+            drift either: Wingman lists it as information and never changes it. Every cluster has one of four states:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             {[
-              { title: "In sync", desc: "Every addon the spec lists now (its current version, not necessarily the one the cluster was created from) is installed." },
-              { title: "Drifted", desc: "An addon the spec lists is missing. The Drift tab lists each one with an Install button." },
-              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, or the spec is gone or does not parse. It is never shown as in sync." },
-              { title: "Not linked", desc: "The cluster was not created from a spec, so there is nothing to drift from." },
+              { title: "In sync", desc: "The file holds every value the flavor locks now (its current version, not necessarily the one the cluster was created from), and every add-on it lists is installed." },
+              { title: "Drifted", desc: "A locked value differs, or an add-on is missing. The Drift tab lists each one: Sync to flavor fixes the values, Install the add-ons." },
+              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, the cluster file does not parse, or the flavor is gone or does not parse. It is never shown as in sync." },
+              { title: "Not linked", desc: "The cluster follows no flavor. It can join one from that flavor's page (Add existing clusters)." },
             ].map(({ title, desc }) => (
               <div key={title} className="rounded-xl border bg-card p-4">
                 <p className="text-sm font-semibold mb-1">{title}</p>
@@ -981,15 +989,35 @@ cluster               …/{cluster}/{chart}/values.yaml
               the dashboard counts drifted and unknown clusters separately. A spec&apos;s <strong>Drift</strong> tab
               lists every cluster created from it.
             </Step>
-            <Step n={2} title="Review the addons">
-              Open the cluster → <strong>Drift</strong> tab to see which spec addons are missing, and which are
-              installed at a version other than the spec&apos;s.
+            <Step n={2} title="Review what differs">
+              Open the cluster → <strong>Drift</strong> tab. <strong>Locked values that differ</strong> shows each one
+              with the flavor&apos;s value beside the file&apos;s; for machine configs, the names a sync would add
+              and remove. Where Wingman cannot tell a nodepool&apos;s network hardware (it has no network config, or
+              two), it says so instead of guessing. Below are the missing add-ons, and add-ons installed at another
+              version.
             </Step>
-            <Step n={3} title="Install what is missing">
-              Each missing addon has an <strong>Install</strong> button (admins). It opens a Day2 MR that installs the
-              chart at the team&apos;s default version, with the values requested when the cluster was created.
+            <Step n={3} title="Sync to flavor">
+              <strong>Sync to flavor</strong> (admins) previews one Day1 MR that sets every locked value the file does
+              not hold, and moves the header to the flavor&apos;s current version. It shows the change line by line,
+              asks for the network hardware where a nodepool needs it, and lists every machine config it would
+              remove: confirm each one before the sync can be opened. It never touches <InlineCode>vlanId</InlineCode>,{" "}
+              <InlineCode>dhcp_values</InlineCode>, <InlineCode>mcFiles</InlineCode>, <InlineCode>mcConfigMap</InlineCode>,
+              the CI&apos;s block or your comments.
+            </Step>
+            <Step n={4} title="Install what is missing">
+              Each missing add-on has an <strong>Install</strong> button (admins), and the sync offers to install them
+              after its MR. Each opens a Day2 MR that installs the chart at the team&apos;s default version, with the
+              values requested when the cluster was created.
             </Step>
           </div>
+          <Callout type="warning" title="Merging a sync that changes machine configs rolls nodes">
+            OpenShift applies a nodepool&apos;s new machine configs to every node of it. With the chart&apos;s default
+            (<InlineCode>upgradeType: InPlace</InlineCode>) each node is drained and rebooted, one at a time unless
+            the nodepool sets <InlineCode>inPlace.maxUnavailable</InlineCode>; a nodepool with{" "}
+            <InlineCode>upgradeType: Replace</InlineCode> gets new nodes instead. The sync dialog and the MR say which,
+            per nodepool. Nothing happens until the MR is merged: merge it in a window the cluster&apos;s owners accept.
+          </Callout>
+          <div className="h-4" />
           <Callout type="info" title="Version differences are information only">
             Wingman never offers to move an installed addon to the spec&apos;s version: a cluster follows its
             team&apos;s default. To hold one cluster at a version on purpose, use an <strong>emergency pin</strong> on

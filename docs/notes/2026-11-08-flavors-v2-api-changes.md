@@ -218,6 +218,10 @@ before (`the cluster template reads an undefined input`).
   Switch the editor to `locked_paths`.
 - **`spec.day1.values`** holds both presets and locked values. A path in
   `locked_paths` is locked; every other value is a preset.
+- **`enforced_locks`** (new, list items and detail): the `locked_paths` a
+  create enforces, as day1 decides them; a stored lock that breaks the rules
+  (listed in `warnings`) is not in it. Show a field as locked only when its
+  path is here.
 - **`warnings`** (new, list items and detail): the flavor rules a stored
   spec breaks; it still loads, but saving it unchanged would be refused.
   They cover values that could break the file, owners, and locks. (Config
@@ -310,8 +314,10 @@ form starts with.
   `nodepools[0].configs`, presets `nodepools[0].replicas: 2`.
 - `agent-single` and `agent-standard` still use `immutable_paths: []`, so
   they also prove the alias.
-- The live create in `e2e/tests/live-day1-flows.spec.ts` now types
-  `workers-chrony-configuration` (it typed a name that does not exist).
+- The live create in `e2e/tests/live-day1-flows.spec.ts` keeps the nodepool
+  defaults the create form fills in and picks each nodepool's hardware type
+  (it typed a name that does not exist before stage 1, then
+  `workers-chrony-configuration` until the form's config picker).
 
 ## 9. New: the configs rule `nodepools[*].configs` (ADR-0029)
 
