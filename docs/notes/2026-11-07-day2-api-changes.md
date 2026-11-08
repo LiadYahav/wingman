@@ -26,6 +26,7 @@ changed. Request bodies now refuse unknown fields (422).
 | `GET /api/day2/clusters/{id}` | one of those |
 | `GET /api/day2/clusters/{id}/upgrade-check?to=<version>` | `{cluster, from_version, to_version, warnings}`: pinned charts lacking `ocp-versions/<to>/` |
 | `GET /api/day2/lints[?team=]` | every finding `{rule, severity, message, team, path, cluster, chart}` |
+| `GET /api/day2/build` | `{version, commit}`: the `WINGMAN_VERSION` and `WINGMAN_COMMIT` the service runs |
 | `GET /health/live`, `/health/ready`, `/metrics` | probes and Prometheus (not under `/api`) |
 
 Removed: `GET /api/day2/cache/stats`.

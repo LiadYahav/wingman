@@ -10,6 +10,9 @@ RFC 9457 errors (ADR-0004), request ids, metrics and ``/metrics``
 - ``/health/ready``: each readiness check passes within a timeout. Its body is
   a plain object, not a problem document: it is read by probes, not by the
   web app (as in server-scan).
+- ``<api_prefix>/build`` (any logged-in user): the ``version`` and ``commit``
+  the service runs, as ``wingman_build_info`` reports them; the web's settings
+  page shows them.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from fastapi.responses import JSONResponse
 
 from wingman_core.infrastructure.session_tokens import SessionTokens
 from wingman_core.observability.metrics import WingmanMetrics
+from wingman_core.web.auth import CurrentUser
 from wingman_core.web.exception_handlers import register_exception_handlers
 from wingman_core.web.metrics import install_metrics
 from wingman_core.web.request_context import RequestIdMiddleware
@@ -41,6 +45,8 @@ def create_base_app(
     *,
     title: str,
     version: str,
+    commit: str,
+    api_prefix: str,
     metrics: WingmanMetrics,
     session_tokens: SessionTokens,
     readiness: Mapping[str, ReadinessCheck] | None = None,
@@ -49,6 +55,8 @@ def create_base_app(
 ) -> FastAPI:
     """A FastAPI app with Wingman's middleware, handlers, metrics and health routes.
 
+    ``api_prefix`` is where the service's routes live (``/api/day1``); the
+    build route goes under it, so the proxy in front routes it like the rest.
     ``cors_origins`` must be explicit origins: the web app is served from the
     same origin as the API, so the default is no CORS at all, and ``*`` is
     refused.
@@ -69,7 +77,15 @@ def create_base_app(
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     _add_health_routes(app, dict(readiness or {}))
+    _add_build_route(app, f"{api_prefix.rstrip('/')}/build", version=version, commit=commit)
     return app
+
+
+def _add_build_route(app: FastAPI, path: str, *, version: str, commit: str) -> None:
+    @app.get(path, tags=["build"])
+    async def build(_: CurrentUser) -> dict[str, str]:
+        """The build this service runs (``WINGMAN_VERSION``, ``WINGMAN_COMMIT``)."""
+        return {"version": version, "commit": commit}
 
 
 def _add_health_routes(app: FastAPI, checks: dict[str, ReadinessCheck]) -> None:

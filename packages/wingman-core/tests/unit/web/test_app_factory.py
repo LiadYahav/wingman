@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from prometheus_client import CollectorRegistry
 
 from wingman_core.application.approvals import SelfApprovalError, UnmanagedProjectError
+from wingman_core.domain.users import Role, User
 from wingman_core.infrastructure.session_tokens import SessionTokens
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.web import app_factory
@@ -23,7 +24,9 @@ def make_app(
 ) -> FastAPI:
     return create_base_app(
         title="t",
-        version="0",
+        version="1.4.0",
+        commit="abc1234",
+        api_prefix="/api/t/",
         metrics=WingmanMetrics(CollectorRegistry(), component="t", version="0", commit="0"),
         session_tokens=SessionTokens("s" * 40, ttl=timedelta(hours=1)),
         readiness=readiness,
@@ -74,6 +77,20 @@ async def test_readiness_reports_each_check(monkeypatch: pytest.MonkeyPatch) -> 
         "b": "error: ConnectionError",
         "c": "timeout",
     }
+
+
+async def test_the_build_is_shown_to_a_logged_in_user_under_the_api_prefix() -> None:
+    app = make_app()
+    assert (await get(app, "/api/t/build")).status_code == 401
+    token = SessionTokens("s" * 40, ttl=timedelta(hours=1)).issue(User("ann", Role.VIEWER))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://t"
+    ) as client:
+        response = await client.get("/api/t/build", headers={"authorization": f"Bearer {token}"})
+    assert (response.status_code, response.json()) == (
+        200,
+        {"version": "1.4.0", "commit": "abc1234"},
+    )
 
 
 async def test_wildcard_cors_is_refused_and_explicit_origins_work() -> None:

@@ -101,6 +101,8 @@ def create_app(
     app = create_base_app(
         title="Wingman day2",
         version=config.runtime.version,
+        commit=config.runtime.commit,
+        api_prefix="/api/day2",
         metrics=metrics,
         session_tokens=SessionTokens(
             config.auth.jwt_secret_key.get_secret_value(),

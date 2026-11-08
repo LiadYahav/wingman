@@ -298,6 +298,8 @@ def create_app(
     app = create_base_app(
         title="Wingman day1",
         version=runtime.version,
+        commit=runtime.commit,
+        api_prefix="/api/day1",
         metrics=metrics,
         session_tokens=session_tokens,
         readiness={"gitlab": lambda: gitlab.get_project(day1_project)},

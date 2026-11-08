@@ -177,6 +177,9 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     empty (it accepted anyone) and 401 on a wrong token.
 32. New: `GET /health/live`, `GET /health/ready` (GitLab reachable),
     `GET /metrics` (service port only); `/healthz` is kept.
+33. New: `GET /api/day1/build` (any logged-in user): `{version, commit}`,
+    the `WINGMAN_VERSION` and `WINGMAN_COMMIT` the service runs (the
+    settings page shows them).
 
 ## Deployment (chart) changes
 
