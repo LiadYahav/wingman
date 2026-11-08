@@ -11,6 +11,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState, NoMatches } from "@/components/common/empty-state";
+import { ProblemList } from "@/components/common/problem-list";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
 import type { CatalogEntry } from "@/types/day2";
 
@@ -269,11 +271,15 @@ export default function AddonsPage() {
           <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
             Addon Catalog
           </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {isLoading
-              ? "Loading catalog..."
-              : `${total} chart${total === 1 ? "" : "s"} across ${teams} team${teams === 1 ? "" : "s"}${warned ? ` · ${warned} with warnings` : ""}`}
-          </p>
+          {isLoading ? (
+            <Skeleton className="mt-1.5 h-4 w-56" />
+          ) : (
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {data
+                ? `${total} chart${total === 1 ? "" : "s"} across ${teams} team${teams === 1 ? "" : "s"}${warned ? ` · ${warned} with warnings` : ""}`
+                : "The charts the team repos offer"}
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -325,9 +331,7 @@ export default function AddonsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load the catalog. Please try again.
-        </div>
+        <ProblemList error={error} title="The catalog could not be loaded" />
       ) : isLoading ? (
         <div className="space-y-6">
           {Array.from({ length: 2 }).map((_, i) => (
@@ -341,14 +345,20 @@ export default function AddonsPage() {
             </div>
           ))}
         </div>
+      ) : total === 0 ? (
+        <EmptyState
+          icon={Package}
+          bordered
+          title="No charts yet"
+          description={
+            <>
+              A team&apos;s charts appear here once its repo has <code>operators/&lt;chart&gt;/</code>.
+            </>
+          }
+          data-testid="catalog-empty"
+        />
       ) : byTeam.size === 0 ? (
-        <div className="rounded-xl border bg-card p-16 text-center shadow-sm">
-          <Package className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-          <p className="text-sm font-semibold">{search ? "No chart matches your search" : "No charts yet"}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {search ? "Try another name or team" : "A team's charts appear here once its repo has operators/<chart>/"}
-          </p>
-        </div>
+        <NoMatches what="charts" onClear={() => setSearch("")} clearLabel="Clear search" bordered />
       ) : (
         <div className="space-y-8">
           {[...byTeam.entries()]

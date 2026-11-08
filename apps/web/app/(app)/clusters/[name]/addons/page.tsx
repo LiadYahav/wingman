@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Layers, RefreshCw, Users } from "lucide-react";
+import { ArrowLeft, ExternalLink, Layers, Package, PackageCheck, RefreshCw, Users } from "lucide-react";
 import { api } from "@/lib/api-client";
 import {
   candidatesOf,
@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/common/empty-state";
+import { ProblemList } from "@/components/common/problem-list";
 import { FindingsList } from "@/components/addons/findings";
 import { ArgoNote, DestinationFacts, UpgradeCheckPanel } from "@/components/addons/destination-header";
 import { InstalledChartCard, type DestinationRef } from "@/components/addons/installed-chart-card";
@@ -39,14 +41,43 @@ function groupByTeam<T extends { team: string }>(items: T[]): [string, T[]][] {
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
 
-function SectionHeading({ title, count, children }: { title: string; count: number; children?: React.ReactNode }) {
+/** `count` is left out when it is unknown (its read failed). */
+function SectionHeading({ title, count, children }: { title: string; count?: number; children?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between border-b pb-1">
       <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
         {title}
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">{count}</span>
+        {count !== undefined && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">{count}</span>
+        )}
       </h2>
       {children}
+    </div>
+  );
+}
+
+/** The installed section while the charts load: its heading, the Argo note and a team of cards. */
+function ChartsSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" data-testid="charts-loading">
+      <div className="flex items-center gap-2 border-b pb-1.5">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-5 w-7 rounded-full" />
+      </div>
+      <Skeleton className="h-3.5 w-3/4" />
+      {Array.from({ length: 2 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-3.5 w-3.5 rounded-full" />
+            <Skeleton className="h-3.5 w-28" />
+          </div>
+          <div className="space-y-2 pl-5">
+            {Array.from({ length: 2 - i }).map((_, j) => (
+              <Skeleton key={j} className="h-14 rounded-xl" />
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -173,21 +204,15 @@ function ClusterCharts() {
       candidates.length > 1 ? (
         <CandidatePicker name={key} candidates={candidates} />
       ) : (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          {problem.detail}{" "}
-          <Link href="/destinations" className="font-medium underline underline-offset-2">
+        <div className="space-y-3">
+          <ProblemList error={charts.error} title={`The charts of ${key} could not be loaded`} />
+          <Link href="/destinations" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Browse destinations
           </Link>
         </div>
       );
   } else if (!data || !ref || catalog.isLoading) {
-    body = (
-      <div className="space-y-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-14 rounded-xl" />
-        ))}
-      </div>
-    );
+    body = <ChartsSkeleton />;
   } else {
     body = (
       <div className="space-y-10">
@@ -195,9 +220,19 @@ function ClusterCharts() {
           <SectionHeading title="Installed" count={installed.length} />
           <ArgoNote note={data.argocd_note} />
           {installed.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No team deploys a chart to {data.cluster} yet.
-            </div>
+            <EmptyState
+              icon={Package}
+              bordered
+              title={`No team deploys a chart to ${data.cluster} yet`}
+              description={
+                available.length === 0
+                  ? undefined
+                  : canWrite
+                    ? "Install one from the Available charts below."
+                    : "The charts that can be installed here are listed under Available below."
+              }
+              data-testid="installed-empty"
+            />
           ) : (
             <div className="space-y-6">
               {groupByTeam(installed).map(([team, items]) => (
@@ -243,7 +278,40 @@ function ClusterCharts() {
           {data.kind !== "hub" && <UpgradeCheckPanel clusterId={data.id} from={data.ocp_version} />}
         </section>
 
-        {available.length > 0 && (
+        {!catalog.data ? (
+          <section className="space-y-4" aria-label="Available">
+            <SectionHeading title="Available" />
+            {catalog.error ? (
+              <ProblemList error={catalog.error} title="The catalog could not be loaded, so the charts to install are unknown" />
+            ) : (
+              <Skeleton className="h-14 rounded-xl" />
+            )}
+          </section>
+        ) : available.length === 0 ? (
+          <section className="space-y-4" aria-label="Available">
+            <SectionHeading title="Available" count={0} />
+            {catalog.data.length === 0 ? (
+              <EmptyState
+                icon={Package}
+                bordered
+                title="The catalog is empty"
+                description={
+                  <>
+                    A team&apos;s charts appear here once its repo has <code>operators/&lt;chart&gt;/</code>.
+                  </>
+                }
+                data-testid="available-empty"
+              />
+            ) : (
+              <EmptyState
+                icon={PackageCheck}
+                bordered
+                title="Every catalog chart is installed here"
+                data-testid="available-empty"
+              />
+            )}
+          </section>
+        ) : (
           <section className="space-y-4" aria-label="Available">
             <SectionHeading title="Available" count={available.length}>
               {canWrite && (

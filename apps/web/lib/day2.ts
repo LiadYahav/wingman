@@ -273,8 +273,9 @@ export function bulkProblemsOf(problem: Problem): BulkProblem[] {
 
 /** The sentence to show for a refused write. */
 export function writeErrorMessage(problem: Problem): string {
-  if (isAmbiguousWrite(problem)) {
-    return `GitLab did not confirm the change, so it may or may not have been made. Check the team repo for the MR before trying again. ${problem.detail}`;
-  }
-  return problem.detail;
+  return isAmbiguousWrite(problem) ? `${AMBIGUOUS_WRITE_HINT} ${problem.detail}` : problem.detail;
 }
+
+/** What an unconfirmed write (ADR-0006) means for the person who asked for it. */
+export const AMBIGUOUS_WRITE_HINT =
+  "GitLab did not confirm the change, so it may or may not have been made. Check the team repo for the MR before trying again.";
