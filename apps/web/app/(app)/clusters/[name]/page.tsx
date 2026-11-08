@@ -147,7 +147,10 @@ function ClusterDetailContent() {
     queryKey: ["clusters", name, "drift"],
     queryFn: () => api.get<ClusterDrift>(`${path}/drift${where}`),
     enabled: Boolean(cluster),
-    staleTime: 60_000,
+    // A sync or install merged by someone else changes it: ask again on every visit,
+    // showing the last answer (from the stored cache, too) meanwhile. Not
+    // refetchOnMount: the query is still disabled when the page mounts.
+    staleTime: 0,
   });
 
   // The cluster's charts as day2 lists them (a bare name, narrowed by its MCE):
