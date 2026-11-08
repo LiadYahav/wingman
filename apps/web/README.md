@@ -4,16 +4,17 @@ Next.js frontend for the Wingman Internal Developer Platform.
 
 ## Features
 
-- **Cluster Management**: Create, view, and manage OpenShift clusters with drift detection
-- **Spec Templates**: Define cluster templates with Day1 provisioning, Day2 addons, and immutable field flags
+- **Cluster Management**: Create, edit and delete hosted clusters by MR; each is one values file for the hostedclusters-setup chart, with `vlanId`/`dhcp_values` (allocate-segment workflow) and `mcFiles`/`mcConfigMap` (CI) left to automation and shown as pending until written
+- **Specs**: Presets for the create form (nodepool shape, preset template inputs, the Day2 addons a cluster should get); every spec fills the one shared `cluster-template.j2`, and "immutable after create" is a hint, not enforced
+- **Drift**: a cluster is drifted when it lacks an addon its spec lists, and the fix installs it at the team default; a version other than the spec's is reported, never fixed (ADR-0025); unknown is never shown as in sync
 - **Two-Phase Cluster Form**: Specs define structure; clusters fill values — nodepool count is locked by spec
 - **Marketplace Addon Picker**: Browse and select Day2 addons on spec creation/edit pages
-- **Charts per Destination**: Install, edit and remove Day2 charts on the hub, MCEs, hosted and UPI clusters; every value shows the layer that set it
+- **Charts per Destination**: Install, edit and remove Day2 charts on the hub, MCEs, hosted and UPI clusters; every value shows the layer that set it; bulk install opens one MR per team; a version of its own is a confirmed emergency pin; a removal leaves the workload running (`argocd app delete --cascade` tears it down)
 - **Destinations and Lints**: Every place teams deploy to, and every check on the team repos
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
 - **Sites and MCEs are read-only**: picked from the day1 repo's folders (Wingman never creates them); the MCE's mastertag is the default OpenShift version
 - **Naming convention**: new cluster names must follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing off-convention names are flagged, not hidden
-- **Approval Workflow**: Aggregated view of open MRs from all platform repositories; an approval names the commit the reviewer saw, so a branch that moved since is refused
+- **Approval Workflow**: Aggregated view of open MRs from the day1, specs and team repos; an approval names the commit the reviewer saw, so a branch that moved since is refused, and nobody approves their own change
 - **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
 - **In-App Documentation**: Full platform guide at `/docs`
 
@@ -111,7 +112,7 @@ test("can configure addon fields", async ({ page }) => {
 app/
 ├── (app)/              # Authenticated routes
 │   ├── clusters/       # Cluster management pages
-│   ├── specs/          # Spec template pages
+│   ├── specs/          # Spec pages (presets for the create form)
 │   ├── addons/         # Addon catalog
 │   ├── destinations/   # Day2 destinations (hub, MCEs, hosted, UPI)
 │   ├── lints/          # Day2 lint findings
