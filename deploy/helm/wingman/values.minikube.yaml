@@ -7,7 +7,7 @@
 #   3. minikube addons enable ingress
 #
 # Deploy:
-#   helm install wingman ./chart -f chart/values.minikube.yaml \
+#   helm install wingman ./deploy/helm/wingman -f deploy/helm/wingman/values.minikube.yaml \
 #     --set gitlab.accessToken=<your-gitlab-token> \
 #     --set auth.jwtSecret=$(openssl rand -hex 32) \
 #     --set devAuth.secret=$(openssl rand -hex 16) \

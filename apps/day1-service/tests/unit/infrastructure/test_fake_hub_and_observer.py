@@ -20,7 +20,7 @@ from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.observed import HubOperation, Observer, outcome_of
 
 MCE = "ocp4-prod-mce-site1-a"
-HC = HostedClusterObservation("openshift-x", "hcp-x", None, "4.16.27")
+HC = HostedClusterObservation("ocp4-x", "hcp-x", None, "4.16.27")
 
 
 def fake() -> FakeHubApi:
@@ -37,7 +37,7 @@ def fake() -> FakeHubApi:
 
 async def test_fake_hub_serves_what_was_seeded() -> None:
     hub = fake()
-    assert await hub.hosted_cluster(MCE, namespace="hcp-x", name="openshift-x") == HC
+    assert await hub.hosted_cluster(MCE, namespace="hcp-x", name="ocp4-x") == HC
     assert [p.name for p in await hub.node_pools(MCE, namespace="hcp-x")] == ["a", "b"]
     assert await hub.node_pools(MCE, namespace="hcp-empty") == []
     prep = "ocp4-prep-mce-site1-a"

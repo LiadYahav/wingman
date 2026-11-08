@@ -9,7 +9,7 @@ import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 const workspaceRoot = path.join(__dirname, "../..");
 
 /**
- * Production routes `/api/*` in nginx (chart/templates/nginx-configmap.yaml).
+ * Production routes `/api/*` in nginx (deploy/helm/wingman/templates/nginx-configmap.yaml).
  * `next dev` alone has no backend, so for a local run against the services
  * set WINGMAN_DEV_DAY1_URL and WINGMAN_DEV_DAY2_URL (see README.md): the dev
  * server then proxies the same paths nginx does. The rewrites exist only in

@@ -29,8 +29,8 @@ docker build -t wingman-day2:latest -f apps/day2-service/Dockerfile .
 docker build -t wingman-web:latest -f apps/web/Dockerfile .
 
 # Install with the minikube values: dev login, an Ingress, the local GitLab
-helm upgrade --install wingman ./chart -n wingman --create-namespace \
-  -f chart/values.minikube.yaml \
+helm upgrade --install wingman ./deploy/helm/wingman -n wingman --create-namespace \
+  -f deploy/helm/wingman/values.minikube.yaml \
   --set gitlab.accessToken=<token> \
   --set auth.jwtSecret=$(openssl rand -hex 32) \
   --set devAuth.secret=$(openssl rand -hex 16)
@@ -46,7 +46,7 @@ secrets as values, and do not create that Secret yourself.
 ```bash
 oc new-project wingman
 
-helm upgrade --install wingman ./chart -n wingman \
+helm upgrade --install wingman ./deploy/helm/wingman -n wingman \
   --set gitlab.url=https://gitlab.example.com \
   --set gitlab.accessToken=<token> \
   --set gitlab.day1ProjectId=gitops-day1/platform-config \

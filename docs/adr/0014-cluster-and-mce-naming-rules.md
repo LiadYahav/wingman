@@ -14,7 +14,9 @@ cluster's identity, unique across the estate. Some repos break the rule
 contain dashes in other environments (`site-a`, `bat-yam`), so a name cannot
 be split on dashes to find its site. HyperShift derives the namespace
 `hcp-<cn>-openshift-<cn>`, a DNS label of at most 63 characters, which
-limits `clusterName` to 24 characters.
+limits `clusterName` to 24 characters. (Corrected 2026-11-08: the
+HostedCluster is `ocp4-<cn>`, so the namespace is `hcp-<cn>-ocp4-<cn>` and
+the limit is 26 characters; see ADR-0015.)
 
 ## Decision
 

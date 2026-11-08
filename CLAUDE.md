@@ -24,7 +24,7 @@ layout); the rewrite is in progress (see Current status).
 
 Monorepo: `apps/web` (Next.js 16), `apps/day1-service` and
 `apps/day2-service` (FastAPI), `packages/wingman-core` (the shared core),
-`chart/` (Helm), `dev/gitlab-fixtures` (production-shaped repo trees for
+`deploy/helm/wingman/` (Helm), `dev/gitlab-fixtures` (production-shaped repo trees for
 tests and local GitLab).
 
 ## Standing project conventions — follow without being re-told
@@ -126,7 +126,7 @@ Explicit user instructions; violating one is a real mistake, not style.
   workflow on the MR branch; `mcFiles`/`mcConfigMap` by CI. Wingman writes
   none of them, and must expect those commits on its MR branches.
 - **`clusterName` differs**: production's ApplicationSet strips `ocp4-` from
-  the file name (`openshift-prod-x-site1` in `hcp-prod-x-site1`); the GitHub
+  the file name (HostedCluster `ocp4-prod-x-site1` in `hcp-prod-x-site1`); the GitHub
   sandbox keeps it. Day1 follows `DAY1_CLUSTER_NAME_STRIP_PREFIX` (default
   `ocp4-`; `""` for the sandbox; ADR-0015). See `docs/ecosystem/README.md`.
 - **Naming convention** `ocp4-<env>-<name>-<site>[-<seq>]`; the chart derives

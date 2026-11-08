@@ -10,7 +10,7 @@ Throughout:
 - `<tag>` is the release you deploy, as its image tag: a version such as `3.0.1`
   (the GitHub release and git tag `v3.0.1`, without the `v`). Never `latest`,
   `3.0`, `3` or a `sha-` tag: they move, or name no release (`docs/ops/images.md`).
-- `$CHART` is the `chart/` directory of the repository copy at that release
+- `$CHART` is the `deploy/helm/wingman/` directory of the repository copy at that release
   (git tag `v<tag>`).
 
 ## 1. What changes
@@ -42,7 +42,7 @@ Unchanged:
 ## 2. What to bring in from the connected side
 
 1. **The repository** at the release you deploy (git tag `v<tag>`), as an
-   archive. You need `chart/`, `docs/` and
+   archive. You need `deploy/helm/wingman/`, `docs/` and
    `dev/gitlab-fixtures/wingman/cluster-specs/cluster-template.j2`.
 2. **The three images** of that release: `wingman-day1`, `wingman-day2` and
    `wingman-web`, all with the same `<tag>`. Choose one way:

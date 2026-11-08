@@ -118,7 +118,7 @@ def hub() -> FakeHubApi:
         hosted_clusters={
             PROD_MCE: [
                 HostedClusterObservation(
-                    name="openshift-prod-herzi-site1",
+                    name="ocp4-prod-herzi-site1",
                     namespace="hcp-prod-herzi-site1",
                     phase=None,
                     version="4.16.27",

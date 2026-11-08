@@ -1,6 +1,6 @@
 # Runbook
 
-One section per alert in `chart/files/alerts.rules.yaml`; each alert's
+One section per alert in `deploy/helm/wingman/files/alerts.rules.yaml`; each alert's
 `runbook` annotation points here. Metric meanings are in `metrics.md`.
 `job` is the Service that was scraped (`wingman-day1` or `wingman-day2`).
 

@@ -12,11 +12,11 @@ These tests read the docs' source and compare what they name with the code:
   before ``=``, with what a settings class reads, a problem ``code``
   (ADR-0004) or the short ``NOT_SETTINGS`` allowlist;
 - every ``<status> <CODE>`` with that code's status in ``wingman_core.web.errors``;
-- every Helm key with ``chart/values.yaml``, and every key-to-variable pair
-  with what ``chart/templates/configmap.yaml`` and ``secret.yaml`` set;
+- every Helm key with ``deploy/helm/wingman/values.yaml``, and every key-to-variable pair
+  with what ``deploy/helm/wingman/templates/configmap.yaml`` and ``secret.yaml`` set;
 - and nothing the rewrite removed (``REMOVED``) comes back.
 
-Guarded: ``README.md``, ``DEVELOPMENT.md``, ``chart/README.md``,
+Guarded: ``README.md``, ``DEVELOPMENT.md``, ``deploy/helm/wingman/README.md``,
 ``apps/web/README.md``, ``docs/ops/*.md`` and every file under
 ``apps/web/app/(app)/docs/``. Left out on purpose: ``docs/adr/`` and
 ``docs/notes/`` (history: they name what was true when they were written) and
@@ -54,7 +54,8 @@ from service_settings import read_by_services
 
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
-CHART_README = ROOT / "chart/README.md"
+CHART = ROOT / "deploy/helm/wingman"
+CHART_README = CHART / "README.md"
 PAGE_DIR = ROOT / "apps/web/app/(app)/docs"
 MARKDOWN: tuple[Path, ...] = (
     README,
@@ -406,7 +407,7 @@ INCLUDE = re.compile(r'include\s+"([\w.]+)"')
 
 @cache
 def values_paths() -> Mapping[str, object]:
-    """Every key path in ``chart/values.yaml`` (``gitlab``, ``gitlab.url``, ...) and its default."""
+    """Every key path in the chart's ``values.yaml`` (``gitlab.url``, ...), with its default."""
     paths: dict[str, object] = {}
 
     def walk(node: Mapping[str, object], prefix: str) -> None:
@@ -415,7 +416,7 @@ def values_paths() -> Mapping[str, object]:
             if isinstance(value, dict):
                 walk(value, f"{prefix}{key}.")
 
-    walk(yaml.safe_load((ROOT / "chart/values.yaml").read_text(encoding="utf-8")), "")
+    walk(yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8")), "")
     return paths
 
 
@@ -465,7 +466,7 @@ def helm_keys_named(text: str, *, tsx: bool, chart_readme: bool) -> set[str]:
 @cache
 def chart_env_sources() -> Mapping[str, frozenset[str]]:
     """Each variable the chart sets, and the values keys its template reads (helpers included)."""
-    templates = ROOT / "chart/templates"
+    templates = CHART / "templates"
     helpers_tpl = (templates / "_helpers.tpl").read_text(encoding="utf-8")
     pieces = re.split(r'\{\{-?\s*define\s+"([\w.]+)"', helpers_tpl)
     helpers = dict(itertools.batched(pieces[1:], 2, strict=True))
@@ -481,7 +482,7 @@ def chart_env_sources() -> Mapping[str, frozenset[str]]:
 
 
 def helm_env_pairs(text: str, *, chart_readme: bool) -> set[tuple[str, str]]:
-    """``Helm: key → env: NAME`` on the page; ``| `key` | `NAME` |`` rows in chart/README.md."""
+    """``Helm: key → env: NAME`` on the page; ``| `key` | `NAME` |`` rows in the chart README."""
     pairs = set(HELM_TO_ENV.findall(text))
     if chart_readme:
         for key, sets in CHART_TABLE_ROW.findall(text):
@@ -493,7 +494,7 @@ def helm_env_pairs(text: str, *, chart_readme: bool) -> set[tuple[str, str]]:
 def wrong_helm(text: str, *, tsx: bool, chart_readme: bool) -> list[str]:
     """Helm keys values.yaml does not have, and pairs the chart does not set that way."""
     wrong = [
-        f"{key}: not in chart/values.yaml"
+        f"{key}: not in deploy/helm/wingman/values.yaml"
         for key in helm_keys_named(text, tsx=tsx, chart_readme=chart_readme)
         if not helm_key_exists(key)
     ]
@@ -511,7 +512,7 @@ def wrong_helm(text: str, *, tsx: bool, chart_readme: bool) -> list[str]:
 SENTINEL_NAMES: Mapping[str, frozenset[str]] = {
     "README.md": frozenset({"GITLAB_TOKEN", "DAY2_SIGS_GROUP_PATH", "MCE_INFRAENV_NAMESPACE"}),
     "DEVELOPMENT.md": frozenset({"DAY2_SERVICE_URL", "WINGMAN_GIT_BACKEND", "ROUTERS"}),
-    "chart/README.md": frozenset({"GITLAB_TOKEN", "OPENSHIFT_OAUTH_CLIENT_SECRET"}),
+    "deploy/helm/wingman/README.md": frozenset({"GITLAB_TOKEN", "OPENSHIFT_OAUTH_CLIENT_SECRET"}),
     "apps/web/README.md": frozenset({"WINGMAN_DEV_DAY1_URL", "DEV_AUTH_SECRET"}),
     "docs/ops/images.md": frozenset({"WINGMAN_VERSION", "PYTHON_BUILD_STANDALONE_URL", "VERSION"}),
     "docs/ops/metrics.md": frozenset({"GITLAB_TOKEN"}),
@@ -520,7 +521,7 @@ SENTINEL_NAMES: Mapping[str, frozenset[str]] = {
 }
 SENTINEL_PAIRS: Mapping[str, tuple[str, str]] = {
     PAGE: ("gitlab.day1ProjectId", "DAY1_GITLAB_PROJECT_ID"),
-    "chart/README.md": ("gitlab.accessToken", "GITLAB_TOKEN"),
+    "deploy/helm/wingman/README.md": ("gitlab.accessToken", "GITLAB_TOKEN"),
 }
 MIN_REFUSALS = 8
 MIN_PAGE_PAIRS = 4
@@ -604,7 +605,7 @@ def test_every_status_a_doc_gives_is_its_codes(doc: str) -> None:
 @pytest.mark.parametrize("doc", DOCS)
 def test_every_helm_key_a_doc_names_is_the_charts(doc: str) -> None:
     text, tsx = source(doc)
-    wrong = wrong_helm(text, tsx=tsx, chart_readme=doc == "chart/README.md")
+    wrong = wrong_helm(text, tsx=tsx, chart_readme=doc == "deploy/helm/wingman/README.md")
     assert not wrong, f"{doc} names Helm values the chart does not have: {wrong}"
 
 
@@ -616,7 +617,7 @@ def test_the_page_checks_find_what_they_must() -> None:
 def test_the_chart_readme_checks_find_what_they_must() -> None:
     text = CHART_README.read_text(encoding="utf-8")
     pairs = helm_env_pairs(text, chart_readme=True)
-    assert SENTINEL_PAIRS["chart/README.md"] in pairs
+    assert SENTINEL_PAIRS["deploy/helm/wingman/README.md"] in pairs
     assert len(pairs) >= MIN_CHART_README_PAIRS, f"only {len(pairs)} key → variable pairs found"
     keys = helm_keys_named(text, tsx=False, chart_readme=True)
     assert len(keys) >= MIN_CHART_README_KEYS, f"only {len(keys)} Helm keys found"

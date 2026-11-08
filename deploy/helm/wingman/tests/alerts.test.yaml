@@ -1,5 +1,5 @@
-# promtool unit tests for chart/files/alerts.rules.yaml:
-#   promtool test rules chart/tests/alerts.test.yaml
+# promtool unit tests for deploy/helm/wingman/files/alerts.rules.yaml:
+#   promtool test rules deploy/helm/wingman/tests/alerts.test.yaml
 # Each alert has a case where it fires and, where the threshold matters, one
 # just below it where it does not.
 rule_files:

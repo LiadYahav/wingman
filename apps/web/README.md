@@ -181,7 +181,7 @@ types/
 
 The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. In a deployment,
 nginx routes `/api/auth`, `/api/day1` and `/api/webhooks` to day1 and `/api/day2` to day2
-(`chart/templates/nginx-configmap.yaml`); `proxy.ts` only guards pages.
+(`deploy/helm/wingman/templates/nginx-configmap.yaml`); `proxy.ts` only guards pages.
 
 ### Running against local services
 
