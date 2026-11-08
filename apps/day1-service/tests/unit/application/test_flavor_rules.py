@@ -1,7 +1,8 @@
 """The flavor rules at save and at create, on the seeded in-memory GitLab.
 
-Machine configs resolve by the day1 CI's rule and the network config is
-expanded per cluster (ADR-0027); owners are numbers (ADR-0028).
+A locked value is the flavor's and a create may not send another
+(ADR-0026); machine configs resolve by the day1 CI's rule and the network
+config is expanded per cluster (ADR-0027); owners are numbers (ADR-0028).
 """
 
 from __future__ import annotations
@@ -237,3 +238,158 @@ async def test_a_flavor_preset_owner_is_used_and_checked_at_create(
         CreateCluster(NEW, support.PROD_SITE, support.PROD_MCE, "agent-owned", "1.0.0", variables)
     )
     assert yaml.safe_load(rendered.content)["owner"]["merkaz"] == "0042"
+
+
+# ── Locks ────────────────────────────────────────────────────────────────────
+
+DELL_CONFIGS = [
+    {"name": "nm-conf", "hardware": "dell"},
+    {"name": "workers-chrony-configuration"},
+    {"name": "nic-ring-buffer"},
+]
+
+
+def dell(support: Any, *pools: dict[str, Any]) -> CreateCluster:
+    """A create from the agent-dell fixture flavor (nodepools[0].configs locked)."""
+    return create(support, spec="agent-dell", nodepools=list(pools))
+
+
+async def test_a_locked_value_left_out_of_the_request_is_the_flavors(
+    context: Day1Context, support: Any
+) -> None:
+    rendered = await context.clusters.preview(
+        dell(
+            support,
+            {"infra_env": "dell-r660-site1-128c-1024gb-5tb"},
+            pool({"name": "nic-ring-buffer"}, infra_env="hp-gen11-site1-64c"),
+        )
+    )
+    pools = yaml.safe_load(rendered.content)["nodepool"]
+    assert pools[0]["configs"] == [
+        {"name": "nm-conf-prod-falcon-site1-dell"},
+        {"name": "workers-chrony-configuration"},
+        {"name": "nic-ring-buffer"},
+    ]
+    assert pools[1]["configs"] == [{"name": "nic-ring-buffer"}]  # not locked
+
+
+async def test_a_request_that_sends_the_locked_value_is_accepted(
+    context: Day1Context, support: Any
+) -> None:
+    rendered = await context.clusters.preview(dell(support, pool(*DELL_CONFIGS)))
+    assert "- name: nm-conf-prod-falcon-site1-dell\n" in rendered.content
+
+
+async def test_a_request_that_sends_another_value_for_a_lock_is_refused(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    pid = await support.project_id(gitlab, support.DAY1)
+    request = dell(support, pool({"name": "nm-conf", "hardware": "cisco"}))
+    with pytest.raises(InvalidInputError) as caught:
+        await context.clusters.create(request, user=support.ALICE)
+    (problem,) = caught.value.problems
+    assert problem.startswith("nodepools[0].configs: locked by flavor agent-dell to [")
+    assert problem.endswith('the request sends [{"name": "nm-conf", "hardware": "cisco"}]')
+    assert await gitlab.list_merge_requests(pid, state=None) == []
+
+
+async def test_a_preset_may_be_overridden(context: Day1Context, support: Any) -> None:
+    rendered = await context.clusters.preview(
+        dell(support, {"infra_env": "dell-r660-site1-128c-1024gb-5tb", "replicas": 5})
+    )
+    assert yaml.safe_load(rendered.content)["nodepool"][0]["replicas"] == 5
+
+
+async def push_flavor(gitlab: InMemoryGitLab, support: Any, spec: dict[str, Any]) -> None:
+    name = spec["metadata"]["name"]
+    await support.push(
+        gitlab,
+        support.SPECS,
+        branch="main",
+        file=f"specs/{name}.yaml",
+        content=yaml.safe_dump(spec),
+    )
+
+
+async def test_a_lock_on_a_nodepool_the_request_lacks_is_refused(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    await push_flavor(
+        gitlab,
+        support,
+        {
+            "metadata": {"name": "agent-two", "version": "1.0.0"},
+            "spec": {
+                "day1": {
+                    "locked_paths": ["nodepools[1].replicas", "owner_anaf"],
+                    "values": {"owner_anaf": "56", "nodepools": [{}, {"replicas": 3}]},
+                }
+            },
+        },
+    )
+    request = create(support, spec="agent-two", nodepools=[pool()], owner_anaf="99")
+    with pytest.raises(InvalidInputError) as caught:
+        await context.clusters.preview(request)
+    assert caught.value.problems == (
+        'owner_anaf: locked by flavor agent-two to "56"; the request sends "99"',
+        "nodepools[1].replicas: the flavor locks it to 3, but the cluster has no nodepools[1]",
+    )
+    replicas_as_text = create(
+        support,
+        spec="agent-two",
+        nodepools=[pool(), {**pool(infra_env="hp-gen11-site1-64c"), "replicas": "3"}],
+    )
+    rendered = await context.clusters.preview(replicas_as_text)
+    assert yaml.safe_load(rendered.content)["owner"]["anaf"] == "56"
+
+
+async def test_a_stored_legacy_lock_that_fixes_nothing_is_not_enforced(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    await push_flavor(
+        gitlab,
+        support,
+        {
+            "metadata": {"name": "agent-legacy", "version": "1.0.0"},
+            "spec": {"day1": {"immutable_paths": ["cluster_name", "nodepools[0].infra_env"]}},
+        },
+    )
+    entry = await context.specs.entry("agent-legacy")
+    assert entry.spec is not None
+    assert entry.spec.spec.day1.locked_paths == ["cluster_name", "nodepools[0].infra_env"]
+    assert entry.spec.locks() == ()
+    await context.clusters.preview(create(support, spec="agent-legacy"))
+
+
+@pytest.mark.parametrize(
+    ("day1", "problem"),
+    [
+        ({"locked_paths": ["owner_merkaz"]}, "owner_merkaz is locked but spec.day1.values sets"),
+        (
+            {"locked_paths": ["openshift_release_version"], "values": {}},
+            "openshift_release_version is set for each cluster at create",
+        ),
+        (
+            {"immutable_paths": ["nodepools[0].infra_env"], "values": {"nodepools": [{}]}},
+            "nodepools[0].infra_env cannot be locked",
+        ),
+    ],
+)
+async def test_a_flavor_whose_locks_fix_nothing_lockable_is_not_saved(
+    context: Day1Context, support: Any, day1: dict[str, Any], problem: str
+) -> None:
+    with pytest.raises(InvalidSpecError) as caught:
+        await context.specs.create(flavor(**day1), user=support.ALICE)
+    (found,) = caught.value.problems
+    assert problem in found
+
+
+async def test_a_flavor_saved_with_the_legacy_name_is_stored_with_the_new_one(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    spec = flavor(immutable_paths=["platform"], values={"platform": "kubevirt"})
+    result = await context.specs.create(spec, user=support.ALICE)
+    files = await committed(gitlab, support, support.SPECS, result.merge_request.source_branch)
+    day1 = yaml.safe_load(files["specs/agent-flavor.yaml"])["spec"]["day1"]
+    assert day1["locked_paths"] == ["platform"]
+    assert "immutable_paths" not in day1

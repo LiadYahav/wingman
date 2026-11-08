@@ -4,7 +4,8 @@ Reads come from the day1 repo's default branch; changes go through the
 ``ClusterProvisioner`` (today a merge request, ADR-0017). A new cluster file
 is rendered from the shared template, then checked against the values-file
 contract before anything is written (ADR-0012), and its name against the
-naming rules (ADR-0014). Its owners must be numbers (ADR-0028), its machine
+naming rules (ADR-0014). The spec's locked values are used and may not be
+sent different (ADR-0026), its owners must be numbers (ADR-0028), its machine
 configs must resolve by the day1 CI's rule, and the cluster's network config
 entry is expanded to the name the CI reads before the template renders
 (ADR-0027). A file that cannot be parsed is shown with its
@@ -49,6 +50,7 @@ from wingman_day1.domain.errors import (
     ResourceNotFoundError,
     StaleError,
 )
+from wingman_day1.domain.locks import apply_locks, lock_conflicts
 from wingman_day1.domain.machine_configs import (
     MachineConfigCatalog,
     cluster_config_problems,
@@ -284,6 +286,8 @@ class ClusterService:
         variables: Mapping[str, object],
         catalog: MachineConfigCatalog,
     ) -> str:
+        locks = spec.locks()
+        conflicts = lock_conflicts(variables, locks, flavor=spec.metadata.name)
         inputs = build_inputs(
             variables=variables,
             cluster_name=ref.name,
@@ -292,11 +296,12 @@ class ClusterService:
             openshift_release_version=None,
             presets=spec.presets(),
         )
+        inputs, missing = apply_locks(inputs, locks)
         problems = check_inputs(inputs)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
         cluster_name = self._naming.for_file(ref.name).cluster_name
-        problems = owner_problems(inputs)
+        problems = [*conflicts, *missing, *owner_problems(inputs)]
         problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)

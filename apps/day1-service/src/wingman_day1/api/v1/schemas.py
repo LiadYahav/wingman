@@ -29,7 +29,7 @@ from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
 from wingman_day1.domain.machine_configs import NETWORK_CONFIG
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
 from wingman_day1.domain.paths import NODEPOOL_DEFAULTS_FILE
-from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata
+from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata, rule_problems
 from wingman_day1.domain.status import LiveStatus
 
 MAX_FILE_BYTES = 256 * 1024
@@ -618,13 +618,19 @@ class SpecOut(ClusterSpec):
     load_problems: list[str] = Field(default_factory=list)
     last_commit_id: str | None = None
     """The commit that last changed the file: send it back with an edit or delete."""
+    warnings: list[str] = Field(default_factory=list)
+    """Flavor rules the stored spec breaks: it loads, but a save would be refused."""
 
     @classmethod
     def of(cls, entry: SpecEntry) -> SpecOut:
         """From a catalog entry."""
         if entry.spec is not None:
             return cls.model_validate(
-                {**entry.spec.model_dump(), "last_commit_id": entry.last_commit_id}
+                {
+                    **entry.spec.model_dump(),
+                    "last_commit_id": entry.last_commit_id,
+                    "warnings": rule_problems(entry.spec),
+                }
             )
         error = entry.error
         return cls.model_construct(

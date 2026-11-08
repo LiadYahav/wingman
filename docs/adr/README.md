@@ -46,6 +46,7 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0023](0023-day2-lints.md) | day2 lints are render_chain.py's rules as errors plus Wingman's own; a change that adds an error is refused |
 | [0024](0024-chart-versions-and-defaults.md) | Chart versions and defaults come from the chart repo on the same GitLab, at the resolved revision and path |
 | [0025](0025-version-differences-are-reported-not-drift.md) | A chart version other than the spec's is reported, never drift; a fix only installs a missing chart |
+| [0026](0026-a-flavor-lock-is-a-fixed-value.md) | A flavor lock is a fixed value the flavor enforces; `locked_paths` replaces `immutable_paths`, which is still read |
 | [0027](0027-machine-configs-from-mc-files-and-nodepool-defaults.md) | Machine configs come from mc-files and are checked; new nodepools start from the team's defaults |
 | [0028](0028-owner-fields-are-numbers.md) | The owner fields are numbers |
 | [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main |

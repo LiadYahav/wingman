@@ -1,25 +1,30 @@
 """Cluster specs: named presets for the cluster template's inputs (ADR-0013).
 
-A spec lives at ``specs/<name>.yaml`` in the specs project. The document
-shape is the legacy one, so every spec already in GitLab still loads, plus
-``spec.day1.values``: preset values for the template's inputs, merged under
-what the user enters at create time. ``structure`` (list shapes for the
-form), ``immutable_paths`` (a form hint) and ``day2.addons`` keep their
-meaning. ``day1.template`` is never stored: it is the shared
-``cluster-template.j2``, filled in on read.
+A spec ("flavor" in the UI) lives at ``specs/<name>.yaml`` in the specs
+project. The document shape is the legacy one, so every spec already in
+GitLab still loads, plus ``spec.day1.values``: values for the template's
+inputs. Each value is a preset, merged under what the user enters at create
+time, or locked: its path is in ``spec.day1.locked_paths`` and the create
+must use it (ADR-0026). ``locked_paths`` was ``immutable_paths``, a form
+hint, which is still read as the same list. ``structure`` (list shapes for
+the form) and ``day2.addons`` keep their meaning. ``day1.template`` is never
+stored: it is the shared ``cluster-template.j2``, filled in on read.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, cast
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from wingman_day1.domain.addons import AddonKey, RequestedAddon
 from wingman_day1.domain.errors import InvalidSpecError
+from wingman_day1.domain.locks import Lock, enforced_locks, lock_problems
+from wingman_day1.domain.owners import owner_problems
+from wingman_day1.domain.template import check_inputs
 
 _NAME = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 _VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
@@ -78,15 +83,33 @@ class SpecAddon(_Strict):
         return AddonKey(self.team, self.name)
 
 
+LEGACY_LOCKED_PATHS: Final = "immutable_paths"
+
+
 class Day1Config(_Strict):
     """What the spec says about the cluster file."""
 
     variables: list[SpecVariable] = Field(default_factory=list)
     structure: dict[str, Any] = Field(default_factory=dict)
-    immutable_paths: list[str] = Field(default_factory=list)
+    locked_paths: list[str] = Field(default_factory=list)
+    """Template-input paths whose value in ``values`` every create must use (ADR-0026)."""
     template: str = ""
     values: dict[str, Any] = Field(default_factory=dict)
-    """Preset inputs for the template; what the user enters wins."""
+    """Inputs for the template: presets the user may change, and the locked values."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _read_legacy_locked_paths(cls, data: object) -> object:
+        """``immutable_paths`` is the old name of ``locked_paths``; it is read, never written."""
+        if not isinstance(data, Mapping) or LEGACY_LOCKED_PATHS not in data:
+            return data
+        document = dict(cast("Mapping[str, object]", data))
+        if "locked_paths" in document:
+            raise ValueError(
+                f"{LEGACY_LOCKED_PATHS} is the old name of locked_paths; give only locked_paths"
+            )
+        document["locked_paths"] = document.pop(LEGACY_LOCKED_PATHS)
+        return document
 
 
 class Day2Config(_Strict):
@@ -147,6 +170,10 @@ class ClusterSpec(_Strict):
         presets.update(self.spec.day1.values)
         return presets
 
+    def locks(self) -> tuple[Lock, ...]:
+        """The locks a create enforces (a lock that breaks the save rules is not one)."""
+        return enforced_locks(self.spec.day1.locked_paths, self.spec.day1.values)
+
     def requested_addons(
         self, overrides: Mapping[str, Mapping[str, object]]
     ) -> list[RequestedAddon]:
@@ -196,6 +223,22 @@ def validate_spec(document: Mapping[str, object]) -> ClusterSpec:
         return ClusterSpec.model_validate(document)
     except ValidationError as exc:
         raise InvalidSpecError("the spec is not a valid ClusterSpec", _problems(exc)) from exc
+
+
+def rule_problems(spec: ClusterSpec) -> list[str]:
+    """The flavor rules ``spec`` breaks that need no other file.
+
+    Safe values (ADR-0013), owner numbers (ADR-0028) and locks (ADR-0026).
+    A save refuses them, together with configs that do not resolve
+    (ADR-0027); a spec already in GitLab that breaks them still loads, and
+    the API lists them as its ``warnings``.
+    """
+    values = spec.spec.day1.values
+    return [
+        *check_inputs(values),
+        *owner_problems(values),
+        *lock_problems(spec.spec.day1.locked_paths, values),
+    ]
 
 
 def dump_spec(spec: ClusterSpec) -> str:

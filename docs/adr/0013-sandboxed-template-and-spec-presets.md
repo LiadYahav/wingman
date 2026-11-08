@@ -1,7 +1,7 @@
 # ADR-0013: The cluster file is rendered from the shared template in a sandbox; specs are value presets
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0026 (locks)
 
 ## Context
 

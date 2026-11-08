@@ -1,0 +1,30 @@
+apiVersion: wingman.io/v1
+kind: ClusterSpec
+metadata:
+  name: agent-dell
+  description: "One nodepool of Dell workers with the team's machine configs, locked"
+  version: "1.0.0"
+  labels:
+    platform: agent
+spec:
+  day1:
+    structure:
+      nodepools:
+        - configs:
+            - {}
+            - {}
+            - {}
+    # Locked: every cluster of this flavor gets exactly these configs on its
+    # first nodepool (ADR-0026). The replicas are a preset anyone may change.
+    locked_paths:
+      - nodepools[0].configs
+    values:
+      nodepools:
+        - replicas: 2
+          configs:
+            - name: nm-conf
+              hardware: dell
+            - name: workers-chrony-configuration
+            - name: nic-ring-buffer
+  day2:
+    addons: []

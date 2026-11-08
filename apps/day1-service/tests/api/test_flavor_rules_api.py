@@ -90,3 +90,48 @@ async def test_owners_must_be_numbers_on_create_and_on_flavor_save(
     saved = await client.post("/api/day1/specs", json=spec, headers=auth(support.ALICE))
     assert saved.status_code == 422
     assert saved.json()["details"]["problems"][0].startswith("owner_mador: must be a number")
+
+
+async def test_a_create_that_breaks_a_lock_is_a_422(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    body = with_pools(support, [{"name": "nic-ring-buffer"}])
+    body["spec_name"] = "agent-dell"
+    response = await client.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
+    assert response.status_code == 422
+    (problem,) = response.json()["details"]["problems"]
+    assert problem.startswith("nodepools[0].configs: locked by flavor agent-dell to ")
+    del body["variables"]["nodepools"][0]["configs"]
+    created = await client.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
+    assert created.status_code == 201, created.text
+
+
+async def test_a_flavor_with_a_lock_that_fixes_nothing_is_a_422_and_a_stored_one_warns(
+    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: Any
+) -> None:
+    body = flavor(locked_paths=["owner_mador"], values={})
+    response = await client.post("/api/day1/specs", json=body, headers=auth(support.ALICE))
+    assert response.status_code == 422
+    assert response.json()["details"]["problems"] == [
+        "locked_paths: owner_mador is locked but spec.day1.values sets no value for it"
+    ]
+    both = flavor(locked_paths=[], immutable_paths=[])
+    response = await client.post("/api/day1/specs", json=both, headers=auth(support.ALICE))
+    assert response.status_code == 422
+    (error,) = response.json()["details"]["errors"]  # the body's own schema: FastAPI's 422
+    assert error["loc"] == ["body", "spec", "day1"]
+    assert "old name of locked_paths" in error["msg"]
+
+    await support.push(
+        gitlab,
+        support.SPECS,
+        branch="main",
+        file="specs/agent-old.yaml",
+        content="metadata: {name: agent-old}\nspec:\n  day1: {immutable_paths: [cluster_name]}\n",
+    )
+    old = (await client.get("/api/day1/specs/agent-old", headers=auth(support.VIEWER))).json()
+    assert old["spec"]["day1"]["locked_paths"] == ["cluster_name"]
+    assert old["warnings"] == [
+        "locked_paths: cluster_name is set for each cluster at create (its name, site, MCE and "
+        "OpenShift version) and cannot be locked"
+    ]
