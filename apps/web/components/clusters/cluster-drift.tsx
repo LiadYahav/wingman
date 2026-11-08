@@ -1,8 +1,8 @@
-import { AlertTriangle, CheckCircle2, CircleHelp, Unlink, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleHelp, Info, Unlink, Wrench } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
-import type { AddonDrift, ClusterDrift } from "@/types";
+import type { AddonDrift, ClusterDrift, VersionDifference } from "@/types";
 
 function Notice({ icon: Icon, tone, children }: { icon: typeof CheckCircle2; tone: string; children: React.ReactNode }) {
   return (
@@ -14,8 +14,42 @@ function Notice({ icon: Icon, tone, children }: { icon: typeof CheckCircle2; ton
 }
 
 /**
+ * Spec addons installed at another version than the spec names. Information
+ * only (ADR-0025): day2 keeps a cluster on its team's default unless someone
+ * pins it on purpose, so there is nothing here to fix.
+ */
+function VersionDifferences({ differences }: { differences: VersionDifference[] }) {
+  if (differences.length === 0) return null;
+  return (
+    <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
+      <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        <Info className="h-3.5 w-3.5" />
+        Other versions than the spec names
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Not drift. These charts follow their team&apos;s default version or a deliberate pin in day2.
+      </p>
+      <div className="divide-y">
+        {differences.map((d) => (
+          <div key={`${d.team}/${d.addon_name}`} className="flex items-center justify-between gap-3 py-2 text-sm flex-wrap">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-mono font-medium truncate">{d.addon_name}</span>
+              <span className="text-muted-foreground text-xs">{d.team}</span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {d.installed_version} installed · spec names {d.spec_version}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Drift is the spec's day2 addons against what day2 has installed (the file
- * itself is never re-rendered: nothing is stored to re-render from).
+ * itself is never re-rendered: nothing is stored to re-render from). Only a
+ * missing addon is drift; another version is listed as information.
  */
 export function ClusterDriftPanel({
   drift,
@@ -67,10 +101,13 @@ export function ClusterDriftPanel({
       );
     case "in_sync":
       return (
-        <Notice icon={CheckCircle2} tone="text-status-ready-fg">
-          <p>Every addon of {specLabel} is installed at the spec&apos;s version.</p>
-          {newerSpec}
-        </Notice>
+        <div className="space-y-2">
+          <Notice icon={CheckCircle2} tone="text-status-ready-fg">
+            <p>Every addon of {specLabel} is installed.</p>
+            {newerSpec}
+          </Notice>
+          <VersionDifferences differences={drift.version_differences ?? []} />
+        </div>
       );
     case "drifted":
       return (
@@ -92,7 +129,7 @@ export function ClusterDriftPanel({
           </div>
 
           <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4 space-y-2">
-            <p className="text-xs font-semibold text-status-warning-fg uppercase tracking-wide">Addon compliance issues</p>
+            <p className="text-xs font-semibold text-status-warning-fg uppercase tracking-wide">Missing addons</p>
             <div className="divide-y divide-status-warning/20">
               {drift.addon_drift.map((entry) => (
                 <div key={`${entry.team}/${entry.addon_name}`} className="flex items-center justify-between gap-3 py-2 text-sm flex-wrap">
@@ -101,17 +138,11 @@ export function ClusterDriftPanel({
                     <span className="text-muted-foreground text-xs">{entry.team}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs">
-                    {entry.reason === "missing" ? (
-                      <span className="text-status-error-fg">Not installed — spec requires {entry.expected_version}</span>
-                    ) : (
-                      <span className="text-status-warning-fg">
-                        {entry.installed_version} installed → spec requires {entry.expected_version}
-                      </span>
-                    )}
+                    <span className="text-status-error-fg">Not installed</span>
                     {isAdmin && (
                       <button onClick={() => onFix(entry)} className={buttonVariants({ size: "sm", variant: "outline" })}>
                         <Wrench className="h-3 w-3 mr-1" />
-                        {entry.reason === "missing" ? "Install" : "Update"}
+                        Install
                       </button>
                     )}
                   </div>
@@ -119,6 +150,7 @@ export function ClusterDriftPanel({
               ))}
             </div>
           </div>
+          <VersionDifferences differences={drift.version_differences ?? []} />
         </div>
       );
   }

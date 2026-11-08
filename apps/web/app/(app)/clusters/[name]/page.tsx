@@ -212,17 +212,15 @@ function ClusterDetailContent() {
   const [fixingAddon, setFixingAddon] = useState<AddonDrift | null>(null);
 
   /**
-   * Install or update a spec addon on day2 with the values requested at
-   * create. A write names the destination by the id day2 resolved the name
-   * to; an update carries the commit the chart's values file was read at.
+   * Install a missing spec addon on day2 with the values requested at create,
+   * at the team's default version (ADR-0025: day2 refuses another version
+   * unless it is an emergency pin). A write names the destination by the id
+   * day2 resolved the name to.
    */
   const fixAddon = async (entry: AddonDrift): Promise<ChangeResult> => {
     const charts = await queryClient.fetchQuery(chartsQuery);
     const path = day2Api.chart(charts.id, entry.team, entry.addon_name);
-    const payload = { version: entry.expected_version, override_values: entry.override_values };
-    if (entry.reason === "missing") return api.post<ChangeResult>(path, payload);
-    const installed = charts.installed.find((c) => c.team === entry.team && c.name === entry.addon_name);
-    return api.put<ChangeResult>(path, { ...payload, last_commit_id: installed?.last_commit_id ?? null });
+    return api.post<ChangeResult>(path, { override_values: entry.override_values });
   };
 
   const addonFixMutation = useMutation({
@@ -555,13 +553,11 @@ function ClusterDetailContent() {
         <ReviewDialog
           open
           onOpenChange={(open) => { if (!open) setFixingAddon(null); }}
-          title={fixingAddon.reason === "missing" ? `Fix: Install ${fixingAddon.addon_name}` : `Fix: Update ${fixingAddon.addon_name}`}
-          description={fixingAddon.reason === "missing"
-            ? `Install ${fixingAddon.addon_name} ${fixingAddon.expected_version} as the spec requires, with the values requested at create. Opens a GitLab MR for approval.`
-            : `Update ${fixingAddon.addon_name} from ${fixingAddon.installed_version} to ${fixingAddon.expected_version} as the spec requires. Opens a GitLab MR for approval.`}
+          title={`Fix: Install ${fixingAddon.addon_name}`}
+          description={`Install ${fixingAddon.addon_name} at the ${fixingAddon.team} team's default version, with the values requested at create. Opens a GitLab MR for approval.`}
           onConfirm={() => addonFixMutation.mutate(fixingAddon)}
           isPending={addonFixMutation.isPending}
-          confirmLabel={fixingAddon.reason === "missing" ? "Confirm — Create Install MR" : "Confirm — Create Update MR"}
+          confirmLabel="Confirm — Create Install MR"
         >
           <div className="rounded-lg border bg-muted/30 p-4 text-sm space-y-2">
             <div className="flex gap-3">
@@ -573,10 +569,8 @@ function ClusterDetailContent() {
               <span className="font-medium">{fixingAddon.team}</span>
             </div>
             <div className="flex gap-3">
-              <span className="text-muted-foreground w-24 shrink-0">
-                {fixingAddon.reason === "missing" ? "Version" : "New version"}
-              </span>
-              <span className="font-medium">{fixingAddon.expected_version}</span>
+              <span className="text-muted-foreground w-24 shrink-0">Version</span>
+              <span className="font-medium">team default</span>
             </div>
             <div className="flex gap-3">
               <span className="text-muted-foreground w-24 shrink-0">Values</span>
@@ -586,11 +580,6 @@ function ClusterDetailContent() {
                   : "chart and team defaults"}
               </span>
             </div>
-            {fixingAddon.reason === "version_mismatch" && (
-              <p className="text-xs text-muted-foreground pt-1">
-                The cluster&apos;s values file is replaced with the values requested at create. To keep later edits, update the addon from the Addons page instead.
-              </p>
-            )}
           </div>
         </ReviewDialog>
       )}

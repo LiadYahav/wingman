@@ -115,7 +115,7 @@ function drift(overrides: Partial<ClusterDrift> = {}): ClusterDrift {
   return {
     cluster: NAME, site: SITE, mce: MCE, state: "in_sync", is_drifted: false,
     spec_name: "agent-standard", spec_version: "1.0.0", current_spec_version: "1.0.0",
-    addon_drift: [], error: null, ...overrides,
+    addon_drift: [], version_differences: [], error: null, ...overrides,
   };
 }
 
@@ -311,27 +311,26 @@ test.describe("Cluster detail", () => {
     // Addressed by the id day2 resolved the name to, not by name and ?mce=
     const request = await install;
     expect(new URL(request.url()).pathname).toBe(`/api/day2/clusters/${encodeURIComponent(HOSTED_ID)}/addons/redbull/cluster-roles`);
-    expect(request.postDataJSON()).toEqual({ version: "main", override_values: { replicas: 2 } });
+    // At the team default: day2 refuses another version unless it is an emergency pin (ADR-0025)
+    expect(request.postDataJSON()).toEqual({ override_values: { replicas: 2 } });
     await expect(page.getByText("Fix MR !9 opened")).toBeVisible();
   });
 
-  test("a version fix carries the last_commit_id day2 listed the chart's values with", async ({ page }) => {
+  test("another version than the spec names is information, not drift, and has no fix", async ({ page }) => {
+    let writes = 0;
+    page.on("request", (req: Request) => {
+      if (["POST", "PUT"].includes(req.method()) && req.url().includes("/addons/")) writes += 1;
+    });
     await openDetail(page, drift({
-      state: "drifted", is_drifted: true,
-      addon_drift: [{ addon_name: "cluster-roles", team: "redbull", reason: "version_mismatch", expected_version: "main", installed_version: "release-1", override_values: { replicas: 2 } }],
+      version_differences: [{ addon_name: "cluster-roles", team: "redbull", spec_version: "main", installed_version: "release-1" }],
     }), [CLUSTER_ROLES]);
-    const update = page.waitForRequest((req: Request) => req.method() === "PUT");
-    await page.route(`**/api/day2/clusters/${encodeURIComponent(HOSTED_ID)}/addons/redbull/cluster-roles`, (r: Route) =>
-      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockMR({ iid: 10, repo: "day2", team: "redbull" })) })
-    );
 
     await page.getByRole("tab", { name: "Drift" }).click();
-    await page.getByRole("button", { name: "Update" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
-
-    expect((await update).postDataJSON()).toEqual({
-      version: "main", override_values: { replicas: 2 }, last_commit_id: CLUSTER_ROLES.last_commit_id,
-    });
+    await expect(page.getByText(/is installed\./)).toBeVisible();
+    await expect(page.getByText("release-1 installed · spec names main")).toBeVisible();
+    await expect(page.getByText(/not drift/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /^(install|update|fix)/i })).toHaveCount(0);
+    expect(writes).toBe(0);
   });
 
   test("the Addons link opens the cluster's charts, narrowed by its MCE", async ({ page }) => {

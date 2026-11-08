@@ -274,14 +274,23 @@ export interface ClusterLiveStatus {
 /** `unknown`: day2 did not answer or the spec is gone (`error` says which). */
 export type DriftState = "in_sync" | "drifted" | "unknown" | "not_linked";
 
+/** A spec addon the cluster does not have: the drift. The fix installs it at the team default. */
 export interface AddonDrift {
   addon_name: string;
   team: string;
-  reason: "missing" | "version_mismatch";
+  reason: "missing";
   expected_version: string;
   installed_version: string;
   /** The values requested at create; install with them. */
   override_values: Record<string, unknown>;
+}
+
+/** A spec addon installed at another version: information, never drift (ADR-0025). */
+export interface VersionDifference {
+  addon_name: string;
+  team: string;
+  spec_version: string;
+  installed_version: string;
 }
 
 /** `GET /clusters/{name}/drift`. */
@@ -296,6 +305,7 @@ export interface ClusterDrift {
   spec_version: string | null;
   current_spec_version: string | null;
   addon_drift: AddonDrift[];
+  version_differences: VersionDifference[];
   error: string | null;
 }
 
