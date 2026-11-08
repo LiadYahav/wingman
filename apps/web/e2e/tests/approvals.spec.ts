@@ -258,6 +258,28 @@ test.describe("Approve with the reviewed sha", () => {
     await expect(page.getByText("11111111")).toBeVisible();
   });
 
+  test("a day2 MR's edit carries the reviewed sha too", async ({ page }) => {
+    // day2 guards an edit at the reviewed head as day1 does (ADR-0006): without
+    // the sha it would overwrite a commit pushed after the review.
+    await open(page);
+    await page.route("**/api/day2/approvals/redbull/7", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail(DAY2_MR)) })
+    );
+    await go(page, "/approvals/day2-redbull-7");
+
+    await page.getByRole("button", { name: /edit files/i }).click();
+    await page.getByLabel(NEW_FILE_DIFF.new_path).fill("replicas: 3\n");
+    await page.getByRole("button", { name: /review & submit changes/i }).click();
+    const put = page.waitForRequest((req: Request) => req.method() === "PUT");
+    await page.getByRole("dialog").getByRole("button", { name: "Submit Changes" }).click();
+
+    expect((await put).postDataJSON()).toEqual({
+      files: [{ path: NEW_FILE_DIFF.new_path, content: "replicas: 3\n" }],
+      message: "",
+      sha: DAY2_MR.sha,
+    });
+  });
+
   test("an MR that only changes files has nothing to edit here, and says so", async ({ page }) => {
     await open(page);
     const changed = { ...NEW_FILE_DIFF, diff: "@@ -1 +1 @@\n-mastertag: 4.16.27-x86_64\n+mastertag: 4.18.22-x86_64\n", new_file: false };

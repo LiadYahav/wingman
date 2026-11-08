@@ -115,9 +115,8 @@ function EditMRPanel({
       const files: UpdateMRFile[] = editableDiffs
         .filter((d) => fileContents[d.new_path] !== newFileContent(d))
         .map((d) => ({ path: d.new_path, content: fileContents[d.new_path] ?? "" }));
-      // day1 refuses the commit if the branch moved past the head reviewed here
-      const body = mrRef.service === "day1" ? { files, message, sha: mr.sha } : { files, message };
-      return api.put<ApprovalDetail>(approvalApiPath(mrRef), body);
+      // Both services refuse the commit if the branch moved past the head reviewed here (ADR-0006)
+      return api.put<ApprovalDetail>(approvalApiPath(mrRef), { files, message, sha: mr.sha });
     },
     onSuccess: (detail) => {
       toast.success("Changes committed to the MR branch — review them again before approving");
