@@ -38,13 +38,10 @@ Wingman is a GitOps-based Internal Developer Platform (IDP) for OpenShift cluste
 
 ### Shared Package
 
-`packages/shared-python/` contains common utilities:
-- `gitlab_client.py` - Async GitLab API wrapper
-- `cache.py` - In-memory LRU cache with TTL
-- `yaml_utils.py` - YAML parsing with error handling
-- `models.py` - Pydantic models shared across services
-- `path_resolver.py` - GitLab path construction
-- `mr_conventions.py` - MR title/description formatting
+`packages/wingman-core/` is the shared core both services build on (ADR-0001):
+the Git domain types and MR conventions, the GitLab port with its httpx
+adapter and in-memory fake, RFC 9457 errors, auth, metrics, the read cache and
+settings.
 
 ## Local Development Setup
 
@@ -87,10 +84,8 @@ npm run dev  # Starts on port 3000
 ### Running Tests
 
 ```bash
-# Python lint + type check
-uvx ruff check apps/day1-service packages/shared-python
-uvx mypy apps/day1-service/src --ignore-missing-imports
-scripts/gate.sh python   # day2 and wingman-core: ruff, ty, import-linter, pytest (incl. the render_chain oracle), deptry
+# Python: ruff, ty, import-linter, pytest (incl. day2's render_chain oracle), pip-audit, deptry
+scripts/gate.sh python
 
 # Frontend lint + build
 cd apps/web && npm run lint && npm run build
@@ -197,16 +192,15 @@ export interface MyData {
 
 ### Adding Shared Python Code
 
-1. Add code to `packages/shared-python/src/wingman_shared/`
-2. Export in `__init__.py`
-3. Both services import from `wingman_shared`
+Code both services need goes in `packages/wingman-core/src/wingman_core/`, in
+the layer it belongs to (ADR-0001); `uv run lint-imports` holds the layers.
 
 ## Code Conventions
 
 ### Python
 
 - **Async GitLab calls**: Always use `await gl.aread_file()` not `gl.read_file()` to avoid blocking the event loop
-- **Error handling**: Catch `NotFoundError`, `GitLabError` from `wingman_shared.exceptions`
+- **Error handling**: Raise `AppError` subclasses (RFC 9457 problems, ADR-0004); never `HTTPException`
 - **Caching**: Use `CacheManager.get_or_fetch()` for expensive operations
 - **Types**: Use type hints everywhere, run `mypy` to verify
 

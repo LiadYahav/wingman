@@ -1,15 +1,10 @@
 # Wingman's Python workspace: one lockfile (uv.lock) and one tooling config for
 # every Python package. Each member keeps its own pyproject for its runtime
 # dependencies; versions are pinned exactly there (ADR-0003).
-#
-# Packages still on the legacy layout (shared-python, day1-service,
-# day2-service) keep their own [tool.ruff] sections until they are rewritten;
-# ruff uses the nearest config, so the strict rules below apply to new code.
 
 [tool.uv.workspace]
 members = [
     "packages/wingman-core",
-    "packages/shared-python",
     "apps/day1-service",
     "apps/day2-service",
 ]
@@ -79,7 +74,7 @@ ignore = ["D203", "D212"]
 convention = "google"
 
 [tool.ruff.lint.isort]
-known-first-party = ["wingman_core", "wingman_shared", "wingman_day1", "wingman_day2"]
+known-first-party = ["wingman_core", "wingman_day1", "wingman_day2"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Query", "fastapi.Depends", "fastapi.Header"]
@@ -257,7 +252,7 @@ allow_indirect_imports = true
 forbidden_modules = ["wingman_day2.infrastructure", "wingman_core.infrastructure", "wingman_day2.main"]
 
 [[tool.importlinter.contracts]]
-name = "wingman_day2 does not import wingman_day1 or the legacy shared package"
+name = "wingman_day2 does not import wingman_day1"
 type = "forbidden"
 source_modules = ["wingman_day2"]
-forbidden_modules = ["wingman_day1", "wingman_shared"]
+forbidden_modules = ["wingman_day1"]

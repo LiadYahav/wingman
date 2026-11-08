@@ -127,20 +127,6 @@ jobs:
             (cd "${entry%%:*}" && uv run --with deptry==0.24.0 deptry src --known-first-party "${entry#*:}")
           done
 
-      # The legacy packages keep their old checks until they are rewritten
-      # (ADR-0001). They have no tests yet; none are faked here.
-      - name: legacy ruff
-        run: |
-          source scripts/python-packages.sh
-          if ((${#LEGACY[@]})); then uv run ruff check "${LEGACY[@]}"; fi
-
-      - name: legacy mypy
-        run: |
-          source scripts/python-packages.sh
-          for dir in "${LEGACY_MYPY[@]}"; do
-            uv run mypy "$dir" --ignore-missing-imports
-          done
-
   chart:
     name: Chart and alerts
     runs-on: ubuntu-24.04

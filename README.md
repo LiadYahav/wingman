@@ -42,7 +42,7 @@ Wingman is an Internal Developer Platform (IDP) for managing OpenShift HostedCon
 | **web** | Frontend UI | Next.js 16, React 19, TailwindCSS, React Query |
 | **day1-service** | Cluster provisioning, specs, approvals | Python 3.13, FastAPI, python-gitlab |
 | **day2-service** | Charts on clusters through the gitops-day2 team repos | Python 3.13, FastAPI, wingman-core (httpx) |
-| **shared-python** | Common utilities, models, GitLab client | Python 3.13, Pydantic |
+| **wingman-core** | The shared core: the GitLab port and adapters, errors, auth, metrics, settings | Python 3.13, httpx, Pydantic |
 
 ### GitOps Flow
 
@@ -81,13 +81,8 @@ cluster-platform/
 │           └── services/      # Business logic
 │
 ├── packages/
-│   └── shared-python/         # Shared Python utilities
-│       └── src/wingman_shared/
-│           ├── auth/          # OAuth, JWT, RBAC
-│           ├── gitlab_client.py
-│           ├── models.py      # Pydantic models
-│           ├── cache.py       # In-memory caching
-│           └── yaml_utils.py  # YAML handling
+│   └── wingman-core/          # The shared core (ADR-0001)
+│       └── src/wingman_core/  # domain, ports, application, infrastructure, web
 │
 ├── chart/                     # Helm chart for deployment
 │   ├── templates/             # Kubernetes manifests
@@ -434,7 +429,7 @@ INFO: Day1 cache pre-warm complete
 ### Adding a New Feature
 
 1. Backend changes go in `services/` (business logic) and `routers/` (HTTP layer)
-2. Shared code goes in `packages/shared-python`
+2. Shared code goes in `packages/wingman-core`
 3. Frontend pages go in `app/(app)/`, components in `components/`
 4. Add types to `types/index.ts` for API responses
 

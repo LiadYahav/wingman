@@ -21,10 +21,9 @@ workflows, herzi, the hostedclusters-setup chart, the reworked gitops-day2
 layout); the rewrite is in progress (see Current status).
 
 Monorepo: `apps/web` (Next.js 16), `apps/day1-service` and
-`apps/day2-service` (FastAPI), `packages/wingman-core` (the new shared core),
-`packages/shared-python` (legacy shared code, being replaced), `chart/`
-(Helm), `dev/gitlab-fixtures` (production-shaped repo trees for tests and
-local GitLab).
+`apps/day2-service` (FastAPI), `packages/wingman-core` (the shared core),
+`chart/` (Helm), `dev/gitlab-fixtures` (production-shaped repo trees for
+tests and local GitLab).
 
 ## Standing project conventions — follow without being re-told
 
@@ -44,8 +43,8 @@ Explicit user instructions; violating one is a real mistake, not style.
    infrastructure/observability → web. `uv run lint-imports` must pass. New
    external systems get a port, an adapter and a fake; never a client call
    from a router.
-5. **GitLab only through `GitLabPort`** (ADR-0002). New code never imports
-   python-gitlab or `wingman_shared.gitlab_client`.
+5. **GitLab only through `GitLabPort`** (ADR-0002). Service code reaches
+   GitLab through the port and its adapter; nothing imports python-gitlab.
 6. **Writes are guarded and never retried** (ADR-0006): updates carry the
    read's `last_commit_id`, merges carry the reviewed `sha`, and an
    `AmbiguousWriteError` is surfaced, not retried.
@@ -240,10 +239,9 @@ and write yours here.
 **2026-11-07 — integration of day1, day2 and CI.** Branch
 `roiblum/feat-ecosystem-day1-day2`. Merged the three agent branches: day1
 (`wingman_day1`, ADRs 0012-0019), day2 (`wingman_day2`, ADRs 0020-0024) and
-CI (ADRs 0030-0032). Session tokens now expire by the injected clock. All
-Python packages except the legacy `wingman-shared` are on the strict bar
-(`scripts/python-packages.sh`). Run locally: day1 `uv run uvicorn
-wingman_day1.main:app --port 8001`, day2 `uv run uvicorn
+CI (ADRs 0030-0032). Session tokens now expire by the injected clock. Every
+Python package is on the strict bar (`scripts/python-packages.sh`). Run
+locally: day1 `uv run uvicorn wingman_day1.main:app --port 8001`, day2 `uv run uvicorn
 wingman_day2.main:app --port 8002` (env in each `settings.py`; both read
 `GITLAB_TOKEN`; `WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake`
 for the fixtures). **Next:** the web pages for both API change notes
