@@ -11,6 +11,8 @@ export class ClusterNewPage {
   readonly versionSelect: Locator;
   readonly versionInput: Locator;
   readonly versionSource: Locator;
+  readonly versionProblems: Locator;
+  readonly versionPresetNote: Locator;
   readonly offConventionMces: Locator;
   readonly formProblems: Locator;
   readonly reviewButton: Locator;
@@ -25,6 +27,8 @@ export class ClusterNewPage {
     this.versionSelect = page.getByTestId("ocp-version-select");
     this.versionInput = page.getByTestId("ocp-version-input");
     this.versionSource = page.getByTestId("ocp-version-source");
+    this.versionProblems = page.getByTestId("ocp-version-problems");
+    this.versionPresetNote = page.getByTestId("ocp-version-preset-note");
     this.offConventionMces = page.getByTestId("off-convention-mces");
     this.formProblems = page.getByTestId("form-problems");
     this.reviewButton = page.getByTestId("review-button");

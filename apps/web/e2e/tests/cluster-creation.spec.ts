@@ -1,14 +1,16 @@
 /**
  * Mocked tests of the cluster create form (/clusters/new) against the
  * rewritten day1 API: read-only sites and MCEs, the naming convention, the
- * MCE's default mastertag, addon overrides keyed `team/name`, and RFC 9457
- * problems shown inline. Mock shapes follow apps/day1-service's schemas.
+ * MCE's default mastertag, the OpenShift versions each MCE offers (ADR-0034),
+ * addon overrides keyed `team/name`, and RFC 9457 problems shown inline. Mock shapes follow apps/day1-service's schemas.
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
 import { ClusterNewPage } from "../pages/cluster-new.page";
-import type { ClusterPreview, CreateClusterRequest, MRDetail, Mce, Problem, SpecEntry, TemplateField } from "../../types";
+import type {
+  ClusterPreview, CreateClusterRequest, MRDetail, Mce, OpenShiftVersions, Problem, SpecEntry, TemplateField,
+} from "../../types";
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -94,6 +96,22 @@ const MCES: Record<string, Mce[]> = {
   ],
 };
 
+/** What each MCE offers: the ladder's rungs in its minors. Mocked MCEs not listed have no upgrade file. */
+const OFFERED: Record<string, string[]> = {
+  "ocp4-prod-mce-site1-a": ["4.18.56", "4.17.58", "4.16.27"],
+  "ocp4-prep-mce-site2-a": ["4.21.40", "4.20.44", "4.18.22"],
+};
+
+function noUpgradeFile(mce: string): OpenShiftVersions {
+  return {
+    mce,
+    versions: [],
+    problems: [
+      `MCE ${mce} has no upgrade/mces/${mce}.yaml in the day1 repo, so Wingman can't tell which OpenShift versions it can host. Add it (see upgrade/README.md).`,
+    ],
+  };
+}
+
 const PREVIEW: ClusterPreview = {
   yaml: '# specName: "agent-standard"\n# specVersion: "1.0.0"\nowner:\n  merkaz: "1234"\n\nmastertag: 4.16.27-x86_64\n',
   path: "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-herzi-site1.yaml",
@@ -142,6 +160,7 @@ const json = (route: Route, body: unknown, status = 200) =>
 
 interface Calls {
   mceSites: (string | null)[];
+  versionMces: string[];
   previews: CreateClusterRequest[];
   creates: CreateClusterRequest[];
 }
@@ -150,13 +169,18 @@ async function setup(
   page: Page,
   { preview }: { preview?: (route: Route) => Promise<void> } = {}
 ): Promise<Calls> {
-  const calls: Calls = { mceSites: [], previews: [], creates: [] };
+  const calls: Calls = { mceSites: [], versionMces: [], previews: [], creates: [] };
   await injectAdminAuth(page);
   await mockDashboardApis(page);
 
   await page.route("**/api/day1/specs", (r) => json(r, [SPEC, BROKEN_SPEC]));
   await page.route("**/api/day1/specs/template/schema", (r) => json(r, SCHEMA));
-  await page.route("**/api/day1/specs/versions/openshift", (r) => json(r, ["4.16.27-x86_64", "4.18.22-x86_64"]));
+  await page.route("**/api/day1/mces/*/openshift-versions", (r) => {
+    const mce = decodeURIComponent(new URL(r.request().url()).pathname.split("/").at(-2) ?? "");
+    calls.versionMces.push(mce);
+    const versions = OFFERED[mce];
+    return json(r, versions ? { mce, versions, problems: [] } : noUpgradeFile(mce));
+  });
   await page.route("**/api/day2/addons", (r) => json(r, []));
   await page.route("**/api/day1/sites", (r) => json(r, ["site1", "site2"]));
   await page.route(/\/api\/day1\/mces(\?.*)?$/, (r) => {
@@ -219,8 +243,103 @@ test.describe("Cluster create form", () => {
     expect(calls.mceSites).toContain("site1");
 
     await expect(form.offConventionMces).toContainText("ocp4-mce-workflow-test");
-    await expect(form.versionSelect).toContainText("4.16.27-x86_64");
+    // The MCE's 4.16.27-x86_64 is the offered 4.16.27
+    await expect(form.versionSelect).toContainText("4.16.27");
     await expect(form.versionSource).toContainText("default of ocp4-prod-mce-site1-a");
+  });
+
+  test("the version picker is disabled until an MCE is chosen", async ({ page }) => {
+    const calls = await setup(page);
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("agent-standard");
+
+    await expect(form.versionSelect).toBeDisabled();
+    await expect(form.versionSelect).toContainText("Choose an MCE first");
+    await form.selectSite("site1");
+    await expect(form.versionSelect).toBeDisabled();
+    expect(calls.versionMces).toEqual([]);
+
+    await form.selectMce("ocp4-prod-mce-site1-a");
+    await expect(form.versionSelect).toBeEnabled();
+    expect(calls.versionMces).toEqual(["ocp4-prod-mce-site1-a"]);
+  });
+
+  test("each MCE offers the versions it can host, and a choice it can't host is dropped", async ({ page }) => {
+    await setup(page);
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("agent-standard");
+    await form.selectSite("site1");
+    await form.selectMce("ocp4-prod-mce-site1-a");
+
+    await form.versionSelect.click();
+    await expect(page.getByRole("option")).toHaveText(["4.18.56", "4.17.58", "4.16.27"]);
+    await page.getByRole("option", { name: "4.17.58" }).click();
+    await expect(form.versionSelect).toContainText("4.17.58");
+
+    // site2's MCE offers newer releases, but not 4.17.58: the field falls back to its default
+    await form.selectSite("site2");
+    await form.selectMce("ocp4-prep-mce-site2-a");
+    await expect(form.versionSelect).toContainText("4.18.22");
+    await expect(form.versionSource).toContainText("default of ocp4-prep-mce-site2-a");
+    await form.versionSelect.click();
+    await expect(page.getByRole("option")).toHaveText(["4.21.40", "4.20.44", "4.18.22"]);
+    await page.keyboard.press("Escape");
+    await expect(form.versionProblems).toHaveCount(0);
+  });
+
+  test("an MCE without its upgrade file offers no version and says why", async ({ page }) => {
+    await setup(page);
+    await page.route("**/api/day1/mces/ocp4-prod-mce-site1-a/openshift-versions", (r) =>
+      json(r, noUpgradeFile("ocp4-prod-mce-site1-a"))
+    );
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("agent-standard");
+    await form.selectSite("site1");
+    await form.selectMce("ocp4-prod-mce-site1-a");
+
+    await expect(form.versionSelect).toBeDisabled();
+    await expect(form.versionSelect).toContainText("No versions offered on ocp4-prod-mce-site1-a");
+    await expect(form.versionProblems).toContainText("ocp4-prod-mce-site1-a offers no OpenShift version");
+    await expect(form.versionProblems).toContainText(
+      "MCE ocp4-prod-mce-site1-a has no upgrade/mces/ocp4-prod-mce-site1-a.yaml in the day1 repo"
+    );
+    // Not the MCE's default mastertag, and not free text: nothing to send
+    await expect(form.versionInput).toHaveCount(0);
+    await form.fillName("ocp4-prod-herzi-site1");
+    await form.review();
+    await expect(form.formProblems).toContainText("Choose an OpenShift version");
+  });
+
+  test("a spec's preset version prefills only when the MCE offers it", async ({ page }) => {
+    await setup(page);
+    const preset = (version: string): SpecEntry => ({
+      ...SPEC,
+      spec: { ...SPEC.spec, day1: { ...SPEC.spec.day1, values: { openshift_release_version: version } } },
+    });
+    let spec = preset("4.17.58-x86_64");
+    await page.route("**/api/day1/specs", (r) => json(r, [spec]));
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("agent-standard");
+    await form.selectSite("site1");
+    await form.selectMce("ocp4-prod-mce-site1-a");
+    await expect(form.versionSelect).toContainText("4.17.58");
+    await expect(form.versionSource).toContainText("preset by spec agent-standard");
+    await expect(form.versionPresetNote).toHaveCount(0);
+
+    // A preset this MCE can't host leaves the field empty (not the MCE's default) and says why
+    spec = preset("4.21.40-x86_64");
+    await form.goto();
+    await form.chooseSpec("agent-standard");
+    await form.selectSite("site1");
+    await form.selectMce("ocp4-prod-mce-site1-a");
+    await expect(form.versionSelect).toContainText("Select OpenShift version…");
+    await expect(form.versionPresetNote).toContainText(
+      "Spec agent-standard presets 4.21.40-x86_64, which ocp4-prod-mce-site1-a can't host"
+    );
   });
 
   test("an MCE's stray files are shown as a warning", async ({ page }) => {
@@ -232,7 +351,7 @@ test.describe("Cluster create form", () => {
     await form.selectMce("ocp4-prep-mce-site2-a");
 
     await expect(page.getByTestId("mce-warnings")).toContainText(".gitkeep");
-    await expect(form.versionSelect).toContainText("4.18.22-x86_64");
+    await expect(form.versionSelect).toContainText("4.18.22");
   });
 
   test("there is no way to create a site or an MCE", async ({ page }) => {
@@ -317,7 +436,7 @@ test.describe("Cluster create form", () => {
       spec_version: "1.0.0",
     });
     expect(body.variables).toMatchObject({
-      openshift_release_version: "4.16.27-x86_64",
+      openshift_release_version: "4.16.27",
       owner_merkaz: "1234",
       nodepools: [{ infra_env: "dell-r660-site1", replicas: 2 }],
     });
@@ -452,7 +571,7 @@ test.describe("Searchable pickers", () => {
     await expect(page.getByRole("option")).toHaveAttribute("data-highlighted", "");
     await page.keyboard.press("Enter");
     await expect(form.mceSelect).toContainText("ocp4-prep-mce-site2-a");
-    await expect(form.versionSelect).toContainText("4.18.22-x86_64");
+    await expect(form.versionSelect).toContainText("4.18.22");
   });
 
   test("a search that matches nothing says so; off-convention MCEs are listed apart", async ({ page }) => {

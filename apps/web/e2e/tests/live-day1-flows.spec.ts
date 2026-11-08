@@ -110,6 +110,9 @@ test("create a cluster from a spec opens an MR its requester cannot approve", as
   await alice.getByTestId(`spec-card-${SPEC}`).click();
   await alice.getByTestId("cluster-name-input").fill(NAME);
   await expect(alice.getByTestId("naming-hint")).toContainText("Follows the naming convention");
+  // The fixture prod MCE offers the ladder's 4.16-4.18 rungs, not its 4.16.27 default (ADR-0034)
+  await alice.getByTestId("ocp-version-select").click();
+  await alice.getByRole("option", { name: "4.18.56" }).click();
   await alice.getByPlaceholder("e.g. 1234").fill("1234");
   await alice.getByPlaceholder("e.g. 56").fill("56");
   await alice.getByPlaceholder("e.g. 7").fill("7");
