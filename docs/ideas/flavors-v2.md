@@ -1,0 +1,126 @@
+# Flavors v2
+
+**Status:** decided 2026-11-08, to build on its own branch after the
+ecosystem branch merges. "Flavor" is what the code and the API call a
+cluster spec (`ClusterSpec`, `/api/day1/specs`, ADR-0013); the UI will say
+Flavor.
+
+## The problem
+
+A flavor today sets list counts (how many nodepools) and marks fields with a
+lock icon, but:
+
+- a nodepool's machine configs are free text, so a typo fails in the
+  platform-config CI after the MR, not in the form;
+- every nodepool needs the same three configs (the per-cluster network
+  config `nm-conf`, `workers-chrony-configuration`, `nic-ring-buffer`) and
+  nobody fills them in for you;
+- the lock is only a form hint: nothing enforces it;
+- an existing cluster can't join a flavor, so drift only covers clusters
+  Wingman created;
+- the create-flavor page is hard to use.
+
+## Decisions
+
+| Question | Decision |
+|---|---|
+| What does a lock mean? | **A fixed value in the flavor.** A locked field takes the flavor's value; cluster create can't override it, and a later edit that changes it shows as drift. An unlocked value is a preset anyone can override at create. |
+| What does sync change on a cluster imported into a flavor? | **Everything in one MR**: every locked value the cluster differs on, machine configs included, in one day1 MR, plus the day2 MRs for missing add-ons (one per team). |
+| Owners (merkaz, anaf, mador) | **Numbers only**: three numeric fields, validated, no names or catalogue. |
+| OCP version | **Not in the flavor.** Chosen per cluster at create, as today; upgrades are a separate flow (workflow-runs.md). |
+
+## Design
+
+### Machine configs per nodepool
+
+- **Catalogue.** Day1 reads `mc-files/` in the day1 repo (`platform-config`)
+  through `GitLabPort`. It never writes there. A new read endpoint lists:
+  - static configs, which are files in the root and its subfolders (for example `kubevirt/`);
+  - per-cluster network configs, from `templates/nm-conf-template-<hw>.bu`. A
+    nodepool picks the hardware type `<hw>`, and the name written to the file
+    is `nm-conf-<clusterName>-<hw>`, the convention the CI resolves.
+  - Not `legacy/`: those are restored originals for clusters not yet
+    onboarded, not something to pick.
+- **Picker.** The shared searchable combobox, grouped by kind, showing each
+  name with its folder. A hardware type is chosen from the template list.
+- **Validation.** On flavor save and on create, each name must resolve by the
+  same rule the CI uses (a static file, or a template suffix). An unknown
+  name is a 422 problem in the form, not a failed pipeline later.
+
+### Nodepool defaults
+
+- `nodepool-defaults.yaml` in the specs project lists the configs a new
+  nodepool starts with: `nm-conf` (hardware type to choose),
+  `workers-chrony-configuration` and `nic-ring-buffer`. The team changes it
+  by MR, like a flavor.
+- Defaults fill a nodepool when it is added, in the flavor editor and at
+  create (unless the flavor locks the list). They are written into the
+  file. Changing the defaults never changes an existing flavor or cluster.
+
+### Locks
+
+- Every value a flavor sets is either a **preset** (prefilled, overridable)
+  or **locked** (shown read-only at create; day1 refuses a create that sends
+  another value).
+- **Day1 drift** becomes: a locked value that differs in the cluster file,
+  beside the existing add-on drift (ADR-0016, ADR-0025). Presets never drift:
+  overriding them is allowed.
+- Specs already in GitLab keep loading: their `immutable_paths` are read as
+  locked paths. The old wording ("can't change after create") goes away.
+- Locked values are template inputs (`nodepools[0].configs`), but drift reads
+  the file (`nodepool[0].configs`). Day1 keeps one table that maps each
+  lockable input to its file key (owner, platform, replicas, configs,
+  labels), next to the shared template.
+
+### Owners
+
+`owner_merkaz`, `owner_anaf` and `owner_mador` are digits only (validated by
+day1 and the form). A flavor can preset or lock them, for example for a
+flavor that belongs to one team. The cluster list can filter and group by
+the three numbers.
+
+### Importing existing clusters
+
+1. **Pick.** From a flavor's page, "Add existing clusters": search and
+   filter by site, MCE and owner. Each one shows what differs from the
+   flavor: its locked values and any missing add-ons.
+2. **Import.** One day1 MR writes the flavor's link (the provenance comment
+   Wingman already writes at create: `specName`, `specVersion`) into each
+   picked cluster's file. Nothing else changes. After the merge, these
+   clusters show their differences as drift.
+3. **Sync.** Per cluster:
+   - One day1 MR writes every locked value the cluster differs on.
+   - Day2 MRs install the missing add-ons.
+   - The confirm dialog and the MR description name the nodepools whose machine
+     configs change: merging reboots those nodes, rolling, because that is
+     how OpenShift applies a MachineConfig.
+   - Sync never touches the keys others own: `vlanId`, `dhcp_values`, `mcFiles`, `mcConfigMap`.
+4. **Which clusters use this flavor.** The flavor page lists its clusters and
+   their drift. A flavor in use can't be deleted. Its version history is the
+   spec file's commit history.
+
+Still to settle while building: how a flavor's nodepool locks match an
+existing cluster's nodepools, which come in any number and order. The
+proposal is to lock configs as a rule for every nodepool ("every nodepool
+has these configs, plus `nm-conf` for its hardware") rather than by
+position. A position only means something for clusters the flavor creates.
+
+### The flavor page
+
+Redesigned with the apple-design skill once the model above exists. One page
+in four parts (basics, nodepools, add-ons, review). Each value has a clear
+preset/locked switch. Machine configs come from the picker, prefilled from
+the defaults. A live preview shows the cluster file the flavor produces.
+
+## Order of work
+
+1. Day1: the machine-config catalogue endpoint, nodepool defaults, config
+   validation, enforced locks at create, owner validation.
+2. Day1: import, day1 drift on locked values, the sync MR.
+3. Web: the flavor page, the create form's config picker, import, and drift
+   for day1 values.
+4. E2E: mocked tests for each, then the live suite against the seeded local
+   GitLab (the fixtures need an `mc-files/` tree).
+
+Each stage lands with its ADR: locks, machine configs and defaults,
+import and sync.

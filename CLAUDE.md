@@ -4,7 +4,8 @@ Orients a Claude Code session on this repo. `README.md` is the human
 quickstart; `docs/ecosystem/README.md` is how Wingman fits the team-redbull
 platform (read it before changing day1 or day2); `docs/adr/` holds the
 decisions and their reasons; `docs/ops/` holds the operator contracts
-(metrics). The session history is `docs/notes/session-log.md`. Personal,
+(metrics); `docs/ideas/` holds what could come next and the decisions it
+waits on. The session history is `docs/notes/session-log.md`. Personal,
 untracked notes (live sandbox URLs, local tokens) are in `CLAUDE.local.md`.
 This file is loaded every session, so it stays short.
 

@@ -296,10 +296,6 @@ See **[DEVELOPMENT.md](DEVELOPMENT.md)** for detailed development guide, archite
 uv run uvicorn wingman_day1.main:app --port 8001 --reload
 uv run uvicorn wingman_day2.main:app --port 8002 --reload
 
-# Backend services, from the repo root (uv workspace)
-uv run uvicorn wingman_day1.main:app --port 8001 --reload
-uv run uvicorn wingman_day2.main:app --port 8002 --reload
-
 # Frontend, proxying /api/* to them (apps/web/README.md has a no-network setup on the fake GitLab)
 cd apps/web && npm ci
 WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1:8002 npm run dev
