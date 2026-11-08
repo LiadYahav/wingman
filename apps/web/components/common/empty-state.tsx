@@ -78,6 +78,7 @@ export function NoMatches({
   what: string;
   onClear: () => void;
   clearLabel?: string;
+  bordered?: boolean;
 } & Omit<ComponentProps<"div">, "title">) {
   return (
     <EmptyState
