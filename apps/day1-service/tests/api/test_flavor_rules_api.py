@@ -74,3 +74,19 @@ async def test_a_flavor_with_configs_that_do_not_resolve_is_a_422(
     fixed = flavor(values={"nodepools": [{"configs": [{"name": "nm-conf", "hardware": "dell"}]}]})
     created = await client.post("/api/day1/specs", json=fixed, headers=auth(support.ALICE))
     assert created.status_code == 201, created.text
+
+
+async def test_owners_must_be_numbers_on_create_and_on_flavor_save(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    body = support.create_body()
+    body["variables"]["owner_anaf"] = "5 6"
+    response = await client.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
+    assert response.status_code == 422
+    assert response.json()["details"]["problems"] == [
+        "owner_anaf: must be a number of 1 to 10 digits, sent as a string like \"1234\" (got '5 6')"
+    ]
+    spec = flavor(values={"owner_mador": 7})
+    saved = await client.post("/api/day1/specs", json=spec, headers=auth(support.ALICE))
+    assert saved.status_code == 422
+    assert saved.json()["details"]["problems"][0].startswith("owner_mador: must be a number")

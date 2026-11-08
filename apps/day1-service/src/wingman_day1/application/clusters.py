@@ -4,9 +4,10 @@ Reads come from the day1 repo's default branch; changes go through the
 ``ClusterProvisioner`` (today a merge request, ADR-0017). A new cluster file
 is rendered from the shared template, then checked against the values-file
 contract before anything is written (ADR-0012), and its name against the
-naming rules (ADR-0014). Its machine configs must resolve by the day1 CI's
-rule, and the cluster's network config entry is expanded to the name the CI
-reads before the template renders (ADR-0027). A file that cannot be parsed is shown with its
+naming rules (ADR-0014). Its owners must be numbers (ADR-0028), its machine
+configs must resolve by the day1 CI's rule, and the cluster's network config
+entry is expanded to the name the CI reads before the template renders
+(ADR-0027). A file that cannot be parsed is shown with its
 error, never dropped from the list (ADR-0004).
 """
 
@@ -60,6 +61,7 @@ from wingman_day1.domain.names import (
     describe_cluster,
     new_cluster_problems,
 )
+from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
@@ -294,7 +296,8 @@ class ClusterService:
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
         cluster_name = self._naming.for_file(ref.name).cluster_name
-        problems = cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
+        problems = owner_problems(inputs)
+        problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
         inputs = expand_network_configs(inputs, cluster_name=cluster_name)

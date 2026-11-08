@@ -3,7 +3,8 @@
 A spec that fails to parse is listed with its error rather than dropped
 (ADR-0004: a read error is never swallowed). Every change is a merge request,
 and a spec is saved only when it meets the flavor rules: safe preset values
-(ADR-0013) and machine configs that resolve (ADR-0027).
+(ADR-0013), machine configs that resolve (ADR-0027) and owner numbers
+(ADR-0028).
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from wingman_day1.domain.errors import (
     StaleError,
 )
 from wingman_day1.domain.machine_configs import flavor_config_problems
+from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.specs import ClusterSpec, dump_spec, parse_spec, with_template
 from wingman_day1.domain.template import TemplateField, analyze_template, check_inputs
 from wingman_day1.ports import RepoReads, SpecChanges
@@ -198,6 +200,7 @@ class SpecCatalog:
         """Every flavor rule a spec must meet before it is proposed; all problems at once."""
         values = spec.spec.day1.values
         problems = check_inputs(values)
+        problems += owner_problems(values)
         catalog = await self._machine_configs.catalog()
         problems += flavor_config_problems(values, catalog)
         if problems:
