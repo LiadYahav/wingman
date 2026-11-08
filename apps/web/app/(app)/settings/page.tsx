@@ -1,9 +1,53 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
-import { Sun, Moon, Monitor, Shield, Eye, Users } from "lucide-react";
+import { Sun, Moon, Monitor, Shield, Eye, Users, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
+import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+
+/** What `GET /api/day{1,2}/build` returns: the `WINGMAN_VERSION` and `WINGMAN_COMMIT` a service runs. */
+interface Build {
+  version: string;
+  commit: string;
+}
+
+const SERVICES = [
+  { name: "day1", path: "/api/day1/build" },
+  { name: "day2", path: "/api/day2/build" },
+] as const;
+
+const noSubscription = () => () => {};
+
+/**
+ * False during the server render and the hydration pass, true after. The
+ * theme is only known in the browser (next-themes reads localStorage and the
+ * OS), so the selection is drawn only once mounted, or the server's HTML and
+ * the client's first render would disagree.
+ */
+function useMounted(): boolean {
+  return useSyncExternalStore(noSubscription, () => true, () => false);
+}
+
+function useBuild(path: string) {
+  // staleTime 0: a restored cache entry must not hide a redeploy.
+  return useQuery<Build>({ queryKey: ["build", path], queryFn: () => api.get<Build>(path), staleTime: 0 });
+}
+
+function BuildValue({ name, build, isPending, isError }: { name: string; build?: Build; isPending: boolean; isError: boolean }) {
+  if (isPending) return <span className="text-muted-foreground" data-testid={`build-${name}`}>…</span>;
+  if (isError || !build) return <span className="text-muted-foreground" data-testid={`build-${name}`}>Could not be read</span>;
+  return (
+    <span className="font-medium" data-testid={`build-${name}`}>
+      {build.version}
+      {build.commit !== "unknown" && (
+        <span className="ml-2 font-mono text-xs text-muted-foreground">{build.commit.slice(0, 12)}</span>
+      )}
+    </span>
+  );
+}
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -25,6 +69,7 @@ function ThemeOption({
   return (
     <button
       onClick={onClick}
+      aria-pressed={isActive}
       className={cn(
         "flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all w-28",
         isActive
@@ -42,7 +87,13 @@ function ThemeOption({
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
+  const mounted = useMounted();
+  const current = mounted ? theme : undefined;
   const { user } = useAuthStore();
+  const day1 = useBuild(SERVICES[0].path);
+  const day2 = useBuild(SERVICES[1].path);
+  const builds = [day1, day2];
+  const skew = day1.data && day2.data && day1.data.version !== day2.data.version;
 
   return (
     <div className="p-6 lg:p-8 max-w-2xl mx-auto space-y-6">
@@ -61,9 +112,9 @@ export default function SettingsPage() {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Choose your preferred color theme.</p>
           <div className="flex gap-3">
-            <ThemeOption value="light" label="Light" icon={Sun} current={theme} onClick={() => setTheme("light")} />
-            <ThemeOption value="dark" label="Dark" icon={Moon} current={theme} onClick={() => setTheme("dark")} />
-            <ThemeOption value="system" label="System" icon={Monitor} current={theme} onClick={() => setTheme("system")} />
+            <ThemeOption value="light" label="Light" icon={Sun} current={current} onClick={() => setTheme("light")} />
+            <ThemeOption value="dark" label="Dark" icon={Moon} current={current} onClick={() => setTheme("dark")} />
+            <ThemeOption value="system" label="System" icon={Monitor} current={current} onClick={() => setTheme("system")} />
           </div>
         </div>
       </SectionCard>
@@ -112,19 +163,21 @@ export default function SettingsPage() {
         </SectionCard>
       )}
 
-      {/* Platform info */}
+      {/* Platform info: what each service reports it runs */}
       <SectionCard title="Platform">
         <div className="space-y-3 text-sm">
-          {[
-            { label: "Platform", value: "Wingman" },
-            { label: "Version", value: "1.0.0" },
-            { label: "Environment", value: process.env.NODE_ENV ?? "production" },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
-              <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium">{value}</span>
+          {SERVICES.map(({ name }, i) => (
+            <div key={name} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+              <span className="text-muted-foreground">{name} version</span>
+              <BuildValue name={name} build={builds[i].data} isPending={builds[i].isPending} isError={builds[i].isError} />
             </div>
           ))}
+          {skew && (
+            <p className="flex items-center gap-1.5 text-xs text-status-warning-fg" data-testid="build-skew">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              day1 and day2 run different versions.
+            </p>
+          )}
         </div>
       </SectionCard>
     </div>
