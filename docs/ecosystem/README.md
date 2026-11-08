@@ -55,7 +55,7 @@ This flow is git plus CI, not one workflow.
 | 1 | Write `sites/<site>/mces/<mce>/hostedClusters/ocp4-<name>.yaml` on a non-main branch of the day1 repo and open an MR | A person (Wingman does this today) | Manual |
 | 2 | The branch push starts day1 CI. CI calls `POST /workflows/segment-lifecycle/allocate-segment {cluster, values_branch, type: "HC"}`. The workflow allocates the lowest free VLAN in segments-manager and commits `vlanId` + `dhcp_values` back to the branch with `[skip ci]`. CI then renders `mcFiles`/`mcConfigMap` and commits again | CI + workflow | Automated |
 | 3 | Merge to `main`. This is the approval | A person | Manual |
-| 4 | The ArgoCD tier-3 ApplicationSet on the MCE makes one Application per file. The chart renders HostedCluster `openshift-<cn>` in namespace `hcp-<cn>`, NodePool ConfigMaps, NodePools and the Crossplane DHCP scope. The exported values set no auto-sync for these Applications (**verify on a live MCE**) | ArgoCD | Automated (sync possibly manual) |
+| 4 | The ArgoCD tier-3 ApplicationSet on the MCE makes one Application per file. The chart renders HostedCluster `ocp4-<cn>` (the file stem in production; checked live 2026-11-08, ADR-0015) in namespace `hcp-<cn>`, NodePool ConfigMaps, NodePools and the Crossplane DHCP scope. The exported values set no auto-sync for these Applications (**verify on a live MCE**) | ArgoCD | Automated (sync possibly manual) |
 | 5 | HyperShift brings up the control plane. NodePools claim Agents from the InfraEnv, and herzi tops the pool up | HyperShift, herzi | Automated (where herzi is live) |
 | 6 | **Delete:** remove the file through an MR. In the sandbox chart a PostDelete hook runs `release-segment`. **The production chart has no such hook, so the segment is never released** | A person + hook | Partly |
 
@@ -280,7 +280,7 @@ Tenant flows: create (03), scale a NodePool (04), delete (05), upgrade the contr
 - Approvals cache-key mismatch: writes clear `approvals:day1:list`, but the real key is `approvals:combined:list`.
 - Day2 approvals look MRs up by IID across team projects, so two teams' `!5` collide.
 - The audit MR expand returns 422 for Day1 MRs.
-- The status service doesn't match the chart's naming: the chart creates HostedCluster `openshift-<clusterName>` in `hcp-<clusterName>`. Re-check after the `ocp4-` prefix question is settled.
+- The status service didn't match the chart's naming. The chart creates HostedCluster `ocp4-<clusterName>` in `hcp-<clusterName>` (checked live 2026-11-08). Fixed in day1 (ADR-0015, correction).
 - **Every file in `hostedClusters/` becomes an ArgoCD Application** (confirmed):
   - The tier-3 generator is `files: sites/<site>/mces/<mce>/hostedClusters/*`, and its comment says an empty file "fails the generator rather than being skipped" (`gitops-day1-argocd-platform/hostedClusters/templates/hcAppset.yaml`).
   - **When Wingman creates an MCE, it writes an empty `hostedClusters/.gitkeep` (`cluster_service.py:531`), which breaks that MCE's ApplicationSet.**
@@ -361,7 +361,7 @@ Related prior art to reuse rather than duplicate: **cluster-navigator** (`team-r
 - **MCE:** `ocp4-<env>-mce-<site>-<letter>`
 - **Seed:** `ocp4-seed-<site>-<zone>`
 - **KubeVirt cluster:** `ocp4-kubevirt-<site>-<zone>…`
-- **Hosted cluster file:** `ocp4-<env>-<name>-<site>[-<x>].yaml`. The file stem is the segments-manager `cluster_name` and the day2 folder/Argo cluster name. The HostedCluster is `openshift-<cn>` in `hcp-<cn>`.
+- **Hosted cluster file:** `ocp4-<env>-<name>-<site>[-<x>].yaml`. The file stem is the segments-manager `cluster_name` and the day2 folder/Argo cluster name. The HostedCluster is `ocp4-<cn>` (the stem in production) in `hcp-<cn>`.
 - **Cluster names** are unique across the whole estate.
 - **Workflow ids are deterministic:** `allocate-segment-HC-<cluster>`, `create-hosted-cluster-<cluster>`, slot runs `<wf>-<mce>_<pool>_<n>`.
 - **Task queues:** `<workflow>-workflow` for workflows; `<domain>-activity` for activities, with `-<mce>` added when the worker writes to an MCE.

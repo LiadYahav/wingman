@@ -104,7 +104,7 @@ export interface ClusterNaming {
   problems: string[];
 }
 
-/** What the chart renders: `openshift-<clusterName>` in `hcp-<clusterName>` (ADR-0015). */
+/** What the chart renders: `ocp4-<clusterName>` in `hcp-<clusterName>` (ADR-0015). */
 export interface HostedClusterRef {
   cluster_name: string;
   name: string;

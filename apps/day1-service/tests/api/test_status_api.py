@@ -59,7 +59,7 @@ async def test_status_has_the_legacy_shape_and_names_the_hosted_cluster(
     )
     assert response.json() == {
         "cluster_name": HERZI,
-        "hosted_cluster": "openshift-prod-herzi-site1",
+        "hosted_cluster": "ocp4-prod-herzi-site1",
         "namespace": "hcp-prod-herzi-site1",
         "hc_phase": None,
         "ocp_version": "4.16.27",
@@ -179,9 +179,7 @@ async def test_the_status_stream_sends_the_status_as_an_event(
     )
     assert event.startswith("data: ")
     assert event.endswith("\n\n")
-    assert (
-        json.loads(event.removeprefix("data: "))["hosted_cluster"] == "openshift-prod-herzi-site1"
-    )
+    assert json.loads(event.removeprefix("data: "))["hosted_cluster"] == "ocp4-prod-herzi-site1"
 
 
 async def test_the_status_stream_of_a_cluster_not_on_the_hub_reports_the_error(
@@ -196,5 +194,5 @@ async def test_the_status_stream_of_a_cluster_not_on_the_hub_reports_the_error(
         auth(support.VIEWER),
     )
     body = json.loads(event.removeprefix("data: "))
-    assert body["hosted_cluster"] == "openshift-prod-new-site1"
+    assert body["hosted_cluster"] == "ocp4-prod-new-site1"
     assert body["error"].startswith("HubObjectNotFound:")

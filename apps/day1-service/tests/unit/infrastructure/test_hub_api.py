@@ -25,7 +25,7 @@ MCE = "ocp4-prod-mce-site1-a"
 Handler = Callable[[httpx.Request], httpx.Response]
 
 HOSTED_CLUSTER = {
-    "metadata": {"name": "openshift-prod-herzi-site1", "namespace": "hcp-prod-herzi-site1"},
+    "metadata": {"name": "ocp4-prod-herzi-site1", "namespace": "hcp-prod-herzi-site1"},
     "status": {
         "conditions": [
             {"type": "Available", "status": "True", "reason": "AsExpected", "message": ""},
@@ -86,16 +86,16 @@ def make(
 async def test_hosted_cluster_url_token_and_parsing() -> None:
     api, rec = make(reply(200, HOSTED_CLUSTER))
     hc = await api.hosted_cluster(
-        MCE, namespace="hcp-prod-herzi-site1", name="openshift-prod-herzi-site1"
+        MCE, namespace="hcp-prod-herzi-site1", name="ocp4-prod-herzi-site1"
     )
     request = rec.requests[0]
     assert str(request.url) == (
         "https://api.ocp4-prod-mce-site1-a.hubs.example.invalid:6443"
         "/apis/hypershift.openshift.io/v1beta1/namespaces/hcp-prod-herzi-site1"
-        "/hostedclusters/openshift-prod-herzi-site1"
+        "/hostedclusters/ocp4-prod-herzi-site1"
     )
     assert request.headers["authorization"] == f"Bearer {TOKEN}"
-    assert hc.name == "openshift-prod-herzi-site1"
+    assert hc.name == "ocp4-prod-herzi-site1"
     assert hc.namespace == "hcp-prod-herzi-site1"
     assert hc.phase is None
     assert hc.version == "4.16.27"
@@ -108,10 +108,10 @@ async def test_hosted_cluster_url_token_and_parsing() -> None:
 
 async def test_hosted_cluster_with_phase_and_no_status() -> None:
     api, _ = make(reply(200, {"status": {"phase": "Completed", "version": {}}}))
-    hc = await api.hosted_cluster(MCE, namespace="hcp-x", name="openshift-x")
+    hc = await api.hosted_cluster(MCE, namespace="hcp-x", name="ocp4-x")
     assert (hc.phase, hc.version, hc.conditions) == ("Completed", None, ())
-    bare, _ = make(reply(200, {"metadata": {"name": "openshift-x"}}))
-    hc = await bare.hosted_cluster(MCE, namespace="hcp-x", name="openshift-x")
+    bare, _ = make(reply(200, {"metadata": {"name": "ocp4-x"}}))
+    hc = await bare.hosted_cluster(MCE, namespace="hcp-x", name="ocp4-x")
     assert (hc.phase, hc.version, hc.conditions) == (None, None, ())
 
 
@@ -165,7 +165,7 @@ async def test_infra_envs_namespaced_or_hub_wide(namespace: str | None, path: st
 async def test_status_codes_map_to_domain_errors(status: int, error: type[Exception]) -> None:
     api, _ = make(reply(status, {"message": f"leaked {TOKEN}?"}))
     with pytest.raises(error) as caught:
-        await api.hosted_cluster(MCE, namespace="hcp-x", name="openshift-x")
+        await api.hosted_cluster(MCE, namespace="hcp-x", name="ocp4-x")
     assert TOKEN not in str(caught.value)
     assert MCE in str(caught.value)
 
@@ -209,7 +209,7 @@ async def test_malformed_objects_are_unavailable(call: str, body: object) -> Non
     api, _ = make(reply(200, body))
     with pytest.raises(HubUnavailableError, match="malformed"):
         if call == "hosted_cluster":
-            await api.hosted_cluster(MCE, namespace="hcp-x", name="openshift-x")
+            await api.hosted_cluster(MCE, namespace="hcp-x", name="ocp4-x")
         elif call == "node_pools":
             await api.node_pools(MCE, namespace="hcp-x")
         else:
@@ -245,7 +245,7 @@ async def test_an_mce_key_that_is_not_a_dns_label_has_no_hub_address() -> None:
 
 @pytest.mark.parametrize(
     ("namespace", "name"),
-    [("hcp-x/../kube-system", "openshift-x"), ("hcp-x", "a?b=c"), ("HCP", "openshift-x")],
+    [("hcp-x/../kube-system", "ocp4-x"), ("hcp-x", "a?b=c"), ("HCP", "ocp4-x")],
 )
 async def test_names_that_cannot_exist_never_reach_the_hub(namespace: str, name: str) -> None:
     api, rec = make(reply(200, HOSTED_CLUSTER))
@@ -278,7 +278,7 @@ def sample(metrics: WingmanMetrics, name: str, **labels: str) -> float | None:
 async def test_calls_are_counted_and_timed_by_outcome() -> None:
     metrics = WingmanMetrics(CollectorRegistry(), component="day1", version="t", commit="t")
     api, _ = make(reply(200, HOSTED_CLUSTER), metrics=metrics)
-    await api.hosted_cluster(MCE, namespace="hcp-x", name="openshift-x")
+    await api.hosted_cluster(MCE, namespace="hcp-x", name="ocp4-x")
     missing, _ = make(reply(404, {}), metrics=metrics)
     with pytest.raises(HubObjectNotFoundError):
         await missing.node_pools(MCE, namespace="hcp-x")

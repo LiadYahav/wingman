@@ -46,7 +46,7 @@ async def test_read_views_list_the_fixture_repo(
     }
     assert herzi["hosted_cluster"] == {
         "cluster_name": "prod-herzi-site1",
-        "name": "openshift-prod-herzi-site1",
+        "name": "ocp4-prod-herzi-site1",
         "namespace": "hcp-prod-herzi-site1",
     }
     assert by_name["ocp4-prep-amit-site2-a"]["naming"]["sequence"] == "a"

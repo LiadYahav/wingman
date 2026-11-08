@@ -116,7 +116,7 @@ def test_a_true_forbidden_condition_is_a_problem() -> None:
 
 def test_live_status_applies_the_hostedcluster_and_nodepool_rules() -> None:
     hosted = HostedClusterObservation(
-        name="openshift-x",
+        name="ocp4-x",
         namespace="hcp-x",
         phase="Completed",
         version="4.18.22",
@@ -129,7 +129,7 @@ def test_live_status_applies_the_hostedcluster_and_nodepool_rules() -> None:
     status = live_status("ocp4-x", hosted, pools)
     assert (status.cluster_name, status.hosted_cluster, status.namespace) == (
         "ocp4-x",
-        "openshift-x",
+        "ocp4-x",
         "hcp-x",
     )
     assert (status.hc_phase, status.ocp_version, status.error) == ("Completed", "4.18.22", None)
@@ -149,7 +149,7 @@ def test_live_status_applies_the_hostedcluster_and_nodepool_rules() -> None:
 
 def test_a_nodepool_read_failure_is_a_hostedcluster_problem_not_silence() -> None:
     hosted = HostedClusterObservation(
-        "openshift-x", "hcp-x", None, None, (Condition("Available", "True"),)
+        "ocp4-x", "hcp-x", None, None, (Condition("Available", "True"),)
     )
     status = live_status("ocp4-x", hosted, [], node_pool_error="403 Forbidden")
     assert status.hc_problems == ("NodePool fetch failed: 403 Forbidden",)

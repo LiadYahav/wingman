@@ -295,7 +295,7 @@ async def test_a_file_with_a_clustername_key_names_its_hosted_cluster(
         content="clusterName: herzi-special\nmastertag: 4.16.27-x86_64\n",
     )
     cluster = await context.clusters.get(HERZI)
-    assert cluster.hosted_cluster.name == "openshift-herzi-special"
+    assert cluster.hosted_cluster.name == "ocp4-herzi-special"
     assert cluster.hosted_cluster.namespace == "hcp-herzi-special"
 
 

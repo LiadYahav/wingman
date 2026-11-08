@@ -153,9 +153,9 @@ def test_an_off_convention_new_name_is_refused() -> None:
 
 
 def test_the_control_plane_namespace_must_fit_in_63_characters_when_ocp4_is_stripped() -> None:
-    # hcp-<cn>-openshift-<cn> is 15 + 2 * len(cn); cn is "prod-<name>-site1".
-    fits = "ocp4-prod-" + "a" * 13 + "-site1"
-    too_long = "ocp4-prod-" + "a" * 14 + "-site1"
+    # hcp-<cn>-ocp4-<cn> is 10 + 2 * len(cn); cn is "prod-<name>-site1".
+    fits = "ocp4-prod-" + "a" * 15 + "-site1"
+    too_long = "ocp4-prod-" + "a" * 16 + "-site1"
     mce = "ocp4-prod-mce-site1-a"
     assert new_cluster_problems(fits, site="site1", mce=mce, naming=STRIP) == []
     problems = new_cluster_problems(too_long, site="site1", mce=mce, naming=STRIP)
@@ -163,7 +163,7 @@ def test_the_control_plane_namespace_must_fit_in_63_characters_when_ocp4_is_stri
 
 
 def test_the_sandbox_keeps_the_whole_stem_so_its_limit_is_tighter() -> None:
-    name = "ocp4-prod-falconx12-site1"
+    name = "ocp4-prod-falconx1234-site1"  # 27: 64 with the whole stem, 54 stripped
     mce = "ocp4-prod-mce-site1-a"
     assert new_cluster_problems(name, site="site1", mce=mce, naming=STRIP) == []
     problems = new_cluster_problems(name, site="site1", mce=mce, naming=SANDBOX)
@@ -173,14 +173,14 @@ def test_the_sandbox_keeps_the_whole_stem_so_its_limit_is_tighter() -> None:
 def test_production_strips_ocp4_from_the_file_name() -> None:
     ref = STRIP.for_file("ocp4-prod-herzi-site1")
     assert ref == HostedClusterRef("prod-herzi-site1")
-    assert ref.name == "openshift-prod-herzi-site1"
+    assert ref.name == "ocp4-prod-herzi-site1"
     assert ref.namespace == "hcp-prod-herzi-site1"
-    assert ref.control_plane_namespace == "hcp-prod-herzi-site1-openshift-prod-herzi-site1"
+    assert ref.control_plane_namespace == "hcp-prod-herzi-site1-ocp4-prod-herzi-site1"
 
 
 def test_the_sandbox_keeps_the_full_stem() -> None:
     ref = SANDBOX.for_file("ocp4-upgrade-demo")
-    assert (ref.name, ref.namespace) == ("openshift-ocp4-upgrade-demo", "hcp-ocp4-upgrade-demo")
+    assert (ref.name, ref.namespace) == ("ocp4-ocp4-upgrade-demo", "hcp-ocp4-upgrade-demo")
 
 
 def test_a_stem_without_the_prefix_is_kept_as_is_when_stripping() -> None:
@@ -188,7 +188,7 @@ def test_a_stem_without_the_prefix_is_kept_as_is_when_stripping() -> None:
 
 
 def test_an_explicit_cluster_name_in_the_file_wins_in_both_modes() -> None:
-    assert STRIP.for_file("ocp4-x", explicit="custom").name == "openshift-custom"
+    assert STRIP.for_file("ocp4-x", explicit="custom").name == "ocp4-custom"
     assert SANDBOX.for_file("ocp4-x", explicit="custom").namespace == "hcp-custom"
     assert STRIP.for_file("ocp4-x", explicit="").cluster_name == "x"
 

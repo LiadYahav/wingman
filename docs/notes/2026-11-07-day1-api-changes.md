@@ -118,7 +118,7 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     `error`; `is_drifted` may be `null`. Count unknowns separately.
 18. **Status** (`/clusters/{name}/status`, `/status/stream`, `/bulk-status`):
     bodies gain `hosted_cluster` and `namespace` (the HostedCluster is now
-    `openshift-<clusterName>` in `hcp-<clusterName>`, ADR-0015).
+    `ocp4-<clusterName>` in `hcp-<clusterName>`, ADR-0015 and its 2026-11-08 correction).
     `bulk-status` answers for every requested cluster, with `error` set on
     failures (it used to omit them). Off → 501 `FEATURE_DISABLED` problem
     (was a plain 501).
