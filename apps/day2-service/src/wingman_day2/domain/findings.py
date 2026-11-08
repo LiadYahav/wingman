@@ -39,6 +39,8 @@ class Rule(StrEnum):
     DUPLICATE_APP = "duplicate-app"
     REPOURL_MISCASED = "repourl-miscased"
     REPOURL_MISSING = "repourl-missing"
+    REPOURL_MOVED = "repourl-moved"
+    CHART_REPO_UNREADABLE = "chart-repo-unreadable"
     YAML_INVALID = "yaml-invalid"
     OCP_VERSION_PIN_MISSING = "ocp-version-pin-missing"
     FLEET_PIN_OVERRIDES_OCP_VERSIONS = "fleet-pin-overrides-ocp-versions"

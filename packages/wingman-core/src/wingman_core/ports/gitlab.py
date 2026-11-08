@@ -34,7 +34,12 @@ class GitLabPort(Protocol):
     """Reads and writes against GitLab projects. All methods are async."""
 
     async def get_project(self, project: int | str) -> Project:
-        """A project by numeric id or by ``group/sub/name`` path."""
+        """A project by numeric id or by ``group/sub/name`` path.
+
+        A path GitLab keeps as a redirect (the project was renamed or moved)
+        finds the project at its new path, as git and ArgoCD do; the caller can
+        tell by comparing ``path_with_namespace`` with the path it asked for.
+        """
         ...
 
     async def list_group_projects(self, group: str) -> list[Project]:

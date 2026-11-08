@@ -18,7 +18,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
+from urllib.parse import urlsplit
 
+from wingman_core.domain.git import Project
 from wingman_day2.domain.clusters import UPI_ARGO_NAMESPACE, ClusterKind, ClusterRef
 
 REPOURL: Final = "repourl"
@@ -48,6 +50,20 @@ def _text(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
+
+
+def repourl_moved_to(repo_url: str, project: Project) -> str | None:
+    """The URL to write instead, when ``repo_url`` names ``project`` by an old path.
+
+    GitLab keeps a renamed or moved project's old path as a redirect, so the
+    old ``repourl`` still works for git and ArgoCD, until someone creates a
+    project at the old path. ``None`` when ``repo_url`` is already current.
+    """
+    path = urlsplit(repo_url.strip()).path.strip("/").removesuffix(".git")
+    current = project.path_with_namespace.strip("/")
+    if f"/{path}".lower().endswith(f"/{current}".lower()):
+        return None
+    return f"{project.web_url}.git" if repo_url.strip().endswith(".git") else project.web_url
 
 
 def miscased_repourl_keys(doc: Mapping[str, object]) -> list[str]:

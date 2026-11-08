@@ -26,9 +26,10 @@ JSON schemas are in `upgrade/schema/`.
   `GET /api/day1/mces/{mce}/openshift-versions` returns
   `{mce, versions[], problems[]}`. The files are read through the cached day1
   repository (ADR-0011). An MCE folder that exists nowhere is a 404.
-- The JSON schemas are the contract for the parts Wingman reads
-  (`schemaVersion: 1`, the rung pattern `4.N.N`, the minor pattern `4.N`).
-  The day1 repo's `scripts/validate_upgrade_rules.py` checks the rest. An
+- The JSON schemas are the contract for the parts Wingman reads (the rung
+  pattern `4.N.N`, the minor pattern `4.N`). The day1 repo's
+  `scripts/validate_upgrade_rules.py` checks the rest, `schemaVersion`
+  included (see the correction below). An
   entry that breaks them is left out and named in `problems`. An unquoted
   `4.20` is the float `4.2`, so it is refused, not guessed.
 - A missing or broken file means no versions and a problem in plain words,
@@ -82,3 +83,12 @@ JSON schemas are in `upgrade/schema/`.
 - `apps/web/e2e/tests/cluster-creation.spec.ts`: the per-MCE list, the
   problem when an MCE has no file, the disabled picker before an MCE is
   chosen, a spec preset the MCE can't host.
+
+## Correction (2026-11-08)
+
+The first version also required `schemaVersion: 1` and offered no version
+when it was missing. Production's `upgrade/ladder.yaml` has no
+`schemaVersion` (the sandbox copy that the fixtures follow added it), so every
+MCE offered nothing and no cluster could be created. Wingman now ignores
+`schemaVersion`: it reads only `ladder[].version`, and checks each rung's own
+shape, so a file whose format moves on still says which rung it can't read.

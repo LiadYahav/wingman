@@ -23,7 +23,7 @@ from wingman_core.domain.git import Project
 from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
 from wingman_core.settings import GitLabSettings
-from wingman_core.testing.gitlab_contract import GitLabContract, NewProject
+from wingman_core.testing.gitlab_contract import GitLabContract, NewProject, RenameProject
 
 URL = os.environ.get("WINGMAN_TEST_GITLAB_URL", "")
 TOKEN = os.environ.get("WINGMAN_TEST_GITLAB_TOKEN", "")
@@ -95,3 +95,11 @@ class TestLiveGitLabContract(GitLabContract):
         yield make
         for project_id in created:
             await admin.delete(f"/projects/{project_id}")
+
+    @pytest.fixture
+    def rename_project(self, admin: httpx.AsyncClient) -> RenameProject:
+        async def rename(project: Project, name: str) -> None:
+            response = await admin.put(f"/projects/{project.id}", json={"name": name, "path": name})
+            response.raise_for_status()
+
+        return rename

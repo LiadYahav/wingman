@@ -34,6 +34,7 @@ checked against it.
 | Day2 permissions per team: a team edits only its own `sigs/<team>` repo | Proposed | [day2-team-permissions.md](day2-team-permissions.md) |
 | Common changes as one form each (scale by total, labels, configs, owner), API tokens for automation, a ticket key on every change | Proposed | [self-service-changes.md](self-service-changes.md) |
 | A merge gate: approve only when the pipeline passed and the segment is written | Proposed | [merge-gate.md](merge-gate.md) |
+| Faster pages: read each repo once per commit (a branch-head check, then one archive when it moved) instead of file by file | Proposed 2026-11-08 | [repo-snapshots.md](repo-snapshots.md) |
 | Tenants see and request changes for their own clusters (by owner numbers); capacity showback per org unit | Proposed | [owners-and-tenants.md](owners-and-tenants.md) |
 | Fleet versions against each MCE's window (who is at the edge, what blocks an upgrade), and pool capacity against the watermarks | Proposed | [fleet-versions-and-capacity.md](fleet-versions-and-capacity.md) |
 | Deleted clusters stay findable: a cluster's file is gone after delete, but its history (who, when, which MR, its last values) is in git; show it | Proposed: read-only, from GitLab history (answers delete procedure question 3, what is kept for audit) | — |

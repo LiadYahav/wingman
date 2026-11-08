@@ -58,7 +58,7 @@ sha256() {
 
 # fetch <url> <sha256> <file>: download, then refuse anything but the pinned bytes.
 fetch() {
-  curl -sSfL --retry 3 -o "$3" "$1"
+  curl -sSfL --retry 5 --retry-delay 5 -o "$3" "$1"
   local actual
   actual=$(sha256 "$3")
   if [[ $actual != "$2" ]]; then

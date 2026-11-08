@@ -111,9 +111,10 @@ Explicit user instructions; violating one is a real mistake, not style.
   day1 repo's upgrade ladder; `docs/ideas/`, `docs/upgrade/`.
 - **Not done yet, in order:** (1) flavors v2 (`docs/ideas/flavors-v2.md`;
   stages 1 and 2 on `roiblum/feat-flavors-v2`, the web pages to build);
-  (2) the architect's answers (`docs/ideas/architecture-fit.md`); (3) chart
-  hardening (a values schema, a pinned nginx image); (4) ecosystem features
-  (`docs/ideas/`).
+  (2) faster pages, reading each repo once per commit
+  (`docs/ideas/repo-snapshots.md`, waits on the user); (3) the architect's
+  answers (`docs/ideas/architecture-fit.md`); (4) chart hardening (a values
+  schema, a pinned nginx image); (5) ecosystem features (`docs/ideas/`).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -255,15 +256,20 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-08 — PR #17 finished and merged; flavors v2 started.** The web
-followed both API notes; report-only drift (ADR-0025); the in-app docs
-audited and guarded (`tests/repo/test_web_docs_contract.py`); UX basics; a
-cleanup and review pass (legacy package gone, duplicates in core, the
-agents' mistakes fixed); the delete-cluster workflow contract (ADR-0033);
-versions from the upgrade ladder. The user's decisions are in
-`docs/ideas/flavors-v2.md` and `architecture-fit.md`. **Next:** flavors v2 on
-`roiblum/feat-flavors-v2`:
-- stage 2's sync, half done in the worktree `agent-a35695ba357fd9bb2` as a
-  WIP commit;
-- stage 3, the web pages and the flavor page redesign (apple-design skill);
-- an upgrade guide for its operator steps.
+**2026-11-08 — releases 3.0.1 to 3.1.0: numbering, status, chart move, two
+production bugs.** 3.0.1 versions every release from its commits (ADR-0031);
+3.0.2 reads the HostedCluster `ocp4-<clusterName>` (ADR-0015 correction) and
+moves the chart to `deploy/helm/wingman/`. PR #20 (3.1.0):
+- a renamed chart repo no longer fails the whole catalog: `get_project`
+  follows GitLab's rename redirect, an unreadable chart repo is that chart's
+  `chart-repo-unreadable`, and the Lints page flags every `repourl-moved`;
+- the upgrade ladder is read without `schemaVersion`, as production writes it
+  (ADR-0034 correction).
+
+**Next:**
+- the user decides on reading each repo once per commit
+  (`docs/ideas/repo-snapshots.md`);
+- flavors v2 on `roiblum/feat-flavors-v2`: stage 2's sync is half done in the
+  worktree `agent-a35695ba357fd9bb2` as a WIP commit; then stage 3, the web
+  pages and the flavor page redesign (apple-design skill); an upgrade guide
+  for its operator steps. Merge main into it first; watch ADR numbers.
