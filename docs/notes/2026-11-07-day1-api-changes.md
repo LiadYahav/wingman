@@ -105,6 +105,14 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     spec is gone); `addon_drift[]` items gain `override_values` (pass them
     to day2's install as `override_values` instead of `{}`). The legacy
     `reason: "No spec associated"` field is gone (`state: not_linked`).
+    Only a missing spec addon is drift (ADR-0025): an `addon_drift[]`
+    item's `reason` is only `"missing"` (`"version_mismatch"` is gone), and
+    its fix installs it at the team default version: send day2's install
+    no `version` (any other is refused as an unconfirmed emergency pin,
+    ADR-0022). A spec addon installed at another version is listed in
+    the new `version_differences[{addon_name, team, spec_version,
+    installed_version}]`, does not make the cluster `drifted`, and has no
+    fix: show it as information.
 17. **`GET /clusters/drift-summary`** items gain `site`, `mce`, `state`,
     `error`; `is_drifted` may be `null`. Count unknowns separately.
 18. **Status** (`/clusters/{name}/status`, `/status/stream`, `/bulk-status`):
