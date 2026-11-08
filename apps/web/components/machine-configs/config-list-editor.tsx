@@ -50,9 +50,11 @@ export function ConfigListEditor({
   catalog,
   loading = false,
   readOnly = false,
+  namesLocked = false,
   clusterName,
   problems = {},
   label = "Machine configs",
+  hideLabel = false,
   testId = "config-list",
 }: {
   entries: ConfigEntry[];
@@ -61,11 +63,18 @@ export function ConfigListEditor({
   loading?: boolean;
   /** Locked by the flavor: shown, not editable. */
   readOnly?: boolean;
+  /**
+   * The configs rule (ADR-0029): the names are fixed (no add, remove or
+   * rename), but an `nm-conf` entry's hardware type is still chosen here.
+   */
+  namesLocked?: boolean;
   /** The chart's clusterName (no `ocp4-`), to show the network config's file name. */
   clusterName?: string;
   /** Day1's problems by entry index (`nodepools[i].configs[j]: ...`). */
   problems?: Record<number, string[]>;
   label?: string;
+  /** The surrounding form shows its own label (and lock): keep `label` for the controls' names only. */
+  hideLabel?: boolean;
   testId?: string;
 }) {
   const local = useMemo(() => entryProblems(entries, catalog), [entries, catalog]);
@@ -85,9 +94,11 @@ export function ConfigListEditor({
   if (readOnly) {
     return (
       <div className="space-y-1.5" data-testid={testId}>
-        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Lock className="h-3 w-3" aria-hidden /> {label} · locked by the flavor
-        </p>
+        {!hideLabel && (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Lock className="h-3 w-3" aria-hidden /> {label} · locked by the flavor
+          </p>
+        )}
         {entries.length === 0 ? (
           <p className="text-xs text-muted-foreground">None.</p>
         ) : (
@@ -107,9 +118,72 @@ export function ConfigListEditor({
     );
   }
 
+  const hardwarePicker = (entry: ConfigEntry, index: number) => (
+    <Combobox
+      className="w-40 shrink-0"
+      options={hardwareOptions}
+      value={entry.hardware ?? null}
+      onValueChange={(hardware) => set(index, { name: NETWORK_CONFIG, hardware })}
+      placeholder="Hardware…"
+      searchPlaceholder="Search hardware types…"
+      emptyMessage="No hardware type matches."
+      disabled={loading}
+      aria-label={`${label}: entry ${index + 1} hardware type`}
+      aria-invalid={!entry.hardware}
+    />
+  );
+
+  if (namesLocked) {
+    return (
+      <div className="space-y-2" data-testid={testId}>
+        {!hideLabel && (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Lock className="h-3 w-3" aria-hidden /> {label} · names locked by the flavor
+          </p>
+        )}
+        {entries.length === 0 && <p className="text-xs text-muted-foreground">None.</p>}
+        <ul className="space-y-2" aria-label={label}>
+          {entries.map((entry, index) => {
+            const shown = [...(local[index] ?? []), ...(problems[index] ?? [])];
+            const network = isNetworkEntry(entry);
+            const name = fileName(entry, clusterName);
+            return (
+              <li key={index} className="space-y-1" data-testid={`${testId}-entry-${index}`}>
+                <div className="flex items-start gap-2">
+                  <span
+                    className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-input/60 bg-muted/40 px-2.5 font-mono text-xs"
+                    data-testid={`${testId}-entry-${index}-name`}
+                  >
+                    {network ? (
+                      <Network className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+                    ) : (
+                      <Lock className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+                    )}
+                    <span className="truncate">{entry.name}</span>
+                  </span>
+                  {network && hardwarePicker(entry, index)}
+                </div>
+                {network && name && (
+                  <p className="pl-1 font-mono text-[11px] text-muted-foreground">Written as {name}</p>
+                )}
+                {shown.length > 0 && (
+                  <ul className="pl-1 text-xs text-destructive" role="alert">
+                    {shown.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2" data-testid={testId}>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      {!hideLabel && <p className="text-xs font-medium text-muted-foreground">{label}</p>}
       {entries.length === 0 && <p className="text-xs text-muted-foreground">No machine configs.</p>}
       <ul className="space-y-2" aria-label={label}>
         {entries.map((entry, index) => {
@@ -133,20 +207,7 @@ export function ConfigListEditor({
                   aria-label={`${label}: entry ${index + 1}`}
                   aria-invalid={shown.length > 0}
                 />
-                {network && (
-                  <Combobox
-                    className="w-40 shrink-0"
-                    options={hardwareOptions}
-                    value={entry.hardware ?? null}
-                    onValueChange={(hardware) => set(index, { name: NETWORK_CONFIG, hardware })}
-                    placeholder="Hardware…"
-                    searchPlaceholder="Search hardware types…"
-                    emptyMessage="No hardware type matches."
-                    disabled={loading}
-                    aria-label={`${label}: entry ${index + 1} hardware type`}
-                    aria-invalid={!entry.hardware}
-                  />
-                )}
+                {network && hardwarePicker(entry, index)}
                 <Button
                   type="button"
                   variant="ghost"

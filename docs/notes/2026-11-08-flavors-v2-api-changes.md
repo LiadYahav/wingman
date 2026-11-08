@@ -310,8 +310,10 @@ form starts with.
   `nodepools[0].configs`, presets `nodepools[0].replicas: 2`.
 - `agent-single` and `agent-standard` still use `immutable_paths: []`, so
   they also prove the alias.
-- The live create in `e2e/tests/live-day1-flows.spec.ts` now types
-  `workers-chrony-configuration` (it typed a name that does not exist).
+- The live create in `e2e/tests/live-day1-flows.spec.ts` keeps the nodepool
+  defaults the create form fills in and picks each nodepool's hardware type
+  (it typed a name that does not exist before stage 1, then
+  `workers-chrony-configuration` until the form's config picker).
 
 ## 9. New: the configs rule `nodepools[*].configs` (ADR-0029)
 
