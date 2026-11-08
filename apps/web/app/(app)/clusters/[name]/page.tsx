@@ -29,6 +29,7 @@ import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
 import type {
   AddonDrift, CatalogEntry, ChangeResult, ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts, MRDetail,
+  ModifyClusterRequest,
 } from "@/types";
 
 interface CommitEntry {
@@ -332,7 +333,7 @@ function ClusterDetailContent() {
         updated_yaml: editYaml,
         change_summary: `Modify cluster ${name} via Wingman`,
         last_commit_id: editBase!.lastCommitId,
-      }),
+      } satisfies ModifyClusterRequest),
     onSuccess: (mr) => {
       toastMrOpened(mr, router.push, "Modify MR");
       setReviewOpen(false);

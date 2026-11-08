@@ -114,13 +114,3 @@ export function asNewFile(content: string): string {
     ...content.split("\n").map((l) => `+${l}`),
   ].join("\n");
 }
-
-/** Format entire content as a deleted file — all lines are removals (red). */
-export function asDeletedFile(content: string): string {
-  return [
-    "--- (deleted)",
-    "+++ /dev/null",
-    "@@ -1 +0,0 @@",
-    ...content.split("\n").map((l) => `-${l}`),
-  ].join("\n");
-}

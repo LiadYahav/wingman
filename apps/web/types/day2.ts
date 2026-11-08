@@ -40,13 +40,6 @@ export interface Destination {
   warnings: Finding[];
 }
 
-export interface Day2Team {
-  name: string;
-  project_id: number;
-  path_with_namespace: string;
-  web_url: string;
-}
-
 export interface GitLabInfo {
   gitlab_url: string;
   sigs_group_path: string;
