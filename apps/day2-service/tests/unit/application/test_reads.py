@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from wingman_core.domain.git import FileChange, RepoPath
+from wingman_core.domain.errors import GitUnavailableError, InvalidRequestError
+from wingman_core.domain.git import FileChange, Project, RepoPath
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day2.application.services import Day2Services
 from wingman_day2.domain.clusters import ClusterKind, ClusterRef
@@ -148,6 +149,76 @@ async def test_catalog_lookups(services: Day2Services, gitlab: InMemoryGitLab) -
     assert (await services.catalog.entry("redbull", "elsewhere")).versions is None
     broken = await services.catalog.entry("redbull", "broken")
     assert Rule.YAML_INVALID in {f.rule for f in broken.findings}
+
+
+async def test_a_repourl_naming_a_renamed_chart_repo_still_reads_and_says_where_it_went(
+    services: Day2Services, gitlab: InMemoryGitLab
+) -> None:
+    roles = await gitlab.get_project("helm-charts/cluster-roles")
+    gitlab.rename_project(roles.id, "helm-charts/cluster-roles-operator")
+    entry = await services.catalog.entry("redbull", "cluster-roles")
+    assert entry.versions == ("main", "2.1.5-hotfix", "2.0.0")
+    [moved] = [f for f in entry.findings if f.rule is Rule.REPOURL_MOVED]
+    assert moved.severity == "warning" and moved.chart == "cluster-roles"
+    assert "helm-charts/cluster-roles-operator" in moved.message
+    assert moved.message.endswith(
+        "set `repourl: http://gitlab.fake/helm-charts/cluster-roles-operator.git`"
+    )
+    values = await services.catalog.default_values("redbull", "cluster-roles", "2.0.0")
+    assert values.problem is None and "groups" in values.values
+
+
+async def test_lints_name_each_file_that_sets_a_moved_repourl_once(
+    services: Day2Services, gitlab: InMemoryGitLab
+) -> None:
+    await commit(
+        gitlab,
+        "sigs/redbull",
+        {"operators/idle/idle.yaml": "repourl: http://gitlab.fake/helm-charts/bmhgen.git\n"},
+    )
+    for path in ("helm-charts/cluster-roles", "helm-charts/bmhgen"):
+        project = await gitlab.get_project(path)
+        gitlab.rename_project(project.id, f"{path}-operator")
+    found = [f for f in await services.lints.report() if f.rule is Rule.REPOURL_MOVED]
+    # cluster-roles is installed on clusters, idle on none; each file is named once.
+    assert [(f.team, f.path, f.chart) for f in found] == [
+        ("redbull", "operators/bmhgen/bmhgen.yaml", "bmhgen"),
+        ("redbull", "operators/cluster-roles/cluster-roles.yaml", "cluster-roles"),
+        ("redbull", "operators/idle/idle.yaml", "idle"),
+    ]
+
+
+async def test_one_unreadable_chart_repo_is_that_charts_problem_not_the_pages(
+    services: Day2Services, gitlab: InMemoryGitLab, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    get_project = gitlab.get_project
+
+    async def refuse_cluster_roles(project: int | str) -> Project:
+        if project == "helm-charts/cluster-roles":
+            raise InvalidRequestError("GET /projects/helm-charts%2Fcluster-roles: 301 moved")
+        return await get_project(project)
+
+    monkeypatch.setattr(gitlab, "get_project", refuse_cluster_roles)
+    entries = {(e.team, e.chart): e for e in await services.catalog.entries()}
+    roles = entries[("redbull", "cluster-roles")]
+    assert roles.chart_project is None and roles.versions is None
+    [problem] = [f for f in roles.findings if f.rule is Rule.CHART_REPO_UNREADABLE]
+    assert problem.severity == "error" and "301 moved" in problem.message
+    assert entries[("redbull", "bmhgen")].versions is not None
+    values = await services.catalog.default_values("redbull", "cluster-roles", "2.0.0")
+    assert values.problem is not None and "could not be read" in values.problem
+
+
+async def test_an_unreachable_gitlab_still_fails_the_catalog(
+    services: Day2Services, gitlab: InMemoryGitLab, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def unreachable(project: int | str) -> Project:
+        raise GitUnavailableError("GitLab unreachable on GET /projects/x: ConnectError")
+
+    await services.topology.load()  # the team repos are read and cached first
+    monkeypatch.setattr(gitlab, "get_project", unreachable)
+    with pytest.raises(GitUnavailableError):
+        await services.catalog.entries()
 
 
 # ── installed ───────────────────────────────────────────────────────────────

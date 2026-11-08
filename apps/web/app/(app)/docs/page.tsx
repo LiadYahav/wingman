@@ -930,7 +930,9 @@ cluster               …/{cluster}/{chart}/values.yaml
                 and warnings for a miscased <InlineCode>repoUrl</InlineCode>, a chart pinned per OCP version with no pin
                 for a cluster&apos;s version, a fleet default&apos;s <InlineCode>targetRevision</InlineCode> that
                 overrides the OCP-version pins, and a cluster name placed at more than one position across team repos.
-                An emergency pin is listed as information.
+                An emergency pin is listed as information. Every chart repo a <InlineCode>repourl</InlineCode> names is
+                checked too: a repo GitLab renamed or moved is a warning that gives the URL to write, and a repo GitLab
+                refuses is an error on that chart alone; the rest of the catalog still loads.
               </p>
               <p>
                 Findings also appear on the destinations, charts and catalog. Before any Day2 MR opens, the team repo

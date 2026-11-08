@@ -24,6 +24,15 @@ natural place to check before an MR, for every team at once.
   `yaml-invalid`, `ocp-version-pin-missing` (a pinned chart with no folder for
   the cluster's version), `fleet-pin-overrides-ocp-versions`, `emergency-pin`
   (info), `cluster-position-conflict`, `env-unknown`.
+- Chart repos (2026-11-08): every file that sets a `repourl` (a catalog
+  entry's team default, or any layer an app's `repourl` comes from) is
+  checked against GitLab once per distinct URL. `repourl-moved` (warning): the
+  URL names a project GitLab renamed or transferred; it still redirects, but
+  only until a new project takes the old path, and the finding gives the URL
+  to write. `chart-repo-unreadable` (error): GitLab refused the chart repo
+  (no access, or an answer Wingman does not expect). Both belong to that
+  chart: the catalog and the other charts still load. GitLab being
+  unreachable is still the whole page's error (ADR-0004).
 - Findings appear where they apply: on clusters, installed charts, catalog
   entries and previews, and all of them at `GET /api/day2/lints`.
   `GET /clusters/{id}/upgrade-check?to=<version>` lists the pinned charts a

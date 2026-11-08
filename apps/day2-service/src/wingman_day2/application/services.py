@@ -61,5 +61,5 @@ class Day2Services:
             changes=ChangeService(gitlab, topology, sigs, clock),
             approvals=ApprovalService(gitlab, sigs),
             audit=AuditService(gitlab, topology, sigs),
-            lints=LintService(topology, sigs),
+            lints=LintService(topology, sigs, charts),
         )
