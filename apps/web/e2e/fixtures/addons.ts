@@ -1,9 +1,34 @@
-import type { AddonCatalogEntry, ClusterSpec } from "../../types";
+import type { ClusterSpec } from "../../types";
+import type { CatalogEntry } from "../../types/day2";
+
+type Chart = Pick<CatalogEntry, "team" | "name" | "current_version" | "available_versions" | "default_values"> &
+  Partial<CatalogEntry>;
+
+/** A catalog entry as `GET /api/day2/addons` returns it, from the fields a test cares about. */
+export function catalogEntry({ team, name, ...rest }: Chart): CatalogEntry {
+  return {
+    team,
+    name,
+    argocd_metadata: {
+      projectNamespace: name,
+      repourl: `https://gitlab.example.com/helm-charts/${name}.git`,
+      targetRevision: rest.current_version,
+      syncPolicy: { syncOptions: ["CreateNamespace=true"] },
+      path: ".",
+    },
+    dependencies: [],
+    ocp_version_pins: [],
+    fleet_defaults: [],
+    chart_project: `helm-charts/${name}`,
+    warnings: [],
+    ...rest,
+  };
+}
 
 // Typed against the app's API types so a shape change fails `tsc` instead of
 // silently crashing the page-object tests at runtime.
-export const mockAddons: AddonCatalogEntry[] = [
-  {
+export const mockAddons: CatalogEntry[] = [
+  catalogEntry({
     team: "platform",
     name: "cert-manager",
     current_version: "1.12.0",
@@ -17,9 +42,8 @@ export const mockAddons: AddonCatalogEntry[] = [
         limits: { cpu: "500m", memory: "512Mi" },
       },
     },
-    dependencies: [],
-  },
-  {
+  }),
+  catalogEntry({
     team: "platform",
     name: "external-secrets",
     current_version: "0.9.0",
@@ -29,9 +53,9 @@ export const mockAddons: AddonCatalogEntry[] = [
       serviceAccount: { create: true, name: "" },
       secretStores: [],
     },
-    dependencies: ["platform/cert-manager"],
-  },
-  {
+    fleet_defaults: ["hosted-clusters"],
+  }),
+  catalogEntry({
     team: "observability",
     name: "prometheus",
     current_version: "2.45.0",
@@ -42,9 +66,9 @@ export const mockAddons: AddonCatalogEntry[] = [
       alertmanager: { enabled: true },
       nodeExporter: { enabled: true },
     },
-    dependencies: [],
-  },
-  {
+    ocp_version_pins: [{ version: "4.18.22", target_revision: "2.44.0" }],
+  }),
+  catalogEntry({
     team: "observability",
     name: "grafana",
     current_version: "10.0.0",
@@ -54,9 +78,9 @@ export const mockAddons: AddonCatalogEntry[] = [
       persistence: { enabled: false, size: "10Gi" },
       dashboards: [],
     },
-    dependencies: [],
-  },
-  {
+    fleet_defaults: ["hosted-clusters"],
+  }),
+  catalogEntry({
     team: "networking",
     name: "ingress-nginx",
     current_version: "4.7.0",
@@ -68,8 +92,7 @@ export const mockAddons: AddonCatalogEntry[] = [
         resources: { requests: { cpu: "100m", memory: "90Mi" } },
       },
     },
-    dependencies: [],
-  },
+  }),
 ];
 
 export const mockSpecs: ClusterSpec[] = [

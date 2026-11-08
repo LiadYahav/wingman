@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wingman-core"
+version = "0.1.0"
+description = "Wingman's shared core: Git domain types, the GitLab port and its adapters, errors, settings"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi==0.141.1",
+    "httpx==0.28.1",
+    "prometheus-client==0.26.0",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.15.0",
+    "pyjwt==2.15.0",
+    "pyyaml==6.0.3",
+    # Imported directly (ASGI middleware types, the HTTP exception handler).
+    "starlette==1.10.0",
+]
+
+[project.optional-dependencies]
+# wingman_core.testing (the GitLab contract suite) is a pytest test class.
+testing = ["pytest==9.1.1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wingman_core"]

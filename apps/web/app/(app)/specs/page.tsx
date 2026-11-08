@@ -3,40 +3,81 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Layers, Server, RefreshCw, Search, X, ChevronsUpDown } from "lucide-react";
+import { Plus, Layers, Server, RefreshCw, Search, X, ChevronsUpDown, FileWarning, SlidersHorizontal } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { ClusterSpec } from "@/types";
+import { useIsAdmin } from "@/stores/auth-store";
+import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
+import { structureSummary } from "@/lib/specs";
+import type { SpecEntry } from "@/types";
 
 type SortOption = "name-asc" | "name-desc" | "version-asc" | "version-desc";
 
-function SpecCard({ spec }: { spec: ClusterSpec }) {
+const MAX_LISTED_PROBLEMS = 3;
+
+/** A spec file that does not parse: listed with why, never hidden. */
+function BrokenSpecCard({ spec }: { spec: SpecEntry }) {
+  const problems = spec.load_problems ?? [];
+  const hidden = problems.length - MAX_LISTED_PROBLEMS;
   return (
-    <Link href={`/specs/${spec.metadata.name}`}>
+    <Link href={`/specs/${encodeURIComponent(spec.metadata.name)}`} data-testid={`spec-card-${spec.metadata.name}`}>
+      <div className="bg-card rounded-xl border border-destructive/30 shadow-sm hover:shadow-md hover:border-destructive/50 transition-all cursor-pointer p-5 h-full group">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h3 className="text-sm font-semibold break-all group-hover:text-primary transition-colors">{spec.metadata.name}</h3>
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs bg-destructive/10 text-destructive font-medium">
+            <FileWarning className="h-3 w-3" />Does not load
+          </span>
+        </div>
+        <p className="text-xs text-destructive/90 break-words">{spec.load_error}</p>
+        {problems.length > 0 && (
+          <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground list-disc pl-4">
+            {problems.slice(0, MAX_LISTED_PROBLEMS).map((p, i) => (
+              <li key={i} className="break-words line-clamp-2">{p}</li>
+            ))}
+            {hidden > 0 && <li className="list-none -ml-4">+{hidden} more</li>}
+          </ul>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function SpecCard({ spec }: { spec: SpecEntry }) {
+  const shape = structureSummary(spec.spec.day1.structure);
+  const presets = Object.keys(spec.spec.day1.values ?? {}).length;
+  const addons = spec.spec.day2.addons.length;
+  return (
+    <Link href={`/specs/${encodeURIComponent(spec.metadata.name)}`} data-testid={`spec-card-${spec.metadata.name}`}>
       <div className="bg-card rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer p-5 h-full group">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="text-sm font-semibold group-hover:text-primary transition-colors">{spec.metadata.name}</h3>
-          <span className="shrink-0 rounded-full px-2 py-0.5 text-xs bg-primary/10 text-primary font-medium">{spec.metadata.version}</span>
+          <h3 className="text-sm font-semibold break-all group-hover:text-primary transition-colors">{spec.metadata.name}</h3>
+          <span className="shrink-0 rounded-full px-2 py-0.5 text-xs bg-primary/10 text-primary font-medium max-w-[8rem] truncate">{spec.metadata.version}</span>
         </div>
         {spec.metadata.description && (
           <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{spec.metadata.description}</p>
         )}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Layers className="h-3 w-3" />{spec.spec.day1.variables.length} variables
-          </span>
-          {spec.spec.day2.addons.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {shape.length > 0 && (
             <span className="flex items-center gap-1">
-              <Server className="h-3 w-3" />{spec.spec.day2.addons.length} addon{spec.spec.day2.addons.length !== 1 ? "s" : ""}
+              <Layers className="h-3 w-3" />{shape.join(", ")}
             </span>
           )}
+          {presets > 0 && (
+            <span className="flex items-center gap-1">
+              <SlidersHorizontal className="h-3 w-3" />{presets} preset{presets !== 1 ? "s" : ""}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <Server className="h-3 w-3" />{addons > 0 ? `${addons} addon${addons !== 1 ? "s" : ""}` : "No addons"}
+          </span>
         </div>
         {spec.metadata.labels && Object.keys(spec.metadata.labels).length > 0 && (
           <div className="flex flex-wrap gap-1 mt-3">
             {Object.entries(spec.metadata.labels).map(([k, v]) => (
-              <span key={k} className="rounded-full px-2 py-0.5 text-xs bg-muted text-muted-foreground">{k}: {v}</span>
+              <span key={k} className="rounded-full px-2 py-0.5 text-xs bg-muted text-muted-foreground max-w-full truncate">{k}: {v}</span>
             ))}
           </div>
         )}
@@ -47,14 +88,17 @@ function SpecCard({ spec }: { spec: ClusterSpec }) {
 
 export default function SpecsPage() {
   const queryClient = useQueryClient();
+  const isAdmin = useIsAdmin();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("name-asc");
 
-  const { data: specs, isLoading, isFetching, error } = useQuery<ClusterSpec[]>({
+  const { data: specs, isLoading, isFetching, error } = useQuery<SpecEntry[]>({
     queryKey: ["specs"],
-    queryFn: () => api.get<ClusterSpec[]>("/api/day1/specs"),
+    queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
     staleTime: 60_000,
   });
+
+  const brokenCount = useMemo(() => (specs ?? []).filter((s) => s.load_error).length, [specs]);
 
   const filtered = useMemo(() => {
     let list = specs ?? [];
@@ -85,19 +129,30 @@ export default function SpecsPage() {
     { value: "version-asc", label: "Version ↑" },
   ];
 
+  const total = specs?.length ?? 0;
+
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1
             className="text-2xl font-bold tracking-tight"
             style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
           >Cluster Specs</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isLoading ? "Loading..." : `${filtered.length}${hasActiveFilters ? ` of ${specs?.length ?? 0}` : ""} spec${(specs?.length ?? 0) !== 1 ? "s" : ""}`}
-          </p>
+          {isLoading ? (
+            <Skeleton className="mt-1.5 h-4 w-24" />
+          ) : (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {specs
+                ? `${filtered.length}${hasActiveFilters ? ` of ${total}` : ""} spec${total !== 1 ? "s" : ""}`
+                : "Cluster specs in the specs repo"}
+              {brokenCount > 0 && (
+                <span className="text-destructive"> · {brokenCount} do{brokenCount === 1 ? "es" : ""} not load</span>
+              )}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => queryClient.invalidateQueries({ queryKey: ["specs"] })}
             disabled={isFetching}
@@ -107,9 +162,11 @@ export default function SpecsPage() {
             <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
             Refresh
           </button>
-          <Link href="/specs/new" className={buttonVariants({ size: "sm" })}>
-            <Plus className="h-4 w-4 mr-1.5" />New Spec
-          </Link>
+          {isAdmin && (
+            <Link href="/specs/new" className={buttonVariants({ size: "sm" })}>
+              <Plus className="h-4 w-4 mr-1.5" />New Spec
+            </Link>
+          )}
         </div>
       </div>
 
@@ -156,27 +213,37 @@ export default function SpecsPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load specs. Please try again.
-        </div>
+        <ProblemList error={error} title="The specs could not be loaded" />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {isLoading
             ? Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} className="h-40 rounded-xl" />
               ))
-            : filtered.map((spec) => <SpecCard key={spec.metadata.name} spec={spec} />)}
+            : filtered.map((spec) =>
+                spec.load_error
+                  ? <BrokenSpecCard key={spec.metadata.name} spec={spec} />
+                  : <SpecCard key={spec.metadata.name} spec={spec} />
+              )}
           {!isLoading && specs?.length === 0 && (
-            <div className="col-span-full bg-card rounded-xl border p-16 text-center text-muted-foreground">
-              No specs yet.{" "}
-              <Link href="/specs/new" className="text-primary hover:underline">Create your first spec</Link>.
-            </div>
+            <EmptyState
+              icon={Layers}
+              title="No specs yet"
+              description="A spec presets a cluster's values, nodepool shape and addons; clusters are created from one."
+              action={isAdmin && <EmptyStateLink href="/specs/new">New spec</EmptyStateLink>}
+              bordered
+              className="col-span-full"
+              data-testid="specs-empty"
+            />
           )}
           {!isLoading && specs && specs.length > 0 && filtered.length === 0 && (
-            <div className="col-span-full bg-card rounded-xl border p-12 text-center text-muted-foreground text-sm">
-              No specs match your search.{" "}
-              <button onClick={() => setSearch("")} className="text-primary hover:underline">Clear search</button>
-            </div>
+            <NoMatches
+              what="specs"
+              clearLabel="Clear search"
+              onClear={() => setSearch("")}
+              bordered
+              className="col-span-full"
+            />
           )}
         </div>
       )}

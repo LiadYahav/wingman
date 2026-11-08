@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { SpecNewPage } from "../pages/spec-new.page";
 import { ConfigureDialogPage } from "../pages/configure-dialog.page";
 import { mockAllApis } from "../fixtures/api-handlers";
+import { catalogEntry } from "../fixtures/addons";
 
 test.describe("Addon Configuration", () => {
   test.beforeEach(async ({ page }) => {
@@ -118,14 +119,13 @@ test.describe("Addon Configuration", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify([
-          {
+          catalogEntry({
             team: "empty",
             name: "test",
             current_version: "1.0.0",
             available_versions: ["1.0.0"],
             default_values: {},
-            dependencies: [],
-          },
+          }),
         ]),
       });
     });

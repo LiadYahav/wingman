@@ -1,0 +1,5 @@
+# helm template fixture: every monitoring object on.
+monitoring:
+  serviceMonitor: { enabled: true, labels: { team: platform } }
+  prometheusRule: { enabled: true }
+  grafanaDashboard: { enabled: true, namespace: grafana }

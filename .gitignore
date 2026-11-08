@@ -46,16 +46,26 @@ coverage/
 htmlcov/
 
 # Helm dependencies (downloaded charts)
-charts/
+/chart/charts/
 
-# Claude files (session-specific)
-.claude/
+# Claude Code: shared assets (skills, rules, agents, settings.json) are tracked,
+# as in server-scan; personal and session files are not.
+.claude/*
+!.claude/skills/
+!.claude/rules/
+!.claude/agents/
+!.claude/settings.json
+.claude/settings.local.json
 CLAUDE.tar.gz
 CLAUDE.txt
 claude.docs
 
 # Playwright MCP
 .playwright-mcp/
+
+# Playwright test output
+apps/web/playwright-report/
+apps/web/test-results/
 
 # Seed venvs
 .venv-seed/
@@ -65,3 +75,6 @@ claude.docs
 
 # Dev screenshots in repo root (not committed)
 /*.png
+
+# Personal Claude Code notes (live URLs, local credentials)
+CLAUDE.local.md

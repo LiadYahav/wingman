@@ -1,0 +1,113 @@
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from wingman_core.infrastructure.cache import TtlCache
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+async def test_values_live_for_their_ttl() -> None:
+    clock = Clock()
+    cache = TtlCache(clock=clock)
+    calls = 0
+
+    async def fetch() -> int:
+        nonlocal calls
+        calls += 1
+        return calls
+
+    assert await cache.get_or_fetch("k", fetch, ttl=10) == 1
+    clock.now = 9.9
+    assert await cache.get_or_fetch("k", fetch, ttl=10) == 1
+    clock.now = 10.0
+    assert await cache.get_or_fetch("k", fetch, ttl=10) == 2
+
+
+async def test_concurrent_misses_share_one_fetch() -> None:
+    cache = TtlCache()
+    calls = 0
+    release = asyncio.Event()
+
+    async def fetch() -> str:
+        nonlocal calls
+        calls += 1
+        await release.wait()
+        return "v"
+
+    waiters = [asyncio.create_task(cache.get_or_fetch("k", fetch, ttl=10)) for _ in range(5)]
+    await asyncio.sleep(0)
+    release.set()
+    assert await asyncio.gather(*waiters) == ["v"] * 5
+    assert calls == 1
+
+
+async def test_failures_are_shared_but_never_cached() -> None:
+    cache = TtlCache()
+    attempts = 0
+    release = asyncio.Event()
+
+    async def failing() -> str:
+        nonlocal attempts
+        attempts += 1
+        await release.wait()
+        raise RuntimeError("gitlab down")
+
+    first = asyncio.create_task(cache.get_or_fetch("k", failing, ttl=10))
+    second = asyncio.create_task(cache.get_or_fetch("k", failing, ttl=10))
+    await asyncio.sleep(0)
+    release.set()
+    for task in (first, second):
+        with pytest.raises(RuntimeError):
+            await task
+    assert attempts == 1
+
+    async def working() -> str:
+        return "ok"
+
+    assert await cache.get_or_fetch("k", working, ttl=10) == "ok"
+
+
+async def test_invalidation_by_key_and_prefix() -> None:
+    cache = TtlCache()
+    for key in ("day1:clusters", "day1:cluster:a", "day2:addons"):
+        await cache.get_or_fetch(key, lambda key=key: _value(key), ttl=60)
+    assert cache.invalidate_prefix("day1:") == 2
+    cache.invalidate("day2:addons")
+    assert await cache.get_or_fetch("day1:clusters", lambda: _value("fresh"), ttl=60) == "fresh"
+    assert await cache.get_or_fetch("day2:addons", lambda: _value("fresh2"), ttl=60) == "fresh2"
+
+
+async def test_a_value_fetched_across_an_invalidation_is_not_kept() -> None:
+    cache = TtlCache()
+    release = asyncio.Event()
+
+    async def slow() -> str:
+        await release.wait()
+        return "read before the write"
+
+    task = asyncio.create_task(cache.get_or_fetch("k", slow, ttl=60))
+    await asyncio.sleep(0)
+    cache.invalidate_prefix("k")
+    release.set()
+    assert await task == "read before the write"
+    assert await cache.get_or_fetch("k", lambda: _value("after"), ttl=60) == "after"
+
+
+async def test_size_is_bounded() -> None:
+    cache = TtlCache(max_entries=2)
+    for key, ttl in (("a", 10), ("b", 20), ("c", 30)):
+        await cache.get_or_fetch(key, lambda key=key: _value(key), ttl=ttl)
+    assert await cache.get_or_fetch("a", lambda: _value("refetched"), ttl=10) == "refetched"
+
+
+async def _value(value: str) -> str:
+    return value

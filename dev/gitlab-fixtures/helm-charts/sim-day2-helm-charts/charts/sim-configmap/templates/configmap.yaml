@@ -1,0 +1,12 @@
+# Named by release AND cluster: two fake UPI clusters share this API server,
+# so one team's chart on both must not collide.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-{{ .Values.clusterName }}
+  labels:
+    day2-sim: "true"
+data:
+  team: {{ .Values.team | quote }}
+  cluster: {{ .Values.clusterName | quote }}
+  chart: {{ .Release.Name | quote }}

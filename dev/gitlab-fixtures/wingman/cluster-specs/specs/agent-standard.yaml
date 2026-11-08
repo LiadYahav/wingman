@@ -1,0 +1,24 @@
+apiVersion: wingman.io/v1
+kind: ClusterSpec
+metadata:
+  name: agent-standard
+  description: "Bare-metal workers on the Agent platform, two nodepools"
+  version: "1.0.0"
+  labels:
+    platform: agent
+spec:
+  day1:
+    # Two nodepools; their fields are filled in at cluster-create time.
+    structure:
+      nodepools:
+        - configs:
+            - {}
+        - configs:
+            - {}
+    immutable_paths: []
+  day2:
+    addons:
+      - team: redbull
+        name: cluster-roles
+        version: main
+        overrideable: []

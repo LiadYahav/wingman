@@ -4,27 +4,32 @@ Next.js frontend for the Wingman Internal Developer Platform.
 
 ## Features
 
-- **Cluster Management**: Create, view, and manage OpenShift clusters with drift detection
-- **Spec Templates**: Define cluster templates with Day1 provisioning, Day2 addons, and immutable field flags
+- **Cluster Management**: Create, edit and delete hosted clusters by MR; each is one values file for the hostedclusters-setup chart, with `vlanId`/`dhcp_values` (allocate-segment workflow) and `mcFiles`/`mcConfigMap` (CI) left to automation and shown as pending until written
+- **Specs**: Presets for the create form (nodepool shape, preset template inputs, the Day2 addons a cluster should get); every spec fills the one shared `cluster-template.j2`, and "immutable after create" is a hint, not enforced
+- **Drift**: a cluster is drifted when it lacks an addon its spec lists, and the fix installs it at the team default; a version other than the spec's is reported, never fixed (ADR-0025); unknown is never shown as in sync
 - **Two-Phase Cluster Form**: Specs define structure; clusters fill values — nodepool count is locked by spec
 - **Marketplace Addon Picker**: Browse and select Day2 addons on spec creation/edit pages
+- **Charts per Destination**: Install, edit and remove Day2 charts on the hub, MCEs, hosted and UPI clusters; every value shows the layer that set it; bulk install opens one MR per team; a version of its own is a confirmed emergency pin; a removal leaves the workload running (`argocd app delete --cascade` tears it down)
+- **Destinations and Lints**: Every place teams deploy to, and every check on the team repos
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
-- **Site/MCE from GitLab**: Dropdowns populated from GitLab folder paths; new names create folders
-- **Approval Workflow**: Aggregated view of open MRs from all platform repositories
+- **Sites and MCEs are read-only**: picked from the day1 repo's folders (Wingman never creates them); the MCE's mastertag is the default OpenShift version
+- **Naming convention**: new cluster names must follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing off-convention names are flagged, not hidden
+- **Approval Workflow**: Aggregated view of open MRs from the day1, specs and team repos; an approval names the commit the reviewer saw, so a branch that moved since is refused, and nobody approves their own change
 - **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
 - **In-App Documentation**: Full platform guide at `/docs`
 
 ## Getting Started
 
 ```bash
-# Install dependencies
-npm install
+# Install dependencies, at the repository root (one lockfile, ADR-0003)
+npm ci
 
-# Start development server
+# Start the development server (from apps/web)
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) in your browser. Without the services behind it
+every API call fails: see [Running against local services](#running-against-local-services).
 
 ## Scripts
 
@@ -34,7 +39,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
 | `npm run lint` | Run ESLint |
-| `npm run test:e2e` | Run Playwright E2E tests |
+| `npm run test:e2e` | Run Playwright E2E tests (both projects) |
+| `npm run test:e2e:mocked` | Run the mocked project, as CI does |
 | `npm run test:e2e:ui` | Open Playwright interactive UI |
 | `npm run test:e2e:headed` | Run tests in visible browser |
 
@@ -51,16 +57,35 @@ e2e/
 
 ### Running Tests
 
+Two Playwright projects (`playwright.config.ts`): `mocked` is every spec but `live-*.spec.ts`,
+with every API call intercepted (`e2e/fixtures/`), and is what CI runs; `live` is the two
+`live-*` specs, against a running stack.
+
 ```bash
-# Run all tests headless
-npm run test:e2e
+# The mocked suite, no backend needed (CI runs it against a production build)
+npm run test:e2e:mocked
 
 # Interactive mode with test explorer
 npm run test:e2e:ui
 
 # Run specific test file
 npx playwright test addon-configuration
+
+# The day1 flows against a running stack (see "Running against local services"): the
+# dashboard; a cluster created, found among the approvals, approved by a second user (a
+# branch that moved since the review is refused), edited and deleted with last_commit_id;
+# live status (off is not an error); a spec built from the catalog, its history, an edit and
+# a delete; the audit log. Every step opens a real MR, so use a disposable GitLab only (the
+# in-memory fake or the seeded local GitLab CE).
+WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test live-day1-flows --project=live
+# The day2 pages against the same stack: the catalog, a hosted cluster's charts from its day1
+# page, install/update/remove/bulk, an MCE, a UPI fleet default, the hub, destinations, lints
+DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+  npx playwright test live-day2 --project=live
 ```
+
+`npm run test:e2e` runs both projects; without a stack the `live` specs skip (no secret) or fail.
 
 ### Page Objects
 
@@ -89,8 +114,10 @@ test("can configure addon fields", async ({ page }) => {
 app/
 ├── (app)/              # Authenticated routes
 │   ├── clusters/       # Cluster management pages
-│   ├── specs/          # Spec template pages
+│   ├── specs/          # Spec pages (presets for the create form)
 │   ├── addons/         # Addon catalog
+│   ├── destinations/   # Day2 destinations (hub, MCEs, hosted, UPI)
+│   ├── lints/          # Day2 lint findings
 │   ├── approvals/      # MR approval workflow
 │   ├── audit/          # Audit trail
 │   ├── docs/           # In-app platform documentation
@@ -100,30 +127,97 @@ app/
 
 components/
 ├── ui/                 # Base UI components (shadcn/ui)
-├── common/             # Shared components (dialogs, headers)
+├── common/             # Shared components (empty states, problems, diffs, review dialog)
+├── layout/             # The app shell, sidebar, user menu, providers
+├── clusters/           # Cluster facts, drift, live status, the template-driven form
+├── addons/             # A destination's charts: values editor, cards, bulk install
 └── specs/              # Spec-specific components
 
+hooks/
+└── use-bulk-status.ts  # Live status of every listed cluster in one request
+
+stores/
+└── auth-store.ts       # The signed-in user and role (zustand)
+
 lib/
-├── api-client.ts       # Typed API client
+├── api-client.ts       # Typed API client; errors are RFC 9457 problems (ApiError)
+├── approvals.ts        # How an MR is addressed: day1-<iid>, specs-<iid>, day2-<team>-<iid>
+├── clusters.ts         # Links to a cluster's pages
+├── specs.ts            # The rules day1 checks a spec against, and the document a spec write sends
+├── mr-toast.ts         # The "MR opened" toast, with a link to its review page
+├── day2.ts             # Day2 paths, query keys, layer roles, problems
+├── live-status.ts      # Live HostedCluster status (501 FEATURE_DISABLED = status is off)
+├── values.ts           # Helm values as data: leaves, paths, YAML
 ├── utils.ts            # Utility functions
 └── diff.ts             # Diff computation utilities
 
 types/
-└── index.ts            # TypeScript type definitions
+├── index.ts            # Shared types (auth, MRs, audit) and re-exports
+├── problem.ts          # RFC 9457 problem bodies and error codes
+├── day1.ts             # day1 service shapes (clusters, specs, MCEs, drift)
+└── day2.ts             # The day2 service's bodies (from its Pydantic schemas)
 ```
+
+## UI conventions
+
+- **Dropdowns** are `Select` (`components/ui/select.tsx`), never a native `<select>`: the
+  browser draws its arrow against the border. The arrow sits as far from the right border as
+  the text from the left; sizes `sm` and `default` match `Input`, `lg` the page forms' own
+  `px-3 py-2` inputs.
+- **A list that can grow** (sites, MCEs, infra envs, chart revisions, versions) is a `Combobox`
+  (`components/ui/combobox.tsx`): the same closed look plus a search box, keyboard only if need
+  be. Options are `{ value, label, description?, group?, disabled? }`; the search matches the
+  label, description and group. The trigger is the `combobox` and carries the `aria-label` and
+  `data-testid` you pass.
+- **Every read has three more states.** Loading is `Skeleton`s shaped like what will be there
+  (rows, cards, lines). A list with nothing in it is an `EmptyState`
+  (`components/common/empty-state.tsx`): what would be here and, when the viewer can take it,
+  the next step (`EmptyStateLink`); `NoMatches` when search or filters emptied it. A failed read
+  is a `ProblemList` (`components/common/problem-list.tsx`) given the error itself, so it shows
+  the problem's detail, every broken rule and the request id: never `error.message` in a
+  string, and never an empty list or a missing section.
 
 ## Environment Variables
 
-The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. API routes
-(`/api/day1`, `/api/day2`, `/api/auth`) are proxied at runtime by the ingress or, in local
-development, by `proxy.ts`.
+The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. In a deployment,
+nginx routes `/api/auth`, `/api/day1` and `/api/webhooks` to day1 and `/api/day2` to day2
+(`chart/templates/nginx-configmap.yaml`); `proxy.ts` only guards pages.
 
-## Docker
+### Running against local services
+
+`next dev` proxies the same paths when these are set (development server only; a production build
+never has the rewrites, see `next.config.ts`):
+
+| Variable | Example | Proxies |
+|---|---|---|
+| `WINGMAN_DEV_DAY1_URL` | `http://127.0.0.1:8001` | `/api/auth/*`, `/api/day1/*`, `/api/webhooks/*` |
+| `WINGMAN_DEV_DAY2_URL` | `http://127.0.0.1:8002` | `/api/day2/*` |
 
 ```bash
-# Build image
-docker build -t wingman-web:latest .
+# Both services on the in-memory GitLab seeded from dev/gitlab-fixtures (no network needed),
+# from the repository root; both need the same JWT_SECRET_KEY (32+ characters).
+export WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake \
+  JWT_SECRET_KEY=local-jwt-secret-at-least-32-characters \
+  DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config SPECS_GITLAB_PROJECT_ID=wingman/cluster-specs \
+  DAY2_SIGS_GROUP_PATH=sigs DAY2_SERVICE_URL=http://127.0.0.1:8002
+DEV_AUTH_ENABLED=true DEV_AUTH_SECRET=local-dev-login-secret-32-characters \
+  uv run uvicorn wingman_day1.main:app --port 8001 &
+uv run uvicorn wingman_day2.main:app --port 8002 &
 
-# Run container
-docker run -p 3000:3000 wingman-web:latest
+cd apps/web
+WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1:8002 npm run dev
+```
+
+Sign in on `/login` with any lowercase username and the `DEV_AUTH_SECRET`. Approving needs a
+second user: nobody approves a change they requested. Each service seeds its own in-memory GitLab,
+so a change one makes is not seen by the other (DEVELOPMENT.md has the local GitLab instead).
+
+## Image
+
+Built from the repository root, so `npm ci` installs exactly what the root lockfile names
+(`docs/ops/images.md`):
+
+```bash
+podman build -f apps/web/Dockerfile -t wingman-web:dev .
+podman run -p 3000:3000 wingman-web:dev
 ```

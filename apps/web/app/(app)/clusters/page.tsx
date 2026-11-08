@@ -3,22 +3,36 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AddonCatalogEntry, InstalledAddon } from "@/types";
-import { Plus, AlertTriangle, CheckCircle2, HelpCircle, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, X } from "lucide-react";
+import { Plus, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, FileWarning, Server, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { api } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
+import { DriftBadge } from "@/components/clusters/drift-badge";
+import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ClusterStatus, ClusterLiveStatus } from "@/types";
+import { useBulkStatus } from "@/hooks/use-bulk-status";
+import { liveStatusToPhase } from "@/lib/live-status";
+import { clusterHref } from "@/lib/clusters";
+import { day2Api, day2Keys } from "@/lib/day2";
+import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftState, DriftSummaryItem } from "@/types";
 
-type SortField = "name" | "site" | "spec" | "created_at";
+type SortField = "name" | "site" | "spec" | "mastertag" | "created_at";
 type SortDir = "asc" | "desc";
-type SyncFilter = "all" | "synced" | "drifted" | "na";
+type DriftFilter = "all" | DriftState;
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+const DRIFT_FILTERS: { value: DriftFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "in_sync", label: "In sync" },
+  { value: "drifted", label: "Drifted" },
+  { value: "unknown", label: "Unknown" },
+  { value: "not_linked", label: "Not linked" },
+];
 
 function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
   if (sortField !== field) return <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />;
@@ -27,93 +41,82 @@ function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: 
     : <ChevronDown className="h-3 w-3 text-primary" />;
 }
 
-const NO_SPEC_SENTINEL = "(not linked to a cluster spec)";
-const hasSpec = (specName: string | undefined) =>
-  !!specName && specName !== NO_SPEC_SENTINEL && specName !== "—";
-
-function liveStatusToPhase(s: ClusterLiveStatus): "Ready" | "Error" | "Provisioning" | "Unknown" {
-  if (s.error) return "Error";
-  if (s.hc_problems.length > 0) return "Error";
-  if (s.node_pools.length === 0) return "Unknown";
-  const allReady = s.node_pools.every(
-    (np) => np.ready_replicas === np.desired_replicas && np.problems.length === 0
+/** Off-convention names and unreadable files are flagged in place, never hidden. */
+function ClusterFlags({ cluster }: { cluster: ClusterStatus }) {
+  const offConvention = !cluster.naming.follows_convention;
+  const unreadable = cluster.problems.length > 0;
+  if (!offConvention && !unreadable) return null;
+  return (
+    <TooltipProvider>
+      {unreadable && (
+        <Tooltip>
+          <TooltipTrigger
+            data-testid="cluster-unreadable"
+            className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium bg-status-error/10 text-status-error-fg cursor-default"
+          >
+            <FileWarning className="h-3 w-3" />Unreadable
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm">
+            <p className="font-medium mb-1">The cluster file does not parse</p>
+            <ul className="list-disc pl-4 space-y-0.5">{cluster.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {offConvention && (
+        <Tooltip>
+          <TooltipTrigger
+            data-testid="cluster-off-convention"
+            aria-label="Name does not follow the naming convention"
+            className="inline-flex items-center text-status-warning cursor-default"
+          >
+            <TriangleAlert className="h-3.5 w-3.5" />
+          </TooltipTrigger>
+          <TooltipContent className="max-w-sm">
+            <p className="font-medium mb-1">Off the naming convention</p>
+            <ul className="list-disc pl-4 space-y-0.5">{cluster.naming.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </TooltipProvider>
   );
-  if (allReady) return "Ready";
-  return "Provisioning";
 }
 
 function ClusterStatusCell({
-  name,
-  mce,
-  site,
-  bulkStatus,
-  isBulkLoading,
+  cluster,
+  status,
+  statusOff,
+  isLoading,
+  failed,
 }: {
-  name: string;
-  mce: string;
-  site: string;
-  bulkStatus?: ClusterLiveStatus | null;
-  isBulkLoading?: boolean;
+  cluster: ClusterStatus;
+  status: ClusterLiveStatus | undefined;
+  statusOff: boolean;
+  isLoading: boolean;
+  failed: boolean;
 }) {
-  // Use bulk-fetched status if available, otherwise fall back to individual fetch
-  const shouldFetchIndividually = bulkStatus === undefined && !isBulkLoading;
-
-  const { data: individualStatus, isLoading: isIndividualLoading } = useQuery<ClusterLiveStatus | null>({
-    queryKey: ["clusters", name, "live-status", mce],
-    queryFn: async () => {
-      try {
-        return await api.get<ClusterLiveStatus>(`/api/day1/clusters/${name}/status?mce=${mce}`);
-      } catch (err) {
-        // 501 = feature disabled — show nothing
-        if (err instanceof Error && err.message.startsWith("API error 501")) return null;
-        throw err;
-      }
-    },
-    staleTime: 2 * 60_000,
-    refetchInterval: 2 * 60_000,
-    retry: false,
-    enabled: shouldFetchIndividually && Boolean(mce),
-  });
-
-  const liveStatus = bulkStatus ?? individualStatus;
-  const isLoading = isBulkLoading ?? isIndividualLoading;
-
-  if (isLoading) {
-    return (
-      <Link href={`/clusters/${name}?site=${site}&mce=${mce}`} className="block">
-        <Skeleton className="h-5 w-16" />
-      </Link>
-    );
-  }
-
-  // Feature disabled or query failed — fall back to "—" link
-  if (!liveStatus) {
+  if (isLoading) return <Skeleton className="h-5 w-16" />;
+  if (!status) {
+    const reason = statusOff
+      ? "Live status is off in this deployment"
+      : failed
+      ? "Live status could not be read"
+      : "No live status for this cluster";
     return (
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger>
-            <Link
-              href={`/clusters/${name}?site=${site}&mce=${mce}`}
-              className="text-muted-foreground/60 text-xs hover:text-primary transition-colors"
-            >
-              —
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent>Click to view live status</TooltipContent>
+          <TooltipTrigger className="text-muted-foreground/60 text-xs cursor-default">—</TooltipTrigger>
+          <TooltipContent>{reason}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );
   }
-
-  const phase = liveStatusToPhase(liveStatus);
-  const errorMsg = liveStatus.error ?? liveStatus.hc_problems[0];
-
+  const errorMsg = status.error ?? status.hc_problems[0];
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger>
-          <Link href={`/clusters/${name}?site=${site}&mce=${mce}`}>
-            <StatusBadge phase={phase} />
+          <Link href={clusterHref(cluster)}>
+            <StatusBadge phase={liveStatusToPhase(status)} />
           </Link>
         </TooltipTrigger>
         {errorMsg && <TooltipContent className="max-w-xs">{errorMsg}</TooltipContent>}
@@ -129,7 +132,7 @@ export default function ClustersPage() {
   // Filter / sort / pagination state
   const [search, setSearch] = useState("");
   const [siteFilter, setSiteFilter] = useState<string>("all");
-  const [syncFilter, setSyncFilter] = useState<SyncFilter>("all");
+  const [driftFilter, setDriftFilter] = useState<DriftFilter>("all");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
@@ -141,99 +144,88 @@ export default function ClustersPage() {
     staleTime: 30_000,
   });
 
-  // Bulk fetch live status for all clusters (avoids N+1 API calls)
-  const clusterStatusInput = useMemo(() => {
-    if (!clusters) return [];
-    return clusters.map((c) => ({ name: c.name, mce: c.mce }));
-  }, [clusters]);
+  const { data: liveStatuses, isLoading: statusLoading, isError: statusFailed } = useBulkStatus(clusters);
 
-  const { data: bulkStatuses, isLoading: bulkStatusLoading } = useQuery<Record<string, ClusterLiveStatus>>({
-    queryKey: ["clusters", "bulk-status", clusterStatusInput],
-    queryFn: async () => {
-      try {
-        return await api.post<Record<string, ClusterLiveStatus>>(
-          "/api/day1/clusters/bulk-status",
-          { clusters: clusterStatusInput }
-        );
-      } catch (err) {
-        // 501 = feature disabled
-        if (err instanceof Error && err.message.startsWith("API error 501")) return {};
-        throw err;
-      }
-    },
-    enabled: clusterStatusInput.length > 0,
-    staleTime: 2 * 60_000,
-    refetchInterval: 2 * 60_000,
-  });
-
-  const { data: driftSummary } = useQuery<{ name: string; is_drifted: boolean }[]>({
+  const { data: driftSummary, isError: driftFailed } = useQuery<DriftSummaryItem[]>({
     queryKey: ["clusters", "drift-summary"],
-    queryFn: () => api.get("/api/day1/clusters/drift-summary"),
-    staleTime: 30_000, // Cache for 30 seconds
-    refetchOnWindowFocus: false, // Don't refetch on focus to avoid blocking
+    queryFn: () => api.get<DriftSummaryItem[]>("/api/day1/clusters/drift-summary"),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   const driftMap = useMemo(
-    () => new Map(driftSummary?.map((d) => [d.name, d.is_drifted]) ?? []),
+    () => new Map((driftSummary ?? []).map((d) => [d.name, d])),
     [driftSummary]
   );
 
-  // Prefetch cluster detail and addons on row hover for faster navigation
-  // Uses debouncing and requestIdleCallback to ensure it never blocks the UI
-  const prefetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const prefetchCluster = useCallback((name: string, site: string, mce: string) => {
-    // Clear any pending prefetch to debounce
-    if (prefetchTimeoutRef.current) {
-      clearTimeout(prefetchTimeoutRef.current);
-    }
+  /** A linked cluster the summary does not list (or a failed summary) is unknown, never in sync. */
+  const driftOf = useCallback(
+    (c: ClusterStatus): DriftSummaryItem | null => {
+      const item = driftMap.get(c.name);
+      if (item) return item;
+      if (!c.spec_name) return { name: c.name, site: c.site, mce: c.mce, state: "not_linked", is_drifted: false, error: null };
+      if (driftSummary === undefined && !driftFailed) return null; // still loading
+      return {
+        name: c.name, site: c.site, mce: c.mce, state: "unknown", is_drifted: null,
+        error: driftFailed ? "The drift summary could not be loaded" : null,
+      };
+    },
+    [driftMap, driftSummary, driftFailed]
+  );
 
-    // Debounce: only prefetch if user hovers for 150ms
+  // Prefetch the detail page's data on row hover (debounced, at idle time)
+  const prefetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const prefetchCluster = useCallback((c: ClusterStatus) => {
+    if (prefetchTimeoutRef.current) clearTimeout(prefetchTimeoutRef.current);
     prefetchTimeoutRef.current = setTimeout(() => {
-      // Use requestIdleCallback to ensure prefetching never blocks UI
+      const query = `site=${encodeURIComponent(c.site)}&mce=${encodeURIComponent(c.mce)}`;
+      const name = encodeURIComponent(c.name);
       const doPrefetch = () => {
-        // Prefetch cluster detail
         queryClient.prefetchQuery({
-          queryKey: ["clusters", name, "detail"],
-          queryFn: () => api.get(`/api/day1/clusters/${name}?site=${site}&mce=${mce}`),
+          queryKey: ["clusters", c.name, "detail"],
+          queryFn: () => api.get(`/api/day1/clusters/${name}?${query}`),
           staleTime: 60_000,
         });
-        // Prefetch cluster drift
         queryClient.prefetchQuery({
-          queryKey: ["clusters", name, "drift"],
-          queryFn: () => api.get(`/api/day1/clusters/${name}/drift?site=${site}&mce=${mce}`),
+          queryKey: ["clusters", c.name, "drift"],
+          queryFn: () => api.get(`/api/day1/clusters/${name}/drift?${query}`),
           staleTime: 60_000,
         });
-        // Prefetch installed addons (key matches addons page)
+        // The entries the cluster's charts page reads (a bare name, narrowed by its MCE)
         queryClient.prefetchQuery({
-          queryKey: ["clusters", name, "addons"],
-          queryFn: () => api.get<{ installed: InstalledAddon[] }>(`/api/day2/clusters/${name}/addons?mce=${mce}`),
+          queryKey: day2Keys.charts(c.name, c.mce),
+          queryFn: () => api.get<DestinationCharts>(day2Api.charts(c.name, c.mce)),
           staleTime: 60_000,
         });
-        // Prefetch addon catalog (key matches addons page) - only if not already cached
         queryClient.prefetchQuery({
-          queryKey: ["addons", "catalog"],
-          queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
+          queryKey: day2Keys.catalog,
+          queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
           staleTime: 120_000,
         });
       };
-
-      // requestIdleCallback with fallback for older browsers
       if (typeof window !== "undefined" && "requestIdleCallback" in window) {
         (window as Window & { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(doPrefetch);
       } else {
-        // Fallback: use setTimeout with 0 to defer to next event loop
         setTimeout(doPrefetch, 0);
       }
     }, 150);
   }, [queryClient]);
 
-  // Unique sites for filter chips
   const sites = useMemo(() => {
     const s = new Set(clusters?.map((c) => c.site).filter(Boolean) ?? []);
     return Array.from(s).sort();
   }, [clusters]);
 
-  // Filtering + sorting
+  const driftCounts = useMemo(() => {
+    const counts: Record<DriftFilter, number> = { all: 0, in_sync: 0, drifted: 0, unknown: 0, not_linked: 0 };
+    for (const c of clusters ?? []) {
+      counts.all += 1;
+      const d = driftOf(c);
+      if (d) counts[d.state] += 1;
+    }
+    return counts;
+  }, [clusters, driftOf]);
+
   const filtered = useMemo(() => {
     let list = clusters ?? [];
     if (search.trim()) {
@@ -241,40 +233,30 @@ export default function ClustersPage() {
       list = list.filter(
         (c) =>
           c.name.toLowerCase().includes(q) ||
-          c.site?.toLowerCase().includes(q) ||
-          c.mce?.toLowerCase().includes(q) ||
-          c.spec_name?.toLowerCase().includes(q)
+          c.site.toLowerCase().includes(q) ||
+          c.mce.toLowerCase().includes(q) ||
+          (c.spec_name ?? "").toLowerCase().includes(q) ||
+          (c.mastertag ?? "").toLowerCase().includes(q)
       );
     }
     if (siteFilter !== "all") list = list.filter((c) => c.site === siteFilter);
-    if (syncFilter !== "all") {
-      list = list.filter((c) => {
-        const linked = hasSpec(c.spec_name);
-        if (syncFilter === "na") return !linked;
-        if (!linked) return false;
-        const drifted = driftMap.get(c.name);
-        if (syncFilter === "drifted") return drifted === true;
-        if (syncFilter === "synced") return drifted === false;
-        return true;
-      });
-    }
+    if (driftFilter !== "all") list = list.filter((c) => driftOf(c)?.state === driftFilter);
 
-    list = [...list].sort((a, b) => {
+    return [...list].sort((a, b) => {
       let cmp = 0;
       if (sortField === "name") cmp = a.name.localeCompare(b.name);
-      else if (sortField === "site") cmp = (a.site ?? "").localeCompare(b.site ?? "");
+      else if (sortField === "site") cmp = `${a.site}/${a.mce}`.localeCompare(`${b.site}/${b.mce}`);
       else if (sortField === "spec") cmp = (a.spec_name ?? "").localeCompare(b.spec_name ?? "");
+      else if (sortField === "mastertag") cmp = (a.mastertag ?? "").localeCompare(b.mastertag ?? "", undefined, { numeric: true });
       else if (sortField === "created_at") cmp = (a.created_at ?? "").localeCompare(b.created_at ?? "");
       return sortDir === "asc" ? cmp : -cmp;
     });
-
-    return list;
-  }, [clusters, search, siteFilter, syncFilter, sortField, sortDir, driftMap]);
+  }, [clusters, search, siteFilter, driftFilter, sortField, sortDir, driftOf]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const flaggedCount = (clusters ?? []).filter((c) => c.problems.length > 0 || !c.naming.follows_convention).length;
 
-  // Reset to page 1 when filters change
   function setFilter<T>(setter: (v: T) => void): (v: T) => void {
     return (v) => { setter(v); setPage(1); };
   }
@@ -284,13 +266,24 @@ export default function ClustersPage() {
     else { setSortField(field); setSortDir("asc"); setPage(1); }
   }
 
-  const hasActiveFilters = search || siteFilter !== "all" || syncFilter !== "all";
+  function clearFilters() {
+    setSearch(""); setSiteFilter("all"); setDriftFilter("all"); setPage(1);
+  }
+
+  const hasActiveFilters = search || siteFilter !== "all" || driftFilter !== "all";
+  const statusOff = liveStatuses === null;
+
+  const sortHeader = (field: SortField, label: string) => (
+    <button onClick={() => toggleSort(field)} className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors whitespace-nowrap">
+      {label} <SortIcon field={field} sortField={sortField} sortDir={sortDir} />
+    </button>
+  );
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-4 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1
             className="text-2xl font-bold tracking-tight"
             style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
@@ -300,10 +293,15 @@ export default function ClustersPage() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {clusters
               ? `${filtered.length} of ${clusters.length} cluster${clusters.length !== 1 ? "s" : ""}${hasActiveFilters ? " (filtered)" : ""}`
-              : "Manage your HostedControlPlane clusters"}
+              : "Hosted clusters in the day1 repo"}
+            {flaggedCount > 0 && (
+              <span className="ml-2 inline-flex items-center gap-1 text-status-warning-fg">
+                <TriangleAlert className="h-3 w-3" />{flaggedCount} flagged
+              </span>
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => queryClient.invalidateQueries({ queryKey: ["clusters"] })}
             disabled={isFetching}
@@ -323,7 +321,6 @@ export default function ClustersPage() {
 
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Search */}
         <div className="relative flex-1 min-w-48 max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <input
@@ -335,55 +332,48 @@ export default function ClustersPage() {
           />
         </div>
 
-        {/* Site filter chips */}
         {sites.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs text-muted-foreground font-medium">Site:</span>
-            <button
-              onClick={() => setFilter(setSiteFilter)("all")}
-              className={cn(
-                "rounded-full px-2.5 py-1 text-xs font-medium transition-all border",
-                siteFilter === "all"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-              )}
-            >All</button>
-            {sites.map((s) => (
+            {["all", ...sites].map((s) => (
               <button
                 key={s}
-                onClick={() => setFilter(setSiteFilter)(siteFilter === s ? "all" : s)}
+                onClick={() => setFilter(setSiteFilter)(siteFilter === s && s !== "all" ? "all" : s)}
                 className={cn(
                   "rounded-full px-2.5 py-1 text-xs font-medium transition-all border",
                   siteFilter === s
                     ? "bg-primary text-primary-foreground border-primary"
                     : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
                 )}
-              >{s}</button>
+              >{s === "all" ? "All" : s}</button>
             ))}
           </div>
         )}
 
-        {/* Sync filter chips */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-muted-foreground font-medium">Sync:</span>
-          {(["all", "synced", "drifted", "na"] as SyncFilter[]).map((f) => (
+          <span className="text-xs text-muted-foreground font-medium">Drift:</span>
+          {DRIFT_FILTERS.map(({ value, label }) => (
             <button
-              key={f}
-              onClick={() => setFilter(setSyncFilter)(f)}
+              key={value}
+              onClick={() => setFilter(setDriftFilter)(value)}
               className={cn(
-                "rounded-full px-2.5 py-1 text-xs font-medium transition-all border capitalize",
-                syncFilter === f
+                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all border",
+                driftFilter === value
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
               )}
-            >{f === "na" ? "N/A" : f}</button>
+            >
+              {label}
+              {value !== "all" && clusters && (
+                <span className="tabular-nums opacity-70">{driftCounts[value]}</span>
+              )}
+            </button>
           ))}
         </div>
 
-        {/* Clear filters */}
         {hasActiveFilters && (
           <button
-            onClick={() => { setSearch(""); setSiteFilter("all"); setSyncFilter("all"); setPage(1); }}
+            onClick={clearFilters}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
           >
             <X className="h-3 w-3" />
@@ -391,7 +381,6 @@ export default function ClustersPage() {
           </button>
         )}
 
-        {/* Page size */}
         {filtered.length > 10 && (
           <div className="flex items-center gap-1.5 ml-auto">
             <span className="text-xs text-muted-foreground">Rows:</span>
@@ -414,38 +403,20 @@ export default function ClustersPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          Failed to load clusters. Please try again.
-        </div>
+        <ProblemList error={error} title="The clusters could not be loaded" />
       ) : (
         <>
-          <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
-                  <th className="text-left px-4 py-3">
-                    <button onClick={() => toggleSort("name")} className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors">
-                      Name <SortIcon field="name" sortField={sortField} sortDir={sortDir} />
-                    </button>
-                  </th>
+                  <th className="text-left px-4 py-3">{sortHeader("name", "Name")}</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3">
-                    <button onClick={() => toggleSort("site")} className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors">
-                      Site / MCE <SortIcon field="site" sortField={sortField} sortDir={sortDir} />
-                    </button>
-                  </th>
-                  <th className="text-left px-4 py-3">
-                    <button onClick={() => toggleSort("spec")} className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors">
-                      Spec <SortIcon field="spec" sortField={sortField} sortDir={sortDir} />
-                    </button>
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Created By</th>
-                  <th className="text-left px-4 py-3">
-                    <button onClick={() => toggleSort("created_at")} className="flex items-center gap-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors">
-                      Created At <SortIcon field="created_at" sortField={sortField} sortDir={sortDir} />
-                    </button>
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Sync</th>
+                  <th className="text-left px-4 py-3">{sortHeader("site", "Site / MCE")}</th>
+                  <th className="text-left px-4 py-3">{sortHeader("mastertag", "Mastertag")}</th>
+                  <th className="text-left px-4 py-3">{sortHeader("spec", "Spec")}</th>
+                  <th className="text-left px-4 py-3">{sortHeader("created_at", "Last change")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Drift</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -457,106 +428,92 @@ export default function ClustersPage() {
                         ))}
                       </tr>
                     ))
-                  : paginated.map((cluster) => (
-                      <tr
-                        key={cluster.name}
-                        className="hover:bg-primary/[0.03] transition-colors"
-                        onMouseEnter={() => prefetchCluster(cluster.name, cluster.site, cluster.mce)}
-                      >
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <Link
-                            href={`/clusters/${cluster.name}?site=${cluster.site}&mce=${cluster.mce}`}
-                            className="font-semibold text-foreground hover:text-primary transition-colors"
-                          >
-                            {cluster.name}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3">
-                          <ClusterStatusCell
-                            name={cluster.name}
-                            mce={cluster.mce}
-                            site={cluster.site}
-                            bulkStatus={bulkStatuses?.[cluster.name]}
-                            isBulkLoading={bulkStatusLoading}
-                          />
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="leading-snug">
-                            <p className="text-sm text-foreground">{cluster.site}</p>
-                            <p className="text-xs text-muted-foreground">{cluster.mce}</p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          {cluster.spec_name ? (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Link href={`/specs/${cluster.spec_name}`} className="hover:text-primary transition-colors font-medium whitespace-nowrap">
-                                {cluster.spec_name}
-                              </Link>
-                              {cluster.spec_version && (
-                                <span className="rounded-full px-1.5 py-0.5 text-xs bg-primary/8 text-primary font-medium whitespace-nowrap">
-                                  v{cluster.spec_version}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{cluster.created_by ?? "—"}</td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {cluster.created_at ? new Date(cluster.created_at).toLocaleDateString("en-GB") : "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          {!hasSpec(cluster.spec_name) ? (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-muted-foreground cursor-default">
-                                  <HelpCircle className="h-3 w-3" />
-                                  N/A
-                                </TooltipTrigger>
-                                <TooltipContent>Not active — cluster is not linked to a spec</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : driftSummary === undefined ? (
-                            <Skeleton className="h-5 w-16" />
-                          ) : driftMap.get(cluster.name) ? (
-                            <span className="relative inline-flex">
-                              <span className="absolute inset-0 rounded-full bg-status-warning/30 animate-ping" />
+                  : paginated.map((cluster) => {
+                      const drift = driftOf(cluster);
+                      return (
+                        <tr
+                          key={cluster.path}
+                          data-testid={`cluster-row-${cluster.name}`}
+                          className="hover:bg-primary/[0.03] transition-colors"
+                          onMouseEnter={() => prefetchCluster(cluster)}
+                        >
+                          <td className="px-4 py-3 max-w-[22rem]">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <Link
-                                href={`/clusters/${cluster.name}?site=${cluster.site}&mce=${cluster.mce}`}
-                                className="relative inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-status-warning/10 text-status-warning-fg hover:bg-status-warning/20 transition-colors"
+                                href={clusterHref(cluster)}
+                                className="font-semibold text-foreground hover:text-primary transition-colors truncate"
+                                title={cluster.name}
                               >
-                                <AlertTriangle className="h-3 w-3" />
-                                Drifted
+                                {cluster.name}
                               </Link>
-                            </span>
-                          ) : (
-                            <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-status-ready/8 text-status-ready-fg")}>
-                              <CheckCircle2 className="h-3 w-3" />
-                              Synced
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                              <ClusterFlags cluster={cluster} />
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <ClusterStatusCell
+                              cluster={cluster}
+                              status={liveStatuses?.[cluster.name]}
+                              statusOff={statusOff}
+                              isLoading={statusLoading}
+                              failed={statusFailed}
+                            />
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="leading-snug">
+                              <p className="text-sm text-foreground">{cluster.site}</p>
+                              <p className="text-xs text-muted-foreground">{cluster.mce}</p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-muted-foreground">
+                            {cluster.mastertag ?? "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            {cluster.spec_name ? (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <Link href={`/specs/${encodeURIComponent(cluster.spec_name)}`} className="hover:text-primary transition-colors font-medium whitespace-nowrap">
+                                  {cluster.spec_name}
+                                </Link>
+                                {cluster.spec_version && (
+                                  <span className="rounded-full px-1.5 py-0.5 text-xs bg-primary/8 text-primary font-medium whitespace-nowrap">
+                                    v{cluster.spec_version}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                            <div className="leading-snug">
+                              <p className="text-sm">{cluster.created_by ?? "—"}</p>
+                              <p className="text-xs">
+                                {cluster.created_at ? formatDate(cluster.created_at) : ""}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            {drift ? <DriftBadge state={drift.state} error={drift.error} /> : <Skeleton className="h-5 w-16" />}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 {!isLoading && clusters?.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center text-muted-foreground">
-                      No clusters yet.{" "}
-                      <Link href="/clusters/new" className="text-primary hover:underline font-medium">
-                        Create your first cluster
-                      </Link>.
+                    <td colSpan={7}>
+                      <EmptyState
+                        icon={Server}
+                        title="No clusters yet"
+                        description="Every hosted cluster file in the day1 repo is listed here."
+                        action={isAdmin && <EmptyStateLink href="/clusters/new">New cluster</EmptyStateLink>}
+                        data-testid="clusters-empty"
+                      />
                     </td>
                   </tr>
                 )}
                 {!isLoading && clusters && clusters.length > 0 && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground text-sm">
-                      No clusters match your filters.{" "}
-                      <button
-                        onClick={() => { setSearch(""); setSiteFilter("all"); setSyncFilter("all"); setPage(1); }}
-                        className="text-primary hover:underline"
-                      >Clear filters</button>
+                    <td colSpan={7}>
+                      <NoMatches what="clusters" onClear={clearFilters} />
                     </td>
                   </tr>
                 )}
@@ -564,7 +521,6 @@ export default function ClustersPage() {
             </table>
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between text-sm">
               <p className="text-xs text-muted-foreground">

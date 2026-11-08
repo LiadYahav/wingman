@@ -35,15 +35,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
     persistQueryClient({
       queryClient,
       persister,
+      // A new build drops what an older one cached (its shapes may differ)
+      buster: process.env.WINGMAN_WEB_BUILD,
       maxAge: 10 * 60 * 1000, // 10 minutes
       dehydrateOptions: {
-        shouldDehydrateQuery: (query) => query.state.status === "success",
+        // An approval's detail is what the reviewer approves (its sha), so it is
+        // never restored from storage: a page opened later always shows the
+        // branch as it is now, not a diff cached minutes ago.
+        shouldDehydrateQuery: (query) =>
+          query.state.status === "success" && query.queryKey[0] !== "approvals",
       },
     });
   }, [queryClient]);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           {children}

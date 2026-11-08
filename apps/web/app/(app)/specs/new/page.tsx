@@ -18,7 +18,6 @@ import {
   Settings2,
   FileCode2,
 } from "lucide-react";
-import { toast } from "sonner";
 import jsYaml from "js-yaml";
 import {
   DndContext,
@@ -37,20 +36,17 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { api } from "@/lib/api-client";
+import { api, isApiError } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReviewDialog } from "@/components/common/review-dialog";
+import { ProblemList } from "@/components/common/problem-list";
+import { specNameProblem, specVersionProblem } from "@/lib/specs";
+import { toastMrOpened } from "@/lib/mr-toast";
 import { asNewFile } from "@/lib/diff";
 import { useIsAdmin } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -60,7 +56,8 @@ import {
 } from "@/components/ui/dialog";
 import { ConfigureOverrideableDialog, deepMergeValues } from "@/components/specs/configure-overrideable-dialog";
 import { DynamicVariableForm, initFormValues, type FormValues } from "@/components/clusters/dynamic-variable-form";
-import type { MRDetail, AddonCatalogEntry, SpecAddon, ClusterSpec, OverrideableField, TemplateField } from "@/types";
+import { chartRevisions, day2Api, day2Keys } from "@/lib/day2";
+import type { MRDetail, CatalogEntry, SpecAddon, ClusterSpec, OverrideableField, TemplateField } from "@/types";
 
 // ── Sortable Addon Item ───────────────────────────────────────────────────────
 
@@ -129,16 +126,15 @@ function SortableAddonItem({
         <Settings2 className="h-4 w-4" />
       </button>
       <div className="shrink-0">
-        <Select value={addon.version} onValueChange={(v) => v && onVersionChange(v)}>
-          <SelectTrigger className="w-24 h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {availableVersions.map((v) => (
-              <SelectItem key={v} value={v}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={availableVersions.map((v) => ({ value: v, label: v }))}
+          value={addon.version}
+          onValueChange={(v) => v && onVersionChange(v)}
+          searchPlaceholder="Search revisions…"
+          emptyMessage="No revision matches."
+          aria-label={`${addon.name} revision`}
+          className="w-24 text-xs"
+        />
       </div>
       <button
         onClick={onRemove}
@@ -158,10 +154,11 @@ function AddonCatalogCard({
   isSelected,
   onAdd,
 }: {
-  addon: AddonCatalogEntry;
+  addon: CatalogEntry;
   isSelected: boolean;
   onAdd: (version: string) => void;
 }) {
+  // The team default (HEAD when it sets none), so a cluster inherits it without a pin
   const [selectedVersion, setSelectedVersion] = useState(addon.current_version);
 
   return (
@@ -189,21 +186,16 @@ function AddonCatalogCard({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <Select
+        <Combobox
+          options={chartRevisions(addon).map((v) => ({ value: v, label: v }))}
           value={selectedVersion}
           onValueChange={(v) => v && setSelectedVersion(v)}
           disabled={isSelected}
-        >
-          <SelectTrigger className="flex-1 h-8 text-xs">
-            <Tag className="h-3 w-3 mr-1" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {addon.available_versions.map((v) => (
-              <SelectItem key={v} value={v}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          searchPlaceholder="Search revisions…"
+          emptyMessage="No revision matches."
+          aria-label={`${addon.name} revision`}
+          className="min-w-0 flex-1 text-xs"
+        />
         <button
           onClick={() => onAdd(selectedVersion)}
           disabled={isSelected}
@@ -230,12 +222,12 @@ function TeamSection({
   onAdd,
 }: {
   team: string;
-  addons: AddonCatalogEntry[];
+  addons: CatalogEntry[];
   selectedAddons: SpecAddon[];
-  onAdd: (addon: AddonCatalogEntry, version: string) => void;
+  onAdd: (addon: CatalogEntry, version: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const isAddonSelected = (addon: AddonCatalogEntry) =>
+  const isAddonSelected = (addon: CatalogEntry) =>
     selectedAddons.some((s) => s.team === addon.team && s.name === addon.name);
 
   return (
@@ -284,6 +276,9 @@ export default function NewSpecPage() {
 
   const [specName, setSpecName] = useState("");
   const [specVersion, setSpecVersion] = useState("1.0.0");
+  const [description, setDescription] = useState("");
+  // Show the name/version hints once the user typed or tried to submit
+  const [attempted, setAttempted] = useState(false);
   const [templateExpanded, setTemplateExpanded] = useState(false);
   // Structure: the form tree values (in spec-build mode, leaves are empty — counts define structure)
   const [structure, setStructure] = useState<FormValues>({});
@@ -295,9 +290,9 @@ export default function NewSpecPage() {
   const [configuringAddon, setConfiguringAddon] = useState<{ team: string; name: string } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const { data: addonCatalog, isLoading: catalogLoading } = useQuery<AddonCatalogEntry[]>({
-    queryKey: ["addons", "catalog"],
-    queryFn: () => api.get<AddonCatalogEntry[]>("/api/day2/addons"),
+  const { data: addonCatalog, isLoading: catalogLoading } = useQuery<CatalogEntry[]>({
+    queryKey: day2Keys.catalog,
+    queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
     staleTime: 120_000,
   });
 
@@ -320,13 +315,10 @@ export default function NewSpecPage() {
     },
   });
 
-  const addonVersionsMap = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    for (const addon of addonCatalog ?? []) {
-      map[`${addon.team}/${addon.name}`] = addon.available_versions;
-    }
-    return map;
-  }, [addonCatalog]);
+  const catalogByKey = useMemo(
+    () => new Map((addonCatalog ?? []).map((addon) => [`${addon.team}/${addon.name}`, addon])),
+    [addonCatalog]
+  );
 
   const filteredCatalog = useMemo(() => {
     if (!addonCatalog) return {};
@@ -336,7 +328,7 @@ export default function NewSpecPage() {
         a.name.toLowerCase().includes(addonSearch.toLowerCase()) ||
         a.team.toLowerCase().includes(addonSearch.toLowerCase())
     );
-    return filtered.reduce<Record<string, AddonCatalogEntry[]>>((acc, addon) => {
+    return filtered.reduce<Record<string, CatalogEntry[]>>((acc, addon) => {
       if (!acc[addon.team]) acc[addon.team] = [];
       acc[addon.team].push(addon);
       return acc;
@@ -357,7 +349,7 @@ export default function NewSpecPage() {
     }
   };
 
-  const handleAddAddon = (addon: AddonCatalogEntry, version: string) => {
+  const handleAddAddon = (addon: CatalogEntry, version: string) => {
     setSelectedAddons([...selectedAddons, { team: addon.team, name: addon.name, version, overrideable: [] }]);
   };
 
@@ -381,17 +373,16 @@ export default function NewSpecPage() {
     ? selectedAddons.find((a) => a.team === configuringAddon.team && a.name === configuringAddon.name)
     : null;
   const configuringCatalogEntry = configuringAddon
-    ? addonCatalog?.find((c) => c.team === configuringAddon.team && c.name === configuringAddon.name)
+    ? catalogByKey.get(`${configuringAddon.team}/${configuringAddon.name}`)
     : null;
 
-  // Fetch full helm chart values for the addon being configured (merges on top of team values)
-  const configuringVersion = configuringAddonData?.version ?? configuringCatalogEntry?.current_version;
+  // The chart's own values at the chosen revision (the team values merge on top)
+  const configuringVersion = configuringAddonData?.version ?? configuringCatalogEntry?.current_version ?? "HEAD";
   const { data: configuringChartValues, isLoading: configuringChartLoading } = useQuery<Record<string, unknown>>({
-    queryKey: ["addons", configuringAddon?.team, configuringAddon?.name, "values", configuringVersion],
-    queryFn: () => api.get<Record<string, unknown>>(
-      `/api/day2/addons/${configuringAddon!.team}/${configuringAddon!.name}/values?version=${encodeURIComponent(configuringVersion!)}`
-    ),
-    enabled: Boolean(configuringAddon && configuringVersion),
+    queryKey: day2Keys.chartDefaults(configuringAddon?.team ?? "", configuringAddon?.name ?? "", configuringVersion),
+    queryFn: () =>
+      api.get<Record<string, unknown>>(day2Api.chartDefaults(configuringAddon!.team, configuringAddon!.name, configuringVersion)),
+    enabled: Boolean(configuringAddon),
     staleTime: 300_000,
   });
 
@@ -409,12 +400,15 @@ export default function NewSpecPage() {
     });
   };
 
+  // The service checks the same rules and answers 422 with every one it finds.
+  const nameProblem = specNameProblem(specName.trim());
+  const versionProblem = specVersionProblem(specVersion.trim());
+
   const buildFinalSpec = (): ClusterSpec => {
-    if (!specName.trim()) throw new Error("Spec name is required");
     return {
       apiVersion: "wingman.io/v1",
       kind: "ClusterSpec",
-      metadata: { name: specName.trim(), version: specVersion, labels: {} },
+      metadata: { name: specName.trim(), description: description.trim(), version: specVersion.trim(), labels: {} },
       spec: {
         day1: {
           variables: [],
@@ -430,11 +424,9 @@ export default function NewSpecPage() {
     };
   };
 
-  const finalYaml = useMemo(() => {
-    try { return jsYaml.dump(buildFinalSpec(), { lineWidth: 120, quotingType: '"' }); }
-    catch { return ""; }
+  const finalYaml = useMemo(() => jsYaml.dump(buildFinalSpec(), { lineWidth: 120, quotingType: '"' }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specName, specVersion, structure, immutablePaths, selectedAddons]);
+  [specName, specVersion, description, structure, immutablePaths, selectedAddons]);
 
   const previewYaml = useMemo(() => {
     const nonIdentity = Object.fromEntries(
@@ -446,21 +438,24 @@ export default function NewSpecPage() {
   const createMutation = useMutation({
     mutationFn: async () => api.post<MRDetail>("/api/day1/specs", buildFinalSpec()),
     onSuccess: (mr) => {
-      toast.success(`Spec MR #${mr.iid} created: ${mr.title}`);
+      toastMrOpened(mr, router.push, "Spec MR");
       setReviewOpen(false);
       router.push("/specs");
     },
-    onError: (err: Error) => {
-      toast.error(`Failed: ${err.message}`);
-      setReviewOpen(false);
-    },
+    // The problem is shown in full next to the actions; the form stays as filled in.
+    onError: () => setReviewOpen(false),
   });
+  const exists = isApiError(createMutation.error, "ALREADY_EXISTS");
 
   const handleReview = () => {
-    try { buildFinalSpec(); }
-    catch (e) { toast.error((e as Error).message); return; }
+    setAttempted(true);
+    if (nameProblem || versionProblem) return;
+    createMutation.reset();
     setReviewOpen(true);
   };
+
+  const showNameProblem = nameProblem && (attempted || specName.length > 0);
+  const showVersionProblem = versionProblem && (attempted || specVersion.length > 0);
 
   if (!isAdmin) {
     return (
@@ -488,28 +483,54 @@ export default function NewSpecPage() {
       </div>
 
       {/* Spec Metadata */}
-      <div className="bg-card rounded-xl border shadow-sm p-4">
+      <div className="bg-card rounded-xl border shadow-sm p-4 space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Spec Name</label>
+          <div className="min-w-0">
+            <label htmlFor="spec-name" className="text-xs font-medium text-muted-foreground mb-1.5 block">Spec Name</label>
             <input
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              id="spec-name"
+              className={cn(
+                "w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50",
+                showNameProblem && "border-destructive/60 focus:ring-destructive/40"
+              )}
               placeholder="e.g. standard-ha, dok, compact-single"
               data-testid="spec-name-input"
+              aria-invalid={Boolean(showNameProblem)}
+              aria-describedby="spec-name-hint"
               value={specName}
               onChange={(e) => setSpecName(e.target.value)}
             />
+            <p id="spec-name-hint" className={cn("mt-1 text-xs", showNameProblem ? "text-destructive" : "text-muted-foreground")}>
+              {showNameProblem ? nameProblem : "Lowercase letters, digits and '-'. It cannot be changed later."}
+            </p>
           </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Version</label>
+          <div className="min-w-0">
+            <label htmlFor="spec-version" className="text-xs font-medium text-muted-foreground mb-1.5 block">Version</label>
             <input
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+              id="spec-version"
+              className={cn(
+                "w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50",
+                showVersionProblem && "border-destructive/60 focus:ring-destructive/40"
+              )}
               placeholder="1.0.0"
               data-testid="spec-version-input"
+              aria-invalid={Boolean(showVersionProblem)}
               value={specVersion}
               onChange={(e) => setSpecVersion(e.target.value)}
             />
+            {showVersionProblem && <p className="mt-1 text-xs text-destructive">{versionProblem}</p>}
           </div>
+        </div>
+        <div>
+          <label htmlFor="spec-description" className="text-xs font-medium text-muted-foreground mb-1.5 block">Description</label>
+          <input
+            id="spec-description"
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+            placeholder="What clusters of this spec are for"
+            data-testid="spec-description-input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </div>
       </div>
 
@@ -660,7 +681,7 @@ export default function NewSpecPage() {
                           onRemove={() => handleRemoveAddon(addon.team, addon.name)}
                           onVersionChange={(v) => handleVersionChange(addon.team, addon.name, v)}
                           onConfigure={() => setConfiguringAddon({ team: addon.team, name: addon.name })}
-                          availableVersions={addonVersionsMap[`${addon.team}/${addon.name}`] ?? [addon.version]}
+                          availableVersions={chartRevisions(catalogByKey.get(`${addon.team}/${addon.name}`), addon.version)}
                         />
                       ))}
                     </div>
@@ -673,6 +694,17 @@ export default function NewSpecPage() {
       </div>
 
       {/* Actions */}
+      {createMutation.error && (
+        <ProblemList
+          error={createMutation.error}
+          title={exists ? `A spec named "${specName.trim()}" already exists. Pick another name, or edit that spec.` : undefined}
+        />
+      )}
+      {exists && (
+        <Link href={`/specs/${encodeURIComponent(specName.trim())}`} className="text-sm text-primary hover:underline">
+          Open the existing spec
+        </Link>
+      )}
       <div className="flex gap-3">
         <Link href="/specs" className={buttonVariants({ variant: "outline" })}>Cancel</Link>
         <button

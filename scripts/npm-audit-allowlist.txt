@@ -1,0 +1,18 @@
+# Advisories `npm audit` reports that are accepted for now, by GHSA id. This
+# list may only shrink: scripts/npm-audit.py fails on any advisory missing here
+# and on any entry npm no longer reports, so a fix removes its lines in the
+# same change. Regenerate the lines with `python3 scripts/npm-audit.py --list`;
+# only the first word of a line is read. Never add an entry without the reason
+# and the fix, as for each group below.
+#
+# Recorded 2026-11-07, after in-range lockfile updates (no package.json
+# change) cleared 83 of the 147 advisories reported before. The 21 dompurify
+# advisories left on 2026-11-08 with @monaco-editor/react, which nothing used.
+
+# Through the shadcn CLI (apps/web/package.json `dependencies`, though only its
+# tailwind.css is used at build time); zod also through eslint-config-next's
+# react-hooks plugin. npm's suggested fix (shadcn@1.0.0) is a downgrade; the real
+# fix is a shadcn release that moves them, or zod > 4.3.x.
+GHSA-gcqx-w48m-w2h4  deepmerge                  low       fix: shadcn@1.0.0 (semver major)  # deepmerge mergeObject() allows prototype poisoning of returned objects
+GHSA-g3hv-75wg-m249  minimatch                  moderate  fix: shadcn@1.0.0 (semver major)  # minimatch has potential denial of service via globparts amplification
+GHSA-mrhx-c7xc-m3w5  zod                        high      fix: shadcn@1.0.0 (semver major)  # Zod can exhaust memory while validating oversized constrained collections

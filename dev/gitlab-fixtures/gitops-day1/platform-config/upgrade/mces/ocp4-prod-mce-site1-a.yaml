@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=../schema/mce.schema.json
+#
+# MCE ocp4-prod-mce-site1-a (sites/site1/mces/ocp4-prod-mce-site1-a/).
+# supportedHostedVersions must equal the hypershift/supported-versions
+# ConfigMap on that MCE. Wingman's create form offers the ladder's rungs in
+# these minors, and nothing else (upgrade/README.md).
+mce:
+  version: 2.8.2
+  supportedHostedVersions: ["4.18", "4.17", "4.16"]
+
+# Production: one hosted control plane upgrading at a time.
+maxConcurrentControlPlanes: 1

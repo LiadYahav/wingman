@@ -21,7 +21,7 @@ docker build -f apps/day2-service/Dockerfile -t "wingman-day2:${TAG}" .
 
 echo ""
 echo "==> Building wingman-web:${TAG}"
-docker build -f apps/web/Dockerfile -t "wingman-web:${TAG}" apps/web/
+docker build -f apps/web/Dockerfile -t "wingman-web:${TAG}" .
 
 echo ""
 echo "==> Images loaded into minikube:"
@@ -31,5 +31,5 @@ echo "Done. Now deploy with:"
 echo "  helm upgrade --install wingman ./chart -f chart/values.minikube.yaml \\"
 echo "    --set gitlab.accessToken=<your-token> \\"
 echo "    --set auth.jwtSecret=\$(openssl rand -hex 32) \\"
-echo "    --set devAuth.secret=devpassword \\"
+echo "    --set devAuth.secret=\$(openssl rand -hex 16) \\"
 echo "    -n wingman --create-namespace"

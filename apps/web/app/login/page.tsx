@@ -2,9 +2,40 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api } from "@/lib/api-client";
+import { api, isApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/stores/auth-store";
-import { UserInfo } from "@/types";
+import type { UserInfo } from "@/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type DevRole = "admin" | "viewer";
+
+/** The roles a dev login can ask for; `items` lets the trigger show the label, not the value. */
+const ROLES: { value: DevRole; label: string }[] = [
+  { value: "viewer", label: "Viewer" },
+  { value: "admin", label: "Admin" },
+];
+
+/** The day1 service's rule for dev-login usernames (application/auth.py). */
+const DEV_USERNAME = /^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$/;
+
+/** Only same-site paths: `?redirect=` must never send the browser elsewhere. */
+function safeRedirect(target: string | null): string {
+  return target && target.startsWith("/") && !target.startsWith("//") ? target : "/";
+}
+
+function callbackError(err: unknown): string {
+  if (isApiError(err, "FORBIDDEN")) return "You are not in a Wingman group. Ask an admin for access.";
+  if (isApiError(err, "UNAUTHORIZED")) return "OpenShift refused the login. Please try again.";
+  if (isApiError(err, "DEPENDENCY_UNAVAILABLE")) return "OpenShift could not be reached. Please try again shortly.";
+  return "Authentication failed. Please try again.";
+}
+
+function devLoginError(err: unknown): string {
+  if (isApiError(err, "UNAUTHORIZED")) return "The dev login secret is wrong.";
+  if (isApiError(err, "NOT_FOUND")) return "Dev login is turned off on this server.";
+  if (isApiError(err, "VALIDATION_ERROR")) return err.messages().join(" · ");
+  return "Dev login failed. Is the day1 service running?";
+}
 
 interface AuthCallbackResponse {
   access_token: string;
@@ -35,7 +66,8 @@ function LoginContent() {
   const [error, setError] = useState<string | null>(null);
   const [devAuthEnabled, setDevAuthEnabled] = useState(false);
   const [devUsername, setDevUsername] = useState("");
-  const [devRole, setDevRole] = useState<"admin" | "viewer">("viewer");
+  const [devSecret, setDevSecret] = useState("");
+  const [devRole, setDevRole] = useState<DevRole>("viewer");
 
   useEffect(() => {
     const code = searchParams.get("code");
@@ -45,13 +77,15 @@ function LoginContent() {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await api.post<AuthCallbackResponse>("/api/auth/callback", { code });
+        const data = await api.post<AuthCallbackResponse>(
+          "/api/auth/callback",
+          { code },
+          { redirectOnUnauthorized: false }
+        );
         login(data.access_token, data.user);
-        const redirect = searchParams.get("redirect") ?? "/";
-        router.replace(redirect);
+        router.replace(safeRedirect(searchParams.get("redirect")));
       } catch (err) {
-        setError("Authentication failed. Please try again.");
-        console.error("OAuth callback error:", err);
+        setError(callbackError(err));
       } finally {
         setIsLoading(false);
       }
@@ -62,7 +96,7 @@ function LoginContent() {
 
   useEffect(() => {
     if (isAuthenticated && !searchParams.get("code")) {
-      router.replace("/");
+      router.replace(safeRedirect(searchParams.get("redirect")));
     }
   }, [isAuthenticated, searchParams, router]);
 
@@ -84,19 +118,25 @@ function LoginContent() {
     }
   };
 
+  const username = devUsername.trim();
+  const usernameInvalid = username !== "" && !DEV_USERNAME.test(username);
+
   const handleDevLogin = async () => {
-    if (!devUsername.trim()) { setError("Username is required"); return; }
+    if (!username) { setError("Username is required"); return; }
+    if (usernameInvalid) { setError("Usernames are lowercase letters, digits, '.', '_' and '-'"); return; }
+    if (!devSecret) { setError("The dev login secret is required (DEV_AUTH_SECRET)"); return; }
     setIsLoading(true);
     setError(null);
     try {
-      const data = await api.post<AuthCallbackResponse>("/api/auth/dev-login", {
-        username: devUsername.trim(),
-        role: devRole,
-      });
+      const data = await api.post<AuthCallbackResponse>(
+        "/api/auth/dev-login",
+        { username, role: devRole, secret: devSecret },
+        { redirectOnUnauthorized: false }
+      );
+      // The isAuthenticated effect above navigates once the store updates.
       login(data.access_token, data.user);
-      router.replace("/");
-    } catch {
-      setError("Dev login failed.");
+    } catch (err) {
+      setError(devLoginError(err));
     } finally {
       setIsLoading(false);
     }
@@ -140,7 +180,7 @@ function LoginContent() {
         <div className="rounded-2xl border bg-card shadow-sm p-6 space-y-5">
           {devAuthEnabled && (
             <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 font-medium">
-              Dev mode — enter any username to sign in
+              Dev mode — sign in with any username and the server&apos;s dev login secret
             </div>
           )}
 
@@ -156,31 +196,56 @@ function LoginContent() {
               Signing you in&hellip;
             </div>
           ) : devAuthEnabled ? (
-            <div className="space-y-3">
+            <form
+              className="space-y-3"
+              onSubmit={(e) => { e.preventDefault(); handleDevLogin(); }}
+            >
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  placeholder="Username"
+                  aria-label="Username"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={devUsername}
+                  onChange={(e) => setDevUsername(e.target.value)}
+                  aria-invalid={usernameInvalid}
+                  className="w-full rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow aria-invalid:border-destructive/60"
+                />
+                {usernameInvalid && (
+                  <p className="text-xs text-destructive">
+                    Lowercase letters, digits, &apos;.&apos;, &apos;_&apos; and &apos;-&apos;; start and end with a letter or digit.
+                  </p>
+                )}
+              </div>
               <input
-                type="text"
-                placeholder="Username"
-                value={devUsername}
-                onChange={(e) => setDevUsername(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleDevLogin()}
+                type="password"
+                placeholder="Dev login secret"
+                aria-label="Dev login secret"
+                autoComplete="current-password"
+                value={devSecret}
+                onChange={(e) => setDevSecret(e.target.value)}
                 className="w-full rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
               />
-              <select
-                value={devRole}
-                onChange={(e) => setDevRole(e.target.value as "admin" | "viewer")}
-                className="w-full rounded-lg border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
-              >
-                <option value="viewer">Viewer</option>
-                <option value="admin">Admin</option>
-              </select>
+              <Select value={devRole} onValueChange={(role) => role && setDevRole(role)} items={ROLES}>
+                <SelectTrigger size="lg" className="w-full" aria-label="Role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  {ROLES.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <button
+                type="submit"
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-60"
-                onClick={handleDevLogin}
                 disabled={isLoading}
               >
                 {isLoading ? <><Spinner />Signing in&hellip;</> : "Sign in"}
               </button>
-            </div>
+            </form>
           ) : (
             <button
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-60 shadow-sm shadow-primary/25"

@@ -51,13 +51,13 @@ spec:
             {{- toYaml .Values.resources.day2 | nindent 12 }}
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /health/live
               port: 8002
             initialDelaySeconds: 15
             periodSeconds: 20
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /health/ready
               port: 8002
             initialDelaySeconds: 5
             periodSeconds: 10

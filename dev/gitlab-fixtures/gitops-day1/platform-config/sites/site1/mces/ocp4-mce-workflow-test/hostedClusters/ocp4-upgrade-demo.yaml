@@ -1,0 +1,86 @@
+# The hosted-cluster upgrade demo (sandbox only).
+#
+# Deployed like every hosted cluster: Argo CD renders helm-charts-hostedclusters-setup
+# with sites/configValues.yaml, sites/site1/values.yaml, this MCE's values.yaml and
+# this file, in that order. The upgrade workflow moves it by editing mastertag and
+# workertag here, then syncing its Application (manual sync).
+#
+# No clusterName: it derives from this file's name minus ocp4-, so the cluster is
+# upgrade-demo — HostedCluster openshift-upgrade-demo in namespace hcp-upgrade-demo,
+# Application ocp4-upgrade-demo.
+
+# KubeVirt VMs on the MCE, where production uses the Agent platform; an InPlace
+# NodePool upgrades the same way on both.
+platform: kubevirt
+kubevirtInfra: local
+
+mastertag: 4.21.40-x86_64
+
+# Releases straight from quay.io, no mirror. Must match upgrade/ladder.yaml's
+# release block (imagePath, repo; mirrored: false, no CPO image).
+imagePath: quay.io/openshift-release-dev
+releaseRepo: ocp-release
+cpoRepo: ""
+
+# Empty: the chart renders no dns, and HyperShift derives the domain from the
+# MCE's apps domain, writes it into the HostedCluster, and passes the cluster's
+# ingress through the MCE's router.
+baseDomain: ""
+
+# Clear of the MCE's own networks, 10.128.0.0/14 and 172.30.0.0/16.
+clusterNetworkCidr: 10.132.0.0/14
+serviceNetworkCidr: 172.31.0.0/16
+
+# A zoned cluster: three NodePools, one per zone, rolled one zone at a time
+# (zone a, b, c), one node each so the whole zone goes at once.
+nodepool:
+  - name: upgrade-demo-zone-a
+    replicas: 1
+    labels:
+      allowDeletion: false
+    workertag: 4.21.40-x86_64
+    upgradeType: InPlace
+    inPlace:
+      maxUnavailable: 1
+    nodeLabels:
+      topology.kubernetes.io/zone: a
+    cores: 4
+    memory: 12Gi
+    size: 32Gi
+    storageClass: gp3-csi
+  - name: upgrade-demo-zone-b
+    replicas: 1
+    labels:
+      allowDeletion: false
+    workertag: 4.21.40-x86_64
+    upgradeType: InPlace
+    inPlace:
+      maxUnavailable: 1
+    nodeLabels:
+      topology.kubernetes.io/zone: b
+    cores: 4
+    memory: 12Gi
+    size: 32Gi
+    storageClass: gp3-csi
+  - name: upgrade-demo-zone-c
+    replicas: 1
+    labels:
+      allowDeletion: false
+    workertag: 4.21.40-x86_64
+    upgradeType: InPlace
+    inPlace:
+      maxUnavailable: 1
+    nodeLabels:
+      topology.kubernetes.io/zone: c
+    cores: 4
+    memory: 12Gi
+    size: 32Gi
+    storageClass: gp3-csi
+
+# Read by the upgrade workflow, never by the chart. Wave 0: a lab cluster, so it
+# may approve itself, roll NodePools without a continue, and skip confirm-day2
+# when it has no day2 Application (D27). A 5-minute soak per zone instead of 30.
+upgrade:
+  profile: zoned
+  wave: 0
+  soakMinutes: 5

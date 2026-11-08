@@ -1,0 +1,4 @@
+admissionController:
+  replicas: 3
+policies:
+  requireLabels: false

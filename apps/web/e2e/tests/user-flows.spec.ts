@@ -6,35 +6,35 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
+import { catalogEntry } from "../fixtures/addons";
+import { destination, hostedCharts, previewOf } from "../fixtures/day2";
+import type { ClusterStatus, CommitRecord } from "../../types";
 
 // ── Shared mock data (correct field shapes matching TypeScript types) ──────────
 
 const CATALOG = [
-  {
+  catalogEntry({
     team: "platform",
     name: "cert-manager",
     current_version: "1.12.0",
     available_versions: ["1.12.0", "1.11.0"],
     default_values: { replicas: 1, namespace: "cert-manager", installCRDs: true },
-    dependencies: [],
-  },
-  {
+  }),
+  catalogEntry({
     team: "platform",
     name: "external-secrets",
     current_version: "0.9.0",
     available_versions: ["0.9.0"],
     default_values: { replicaCount: 1 },
-    dependencies: ["platform/cert-manager"],
-  },
-  {
+  }),
+  catalogEntry({
     team: "observability",
     name: "prometheus",
     current_version: "2.45.0",
     available_versions: ["2.45.0", "2.44.0"],
     default_values: { retention: "15d" },
-    dependencies: [],
-  },
+  }),
 ];
 
 const SPECS = [
@@ -65,21 +65,15 @@ const SPECS = [
   },
 ];
 
-const MOCK_MR = {
+const MOCK_MR = mockMR({
   iid: 42,
   title: "feat: create spec qa-e2e-test",
   description: "Automated spec creation",
-  author: { username: "qa-admin", name: "QA Admin", avatar_url: "" },
-  state: "opened",
+  author: { username: "qa-admin", name: "qa-admin", avatar_url: "" },
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
-  web_url: "https://gitlab.example.com/mr/42",
   source_branch: "qa-e2e-test",
-  target_branch: "main",
-  labels: ["wingman"],
-  repo: "day1",
-  has_conflicts: false,
-};
+});
 
 const MOCK_MR_DETAIL = {
   mr: MOCK_MR,
@@ -95,7 +89,7 @@ const MOCK_MR_DETAIL = {
   ],
 };
 
-const AUDIT_COMMITS = [
+const AUDIT_COMMITS: CommitRecord[] = [
   {
     id: "abc123def",
     short_id: "abc123d",
@@ -113,27 +107,9 @@ const AUDIT_MRS = [
   { ...MOCK_MR, repo: "day1" as const, state: "merged" as const },
 ];
 
-const INSTALLED_ADDONS = [
-  {
-    team: "platform",
-    name: "cert-manager",
-    version: "1.12.0",
-    override_values: { replicas: 2 },
-    available_versions: ["1.12.0", "1.11.0"],
-    gitlab_url: "https://gitlab.example.com/mces/mce-east/test-cluster/cert-manager",
-  },
-];
-
-const MERGED_VALUES = {
-  addon_name: "cert-manager",
-  team: "platform",
-  version: "1.12.0",
-  merged: { replicas: 2, namespace: "cert-manager", installCRDs: true },
-  chart_values: { replicas: 1, namespace: "cert-manager", installCRDs: true },
-  team_values: { replicas: 1, namespace: "cert-manager", installCRDs: true },
-  cluster_values: { replicas: 2 },
-  provenance: { replicas: "cluster", namespace: "team", installCRDs: "team" },
-};
+// The day2 cluster charts (`GET /api/day2/clusters/{id}/addons`) and one chart's values preview.
+const CLUSTER_CHARTS = { ...hostedCharts(), cluster: "test-cluster", mce: "mce-east" };
+const MERGED_VALUES = previewOf("platform", "cert-manager");
 
 // ── Mock helper ───────────────────────────────────────────────────────────────
 
@@ -177,49 +153,6 @@ async function setupMocks(page: Page) {
     })
   );
 
-  // Cluster creation
-  await page.route("**/api/day1/clusters", async (r: Route) => {
-    if (r.request().method() === "GET") {
-      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
-    } else {
-      await r.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(MOCK_MR) });
-    }
-  });
-
-  // Cluster preview
-  await page.route("**/api/day1/clusters/preview", (r: Route) =>
-    r.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ yaml: "apiVersion: wingman.io/v1\nkind: Cluster\nmetadata:\n  name: test-cluster" }),
-    })
-  );
-
-  // Sites and MCEs
-  await page.route("**/api/day1/sites", async (r: Route) => {
-    if (r.request().method() === "GET") {
-      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(["site-east", "site-west"]) });
-    } else {
-      await r.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(MOCK_MR) });
-    }
-  });
-  await page.route("**/api/day1/sites/*/mces", async (r: Route) => {
-    if (r.request().method() === "GET") {
-      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(["mce-east", "mce-west"]) });
-    } else {
-      await r.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(MOCK_MR) });
-    }
-  });
-
-  // OCP versions
-  await page.route("**/api/day1/specs/versions/openshift", (r: Route) =>
-    r.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(["4.16.12", "4.15.30", "4.14.20"]),
-    })
-  );
-
   // Approvals
   await page.route("**/api/day1/approvals", async (r: Route) => {
     const url = r.request().url();
@@ -255,7 +188,7 @@ async function setupMocks(page: Page) {
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) })
   );
 
-  // Cluster addons — response must match ClusterInstalledResponse: { cluster, mce, installed[] }
+  // Cluster charts: DestinationCharts, or a ValuesPreview for one chart
   await page.route("**/api/day2/clusters/*/addons**", async (r: Route) => {
     const url = r.request().url();
     if (url.match(/\/addons\/[^/]+\/[^/?]+/)) {
@@ -264,7 +197,7 @@ async function setupMocks(page: Page) {
       await r.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ cluster: "test-cluster", mce: "mce-east", installed: INSTALLED_ADDONS }),
+        body: JSON.stringify(CLUSTER_CHARTS),
       });
     }
   });
@@ -274,9 +207,14 @@ async function setupMocks(page: Page) {
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sigs_group_url: "https://gitlab.example.com/sigs" }) })
   );
 
-  // Drift summary (dashboard)
-  await page.route("**/api/day1/clusters/drift-summary", (r: Route) =>
-    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({}) })
+  // The charts page also reads the destination itself (its Argo instance, the way back). Unmocked,
+  // a dev server proxying /api/day2 answers 401 and the page goes to /login.
+  await page.route(/\/api\/day2\/clusters\/test-cluster(\?.*)?$/, (r: Route) =>
+    r.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(destination("hosted:site-east:prod:mce-east:test-cluster", { argo: "mce-east" })),
+    })
   );
 }
 
@@ -394,49 +332,7 @@ test.describe("Spec Creation Flow", () => {
   });
 });
 
-// ── Cluster creation flow ─────────────────────────────────────────────────────
-
-test.describe("Cluster Creation Flow", () => {
-  test.beforeEach(async ({ page }) => {
-    await setupMocks(page);
-  });
-
-  test("step 1 shows spec cards to choose from", async ({ page }) => {
-    await navigateTo(page, "/clusters/new");
-
-    await expect(page.getByText("standard-ha")).toBeVisible();
-    await expect(page.getByText("Standard HA cluster")).toBeVisible();
-    await expect(page.getByText(/1 addon/i)).toBeVisible();
-  });
-
-  test("selecting a spec advances to step 2", async ({ page }) => {
-    await navigateTo(page, "/clusters/new");
-
-    await page.getByText("standard-ha").click();
-    await expect(page.getByText(/step 2 of 2/i)).toBeVisible();
-  });
-
-  test("step 2 shows cluster name and identity fields", async ({ page }) => {
-    await navigateTo(page, "/clusters/new");
-    await page.getByText("standard-ha").click();
-    await page.waitForTimeout(300);
-
-    // Cluster name input placeholder is "e.g. alpha-prod"
-    await expect(page.getByPlaceholder("e.g. alpha-prod")).toBeVisible();
-    await expect(page.getByText(/site/i).first()).toBeVisible();
-    await expect(page.getByText("MCE").first()).toBeVisible();
-    await expect(page.getByText(/OpenShift/i).first()).toBeVisible();
-  });
-
-  test("Review & Create button is present on step 2", async ({ page }) => {
-    await navigateTo(page, "/clusters/new");
-    await page.getByText("standard-ha").click();
-    await page.waitForTimeout(300);
-
-    // The button renders on step 2 (validation happens on click, not on render)
-    await expect(page.getByRole("button", { name: /review & create|generating/i })).toBeVisible();
-  });
-});
+// Cluster creation: cluster-creation.spec.ts
 
 // ── Approvals flow ────────────────────────────────────────────────────────────
 
@@ -578,16 +474,20 @@ test.describe("Audit Log Flow", () => {
 
 // ── Cluster addons flow ───────────────────────────────────────────────────────
 
-const TEST_CLUSTER = {
+const TEST_CLUSTER: ClusterStatus = {
   name: "test-cluster",
   site: "site-east",
   mce: "mce-east",
-  phase: "Ready",
+  phase: "Unknown",
   spec_name: "standard-ha",
   spec_version: "1.0.0",
   created_by: "qa-admin",
   created_at: new Date().toISOString(),
-  is_drifted: false,
+  mastertag: "4.16.27-x86_64",
+  path: "sites/site-east/mces/mce-east/hostedClusters/test-cluster.yaml",
+  hosted_cluster: { cluster_name: "test-cluster", name: "openshift-test-cluster", namespace: "hcp-test-cluster" },
+  naming: { follows_convention: false, env: null, short_name: null, sequence: null, problems: ["cluster 'test-cluster' does not follow ocp4-<env>-<name>-site-east[-<seq>]"] },
+  problems: [],
 };
 
 test.describe("Cluster Addons Flow", () => {
@@ -612,7 +512,7 @@ test.describe("Cluster Addons Flow", () => {
         await r.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ cluster: "test-cluster", mce: "mce-east", installed: INSTALLED_ADDONS }),
+          body: JSON.stringify(CLUSTER_CHARTS),
         });
       }
     });
@@ -717,19 +617,15 @@ test.describe("Global Addons Catalog", () => {
 
     await page.getByPlaceholder("Search addons or teams...").fill("prometheus");
     await page.waitForTimeout(300);
-    await expect(page.getByText("prometheus")).toBeVisible();
-    await expect(page.getByText("cert-manager")).not.toBeVisible();
+    await expect(page.getByRole("heading", { name: "prometheus" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "cert-manager" })).not.toBeVisible();
   });
 
-  test("F5: dependency chips appear on available-addon cards in cluster addons page", async ({ page }) => {
-    // F5 dependency chips live on the cluster addons "Available Addons" panel,
-    // not on the global catalog page which uses a simpler card layout.
+  test("cluster charts page shows fleet defaults beside the cluster's own charts", async ({ page }) => {
     await navigateTo(page, "/clusters/test-cluster/addons?mce=mce-east");
 
-    // The available addons section shows addon catalog with dependency chips.
-    // external-secrets has dependency on platform/cert-manager.
-    const bodyText = await page.textContent("body") ?? "";
-    // If available addons section renders, dependency info from mock data should be visible
-    expect(bodyText).toMatch(/cert-manager|external-secrets|platform/i);
+    // cert-manager and prometheus are the cluster's own (CLUSTER_CHARTS); external-secrets is a fleet default there.
+    await expect(page.getByText("prometheus").first()).toBeVisible();
+    await expect(page.getByText("fleet default").first()).toBeVisible();
   });
 });

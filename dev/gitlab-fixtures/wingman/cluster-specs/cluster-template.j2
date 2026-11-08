@@ -1,0 +1,71 @@
+{#-
+  Wingman day1 template: renders ONE hosted-cluster values file for the
+  hostedclusters-setup chart. Wingman commits the output to the day1 repo
+  (gitops-day1/platform-config) at
+
+      sites/<site>/mces/<mce>/hostedClusters/<cluster_name>.yaml
+
+  ArgoCD layers it last, on top of sites/configValues.yaml, the site's
+  values.yaml and the MCE's values.yaml, so this file holds only what is
+  specific to one cluster.
+
+  Inputs Wingman always passes (dedicated form widgets, not part of the
+  dynamic form):
+    cluster_name               the file stem, e.g. ocp4-prod-herzi-site1
+    site, mce                  the folder the file is written to
+    openshift_release_version  e.g. 4.16.27-x86_64 (a bare 4.16.27 also works)
+
+  Never render these keys. Other owners write them:
+    clusterName, site, mce     ArgoCD passes them from the file path
+    vlanId, dhcp_values        the allocate-segment workflow appends them on
+                               the MR branch
+    mcFiles, mcConfigMap       the day1 CI pipeline renders them from
+                               nodepool[].configs
+    baseDomain, DNS, secrets, registries
+                               MCE, site or global values layers
+
+  Every field below is read by the chart (templates/nodepool.yaml, hc.yaml).
+  Names are the chart's own, so `helm template` with this output plus the
+  value layers above is the check that a rendered file is valid.
+-#}
+owner:
+  {# Example: 1234 #}
+  merkaz: "{{ owner_merkaz }}"
+  {# Example: 56 #}
+  anaf: "{{ owner_anaf }}"
+  {# Example: 7 #}
+  mador: "{{ owner_mador }}"
+
+mastertag: {{ openshift_release_version }}
+{% if platform | default("") == "kubevirt" %}
+
+# KubeVirt workers (VMs). Without this key the chart uses the Agent platform.
+platform: kubevirt
+{% endif %}
+
+nodepool:
+{% for np in nodepools %}
+  {# Example: dell-r660-site1-128c-1024gb-5tb #}
+  - infraEnvName: {{ np.infra_env }}
+{% if np.nodepool_name | default("") %}
+    # Needed only when two nodepools share an InfraEnv; otherwise the chart
+    # derives <clusterName>-<infraEnvName>.
+    name: {{ np.nodepool_name }}
+{% endif %}
+    replicas: {{ np.replicas | default(2) }}
+    labels:
+      allowDeletion: false
+{% if np.configs | default([]) %}
+    configs:
+{% for config in np.configs | default([]) %}
+      {# Example: worker-kubeletconfig-reserved #}
+      - name: {{ config.name }}
+{% endfor %}
+{% endif %}
+{% if np.node_labels | default({}) %}
+    nodeLabels: {{ np.node_labels | default({}) | tojson }}
+{% endif %}
+{% if np.tuning_config | default("") %}
+    tuningConfig: {{ np.tuning_config }}
+{% endif %}
+{% endfor %}

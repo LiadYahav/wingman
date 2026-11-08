@@ -1,0 +1,15 @@
+# The build context of apps/day2-service/Dockerfile is the repository root;
+# this allowlist lets in only what that Dockerfile copies (docs/ops/images.md).
+**
+!deploy/python/requirements-day2.txt
+!deploy/python/requirements-build.txt
+!packages/wingman-core/
+!packages/wingman-core/**
+!apps/day2-service/
+!apps/day2-service/**
+**/tests
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.venv
+**/Dockerfile*

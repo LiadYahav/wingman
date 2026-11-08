@@ -1,0 +1,118 @@
+# The GitLab contract suite against a real GitLab CE (ADR-0005), nightly and
+# on demand. Too heavy for every push (several GB, minutes to boot), so the
+# fake carries every CI run and this keeps the fake honest.
+#
+# It boots the GitLab version the suite was verified on, trimmed like
+# scripts/dev/gitlab-up.sh, makes a throwaway admin token with gitlab-rails,
+# and fails unless every live test ran and passed: pytest passes a suite whose
+# tests all skip, so scripts/assert-junit.py refuses one.
+#
+# Bumping GitLab: change GITLAB_IMAGE here and in scripts/dev/gitlab-up.sh,
+# run the suite, and record the result in ADR-0005's Verification.
+name: Live GitLab contract
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # 03:17 UTC, nightly, off the hour
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: live-gitlab
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  UV_VERSION: "0.13.7"
+  PYTHON_VERSION: "3.13"
+  GITLAB_IMAGE: docker.io/gitlab/gitlab-ce:19.5.3-ce.0
+  GITLAB_URL: http://localhost:8929
+
+jobs:
+  contract:
+    name: GitLab contract (GitLab CE 19.5.3)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Started first: it boots while the Python environment installs.
+      - name: Start GitLab CE
+        run: |
+          docker run -d --name gitlab --hostname gitlab.local -p 8929:80 --shm-size=512m \
+            -e GITLAB_OMNIBUS_CONFIG="external_url '$GITLAB_URL'; nginx['listen_port'] = 80; puma['worker_processes'] = 0; sidekiq['concurrency'] = 5; prometheus_monitoring['enable'] = false;" \
+            "$GITLAB_IMAGE"
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: uv sync --locked
+        run: uv sync --locked --all-packages --all-groups --all-extras
+
+      # /-/health answers 404 to non-local callers; the sign-in page does not.
+      - name: Wait for GitLab (up to 20 minutes)
+        run: |
+          for _ in $(seq 1 120); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$GITLAB_URL/users/sign_in") || code=000
+            if [[ $code == 200 ]]; then
+              echo "GitLab is up"
+              exit 0
+            fi
+            if [[ "$(docker inspect -f '{{.State.Running}}' gitlab)" != true ]]; then
+              echo "::error::the GitLab container stopped"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::error::GitLab did not serve /users/sign_in within 20 minutes"
+          exit 1
+
+      # A random token for this run only, passed to gitlab-rails through the
+      # environment so it never appears in a command line or the log. Retried:
+      # the sign-in page can answer before every background migration is done.
+      - name: Create an admin API token
+        run: |
+          token="wingman-ci-$(openssl rand -hex 16)"
+          echo "::add-mask::$token"
+          for attempt in 1 2 3 4 5; do
+            if WINGMAN_TOKEN="$token" docker exec -e WINGMAN_TOKEN gitlab gitlab-rails runner '
+                user = User.find_by_username("root")
+                token = user.personal_access_tokens.new(name: "wingman-ci", scopes: ["api", "admin_mode"], expires_at: 2.days.from_now)
+                token.set_token(ENV.fetch("WINGMAN_TOKEN"))
+                token.save!'; then
+              break
+            fi
+            if [[ $attempt == 5 ]]; then
+              echo "::error::could not create a token with gitlab-rails runner"
+              exit 1
+            fi
+            sleep 20
+          done
+          curl -sSf --max-time 10 -H "PRIVATE-TOKEN: $token" "$GITLAB_URL/api/v4/user" > /dev/null
+          printf '%s' "$token" > "$RUNNER_TEMP/gitlab-token"
+          echo "token works against $GITLAB_URL/api/v4/user"
+
+      # 27: the contract's size when ADR-0005 recorded it; raise it as the
+      # contract grows, so a test that drops out of the run is noticed.
+      - name: Live contract suite (must run, never skip)
+        env:
+          WINGMAN_TEST_GITLAB_URL: ${{ env.GITLAB_URL }}
+        run: |
+          WINGMAN_TEST_GITLAB_TOKEN="$(cat "$RUNNER_TEMP/gitlab-token")" \
+            uv run pytest -m live_gitlab -v -rA --junitxml="$RUNNER_TEMP/live-gitlab.xml"
+          python3 scripts/assert-junit.py "$RUNNER_TEMP/live-gitlab.xml" --min-tests 27
+
+      - name: GitLab logs
+        if: failure()
+        run: docker logs --tail 300 gitlab

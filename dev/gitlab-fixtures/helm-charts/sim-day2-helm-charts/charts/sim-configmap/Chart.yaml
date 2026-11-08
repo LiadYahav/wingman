@@ -1,0 +1,4 @@
+apiVersion: v2
+name: sim-configmap
+description: SIMULATION leaf chart — one ConfigMap naming who deployed it where
+version: 0.1.0

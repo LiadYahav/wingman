@@ -1,0 +1,12 @@
+# zizmor (workflow security linter) configuration, read by CI's `workflows`
+# job and `scripts/gate.sh ci`.
+rules:
+  # Every `uses:` is pinned to a full commit SHA, first-party actions
+  # included: the pin guard server-scan's ADR-0013 asks for. zizmor 1.32's
+  # default policy is the same; it is written out so a change of default
+  # cannot loosen it. ref-version-mismatch (an online audit) checks that the
+  # `# vX.Y.Z` comment names the tag the SHA came from.
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin

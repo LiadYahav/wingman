@@ -1,26 +1,27 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, GitCommitHorizontal, GitPullRequest, ChevronDown, ChevronRight, FilePlus, FileX, FileEdit, RefreshCw, Search, X } from "lucide-react";
+import { ExternalLink, GitCommitHorizontal, GitPullRequest, ChevronDown, ChevronRight, FilePlus, FileX, FileEdit, RefreshCw, Search, X, Eye } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { approvalApiPath, approvalHref, mrKey, mrRef } from "@/lib/approvals";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
-import type { CommitRecord, MRDetail, FileDiff } from "@/types";
+import { ProblemList } from "@/components/common/problem-list";
+import { EmptyState, NoMatches } from "@/components/common/empty-state";
+import { RepoBadge } from "@/components/common/repo-badge";
+import type { ApprovalDetail, CommitRecord, MRDetail, FileDiff } from "@/types";
 
-function RepoBadge({ repo }: { repo: string }) {
-  const cls = repo === "day1"
-    ? "bg-primary/10 text-primary dark:bg-status-provisioning/15 dark:text-status-provisioning"
-    : repo === "day2"
-    ? "bg-status-ready/10 text-status-ready-fg dark:bg-status-ready/15 dark:text-status-ready"
-    : "bg-muted text-muted-foreground";
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", cls)}>
-      {repo}
-    </span>
-  );
+type RepoFilter = "all" | CommitRecord["repo"];
+
+/** day1 serves the day1 and specs repos (by repo); day2 finds the team repo, hinted by team. */
+function commitDiffPath(commit: CommitRecord): string {
+  return commit.repo === "day2"
+    ? `/api/day2/audit/commits/${commit.id}/diff${commit.team ? `?team=${encodeURIComponent(commit.team)}` : ""}`
+    : `/api/day1/audit/commits/${commit.repo}/${commit.id}/diff`;
 }
 
 function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
@@ -85,14 +86,9 @@ function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
 function CommitRow({ commit }: { commit: CommitRecord }) {
   const [expanded, setExpanded] = useState(false);
 
-  const { data: diffs, isLoading: diffsLoading, isError: diffsError } = useQuery<FileDiff[]>({
+  const { data: diffs, isLoading: diffsLoading, error: diffsError } = useQuery<FileDiff[]>({
     queryKey: ["audit", commit.repo, "commit-diff", commit.id],
-    queryFn: () => {
-      const path = commit.repo === "day2"
-        ? `/api/day2/audit/commits/${commit.id}/diff`
-        : `/api/day1/audit/commits/${commit.repo}/${commit.id}/diff`;
-      return api.get<FileDiff[]>(path);
-    },
+    queryFn: () => api.get<FileDiff[]>(commitDiffPath(commit)),
     enabled: expanded,
     staleTime: 300_000,
     retry: 1,
@@ -108,10 +104,10 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-medium truncate">{commit.title}</p>
-            <RepoBadge repo={commit.repo} />
+            <RepoBadge repo={commit.repo} team={commit.team} />
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-            {commit.author_name} · {new Date(commit.authored_date).toLocaleString("en-GB")} · {commit.short_id}
+            {commit.author_name} · {formatDateTime(commit.authored_date)} · {commit.short_id}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -138,7 +134,9 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
               <Skeleton className="h-3 w-64" />
             </div>
           ) : diffsError ? (
-            <p className="text-xs text-destructive italic px-6 pb-3">Failed to load diff</p>
+            <div className="px-6 pb-3">
+              <ProblemList error={diffsError} title="The commit's diff could not be loaded" />
+            </div>
           ) : (
             <DiffFileList diffs={diffs ?? []} />
           )}
@@ -163,9 +161,9 @@ function MRRow({ mr }: { mr: MRDetail }) {
     ? "bg-status-error/15"
     : "bg-status-ready/15";
 
-  const { data: detail, isLoading: detailLoading, isError: detailError } = useQuery<{ mr: MRDetail; diffs: FileDiff[] }>({
-    queryKey: ["audit", mr.repo, "mr-diff", mr.iid],
-    queryFn: () => api.get<{ mr: MRDetail; diffs: FileDiff[] }>(`/api/${mr.repo}/approvals/${mr.iid}`),
+  const { data: detail, isLoading: detailLoading, error: detailError } = useQuery<ApprovalDetail>({
+    queryKey: ["audit", "mr-diff", mrKey(mr)],
+    queryFn: () => api.get<ApprovalDetail>(approvalApiPath(mrRef(mr))),
     enabled: expanded,
     staleTime: 300_000,
     retry: 1,
@@ -181,16 +179,26 @@ function MRRow({ mr }: { mr: MRDetail }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-medium truncate">{mr.title}</p>
-            <RepoBadge repo={mr.repo} />
+            <RepoBadge repo={mr.repo} team={mr.team} />
             <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", stateBg, stateColor)}>
               {mr.state}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {mr.author.username} · {new Date(mr.created_at).toLocaleString("en-GB")}
+            {mr.author.username} · {formatDateTime(mr.created_at)}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {mr.state === "opened" && (
+            <Link
+              href={approvalHref(mr)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Review in Wingman"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </Link>
+          )}
           <a
             href={mr.web_url}
             target="_blank"
@@ -214,7 +222,9 @@ function MRRow({ mr }: { mr: MRDetail }) {
               <Skeleton className="h-3 w-64" />
             </div>
           ) : detailError ? (
-            <p className="text-xs text-destructive italic px-6 pb-3">Failed to load diff</p>
+            <div className="px-6 pb-3">
+              <ProblemList error={detailError} title="The merge request's diff could not be loaded" />
+            </div>
           ) : (
             <DiffFileList diffs={detail?.diffs ?? []} />
           )}
@@ -232,44 +242,33 @@ export default function AuditPage() {
 
   // Filter/pagination state
   const [search, setSearch] = useState("");
-  const [repoFilter, setRepoFilter] = useState<"all" | "day1" | "day2">("all");
+  const [repoFilter, setRepoFilter] = useState<RepoFilter>("all");
   const [mrStateFilter, setMrStateFilter] = useState<"all" | "opened" | "merged" | "closed">("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  const { data: day1Commits, isLoading: loadingD1C, isFetching: fetchingD1C } = useQuery<CommitRecord[]>({
+  // Every item says which repo it is from: day1 serves day1 and specs, day2 every team repo.
+  const { data: day1Commits, isLoading: loadingD1C, isFetching: fetchingD1C, error: day1CommitsError } = useQuery<CommitRecord[]>({
     queryKey: ["audit", "day1", "commits"],
-    queryFn: () =>
-      api.get<CommitRecord[]>("/api/day1/audit/commits").then((r) =>
-        r.map((c) => ({ ...c, repo: "day1" as const }))
-      ),
+    queryFn: () => api.get<CommitRecord[]>("/api/day1/audit/commits"),
     staleTime: 30_000,
   });
 
-  const { data: day2Commits, isLoading: loadingD2C, isFetching: fetchingD2C } = useQuery<CommitRecord[]>({
+  const { data: day2Commits, isLoading: loadingD2C, isFetching: fetchingD2C, error: day2CommitsError } = useQuery<CommitRecord[]>({
     queryKey: ["audit", "day2", "commits"],
-    queryFn: () =>
-      api.get<CommitRecord[]>("/api/day2/audit/commits").then((r) =>
-        r.map((c) => ({ ...c, repo: "day2" as const }))
-      ),
+    queryFn: () => api.get<CommitRecord[]>("/api/day2/audit/commits"),
     staleTime: 30_000,
   });
 
-  const { data: day1Mrs, isLoading: loadingD1M, isFetching: fetchingD1M } = useQuery<MRDetail[]>({
+  const { data: day1Mrs, isLoading: loadingD1M, isFetching: fetchingD1M, error: day1MrsError } = useQuery<MRDetail[]>({
     queryKey: ["audit", "day1", "mrs"],
-    queryFn: () =>
-      api.get<MRDetail[]>("/api/day1/audit/merge-requests").then((r) =>
-        r.map((m) => ({ ...m, repo: "day1" as const }))
-      ),
+    queryFn: () => api.get<MRDetail[]>("/api/day1/audit/merge-requests"),
     staleTime: 30_000,
   });
 
-  const { data: day2Mrs, isLoading: loadingD2M, isFetching: fetchingD2M } = useQuery<MRDetail[]>({
+  const { data: day2Mrs, isLoading: loadingD2M, isFetching: fetchingD2M, error: day2MrsError } = useQuery<MRDetail[]>({
     queryKey: ["audit", "day2", "mrs"],
-    queryFn: () =>
-      api.get<MRDetail[]>("/api/day2/audit/merge-requests").then((r) =>
-        r.map((m) => ({ ...m, repo: "day2" as const }))
-      ),
+    queryFn: () => api.get<MRDetail[]>("/api/day2/audit/merge-requests"),
     staleTime: 30_000,
   });
 
@@ -287,6 +286,10 @@ export default function AuditPage() {
 
   const commitsLoading = loadingD1C || loadingD2C;
   const mrsLoading = loadingD1M || loadingD2M;
+  // A source failed and the others hold nothing: its problem is the whole answer,
+  // so neither an empty state nor a count of zero claims the list is empty.
+  const commitsUnknown = !commitsLoading && Boolean(day1CommitsError || day2CommitsError) && allCommits.length === 0;
+  const mrsUnknown = !mrsLoading && Boolean(day1MrsError || day2MrsError) && allMrs.length === 0;
 
   // Filtered lists
   const filteredCommits = useMemo(() => {
@@ -296,8 +299,9 @@ export default function AuditPage() {
       const q = search.toLowerCase();
       list = list.filter((c) =>
         c.title.toLowerCase().includes(q) ||
-        c.author_name?.toLowerCase().includes(q) ||
-        c.short_id?.toLowerCase().includes(q)
+        c.author_name.toLowerCase().includes(q) ||
+        c.short_id.toLowerCase().includes(q) ||
+        (c.team ?? "").toLowerCase().includes(q)
       );
     }
     return list;
@@ -311,7 +315,8 @@ export default function AuditPage() {
       const q = search.toLowerCase();
       list = list.filter((m) =>
         m.title.toLowerCase().includes(q) ||
-        m.author?.username?.toLowerCase().includes(q)
+        m.author.username.toLowerCase().includes(q) ||
+        (m.team ?? "").toLowerCase().includes(q)
       );
     }
     return list;
@@ -326,10 +331,13 @@ export default function AuditPage() {
   function changeFilter<T>(setter: (v: T) => void) { return (v: T) => { setter(v); setPage(1); }; }
 
   const hasActiveFilters = search || repoFilter !== "all" || mrStateFilter !== "all";
+  function clearFilters() {
+    setSearch(""); setRepoFilter("all"); setMrStateFilter("all"); setPage(1);
+  }
 
   const tabs = [
-    { id: "commits" as const, label: "Commits", count: commitsLoading ? null : filteredCommits.length },
-    { id: "mrs" as const, label: "Merge Requests", count: mrsLoading ? null : filteredMrs.length },
+    { id: "commits" as const, label: "Commits", count: commitsLoading || commitsUnknown ? null : filteredCommits.length },
+    { id: "mrs" as const, label: "Merge Requests", count: mrsLoading || mrsUnknown ? null : filteredMrs.length },
   ];
 
   return (
@@ -343,7 +351,7 @@ export default function AuditPage() {
             Audit Log
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            All changes across Day1 and Day2 repos — click any entry to view diffs
+            Changes across the day1, specs and day2 team repos — click any entry to view its diff
           </p>
         </div>
         <button
@@ -403,7 +411,7 @@ export default function AuditPage() {
         {/* Repo filter */}
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground font-medium">Repo:</span>
-          {(["all", "day1", "day2"] as const).map((r) => (
+          {(["all", "day1", "specs", "day2"] as const).map((r) => (
             <button
               key={r}
               onClick={() => changeFilter(setRepoFilter)(r)}
@@ -438,7 +446,7 @@ export default function AuditPage() {
 
         {hasActiveFilters && (
           <button
-            onClick={() => { setSearch(""); setRepoFilter("all"); setMrStateFilter("all"); setPage(1); }}
+            onClick={clearFilters}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="h-3 w-3" />
@@ -468,45 +476,58 @@ export default function AuditPage() {
         )}
       </div>
 
-      <div className="bg-card rounded-xl border shadow-sm px-4 py-1">
-        {activeTab === "commits" && (
-          <>
-            {commitsLoading
-              ? Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="py-3.5 border-b last:border-0">
-                    <Skeleton className="h-4 w-3/4 mb-1.5" />
-                    <Skeleton className="h-3 w-1/3" />
-                  </div>
-                ))
-              : paginatedCommits.length > 0
-              ? paginatedCommits.map((c) => <CommitRow key={`${c.repo}-${c.id}`} commit={c} />)
-              : (
-                <p className="text-sm text-muted-foreground text-center py-12">
-                  {hasActiveFilters ? "No commits match your filters" : "No commits yet"}
-                </p>
-              )}
-          </>
-        )}
+      {activeTab === "commits" && day1CommitsError && <ProblemList error={day1CommitsError} title="Day1 and spec commits could not be loaded" />}
+      {activeTab === "commits" && day2CommitsError && <ProblemList error={day2CommitsError} title="Day2 team commits could not be loaded" />}
+      {activeTab === "mrs" && day1MrsError && <ProblemList error={day1MrsError} title="Day1 and spec MRs could not be loaded" />}
+      {activeTab === "mrs" && day2MrsError && <ProblemList error={day2MrsError} title="Day2 team MRs could not be loaded" />}
 
-        {activeTab === "mrs" && (
-          <>
-            {mrsLoading
-              ? Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="py-3.5 border-b last:border-0">
-                    <Skeleton className="h-4 w-3/4 mb-1.5" />
-                    <Skeleton className="h-3 w-1/3" />
-                  </div>
-                ))
-              : paginatedMrs.length > 0
-              ? paginatedMrs.map((mr) => <MRRow key={`${mr.repo}-${mr.iid}`} mr={mr} />)
-              : (
-                <p className="text-sm text-muted-foreground text-center py-12">
-                  {hasActiveFilters ? "No MRs match your filters" : "No merge requests yet"}
-                </p>
-              )}
-          </>
-        )}
-      </div>
+      {activeTab === "commits" && !commitsUnknown && (
+        <div className="bg-card rounded-xl border shadow-sm px-4 py-1">
+          {commitsLoading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="py-3.5 border-b last:border-0">
+                  <Skeleton className="h-4 w-3/4 mb-1.5" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              ))
+            : paginatedCommits.length > 0
+            ? paginatedCommits.map((c) => <CommitRow key={`${c.repo}-${c.team ?? ""}-${c.id}`} commit={c} />)
+            : allCommits.length > 0
+            ? <NoMatches what="commits" onClear={clearFilters} data-testid="audit-commits-no-matches" />
+            : (
+              <EmptyState
+                icon={GitCommitHorizontal}
+                title="No commits yet"
+                description="Commits to the day1, specs and day2 team repos are listed here."
+                data-testid="audit-commits-empty"
+              />
+            )}
+        </div>
+      )}
+
+      {activeTab === "mrs" && !mrsUnknown && (
+        <div className="bg-card rounded-xl border shadow-sm px-4 py-1">
+          {mrsLoading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="py-3.5 border-b last:border-0">
+                  <Skeleton className="h-4 w-3/4 mb-1.5" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              ))
+            : paginatedMrs.length > 0
+            ? paginatedMrs.map((mr) => <MRRow key={mrKey(mr)} mr={mr} />)
+            : allMrs.length > 0
+            ? <NoMatches what="merge requests" onClear={clearFilters} data-testid="audit-mrs-no-matches" />
+            : (
+              <EmptyState
+                icon={GitPullRequest}
+                title="No merge requests yet"
+                description="Merge requests in the day1, specs and day2 team repos are listed here."
+                data-testid="audit-mrs-empty"
+              />
+            )}
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (

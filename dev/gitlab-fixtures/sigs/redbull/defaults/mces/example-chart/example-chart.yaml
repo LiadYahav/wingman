@@ -1,0 +1,6 @@
+projectNamespace: example-namespace
+repourl: {{GITLAB_URL}}/helm-charts/example-chart.git
+targetRevision: main
+syncPolicy:
+  syncOptions:
+    - CreateNamespace=true

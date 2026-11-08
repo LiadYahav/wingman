@@ -1,0 +1,7 @@
+# Extra branches per fixture project, created from the default branch.
+# In a chart repo each branch is one frozen release (day2 pins a chart by
+# branch name), so the seed sets Chart.yaml's version to the branch name.
+helm-charts/bmhgen: ["1.0.0", "1.1.0"]
+helm-charts/cluster-roles: ["2.0.0", "2.1.5-hotfix"]
+helm-charts/kyverno: ["3.2.6", "3.3.0"]
+helm-charts/example-chart: ["0.1.0"]

@@ -1,0 +1,16 @@
+apiVersion: wingman.io/v1
+kind: ClusterSpec
+metadata:
+  name: agent-single
+  description: "One nodepool on the Agent platform, for test and prep clusters"
+  version: "1.0.0"
+  labels:
+    platform: agent
+spec:
+  day1:
+    structure:
+      nodepools:
+        - {}
+    immutable_paths: []
+  day2:
+    addons: []

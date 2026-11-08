@@ -4,6 +4,7 @@ import { useState } from "react";
 import jsYaml from "js-yaml";
 import { Plus, X, ChevronDown, ChevronRight, Lock, Unlock, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Combobox } from "@/components/ui/combobox";
 import type { TemplateField } from "@/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -13,6 +14,12 @@ export type Mode = "spec-build" | "cluster-create" | "cluster-edit";
 export interface FieldValueMap { [key: string]: FieldValue }
 export type FieldValue = string | number | boolean | FieldValue[] | FieldValueMap;
 export type FormValues = FieldValueMap;
+
+/** InfraEnv names on the MCE hub, for every `infra_env` input at any depth (e.g. inside nodepools). */
+interface InfraEnvProps {
+  infraEnvOptions?: string[];
+  infraEnvsLoading?: boolean;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -232,6 +239,7 @@ function ObjectEditor({
 
 function ObjectCard({
   fields, value, onChange, onRemove, index, mode, basePath, immutablePaths, onToggleImmutable,
+  infraEnvOptions, infraEnvsLoading,
 }: {
   fields: TemplateField[];
   value: Record<string, FieldValue>;
@@ -242,7 +250,7 @@ function ObjectCard({
   basePath: string;
   immutablePaths: Set<string>;
   onToggleImmutable?: (path: string) => void;
-}) {
+} & InfraEnvProps) {
   const [expanded, setExpanded] = useState(true);
 
   // Build a one-line summary for collapsed state
@@ -314,6 +322,8 @@ function ObjectCard({
               path={`${basePath}.${subField.name}`}
               immutablePaths={immutablePaths}
               onToggleImmutable={onToggleImmutable}
+              infraEnvOptions={infraEnvOptions}
+              infraEnvsLoading={infraEnvsLoading}
             />
           ))}
         </div>
@@ -325,9 +335,9 @@ function ObjectCard({
 // ── String list editor ─────────────────────────────────────────────────────────
 
 function StringListEditor({
-  field, value, onChange, mode,
+  value, onChange, mode,
 }: {
-  field: TemplateField; value: FieldValue[]; onChange: (v: FieldValue[]) => void; mode: Mode;
+  value: FieldValue[]; onChange: (v: FieldValue[]) => void; mode: Mode;
 }) {
   const canAdd = mode === "spec-build";
 
@@ -376,6 +386,7 @@ function StringListEditor({
 
 function ObjectListEditor({
   field, value, onChange, mode, basePath, immutablePaths, onToggleImmutable,
+  infraEnvOptions, infraEnvsLoading,
 }: {
   field: TemplateField;
   value: FieldValue[];
@@ -384,7 +395,7 @@ function ObjectListEditor({
   basePath: string;
   immutablePaths: Set<string>;
   onToggleImmutable?: (path: string) => void;
-}) {
+} & InfraEnvProps) {
   const subFields = field.fields!;
   const canAdd = mode === "spec-build";
   const items = value as Record<string, FieldValue>[];
@@ -402,6 +413,8 @@ function ObjectListEditor({
           basePath={`${basePath}[${i}]`}
           immutablePaths={immutablePaths}
           onToggleImmutable={onToggleImmutable}
+          infraEnvOptions={infraEnvOptions}
+          infraEnvsLoading={infraEnvsLoading}
           onChange={(updated) => {
             const next = [...items];
             next[i] = updated;
@@ -446,9 +459,7 @@ export function FieldEditor({
   path: string;
   immutablePaths: Set<string>;
   onToggleImmutable?: (path: string) => void;
-  infraEnvOptions?: string[];
-  infraEnvsLoading?: boolean;
-}) {
+} & InfraEnvProps) {
   const isImmutable = immutablePaths.has(path);
   const isReadOnly = mode === "cluster-edit" && isImmutable;
   const isScalar = field.type !== "list" && field.type !== "object";
@@ -464,6 +475,8 @@ export function FieldEditor({
           basePath={path}
           immutablePaths={immutablePaths}
           onToggleImmutable={onToggleImmutable}
+          infraEnvOptions={infraEnvOptions}
+          infraEnvsLoading={infraEnvsLoading}
         />
       );
     }
@@ -471,7 +484,6 @@ export function FieldEditor({
     if (field.type === "list") {
       return (
         <StringListEditor
-          field={field}
           value={value as FieldValue[]}
           onChange={(v) => onChange(v)}
           mode={mode}
@@ -486,30 +498,25 @@ export function FieldEditor({
     // Scalar — in spec-build mode, no value input (structure phase only)
     if (mode === "spec-build") return null;
 
-    // Smart dropdown for infra_env: populated from MCE API when available
+    // infra_env is picked from the MCE hub's InfraEnvs when live status lists them
     if (field.name === "infra_env" && (mode === "cluster-create" || mode === "cluster-edit") && !isReadOnly) {
-      if (infraEnvsLoading) {
+      if (infraEnvsLoading || (infraEnvOptions && infraEnvOptions.length > 0)) {
         return (
-          <select disabled className={cn(inputCls, "opacity-50 cursor-wait")}>
-            <option>Loading…</option>
-          </select>
+          <Combobox
+            size="lg"
+            options={(infraEnvOptions ?? []).map((env) => ({ value: env, label: env }))}
+            value={typeof value === "string" ? value : null}
+            onValueChange={(env) => onChange(env ?? "")}
+            disabled={infraEnvsLoading}
+            placeholder={infraEnvsLoading ? "Loading infra envs…" : "Select infra env…"}
+            searchPlaceholder="Search infra envs…"
+            emptyMessage="No infra env matches."
+            aria-label={toLabel(field.name)}
+            data-testid={`infra-env-select-${path}`}
+          />
         );
       }
-      if (infraEnvOptions && infraEnvOptions.length > 0) {
-        return (
-          <select
-            className={inputCls}
-            value={value as string}
-            onChange={(e) => onChange(e.target.value)}
-          >
-            <option value="">— select infra env —</option>
-            {infraEnvOptions.map((env) => (
-              <option key={env} value={env}>{env}</option>
-            ))}
-          </select>
-        );
-      }
-      // Fall through: CLUSTER_STATUS_ENABLED=false or fetch failed → plain text input
+      // Live status is off or the list failed: type the name
     }
 
     return <ScalarInput field={field} value={value} onChange={onChange} readOnly={isReadOnly} />;
@@ -568,9 +575,7 @@ export function DynamicVariableForm({
   mode?: Mode;
   immutablePaths?: Set<string>;
   onToggleImmutable?: (path: string) => void;
-  infraEnvOptions?: string[];
-  infraEnvsLoading?: boolean;
-}) {
+} & InfraEnvProps) {
   if (schema.length === 0) return null;
 
   return (

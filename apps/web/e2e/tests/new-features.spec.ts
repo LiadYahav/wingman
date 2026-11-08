@@ -1,7 +1,6 @@
 /**
  * E2E tests for new features:
  *  F7 — Conflicted badge on approvals list and detail page
- *  F5 — Dependency chips ("Requires:") on cluster addons available section
  *  F3 — Variable preview dialog on /specs/new
  *  F4 — Spec history tab on /specs/[name]
  *
@@ -13,41 +12,35 @@
  */
 
 import { test, expect, Page } from "@playwright/test";
-import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
 
 // ── Shared mock data ──────────────────────────────────────────────────────────
 
-const mockMRConflicted = {
+const mockMRConflicted = mockMR({
   iid: 42,
   title: "Add cluster east-prod",
   description: "Provisioning cluster east-prod",
-  author: { username: "alice", name: "Alice Smith", avatar_url: "" },
-  state: "opened",
+  author: { username: "alice", name: "alice", avatar_url: "" },
   created_at: "2026-01-15T10:00:00Z",
   updated_at: "2026-01-15T10:00:00Z",
-  web_url: "https://gitlab.example.com/mr/42",
   source_branch: "add-cluster-east-prod",
-  target_branch: "main",
   labels: [],
-  repo: "day1",
   has_conflicts: true,
-};
+});
 
-const mockMRNoConflict = {
+const mockMRNoConflict = mockMR({
   iid: 99,
   title: "Update grafana addon",
   description: "",
-  author: { username: "bob", name: "Bob Jones", avatar_url: "" },
-  state: "opened",
+  author: { username: "bob", name: "", avatar_url: null },
   created_at: "2026-01-14T09:00:00Z",
   updated_at: "2026-01-14T09:00:00Z",
-  web_url: "https://gitlab.example.com/mr/99",
   source_branch: "update-grafana",
-  target_branch: "main",
   labels: [],
   repo: "day2",
+  team: "observability",
   has_conflicts: false,
-};
+});
 
 const mockSpecHistory = [
   {
@@ -68,34 +61,18 @@ const mockSpecHistory = [
   },
 ];
 
+// `GET /api/day1/specs/{name}` (SpecOut): the template is filled on read.
 const mockSpec = {
   apiVersion: "wingman.io/v1",
   kind: "ClusterSpec",
-  metadata: { name: "some-spec", version: "1.0.0", labels: {} },
+  metadata: { name: "some-spec", description: "", version: "1.0.0", labels: {} },
   spec: {
-    day1: { variables: [], structure: {}, immutable_paths: [], template: "" },
+    day1: { variables: [], structure: {}, immutable_paths: [], template: "", values: {} },
     day2: { addons: [] },
   },
+  load_error: null,
+  load_problems: [],
 };
-
-const mockAddonCatalogWithDeps = [
-  {
-    team: "platform",
-    name: "cert-manager",
-    available_versions: ["1.12.0"],
-    current_version: "1.12.0",
-    default_values: { replicas: 1 },
-    dependencies: [],
-  },
-  {
-    team: "platform",
-    name: "external-dns",
-    available_versions: ["0.13.0"],
-    current_version: "0.13.0",
-    default_values: { provider: "aws" },
-    dependencies: ["cert-manager"],
-  },
-];
 
 // ── Shared setup helpers ──────────────────────────────────────────────────────
 
@@ -217,106 +194,6 @@ test.describe("F7 — Conflicted badge", () => {
 
     await expect(page.getByText("Clean MR")).toBeVisible();
     await expect(page.getByText("Conflicted")).not.toBeVisible();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// F5 — Dependency chips
-// ─────────────────────────────────────────────────────────────────────────────
-
-test.describe("F5 — Dependency chips", () => {
-  test("shows Requires chip for addon with dependencies in cluster addons available section", async ({ page }) => {
-    const clusterName = "my-cluster";
-    const mce = "mce-east";
-
-    await setupAndNavigate(page, `/clusters/${clusterName}/addons?mce=${mce}`, async (p) => {
-      // Mock addon catalog — external-dns depends on cert-manager
-      await p.route("**/api/day2/addons", async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(mockAddonCatalogWithDeps),
-        });
-      });
-
-      // cert-manager is installed; external-dns is available (shows in Available section)
-      await p.route(`**/api/day2/clusters/${clusterName}/addons**`, async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            installed: [
-              {
-                team: "platform",
-                name: "cert-manager",
-                version: "1.12.0",
-                override_values: {},
-                available_versions: ["1.12.0"],
-              },
-            ],
-          }),
-        });
-      });
-
-      await p.route("**/api/day2/gitlab-info", async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ sigs_group_url: "" }),
-        });
-      });
-    });
-
-    // external-dns (which has dependencies) should appear in the Available section
-    // and show "Requires: cert-manager"
-    await expect(page.getByText("Requires:")).toBeVisible();
-    await expect(page.getByText("cert-manager").first()).toBeVisible();
-  });
-
-  test("does not show Requires chip for addon with empty dependencies", async ({ page }) => {
-    const clusterName = "my-cluster";
-    const mce = "mce-east";
-
-    const catalogNoDeps = [
-      {
-        team: "platform",
-        name: "cert-manager",
-        available_versions: ["1.12.0"],
-        current_version: "1.12.0",
-        default_values: { replicas: 1 },
-        dependencies: [],
-      },
-    ];
-
-    await setupAndNavigate(page, `/clusters/${clusterName}/addons?mce=${mce}`, async (p) => {
-      await p.route("**/api/day2/addons", async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(catalogNoDeps),
-        });
-      });
-
-      await p.route(`**/api/day2/clusters/${clusterName}/addons**`, async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ installed: [] }),
-        });
-      });
-
-      await p.route("**/api/day2/gitlab-info", async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ sigs_group_url: "" }),
-        });
-      });
-    });
-
-    // cert-manager has no dependencies — "Requires:" should NOT appear
-    await expect(page.getByText("cert-manager")).toBeVisible();
-    await expect(page.getByText("Requires:")).not.toBeVisible();
   });
 });
 
