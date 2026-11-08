@@ -1,7 +1,7 @@
 # Read each repo once per commit
 
-**Status:** proposed, 2026-11-08. Waits on one decision (at the end). When it
-is built, it gets an ADR next to ADR-0002 and ADR-0011.
+**Status:** decided and built, 2026-11-08: ADR-0035. This file keeps the
+proposal as it was made; the ADR has what was built and measured.
 
 ## The problem
 

@@ -4,6 +4,24 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-08 — releases 3.0.1 to 3.1.0: numbering, status, chart move, two
+production bugs.** 3.0.1 versions every release from its commits (ADR-0031);
+3.0.2 reads the HostedCluster `ocp4-<clusterName>` (ADR-0015 correction) and
+moves the chart to `deploy/helm/wingman/`. PR #20 (3.1.0):
+- a renamed chart repo no longer fails the whole catalog: `get_project`
+  follows GitLab's rename redirect, an unreadable chart repo is that chart's
+  `chart-repo-unreadable`, and the Lints page flags every `repourl-moved`;
+- the upgrade ladder is read without `schemaVersion`, as production writes it
+  (ADR-0034 correction).
+
+**Next:**
+- the user decides on reading each repo once per commit
+  (`docs/ideas/repo-snapshots.md`);
+- flavors v2 on `roiblum/feat-flavors-v2`: stage 2's sync is half done in the
+  worktree `agent-a35695ba357fd9bb2` as a WIP commit; then stage 3, the web
+  pages and the flavor page redesign (apple-design skill); an upgrade guide
+  for its operator steps. Merge main into it first; watch ADR numbers.
+
 **2026-11-08 — PR #17 finished and merged; flavors v2 started.** The web
 followed both API notes; report-only drift (ADR-0025); the in-app docs
 audited and guarded (`tests/repo/test_web_docs_contract.py`); UX basics; a

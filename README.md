@@ -322,7 +322,7 @@ DEV_AUTH_SECRET=                          # at least 32 characters when dev logi
 # Optional
 SPECS_ROOT_PATH=specs                     # the spec files' folder in the specs project
 DAY1_CLUSTER_NAME_STRIP_PREFIX=ocp4-      # ADR-0015: "" for the GitHub sandbox (legacy name: MCE_CLUSTER_NAME_PREFIX)
-DAY1_CACHE_TTL_SECONDS=30                 # at most 60 (ADR-0011)
+DAY1_CACHE_TTL_SECONDS=30                 # at most 60 (ADR-0011); how often a branch head is checked (ADR-0035)
 GITLAB_WEBHOOK_SECRET=                    # empty: the webhook answers 404
 DAY2_SERVICE_URL=http://wingman-day2:8002 # for drift
 DAY2_TIMEOUT_SECONDS=5
@@ -346,7 +346,7 @@ DAY1_GITLAB_PROJECT_ID=gitops-day1/platform-config   # read-only for day2 (versi
 
 # Optional
 DAY2_GITOPS_BRANCH=main          # the branch the platform reads; MRs target it
-DAY2_CACHE_TTL_SECONDS=15        # at most 60 (ADR-0011)
+DAY2_CACHE_TTL_SECONDS=15        # at most 60 (ADR-0011); how often a branch head is checked (ADR-0035)
 ```
 
 ### Frontend
@@ -554,10 +554,11 @@ The GitLab access token needs `api` scope. Regenerate it with full API access.
 
 ### Data from GitLab looks stale
 
-Each replica keeps a GitLab read for at most `DAY1_CACHE_TTL_SECONDS` (30 s) or
-`DAY2_CACHE_TTL_SECONDS` (15 s), never over 60 s (ADR-0011). Wingman's own writes clear what
-they change, and day1's GitLab webhook (`GITLAB_WEBHOOK_SECRET`) clears what a change made in
-GitLab directly touched; otherwise wait for the TTL.
+Each replica checks where a repo's branch points at most every `DAY1_CACHE_TTL_SECONDS` (30 s)
+or `DAY2_CACHE_TTL_SECONDS` (15 s), never over 60 s, and reads the repo again only when it
+moved (ADR-0011, ADR-0035); merge requests and history are kept for the same TTL. Wingman's
+own writes clear what they change, and day1's GitLab webhook (`GITLAB_WEBHOOK_SECRET`) clears
+what a change made in GitLab directly touched; otherwise wait for the TTL.
 
 ### Frontend shows stale data
 

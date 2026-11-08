@@ -109,12 +109,14 @@ Explicit user instructions; violating one is a real mistake, not style.
   legacy `wingman-shared` removed; the delete dialog ready for the
   delete-cluster workflow (ADR-0033); OpenShift versions per MCE from the
   day1 repo's upgrade ladder; `docs/ideas/`, `docs/upgrade/`.
+- Done (2026-11-08): the day1, specs and team repos are read once per commit
+  from GitLab's archive (ADR-0035); the catalog on a production-sized repo went
+  from 9 s and 357 GitLab calls per load to 0.03 s cached, 0.46 s after the TTL.
 - **Not done yet, in order:** (1) flavors v2 (`docs/ideas/flavors-v2.md`;
   stages 1 and 2 on `roiblum/feat-flavors-v2`, the web pages to build);
-  (2) faster pages, reading each repo once per commit
-  (`docs/ideas/repo-snapshots.md`, waits on the user); (3) the architect's
-  answers (`docs/ideas/architecture-fit.md`); (4) chart hardening (a values
-  schema, a pinned nginx image); (5) ecosystem features (`docs/ideas/`).
+  (2) the architect's
+  answers (`docs/ideas/architecture-fit.md`); (3) chart hardening (a values
+  schema, a pinned nginx image); (4) ecosystem features (`docs/ideas/`).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -138,6 +140,11 @@ Explicit user instructions; violating one is a real mistake, not style.
   and its `sha` after a push are computed by background jobs, and a merged
   source branch is deleted later. The adapter handles the first three (a
   merge checks the branch head itself); don't assume the fourth.
+- **A read's `last_commit_id` is the commit the repo was read at**, not the
+  file's own last change (ADR-0035: repos are read once per commit, from
+  GitLab's archive). It is a valid write guard, since GitLab checks "changed
+  since that commit". Never decide staleness with `expected != current`: use
+  `RepoReads.changed_since`. For "changed by, at", use `last_change`.
 - **ty honours only `# type: ignore` or `# ty: ignore[rule]`**, never a
   mypy-style `# type: ignore[code]` (ADR-0008).
 - **Next.js 16 / React 19 / Tailwind 4 / zod 4** differ from older docs. Read
@@ -256,20 +263,24 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-08 — releases 3.0.1 to 3.1.0: numbering, status, chart move, two
-production bugs.** 3.0.1 versions every release from its commits (ADR-0031);
-3.0.2 reads the HostedCluster `ocp4-<clusterName>` (ADR-0015 correction) and
-moves the chart to `deploy/helm/wingman/`. PR #20 (3.1.0):
-- a renamed chart repo no longer fails the whole catalog: `get_project`
-  follows GitLab's rename redirect, an unreadable chart repo is that chart's
-  `chart-repo-unreadable`, and the Lints page flags every `repourl-moved`;
-- the upgrade ladder is read without `schemaVersion`, as production writes it
-  (ADR-0034 correction).
+**2026-11-08 — PR #20 released 3.1.0; repos read once per commit (ADR-0035).**
+PR #20: a renamed chart repo no longer fails the catalog (`get_project` follows
+GitLab's rename redirect, `chart-repo-unreadable`, `repourl-moved` on the Lints
+page); the ladder is read without `schemaVersion`; CI retries tool downloads.
+Then, on `roiblum/feat-repo-snapshots` (the user chose it):
+- `GitLabPort.get_branch` and `read_archive`, with `RepoSnapshots` in core;
+- day1 and day2 read files and trees through them;
+- a read's `last_commit_id` is now the commit read at (see the key facts);
+- day1's stale check asks `changed_since`, and "changed by" comes from
+  `last_change`.
+Old and new answers were compared on scaled local data and are identical.
 
 **Next:**
-- the user decides on reading each repo once per commit
-  (`docs/ideas/repo-snapshots.md`);
+- day1's first cluster list after a merge still costs one history lookup per
+  cluster; carry unchanged files forward from a compare (ADR-0035,
+  Consequences);
 - flavors v2 on `roiblum/feat-flavors-v2`: stage 2's sync is half done in the
   worktree `agent-a35695ba357fd9bb2` as a WIP commit; then stage 3, the web
   pages and the flavor page redesign (apple-design skill); an upgrade guide
-  for its operator steps. Merge main into it first; watch ADR numbers.
+  for its operator steps. Merge main into it first: its ADRs 0033 and 0034
+  collide with main's and become 0036 and 0037.
