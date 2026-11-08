@@ -1,8 +1,12 @@
-"""The day2 repositories: GitLabPort reads, cached per replica for seconds (ADR-0011).
+"""The day2 repositories: GitLabPort reads, cached per replica (ADR-0011, ADR-0035).
 
-A missing file is a normal answer (``None``) and is cached like any other;
-every other GitLab error propagates, so a page never shows "nothing here"
-when the truth is "GitLab failed" (ADR-0004).
+The team repos and the day1 repo are read through ``RepoSnapshots``: one
+head check per TTL, one archive per commit. Merge requests, history and chart
+repos are read call by call and kept for the TTL.
+
+A missing file is a normal answer (``None``); every other GitLab error
+propagates, so a page never shows "nothing here" when the truth is "GitLab
+failed" (ADR-0004).
 """
 
 from __future__ import annotations
@@ -12,26 +16,17 @@ from collections.abc import Awaitable, Callable
 from urllib.parse import urlsplit
 
 from wingman_core.domain.errors import NotFoundError
-from wingman_core.domain.git import Commit, EntryKind, FileContent, Project, RepoPath
+from wingman_core.domain.git import Commit, FileContent, Project, RepoPath
 from wingman_core.domain.merge_request import MergeRequest, MRState
 from wingman_core.domain.mr_conventions import WINGMAN_LABEL
 from wingman_core.infrastructure.cache import TtlCache
+from wingman_core.infrastructure.snapshots import RepoFiles, RepoSnapshots
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_day2.domain.day1 import Day1Index, build_day1_index, day1_version_files
 from wingman_day2.domain.deploy_config import DEFAULT_REVISION
 from wingman_day2.domain.teams import Team
 from wingman_day2.domain.tree import RepoTree
 from wingman_day2.infrastructure import cache_keys
-
-_READ_CONCURRENCY = 16
-
-
-async def _tree(gitlab: GitLabPort, project_id: int, ref: str) -> RepoTree:
-    try:
-        entries = await gitlab.list_tree(project_id, RepoPath.root(), ref, recursive=True)
-    except NotFoundError:
-        return RepoTree(frozenset())  # an empty repository has no tree yet
-    return RepoTree(frozenset(str(e.path) for e in entries if e.kind is EntryKind.FILE))
 
 
 async def _read_or_none(
@@ -43,15 +38,34 @@ async def _read_or_none(
         return None
 
 
+def _tree_of(files: RepoFiles | None) -> RepoTree:
+    return RepoTree(files.paths if files is not None else frozenset())
+
+
+async def _read_at(files: RepoFiles | None, path: RepoPath, branch: str) -> FileContent | None:
+    content = await files.read(path) if files is not None else None
+    if files is None or content is None:
+        return None
+    return FileContent(path=path, ref=branch, content=content, last_commit_id=files.commit_id)
+
+
 class GitLabSigsRepository:
     """The team repos of one sigs group."""
 
     def __init__(
-        self, gitlab: GitLabPort, cache: TtlCache, *, group: str, branch: str, ttl: float
+        self,
+        gitlab: GitLabPort,
+        cache: TtlCache,
+        snapshots: RepoSnapshots,
+        *,
+        group: str,
+        branch: str,
+        ttl: float,
     ) -> None:
         """Read ``group``'s projects at ``branch``; keep each read for ``ttl`` seconds."""
         self._gitlab = gitlab
         self._cache = cache
+        self._snapshots = snapshots
         self._group = group
         self._branch = branch
         self._ttl = ttl
@@ -79,19 +93,14 @@ class GitLabSigsRepository:
         return await self._cached(cache_keys.teams(), fetch)
 
     async def tree(self, team: Team) -> RepoTree:
-        """See SigsRepository.tree."""
-        pid = team.project.id
-        return await self._cached(
-            cache_keys.tree(pid, self._branch), lambda: _tree(self._gitlab, pid, self._branch)
-        )
+        """See SigsRepository.tree (an empty repository has an empty tree)."""
+        files = await self._snapshots.files(team.project.id, self._branch)
+        return _tree_of(files)
 
     async def read(self, team: Team, path: RepoPath) -> FileContent | None:
-        """See SigsRepository.read."""
-        pid = team.project.id
-        return await self._cached(
-            cache_keys.file(pid, self._branch, path),
-            lambda: _read_or_none(self._gitlab, pid, path, self._branch),
-        )
+        """See SigsRepository.read; ``last_commit_id`` is the commit it was read at (ADR-0035)."""
+        files = await self._snapshots.files(team.project.id, self._branch)
+        return await _read_at(files, path, self._branch)
 
     async def open_merge_requests(self, team: Team) -> list[MergeRequest]:
         """See SigsRepository.open_merge_requests."""
@@ -130,40 +139,48 @@ class GitLabSigsRepository:
     def invalidate(self, team: Team) -> None:
         """See SigsRepository.invalidate."""
         self._cache.invalidate_prefix(cache_keys.project_prefix(team.project.id))
+        self._snapshots.forget(team.project.id)
 
 
 class GitLabDay1Repository:
     """The day1 repo, read at the branch the platform reads (``main``)."""
 
     def __init__(
-        self, gitlab: GitLabPort, cache: TtlCache, *, project: int | str, branch: str, ttl: float
+        self,
+        gitlab: GitLabPort,
+        cache: TtlCache,
+        snapshots: RepoSnapshots,
+        *,
+        project: int | str,
+        branch: str,
+        ttl: float,
     ) -> None:
         """``project`` is an id or ``group/name`` path."""
         self._gitlab = gitlab
         self._cache = cache
+        self._snapshots = snapshots
         self._project = project
         self._branch = branch
         self._ttl = ttl
 
     async def index(self) -> Day1Index:
-        """See Day1Repository.index."""
+        """See Day1Repository.index; built once per day1 commit."""
+        project = await self._cache.get_or_fetch(
+            cache_keys.day1_project(self._project),
+            lambda: self._gitlab.get_project(self._project),
+            ttl=self._ttl,
+        )
+        files = await self._snapshots.files(project.id, self._branch)
 
-        async def fetch() -> Day1Index:
-            project = await self._gitlab.get_project(self._project)
-            tree = await _tree(self._gitlab, project.id, self._branch)
-            limit = asyncio.Semaphore(_READ_CONCURRENCY)
+        async def build() -> Day1Index:
+            tree = _tree_of(files)
+            paths = day1_version_files(tree)
+            read = await asyncio.gather(*(_read_at(files, p, self._branch) for p in paths))
+            return build_day1_index(tree, {str(f.path): f.content for f in read if f is not None})
 
-            async def read(path: RepoPath) -> tuple[str, FileContent | None]:
-                async with limit:
-                    return str(path), await _read_or_none(
-                        self._gitlab, project.id, path, self._branch
-                    )
-
-            files = await asyncio.gather(*(read(p) for p in day1_version_files(tree)))
-            return build_day1_index(tree, {p: f.content for p, f in files if f is not None})
-
+        commit = files.commit_id if files is not None else ""
         return await self._cache.get_or_fetch(
-            cache_keys.day1_index(self._project, self._branch), fetch, ttl=self._ttl
+            cache_keys.day1_index(project.id, commit), build, ttl=self._ttl
         )
 
 

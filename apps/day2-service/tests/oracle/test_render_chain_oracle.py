@@ -33,6 +33,7 @@ import pytest
 
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
+from wingman_core.infrastructure.snapshots import RepoSnapshots
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects
 from wingman_day2.application.apps import load_deploy
 from wingman_day2.application.topology import Topology, TopologyService
@@ -104,8 +105,9 @@ async def wingman(files: Files) -> tuple[Topology, GitLabSigsRepository]:
     for project, tree in files.items():
         gitlab.create_project(project, tree)
     cache = TtlCache()
-    sigs = GitLabSigsRepository(gitlab, cache, group="sigs", branch="main", ttl=60)
-    day1 = GitLabDay1Repository(gitlab, cache, project=DAY1, branch="main", ttl=60)
+    snapshots = RepoSnapshots(gitlab, cache, ttl=60)
+    sigs = GitLabSigsRepository(gitlab, cache, snapshots, group="sigs", branch="main", ttl=60)
+    day1 = GitLabDay1Repository(gitlab, cache, snapshots, project=DAY1, branch="main", ttl=60)
     return await TopologyService(sigs, day1).load(), sigs
 
 
