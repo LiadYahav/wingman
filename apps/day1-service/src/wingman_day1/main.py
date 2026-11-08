@@ -123,7 +123,7 @@ def build_adapters(
         )
 
         fake = InMemoryGitLab(clock=clock)
-        root = settings.wingman_fixtures_dir or default_fixture_root()
+        root = runtime.fixtures_dir or default_fixture_root()
         seed_fake(fake, load_fixture_projects(root))
         inner: GitLabPort = fake
     else:
@@ -265,8 +265,8 @@ def create_app(
     metrics = WingmanMetrics(
         CollectorRegistry(),
         component=SERVICE,
-        version=settings.wingman_version,
-        commit=settings.wingman_commit,
+        version=runtime.version,
+        commit=runtime.commit,
     )
     secret = auth.jwt_secret_key.get_secret_value()
     session_tokens = SessionTokens(secret, ttl=timedelta(hours=auth.jwt_expiry_hours), clock=clock)
@@ -297,7 +297,7 @@ def create_app(
     day1_project = project_ref(settings.day1_gitlab_project_id)
     app = create_base_app(
         title="Wingman day1",
-        version=settings.wingman_version,
+        version=runtime.version,
         metrics=metrics,
         session_tokens=session_tokens,
         readiness={"gitlab": lambda: gitlab.get_project(day1_project)},

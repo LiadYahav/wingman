@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import AnyHttpUrl, SecretStr, ValidationError
 
@@ -22,6 +24,27 @@ def test_production_and_real_gitlab_are_the_defaults(monkeypatch: pytest.MonkeyP
         Environment.PRODUCTION,
         GitBackend.GITLAB,
     )
+
+
+def test_the_build_and_the_fixtures_come_from_the_wingman_variables(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("WINGMAN_VERSION", "1.4.0")
+    monkeypatch.setenv("WINGMAN_COMMIT", "abc1234")
+    monkeypatch.setenv("WINGMAN_FIXTURES_DIR", str(tmp_path))
+    settings = RuntimeSettings()
+    assert (settings.version, settings.commit, settings.fixtures_dir) == (
+        "1.4.0",
+        "abc1234",
+        tmp_path,
+    )
+
+
+def test_a_local_run_says_it_is_no_release(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("WINGMAN_VERSION", "WINGMAN_COMMIT", "WINGMAN_FIXTURES_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    settings = RuntimeSettings()
+    assert (settings.version, settings.commit, settings.fixtures_dir) == ("dev", "unknown", None)
 
 
 def test_empty_gitlab_token_is_refused() -> None:

@@ -73,9 +73,8 @@ async def test_the_fake_backend_can_be_seeded_from_another_directory(tmp_path: P
     project = tmp_path / "group" / "proj"
     project.mkdir(parents=True)
     (project / "README.md").write_text("# hi\n", encoding="utf-8")
-    adapters = build_adapters(
-        settings(wingman_fixtures_dir=tmp_path), FAKE, metrics=metrics(), service_token=lambda: "t"
-    )
+    runtime = FAKE.model_copy(update={"fixtures_dir": tmp_path})
+    adapters = build_adapters(settings(), runtime, metrics=metrics(), service_token=lambda: "t")
     try:
         assert (await adapters.gitlab.get_project("group/proj")).path_with_namespace == "group/proj"
     finally:

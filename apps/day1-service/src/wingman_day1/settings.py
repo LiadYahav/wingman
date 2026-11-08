@@ -81,14 +81,6 @@ class Day1Settings(BaseSettings):
     mce_infraenv_namespace: str = ""
     mce_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
 
-    # ── Build identity (wingman_build_info) ──────────────────────────────────
-    wingman_version: str = "0.2.0"
-    wingman_commit: str = "unknown"
-
-    # ── WINGMAN_GIT_BACKEND=fake only: the repo trees to seed it with ────────
-    wingman_fixtures_dir: Path | None = None
-    """Defaults to ``dev/gitlab-fixtures`` of the checkout."""
-
     # ── Live status stream ───────────────────────────────────────────────────
     day1_status_poll_seconds: float = Field(default=30.0, ge=5, le=600)
 
