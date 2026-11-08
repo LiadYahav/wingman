@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -527,6 +527,10 @@ export default function NewClusterPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const errorRef = useRef<HTMLDivElement>(null);
+  // The visible labels name the site, MCE and version controls
+  const siteLabelId = useId();
+  const mceLabelId = useId();
+  const versionLabelId = useId();
 
   const [step, setStep] = useState<"spec" | "vars">("spec");
   const [selectedSpec, setSelectedSpec] = useState<SpecEntry | null>(null);
@@ -899,7 +903,7 @@ export default function NewClusterPage() {
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 min-w-0">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <label id={siteLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     Site <span className="text-destructive">*</span>
                   </label>
                   <Combobox
@@ -917,7 +921,7 @@ export default function NewClusterPage() {
                     searchPlaceholder="Search sites…"
                     emptyMessage="No site matches."
                     data-testid="site-select"
-                    aria-label="Site"
+                    aria-labelledby={siteLabelId}
                   />
                   {!siteChoice && detectedSite && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
@@ -925,7 +929,7 @@ export default function NewClusterPage() {
                   {Boolean(sitesError) && <ProblemList error={sitesError} title="The sites could not be loaded" />}
                 </div>
                 <div className="space-y-1.5 min-w-0">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <label id={mceLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     MCE <span className="text-destructive">*</span>
                   </label>
                   <Combobox
@@ -948,7 +952,7 @@ export default function NewClusterPage() {
                     searchPlaceholder="Search MCEs…"
                     emptyMessage="No MCE matches."
                     data-testid="mce-select"
-                    aria-label="MCE"
+                    aria-labelledby={mceLabelId}
                   />
                   {!mceChoice && detectedMce && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
@@ -1026,7 +1030,7 @@ export default function NewClusterPage() {
               </div>
 
               <div className="space-y-1.5 border-t pt-4">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label id={versionLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   OpenShift Version <span className="text-destructive">*</span>
                 </label>
                 {/* The list when it loads; free text when it is empty or could not be read */}
@@ -1041,12 +1045,12 @@ export default function NewClusterPage() {
                     searchPlaceholder="Search versions…"
                     emptyMessage="No version matches."
                     data-testid="ocp-version-select"
-                    aria-label="OpenShift version"
+                    aria-labelledby={versionLabelId}
                   />
                 ) : (
                   <input
                     type="text"
-                    data-testid="ocp-version-input" aria-label="OpenShift version"
+                    data-testid="ocp-version-input" aria-labelledby={versionLabelId}
                     className={cn(inputCls, "font-mono")}
                     placeholder="e.g. 4.16.27-x86_64"
                     value={ocpVersion}

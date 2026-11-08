@@ -239,6 +239,15 @@ test.describe("Cluster create form", () => {
     await expect(empty.getByRole("link", { name: "New spec" })).toHaveAttribute("href", "/specs/new");
   });
 
+  test("the site, MCE and version controls are named by their visible labels", async ({ page }) => {
+    await mockCreateForm(page);
+    await openForm(page);
+
+    await expect(page.getByRole("combobox", { name: /^site\b/i })).toHaveAttribute("data-testid", "site-select");
+    await expect(page.getByRole("combobox", { name: /^mce\b/i })).toHaveAttribute("data-testid", "mce-select");
+    await expect(page.getByRole("combobox", { name: /^openshift version\b/i })).toHaveAttribute("data-testid", "ocp-version-select");
+  });
+
   test("a failed sites read shows the problem, not \"No sites in the day1 repo\"", async ({ page }) => {
     await mockCreateForm(page);
     await page.route("**/api/day1/sites", (r) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));
