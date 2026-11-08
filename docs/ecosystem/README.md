@@ -354,7 +354,7 @@ Related prior art to reuse rather than duplicate: **cluster-navigator** (`team-r
 9. **InfraEnvs:** who creates them? Nothing in the repos does.
 10. **ArgoCD sync for per-cluster day1 apps:** auto or manual?
 11. **Air-gapped gitops-day2:** which phase is it on?
-12. **Deletion in production:** who releases the segment, until `deprovision-cluster` exists?
+12. **Deletion in production:** who releases the segment? **Answered (user, 2026-11-08):** the delete-cluster workflow, as allocation belongs to the day1 workflow. Wingman releases nothing.
 
 ## Naming conventions cheat sheet
 
