@@ -154,7 +154,9 @@ Type checking is ty (ADR-0008): it honours only `# type: ignore` or `# ty: ignor
 
 Work on a feature branch and merge through a pull request; never push to `main`. Commit after
 each completed stage, one unit of work per commit, with a Conventional Commit subject (`feat:`,
-`fix:`, `docs:`, `ci:`, `test:`, `refactor:`). Docs change in the same commit as the code; a new
+`fix:`, `docs:`, `ci:`, `test:`, `refactor:`). The subjects set the release version: a `feat:`
+makes the merge a minor release, a `!` before the colon (`feat!:`) a major, anything else a patch
+(CLAUDE.md, convention 2). Docs change in the same commit as the code; a new
 decision gets an ADR (template in `docs/adr/README.md`).
 
 ## Deployment

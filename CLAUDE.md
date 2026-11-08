@@ -37,7 +37,11 @@ Explicit user instructions; violating one is a real mistake, not style.
 2. **Git: commit and push after each completed stage**, on a feature branch,
    with Conventional Commit subjects (`feat:`, `fix:`, `docs:`, `ci:`,
    `test:`, `refactor:`). One unit of work per commit. Never push to `main`
-   directly; merges go through a PR.
+   directly; merges go through a PR. The subjects since the last release set
+   the next version (ADR-0031): any `feat:`/`feat(<scope>):` makes the merge a
+   minor, any `!` before the colon (`feat!:`, `fix(day1)!:`) a major,
+   otherwise a patch. Only subjects count: a `BREAKING CHANGE:` footer alone
+   does not.
 3. **This repo is public.** Never commit live URLs, tokens, internal hostnames,
    or findings about private systems (e.g. the production export in
    `~/Downloads/stack-export`). Put them in the git-ignored `CLAUDE.local.md`.
@@ -193,7 +197,10 @@ ADR-0032). The pass:
    one more `gh api repos/<o>/<r>/git/tags/<sha> --jq .object.sha`). Never
    copy a SHA from a README; server-scan was broken twice by tags that do not
    exist. Then `scripts/gate.sh ci`: zizmor refuses a tag pin and a comment that
-   names another tag.
+   names another tag. `PaulHatch/semantic-version`'s defaults are the
+   versioning rule (convention 2, ADR-0031): before bumping it, check that its
+   `action.yml` defaults (`major_pattern`, `minor_pattern`,
+   `search_commit_body`, `bump_each_commit`) did not change.
 2. **Downloaded tools.** `scripts/ci-tools.sh` (actionlint, zizmor,
    shellcheck), `scripts/install-helm.sh` and the promtool step in `ci.yml`:
    new version plus every checksum, from the release's checksum file or the
