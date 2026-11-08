@@ -19,6 +19,7 @@ from wingman_core.domain.git import (
     FileContent,
     FileDiff,
     Project,
+    RepoArchive,
     RepoPath,
     TreeEntry,
 )
@@ -61,6 +62,18 @@ class GitLabPort(Protocol):
 
     async def list_branches(self, project_id: int) -> list[Branch]:
         """Every branch of a project, sorted by name."""
+        ...
+
+    async def get_branch(self, project_id: int, name: str) -> Branch:
+        """One branch and its head commit; NotFoundError if there is no such branch."""
+        ...
+
+    async def read_archive(self, project_id: int, sha: str, *, max_bytes: int) -> RepoArchive:
+        """Every file at commit ``sha``, in one call (ADR-0035).
+
+        InvalidRequestError when the files together are larger than
+        ``max_bytes``: the caller reads that repository file by file instead.
+        """
         ...
 
     async def create_branch(self, project_id: int, name: str, ref: str) -> Branch:

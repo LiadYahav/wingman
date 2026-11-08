@@ -364,6 +364,46 @@ async def test_an_edit_from_a_stale_read_is_a_conflict(context: Day1Context, sup
         )
 
 
+async def test_an_edit_read_before_other_files_changed_is_not_stale(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    # Reads carry the commit they were read at (ADR-0035). A merge that touches
+    # other files moves that commit on, but this cluster's file is unchanged.
+    current = await context.clusters.get(HERZI)
+    pid = await support.project_id(gitlab, support.DAY1)
+    await gitlab.commit(
+        pid,
+        branch="main",
+        message="another cluster's change",
+        changes=[FileChange.create(RepoPath("sites/site1/notes.md"), "n\n")],
+    )
+    context.repos[RepoKey.DAY1].forget_files()  # as after the merge Wingman sees
+    edited = current.content.replace("4.16.27", "4.16.28")
+    result = await context.clusters.modify(
+        HERZI, edited, user=support.ALICE, summary="", last_commit_id=current.last_commit_id
+    )
+    assert gitlab.snapshot(pid, result.merge_request.source_branch)[str(HERZI.path)] == edited
+
+
+async def test_a_cluster_shows_its_own_last_change_not_the_newest_merge(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    pid = await support.project_id(gitlab, support.DAY1)
+    [own] = await gitlab.list_commits(pid, ref="main", path=HERZI.path, limit=1)
+    await gitlab.commit(
+        pid,
+        branch="main",
+        message="another cluster's change",
+        changes=[FileChange.create(RepoPath("sites/site1/notes.md"), "n\n")],
+    )
+    context.repos[RepoKey.DAY1].forget_files()
+    listed = {c.ref.name: c for c in await context.clusters.clusters()}
+    shown = listed[HERZI.name].last_change
+    assert shown is not None and shown.id == own.id
+    detail = await context.clusters.get(HERZI)
+    assert detail.last_change is not None and detail.last_change.id == own.id
+
+
 async def test_a_delete_from_a_stale_read_is_a_conflict(context: Day1Context, support: Any) -> None:
     with pytest.raises(StaleError):
         await context.clusters.delete(HERZI, user=support.ALICE, last_commit_id="0" * 40)

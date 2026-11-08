@@ -45,3 +45,10 @@ can fail confusingly after it succeeded.
 - Contract: `test_update_with_stale_last_commit_id_is_revision_conflict`,
   `test_merge_with_stale_sha_is_revision_conflict`, `test_commit_is_atomic`.
 - Adapter: `test_writes_are_never_retried`.
+
+## Note (2026-11-08, ADR-0035)
+
+A read's `last_commit_id` is now the commit the repository was read at, not
+the file's own last change. The guard still holds: GitLab compares the
+file's last change as of that commit with its last change on the branch. A
+commit GitLab does not know passes its check (pinned in the contract suite).

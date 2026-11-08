@@ -33,16 +33,6 @@ def files_prefix(repo: str) -> str:
     return f"{repo}:files:"
 
 
-def tree(repo: str, path: RepoPath, *, recursive: bool) -> str:
-    """A tree listing."""
-    return f"{files_prefix(repo)}tree:{'r' if recursive else 'd'}:{path}"
-
-
-def file(repo: str, path: RepoPath) -> str:
-    """One file at the default branch."""
-    return f"{files_prefix(repo)}file:{path}"
-
-
 def history(repo: str, path: RepoPath, *, limit: int) -> str:
     """The commits that changed a path."""
     return f"{files_prefix(repo)}history:{limit}:{path}"
