@@ -17,6 +17,7 @@ import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState } from "@/components/common/empty-state";
 import { DriftBadge } from "@/components/clusters/drift-badge";
 import { ClusterDriftPanel } from "@/components/clusters/cluster-drift";
+import { DeleteWorkflowPanel } from "@/components/clusters/delete-workflow-panel";
 import { LiveStatusCard } from "@/components/clusters/live-status-card";
 import {
   ClusterInfoCard, FileProblems, HostedClusterCard, NamingNotice, NodePoolsCard, SpecCard,
@@ -600,8 +601,9 @@ function ClusterDetailContent() {
         <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm space-y-1">
           <p className="break-words">Deleting cluster <strong>{name}</strong> from site <strong>{site}</strong> / MCE <strong>{mce}</strong>.</p>
           {cluster && <p className="font-mono text-xs text-muted-foreground break-all">{cluster.path}</p>}
-          <p className="text-muted-foreground text-xs">Once merged, ArgoCD removes the HostedCluster.</p>
+          <p className="text-muted-foreground text-xs">Once merged, ArgoCD removes the HostedCluster. The network segment is not released: that is the delete-cluster workflow&apos;s job.</p>
         </div>
+        <DeleteWorkflowPanel name={name} where={where} isAdmin={isAdmin} />
       </ReviewDialog>
 
       {fixingAddon && (

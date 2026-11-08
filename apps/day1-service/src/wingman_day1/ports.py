@@ -19,6 +19,7 @@ from wingman_day1.domain.auth import Identity
 from wingman_day1.domain.changes import ClusterChange, ProvisionResult, SpecChange
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
+from wingman_day1.domain.workflows import WorkflowRun
 
 
 class RepoReads(Protocol):
@@ -77,6 +78,23 @@ class ClusterProvisioner(Protocol):
 
     async def apply(self, change: ClusterChange) -> ProvisionResult:
         """Propose ``change``; raises Git errors as they come (never retried)."""
+        ...
+
+
+class ClusterDeleteWorkflow(Protocol):
+    """The delete-cluster workflow (ADR-0033). Not built yet: no adapter exists.
+
+    It owns the ordered teardown: drain, remove the cluster's files, wait for
+    ArgoCD to prune, wait for the released nodes to be wiped, delete the DHCP
+    scope, and release the segment last.
+    """
+
+    async def latest_run(self, ref: ClusterRef) -> WorkflowRun | None:
+        """The newest run for ``ref``, or ``None`` when it never ran."""
+        ...
+
+    async def start(self, ref: ClusterRef, *, requested_by: User) -> WorkflowRun:
+        """Start a run for ``ref``; the orchestrator refuses a second one while one runs."""
         ...
 
 

@@ -28,6 +28,7 @@ from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata
 from wingman_day1.domain.status import LiveStatus
+from wingman_day1.domain.workflows import WorkflowRun
 
 MAX_FILE_BYTES = 256 * 1024
 NO_SPEC = None
@@ -767,3 +768,34 @@ class SpecDriftOut(BaseModel):
     spec_version: str | None
     unified_diff: str = ""
     error: str | None
+
+
+# ── The delete-cluster workflow (ADR-0033) ──────────────────────────────────
+
+
+class WorkflowRunOut(BaseModel):
+    """One run of a workflow that acts on a cluster."""
+
+    workflow_id: str
+    status: str
+    phase: str | None
+    error: str | None
+
+    @classmethod
+    def of(cls, run: WorkflowRun) -> WorkflowRunOut:
+        """From a run."""
+        return cls(workflow_id=run.workflow_id, status=run.status, phase=run.phase, error=run.error)
+
+
+class DeleteWorkflowOut(BaseModel):
+    """``GET /clusters/{name}/delete-workflow``: the newest run, if any."""
+
+    run: WorkflowRunOut | None
+
+
+class StartDeleteWorkflowIn(BaseModel):
+    """``POST /clusters/{name}/delete-workflow``: deleting is not reversible, so say so."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirm: Literal[True]

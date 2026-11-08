@@ -340,3 +340,20 @@ export interface SpecDrift {
   spec_version: string | null;
   error: string | null;
 }
+
+// ── The delete-cluster workflow (ADR-0033) ──────────────────────────────────
+
+/** One run of a workflow that acts on a cluster, as the orchestrator reports it. */
+export interface WorkflowRun {
+  workflow_id: string;
+  /** The orchestrator's status, lowercase: `running`, `completed`, `failed`, ... */
+  status: string;
+  /** The step it is on, for example `awaiting-prune`. */
+  phase: string | null;
+  error: string | null;
+}
+
+/** `GET /clusters/{name}/delete-workflow` (501 FEATURE_DISABLED until the workflow exists). */
+export interface DeleteWorkflowState {
+  run: WorkflowRun | null;
+}

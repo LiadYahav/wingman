@@ -284,6 +284,43 @@ test.describe("Cluster detail", () => {
     expect(url.searchParams.get("mce")).toBe(MCE);
   });
 
+  test("the delete dialog shows the delete-cluster workflow as not available yet", async ({ page }) => {
+    await openDetail(page);
+    await page.getByRole("button", { name: "Delete" }).click();
+
+    const panel = page.getByRole("dialog").getByTestId("delete-workflow");
+    await expect(panel.getByText("Not available yet", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Release the network segment")).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Start delete workflow" })).toBeDisabled();
+    // The MR delete still works meanwhile
+    await expect(page.getByRole("dialog").getByRole("button", { name: /confirm/i })).toBeEnabled();
+  });
+
+  test("once the workflow exists, an admin starts it by typing the cluster name", async ({ page }) => {
+    await openDetail(page);
+    let run: unknown = null;
+    await page.route(`**/api/day1/clusters/${NAME}/delete-workflow**`, async (r: Route) => {
+      if (r.request().method() === "POST") {
+        run = { workflow_id: `delete-hosted-cluster-${NAME}`, status: "running", phase: "draining", error: null };
+        await r.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify(run) });
+      } else {
+        await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ run }) });
+      }
+    });
+    const started = page.waitForRequest((req: Request) => req.method() === "POST" && req.url().includes("/delete-workflow"));
+
+    await page.getByRole("button", { name: "Delete" }).click();
+    const panel = page.getByRole("dialog").getByTestId("delete-workflow");
+    const start = panel.getByRole("button", { name: "Start delete workflow" });
+    await expect(panel.getByText("Not available yet", { exact: true })).toHaveCount(0);
+    await expect(start).toBeDisabled();
+    await panel.getByRole("textbox", { name: /cluster name/i }).fill(NAME);
+    await start.click();
+
+    expect((await started).postDataJSON()).toEqual({ confirm: true });
+    await expect(panel.getByTestId("delete-workflow-run")).toContainText("draining");
+  });
+
   test("unknown drift says why and is not shown as in sync", async ({ page }) => {
     await openDetail(page, drift({ state: "unknown", is_drifted: null, error: "day2 did not answer: timeout" }));
 

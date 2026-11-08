@@ -141,6 +141,10 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters", (route: Route) => json(route, []));
   await page.route("**/api/day1/clusters/drift-summary", (route: Route) => json(route, []));
   await page.route("**/api/day1/clusters/bulk-status", (route: Route) => json(route, {}));
+  // Not built yet (ADR-0033): the panel says "Not available yet" until it is.
+  await page.route("**/api/day1/clusters/*/delete-workflow**", (route: Route) =>
+    fulfillProblem(route, 501, "FEATURE_DISABLED", "The delete-cluster workflow is not available yet.")
+  );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));
   await page.route("**/api/day2/approvals", (route: Route) => json(route, []));

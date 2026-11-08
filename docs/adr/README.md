@@ -46,6 +46,7 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0023](0023-day2-lints.md) | day2 lints are render_chain.py's rules as errors plus Wingman's own; a change that adds an error is refused |
 | [0024](0024-chart-versions-and-defaults.md) | Chart versions and defaults come from the chart repo on the same GitLab, at the resolved revision and path |
 | [0025](0025-version-differences-are-reported-not-drift.md) | A chart version other than the spec's is reported, never drift; a fix only installs a missing chart |
+| [0033](0033-delete-cluster-workflow-contract.md) | The delete-cluster workflow has a contract and a ready web panel; both say "not available yet" until it exists |
 | [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main |
 | [0031](0031-commit-derived-versions.md) | (Proposed) Derive the version from Conventional Commits, as server-scan and herzi do |
 | [0032](0032-ci-supply-chain.md) | CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks |

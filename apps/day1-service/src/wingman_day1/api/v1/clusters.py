@@ -16,7 +16,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from wingman_core.domain.errors import GitError
 from wingman_core.web.auth import AdminUser, CurrentUser
-from wingman_day1.api.deps import Context, Status
+from wingman_day1.api.deps import Context, DeleteWorkflow, Status
 from wingman_day1.api.v1.schemas import (
     BulkStatusIn,
     ClusterDetailOut,
@@ -25,10 +25,13 @@ from wingman_day1.api.v1.schemas import (
     ClusterStatusOut,
     CommitOut,
     CreateClusterIn,
+    DeleteWorkflowOut,
     DriftSummaryItemOut,
     ModifyClusterIn,
     MRDetailOut,
     PreviewOut,
+    StartDeleteWorkflowIn,
+    WorkflowRunOut,
     change_out,
     cluster_detail,
 )
@@ -189,6 +192,36 @@ async def modify_cluster(
         last_commit_id=body.last_commit_id,
     )
     return change_out(RepoKey.DAY1, result.merge_request)
+
+
+@router.get("/{name}/delete-workflow")
+async def delete_workflow_state(
+    name: str,
+    context: Context,
+    user: CurrentUser,
+    workflow: DeleteWorkflow,
+    site: Site = None,
+    mce: Mce = None,
+) -> DeleteWorkflowOut:
+    """The newest delete-cluster run (501 until the workflow exists, ADR-0033)."""
+    ref = await _ref(context, name, site, mce)
+    run = await workflow.latest_run(ref)
+    return DeleteWorkflowOut(run=WorkflowRunOut.of(run) if run else None)
+
+
+@router.post("/{name}/delete-workflow", status_code=202)
+async def start_delete_workflow(
+    name: str,
+    body: StartDeleteWorkflowIn,
+    context: Context,
+    user: AdminUser,
+    workflow: DeleteWorkflow,
+    site: Site = None,
+    mce: Mce = None,
+) -> WorkflowRunOut:
+    """Start the delete-cluster workflow (501 until it exists, ADR-0033)."""
+    ref = await _ref(context, name, site, mce)
+    return WorkflowRunOut.of(await workflow.start(ref, requested_by=user))
 
 
 @router.delete("/{name}")

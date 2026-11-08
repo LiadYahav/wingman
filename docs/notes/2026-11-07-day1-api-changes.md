@@ -177,6 +177,10 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     empty (it accepted anyone) and 401 on a wrong token.
 32. New: `GET /health/live`, `GET /health/ready` (GitLab reachable),
     `GET /metrics` (service port only); `/healthz` is kept.
+33. New: `GET` and `POST /clusters/{name}/delete-workflow` (ADR-0033). Both
+    answer 501 `FEATURE_DISABLED` ("not available yet") until the
+    delete-cluster workflow exists. Then `GET` returns `{"run": null | {workflow_id,
+    status, phase, error}}`, and `POST {"confirm": true}` (admin) returns 202 with the run.
 
 ## Deployment (chart) changes
 

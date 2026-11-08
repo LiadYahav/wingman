@@ -63,7 +63,7 @@ from wingman_day1.infrastructure.merge_requests import (
 )
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.repositories import CachedRepository
-from wingman_day1.ports import Day2Addons, HubApi, IdentityProvider
+from wingman_day1.ports import ClusterDeleteWorkflow, Day2Addons, HubApi, IdentityProvider
 from wingman_day1.settings import Day1Settings
 
 SERVICE = "day1"
@@ -94,6 +94,8 @@ class Adapters:
     """``None`` when ``CLUSTER_STATUS_ENABLED`` is off."""
     identity: IdentityProvider | None = None
     """``None`` when OpenShift OAuth is not configured (dev login only)."""
+    delete_workflow: ClusterDeleteWorkflow | None = None
+    """``None`` until the delete-cluster workflow exists (ADR-0033)."""
     closers: tuple[Close, ...] = field(default=())
 
 
@@ -235,6 +237,7 @@ def build_context(
             dev_secret=dev_secret,
         ),
         repos=repos,
+        delete_workflow=adapters.delete_workflow,
         status=(
             StatusService(
                 adapters.hub,
