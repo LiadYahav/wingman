@@ -76,7 +76,7 @@ Explicit user instructions; violating one is a real mistake, not style.
   (`dev/gitlab-fixtures/wingman/cluster-specs/cluster-template.j2`, verified
   with `helm template` against both chart copies); fixtures; the
   `wingman-core` foundation (GitLab port, httpx adapter, in-memory fake,
-  contract suite passing 29/29 on the fake and on GitLab CE 19.5.3, RFC 9457
+  contract suite passing 30/30 on the fake and on GitLab CE 19.5.3, RFC 9457
   errors, metrics, settings, auth, cache, approvals); CI and
   `scripts/gate.sh`; ADRs 0001-0011; monitoring in the chart (ServiceMonitor,
   7 promtool-tested alerts with a runbook, a Grafana dashboard, all off by
