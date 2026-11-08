@@ -177,6 +177,24 @@ test.describe("Approve with the reviewed sha", () => {
     await expect(page.getByText("You requested this change, so another admin must approve it.")).toBeVisible();
   });
 
+  test("a merge GitLab did not confirm says it may have happened, not that it failed", async ({ page }) => {
+    await open(page);
+    await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail(DAY1_MR)) })
+    );
+    await page.route("**/api/day1/approvals/42/approve?repo=day1", (r: Route) =>
+      fulfillProblem(r, 504, "AMBIGUOUS_WRITE", "GitLab did not answer the merge request")
+    );
+    await go(page, "/approvals/day1-42");
+
+    await page.getByRole("button", { name: /review & approve/i }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Approve & Merge" }).click();
+    const alert = page.getByRole("alert").filter({ hasText: "GitLab did not answer the merge request" });
+    await expect(alert).toContainText("GitLab did not confirm the change, so it may or may not have been made");
+    await expect(alert).toContainText("request req_e2e0000000000001");
+    await expect(page.getByText("The action failed")).toHaveCount(0);
+  });
+
   test("your own MR cannot be approved from the page", async ({ page }) => {
     await open(page, "alice");
     await page.route("**/api/day1/approvals/42?repo=day1", (r: Route) =>

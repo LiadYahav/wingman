@@ -14,6 +14,7 @@ import { approvalHref } from "@/lib/approvals";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { writeErrorTitle } from "@/lib/write-errors";
 import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { ReviewDialog } from "@/components/common/review-dialog";
@@ -531,7 +532,7 @@ function describeFailure(error: unknown, what: "preview" | "create"): FormError 
   if (isApiError(error, "NOT_FOUND")) {
     return { kind: "server", error, title: verb, hint: "The site, MCE or spec no longer exists in GitLab. Reload the page." };
   }
-  return { kind: "server", error, title: verb };
+  return { kind: "server", error, title: writeErrorTitle(error, verb) };
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────

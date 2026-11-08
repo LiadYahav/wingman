@@ -21,6 +21,7 @@ import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { computeLineDiff } from "@/lib/diff";
+import { writeErrorTitle } from "@/lib/write-errors";
 import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
 
 /** 409 REVISION_CONFLICT on approve or edit: the head is not the one reviewed. */
@@ -157,7 +158,7 @@ function EditMRPanel({
       {saveError !== null && (
         isApiError(saveError, "REVISION_CONFLICT")
           ? <ProblemList error={saveError} title={BRANCH_MOVED} />
-          : <ProblemList error={saveError} title="The edit was refused" />
+          : <ProblemList error={saveError} title={writeErrorTitle(saveError, "The edit was refused")} />
       )}
       {editableDiffs.length === 0 ? (
         <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -237,7 +238,7 @@ function ActionError({ error, onReload }: { error: unknown; onReload: () => void
   if (isApiError(error, "NOT_MERGEABLE")) {
     return <ProblemList error={error} title="GitLab cannot merge this MR right now" />;
   }
-  return <ProblemList error={error} title="The action failed" />;
+  return <ProblemList error={error} title={writeErrorTitle(error, "The action failed")} />;
 }
 
 function MRDetailContent() {

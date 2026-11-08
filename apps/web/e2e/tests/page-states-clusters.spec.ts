@@ -156,6 +156,24 @@ test.describe("Cluster detail", () => {
     await expect(liveStatusCard(page)).toBeVisible();
     await expect(page.getByTestId("live-status-no-node-pools")).toHaveText("No node pools reported");
   });
+
+  test("a delete GitLab did not confirm says it may have happened, not that it was refused", async ({ page }) => {
+    await mockDetail(page);
+    await page.route(`**/api/day1/clusters/${NAME}?**`, (r) =>
+      r.request().method() === "DELETE"
+        ? fulfillProblem(r, 504, "AMBIGUOUS_WRITE", "GitLab did not answer the commit request")
+        : r.fallback()
+    );
+    await go(page, `/clusters/${NAME}?site=${SITE}&mce=${MCE}`);
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /Delete Cluster MR/ }).click();
+
+    const alert = page.getByRole("alert").filter({ hasText: "GitLab did not answer the commit request" });
+    await expect(alert).toContainText("GitLab did not confirm the change, so it may or may not have been made");
+    await expect(alert).toContainText("request req_e2e0000000000001");
+    await expect(page.getByText("The change was refused")).toHaveCount(0);
+    await expect(page.getByText("Delete failed")).toHaveCount(0);
+  });
 });
 
 // ── Create form ─────────────────────────────────────────────────────────────

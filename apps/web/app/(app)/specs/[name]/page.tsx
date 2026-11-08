@@ -17,6 +17,7 @@ import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { DriftBadge } from "@/components/clusters/drift-badge";
 import { formatPreset, specApiPath, structureSummary } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
+import { writeErrorTitle } from "@/lib/write-errors";
 import type { ClusterSpec, DriftState, MRDetail, SpecCluster, SpecCommit, SpecDetail, SpecDrift } from "@/types";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -171,7 +172,7 @@ export default function SpecDetailPage() {
         setDeleteReviewOpen(false);
         return;
       }
-      toast.error("Could not open the delete MR", { description: errorMessages(err).join(" · ") });
+      toast.error(writeErrorTitle(err, "Could not open the delete MR"), { description: errorMessages(err).join(" · ") });
     },
   });
   const deleteConflict = isApiError(deleteMutation.error, "REVISION_CONFLICT");

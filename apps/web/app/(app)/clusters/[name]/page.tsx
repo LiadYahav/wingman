@@ -26,6 +26,7 @@ import { clusterQuery } from "@/lib/clusters";
 import { chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { fetchLiveStatus } from "@/lib/live-status";
 import { toastMrOpened } from "@/lib/mr-toast";
+import { writeErrorTitle } from "@/lib/write-errors";
 import type {
   AddonDrift, CatalogEntry, ChangeResult, ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts, MRDetail,
 } from "@/types";
@@ -259,7 +260,7 @@ function ClusterDetailContent() {
       setFixingAddon(null);
       queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });
     },
-    onError: (e) => toast.error("Fix failed", { description: errorMessages(e).join(" · ") }),
+    onError: (e) => toast.error(writeErrorTitle(e, "Fix failed"), { description: errorMessages(e).join(" · ") }),
   });
 
   const fixAllMutation = useMutation({
@@ -275,7 +276,7 @@ function ClusterDetailContent() {
       queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });
     },
     onError: (e) => {
-      toast.error("A fix failed", { description: errorMessages(e).join(" · ") });
+      toast.error(writeErrorTitle(e, "A fix failed"), { description: errorMessages(e).join(" · ") });
       queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });
     },
   });
@@ -307,7 +308,7 @@ function ClusterDetailContent() {
     setWriteError(e);
     // The page shows the problem itself (below the header); the toast only points at it.
     if (!isApiError(e, "REVISION_CONFLICT") && !isApiError(e, "VALIDATION_ERROR")) {
-      toast.error(`${what} failed`, { description: "The problem is shown on the page." });
+      toast.error(writeErrorTitle(e, `${what} failed`), { description: "The problem is shown on the page." });
     }
   };
 
@@ -438,7 +439,7 @@ function ClusterDetailContent() {
             </button>
           </div>
         ) : (
-          <ProblemList error={writeError} title="The change was refused" />
+          <ProblemList error={writeError} title={writeErrorTitle(writeError)} />
         )
       )}
 

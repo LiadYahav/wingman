@@ -8,6 +8,7 @@
  * keep working (ADR-0020). `?mce=` narrows a bare name.
  */
 
+import { AMBIGUOUS_WRITE_HINT, isAmbiguousWrite } from "@/lib/write-errors";
 import type { CatalogEntry, DestinationKind, Finding, LayerRole } from "@/types/day2";
 
 // ── Addressing ───────────────────────────────────────────────────────────────
@@ -244,11 +245,6 @@ export function isRevisionConflict(problem: Problem): boolean {
   return problem.code === "REVISION_CONFLICT";
 }
 
-/** GitLab did not confirm a write; it may have happened. Never retried (ADR-0006). */
-export function isAmbiguousWrite(problem: Problem): boolean {
-  return problem.code === "AMBIGUOUS_WRITE";
-}
-
 /** `details.candidates` of an ambiguous bare name: the ids it could mean. */
 export function candidatesOf(problem: Problem): string[] {
   const candidates = problem.details.candidates;
@@ -271,11 +267,7 @@ export function bulkProblemsOf(problem: Problem): BulkProblem[] {
   });
 }
 
-/** The sentence to show for a refused write. */
+/** The sentence to show for a refused write; an unconfirmed one says it may have happened. */
 export function writeErrorMessage(problem: Problem): string {
   return isAmbiguousWrite(problem) ? `${AMBIGUOUS_WRITE_HINT} ${problem.detail}` : problem.detail;
 }
-
-/** What an unconfirmed write (ADR-0006) means for the person who asked for it. */
-export const AMBIGUOUS_WRITE_HINT =
-  "GitLab did not confirm the change, so it may or may not have been made. Check the team repo for the MR before trying again.";
