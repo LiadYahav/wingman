@@ -411,6 +411,8 @@ test.describe("Searchable pickers", () => {
     await expect(page.getByPlaceholder("Search sites…")).toBeFocused();
     await page.keyboard.type("2");
     await expect(page.getByRole("option")).toHaveText(["site2"]);
+    // Typing highlights the first match; Enter chooses the highlighted option
+    await expect(page.getByRole("option", { name: "site2" })).toHaveAttribute("data-highlighted", "");
     await page.keyboard.press("Enter");
     await expect(form.siteSelect).toContainText("site2");
 
@@ -419,8 +421,11 @@ test.describe("Searchable pickers", () => {
     await expect(form.mceSelect).toBeEnabled();
     await form.mceSelect.focus();
     await page.keyboard.press("ArrowDown");
+    await expect(page.getByPlaceholder("Search MCEs…")).toBeFocused();
     await page.keyboard.type("4.18");
+    await expect(page.getByPlaceholder("Search MCEs…")).toHaveValue("4.18");
     await expect(page.getByRole("option")).toHaveCount(1);
+    await expect(page.getByRole("option")).toHaveAttribute("data-highlighted", "");
     await page.keyboard.press("Enter");
     await expect(form.mceSelect).toContainText("ocp4-prep-mce-site2-a");
     await expect(form.versionSelect).toContainText("4.18.22-x86_64");
