@@ -13,8 +13,9 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from wingman_core.application.approvals import PendingChange, describe
-from wingman_core.domain.git import Commit, FileChange, FileDiff
+from wingman_core.domain.git import Commit, FileChange
 from wingman_core.domain.merge_request import MergeRequest
+from wingman_core.web.schemas import FileDiffOut
 from wingman_day2.application.catalog import CatalogEntry, ChartValues
 from wingman_day2.application.changes import ChangeResult
 from wingman_day2.application.installed import ClusterCharts, InstalledChart
@@ -594,29 +595,6 @@ class BulkOut(BaseModel):
 
     merge_requests: list[ChangeOut]
     failed: list[BulkFailureOut]
-
-
-class FileDiffOut(BaseModel):
-    """How one file differs."""
-
-    old_path: str
-    new_path: str
-    diff: str
-    new_file: bool
-    renamed_file: bool
-    deleted_file: bool
-
-    @classmethod
-    def of(cls, diff: FileDiff) -> FileDiffOut:
-        """From the core diff."""
-        return cls(
-            old_path=str(diff.old_path),
-            new_path=str(diff.new_path),
-            diff=diff.diff,
-            new_file=diff.new_file,
-            renamed_file=diff.renamed_file,
-            deleted_file=diff.deleted_file,
-        )
 
 
 class ApprovalDetailOut(BaseModel):

@@ -14,9 +14,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from wingman_core.application.approvals import describe
-from wingman_core.domain.git import Commit, FileDiff
+from wingman_core.domain.git import Commit
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.domain.users import User
+from wingman_core.web.schemas import FileDiffOut
 from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.audit import AuditCommit
 from wingman_day1.application.clusters import ClusterFile
@@ -154,29 +155,6 @@ class MRDetailOut(BaseModel):
 def change_out(repo: RepoKey, merge_request: MergeRequest) -> MRDetailOut:
     """The response for an MR a change just opened."""
     return MRDetailOut.of(Change(repo, describe(merge_request)))
-
-
-class FileDiffOut(BaseModel):
-    """One file of a diff."""
-
-    old_path: str
-    new_path: str
-    diff: str
-    new_file: bool
-    renamed_file: bool
-    deleted_file: bool
-
-    @classmethod
-    def of(cls, diff: FileDiff) -> FileDiffOut:
-        """From a domain diff."""
-        return cls(
-            old_path=str(diff.old_path),
-            new_path=str(diff.new_path),
-            diff=diff.diff,
-            new_file=diff.new_file,
-            renamed_file=diff.renamed_file,
-            deleted_file=diff.deleted_file,
-        )
 
 
 class ApprovalDetailOut(BaseModel):
