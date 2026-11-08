@@ -207,8 +207,8 @@ if [ -n "$GITLAB_TOKEN" ]; then
   DEV_SECRET=$(openssl rand -hex 16)
 
   info "Deploying Helm chart..."
-  helm upgrade --install wingman ./chart \
-    -f chart/values.minikube.yaml \
+  helm upgrade --install wingman ./deploy/helm/wingman \
+    -f deploy/helm/wingman/values.minikube.yaml \
     --set gitlab.accessToken="$GITLAB_TOKEN" \
     --set auth.jwtSecret="$JWT_SECRET" \
     --set devAuth.secret="$DEV_SECRET" \
@@ -235,7 +235,7 @@ if [ -n "$GITLAB_TOKEN" ]; then
 else
   warn "Skipping Helm deploy — no GitLab token."
   warn "Once you have a token, run:"
-  warn "  helm upgrade --install wingman ./chart -f chart/values.minikube.yaml \\"
+  warn "  helm upgrade --install wingman ./deploy/helm/wingman -f deploy/helm/wingman/values.minikube.yaml \\"
   warn "    --set gitlab.accessToken=<token> \\"
   warn "    --set auth.jwtSecret=\$(openssl rand -hex 32) \\"
   warn "    --set devAuth.secret=\$(openssl rand -hex 16) \\"

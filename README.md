@@ -83,12 +83,12 @@ wingman/
 │   └── wingman-core/              # The shared core (ADR-0001)
 │       └── src/wingman_core/      # domain, ports, application, infrastructure, observability, web
 │
-├── chart/                         # Helm chart (chart/README.md)
-│   ├── templates/                 # Kubernetes manifests
-│   ├── values.yaml                # Production defaults
-│   └── values.minikube.yaml       # Local development overrides
-│
-├── deploy/python/                 # Hash-pinned requirement exports the images install from
+├── deploy/
+│   ├── helm/wingman/              # Helm chart (deploy/helm/wingman/README.md)
+│   │   ├── templates/             # Kubernetes manifests
+│   │   ├── values.yaml            # Production defaults
+│   │   └── values.minikube.yaml   # Local development overrides
+│   └── python/                    # Hash-pinned requirement exports the images install from
 ├── dev/gitlab-fixtures/           # Production-shaped repo trees: the fake backend's and the local GitLab's seed
 ├── docs/                          # adr/, ecosystem/, ops/, notes/
 ├── tests/repo/                    # Repository contracts: chart env, docs, CI scripts, observability
@@ -117,7 +117,7 @@ wingman/
 
 ## Deployment
 
-See **[chart/README.md](chart/README.md)** for Helm chart deployment instructions.
+See **[deploy/helm/wingman/README.md](deploy/helm/wingman/README.md)** for Helm chart deployment instructions.
 
 ## API Reference
 
@@ -273,7 +273,7 @@ reachable through the Route.
 
 Both services read their settings at start-up and refuse an unsafe or
 incomplete configuration (ADR-0009). The chart sets them
-(`chart/templates/configmap.yaml`, `secret.yaml`);
+(`deploy/helm/wingman/templates/configmap.yaml`, `secret.yaml`);
 `tests/repo/test_chart_env_contract.py` fails when the chart and the settings
 classes disagree. Defaults are in
 `packages/wingman-core/src/wingman_core/settings.py` (shared) and each

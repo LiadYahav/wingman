@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from service_settings import env_names, read_by_services
 
 ROOT = Path(__file__).resolve().parents[2]
+CHART = ROOT / "deploy/helm/wingman"
 # Read by libraries, not by a settings class: httpx's CA bundle.
 LIBRARY_VARIABLES = {"SSL_CERT_FILE"}
 # Set by the image (docs/ops/images.md), not by the chart.
@@ -43,7 +44,7 @@ if HELM is None:
 def chart_variables(*extra: str) -> set[str]:
     assert HELM is not None
     rendered = subprocess.run(  # noqa: S603 - a fixed argv, no shell
-        [HELM, "template", "wingman", str(ROOT / "chart"), "--namespace", "wingman", *extra],
+        [HELM, "template", "wingman", str(CHART), "--namespace", "wingman", *extra],
         check=True,
         capture_output=True,
         text=True,

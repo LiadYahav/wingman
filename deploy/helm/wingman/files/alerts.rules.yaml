@@ -1,6 +1,6 @@
 # Wingman alert rules. A plain Prometheus rules file (as in herzi), loaded into
 # a PrometheusRule by templates/prometheusrule.yaml and unit-tested with
-# `promtool test rules chart/tests/alerts.test.yaml`. Every alert names its
+# `promtool test rules deploy/helm/wingman/tests/alerts.test.yaml`. Every alert names its
 # runbook section in docs/ops/runbook.md; the metrics are documented in
 # docs/ops/metrics.md (ADR-0010).
 #

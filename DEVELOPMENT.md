@@ -114,7 +114,7 @@ variable is listed in the README's [Environment Variables](README.md#environment
 5. **Document it**: a row in the README's API Reference (`tests/repo/test_web_docs_contract.py`
    fails until the README and the routes agree), and the web types in `apps/web/types/`.
 
-A new setting goes in the service's `settings.py`, the chart (`chart/templates/configmap.yaml`
+A new setting goes in the service's `settings.py`, the chart (`deploy/helm/wingman/templates/configmap.yaml`
 or `secret.yaml`; `tests/repo/test_chart_env_contract.py` compares them) and the README's
 settings list. Metric names and labels are a contract (ADR-0010, `docs/ops/metrics.md`).
 
@@ -161,7 +161,7 @@ decision gets an ADR (template in `docs/adr/README.md`).
 
 ## Deployment
 
-`chart/README.md` installs the chart; `docs/ops/images.md` builds and publishes the images.
+`deploy/helm/wingman/README.md` installs the chart; `docs/ops/images.md` builds and publishes the images.
 Every merge to main is a release, versioned from the commit subjects (ADR-0031). Deploy a
 release by its version, the same for every image, with `image.<component>.tag`
 (`image.day1.tag`, `image.day2.tag`, `image.web.tag`; for example `3.0.1`, never `latest`).

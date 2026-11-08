@@ -24,7 +24,7 @@ layout); the rewrite is in progress (see Current status).
 
 Monorepo: `apps/web` (Next.js 16), `apps/day1-service` and
 `apps/day2-service` (FastAPI), `packages/wingman-core` (the shared core),
-`chart/` (Helm), `dev/gitlab-fixtures` (production-shaped repo trees for
+`deploy/helm/wingman/` (Helm), `dev/gitlab-fixtures` (production-shaped repo trees for
 tests and local GitLab).
 
 ## Standing project conventions — follow without being re-told

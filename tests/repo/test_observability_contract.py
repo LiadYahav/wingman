@@ -25,9 +25,10 @@ from wingman_core.observability.metrics import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-RULES = yaml.safe_load((ROOT / "chart/files/alerts.rules.yaml").read_text(encoding="utf-8"))
+CHART = ROOT / "deploy/helm/wingman"
+RULES = yaml.safe_load((CHART / "files/alerts.rules.yaml").read_text(encoding="utf-8"))
 DASHBOARD: dict[str, Any] = json.loads(
-    (ROOT / "chart/dashboards/wingman.json").read_text(encoding="utf-8")
+    (CHART / "dashboards/wingman.json").read_text(encoding="utf-8")
 )
 RUNBOOK = (ROOT / "docs/ops/runbook.md").read_text(encoding="utf-8")
 

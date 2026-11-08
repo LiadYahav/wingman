@@ -158,19 +158,19 @@ jobs:
           install -m 0755 "$RUNNER_TEMP/prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /usr/local/bin/promtool
 
       - name: helm lint --strict
-        run: helm lint --strict chart
+        run: helm lint --strict deploy/helm/wingman
 
-      - name: helm template (every chart/ci fixture)
+      - name: helm template (every deploy/helm/wingman/ci fixture)
         run: |
-          for f in chart/ci/*.yaml; do
-            helm template wingman chart --namespace wingman -f "$f" > /dev/null
+          for f in deploy/helm/wingman/ci/*.yaml; do
+            helm template wingman deploy/helm/wingman --namespace wingman -f "$f" > /dev/null
           done
 
       - name: promtool check rules
-        run: promtool check rules chart/files/alerts.rules.yaml
+        run: promtool check rules deploy/helm/wingman/files/alerts.rules.yaml
 
       - name: promtool test rules
-        run: promtool test rules chart/tests/alerts.test.yaml
+        run: promtool test rules deploy/helm/wingman/tests/alerts.test.yaml
 
   web:
     name: Web
