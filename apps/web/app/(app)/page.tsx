@@ -107,6 +107,8 @@ export default function DashboardPage() {
   const approvalsLoading = day1ApprovalsPending || day2ApprovalsPending;
   const unavailableApprovals = [day1ApprovalsError && "day1", day2ApprovalsError && "day2"].filter(Boolean);
   const totalApprovals = allApprovals.length;
+  // Neither source answered: there is no count to show, not a count of zero.
+  const allApprovalsFailed = Boolean(day1ApprovalsError && day2ApprovalsError);
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-300">
@@ -129,13 +131,17 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Ready"
-          value={statusOff || clustersError ? undefined : health.ready}
-          hint={statusOff ? "Live status is off" : undefined}
+          value={statusOff || clustersError || statusError ? undefined : health.ready}
+          hint={statusOff ? "Live status is off" : statusError ? "Could not be read" : undefined}
           icon={CheckCircle2} href="/clusters" loading={clustersLoading || statusLoading} color="green"
         />
         <StatCard
-          title="Pending Approvals" value={totalApprovals}
-          hint={unavailableApprovals.length > 0 ? `${unavailableApprovals.join(" and ")} unavailable` : undefined}
+          title="Pending Approvals" value={allApprovalsFailed ? undefined : totalApprovals}
+          hint={
+            allApprovalsFailed ? "Could not be loaded"
+              : unavailableApprovals.length > 0 ? `${unavailableApprovals.join(" and ")} unavailable`
+              : undefined
+          }
           icon={GitPullRequest} href="/approvals" loading={approvalsLoading}
           color={totalApprovals > 0 ? "orange" : "blue"}
         />

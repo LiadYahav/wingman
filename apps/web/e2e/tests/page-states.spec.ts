@@ -129,4 +129,27 @@ test.describe("Clusters and the dashboard", () => {
     await expect(alerts.filter({ hasText: "Failed to load clusters" })).toContainText("GitLab could not be reached", { timeout: 10_000 });
     await expect(page.getByTestId("clusters-empty")).toHaveCount(0);
   });
+
+  test("a stat whose reads failed shows no value, never zero", async ({ page }) => {
+    await injectAdminAuth(page);
+    await mockDashboardApis(page);
+    await page.route("**/api/day1/clusters", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([cluster("ocp4-prod-alpha-site1")]) })
+    );
+    await page.route("**/api/day1/clusters/bulk-status", (r: Route) => fulfillProblem(r, 503, "DEPENDENCY_UNAVAILABLE", "The MCE hub did not answer"));
+    await page.route("**/api/day1/approvals", (r: Route) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));
+    await page.route("**/api/day2/approvals", (r: Route) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));
+    await go(page, "/");
+
+    const ready = page.getByTestId("stat-ready");
+    await expect(ready).toContainText("Could not be read");
+    await expect(ready).toContainText("—");
+    await expect(ready).not.toContainText("0");
+
+    // The default query retries twice (1s, 2s) before the error shows
+    const pending = page.getByTestId("stat-pending-approvals");
+    await expect(pending).toContainText("Could not be loaded", { timeout: 10_000 });
+    await expect(pending).toContainText("—");
+    await expect(pending).not.toContainText("0");
+  });
 });
