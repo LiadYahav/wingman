@@ -98,16 +98,18 @@ export function ClusterDriftPanel({
   if (error) return <ProblemList error={error} title="Drift could not be loaded" />;
   if (!drift) return null;
 
+  // The version compared against: the spec's current one, else (it is gone) the one created from
+  const comparedVersion = drift.current_spec_version ?? drift.spec_version;
   const specLabel = (
     <>
-      <strong>{drift.spec_name}</strong>{drift.spec_version && <> v{drift.spec_version}</>}
+      <strong>{drift.spec_name}</strong>{comparedVersion && <> v{comparedVersion}</>}
     </>
   );
   const newerSpec =
     drift.current_spec_version && drift.spec_version && drift.current_spec_version !== drift.spec_version ? (
       <p className="text-xs text-muted-foreground mt-1">
-        The spec is now at v{drift.current_spec_version}; this cluster was created from v{drift.spec_version}.
-        Drift compares against the version it was created from.
+        This cluster was created from v{drift.spec_version}; drift compares against the spec as it is now,
+        v{drift.current_spec_version}.
       </p>
     ) : null;
 
