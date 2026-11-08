@@ -15,6 +15,7 @@ import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { DriftBadge } from "@/components/clusters/drift-badge";
+import { clusterHref } from "@/lib/clusters";
 import { formatPreset, specApiPath, structureSummary } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
@@ -27,10 +28,6 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-sm font-medium text-right min-w-0 break-words">{value}</span>
     </div>
   );
-}
-
-function clusterHref(name: string, site: string, mce: string) {
-  return `/clusters/${encodeURIComponent(name)}?site=${encodeURIComponent(site)}&mce=${encodeURIComponent(mce)}`;
 }
 
 const DRIFT_ORDER: DriftState[] = ["drifted", "unknown", "in_sync", "not_linked"];
@@ -357,7 +354,7 @@ export default function SpecDetailPage() {
                     <tr key={`${c.site}/${c.mce}/${c.name}`} data-testid={`spec-cluster-${c.name}`} className="hover:bg-primary/[0.03] transition-colors">
                       <td className="px-4 py-3">
                         <Link
-                          href={clusterHref(c.name, c.site, c.mce)}
+                          href={clusterHref(c)}
                           className="font-semibold hover:text-primary transition-colors inline-flex items-center gap-1 break-all"
                         >
                           {c.name}
@@ -441,7 +438,7 @@ export default function SpecDetailPage() {
                       <Server className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <Link
-                          href={clusterHref(r.cluster, r.site, r.mce)}
+                          href={clusterHref({ name: r.cluster, site: r.site, mce: r.mce })}
                           className="text-sm font-semibold hover:text-primary transition-colors break-all"
                         >
                           {r.cluster}
