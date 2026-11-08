@@ -10,7 +10,7 @@ import { api, isApiError, errorMessages } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
@@ -519,7 +519,7 @@ export default function SpecDetailPage() {
                       <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
                         <span>{commit.author}</span>
                         <span>·</span>
-                        <span>{new Date(commit.date).toLocaleDateString()}</span>
+                        <span>{formatDate(commit.date)}</span>
                       </div>
                     </button>
                   ))}

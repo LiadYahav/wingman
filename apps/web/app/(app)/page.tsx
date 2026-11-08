@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
@@ -228,7 +228,7 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{mr.title}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      by {mr.author.username} · {new Date(mr.created_at).toLocaleDateString("en-GB")}
+                      by {mr.author.username} · {formatDate(mr.created_at)}
                     </p>
                   </div>
                   <RepoBadge repo={mr.repo} className="ml-3 shrink-0" />

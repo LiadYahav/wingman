@@ -120,6 +120,26 @@ test.describe("Cluster detail", () => {
     await expect(problems(page)).toHaveCount(0);
   });
 
+  test.describe("in an en-US browser", () => {
+    test.use({ locale: "en-US" });
+
+    test("a commit's date is en-GB like every other date, not the browser's format", async ({ page }) => {
+      await mockDetail(page);
+      await page.route(`**/api/day1/clusters/${NAME}/history?**`, (r) =>
+        json(r, [{
+          sha: "0c904bfafde4c4ed24416190ea224ee25cdcf738", short_sha: "0c904bfa", message: "Create cluster",
+          author: "alice", date: "2026-11-07T10:00:00+00:00", web_url: "https://gitlab.example.com/c/0c904bfa",
+        }])
+      );
+      await go(page, `/clusters/${NAME}?site=${SITE}&mce=${MCE}`);
+      await page.getByRole("tab", { name: "History" }).click();
+
+      await expect(page.getByText("0c904bfa")).toBeVisible();
+      await expect(page.getByText("07/11/2026", { exact: true })).toBeVisible();
+      await expect(page.getByText("11/7/2026")).toHaveCount(0);
+    });
+  });
+
   test("a failed live status read shows the problem in place of the card", async ({ page }) => {
     await mockDetail(page, (r) => fulfillProblem(r, 503, "DEPENDENCY_UNAVAILABLE", "The MCE hub did not answer"));
     await go(page, `/clusters/${NAME}?site=${SITE}&mce=${MCE}`);

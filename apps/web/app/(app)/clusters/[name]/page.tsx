@@ -25,6 +25,7 @@ import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
 import { chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { fetchLiveStatus } from "@/lib/live-status";
+import { formatDate } from "@/lib/utils";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
 import type {
@@ -84,7 +85,7 @@ function CommitList({
               <span>·</span>
               <span>{c.author}</span>
               <span>·</span>
-              <span>{new Date(c.date).toLocaleDateString()}</span>
+              <span>{formatDate(c.date)}</span>
               {teamColumn && c.team && <><span>·</span><span className="text-primary/70">{c.team}</span></>}
             </div>
           </div>

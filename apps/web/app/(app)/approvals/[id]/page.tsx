@@ -14,7 +14,7 @@ import { approvalApiPath, parseApprovalId, type MRRef } from "@/lib/approvals";
 import { useAuthStore, useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
@@ -443,7 +443,7 @@ function MRDetailContent() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">{mr.merged_at ? "Merged" : "Created"}</p>
-                <p className="font-medium">{new Date(mr.merged_at ?? mr.created_at).toLocaleDateString("en-GB")}</p>
+                <p className="font-medium">{formatDate(mr.merged_at ?? mr.created_at)}</p>
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground mb-0.5">Source branch</p>
