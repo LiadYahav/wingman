@@ -25,7 +25,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Final
 
-from wingman_core.domain.git import FileChange
+from wingman_core.domain.git import FileChange, commit_author
 from wingman_core.domain.merge_request import MergeRequest, NewMergeRequest
 from wingman_core.domain.mr_conventions import (
     WINGMAN_LABEL,
@@ -47,7 +47,6 @@ from wingman_day1.domain.changes import (
     ProvisionResult,
     SpecAction,
     SpecChange,
-    commit_author,
 )
 from wingman_day1.infrastructure.repositories import CachedRepository
 
