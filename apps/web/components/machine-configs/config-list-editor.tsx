@@ -56,6 +56,7 @@ export function ConfigListEditor({
   label = "Machine configs",
   hideLabel = false,
   testId = "config-list",
+  networkHardware = "entry",
 }: {
   entries: ConfigEntry[];
   onChange: (entries: ConfigEntry[]) => void;
@@ -76,8 +77,18 @@ export function ConfigListEditor({
   /** The surrounding form shows its own label (and lock): keep `label` for the controls' names only. */
   hideLabel?: boolean;
   testId?: string;
+  /**
+   * `"per-nodepool"`: the list is shared by nodepools that each choose their
+   * own network hardware (the configs rule, ADR-0029), so `nm-conf` takes no
+   * hardware here.
+   */
+  networkHardware?: "entry" | "per-nodepool";
 }) {
-  const local = useMemo(() => entryProblems(entries, catalog), [entries, catalog]);
+  const perNodepool = networkHardware === "per-nodepool";
+  const local = useMemo(
+    () => entryProblems(entries, catalog, { hardwareRequired: !perNodepool }),
+    [entries, catalog, perNodepool]
+  );
   const options = useMemo(() => nameOptions(catalog, entries), [catalog, entries]);
   const hardwareOptions = useMemo<ComboboxOption[]>(
     () => (catalog?.hardware_types ?? []).map((h) => ({ value: h.name, label: h.name, description: h.template })),
@@ -207,7 +218,7 @@ export function ConfigListEditor({
                   aria-label={`${label}: entry ${index + 1}`}
                   aria-invalid={shown.length > 0}
                 />
-                {network && hardwarePicker(entry, index)}
+                {network && !perNodepool && hardwarePicker(entry, index)}
                 <Button
                   type="button"
                   variant="ghost"
@@ -218,8 +229,11 @@ export function ConfigListEditor({
                   <X />
                 </Button>
               </div>
-              {network && name && (
+              {network && name && !perNodepool && (
                 <p className="pl-1 font-mono text-[11px] text-muted-foreground">Written as {name}</p>
+              )}
+              {network && perNodepool && (
+                <p className="pl-1 text-[11px] text-muted-foreground">Each nodepool&apos;s own network config, for the hardware it chooses</p>
               )}
               {shown.length > 0 && (
                 <ul className="pl-1 text-xs text-destructive" role="alert">

@@ -69,8 +69,16 @@ export function asEntries(value: unknown): ConfigEntry[] {
  * The problems day1 would report for each entry, by index (§3 of the API
  * note): a network entry without a known hardware type, hardware on a static
  * config, a name `mc-files/` does not have, the same entry twice.
+ *
+ * `hardwareRequired: false` is for a list whose network entry takes each
+ * nodepool's own hardware (the configs rule, ADR-0029): a missing hardware
+ * type is then not a problem of the list.
  */
-export function entryProblems(entries: ConfigEntry[], catalog: MachineConfigs | undefined): string[][] {
+export function entryProblems(
+  entries: ConfigEntry[],
+  catalog: MachineConfigs | undefined,
+  { hardwareRequired = true }: { hardwareRequired?: boolean } = {}
+): string[][] {
   const hardware = new Set(catalog?.hardware_types.map((h) => h.name) ?? []);
   const known = new Set(catalog?.static_configs.map((c) => c.name) ?? []);
   const hardwareList = [...hardware].join(", ");
@@ -79,8 +87,9 @@ export function entryProblems(entries: ConfigEntry[], catalog: MachineConfigs | 
     const problems: string[] = [];
     if (!entry.name) problems.push("Choose a machine config");
     else if (isNetworkEntry(entry)) {
-      if (!entry.hardware) problems.push(`Choose the hardware type${hardwareList ? ` (${hardwareList})` : ""}`);
-      else if (catalog && !hardware.has(entry.hardware)) problems.push(`No hardware type '${entry.hardware}'`);
+      if (!entry.hardware) {
+        if (hardwareRequired) problems.push(`Choose the hardware type${hardwareList ? ` (${hardwareList})` : ""}`);
+      } else if (catalog && !hardware.has(entry.hardware)) problems.push(`No hardware type '${entry.hardware}'`);
     } else {
       if (entry.hardware) problems.push(`Hardware applies only to ${NETWORK_CONFIG}`);
       if (catalog && !known.has(entry.name)) problems.push(`No machine config '${entry.name}' in mc-files/`);

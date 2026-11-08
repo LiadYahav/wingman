@@ -229,6 +229,14 @@ async function navigateTo(page: Page, path: string) {
 
 // ── Spec creation flow ────────────────────────────────────────────────────────
 
+/** A new flavor's first nodepool starts with the nodepool defaults; day1 needs its nm-conf's hardware. */
+async function chooseNetworkHardware(page: Page, hardware = "dell") {
+  await page.getByTestId("nodepool-0-configs").getByRole("combobox", { name: /entry 1 hardware type$/ }).click();
+  await page.getByRole("option").filter({ has: page.getByText(hardware, { exact: true }) }).click();
+  // The list is a popup (role dialog) until its exit animation ends
+  await expect(page.getByRole("option")).toHaveCount(0);
+}
+
 test.describe("Spec Creation Flow", () => {
   test.beforeEach(async ({ page }) => {
     await setupMocks(page);
@@ -287,21 +295,21 @@ test.describe("Spec Creation Flow", () => {
     await expect(page.getByTestId("selected-addon-platform-cert-manager")).not.toBeVisible();
   });
 
-  test("Preview variables dialog opens and shows structure YAML", async ({ page }) => {
+  test("the review part shows the flavor file with its structure", async ({ page }) => {
     await navigateTo(page, "/specs/new");
 
-    await page.getByRole("button", { name: /preview variables/i }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    // The preview shows YAML content like "nodepools_count: 1"
-    await expect(dialog).toContainText(/nodepools_count|cluster_name|structure/i);
+    const review = page.locator("section#review");
+    await review.getByRole("tab", { name: "Flavor file" }).click();
+    // The flavor file as YAML: its structure (one nodepool to start with) and values
+    await expect(review.getByTestId("flavor-yaml")).toContainText(/structure:\s+nodepools:/);
   });
 
   test("Review & Create opens review dialog with spec YAML", async ({ page }) => {
     await navigateTo(page, "/specs/new");
 
-    // Fill required spec name
+    // Fill required spec name, and the hardware of the default nm-conf (day1 needs one)
     await page.getByPlaceholder(/standard-ha|dok|compact/i).fill("my-qa-spec");
+    await chooseNetworkHardware(page);
 
     await page.getByRole("button", { name: /review & create/i }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -312,6 +320,7 @@ test.describe("Spec Creation Flow", () => {
     await navigateTo(page, "/specs/new");
 
     await page.getByPlaceholder(/standard-ha|dok|compact/i).fill("my-qa-spec");
+    await chooseNetworkHardware(page);
     await page.getByRole("button", { name: /review & create/i }).click();
 
     const dialog = page.getByRole("dialog");

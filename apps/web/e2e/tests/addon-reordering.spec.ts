@@ -58,6 +58,9 @@ test.describe("Addon Reordering", () => {
 
     const certManager = specPage.getSelectedAddon("platform", "cert-manager");
     const prometheus = specPage.getSelectedAddon("observability", "prometheus");
+    // The add-ons are the flavor page's third part: bring the list to the middle of the screen
+    // (clear of the sticky bar of parts) before dragging in it
+    await certManager.evaluate((el) => el.scrollIntoView({ block: "center" }));
 
     const handleBounds = await certManager.locator("[data-testid='drag-handle']").boundingBox();
     const prometheusBounds = await prometheus.boundingBox();
