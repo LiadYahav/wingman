@@ -32,6 +32,12 @@ checked against it.
 | Workflow runs on the cluster page, OCP upgrades (control plane, then workers) and reviewing workflow branches | Proposed | [workflow-runs.md](workflow-runs.md) |
 | Servers per hosted cluster from server-scan, why a cluster waits for workers, and moving capacity between clusters | Proposed | [servers-and-nodes.md](servers-and-nodes.md) |
 | Day2 permissions per team: a team edits only its own `sigs/<team>` repo | Proposed | [day2-team-permissions.md](day2-team-permissions.md) |
+| Common changes as one form each (scale by total, labels, configs, owner), API tokens for automation, a ticket key on every change | Proposed | [self-service-changes.md](self-service-changes.md) |
+| A merge gate: approve only when the pipeline passed and the segment is written | Proposed | [merge-gate.md](merge-gate.md) |
+| Tenants see and request changes for their own clusters (by owner numbers); capacity showback per org unit | Proposed | [owners-and-tenants.md](owners-and-tenants.md) |
+| Fleet versions against each MCE's window (who is at the edge, what blocks an upgrade), and pool capacity against the watermarks | Proposed | [fleet-versions-and-capacity.md](fleet-versions-and-capacity.md) |
+| Deleted clusters stay findable: a cluster's file is gone after delete, but its history (who, when, which MR, its last values) is in git; show it | Proposed: read-only, from GitLab history (answers delete procedure question 3, what is kept for audit) | — |
+| Audit export: who asked, who approved, what changed, per period, as CSV | Proposed: read-only, from the audit Wingman already builds | — |
 | ArgoCD sync and health per cluster | Blocked: Wingman has no ArgoCD access; open question 10 in the ecosystem README (do day1 Applications sync automatically?) | — |
 | Release the network segment when a cluster is deleted (start `release-segment` after the delete MR merges) | **Dropped** (user, 2026-11-08): the delete-cluster workflow releases it, as allocation belongs to the day1 workflow; not Wingman's. It releases last, after ArgoCD has pruned and the DHCP scope is gone (architecture-fit.md) | — |
 | KubeVirt self-service (`create-vm` and the tenant flows) | Parked until day1 settles (ecosystem plan, phase 5) | — |
