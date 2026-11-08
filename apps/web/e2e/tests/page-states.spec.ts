@@ -63,7 +63,7 @@ test.describe("Clusters and the dashboard", () => {
       await answered;
       await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([cluster("ocp4-prod-alpha-site1")]) });
     });
-    await page.goto("/clusters");
+    await go(page, "/clusters");
 
     await expect(page.locator("tbody [data-slot=skeleton]").first()).toBeVisible();
     await expect(page.getByTestId("clusters-empty")).toHaveCount(0);
