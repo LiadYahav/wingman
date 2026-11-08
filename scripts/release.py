@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Release helpers for CI (ADR-0030): the version plan, registry tags and release notes.
+"""Release helpers for CI (ADR-0030, ADR-0031): the version guard, registry tags and release notes.
 
-    python3 scripts/release.py plan [--registry-tags FILE]
+    python3 scripts/release.py plan --version X.Y.Z [--registry-tags FILE]
     python3 scripts/release.py registry-tags IMAGE [IMAGE ...]
     python3 scripts/release.py notes TAG [--image IMAGE ...]
 
-A release is cut by bumping the root VERSION file. ``plan`` decides whether
-this commit cuts one and refuses a VERSION below the newest release, so a
-version tag never moves and never goes backwards. ``notes`` writes the release
-notes from the Conventional Commit subjects since the previous tag (there is
-no CHANGELOG, as in server-scan and herzi). Standard library only: it runs on
-a bare runner.
+Every commit on main is a release. Its version is computed from the
+Conventional Commit subjects since the last ``v*`` tag by
+PaulHatch/semantic-version (the ``release-plan`` job); ``plan`` refuses that
+version unless it is new and above every release, so a version tag never moves
+and never goes backwards. The one exception is the tag already on this very
+commit: a re-run. ``notes`` writes the release notes from the Conventional
+Commit subjects since the previous tag (there is no CHANGELOG, as in
+server-scan and herzi). Standard library only: it runs on a bare runner.
 """
 
 from __future__ import annotations
@@ -45,22 +47,26 @@ Version = tuple[int, int, int]
 
 
 class PlanError(Exception):
-    """VERSION cannot be released: it is malformed or below the newest release."""
+    """The computed version cannot be released: malformed, taken, or below the newest release."""
 
 
 @dataclass(frozen=True)
 class Plan:
-    """Whether this commit publishes ``tag`` as a release, and why."""
+    """This commit releases ``version`` under the git tag ``tag``; ``reason`` says why it may."""
 
     version: str
     tag: str
-    release: bool
     reason: str
 
 
 def parse_tag(tag: str) -> Version | None:
-    """``v1.2.3`` as a comparable tuple; ``None`` for anything else."""
-    match = SEMVER.match(tag[1:]) if tag.startswith("v") else None
+    """``v1.2.3`` or ``1.2.3`` as a comparable tuple; ``None`` for anything else.
+
+    Git tags carry the ``v``; image tags do not (``3.0.1``), except those
+    published before ADR-0031 (``v3.0.0``). ``3.0``, ``3``, ``latest`` and
+    ``sha-<sha>`` are not versions.
+    """
+    match = SEMVER.match(tag.removeprefix("v"))
     if match is None:
         return None
     major, minor, patch = (int(part) for part in match.groups())
@@ -68,41 +74,29 @@ def parse_tag(tag: str) -> Version | None:
 
 
 def decide(version: str, git_tags: dict[str, str], head: str, registry_tags: set[str]) -> Plan:
-    """The release plan for ``version`` at commit ``head``.
+    """Check that commit ``head`` may release ``version``, or raise ``PlanError``.
 
     ``git_tags`` maps each tag to the commit it points at; ``registry_tags`` are
-    the image tags already published. A version that already exists is never
-    re-pointed: unless its git tag is on this very commit (a re-run), the
-    commit publishes its ``<sha>`` and ``latest`` tags only.
+    the image tags already published. The version must be above every release
+    in either, and its tag may already exist only on this very commit (a
+    re-run, where every step repeats idempotently).
     """
     if not SEMVER.match(version):
-        raise PlanError(f"VERSION must be X.Y.Z (digits only), got {version!r}")
+        raise PlanError(f"the computed version must be X.Y.Z (digits only), got {version!r}")
     tag = f"v{version}"
     released = [t for t in {*git_tags, *registry_tags} if parse_tag(t) is not None]
     newest = max(released, key=lambda t: parse_tag(t) or (0, 0, 0), default=None)
     if newest is not None and (parse_tag(newest) or (0, 0, 0)) > (parse_tag(tag) or (0, 0, 0)):
-        raise PlanError(
-            f"VERSION {version} is below the newest release {newest}; versions only move forward"
-        )
+        raise PlanError(f"{tag} is below the newest release {newest}; versions only move forward")
     if tag in git_tags:
         if git_tags[tag] == head:
-            return Plan(version, tag, True, f"{tag} already points at this commit: a re-run")
-        return Plan(
-            version,
-            tag,
-            False,
-            f"{tag} was released at {git_tags[tag][:7]}; this commit publishes <sha> and latest "
-            "only. Bump VERSION to cut a release",
+            return Plan(version, tag, f"{tag} already points at this commit: a re-run")
+        raise PlanError(f"{tag} already exists on {git_tags[tag][:7]}; refusing to re-tag")
+    if {tag, version} & registry_tags:
+        raise PlanError(
+            f"{version} is already in the registry without a git tag and is never re-pointed"
         )
-    if tag in registry_tags:
-        return Plan(
-            version,
-            tag,
-            False,
-            f"{tag} is already in the registry without a git tag (published before releases "
-            "were tagged) and is never re-pointed. Bump VERSION to cut a release",
-        )
-    return Plan(version, tag, True, f"new release {tag} (previous: {newest or 'none'})")
+    return Plan(version, tag, f"new release {tag} (previous: {newest or 'none'})")
 
 
 def render_notes(tag: str, previous: str, subjects: list[str], images: list[str]) -> str:
@@ -128,7 +122,8 @@ def render_notes(tag: str, previous: str, subjects: list[str], images: list[str]
     if not out:
         out = ["No operator-visible changes in this release.", ""]
     if images:
-        out += ["### Images", "", *(f"- `{image}:{tag}`" for image in images), ""]
+        version = tag.removeprefix("v")  # image tags carry no v (ADR-0031)
+        out += ["### Images", "", *(f"- `{image}:{version}`" for image in images), ""]
     if previous:
         out.append(f"**Full changelog:** {previous}...{tag}")
     return "\n".join(out).rstrip("\n") + "\n"
@@ -203,7 +198,8 @@ def main(argv: list[str] | None = None) -> int:
     """Run one subcommand."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
-    plan_cmd = commands.add_parser("plan", help="decide whether this commit cuts a release")
+    plan_cmd = commands.add_parser("plan", help="check the version this commit releases")
+    plan_cmd.add_argument("--version", required=True, help="X.Y.Z, from semantic-version")
     plan_cmd.add_argument("--registry-tags", type=Path, help="file of published image tags")
     tags_cmd = commands.add_parser("registry-tags", help="print every tag of the given images")
     tags_cmd.add_argument("images", nargs="+")
@@ -231,17 +227,16 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(render_notes(args.tag, previous, subjects, args.image))
         return 0
 
-    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     registry: set[str] = set()
     if args.registry_tags:
         registry = set(args.registry_tags.read_text(encoding="utf-8").split())
     try:
-        plan = decide(version, _git_tags(), _git("rev-parse", "HEAD"), registry)
+        plan = decide(args.version, _git_tags(), _git("rev-parse", "HEAD"), registry)
     except PlanError as exc:
         print(f"::error::{exc}")
         return 1
-    print(f"VERSION {plan.version}: {'release' if plan.release else 'no release'}. {plan.reason}")
-    _write_outputs({"version": plan.version, "tag": plan.tag, "release": str(plan.release).lower()})
+    print(f"{plan.tag}: {plan.reason}")
+    _write_outputs({"version": plan.version, "tag": plan.tag})
     return 0
 
 

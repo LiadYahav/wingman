@@ -154,11 +154,15 @@ Type checking is ty (ADR-0008): it honours only `# type: ignore` or `# ty: ignor
 
 Work on a feature branch and merge through a pull request; never push to `main`. Commit after
 each completed stage, one unit of work per commit, with a Conventional Commit subject (`feat:`,
-`fix:`, `docs:`, `ci:`, `test:`, `refactor:`). Docs change in the same commit as the code; a new
+`fix:`, `docs:`, `ci:`, `test:`, `refactor:`). The subjects set the release version: a `feat:`
+makes the merge a minor release, a `!` before the colon (`feat!:`) a major, anything else a patch
+(CLAUDE.md, convention 2). Docs change in the same commit as the code; a new
 decision gets an ADR (template in `docs/adr/README.md`).
 
 ## Deployment
 
 `chart/README.md` installs the chart; `docs/ops/images.md` builds and publishes the images.
-Deploy a commit's images with `image.<component>.tag` (`image.day1.tag`, `image.day2.tag`,
-`image.web.tag`). Operating it: `docs/ops/metrics.md` and `docs/ops/runbook.md`.
+Every merge to main is a release, versioned from the commit subjects (ADR-0031). Deploy a
+release by its version, the same for every image, with `image.<component>.tag`
+(`image.day1.tag`, `image.day2.tag`, `image.web.tag`; for example `3.0.1`, never `latest`).
+Operating it: `docs/ops/metrics.md` and `docs/ops/runbook.md`.

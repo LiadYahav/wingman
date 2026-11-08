@@ -4,41 +4,64 @@ Wingman ships three images: `wingman-day1`, `wingman-day2` and `wingman-web`.
 Every one is built from the **repository root**, so it can read the two
 lockfiles, and everything inside it comes from them: nothing is resolved at
 build time (ADR-0003). CI builds all three on every pull request without
-pushing, and publishes them from `main` (ADR-0030).
+pushing, and publishes them from `main` (ADR-0030, ADR-0031).
 
 ## What CI publishes
 
-`ghcr.io/<owner>/wingman-<name>`, linux/amd64:
+Every commit on `main` is a release. Its version is computed from the
+Conventional Commit subjects since the previous release (ADR-0031), so it
+gets a git tag `v<X.Y.Z>`, a GitHub release with notes, and these image tags
+on `ghcr.io/<owner>/wingman-<name>`, linux/amd64:
 
-| Tag | When | Moves? |
+| Tag | Example | Moves? |
 |---|---|---|
-| `<short sha>` | every commit on `main` | never |
-| `latest` | every commit on `main` | yes; never deploy it |
-| `v<VERSION>` | the commit that cuts that release (VERSION names a version that does not exist yet) | never |
+| `<X.Y.Z>` | `3.0.1` | never |
+| `<X.Y>` | `3.0` | yes, to the newest `3.0.z` |
+| `<X>` | `3` | yes, to the newest `3.y.z` |
+| `latest` | | yes, to the newest release |
+| `sha-<short sha>` | `sha-1b7c805` | never |
 
-Deploy a `v<VERSION>` or a `<short sha>` (`--set image.<name>.tag=...`).
+**Deploy a full version** (`--set image.<name>.tag=3.0.1`), the same for all
+three images: it is the only tag that names one build and that the release
+notes describe. Never deploy `latest`, `3.0` or `3` (they move), and never a
+`sha-` tag (it names no release). The image tag has no `v`; the git tag and
+the release do (`v3.0.1`). Releases up to `v3.0.0` were cut by the retired
+`VERSION` file and their images are tagged `v3.0.0` and `<short sha>`.
 
 Each pushed image carries:
 
 - OCI labels (`org.opencontainers.image.{title,description,source,url,version,revision,created}`)
-  from `docker/metadata-action`; `version` is the release tag, or the short sha.
+  from `docker/metadata-action`; `version` is the release, `X.Y.Z`.
 - An SBOM and BuildKit provenance as attestation manifests in the image index:
   `docker buildx imagetools inspect <image>:<tag> --format '{{ json .SBOM }}'`.
 - Signed SLSA build provenance (Sigstore, `actions/attest`), stored by GitHub and
   pushed to the registry beside the image:
-  `gh attestation verify oci://ghcr.io/<owner>/wingman-web:<tag> --owner <owner>`.
+  `gh attestation verify oci://ghcr.io/<owner>/wingman-web:3.0.1 --owner <owner>`.
 
-The build arguments `VERSION` and `COMMIT` reach `wingman_build_info`
-(ADR-0010) and the labels.
+The build arguments `VERSION` (the release, `X.Y.Z`; `dev` by default) and
+`COMMIT` reach `wingman_build_info` (ADR-0010) and the labels. No file holds
+the version: CI computes it and passes it in.
 
 ## Building locally
+
+A development build is named by its commit; it reports version `dev`:
 
 ```bash
 SHA=$(git rev-parse --short HEAD)
 podman build -f apps/web/Dockerfile          -t wingman-web:$SHA  .
 podman build -f apps/day1-service/Dockerfile -t wingman-day1:$SHA .
 podman build -f apps/day2-service/Dockerfile -t wingman-day2:$SHA .
-# production (amd64) with docker: docker buildx build --platform linux/amd64 -f <file> -t <tag> . --load
+```
+
+A production build by hand (amd64, for example inside the air gap) builds a
+release: check out its git tag and name the images by its version, as CI does:
+
+```bash
+git checkout v3.0.1
+VERSION=3.0.1
+docker buildx build --platform linux/amd64 -f apps/day1-service/Dockerfile \
+  --build-arg VERSION=$VERSION --build-arg COMMIT=$(git rev-parse HEAD) -t wingman-day1:$VERSION . --load
+# the same for apps/day2-service/Dockerfile (wingman-day2) and apps/web/Dockerfile (wingman-web)
 ```
 
 Each Dockerfile has its own allowlist, `<Dockerfile>.dockerignore` beside it

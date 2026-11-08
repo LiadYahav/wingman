@@ -17,10 +17,11 @@ image:
   # Example: registry.internal/wingman
   registry: ""   # if empty, images are pulled without a registry prefix
 
-  # [VERSIONING] Set tag to the git commit SHA of the build you want to deploy.
-  # Example: tag: "a3f9c12"  (from: git rev-parse --short HEAD)
-  # Using "latest" is only recommended for local dev; production deploys should
-  # always pin to a specific SHA so releases are traceable and rollbacks are safe.
+  # [VERSIONING] Set every tag to the release you deploy, the same for all
+  # three images. Example: tag: "3.0.1"  (the GitHub release v3.0.1; no "v").
+  # Every merge to main is a release (docs/ops/images.md). "latest", "3.0" and
+  # "3" move and "sha-..." names no release: production pins a full version,
+  # so releases are traceable and rollbacks are safe. "latest" is for local dev.
 
   day1:
     repository: wingman-day1

@@ -37,7 +37,11 @@ Explicit user instructions; violating one is a real mistake, not style.
 2. **Git: commit and push after each completed stage**, on a feature branch,
    with Conventional Commit subjects (`feat:`, `fix:`, `docs:`, `ci:`,
    `test:`, `refactor:`). One unit of work per commit. Never push to `main`
-   directly; merges go through a PR.
+   directly; merges go through a PR. The subjects since the last release set
+   the next version (ADR-0031): any `feat:`/`feat(<scope>):` makes the merge a
+   minor, any `!` before the colon (`feat!:`, `fix(day1)!:`) a major,
+   otherwise a patch. Only subjects count: a `BREAKING CHANGE:` footer alone
+   does not.
 3. **This repo is public.** Never commit live URLs, tokens, internal hostnames,
    or findings about private systems (e.g. the production export in
    `~/Downloads/stack-export`). Put them in the git-ignored `CLAUDE.local.md`.
@@ -91,10 +95,10 @@ Explicit user instructions; violating one is a real mistake, not style.
   lints, one MR per team; ADRs 0020-0024), held to the team's
   `render_chain.py` by an oracle test and run against GitLab CE 19.5.3.
   Web-visible API changes: `docs/notes/2026-11-07-day2-api-changes.md`.
-- Done: CI's supply chain and releases (ADR-0030, ADR-0032): hash-pinned
-  per-service exports, the web image from the root lock, build on every PR,
-  publish and release from main, a blocking npm audit, a nightly live-GitLab
-  run.
+- Done: CI's supply chain and releases (ADR-0030, ADR-0031, ADR-0032):
+  hash-pinned per-service exports, the web image from the root lock, build on
+  every PR, every merge to main a release versioned from its commits, a
+  blocking npm audit, a nightly live-GitLab run.
 - Done: both service images install only from the hash-pinned exports
   (`docs/ops/images.md`); the chart sets exactly the variables the services
   read (`tests/repo/test_chart_env_contract.py`) and probes
@@ -177,7 +181,7 @@ any unmocked endpoint's 401 redirects to `/login`.
 
 The live GitLab contract runs nightly in CI (`.github/workflows/live-gitlab.yml`)
 and fails unless every live test ran. Only GitHub can run the publish jobs
-(tag, push, release notes; ADR-0030).
+(the computed version, tag, push, release notes; ADR-0030, ADR-0031).
 
 Then the step no command covers: re-read the docs your change made wrong.
 
@@ -193,7 +197,10 @@ ADR-0032). The pass:
    one more `gh api repos/<o>/<r>/git/tags/<sha> --jq .object.sha`). Never
    copy a SHA from a README; server-scan was broken twice by tags that do not
    exist. Then `scripts/gate.sh ci`: zizmor refuses a tag pin and a comment that
-   names another tag.
+   names another tag. `PaulHatch/semantic-version`'s defaults are the
+   versioning rule (convention 2, ADR-0031): before bumping it, check that its
+   `action.yml` defaults (`major_pattern`, `minor_pattern`,
+   `search_commit_body`, `bump_each_commit`) did not change.
 2. **Downloaded tools.** `scripts/ci-tools.sh` (actionlint, zizmor,
    shellcheck), `scripts/install-helm.sh` and the promtool step in `ci.yml`:
    new version plus every checksum, from the release's checksum file or the
@@ -231,12 +238,16 @@ ADR-0032). The pass:
 - Roles come from OpenShift groups (`WINGMAN_ADMIN_GROUPS` /
   `WINGMAN_VIEWER_GROUPS`) and travel in the app JWT; both services share
   `JWT_SECRET_KEY`. `AdminUser` guards writes, `CurrentUser` reads.
-- Images (docs/ops/images.md, ADR-0030): CI builds all three on every PR and
-  pushes `ghcr.io/<owner>/wingman-{day1,day2,web}` from main as `<short_sha>`
-  and `latest`; `v<VERSION>` only when VERSION names a new, higher version
-  (that commit is the release: git tag, signed provenance, release notes).
-  Never re-point or lower a version. Manual production builds are tagged with
-  the commit SHA.
+- Images (docs/ops/images.md, ADR-0030, ADR-0031): CI builds all three on
+  every PR. Every merge to main is a release: `PaulHatch/semantic-version`
+  computes `X.Y.Z` from the commit subjects since the last `v*` tag
+  (convention 2), `scripts/release.py plan` refuses one that exists or moves
+  backwards, and CI creates the git tag `v<X.Y.Z>`, pushes
+  `ghcr.io/<owner>/wingman-{day1,day2,web}` as `X.Y.Z`, `X.Y`, `X`, `latest`
+  and `sha-<short_sha>` with signed provenance, and writes the release notes.
+  There is no `VERSION` file (retired after v3.0.0). Deploy `X.Y.Z`, never
+  `latest` or a `sha-` tag; a manual production build is of a release tag and
+  named by its version.
 
 ## Where to continue right now
 

@@ -9,8 +9,9 @@
 # verifying the new tag resolves first (CLAUDE.md, "Keeping CI current").
 #
 # Every job states its own permissions; the workflow default is none.
-# Pull requests build every image without pushing. Main pushes them, and cuts
-# a release when VERSION names a version that does not exist yet (ADR-0030).
+# Pull requests build every image without pushing. Every push to main is a
+# release, its version computed from the Conventional Commit subjects since
+# the last v* tag (ADR-0031; tag, publish and notes as ADR-0030 built them).
 name: CI
 
 on:
@@ -302,9 +303,10 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
 
-  # Reads VERSION and the existing releases. On a pull request it fails a
-  # VERSION that moves backwards, before it merges; on main it also reads the
-  # registry and decides whether this commit cuts a release (ADR-0030).
+  # Computes the version this commit releases and checks it moves forward.
+  # On a pull request that is the version its merge would release, so a bad
+  # one fails before it merges; on main it is checked against the registry
+  # too, and becomes this commit's release (ADR-0031).
   release-plan:
     name: Release plan
     runs-on: ubuntu-24.04
@@ -313,14 +315,24 @@ jobs:
       contents: read
       packages: read # lists the published image tags (main only)
     outputs:
-      version: ${{ steps.plan.outputs.version }}
-      tag: ${{ steps.plan.outputs.tag }}
-      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }} # "3.0.1", no v: the image tag to deploy
+      tag: ${{ steps.plan.outputs.tag }} # "v3.0.1": the git tag and release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # every tag
+          fetch-depth: 0 # full history and every tag: the version action scans every commit since the last tag
           persist-credentials: false
+
+      # As server-scan: `!` before the colon (`feat!:`, `fix(day1)!:`) ->
+      # major, `feat:`/`feat(scope):` -> minor, anything else -> patch, read
+      # from the subjects (not bodies) since the last `v*` tag; one release
+      # bumps by one, however many commits it holds. A commit that already
+      # carries a `v*` tag gets that version back: a re-run.
+      - name: Determine the next version from Conventional Commits
+        id: version
+        uses: PaulHatch/semantic-version@9f72830310d5ed81233b641ee59253644cd8a8fc # v6.0.2
+        with:
+          tag_prefix: "v"
 
       - name: List the published image tags
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -333,12 +345,18 @@ jobs:
             > "$RUNNER_TEMP/registry-tags.txt"
           echo "$(wc -l < "$RUNNER_TEMP/registry-tags.txt") tags published"
 
-      - name: Plan the release (VERSION only moves forward)
+      # A wrong version is worse than a failed build: it would publish images
+      # under a tag that exists or moves backwards, and neither is recoverable
+      # by re-running. The one exception is the tag already on this very
+      # commit: a re-run, which every step below repeats idempotently.
+      - name: Verify the computed version moves forward
         id: plan
+        env:
+          COMPUTED: ${{ steps.version.outputs.version }}
         run: |
-          args=()
+          args=(--version "$COMPUTED")
           if [[ -f "$RUNNER_TEMP/registry-tags.txt" ]]; then
-            args=(--registry-tags "$RUNNER_TEMP/registry-tags.txt")
+            args+=(--registry-tags "$RUNNER_TEMP/registry-tags.txt")
           fi
           python3 scripts/release.py plan "${args[@]}"
 
@@ -353,11 +371,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      contents: write # creates the v<VERSION> tag
+      contents: write # creates the v<X.Y.Z> tag
     steps:
       # Through the API, so no checkout holds a write token on disk.
       - name: Create the annotated tag (idempotent)
-        if: needs.release-plan.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-plan.outputs.tag }}
@@ -409,18 +426,20 @@ jobs:
           NAME: ${{ matrix.image.name }}
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/wingman-$NAME" >> "$GITHUB_OUTPUT"
 
-      # Tags: <short sha> and latest on every main commit; v<VERSION> only
-      # when this commit cuts that release, so a version tag never moves.
-      # The highest-priority tag becomes the version label and build arg.
+      # As server-scan: the full version (3.0.1, never moves), the rolling
+      # 3.0 and 3, latest and sha-<short sha>. Deploy the full version
+      # (docs/ops/images.md). The version label is the full version.
       - name: Tags and OCI labels
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=${{ needs.release-plan.outputs.tag }},enable=${{ needs.release-plan.outputs.release == 'true' }},priority=1000
-            type=sha,prefix=,format=short,priority=300
-            type=raw,value=latest,priority=200
+            type=semver,pattern={{version}},value=${{ needs.release-plan.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release-plan.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ needs.release-plan.outputs.tag }}
+            type=raw,value=latest
+            type=sha,prefix=sha-
           labels: |
             org.opencontainers.image.title=wingman-${{ matrix.image.name }}
             org.opencontainers.image.description=${{ matrix.image.description }}
@@ -447,7 +466,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
+            VERSION=${{ needs.release-plan.outputs.version }}
             COMMIT=${{ github.sha }}
           sbom: true
           provenance: mode=max
@@ -467,7 +486,7 @@ jobs:
 
   release-notes:
     name: Release notes
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-plan.outputs.release == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [release-plan, publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
