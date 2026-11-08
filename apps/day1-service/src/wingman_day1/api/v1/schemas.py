@@ -21,6 +21,7 @@ from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.audit import AuditCommit
 from wingman_day1.application.clusters import ClusterFile
 from wingman_day1.application.drift import ClusterDrift
+from wingman_day1.application.imports import ImportCandidate, ImportPreview
 from wingman_day1.application.machine_configs import MachineConfigOverview
 from wingman_day1.application.sites import MceView
 from wingman_day1.application.specs import SpecEntry
@@ -886,6 +887,109 @@ class SpecClusterOut(BaseModel):
     state: DriftStateOut
     is_drifted: bool | None
     error: str | None
+
+
+MAX_PICKED = 500
+"""A request-size bound; the import itself takes at most ``imports.MAX_IMPORT``."""
+
+
+class ClusterPickIn(_In):
+    """A cluster to compare with a flavor; ``site`` and ``mce`` only when the name is ambiguous."""
+
+    name: str = Field(min_length=1, max_length=63)
+    site: str | None = Field(default=None, min_length=1, max_length=63)
+    mce: str | None = Field(default=None, min_length=1, max_length=63)
+
+
+class ImportPreviewIn(_In):
+    """The clusters to preview an import of."""
+
+    clusters: list[ClusterPickIn] = Field(min_length=1, max_length=MAX_PICKED)
+
+
+class ImportPickIn(_In):
+    """A cluster to import, as the preview returned it."""
+
+    name: str = Field(min_length=1, max_length=63)
+    site: str = Field(min_length=1, max_length=63)
+    mce: str = Field(min_length=1, max_length=63)
+    last_commit_id: str = Field(min_length=7, max_length=64)
+    """The preview's ``last_commit_id``: a file that moved since fails the import."""
+    relink: bool = False
+    """``true`` to link a cluster that follows another flavor to this one instead."""
+
+
+class ImportIn(_In):
+    """Link existing clusters to the flavor: one day1 MR."""
+
+    spec_version: str = Field(min_length=1, max_length=64)
+    """The flavor version the preview showed."""
+    clusters: list[ImportPickIn] = Field(min_length=1, max_length=MAX_PICKED)
+
+
+class LinkedSpecOut(BaseModel):
+    """The flavor a cluster file's header names."""
+
+    name: str
+    version: str | None
+
+
+class ImportCandidateOut(BaseModel):
+    """One picked cluster in an import preview."""
+
+    name: str
+    site: str
+    mce: str
+    path: str
+    last_commit_id: str
+    """Send it back with the import."""
+    status: Literal["ready", "relink", "linked", "refused"]
+    linked_spec: LinkedSpecOut | None
+    """The flavor the file follows now, if any."""
+    problems: list[str]
+    """Why it cannot be imported as it is (empty for ``ready``)."""
+    drift: ClusterDriftOut
+    """The cluster against this flavor: what will show as drift once it is linked."""
+
+    @classmethod
+    def of(cls, candidate: ImportCandidate) -> ImportCandidateOut:
+        """From an import candidate."""
+        cluster = candidate.cluster
+        provenance = cluster.provenance
+        return cls(
+            name=cluster.ref.name,
+            site=cluster.ref.site,
+            mce=cluster.ref.mce,
+            path=str(cluster.ref.path),
+            last_commit_id=cluster.last_commit_id,
+            status=candidate.status.value,
+            linked_spec=LinkedSpecOut(name=provenance.spec_name, version=provenance.spec_version)
+            if provenance.spec_name
+            else None,
+            problems=list(candidate.problems),
+            drift=ClusterDriftOut.of(candidate.drift),
+        )
+
+
+class ImportPreviewOut(BaseModel):
+    """``POST /specs/{name}/import/preview``."""
+
+    spec_name: str
+    spec_version: str
+    """Send it back with the import."""
+    warnings: list[str]
+    """About the flavor: locks by nodepool position, which compare whichever nodepool is there."""
+    clusters: list[ImportCandidateOut]
+
+    @classmethod
+    def of(cls, preview: ImportPreview) -> ImportPreviewOut:
+        """From an import preview."""
+        return cls(
+            spec_name=preview.spec_name,
+            spec_version=preview.spec_version,
+            warnings=list(preview.warnings),
+            clusters=[ImportCandidateOut.of(c) for c in preview.candidates],
+        )
 
 
 class SpecDriftOut(BaseModel):

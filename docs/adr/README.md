@@ -54,3 +54,4 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0031](0031-commit-derived-versions.md) | (Proposed) Derive the version from Conventional Commits, as server-scan and herzi do |
 | [0032](0032-ci-supply-chain.md) | CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks |
 | [0033](0033-day1-drift-is-locked-values-and-missing-addons.md) | Day1 drift is the flavor's locked values the file does not hold, and its missing add-ons; unknown is never in sync |
+| [0034](0034-import-and-sync-edit-the-cluster-file-text.md) | Existing clusters join a flavor by one MR that writes only the link; cluster files are edited as text, checked, never round-tripped |

@@ -158,8 +158,13 @@ def _parse_addons(raw: str | None) -> tuple[tuple[RequestedAddon, ...], tuple[st
         return (), (f"the wingmanAddons header line is unreadable: {type(exc).__name__}",)
 
 
-def with_provenance(body: str, provenance: Provenance) -> str:
-    """``body`` with the header for ``provenance`` in front (the header Wingman writes)."""
+def is_header_line(line: str) -> bool:
+    """Whether ``line`` is one of Wingman's header lines (``# specName: ...`` and the like)."""
+    return _HEADER.match(line.strip()) is not None
+
+
+def provenance_lines(provenance: Provenance) -> list[str]:
+    """The header lines Wingman writes for ``provenance``, in order, without line endings."""
     lines: list[str] = []
     if provenance.spec_name:
         lines.append(f'# specName: "{provenance.spec_name}"')
@@ -176,7 +181,12 @@ def with_provenance(body: str, provenance: Provenance) -> str:
             for a in provenance.requested_addons
         ]
         lines.append(f"# wingmanAddons: {json.dumps(payload, sort_keys=True)}")
-    header = "\n".join(lines)
+    return lines
+
+
+def with_provenance(body: str, provenance: Provenance) -> str:
+    """``body`` with the header for ``provenance`` in front (the header Wingman writes)."""
+    header = "\n".join(provenance_lines(provenance))
     return f"{header}\n{body}" if header else body
 
 

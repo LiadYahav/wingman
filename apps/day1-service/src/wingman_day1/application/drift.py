@@ -36,6 +36,7 @@ from wingman_day1.domain.cluster_file import load_values
 from wingman_day1.domain.errors import Day2UnavailableError, InvalidClusterFileError
 from wingman_day1.domain.machine_configs import MachineConfigCatalog
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.value_drift import ValueDrift, value_drift
 from wingman_day1.ports import Day2Addons
 
@@ -110,10 +111,11 @@ class DriftService:
         return await self._many(c for c in clusters if c.provenance.spec_name == name)
 
     async def against(
-        self, cluster: ClusterFile, entry: SpecEntry, catalog: MachineConfigCatalog
+        self, cluster: ClusterFile, spec: ClusterSpec, catalog: MachineConfigCatalog
     ) -> ClusterDrift:
-        """``cluster`` against the flavor ``entry``, whatever flavor its header names (import)."""
-        return await self._compare(cluster, entry.name, entry, catalog)
+        """``cluster`` against the flavor ``spec``, whatever flavor its header names (import)."""
+        name = spec.metadata.name
+        return await self._compare(cluster, name, SpecEntry(name, spec), catalog)
 
     async def _many(self, clusters: Iterable[ClusterFile]) -> list[ClusterDrift]:
         specs = {e.name: e for e in await self._specs.entries()}

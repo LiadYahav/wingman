@@ -112,3 +112,137 @@ async def test_a_value_the_file_lacks_is_null_and_not_in_file(
             "reboots": False,
         }
     ]
+
+
+# ── Import ───────────────────────────────────────────────────────────────────
+
+
+async def test_the_import_preview_lists_each_cluster_with_its_drift_against_the_flavor(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    response = await client.post(
+        "/api/day1/specs/agent-baseline/import/preview",
+        json={"clusters": [{"name": LARK}, {"name": HERON, "site": "site1"}]},
+        headers=auth(support.ALICE),
+    )
+    assert response.status_code == 200, response.text
+    preview = response.json()
+    assert (preview["spec_name"], preview["spec_version"], preview["warnings"]) == (
+        "agent-baseline",
+        "1.0.0",
+        [],
+    )
+    lark, heron = preview["clusters"]
+    assert {k: v for k, v in lark.items() if k != "drift"} == {
+        "name": LARK,
+        "site": "site1",
+        "mce": "ocp4-prod-mce-site1-a",
+        "path": f"{HOSTED}/{LARK}.yaml",
+        "last_commit_id": lark["last_commit_id"],
+        "status": "ready",
+        "linked_spec": None,
+        "problems": [],
+    }
+    assert len(lark["last_commit_id"]) == 40
+    assert lark["drift"]["state"] == "drifted"
+    assert lark["drift"]["spec_name"] == "agent-baseline"
+    assert lark["drift"]["spec_version"] is None
+    assert [d["file_key"] for d in lark["drift"]["value_drift"]] == [
+        "nodepool[0].configs",
+        "nodepool[1].configs",
+    ]
+    assert heron["drift"]["value_drift"][0]["needs_decision"].startswith(
+        "nodepool[0] has no network config"
+    )
+
+
+async def test_the_import_opens_one_day1_mr(
+    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    headers = auth(support.ALICE)
+    preview = (
+        await client.post(
+            "/api/day1/specs/agent-baseline/import/preview",
+            json={"clusters": [{"name": LARK}]},
+            headers=headers,
+        )
+    ).json()
+    (lark,) = preview["clusters"]
+    body = {
+        "spec_version": preview["spec_version"],
+        "clusters": [
+            {
+                "name": lark["name"],
+                "site": lark["site"],
+                "mce": lark["mce"],
+                "last_commit_id": lark["last_commit_id"],
+            }
+        ],
+    }
+    response = await client.post(
+        "/api/day1/specs/agent-baseline/import", json=body, headers=headers
+    )
+    assert response.status_code == 201, response.text
+    mr = response.json()
+    assert (mr["repo"], mr["title"]) == (
+        "day1",
+        "[Wingman/Day1] Import spec agent-baseline into 1 cluster",
+    )
+    assert mr["labels"] == ["day1", "import", "wingman"]
+    pid = await support.project_id(gitlab, support.DAY1)
+    content = gitlab.snapshot(pid, mr["source_branch"])[lark["path"]]
+    assert content.startswith('# specName: "agent-baseline"\n# specVersion: "1.0.0"\n# Placeholder')
+    again = await client.post("/api/day1/specs/agent-baseline/import", json=body, headers=headers)
+    assert again.status_code == 201  # the file on main is unchanged until the MR merges
+
+
+async def test_import_problems_are_422s_and_a_moved_file_is_409(
+    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    headers = auth(support.ALICE)
+    pick = {"name": LARK, "site": "site1", "mce": "ocp4-prod-mce-site1-a"}
+    stale = {"spec_version": "1.0.0", "clusters": [{**pick, "last_commit_id": "0" * 40}]}
+    response = await client.post(
+        "/api/day1/specs/agent-baseline/import", json=stale, headers=headers
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "REVISION_CONFLICT"
+    await link(client, support, gitlab, LARK, "agent-dell")
+    preview = (
+        await client.post(
+            "/api/day1/specs/agent-baseline/import/preview",
+            json={"clusters": [{"name": LARK}]},
+            headers=headers,
+        )
+    ).json()
+    (lark,) = preview["clusters"]
+    assert (lark["status"], lark["linked_spec"]) == (
+        "relink",
+        {"name": "agent-dell", "version": "1.0.0"},
+    )
+    body = {
+        "spec_version": "1.0.0",
+        "clusters": [{**pick, "last_commit_id": lark["last_commit_id"]}],
+    }
+    response = await client.post(
+        "/api/day1/specs/agent-baseline/import", json=body, headers=headers
+    )
+    assert response.status_code == 422
+    assert response.json()["details"]["problems"] == [
+        "ocp4-prod-lark-site1: follows flavor agent-dell v1.0.0; send relink: true to link it "
+        "to agent-baseline instead"
+    ]
+    body["clusters"][0]["relink"] = True
+    response = await client.post(
+        "/api/day1/specs/agent-baseline/import", json=body, headers=headers
+    )
+    assert response.status_code == 201, response.text
+
+
+async def test_import_is_for_admins(client: httpx.AsyncClient, auth: Auth, support: Any) -> None:
+    response = await client.post(
+        "/api/day1/specs/agent-baseline/import/preview",
+        json={"clusters": [{"name": LARK}]},
+        headers=auth(support.VIEWER),
+    )
+    assert response.status_code == 403

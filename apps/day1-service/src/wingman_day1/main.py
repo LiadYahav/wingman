@@ -50,6 +50,7 @@ from wingman_day1.application.audit import AuditService
 from wingman_day1.application.auth import AuthService
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
+from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
@@ -212,15 +213,17 @@ def build_context(
         machine_configs,
         specs_root=settings.specs_root_path,
     )
+    provisioner = GitClusterProvisioner(
+        MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
+    )
     cluster_service = ClusterService(
-        day1,
-        site_catalog,
+        day1, site_catalog, spec_catalog, provisioner, machine_configs, naming=naming
+    )
+    drift = DriftService(
+        cluster_service,
         spec_catalog,
-        GitClusterProvisioner(
-            MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
-        ),
+        CachedDay2Addons(adapters.day2, cache, ttl=ttl),
         machine_configs,
-        naming=naming,
     )
     repos = {RepoKey.DAY1: day1, RepoKey.SPECS: specs_repo}
     dev_secret = settings.dev_auth_secret.get_secret_value() if settings.dev_auth_enabled else None
@@ -230,12 +233,8 @@ def build_context(
         specs=spec_catalog,
         approvals=ApprovalService(gitlab, repos),
         audit=AuditService(repos),
-        drift=DriftService(
-            cluster_service,
-            spec_catalog,
-            CachedDay2Addons(adapters.day2, cache, ttl=ttl),
-            machine_configs,
-        ),
+        drift=drift,
+        imports=ImportService(cluster_service, spec_catalog, drift, machine_configs, provisioner),
         auth=AuthService(
             session_tokens,
             identity=adapters.identity,

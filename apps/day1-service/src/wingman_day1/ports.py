@@ -16,7 +16,7 @@ from wingman_core.domain.merge_request import MergeRequest, MRState
 from wingman_core.domain.users import User
 from wingman_day1.domain.addons import InstalledAddon
 from wingman_day1.domain.auth import Identity
-from wingman_day1.domain.changes import ClusterChange, ProvisionResult, SpecChange
+from wingman_day1.domain.changes import ClusterChange, ImportChange, ProvisionResult, SpecChange
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 
@@ -77,6 +77,10 @@ class ClusterProvisioner(Protocol):
 
     async def apply(self, change: ClusterChange) -> ProvisionResult:
         """Propose ``change``; raises Git errors as they come (never retried)."""
+        ...
+
+    async def link(self, change: ImportChange) -> ProvisionResult:
+        """Propose linking several cluster files to a flavor in one commit (ADR-0034)."""
         ...
 
 

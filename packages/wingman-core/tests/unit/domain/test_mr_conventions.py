@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 
 from wingman_core.domain.mr_conventions import (
     MRMetadata,
+    ParsedTitle,
     Repo,
     ResourceType,
     Verb,
@@ -51,6 +52,16 @@ def test_title_matches_the_existing_format() -> None:
         Repo.DAY1, Verb.CREATE, ResourceType.CLUSTER, "ocp4-prod-a-site1", "from spec agent"
     )
     assert title == "[Wingman/Day1] Create cluster ocp4-prod-a-site1 from spec agent"
+
+
+def test_import_and_sync_titles_parse() -> None:
+    imported = "[Wingman/Day1] Import spec agent-baseline into 2 clusters"
+    assert mr_title(Repo.DAY1, Verb.IMPORT, ResourceType.SPEC, "agent-baseline", "into 2 clusters")
+    assert parse_mr_title(imported) == ParsedTitle(
+        Repo.DAY1, Verb.IMPORT, ResourceType.SPEC, "agent-baseline"
+    )
+    synced = parse_mr_title("[Wingman/Day1] Sync cluster ocp4-prod-a-site1 to spec agent v2")
+    assert synced == ParsedTitle(Repo.DAY1, Verb.SYNC, ResourceType.CLUSTER, "ocp4-prod-a-site1")
 
 
 @given(

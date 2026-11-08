@@ -294,9 +294,9 @@ async def test_a_cluster_compares_against_a_flavor_its_header_does_not_name(
     context: Day1Context,
 ) -> None:
     lark = await context.clusters.get(LARK)
-    entry = await context.specs.entry("agent-baseline")
+    spec = await context.specs.get("agent-baseline")
     catalog = await context.machine_configs.catalog()
-    drift = await context.drift.against(lark, entry, catalog)
+    drift = await context.drift.against(lark, spec, catalog)
     assert drift.state is DriftState.DRIFTED
     assert drift.spec_name == "agent-baseline"
     assert drift.spec_version is None  # the file names no flavor version yet

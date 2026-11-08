@@ -20,7 +20,14 @@ from wingman_core.domain.users import Role, User
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects, seed_fake
-from wingman_day1.domain.changes import ClusterAction, ClusterChange, SpecAction, SpecChange
+from wingman_day1.domain.changes import (
+    ClusterAction,
+    ClusterChange,
+    FileUpdate,
+    ImportChange,
+    SpecAction,
+    SpecChange,
+)
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.infrastructure.merge_requests import (
     GitClusterProvisioner,
@@ -277,3 +284,75 @@ async def test_spec_changes_open_specs_mrs(
     assert "specs/agent-single.yaml" not in gitlab.snapshot(project.id, deleted.source_branch)
     head = (await gitlab.list_commits(project.id, ref=deleted.source_branch, limit=1))[0]
     assert head.title == "Delete spec agent-single v1.0.0"
+
+
+# ── Import: several files, one commit, one MR ────────────────────────────────
+
+LARK = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-lark-site1")
+
+
+async def linking(gitlab: InMemoryGitLab, *refs: ClusterRef, stale: bool = False) -> ImportChange:
+    project = await gitlab.get_project(DAY1)
+    files = []
+    for ref in refs:
+        current = await gitlab.read_file(project.id, ref.path, "main")
+        files.append(
+            FileUpdate(
+                ref,
+                f'# specName: "agent-baseline"\n{current.content}',
+                "0" * 40 if stale else current.last_commit_id,
+            )
+        )
+    return ImportChange("agent-baseline", "1.0.0", tuple(files), ALICE, "Linking.")
+
+
+async def test_an_import_is_one_commit_changing_exactly_the_picked_files(
+    gitlab: InMemoryGitLab, provisioner: GitClusterProvisioner
+) -> None:
+    project = await gitlab.get_project(DAY1)
+    main_before = gitlab.snapshot(project.id, "main")
+    mr = (await provisioner.link(await linking(gitlab, HERZI, LARK))).merge_request
+    branch = gitlab.snapshot(project.id, mr.source_branch)
+    changed = sorted(p for p in branch if branch[p] != main_before.get(p))
+    assert changed == sorted([str(HERZI.path), str(LARK.path)])
+    assert branch[str(LARK.path)] == '# specName: "agent-baseline"\n' + main_before[str(LARK.path)]
+    assert gitlab.snapshot(project.id, "main") == main_before
+    head = (await gitlab.list_commits(project.id, ref=mr.source_branch, limit=1))[0]
+    assert head.title == "Import 2 clusters into spec agent-baseline v1.0.0"
+    assert "- ocp4-prod-lark-site1 (site1/ocp4-prod-mce-site1-a)" in head.message
+    assert (head.author_name, head.message.splitlines()[-1]) == (
+        "Alice Admin",
+        "Requested-by: alice",
+    )
+    assert mr.title == "[Wingman/Day1] Import spec agent-baseline into 2 clusters"
+    assert mr.source_branch == "platform/alice/import-spec-agent-baseline-20261107T143022"
+    assert mr.labels == ("day1", "import", "wingman")
+    footer = parse_mr_description(mr.description)
+    assert footer is not None
+    assert (footer.action, footer.resource_type, footer.resource_name) == (
+        "import",
+        ResourceType.SPEC,
+        "agent-baseline",
+    )
+
+
+async def test_an_import_with_one_file_that_moved_commits_nothing(
+    gitlab: InMemoryGitLab, provisioner: GitClusterProvisioner
+) -> None:
+    project = await gitlab.get_project(DAY1)
+    fresh = (await linking(gitlab, HERZI)).files[0]
+    moved = (await linking(gitlab, LARK, stale=True)).files[0]
+    with pytest.raises(RevisionConflictError):
+        await provisioner.link(ImportChange("agent-baseline", "1.0.0", (fresh, moved), ALICE, "x"))
+    assert await gitlab.list_merge_requests(project.id, state=None) == []
+    assert [b.name for b in await gitlab.list_branches(project.id)] == ["main"]
+
+
+def test_an_import_changes_each_file_once_and_at_least_one() -> None:
+    update = FileUpdate(LARK, "x: 1\n", "a" * 8)
+    with pytest.raises(ValueError, match="at least one"):
+        ImportChange("s", "1", (), ALICE, "x")
+    with pytest.raises(ValueError, match="each cluster file once"):
+        ImportChange("s", "1", (update, update), ALICE, "x")
+    with pytest.raises(ValueError, match="last_commit_id"):
+        ImportChange("s", "1", (FileUpdate(LARK, "x", ""),), ALICE, "x")

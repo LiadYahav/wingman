@@ -27,6 +27,10 @@ class InvalidClusterFileError(InvalidInputError):
     """A cluster values file (rendered or edited) breaks the values-file contract."""
 
 
+class UneditableFileError(InvalidInputError):
+    """Wingman cannot change a cluster file's text safely; a person edits it by hand."""
+
+
 class RenderError(InvalidInputError):
     """The cluster template could not be rendered with the given inputs."""
 
