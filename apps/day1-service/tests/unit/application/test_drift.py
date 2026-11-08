@@ -51,7 +51,7 @@ async def create_merged(
 
 async def test_clusters_without_a_spec_header_are_not_linked(context: Day1Context) -> None:
     summary = await context.drift.summary()
-    assert len(summary) == 12
+    assert len(summary) == 14
     assert {d.state for d in summary} == {DriftState.NOT_LINKED}
     assert all(d.is_drifted is False for d in summary)
 

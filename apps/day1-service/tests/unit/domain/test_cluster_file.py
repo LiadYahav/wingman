@@ -311,8 +311,8 @@ def test_every_fixture_cluster_file_parses_and_reads(path: Path) -> None:
     assert values.platform in ("agent", "kubevirt")
 
 
-def test_twelve_fixture_cluster_files_exist() -> None:
-    assert len(FIXTURE_FILES) == 12
+def test_fourteen_fixture_cluster_files_exist() -> None:
+    assert len(FIXTURE_FILES) == 14
 
 
 def test_read_values_picks_out_what_day1_shows() -> None:

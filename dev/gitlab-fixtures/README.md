@@ -15,6 +15,7 @@ project, laid out exactly as production lays them out:
 ## Changes made to the upstream content
 
 - `.github/`, `scripts/` and `tests/` of the day1 repo are left out; Wingman never reads them.
+- Two hosted clusters are written for Wingman, shaped like production's hand-written files and not created by Wingman (no flavor header): `ocp4-prod-lark-site1` (production's compact list style, an extra and a `legacy/` config, `nodeLabels`) and `ocp4-prod-heron-site1` (one nodepool without a network config, one with two). Both carry a `vlanId`, `dhcp_values` and a `# === Added by CI ===` block with placeholder `mcConfigMap` entries; import and sync are tested on them.
 - `mc-files/` is a small made-up tree with placeholder bodies (no real servers, addresses or hostnames), shaped like the real one: static configs at the root and in `kubevirt/`, a `legacy/` file that Wingman must not offer, and three network templates whose hardware types overlap (`dell`, `dell-data`, `cisco`). ADR-0027 has the rule Wingman reads it by.
 - Chart repo URLs point at the local GitLab: every `repourl` is `{{GITLAB_URL}}/helm-charts/<chart>.git`, and the seed substitutes `{{GITLAB_URL}}`. Upstream had sanitized placeholders (`...helm-charts...`) or the sim's GitHub URL.
 - `sigs/redbull/operators/kyverno/kyverno.yaml` keeps the **`repoUrl`** spelling on purpose. Production has several files with this known bug (ArgoCD reads only lowercase `repourl`, so the app renders an empty `repoURL`), and Wingman must flag it.

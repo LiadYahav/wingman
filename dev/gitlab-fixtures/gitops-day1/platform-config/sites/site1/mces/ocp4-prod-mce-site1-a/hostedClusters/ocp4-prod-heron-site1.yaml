@@ -1,0 +1,44 @@
+# Placeholder data for Wingman's tests: an older hand-written cluster whose
+# nodepools a person must look at before it can follow a flavor's configs.
+owner:
+  merkaz: "2040"
+  anaf: "12"
+  mador: "3"
+
+mastertag: 4.18.22-x86_64
+
+nodepool:
+  # General workers: no network config of their own.
+  - infraEnvName: hp-gen11-site1-64c
+    replicas: 2
+    labels:
+      allowDeletion: false
+    configs:
+      - name: worker-kubeletconfig-reserved
+      - name: workers-chrony-configuration
+  # Two network configs: the second was copied in by hand.
+  - infraEnvName: dell-r660-site1-128c-1024gb-5tb
+    name: prod-heron-site1-dell-b
+    replicas: 1
+    labels:
+      allowDeletion: false
+    configs:
+      - name: nm-conf-prod-heron-site1-dell
+      - name: nm-conf-prod-heron-site1-cisco
+      - name: nic-ring-buffer
+      - name: workers-chrony-configuration
+vlanId: 1413
+dhcp_values:
+  network: "10.20.47.0"
+# === Added by CI ===
+mcConfigMap:
+  - name: worker-kubeletconfig-reserved
+    config: PLACEHOLDER-gzip-base64-1
+  - name: workers-chrony-configuration
+    config: PLACEHOLDER-gzip-base64-2
+  - name: nm-conf-prod-heron-site1-dell
+    config: PLACEHOLDER-gzip-base64-3
+  - name: nm-conf-prod-heron-site1-cisco
+    config: PLACEHOLDER-gzip-base64-4
+  - name: nic-ring-buffer
+    config: PLACEHOLDER-gzip-base64-5

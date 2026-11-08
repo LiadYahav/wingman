@@ -163,7 +163,7 @@ async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str
     check(prod["hub_version"] == "4.16.27-x86_64", f"{MCE} hub version {prod['hub_version']}")
     clusters = (await api.get("/api/day1/clusters", headers=alice)).json()
     flagged = [c["name"] for c in clusters if not c["naming"]["follows_convention"]]
-    check(len(clusters) == 12, f"{len(clusters)} clusters listed; off-convention: {flagged}")
+    check(len(clusters) == 14, f"{len(clusters)} clusters listed; off-convention: {flagged}")
 
     step("create from agent-standard")
     body = {
