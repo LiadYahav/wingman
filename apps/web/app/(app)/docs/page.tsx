@@ -184,7 +184,7 @@ const NAV_SECTIONS = [
   { id: "concepts", label: "Core Concepts" },
   { id: "roles", label: "Roles & Access" },
   { id: "gitops", label: "GitOps Workflow" },
-  { id: "specs", label: "Specs" },
+  { id: "specs", label: "Flavors" },
   { id: "clusters", label: "Clusters" },
   { id: "addons", label: "Day2 Addons" },
   { id: "drift", label: "Drift Detection" },
@@ -387,9 +387,9 @@ export default function DocsPage() {
           <div className="space-y-4">
             {[
               {
-                term: "Spec",
+                term: "Flavor",
                 color: "bg-purple-500/10 text-purple-500",
-                description: "A preset for creating clusters. It sets the shape the create form starts with (how many nodepools), can preset template inputs, and lists the day2 addons clusters of this spec should have, with the values a creator may set for each. Every spec fills the same shared template; a spec has no template of its own.",
+                description: "A class of cluster (a spec, in the API and the specs repo). It sets the shape the create form starts with (how many nodepools), presets some template inputs and locks others (a locked value is fixed, and an edit that changes it is drift), and lists the day2 add-ons its clusters should have, with the values a creator may set for each. Every flavor fills the same shared template. Clusters are created from a flavor, and existing ones can join one.",
                 example: "agent-standard — two nodepools on the Agent platform, with the redbull team's cluster-roles addon",
               },
               {
@@ -455,9 +455,9 @@ export default function DocsPage() {
               </div>
               <ul className="space-y-2">
                 {[
-                  "Create, edit and delete specs and clusters",
+                  "Create, edit and delete flavors and clusters; add existing clusters to a flavor and sync them",
                   "Install, edit and remove charts",
-                  "Install a spec's missing addons from a cluster's Drift tab",
+                  "Install a flavor's missing add-ons from a cluster's Drift tab",
                   "Approve, edit or reject other people's MRs",
                   "Everything a Viewer can do",
                 ].map((item) => (
@@ -480,7 +480,7 @@ export default function DocsPage() {
               </div>
               <ul className="space-y-2">
                 {[
-                  "Browse clusters, specs, destinations and charts",
+                  "Browse clusters, flavors, destinations and charts",
                   "See drift, lints and live status",
                   "Read pending approvals and their diffs",
                   "Read the audit log",
@@ -540,81 +540,117 @@ export default function DocsPage() {
           </Callout>
         </section>
 
-        {/* Specs */}
+        {/* Flavors */}
         <section>
-          <SectionHeader id="specs" icon={Layers} title="Specs" subtitle="Presets for the clusters you create" />
+          <SectionHeader id="specs" icon={Layers} title="Flavors" subtitle="What every cluster of a kind gets, and what it may change" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            A spec is a reusable preset: think of it as a &quot;cluster class&quot;. It sets how many nodepools the
-            create form starts with, may preset some template inputs, and lists the Day2 addons its clusters should
-            have. Every spec fills the same shared template, <InlineCode>cluster-template.j2</InlineCode> in the
-            specs repo, so specs differ in values, not in templates.
+            A flavor is a reusable class of cluster (the API and the specs repo call it a spec). It sets how many
+            nodepools a cluster starts with, gives each value it sets either as a <strong>preset</strong> or{" "}
+            <strong>locked</strong>, and lists the Day2 add-ons its clusters should have. Every flavor fills the same
+            shared template, <InlineCode>cluster-template.j2</InlineCode> in the specs repo, so flavors differ in
+            values, not in templates.
           </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            {[
+              { title: "Preset", desc: "Prefilled in the create form; a cluster may change it. A preset never drifts." },
+              { title: "Locked", desc: "Fixed: every cluster gets exactly this value, the create form shows it read-only and day1 refuses another, and a later edit of the file shows as drift. Lockable: the owner numbers, the platform, and per nodepool its replicas, machine configs and node labels." },
+            ].map(({ title, desc }) => (
+              <div key={title} className="rounded-xl border bg-card p-4">
+                <p className="text-sm font-semibold mb-1">{title}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
 
-          <h3 className="text-base font-semibold mb-4">Creating a spec — worked example</h3>
+          <h3 className="text-base font-semibold mb-4">Creating a flavor — worked example</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            We will walk through creating <InlineCode>agent-standard</InlineCode>, a spec for clusters with two
-            nodepools on the Agent platform.
+            We will walk through <InlineCode>agent-baseline</InlineCode>: every nodepool of its clusters gets the
+            team&apos;s machine configs, and every cluster gets the redbull team&apos;s cluster-roles add-on. Go to{" "}
+            <strong>Flavors</strong> → <strong>New Flavor</strong>; the editor has four parts, listed in the bar at
+            the top, which also counts the problems in each.
           </p>
           <div className="space-y-4 mb-6">
-            <Step n={1} title="Name the spec">
-              Go to <strong>Specs</strong> → <strong>New Spec</strong>. Enter the <strong>Spec Name</strong>{" "}
-              <InlineCode>agent-standard</InlineCode> (a lowercase DNS label; it cannot be changed later), a
-              version and a description. This names the preset, not a cluster: the cluster&apos;s name, site, MCE
-              and OpenShift version are chosen when a cluster is created.
+            <Step n={1} title="Basics">
+              The name <InlineCode>agent-baseline</InlineCode> (a lowercase DNS label; a flavor keeps its name), a
+              version and a description. Under <strong>Owner and platform</strong>, the owner numbers (digits only)
+              and the platform. Each has a <strong>Preset | Locked</strong> switch: leave a preset empty and each
+              cluster fills it in. Other template inputs can be preset too, in the collapsed group below.
             </Step>
-            <Step n={2} title="Shape the form">
-              In <strong>Cluster Structure</strong>, add <strong>2 nodepools</strong> with the + button, and their
-              sub-entries (such as configs). Clusters created from this spec get exactly 2 nodepools: their create
-              form fills in the values, but cannot add or remove one. The shared template is shown read-only under{" "}
-              <strong>Cluster Template — shared across all specs</strong>.
+            <Step n={2} title="Nodepools">
+              Add nodepools: each starts with the team&apos;s defaults (<InlineCode>nodepool-defaults.yaml</InlineCode>{" "}
+              in the specs repo). Then choose how machine configs work: <strong>Each nodepool its own</strong> (a list
+              per nodepool, preset or locked by position), or <strong>The same on every nodepool</strong>: one list,
+              locked as a rule, so every nodepool of every cluster has exactly these configs, whatever its number or
+              order. Configs come from the picker: a file of <InlineCode>mc-files/</InlineCode> by name, or{" "}
+              <InlineCode>nm-conf</InlineCode>, the cluster&apos;s own network config, with a hardware type (under
+              the rule, each nodepool picks its own). Replicas and node labels are preset or locked per nodepool.
             </Step>
-            <Step n={3} title="Lock fields (a hint)">
-              The <Lock className="inline h-3 w-3" /> toggle marks a field as one that should not change after
-              create; the create form shows it as <strong>immutable after create</strong>. It is a hint for people:
-              an edit of the cluster&apos;s file is not checked against it.
+            <Step n={3} title="Add-ons">
+              Pick charts from the catalog and put them in order. The gear opens{" "}
+              <strong>Configure overrideable fields</strong>: the values a cluster&apos;s creator may set for that
+              add-on. Everything else comes from the chart&apos;s defaults.
             </Step>
-            <Step n={4} title="Pick the Day2 addons">
-              In <strong>Day 2 — Addons</strong>, pick charts from <strong>Available Addons</strong> and drag them
-              into order. The gear opens <strong>Configure Overrideable Fields</strong>: the values a cluster&apos;s
-              creator may set for that addon. Everything else comes from the chart&apos;s defaults.
-            </Step>
-            <Step n={5} title="Review and submit">
-              <strong>Preview variables</strong> shows the structure the spec passes to the template.{" "}
-              <strong>Review &amp; Create</strong> shows the spec file, and <strong>Confirm — Create Spec MR</strong>{" "}
-              opens the MR in the specs repo. The spec can be used once it is merged.
+            <Step n={4} title="Review">
+              Lists what every cluster gets (<strong>Locked</strong>) and what it starts from (<strong>Presets</strong>),
+              and shows the flavor file. On an existing flavor&apos;s edit page it also previews the cluster file the
+              flavor produces, on an MCE and release you choose. <strong>Review &amp; Create</strong> runs day1&apos;s
+              checks and <strong>Confirm — Create Flavor MR</strong> opens the MR in the specs repo; the flavor can be
+              used once it is merged. Every refusal shows at its field.
             </Step>
           </div>
 
-          <CodeBlock language="The spec file — specs/agent-standard.yaml">
+          <CodeBlock language="The flavor file — specs/agent-baseline.yaml">
 {`apiVersion: wingman.io/v1
 kind: ClusterSpec
 metadata:
-  name: agent-standard
-  description: Bare-metal workers on the Agent platform, two nodepools
+  name: agent-baseline
+  description: Every nodepool gets the team's machine configs
   version: "1.0.0"
 spec:
   day1:
-    structure:              # the create form starts with two nodepools
+    structure:                 # clusters start with one nodepool
       nodepools:
-        - configs: [{}]
-        - configs: [{}]
-    immutable_paths: []     # the "immutable after create" hints
-    values:                 # presets, merged under what the creator enters
-      owner_merkaz: "1234"
+        - configs: [{}, {}, {}]
+    locked_paths:              # fixed; every other value is a preset
+      - nodepools[*].configs   # the rule: every nodepool, exactly these
+    values:
+      nodepools:
+        - configs:
+            - name: nm-conf    # the cluster's own network config,
+              hardware: dell   #   written as nm-conf-<clusterName>-dell
+            - name: workers-chrony-configuration
+            - name: nic-ring-buffer
   day2:
     addons:
       - team: redbull
         name: cluster-roles
         version: main
-        overrideable: []    # the values a creator may set`}
+        overrideable: []       # the values a creator may set`}
           </CodeBlock>
 
+          <h3 className="text-base font-semibold mt-6 mb-3">Adding existing clusters to a flavor</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+            Clusters written before Wingman, or created from another flavor, can join one from the flavor&apos;s
+            page: <strong>Add existing clusters</strong> (admins).
+          </p>
+          <div className="space-y-3 mb-5">
+            <Step n={1} title="Pick">
+              Search by name and filter by site, MCE and owner numbers; pick up to 50.
+            </Step>
+            <Step n={2} title="Preview">
+              Each cluster shows whether it can join (<strong>Ready</strong>; on another flavor, which needs{" "}
+              <strong>Move to this flavor</strong>; already on it; or can&apos;t be imported, and why) and what will
+              show as drift once it has: the configs a sync would add and remove per nodepool, and the missing add-ons.
+            </Step>
+            <Step n={3} title="Import">
+              One Day1 MR writes only the flavor link (<InlineCode># specName</InlineCode>,{" "}
+              <InlineCode># specVersion</InlineCode>) into each file&apos;s header. Nothing changes on the clusters.
+              After it merges they show their differences as drift, and <strong>Sync to flavor</strong> on each
+              cluster&apos;s page fixes them (see Drift Detection).
+            </Step>
+          </div>
+
           <div className="mt-5 space-y-4">
-            <Callout type="info" title="Preset values">
-              <InlineCode>spec.day1.values</InlineCode> presets template inputs: a creator&apos;s own values win
-              (maps are merged). Presets are written in the spec file in the specs repo; the spec pages show them
-              read-only (<strong>Preset values</strong>).
-            </Callout>
             <Callout type="tip" title="Example comments in the template">
               A <InlineCode># Example: value</InlineCode> or <InlineCode>{"{# Example: value #}"}</InlineCode> comment
               on a line just before an input in <InlineCode>cluster-template.j2</InlineCode> becomes that field&apos;s
@@ -626,31 +662,29 @@ spec:
                 </CodeBlock>
               </div>
             </Callout>
-            <Callout type="warning" title="Editing a spec does not rewrite existing clusters">
-              Changing a spec does not touch clusters that already exist: their files keep what they were
-              created with, and nothing re-renders them (the inputs of a create are not stored). Drift, though,
-              always compares a cluster with the spec as it is now: add an addon to a spec and every cluster
-              created from it shows <strong>Drifted</strong> until the addon is installed. To change an existing
-              cluster, edit its file from the cluster page. Deleting a spec leaves its clusters&apos; files as they
-              are; their drift becomes <strong>Unknown</strong>, because the spec they name is gone.
+            <Callout type="warning" title="Editing a flavor does not rewrite existing clusters">
+              Changing a flavor does not touch clusters that already exist: nothing re-renders their files. Drift,
+              though, always compares a cluster with the flavor as it is now: lock a new value or add an add-on, and
+              every cluster of the flavor shows <strong>Drifted</strong> until it is synced or the add-on installed.
+              A flavor that clusters follow cannot be deleted; delete or move them first.
             </Callout>
           </div>
         </section>
 
         {/* Clusters */}
         <section>
-          <SectionHeader id="clusters" icon={Server} title="Clusters" subtitle="Create a hosted cluster from a spec, then edit or delete it by MR" />
+          <SectionHeader id="clusters" icon={Server} title="Clusters" subtitle="Create a hosted cluster from a flavor, then edit or delete it by MR" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            Creating a cluster is a two-step form: choose a spec, then fill in the values. The spec fixes the
-            shape (how many nodepools); the form only changes values.
+            Creating a cluster is a two-step form: choose a flavor, then fill in the values. The flavor sets the
+            shape (how many nodepools it starts with), presets values and locks others.
           </p>
 
           <h3 className="text-base font-semibold mb-4">Worked example — ocp4-prod-herzi-site1</h3>
           <div className="space-y-4 mb-6">
-            <Step n={1} title="Choose the spec">
+            <Step n={1} title="Choose the flavor">
               Go to <strong>Clusters</strong> → <strong>New Cluster</strong> and pick{" "}
-              <InlineCode>agent-standard</InlineCode>. A spec is required; a spec file that does not parse is shown
-              but cannot be picked.
+              <InlineCode>agent-standard</InlineCode>. A flavor is required; a flavor file that does not parse is
+              shown but cannot be picked.
             </Step>
             <Step n={2} title="Cluster details">
               <ul className="mt-2 space-y-1 list-none">
@@ -666,7 +700,7 @@ spec:
                 you picked; the form lists every problem with a name as you type, and fills in site and MCE when it
                 can detect them from the name. The version list is the chosen MCE&apos;s: the releases in the day1
                 repo&apos;s upgrade ladder that the MCE can host, so the picker waits for an MCE. It defaults to the
-                spec&apos;s preset, else the MCE&apos;s mastertag, but only when the MCE offers it. The release becomes
+                flavor&apos;s preset, else the MCE&apos;s mastertag, but only when the MCE offers it. The release becomes
                 the file&apos;s <InlineCode>mastertag</InlineCode>.
               </p>
             </Step>
@@ -682,7 +716,7 @@ spec:
               flavor locks its configs. Every refusal shows at its field.
             </Step>
             <Step n={4} title="Addon configuration">
-              If the spec lists addons, set the values it lets you set for each (or switch to{" "}
+              If the flavor lists add-ons, set the values it lets you set for each (or switch to{" "}
               <strong>Full Values</strong> for YAML). They are recorded in the cluster file&apos;s header and used
               when the addons are installed: installing them is a Day2 change, from the cluster&apos;s Drift tab.
             </Step>
@@ -751,7 +785,7 @@ nodepool:
 
           <h3 className="text-base font-semibold mt-6 mb-3">The cluster page</h3>
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-            The tabs are <strong>Overview</strong> (the cluster, its HostedCluster and network, nodepools, spec and,
+            The tabs are <strong>Overview</strong> (the cluster, its HostedCluster and network, nodepools, flavor and,
             when it is on, live status), <strong>YAML</strong>, <strong>Drift</strong> and <strong>History</strong>{" "}
             (the cluster file&apos;s commits in the day1 repo, and its chart values&apos; commits in the team repos).
             The header has <strong>GitLab</strong> (the file), <strong>Addons</strong> (its charts) and, for admins,{" "}
@@ -986,8 +1020,8 @@ cluster               …/{cluster}/{chart}/values.yaml
           <div className="space-y-3 mb-5">
             <Step n={1} title="Find drifted clusters">
               The <strong>Clusters</strong> list shows each cluster&apos;s drift state and filters by it;
-              the dashboard counts drifted and unknown clusters separately. A spec&apos;s <strong>Drift</strong> tab
-              lists every cluster created from it.
+              the dashboard counts drifted and unknown clusters separately. A flavor&apos;s <strong>Drift</strong> tab
+              lists every cluster that follows it.
             </Step>
             <Step n={2} title="Review what differs">
               Open the cluster → <strong>Drift</strong> tab. <strong>Locked values that differ</strong> shows each one
@@ -1019,7 +1053,7 @@ cluster               …/{cluster}/{chart}/values.yaml
           </Callout>
           <div className="h-4" />
           <Callout type="info" title="Version differences are information only">
-            Wingman never offers to move an installed addon to the spec&apos;s version: a cluster follows its
+            Wingman never offers to move an installed add-on to the flavor&apos;s version: a cluster follows its
             team&apos;s default. To hold one cluster at a version on purpose, use an <strong>emergency pin</strong> on
             its charts page (see Day2 Addons).
           </Callout>
@@ -1154,21 +1188,21 @@ cluster               …/{cluster}/{chart}/values.yaml
               </Callout>
             </FeaturePanel>
 
-            <FeaturePanel icon={Eye} tint="bg-blue-500/10 text-blue-500" title="Preview variables" where="New Spec page">
+            <FeaturePanel icon={Eye} tint="bg-blue-500/10 text-blue-500" title="Preview the cluster file a flavor produces" where="A flavor's edit page → Review">
               <p>
-                <strong>Preview variables</strong> shows, as YAML, the structure the spec passes to the cluster
-                template. Identity fields (cluster name, site, MCE) are not in it: they are chosen when a cluster is
-                created. Use it to check the shape before you open the MR.
+                The <strong>Review</strong> part of a saved flavor&apos;s edit page renders the cluster file the
+                flavor produces, as you edit, on an MCE, release and example name you choose: the same render a
+                create runs, through day1. A new flavor has no preview until it is merged.
               </p>
             </FeaturePanel>
 
-            <FeaturePanel icon={GitBranch} tint="bg-purple-500/10 text-purple-500" title="Spec history & time travel" where="Spec page → History tab">
+            <FeaturePanel icon={GitBranch} tint="bg-purple-500/10 text-purple-500" title="Flavor history & time travel" where="Flavor page → History tab">
               <p>
-                Every spec has a <strong>History</strong> tab listing every commit that touched it. Selecting a commit
-                shows the spec <em>at that exact commit</em>, without affecting the current spec. This is useful for:
+                Every flavor has a <strong>History</strong> tab listing every commit that touched it. Selecting a commit
+                shows the flavor <em>at that exact commit</em>, without affecting the current one. This is useful for:
               </p>
               <ul className="space-y-1 pl-4 list-disc marker:text-muted-foreground/40">
-                <li>Auditing what changed between two spec versions</li>
+                <li>Auditing what changed between two flavor versions</li>
                 <li>Recovering a previous value that was overwritten</li>
                 <li>Understanding what a cluster created at a particular time got</li>
               </ul>
@@ -1259,7 +1293,7 @@ maxConcurrentControlPlanes: 1`}
               </CodeBlock>
               <p>
                 If an MCE has no file, or the ladder is missing or broken, the form offers no version and shows the
-                reason under the field. Wingman never falls back to every release. A spec&apos;s preset version
+                reason under the field. Wingman never falls back to every release. A flavor&apos;s preset version
                 prefills only when the MCE offers it. Create refuses a release the MCE can&apos;t host. To offer
                 another release, add a rung to the ladder or a minor to the MCE&apos;s file, through a merge request
                 in the day1 repo.
@@ -1385,7 +1419,7 @@ maxConcurrentControlPlanes: 1`}
               },
               {
                 q: "Cluster shows as drifted right after creation",
-                a: "Drift compares the spec's addons with what Day2 has installed. A new cluster's spec addons are not installed until someone installs them: once the cluster's MR is merged, install them from its Drift tab.",
+                a: "Drift compares the flavor's add-ons with what Day2 has installed. A new cluster's add-ons are not installed until someone installs them: once the cluster's MR is merged, install them from its Drift tab.",
               },
               {
                 q: "MR was merged but cluster is still not provisioned",
