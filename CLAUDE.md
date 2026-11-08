@@ -99,11 +99,17 @@ Explicit user instructions; violating one is a real mistake, not style.
   (`docs/ops/images.md`); the chart sets exactly the variables the services
   read (`tests/repo/test_chart_env_contract.py`) and probes
   `/health/live`/`/health/ready`.
-- **Not done yet, in order:** (1) web pages for the new data and both API
-  change notes; (2) end-to-end check of the whole stack against the seeded
-  local GitLab; (3) chart hardening (a values schema, a pinned nginx image);
-  (4) ecosystem features (servers per hosted cluster from server-scan,
-  workflow runs).
+- Done (2026-11-08): the web on both new APIs (shared dropdown, searchable
+  combobox, empty, loading and error states); the whole stack checked live
+  against the seeded local GitLab; report-only version drift (ADR-0025); the
+  legacy `wingman-shared` removed; the delete dialog ready for the
+  delete-cluster workflow (ADR-0033); OpenShift versions per MCE from the
+  day1 repo's upgrade ladder; `docs/ideas/`, `docs/upgrade/`.
+- **Not done yet, in order:** (1) flavors v2 (`docs/ideas/flavors-v2.md`;
+  stages 1 and 2 on `roiblum/feat-flavors-v2`, the web pages to build);
+  (2) the architect's answers (`docs/ideas/architecture-fit.md`); (3) chart
+  hardening (a values schema, a pinned nginx image); (4) ecosystem features
+  (`docs/ideas/`).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -238,17 +244,15 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-07 — integration of day1, day2 and CI.** Branch
-`roiblum/feat-ecosystem-day1-day2`. Merged the three agent branches: day1
-(`wingman_day1`, ADRs 0012-0019), day2 (`wingman_day2`, ADRs 0020-0024) and
-CI (ADRs 0030-0032). Session tokens now expire by the injected clock. Every
-Python package is on the strict bar (`scripts/python-packages.sh`). Run
-locally: day1 `uv run uvicorn wingman_day1.main:app --port 8001`, day2 `uv run uvicorn
-wingman_day2.main:app --port 8002` (env in each `settings.py`; both read
-`GITLAB_TOKEN`; `WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake`
-for the fixtures). **Next:** the web pages for both API change notes
-(`docs/notes/2026-11-07-day{1,2}-api-changes.md`), the chart env, an
-end-to-end run of the whole stack. **Deferred:** ArgoCD sync/status (no Argo
-API access), `exclusions.yaml` edits, OCP-version pin MRs. **Open:** team
-questions 2 (`clusterName`) and 3 (off-convention MCEs) in
-`docs/ecosystem/README.md`.
+**2026-11-08 — PR #17 finished and merged; flavors v2 started.** The web
+followed both API notes; report-only drift (ADR-0025); the in-app docs
+audited and guarded (`tests/repo/test_web_docs_contract.py`); UX basics; a
+cleanup and review pass (legacy package gone, duplicates in core, the
+agents' mistakes fixed); the delete-cluster workflow contract (ADR-0033);
+versions from the upgrade ladder. The user's decisions are in
+`docs/ideas/flavors-v2.md` and `architecture-fit.md`. **Next:** flavors v2 on
+`roiblum/feat-flavors-v2`:
+- stage 2's sync, half done in the worktree `agent-a35695ba357fd9bb2` as a
+  WIP commit;
+- stage 3, the web pages and the flavor page redesign (apple-design skill);
+- an upgrade guide for its operator steps.

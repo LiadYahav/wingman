@@ -4,6 +4,21 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-07 — integration of day1, day2 and CI.** Branch
+`roiblum/feat-ecosystem-day1-day2`. Merged the three agent branches: day1
+(`wingman_day1`, ADRs 0012-0019), day2 (`wingman_day2`, ADRs 0020-0024) and
+CI (ADRs 0030-0032). Session tokens now expire by the injected clock. Every
+Python package is on the strict bar (`scripts/python-packages.sh`). Run
+locally: day1 `uv run uvicorn wingman_day1.main:app --port 8001`, day2 `uv run uvicorn
+wingman_day2.main:app --port 8002` (env in each `settings.py`; both read
+`GITLAB_TOKEN`; `WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake`
+for the fixtures). **Next:** the web pages for both API change notes
+(`docs/notes/2026-11-07-day{1,2}-api-changes.md`), the chart env, an
+end-to-end run of the whole stack. **Deferred:** ArgoCD sync/status (no Argo
+API access), `exclusions.yaml` edits, OCP-version pin MRs. **Open:** team
+questions 2 (`clusterName`) and 3 (off-convention MCEs) in
+`docs/ecosystem/README.md`.
+
 **2026-11-07 — the day2 rewrite.** Branch `worktree-agent-a2d6d3b83dd18abaf`
 (on `706935d`). `apps/day2-service/src/wingman_day2` replaces the legacy
 service: four destination kinds discovered from team folders plus day1, the
