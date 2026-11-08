@@ -81,7 +81,7 @@ test.describe("Spec list", () => {
     await open(page, "/specs", (p) => p.route("**/api/day1/specs", (r) => json(r, [SPEC])));
 
     await page.getByPlaceholder("Search flavors...").fill("no-such-spec");
-    await expect(page.getByText("No specs match")).toBeVisible();
+    await expect(page.getByText("No flavors match")).toBeVisible();
     await page.getByRole("button", { name: "Clear search" }).click();
     await expect(page.getByTestId("spec-card-agent-standard")).toBeVisible();
   });

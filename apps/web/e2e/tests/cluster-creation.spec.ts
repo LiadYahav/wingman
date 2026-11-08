@@ -537,7 +537,7 @@ test.describe("Cluster create form", () => {
 
     await form.review();
     await expect(form.formProblems).toContainText("The flavor changed since you opened it");
-    await form.formProblems.getByRole("button", { name: /reload specs/i }).click();
+    await form.formProblems.getByRole("button", { name: /reload flavors/i }).click();
     await expect(page.getByText(/step 1 of 2/i)).toBeVisible();
   });
 });
