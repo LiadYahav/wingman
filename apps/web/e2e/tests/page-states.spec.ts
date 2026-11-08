@@ -126,7 +126,7 @@ test.describe("Clusters and the dashboard", () => {
     await expect(page.getByText("Could not be loaded", { exact: true })).toBeVisible();
 
     await page.goto("/clusters");
-    await expect(alerts.filter({ hasText: "Failed to load clusters" })).toContainText("GitLab could not be reached", { timeout: 10_000 });
+    await expect(alerts.filter({ hasText: "The clusters could not be loaded" })).toContainText("GitLab could not be reached", { timeout: 10_000 });
     await expect(page.getByTestId("clusters-empty")).toHaveCount(0);
   });
 

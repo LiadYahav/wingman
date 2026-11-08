@@ -403,7 +403,7 @@ export default function ClustersPage() {
       </div>
 
       {error ? (
-        <ProblemList error={error} title="Failed to load clusters" />
+        <ProblemList error={error} title="The clusters could not be loaded" />
       ) : (
         <>
           <div className="bg-card rounded-xl border shadow-sm overflow-x-auto">
