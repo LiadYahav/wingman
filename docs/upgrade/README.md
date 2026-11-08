@@ -9,6 +9,7 @@ stop and report instead of improvising, and how to go back.
 | From | To | Guide |
 |---|---|---|
 | The legacy services (`src.main:app`, the chart before PR #17) | The rewrite on `wingman-core` (`wingman_day1`, `wingman_day2`) | [legacy-to-ecosystem.md](legacy-to-ecosystem.md) |
+| 3.2 | 3.3: flavors v2 (enforced locks, checked machine configs, import and sync) | [3.2-to-3.3.md](3.2-to-3.3.md) |
 
 Releases are named by version: from 3.0.1 on, every merge to main is a
 release whose version comes from its commits (ADR-0031), and you deploy that
