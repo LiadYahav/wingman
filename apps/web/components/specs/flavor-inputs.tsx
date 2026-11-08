@@ -3,7 +3,7 @@ import { ConfigEntryList } from "@/components/specs/config-entries";
 import { formatPreset, structureSummary } from "@/lib/specs";
 import { isMapping } from "@/lib/values";
 import { cn } from "@/lib/utils";
-import type { ClusterSpec } from "@/types";
+import type { SpecEntry } from "@/types";
 
 /**
  * A warning panel: rules a stored flavor breaks (`warnings` of a spec), or
@@ -114,21 +114,45 @@ function InputValue({ field, value }: { field: string; value: unknown }) {
   return <span className="text-xs font-mono text-foreground/80 break-all">{formatPreset(value)}</span>;
 }
 
-/** Preset (prefilled, overridable) or Locked (fixed by the flavor). */
-function ValueKind({ lock }: { lock: string | null }) {
-  if (!lock) {
+/**
+ * What a value is at create: a preset; locked by a lock day1 enforces; or
+ * locked in the file by a lock that breaks a rule, which day1 does not
+ * enforce (the flavor's warnings say why), so a create treats it as a preset.
+ */
+type ValueKind =
+  | { kind: "preset" }
+  | { kind: "locked"; lock: string }
+  | { kind: "unenforced"; lock: string };
+
+function kindOf(path: string, locks: readonly string[], enforced: readonly string[]): ValueKind {
+  const lock = lockOf(path, enforced);
+  if (lock) return { kind: "locked", lock };
+  const inFile = lockOf(path, locks);
+  return inFile ? { kind: "unenforced", lock: inFile } : { kind: "preset" };
+}
+
+function ValueKindBadge({ value }: { value: ValueKind }) {
+  const chip = "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium";
+  if (value.kind === "preset") {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+      <span className={cn(chip, "border text-muted-foreground")}>
         <SlidersHorizontal className="h-3 w-3" aria-hidden />Preset
       </span>
     );
   }
+  if (value.kind === "unenforced") {
+    return (
+      <span
+        title={`${value.lock} is in the file's locked_paths, but it breaks a rule (see the warnings), so a create does not enforce it`}
+        className={cn(chip, "bg-status-warning/10 text-status-warning-fg")}
+      >
+        <AlertTriangle className="h-3 w-3" aria-hidden />Locked in the file · not enforced
+      </span>
+    );
+  }
   return (
-    <span
-      title={`Locked by ${lock}`}
-      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
-    >
-      <Lock className="h-3 w-3" aria-hidden />Locked{isRule(lock) && <> · every nodepool</>}
+    <span title={`Locked by ${value.lock}`} className={cn(chip, "bg-primary/10 text-primary")}>
+      <Lock className="h-3 w-3" aria-hidden />Locked{isRule(value.lock) && <> · every nodepool</>}
     </span>
   );
 }
@@ -136,17 +160,17 @@ function ValueKind({ lock }: { lock: string | null }) {
 /** Lists and maps go under their name, scalars beside it. */
 const isWide = (value: unknown) => Array.isArray(value) || (isMapping(value) && Object.keys(value).length > 0);
 
-function InputRowView({ row, lock }: { row: InputRow; lock: string | null }) {
+function InputRowView({ row, kind }: { row: InputRow; kind: ValueKind }) {
   const wide = isWide(row.value);
   return (
     <div
       data-testid={`flavor-input-${row.path}`}
-      data-kind={lock ? "locked" : "preset"}
+      data-kind={kind.kind}
       className={cn("px-3 py-2", wide ? "space-y-1.5" : "flex items-center justify-between gap-3")}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-sm font-mono break-all">{row.field}</span>
-        <ValueKind lock={lock} />
+        <ValueKindBadge value={kind} />
       </div>
       <div className={cn("min-w-0", wide ? "[&>span]:justify-start" : "text-right")}>
         <InputValue field={row.field} value={row.value} />
@@ -158,16 +182,22 @@ function InputRowView({ row, lock }: { row: InputRow; lock: string | null }) {
 /**
  * What a cluster of this flavor starts from (ADR-0026): every value in
  * `spec.day1.values` is a preset, prefilled at create and overridable, unless
- * a path in `locked_paths` fixes it. A locked value can't be changed at
- * create, and a later edit of the cluster file shows as drift (ADR-0036).
+ * a lock day1 enforces (`enforced_locks`) fixes it. A locked value can't be
+ * changed at create, and a later edit of the cluster file shows as drift
+ * (ADR-0036). A lock in `locked_paths` that breaks a rule is not enforced
+ * and is shown as such; the flavor's warnings say why.
  */
-export function FlavorInputsCard({ spec }: { spec: ClusterSpec }) {
+export function FlavorInputsCard({ spec }: { spec: SpecEntry }) {
   const { values = {}, structure, locked_paths: locks = [], variables } = spec.spec.day1;
+  // An older day1 does not send enforced_locks: every lock in the file is enforced there
+  const enforced = spec.enforced_locks ?? locks;
   const groups = inputGroups(values);
   const rows = groups.flatMap((g) => g.rows);
-  const lockFor = new Map(rows.map((r) => [r.path, lockOf(r.path, locks)]));
-  const lockedCount = rows.filter((r) => lockFor.get(r.path)).length;
-  const presetCount = rows.length - lockedCount;
+  const kinds = new Map(rows.map((r) => [r.path, kindOf(r.path, locks, enforced)]));
+  const count = (kind: ValueKind["kind"]) => rows.filter((r) => kinds.get(r.path)?.kind === kind).length;
+  const presetCount = count("preset");
+  const lockedCount = count("locked");
+  const unenforcedCount = count("unenforced");
   // A lock with no value fixes nothing (the flavor's warnings say so too)
   const withoutValue = locks.filter((lock) => !rows.some((r) => lockPattern(lock).test(r.path)));
   const shape = structureSummary(structure);
@@ -178,18 +208,28 @@ export function FlavorInputsCard({ spec }: { spec: ClusterSpec }) {
         <h2 className="text-sm font-semibold">Cluster inputs</h2>
         <p className="text-xs text-muted-foreground" data-testid="flavor-input-counts">
           {presetCount} preset{presetCount !== 1 ? "s" : ""} · {lockedCount} locked
+          {unenforcedCount > 0 && <> · {unenforcedCount} not enforced</>}
         </p>
       </div>
 
       <dl className="grid gap-1.5 text-xs text-muted-foreground">
         <div className="flex gap-2">
-          <dt className="w-14 shrink-0 font-medium text-foreground">Preset</dt>
+          <dt className="w-20 shrink-0 font-medium text-foreground">Preset</dt>
           <dd>Prefilled when a cluster is created; the person creating it can change it.</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="w-14 shrink-0 font-medium text-primary">Locked</dt>
+          <dt className="w-20 shrink-0 font-medium text-primary">Locked</dt>
           <dd>Fixed by the flavor: a create can&apos;t change it, and a later edit of the cluster file shows as drift.</dd>
         </div>
+        {unenforcedCount > 0 && (
+          <div className="flex gap-2" data-testid="flavor-unenforced-note">
+            <dt className="w-20 shrink-0 font-medium text-status-warning-fg">Not enforced</dt>
+            <dd>
+              Locked in the flavor&apos;s file, but the lock breaks a rule (see the warnings above), so a create treats
+              the value as a preset and nothing drifts from it.
+            </dd>
+          </div>
+        )}
       </dl>
 
       {rows.length === 0 ? (
@@ -208,7 +248,7 @@ export function FlavorInputsCard({ spec }: { spec: ClusterSpec }) {
               )}
               <div className="rounded-lg border divide-y divide-border/50">
                 {group.rows.map((row) => (
-                  <InputRowView key={row.path} row={row} lock={lockFor.get(row.path) ?? null} />
+                  <InputRowView key={row.path} row={row} kind={kinds.get(row.path) ?? { kind: "preset" }} />
                 ))}
               </div>
             </div>
@@ -216,7 +256,7 @@ export function FlavorInputsCard({ spec }: { spec: ClusterSpec }) {
         </div>
       )}
 
-      {locks.some(isRule) && (
+      {enforced.some(isRule) && (
         <p className="text-xs text-muted-foreground" data-testid="flavor-configs-rule">
           <span className="font-mono">nodepools[*].configs</span> is a rule: every nodepool of a cluster has exactly
           these configs, in any order, and <span className="font-mono">nm-conf</span> is each nodepool&apos;s own network

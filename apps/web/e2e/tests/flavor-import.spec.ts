@@ -33,7 +33,8 @@ const SPEC: SpecDetail = {
     day1: {
       variables: [],
       structure: { nodepools: [{ configs: [{}, {}, {}] }] },
-      locked_paths: ["owner_anaf", "nodepools[*].configs", "owner_mador"],
+      // owner_mador has no value and infra_env is not lockable: both are in the file, neither is enforced
+      locked_paths: ["owner_anaf", "nodepools[*].configs", "owner_mador", "nodepools[0].infra_env"],
       template: "",
       values: {
         owner_merkaz: "1234",
@@ -41,6 +42,7 @@ const SPEC: SpecDetail = {
         nodepools: [
           {
             replicas: 2,
+            infra_env: "infra-dell-site1",
             configs: [{ name: "nm-conf", hardware: "dell" }, { name: "workers-chrony-configuration" }, { name: "nic-ring-buffer" }],
           },
         ],
@@ -50,7 +52,11 @@ const SPEC: SpecDetail = {
   },
   load_error: null,
   load_problems: [],
-  warnings: ["locked_paths: owner_mador is locked but spec.day1.values sets no value for it"],
+  warnings: [
+    "locked_paths: owner_mador is locked but spec.day1.values sets no value for it",
+    "locked_paths: nodepools[0].infra_env cannot be locked; lockable inputs are owner_merkaz, owner_anaf, owner_mador, platform, nodepools[<i>].replicas, nodepools[<i>].configs, nodepools[<i>].node_labels",
+  ],
+  enforced_locks: ["owner_anaf", "nodepools[*].configs"],
   last_commit_id: "aaaaaaaa11111111aaaaaaaa11111111aaaaaaaa",
 };
 
@@ -222,7 +228,7 @@ test.describe("Flavor overview", () => {
     await open(page);
 
     const inputs = page.getByTestId("flavor-inputs");
-    await expect(inputs.getByTestId("flavor-input-counts")).toHaveText("2 presets · 2 locked");
+    await expect(inputs.getByTestId("flavor-input-counts")).toHaveText("2 presets · 2 locked · 1 not enforced");
     await expect(inputs.getByTestId("flavor-input-owner_merkaz")).toHaveAttribute("data-kind", "preset");
     await expect(inputs.getByTestId("flavor-input-owner_merkaz")).toContainText("Preset");
     await expect(inputs.getByTestId("flavor-input-owner_anaf")).toHaveAttribute("data-kind", "locked");
@@ -240,18 +246,39 @@ test.describe("Flavor overview", () => {
     await expect(configs).not.toContainText("{");
     await expect(inputs.getByTestId("flavor-configs-rule")).toContainText("every nodepool of a cluster has exactly these configs");
 
+    // In locked_paths but not in enforced_locks: locked in the file, not enforced, pointing at the warnings
+    const infraEnv = inputs.getByTestId("flavor-input-nodepools[0].infra_env");
+    await expect(infraEnv).toHaveAttribute("data-kind", "unenforced");
+    await expect(infraEnv).toContainText("Locked in the file · not enforced");
+    await expect(inputs.getByTestId("flavor-unenforced-note")).toContainText("see the warnings above");
+
     // A lock with no value fixes nothing, and says so
     await expect(inputs.getByTestId("flavor-locks-without-value")).toContainText("owner_mador");
     // The stage 1 wording is gone: a lock is a fixed value, not "locked after create"
     await expect(page.getByText(/locked after create/i)).toHaveCount(0);
   });
 
+  test("an older day1 without enforced_locks: every lock in the file is enforced", async ({ page }) => {
+    const older: SpecDetail = { ...SPEC, enforced_locks: undefined }; // left out of the JSON
+    await open(page, {
+      routes: async (p) => {
+        await p.route(base, (r) => json(r, older));
+      },
+    });
+
+    const inputs = page.getByTestId("flavor-inputs");
+    await expect(inputs.getByTestId("flavor-input-counts")).toHaveText("2 presets · 3 locked");
+    await expect(inputs.getByTestId("flavor-input-nodepools[0].infra_env")).toHaveAttribute("data-kind", "locked");
+    await expect(inputs.getByTestId("flavor-unenforced-note")).toHaveCount(0);
+  });
+
   test("the rules the stored flavor breaks are shown above the tabs", async ({ page }) => {
     await open(page);
 
     const warnings = page.getByTestId("flavor-warnings");
-    await expect(warnings).toContainText("This flavor breaks 1 rule");
+    await expect(warnings).toContainText("This flavor breaks 2 rules");
     await expect(warnings).toContainText("owner_mador is locked but spec.day1.values sets no value for it");
+    await expect(warnings).toContainText("nodepools[0].infra_env cannot be locked");
     await expect(warnings).toContainText("saving it unchanged is refused");
   });
 
