@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X, ChevronDown, ChevronRight,
-  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, FileQuestionMark, Files,
+  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, Files,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, isApiError } from "@/lib/api-client";
@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
-import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
+import { EmptyState } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { computeLineDiff } from "@/lib/diff";
 import { writeErrorTitle } from "@/lib/write-errors";
@@ -318,22 +318,17 @@ function MRDetailContent() {
     await refetch();
   };
 
+  // An address that names no MR is an error to correct, not an empty list
   if (!ref) {
     return (
-      <div className="p-6 lg:p-8 max-w-5xl mx-auto">
-        <EmptyState
-          icon={FileQuestionMark}
+      <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-4" data-testid="approval-invalid-id">
+        <ProblemList
           title="Invalid MR ID"
-          description={
-            <>
-              <code className="break-all">{id}</code> names no merge request. Expected <code>day1-123</code>,{" "}
-              <code>specs-45</code> or <code>day2-&lt;team&gt;-67</code>.
-            </>
-          }
-          action={<EmptyStateLink href="/approvals">Back to approvals</EmptyStateLink>}
-          bordered
-          data-testid="approval-invalid-id"
+          lines={[`"${id}" names no merge request. Expected day1-123, specs-45 or day2-<team>-67.`]}
         />
+        <Link href="/approvals" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <ArrowLeft className="h-4 w-4 mr-1.5" />Back to approvals
+        </Link>
       </div>
     );
   }

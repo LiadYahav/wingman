@@ -320,11 +320,15 @@ test.describe("Approvals", () => {
     await expect(page.getByTestId("approval-no-files")).toContainText("No changed files");
   });
 
-  test("an unknown id says what an id looks like and links back", async ({ page }) => {
+  test("an unknown id is an error that says what an id looks like and links back", async ({ page }) => {
     await open(page, "/approvals/nope");
 
     const invalid = page.getByTestId("approval-invalid-id");
-    await expect(invalid).toContainText("day2-<team>-67");
+    const alert = invalid.getByRole("alert");
+    await expect(alert).toContainText("Invalid MR ID");
+    await expect(alert).toContainText('"nope" names no merge request');
+    await expect(alert).toContainText("day2-<team>-67");
+    await expect(invalid.locator("[data-slot=empty-state]")).toHaveCount(0);
     await expect(invalid.getByRole("link", { name: "Back to approvals" })).toHaveAttribute("href", "/approvals");
   });
 });
