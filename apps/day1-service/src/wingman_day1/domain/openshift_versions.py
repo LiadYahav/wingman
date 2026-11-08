@@ -11,7 +11,9 @@ workflow also reads:
 A new cluster on an MCE may use a rung whose minor the MCE can host, newest
 first. Their JSON schemas (``upgrade/schema/``) are the contract: this checks
 the parts Wingman reads against them, and the day1 repo's
-``scripts/validate_upgrade_rules.py`` checks the rest.
+``scripts/validate_upgrade_rules.py`` checks the rest. ``schemaVersion`` is
+part of the rest: production's ladder predates it, and a rung is checked on
+its own shape whatever the file says its version is.
 
 Nothing here raises. What a file gets wrong comes back as problems, in plain
 words, and the entries that are wrong are left out. An MCE whose file is
@@ -29,7 +31,6 @@ import yaml
 
 LADDER_PATH: Final = "upgrade/ladder.yaml"
 README_PATH: Final = "upgrade/README.md"
-SCHEMA_VERSION: Final = 1
 
 _RELEASE: Final = re.compile(r"^4\.[0-9]+\.[0-9]+$")
 """``ladder.schema.json``, ``$defs.rung.version``."""
@@ -116,15 +117,6 @@ def parse_ladder(text: str) -> Ladder:
     document, problems = _load(text, LADDER_PATH)
     if document is None:
         return Ladder((), tuple(problems))
-    if document.get("schemaVersion") != SCHEMA_VERSION:
-        found = document.get("schemaVersion")
-        return Ladder(
-            (),
-            (
-                f"{LADDER_PATH} has schemaVersion {found!r}; Wingman reads schemaVersion "
-                f"{SCHEMA_VERSION}",
-            ),
-        )
     rungs = document.get("ladder")
     if not isinstance(rungs, list) or not rungs:
         return Ladder((), (f"{LADDER_PATH} has no ladder: list of releases",))

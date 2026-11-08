@@ -89,8 +89,6 @@ def test_a_missing_ladder_offers_nothing() -> None:
     [
         ("ladder: [", "upgrade/ladder.yaml is not valid YAML at line"),
         ("- 4.18.56\n", "upgrade/ladder.yaml is not a YAML mapping"),
-        ("schemaVersion: 2\nladder: [{version: 4.18.56}]\n", "has schemaVersion 2"),
-        ("ladder: [{version: 4.18.56}]\n", "has schemaVersion None"),
         ("schemaVersion: 1\nladder: []\n", "has no ladder: list"),
         ("schemaVersion: 1\n", "has no ladder: list"),
     ],
@@ -100,6 +98,13 @@ def test_a_broken_ladder_is_a_problem_and_no_release(text: str, problem: str) ->
     assert ladder.releases == ()
     assert len(ladder.problems) == 1
     assert problem in ladder.problems[0]
+
+
+@pytest.mark.parametrize("header", ["", "schemaVersion: 1\n", "schemaVersion: 2\n"])
+def test_the_rungs_are_read_whatever_the_schema_version(header: str) -> None:
+    # Production's ladder has no schemaVersion; Wingman reads only ladder[].version.
+    ladder = parse_ladder(f"{header}ladder:\n  - {{ version: 4.18.56 }}\n")
+    assert (ladder.releases, ladder.problems) == (("4.18.56",), ())
 
 
 def test_a_rung_that_breaks_the_schema_is_left_out_and_named() -> None:
