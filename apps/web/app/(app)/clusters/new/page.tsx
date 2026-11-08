@@ -740,6 +740,9 @@ export default function NewClusterPage() {
     if (!mce) problems.push("Choose an MCE");
     if (!trimmedName) problems.push("Enter a cluster name");
     if (!ocpVersion.trim()) problems.push("Choose an OpenShift version");
+    // Without the template's inputs the form can neither show nor check them: never send without them.
+    if (schemaError) problems.push("The cluster template's inputs could not be loaded: reload the page to try again");
+    else if (!templateSchema) problems.push("The cluster template's inputs are still loading");
     problems.push(...missingRequired(schema, formValues).map((path) => `${labelForPath(path)} is required`));
     const { overrides, problems: overrideProblems } = collectOverrides();
     problems.push(...overrideProblems);

@@ -265,6 +265,30 @@ test.describe("Cluster create form", () => {
     await expect(page.getByText(/takes no inputs/)).toHaveCount(0);
   });
 
+  test("without the template's inputs Review refuses, and nothing is sent", async ({ page }) => {
+    await mockCreateForm(page);
+    await page.route("**/api/day1/specs/template/schema", (r) =>
+      fulfillProblem(r, 503, "GIT_UNAVAILABLE", "The specs project could not be read")
+    );
+    let previews = 0;
+    await page.route("**/api/day1/clusters/preview", (r) => {
+      previews += 1;
+      return json(r, { path: DETAIL.path, yaml: DETAIL.yaml });
+    });
+    await openForm(page);
+    // Everything else is filled: the site, MCE and version follow from the name
+    await page.getByTestId("cluster-name-input").fill(NAME);
+    await expect(page.getByTestId("mce-select")).toContainText(MCE);
+    await expect(page.getByRole("alert").filter({ hasText: "The cluster template's inputs could not be loaded" }))
+      .toContainText("The specs project could not be read", { timeout: 10_000 });
+
+    await page.getByTestId("review-button").click();
+    const checks = page.getByTestId("form-problems");
+    await expect(checks).toContainText("The cluster template's inputs could not be loaded: reload the page to try again");
+    await expect(page.getByRole("dialog", { name: /^Review/ })).toHaveCount(0);
+    expect(previews).toBe(0);
+  });
+
   test("infra envs that could not be listed are a problem, and their names are typed", async ({ page }) => {
     await mockCreateForm(page);
     await page.route("**/api/day1/mces/*/infraenvs", (r) =>
