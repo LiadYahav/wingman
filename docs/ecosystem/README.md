@@ -346,15 +346,15 @@ Related prior art to reuse rather than duplicate: **cluster-navigator** (`team-r
 1. **Canonical day1 repo and chart:** GitLab production or GitHub sandbox? They differ (Secrets, PostDelete release, day2 registration), and the sandbox README says this is undecided. The workflows `.env.example` points the day1 repo at GitHub, while its docs describe a GitLab pipeline.
 2. **`clusterName` derivation differs between production and sandbox** (see the table above). It changes the HostedCluster and namespace names Wingman reads status from, and the sandbox release hook posts `.Values.clusterName` (the full stem), which matches the allocated `cluster_name` only there. Which one is right?
 3. **Off-convention names:** `ocp4-upgrade-demo` and MCE `ocp4-mce-workflow-test` don't match `ocp4-<env>-<name>-<site>`. The chart's day2 registration derives `<env>` from these names and fails on them. Should Wingman refuse such names, or allow them with `day2.env` set explicitly?
-3. **Hub/MCE choice:** who picks the hub/MCE, now that Wingman owns Day1?
-4. **The merge:** does it stay a manual human approval? Is it done in Wingman's approvals page or in GitLab?
-5. **Orchestrator auth:** decided, see [Decisions](#decisions-2026-11-07).
-6. **Site codes don't match across sandboxes:** segments-manager `site1/2/3`, server-scan `nyc, tlv, bat-yam, five`, stack-export `site-a`. What is the canonical site token? segments-manager assumes it is the same token everywhere (its env key, the day1 path, the MCE name).
-7. **InfraEnv naming differs across docs:** `hp-gen11-nyc-64c-128gb` (server-scan; its server pool is `^ocp-<infraEnv>`), `<conf>-zone-<z>-metal|<cpu>` (workflows), `dell-r660-site-a-128c-1024gb-5tb` (stack-export).
-8. **InfraEnvs:** who creates them? Nothing in the repos does.
-9. **ArgoCD sync for per-cluster day1 apps:** auto or manual?
-10. **Air-gapped gitops-day2:** which phase is it on?
-11. **Deletion in production:** who releases the segment, until `deprovision-cluster` exists?
+4. **Hub/MCE choice:** who picks the hub/MCE, now that Wingman owns Day1? (Also the first question in `docs/ideas/architecture-fit.md`.)
+5. **The merge:** does it stay a manual human approval? Is it done in Wingman's approvals page or in GitLab?
+6. **Orchestrator auth:** decided, see [Decisions](#decisions-2026-11-07).
+7. **Site codes don't match across sandboxes:** segments-manager `site1/2/3`, server-scan `nyc, tlv, bat-yam, five`, stack-export `site-a`. What is the canonical site token? segments-manager assumes it is the same token everywhere (its env key, the day1 path, the MCE name).
+8. **InfraEnv naming differs across docs:** `hp-gen11-nyc-64c-128gb` (server-scan; its server pool is `^ocp-<infraEnv>`), `<conf>-zone-<z>-metal|<cpu>` (workflows), `dell-r660-site-a-128c-1024gb-5tb` (stack-export).
+9. **InfraEnvs:** who creates them? Nothing in the repos does.
+10. **ArgoCD sync for per-cluster day1 apps:** auto or manual?
+11. **Air-gapped gitops-day2:** which phase is it on?
+12. **Deletion in production:** who releases the segment, until `deprovision-cluster` exists?
 
 ## Naming conventions cheat sheet
 

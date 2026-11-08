@@ -112,6 +112,25 @@ in four parts (basics, nodepools, add-ons, review). Each value has a clear
 preset/locked switch. Machine configs come from the picker, prefilled from
 the defaults. A live preview shows the cluster file the flavor produces.
 
+## Where this is going
+
+The architecture's self-service catalog "exposes pre-packaged NodePool
+profiles": flavors are those profiles (architecture-fit.md). Two things move
+when the workflows exist:
+
+- **Create:** the create workflow takes worker types (a node type and a count)
+  and spreads each over three zones itself. A flavor's nodepools then become
+  worker types with totals, and the zones stay out of the form. Keep the
+  flavor's nodepool entries close to that shape.
+- **Sync:** once the scale workflow (update-nodepool) owns the NodePool files,
+  a flavor sync changes NodePool fields through it, not by Wingman's own
+  commit: one writer per file. Until then the sync MR carries the file's
+  `last_commit_id` (ADR-0006), so it can't overwrite a change made after
+  Wingman read the file.
+
+Where a nodepool's machine configs live in the VM model (the node type or the
+cluster) is a question for the architect.
+
 ## Order of work
 
 1. Day1: the machine-config catalogue endpoint, nodepool defaults, config
