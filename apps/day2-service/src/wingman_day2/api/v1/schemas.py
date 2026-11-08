@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from wingman_core.application.approvals import PendingChange
+from wingman_core.application.approvals import PendingChange, describe
 from wingman_core.domain.git import Commit, FileChange, FileDiff
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_day2.application.catalog import CatalogEntry, ChartValues
@@ -517,16 +517,19 @@ class MRDetailOut(BaseModel):
     gitlab_author: str
 
     @classmethod
-    def of(
-        cls, team: str, merge_request: MergeRequest, requested_by: str | None = None
-    ) -> MRDetailOut:
-        """From an MR; ``requested_by`` is the footer's author."""
-        mr = merge_request
+    def of(cls, team: str, merge_request: MergeRequest) -> MRDetailOut:
+        """From an MR. ``author`` is the requester its footer names (ADR-0007), not GitLab's."""
+        return cls.of_change(team, describe(merge_request))
+
+    @classmethod
+    def of_change(cls, team: str, change: PendingChange) -> MRDetailOut:
+        """From a described Wingman MR; ``gitlab_author`` keeps the account that opened it."""
+        mr = change.merge_request
         return cls(
             iid=mr.ref.iid,
             title=mr.title,
             description=mr.description,
-            author=MRAuthorOut(username=requested_by or mr.author_username),
+            author=MRAuthorOut(username=change.requested_by),
             state=str(mr.state),
             created_at=mr.created_at.isoformat(),
             updated_at=mr.updated_at.isoformat(),
@@ -540,11 +543,6 @@ class MRDetailOut(BaseModel):
             sha=mr.sha,
             gitlab_author=mr.author_username,
         )
-
-    @classmethod
-    def of_change(cls, team: str, change: PendingChange) -> MRDetailOut:
-        """From a described Wingman MR."""
-        return cls.of(team, change.merge_request, change.requested_by)
 
 
 class FileChangeOut(BaseModel):
@@ -569,9 +567,9 @@ class ChangeOut(MRDetailOut):
     notes: list[str]
 
     @classmethod
-    def of_result(cls, result: ChangeResult, requested_by: str) -> ChangeOut:
-        """From the change result."""
-        base = MRDetailOut.of(result.team, result.merge_request, requested_by)
+    def of_result(cls, result: ChangeResult) -> ChangeOut:
+        """From the change result (its MR's footer names the requester)."""
+        base = MRDetailOut.of(result.team, result.merge_request)
         return cls(
             **base.model_dump(),
             cluster=result.cluster.ref.id,

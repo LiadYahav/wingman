@@ -27,7 +27,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from wingman_core.domain.errors import GitError, RevisionConflictError
-from wingman_core.domain.git import FileChange, FileContent, RepoPath
+from wingman_core.domain.git import FileChange, FileContent, RepoPath, commit_author
 from wingman_core.domain.merge_request import MergeRequest, NewMergeRequest
 from wingman_core.domain.mr_conventions import (
     WINGMAN_LABEL,
@@ -631,6 +631,7 @@ class ChangeService:
                 start_branch=self._sigs.branch,
                 message=commit_message,
                 changes=plan.changes,
+                author=commit_author(user),
             )
             merge_request = await self._gitlab.create_merge_request(
                 team.project.id,

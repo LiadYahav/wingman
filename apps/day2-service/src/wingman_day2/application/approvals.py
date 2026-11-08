@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from wingman_core.application.approvals import Approvals, PendingChange, describe
 from wingman_core.domain.errors import InvalidRepoPathError
-from wingman_core.domain.git import FileChange, FileDiff, RepoPath
+from wingman_core.domain.git import FileChange, FileDiff, RepoPath, commit_author
 from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef, MRState
 from wingman_core.domain.users import User
 from wingman_core.ports.gitlab import GitLabPort
@@ -120,6 +120,7 @@ class ApprovalService:
                 branch=merge_request.source_branch,
                 message=f"{message or f'Edit !{iid}'}\n\nEdited by {user.username} via Wingman",
                 changes=changes,
+                author=commit_author(user),
             )
         finally:
             self._sigs.invalidate(current.team)

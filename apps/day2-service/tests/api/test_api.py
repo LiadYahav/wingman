@@ -141,6 +141,8 @@ async def test_install_approve_update_and_remove_on_a_hosted_cluster(
     problem(await approve(jane, "redbull", change["iid"], change["sha"]), 403, "SELF_APPROVAL")
     merged = ok(await approve(bob, "redbull", change["iid"], change["sha"]))
     assert merged["state"] == "merged"
+    # The requester, not the service account that opened the MR or bob who merged it.
+    assert (merged["author"]["username"], merged["gitlab_author"]) == ("jane", "wingman-bot")
     assert ok(await jane.get("/api/day2/approvals")) == []
 
     charts = await installed(jane, HERZI)
@@ -338,6 +340,7 @@ async def test_mr_detail_edit_and_reject(jane: httpx.AsyncClient, bob: httpx.Asy
     )
     closed = ok(await bob.post(f"/api/day2/approvals/redbull/{change['iid']}/reject"))
     assert closed["state"] == "closed"
+    assert closed["author"]["username"] == change["author"]["username"]
     body = problem(
         await bob.put(
             f"/api/day2/approvals/redbull/{change['iid']}",
@@ -514,6 +517,20 @@ async def test_audit_lists_commits_and_merge_requests_and_diffs(
     mrs = ok(await jane.get("/api/day2/audit/merge-requests"))
     assert [(m["team"], m["iid"]) for m in mrs] == [("redbull", change["iid"])]
     assert ok(await jane.get("/api/day2/audit/merge-requests?page=2")) == []
+
+
+async def test_history_names_the_requester_not_the_service_account(
+    jane: httpx.AsyncClient, bob: httpx.AsyncClient
+) -> None:
+    # As day1's: the MR's author is the footer's requester, and its commit is
+    # authored by them (GitLab keeps the service account as the committer).
+    change = ok(await install(jane, "redbull", "bmhgen"), 201)
+    ok(await approve(bob, "redbull", change["iid"], change["sha"]))
+    [mr] = ok(await jane.get("/api/day2/audit/merge-requests"))
+    assert (mr["author"]["username"], mr["gitlab_author"]) == ("jane", "wingman-bot")
+    commits = ok(await jane.get("/api/day2/audit/commits?per_page=10"))
+    [installed] = [c for c in commits if c["title"].startswith("Install bmhgen")]
+    assert (installed["author_name"], installed["author_email"]) == ("jane", "jane@openshift.local")
 
 
 # ── operations endpoints ────────────────────────────────────────────────────
