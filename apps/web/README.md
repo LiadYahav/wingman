@@ -150,6 +150,11 @@ types/
   browser draws its arrow against the border. The arrow sits as far from the right border as
   the text from the left; sizes `sm` and `default` match `Input`, `lg` the page forms' own
   `px-3 py-2` inputs.
+- **A list that can grow** (sites, MCEs, infra envs, chart revisions, versions) is a `Combobox`
+  (`components/ui/combobox.tsx`): the same closed look plus a search box, keyboard only if need
+  be. Options are `{ value, label, description?, group?, disabled? }`; the search matches the
+  label, description and group. The trigger is the `combobox` and carries the `aria-label` and
+  `data-testid` you pass.
 
 ## Environment Variables
 

@@ -15,7 +15,7 @@ import { day2Api, day2Keys } from "@/lib/day2";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { GitLabFileList } from "@/components/common/gitlab-file-list";
 import { ProblemList } from "@/components/common/problem-list";
@@ -77,6 +77,27 @@ function siteFromName(name: string, sites: string[]): string | null {
   const matches = sites.filter((s) => clusterNamePattern(s).test(name));
   return matches.sort((a, b) => b.length - a.length)[0] ?? null;
 }
+
+/** An MCE to choose: what it hosts under; one off the convention is listed apart and cannot be chosen. */
+function mceOption(mce: Mce): ComboboxOption {
+  if (!mce.follows_convention) {
+    return {
+      value: mce.name,
+      label: mce.name,
+      description: `Does not follow ocp4-<env>-mce-${mce.site}-<letter>`,
+      group: "Off convention",
+      disabled: true,
+    };
+  }
+  const facts = [
+    mce.env && `env ${mce.env}`,
+    mce.default_mastertag && `OCP ${mce.default_mastertag}`,
+    `${mce.cluster_count} cluster${mce.cluster_count === 1 ? "" : "s"}`,
+  ];
+  return { value: mce.name, label: mce.name, description: facts.filter(Boolean).join(" · ") };
+}
+
+const asOption = (value: string): ComboboxOption => ({ value, label: value });
 
 /** The one conventional MCE of the site whose env the name carries. */
 function mceFromName(name: string, site: string, mces: Mce[]): string | null {
@@ -614,7 +635,9 @@ export default function NewClusterPage() {
     ? { value: selectedMce.default_mastertag, source: `default of ${selectedMce.name}` }
     : null;
   const ocpVersion = ocpChoice ?? versionDefault?.value ?? "";
-  const versionOptions = ocpVersion && !ocpVersions.includes(ocpVersion) ? [ocpVersion, ...ocpVersions] : ocpVersions;
+  const versionOptions = (ocpVersion && !ocpVersions.includes(ocpVersion) ? [ocpVersion, ...ocpVersions] : ocpVersions).map(asOption);
+  const siteOptions = sites.map(asOption);
+  const mceOptions = mces.map(mceOption);
 
   const seededValues = useMemo(
     () => (selectedSpec ? seedForm(selectedSpec, schema) : {}),
@@ -886,20 +909,18 @@ export default function NewClusterPage() {
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     Site <span className="text-destructive">*</span>
                   </label>
-                  <Select
+                  <Combobox
+                    size="lg"
+                    options={siteOptions}
                     value={site || null}
-                    onValueChange={(v) => { setSiteChoice(v ?? null); setMceChoice(null); }}
+                    onValueChange={(v) => { setSiteChoice(v); setMceChoice(null); }}
                     disabled={sitesLoading || sites.length === 0}
-                  >
-                    <SelectTrigger className="w-full" data-testid="site-select" aria-label="Site">
-                      <SelectValue placeholder={sitesLoading ? "Loading sites…" : sites.length === 0 ? "No sites in the day1 repo" : "Select site…"} />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {sites.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={sitesLoading ? "Loading sites…" : sites.length === 0 ? "No sites in the day1 repo" : "Select site…"}
+                    searchPlaceholder="Search sites…"
+                    emptyMessage="No site matches."
+                    data-testid="site-select"
+                    aria-label="Site"
+                  />
                   {!siteChoice && detectedSite && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
                   )}
@@ -908,38 +929,27 @@ export default function NewClusterPage() {
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     MCE <span className="text-destructive">*</span>
                   </label>
-                  <Select
+                  <Combobox
+                    size="lg"
+                    options={mceOptions}
                     value={mce || null}
                     onValueChange={(v) => {
                       // Choosing an MCE pins its site too, so editing the name no longer moves either.
                       setSiteChoice(site);
-                      setMceChoice(v ?? null);
+                      setMceChoice(v);
                     }}
                     disabled={!site || mcesLoading || mces.length === 0}
-                  >
-                    <SelectTrigger className="w-full" data-testid="mce-select" aria-label="MCE">
-                      <SelectValue
-                        placeholder={
-                          !site ? "Select site first…"
-                            : mcesLoading ? "Loading MCEs…"
-                            : mces.length === 0 ? "No MCEs on this site"
-                            : "Select MCE…"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {mces.map((m) => (
-                        <SelectItem key={m.name} value={m.name} disabled={!m.follows_convention}>
-                          <span className="truncate">{m.name}</span>
-                          {m.env ? (
-                            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{m.env}</span>
-                          ) : (
-                            <span className="text-[10px] text-status-warning-fg">off convention</span>
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      !site ? "Select site first…"
+                        : mcesLoading ? "Loading MCEs…"
+                        : mces.length === 0 ? "No MCEs on this site"
+                        : "Select MCE…"
+                    }
+                    searchPlaceholder="Search MCEs…"
+                    emptyMessage="No MCE matches."
+                    data-testid="mce-select"
+                    aria-label="MCE"
+                  />
                   {!mceChoice && detectedMce && (
                     <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
                   )}
@@ -1019,16 +1029,17 @@ export default function NewClusterPage() {
                   OpenShift Version <span className="text-destructive">*</span>
                 </label>
                 {versionOptions.length > 0 ? (
-                  <Select value={ocpVersion || null} onValueChange={(v) => setOcpChoice(v ?? null)}>
-                    <SelectTrigger className="w-full" data-testid="ocp-version-select" aria-label="OpenShift version">
-                      <SelectValue placeholder="Select OpenShift version…" />
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {versionOptions.map((v) => (
-                        <SelectItem key={v} value={v}>{v}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    size="lg"
+                    options={versionOptions}
+                    value={ocpVersion || null}
+                    onValueChange={setOcpChoice}
+                    placeholder="Select OpenShift version…"
+                    searchPlaceholder="Search versions…"
+                    emptyMessage="No version matches."
+                    data-testid="ocp-version-select"
+                    aria-label="OpenShift version"
+                  />
                 ) : (
                   <input
                     type="text"

@@ -44,13 +44,7 @@ import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
 import { computeLineDiff } from "@/lib/diff";
 import { cn } from "@/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { ConfigureOverrideableDialog, deepMergeValues } from "@/components/specs/configure-overrideable-dialog";
 import { formatPreset, specApiPath, specDocument, specVersionProblem } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
@@ -97,12 +91,15 @@ function SortableAddonItem({
         <Settings2 className="h-4 w-4" />
       </button>
       <div className="shrink-0">
-        <Select value={addon.version} onValueChange={(v) => v && onVersionChange(v)}>
-          <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {availableVersions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={availableVersions.map((v) => ({ value: v, label: v }))}
+          value={addon.version}
+          onValueChange={(v) => v && onVersionChange(v)}
+          searchPlaceholder="Search revisions…"
+          emptyMessage="No revision matches."
+          aria-label={`${addon.name} revision`}
+          className="w-24 text-xs"
+        />
       </div>
       <button onClick={onRemove} aria-label="Remove addon" className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
         <X className="h-4 w-4" />
@@ -137,14 +134,16 @@ function AddonCatalogCard({ addon, isSelected, onAdd }: {
         {isSelected && <span className="rounded-full px-2 py-0.5 text-xs bg-primary/10 text-primary font-medium shrink-0">Added</span>}
       </div>
       <div className="flex items-center gap-2">
-        <Select value={selectedVersion} onValueChange={(v) => v && setSelectedVersion(v)} disabled={isSelected}>
-          <SelectTrigger className="flex-1 h-8 text-xs">
-            <Tag className="h-3 w-3 mr-1" /><SelectValue />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {chartRevisions(addon).map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={chartRevisions(addon).map((v) => ({ value: v, label: v }))}
+          value={selectedVersion}
+          onValueChange={(v) => v && setSelectedVersion(v)}
+          disabled={isSelected}
+          searchPlaceholder="Search revisions…"
+          emptyMessage="No revision matches."
+          aria-label={`${addon.name} revision`}
+          className="min-w-0 flex-1 text-xs"
+        />
         <button onClick={() => onAdd(selectedVersion)} disabled={isSelected}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 shrink-0", isSelected && "opacity-50 cursor-not-allowed")}>
           <Plus className="h-3.5 w-3.5 mr-1" />Add

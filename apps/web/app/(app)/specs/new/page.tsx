@@ -46,13 +46,7 @@ import { toastMrOpened } from "@/lib/mr-toast";
 import { asNewFile } from "@/lib/diff";
 import { useIsAdmin } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -132,16 +126,15 @@ function SortableAddonItem({
         <Settings2 className="h-4 w-4" />
       </button>
       <div className="shrink-0">
-        <Select value={addon.version} onValueChange={(v) => v && onVersionChange(v)}>
-          <SelectTrigger className="w-24 h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {availableVersions.map((v) => (
-              <SelectItem key={v} value={v}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={availableVersions.map((v) => ({ value: v, label: v }))}
+          value={addon.version}
+          onValueChange={(v) => v && onVersionChange(v)}
+          searchPlaceholder="Search revisions…"
+          emptyMessage="No revision matches."
+          aria-label={`${addon.name} revision`}
+          className="w-24 text-xs"
+        />
       </div>
       <button
         onClick={onRemove}
@@ -193,21 +186,16 @@ function AddonCatalogCard({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <Select
+        <Combobox
+          options={chartRevisions(addon).map((v) => ({ value: v, label: v }))}
           value={selectedVersion}
           onValueChange={(v) => v && setSelectedVersion(v)}
           disabled={isSelected}
-        >
-          <SelectTrigger className="flex-1 h-8 text-xs">
-            <Tag className="h-3 w-3 mr-1" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {chartRevisions(addon).map((v) => (
-              <SelectItem key={v} value={v}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          searchPlaceholder="Search revisions…"
+          emptyMessage="No revision matches."
+          aria-label={`${addon.name} revision`}
+          className="min-w-0 flex-1 text-xs"
+        />
         <button
           onClick={() => onAdd(selectedVersion)}
           disabled={isSelected}
