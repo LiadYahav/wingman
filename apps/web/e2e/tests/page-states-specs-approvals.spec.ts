@@ -68,7 +68,9 @@ test.describe("Spec list", () => {
 
     const skeletons = page.getByRole("main").locator("[data-slot=skeleton]");
     await expect(skeletons.first()).toBeVisible();
-    await expect(page.getByText("Loading...")).toHaveCount(0);
+    // Not yet known to be empty: neither the empty state nor a count of zero
+    await expect(page.getByTestId("specs-empty")).toHaveCount(0);
+    await expect(page.getByText("0 specs")).toHaveCount(0);
     specs.release();
     await expect(page.getByTestId("spec-card-agent-standard")).toBeVisible();
     await expect(page.getByText("1 spec", { exact: true })).toBeVisible();
@@ -82,7 +84,6 @@ test.describe("Spec list", () => {
     const alert = problem(page, "The specs could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
-    await expect(page.getByText(/Failed to load/)).toHaveCount(0);
     await expect(page.getByTestId("specs-empty")).toHaveCount(0);
     await expect(page.getByText("0 specs")).toHaveCount(0);
   });
@@ -243,7 +244,7 @@ test.describe("Audit", () => {
     await expect(page.getByText(COMMIT.title)).toBeVisible();
   });
 
-  test("a commit diff that cannot be read is a problem, not 'Failed to load diff'", async ({ page }) => {
+  test("a commit diff that cannot be read is a problem with its request id", async ({ page }) => {
     await open(page, "/audit", withAudit(async (p) => {
       await p.route("**/api/day1/audit/commits", (r) => ok(r, [COMMIT]));
       await p.route("**/api/day1/audit/commits/specs/*/diff", unreachable);
@@ -253,7 +254,6 @@ test.describe("Audit", () => {
     const alert = problem(page, "The commit's diff could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
-    await expect(page.getByText("Failed to load diff")).toHaveCount(0);
   });
 
   test("an MR diff that cannot be read is a problem", async ({ page }) => {
@@ -279,7 +279,8 @@ test.describe("Approvals", () => {
     await open(page, "/approvals");
 
     await expect(page.getByTestId("approvals-empty")).toContainText("All caught up");
-    await expect(page.getByText("Loading...")).toHaveCount(0);
+    // Both sources answered: nothing is still a skeleton beside the empty state
+    await expect(page.getByRole("main").locator("[data-slot=skeleton]")).toHaveCount(0);
   });
 
   test("filters that match nothing say so and clear in one click", async ({ page }) => {

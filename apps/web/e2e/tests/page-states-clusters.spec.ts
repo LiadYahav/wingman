@@ -108,7 +108,6 @@ test.describe("Cluster detail", () => {
     await expect(page.getByTestId("history-day1-empty")).toHaveCount(0);
     // The other source read fine and is empty: it says so on its own
     await expect(page.getByTestId("history-day2-empty")).toContainText("No addon value changes yet");
-    await expect(page.getByText("No history available.")).toHaveCount(0);
   });
 
   test("an empty history is an empty state for each source", async ({ page }) => {

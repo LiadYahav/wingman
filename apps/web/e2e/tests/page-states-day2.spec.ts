@@ -122,7 +122,9 @@ test.describe("Catalog", () => {
     await open(page, "/addons");
 
     await expect(page.locator("[data-slot=skeleton]").first()).toBeVisible();
-    await expect(page.getByText(/Loading/)).toHaveCount(0);
+    // Not yet known to be empty: neither the empty state nor a count of zero
+    await expect(page.getByTestId("catalog-empty")).toHaveCount(0);
+    await expect(page.getByText(/0 charts/)).toHaveCount(0);
     release();
     await expect(page.getByText("6 charts across 4 teams · 1 with warnings")).toBeVisible();
     await expect(page.locator("[data-slot=skeleton]")).toHaveCount(0);
