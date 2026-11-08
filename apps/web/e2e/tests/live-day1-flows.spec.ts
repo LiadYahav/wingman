@@ -96,7 +96,7 @@ test("the dashboard counts the clusters and specs; the sidebar and the docs are 
   await expect(clusters).toContainText(/\d+/);
   await expect(clusters).toContainText(/\d+ specs?/);
   const nav = alice.getByLabel("Main");
-  for (const page of ["Clusters", "Specs", "Addons", "Approvals", "Audit", "Documentation"]) {
+  for (const page of ["Clusters", "Flavors", "Addons", "Approvals", "Audit", "Documentation"]) {
     await expect(nav.getByRole("link", { name: new RegExp(`^${page}`) })).toBeVisible();
   }
 

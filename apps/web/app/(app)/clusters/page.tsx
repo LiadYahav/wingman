@@ -545,7 +545,7 @@ export default function ClustersPage() {
                     Owner
                   </th>
                   <th className="text-left px-3 py-3">{sortHeader("mastertag", "Mastertag")}</th>
-                  <th className="text-left px-3 py-3">{sortHeader("spec", "Spec")}</th>
+                  <th className="text-left px-3 py-3">{sortHeader("spec", "Flavor")}</th>
                   <th className="text-left px-3 py-3">{sortHeader("created_at", "Last change")}</th>
                   <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Drift</th>
                 </tr>

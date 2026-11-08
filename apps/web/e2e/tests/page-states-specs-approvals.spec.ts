@@ -51,10 +51,10 @@ test.describe("Spec list", () => {
     await expect(skeletons.first()).toBeVisible();
     // Not yet known to be empty: neither the empty state nor a count of zero
     await expect(page.getByTestId("specs-empty")).toHaveCount(0);
-    await expect(page.getByText("0 specs")).toHaveCount(0);
+    await expect(page.getByText("0 flavors")).toHaveCount(0);
     specs.release();
     await expect(page.getByTestId("spec-card-agent-standard")).toBeVisible();
-    await expect(page.getByText("1 spec", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 flavor", { exact: true })).toBeVisible();
     await expect(skeletons).toHaveCount(0);
   });
 
@@ -62,25 +62,25 @@ test.describe("Spec list", () => {
     await open(page, "/specs", (p) => p.route("**/api/day1/specs", unreachable));
 
     // The default query retries twice (1s, 2s) before the error shows
-    const alert = problem(page, "The specs could not be loaded");
+    const alert = problem(page, "The flavors could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
     await expect(page.getByTestId("specs-empty")).toHaveCount(0);
-    await expect(page.getByText("0 specs")).toHaveCount(0);
+    await expect(page.getByText("0 flavors")).toHaveCount(0);
   });
 
   test("with no specs it says so and offers to create one", async ({ page }) => {
     await open(page, "/specs");
 
     const empty = page.getByTestId("specs-empty");
-    await expect(empty).toContainText("No specs yet");
+    await expect(empty).toContainText("No flavors yet");
     await expect(empty.getByRole("link", { name: "New spec" })).toHaveAttribute("href", "/specs/new");
   });
 
   test("a search that matches nothing says so and clears in one click", async ({ page }) => {
     await open(page, "/specs", (p) => p.route("**/api/day1/specs", (r) => json(r, [SPEC])));
 
-    await page.getByPlaceholder("Search specs...").fill("no-such-spec");
+    await page.getByPlaceholder("Search flavors...").fill("no-such-spec");
     await expect(page.getByText("No specs match")).toBeVisible();
     await page.getByRole("button", { name: "Clear search" }).click();
     await expect(page.getByTestId("spec-card-agent-standard")).toBeVisible();

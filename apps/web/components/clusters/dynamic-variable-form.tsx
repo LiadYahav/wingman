@@ -532,7 +532,7 @@ function ObjectListEditor({
 
       {!canAdd && items.length === 0 && (
         <div className="rounded-xl border border-dashed border-border/50 p-4 text-center text-sm text-muted-foreground">
-          No {toLabel(field.name).toLowerCase()} defined in spec
+          No {toLabel(field.name).toLowerCase()} defined in the flavor
         </div>
       )}
     </div>

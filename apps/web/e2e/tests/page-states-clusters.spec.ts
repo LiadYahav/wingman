@@ -245,7 +245,7 @@ test.describe("Cluster create form", () => {
     await go(page, "/clusters/new");
 
     const empty = page.getByTestId("specs-empty");
-    await expect(empty).toContainText("No specs yet");
+    await expect(empty).toContainText("No flavors yet");
     await expect(empty.getByRole("link", { name: "New spec" })).toHaveAttribute("href", "/specs/new");
   });
 

@@ -561,14 +561,14 @@ function describeFailure(error: unknown, what: "preview" | "create"): FormError 
     return {
       kind: "server",
       error,
-      title: "The spec changed since you opened it",
-      hint: "Reload the specs and fill the form again from the current version.",
+      title: "The flavor changed since you opened it",
+      hint: "Reload the flavors and fill the form again from the current version.",
       reloadSpec: true,
     };
   }
   if (isApiError(error, "VALIDATION_ERROR")) return { kind: "server", error, title: `${verb}: fix the following` };
   if (isApiError(error, "NOT_FOUND")) {
-    return { kind: "server", error, title: verb, hint: "The site, MCE or spec no longer exists in GitLab. Reload the page." };
+    return { kind: "server", error, title: verb, hint: "The site, MCE or flavor no longer exists in GitLab. Reload the page." };
   }
   return { kind: "server", error, title: writeErrorTitle(error, verb) };
 }
@@ -951,7 +951,7 @@ export default function NewClusterPage() {
           step === "spec" ? "bg-primary text-white" : "bg-status-ready text-white")}>
           {step === "spec" ? "1" : <CheckCircle2 className="h-4 w-4" />}
         </span>
-        <span className={step === "spec" ? "font-semibold" : "text-muted-foreground"}>Choose Spec</span>
+        <span className={step === "spec" ? "font-semibold" : "text-muted-foreground"}>Choose Flavor</span>
         <div className="h-px w-8 bg-border" />
         <span className={cn("flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
           step === "vars" ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
@@ -966,11 +966,11 @@ export default function NewClusterPage() {
           {specsLoading ? (
             Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
           ) : specsError ? (
-            <ProblemList error={specsError} title="The specs could not be loaded" />
+            <ProblemList error={specsError} title="The flavors could not be loaded" />
           ) : specs?.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title="No specs yet"
+              title="No flavors yet"
               description="A cluster is created from a cluster spec. Create one first."
               action={<EmptyStateLink href="/specs/new">New spec</EmptyStateLink>}
               bordered
@@ -1339,7 +1339,7 @@ export default function NewClusterPage() {
               <div className="px-5 py-4 border-b bg-muted/30">
                 <h2 className="text-sm font-semibold">Addon Configuration</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Values for the spec&apos;s day2 addons on this cluster. They are recorded in the cluster file and used when the addons are installed.
+                  Values for the flavor&apos;s day2 add-ons on this cluster. They are recorded in the cluster file and used when the addons are installed.
                 </p>
               </div>
               <div className="p-5 space-y-4">
@@ -1459,7 +1459,7 @@ export default function NewClusterPage() {
                   {formError.hint && <p className="text-xs text-muted-foreground">{formError.hint}</p>}
                   {formError.reloadSpec && (
                     <button type="button" onClick={reloadSpecs} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}>
-                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload specs
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload flavors
                     </button>
                   )}
                 </div>
@@ -1513,7 +1513,7 @@ export default function NewClusterPage() {
             </div>
 
             <div className="border-t pt-3 space-y-1">
-              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Spec</p>
+              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Flavor</p>
               <div className="flex gap-3">
                 <span className="text-muted-foreground w-32 shrink-0">Name</span>
                 <span className="font-medium break-all min-w-0">{reviewed.request.spec_name}</span>
