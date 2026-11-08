@@ -167,6 +167,8 @@ do. Paths are relative to the day1 service (`/api/day1`, `/api/auth`,
     for day1-service items, and expand an MR with
     `/api/day1/approvals/{iid}?repo={repo}` (the page calls
     `/api/${repo}/approvals/...`, which for a specs MR is not even a route).
+    Only Wingman's MRs are listed (the `wingman` label), as day2 does: an MR
+    opened by hand is not one an approval detail can open.
 29. `GET /audit/commits/{repo}/{sha}/diff`: unknown SHA → 404 problem;
     a wrong `repo` hint is still tolerated.
 

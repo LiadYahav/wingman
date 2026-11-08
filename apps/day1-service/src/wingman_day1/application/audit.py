@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from wingman_core.application.approvals import PendingChange, describe
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, FileDiff
+from wingman_core.domain.mr_conventions import WINGMAN_LABEL
 from wingman_day1.application.approvals import RepoKey
 from wingman_day1.domain.errors import ResourceNotFoundError
 from wingman_day1.ports import RepoReads
@@ -54,10 +55,17 @@ class AuditService:
         return merged[per_page * (page - 1) : wanted]
 
     async def merge_requests(self, *, per_page: int, page: int) -> list[AuditMergeRequest]:
-        """One page of merge requests (any state) merged across both repositories."""
+        """One page of Wingman's merge requests (any state) merged across both repositories.
+
+        Only MRs labelled ``wingman``: those are the ones Wingman opened, and the
+        only ones an approval detail can open (``Approvals.get`` refuses the rest).
+        """
         wanted = per_page * page
         lists = await asyncio.gather(
-            *(r.merge_requests(state=None, limit=wanted) for r in self._repos.values())
+            *(
+                r.merge_requests(state=None, labels=(WINGMAN_LABEL,), limit=wanted)
+                for r in self._repos.values()
+            )
         )
         merged = sorted(
             (
