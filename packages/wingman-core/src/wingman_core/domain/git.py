@@ -7,6 +7,7 @@ them from backend responses; application code never handles raw JSON.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -259,3 +260,44 @@ class Branch:
 
     name: str
     commit_id: str
+
+
+def tree_of(paths: Iterable[str], path: RepoPath, *, recursive: bool) -> list[TreeEntry] | None:
+    """``list_tree`` from a set of file paths: files and the directories they imply, sorted.
+
+    ``None`` when nothing is at or under ``path`` (a missing directory; at the
+    root, an empty repository). Git keeps no empty directories, so the
+    directories implied by the files are exactly the repository's.
+    """
+    prefix = "" if path.is_root else f"{path}/"
+    found: dict[str, EntryKind] = {}
+    for file in paths:
+        if not file.startswith(prefix):
+            continue
+        parts = file[len(prefix) :].split("/")
+        if recursive:
+            for depth in range(1, len(parts)):
+                found[prefix + "/".join(parts[:depth])] = EntryKind.DIRECTORY
+            found[file] = EntryKind.FILE
+        else:
+            found[prefix + parts[0]] = EntryKind.FILE if len(parts) == 1 else EntryKind.DIRECTORY
+    if not found:
+        return None
+    return sorted((TreeEntry(RepoPath(p), kind) for p, kind in found.items()), key=lambda e: e.path)
+
+
+@dataclass(frozen=True, slots=True)
+class RepoArchive:
+    """Every file of a repository at one commit, from one archive download.
+
+    ``files`` maps each path to its bytes; a symlink holds its target path,
+    as ``read_file`` returns it. Submodules are not in it.
+    """
+
+    commit_id: str
+    files: Mapping[str, bytes]
+
+    @property
+    def size(self) -> int:
+        """The bytes of every file together."""
+        return sum(len(content) for content in self.files.values())

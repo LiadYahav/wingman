@@ -17,6 +17,7 @@ from wingman_core.domain.git import (
     FileContent,
     FileDiff,
     Project,
+    RepoArchive,
     RepoPath,
     TreeEntry,
 )
@@ -92,6 +93,19 @@ class InstrumentedGitLab:
         """See GitLabPort.list_branches."""
         return await self._call(
             GitLabOperation.LIST_BRANCHES, self._inner.list_branches(project_id)
+        )
+
+    async def get_branch(self, project_id: int, name: str) -> Branch:
+        """See GitLabPort.get_branch."""
+        return await self._call(
+            GitLabOperation.GET_BRANCH, self._inner.get_branch(project_id, name)
+        )
+
+    async def read_archive(self, project_id: int, sha: str, *, max_bytes: int) -> RepoArchive:
+        """See GitLabPort.read_archive."""
+        return await self._call(
+            GitLabOperation.READ_ARCHIVE,
+            self._inner.read_archive(project_id, sha, max_bytes=max_bytes),
         )
 
     async def create_branch(self, project_id: int, name: str, ref: str) -> Branch:

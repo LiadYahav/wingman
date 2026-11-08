@@ -21,6 +21,7 @@ import pytest
 
 from wingman_core.domain.errors import (
     AlreadyExistsError,
+    InvalidRequestError,
     NotFoundError,
     NotMergeableError,
     RevisionConflictError,
@@ -492,3 +493,55 @@ class GitLabContract:
         found = await gitlab.get_project(old)
         assert (found.id, found.path_with_namespace) == (project.id, f"{old}-renamed")
         assert found.web_url.endswith(f"/{old}-renamed")
+
+    # ── Reading a repo at one commit (ADR-0035) ─────────────────────────────
+
+    async def test_get_branch_gives_its_head_and_a_missing_one_is_not_found(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        head = await gitlab.get_branch(project.id, "main")
+        assert head in await gitlab.list_branches(project.id)
+        with pytest.raises(NotFoundError):
+            await gitlab.get_branch(project.id, "no-such-branch")
+
+    async def test_an_archive_holds_every_file_at_its_commit(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        head = await gitlab.get_branch(project.id, "main")
+        await _branch_with_change(gitlab, project, "main", "README.md", "# later\n")
+        archive = await gitlab.read_archive(project.id, head.commit_id, max_bytes=1_000_000)
+        assert archive.commit_id == head.commit_id
+        assert {path: content.decode() for path, content in archive.files.items()} == FILES
+
+    async def test_an_archive_larger_than_allowed_is_refused(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        head = await gitlab.get_branch(project.id, "main")
+        with pytest.raises(InvalidRequestError):
+            await gitlab.read_archive(project.id, head.commit_id, max_bytes=8)
+
+    async def test_any_commit_a_file_was_read_at_guards_its_update(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        read_at = (await gitlab.get_branch(project.id, "main")).commit_id
+        # Another file changes: README.md is still as it was at read_at.
+        await _branch_with_change(gitlab, project, "main", "sites/site1/values.yaml", "a: 2\n")
+        readme = _p("README.md")
+        await gitlab.commit(
+            project.id,
+            branch="main",
+            message="mine",
+            changes=[FileChange.update(readme, "# mine\n", last_commit_id=read_at)],
+        )
+        # Now README.md changed after read_at.
+        with pytest.raises(RevisionConflictError):
+            await gitlab.commit(
+                project.id,
+                branch="main",
+                message="mine again",
+                changes=[FileChange.update(readme, "# again\n", last_commit_id=read_at)],
+            )

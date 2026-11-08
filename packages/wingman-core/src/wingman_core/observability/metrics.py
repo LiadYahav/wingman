@@ -85,6 +85,8 @@ class GitLabOperation(StrEnum):
     READ_FILE = "read_file"
     LIST_TREE = "list_tree"
     LIST_BRANCHES = "list_branches"
+    GET_BRANCH = "get_branch"
+    READ_ARCHIVE = "read_archive"
     CREATE_BRANCH = "create_branch"
     COMMIT = "commit"
     LIST_COMMITS = "list_commits"

@@ -17,7 +17,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import io
 import re
+import tarfile
+import zlib
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
@@ -45,6 +48,7 @@ from wingman_core.domain.git import (
     FileContent,
     FileDiff,
     Project,
+    RepoArchive,
     RepoPath,
     TreeEntry,
 )
@@ -156,6 +160,23 @@ class GitLabHttpAdapter:
         """See GitLabPort.list_branches."""
         raw = await self._get_pages(f"/projects/{project_id}/repository/branches", {})
         return sorted((Branch(b["name"], b["commit"]["id"]) for b in raw), key=lambda b: b.name)
+
+    async def get_branch(self, project_id: int, name: str) -> Branch:
+        """See GitLabPort.get_branch."""
+        raw = await self._get(f"/projects/{project_id}/repository/branches/{quote(name, safe='')}")
+        return Branch(raw["name"], raw["commit"]["id"])
+
+    async def read_archive(self, project_id: int, sha: str, *, max_bytes: int) -> RepoArchive:
+        """See GitLabPort.read_archive: ``/repository/archive.tar.gz?sha=``, read in memory."""
+        response = await self._read(
+            "GET",
+            f"/projects/{project_id}/repository/archive.tar.gz",
+            {"sha": sha},
+            headers={"Accept": "application/gzip"},
+        )
+        if len(response.content) > max_bytes:
+            raise InvalidRequestError(f"the archive of {sha[:8]} is larger than {max_bytes} bytes")
+        return _archive(response.content, sha, max_bytes=max_bytes)
 
     async def create_branch(self, project_id: int, name: str, ref: str) -> Branch:
         """See GitLabPort.create_branch."""
@@ -348,7 +369,13 @@ class GitLabHttpAdapter:
         return items
 
     async def _read(
-        self, method: str, path: str, params: Mapping[str, str], *, follow_moved: bool = False
+        self,
+        method: str,
+        path: str,
+        params: Mapping[str, str],
+        *,
+        follow_moved: bool = False,
+        headers: Mapping[str, str] | None = None,
     ) -> httpx.Response:
         """Send a read, retrying transient failures.
 
@@ -358,7 +385,7 @@ class GitLabHttpAdapter:
         for attempt in range(1, self._read_attempts + 1):
             last = attempt == self._read_attempts
             try:
-                response = await self._client.request(method, path, params=params)
+                response = await self._client.request(method, path, params=params, headers=headers)
                 moved = _moved_project(response) if follow_moved else None
                 if moved is not None:
                     response = await self._client.request(method, moved)
@@ -508,6 +535,35 @@ def _retry_delay(response: httpx.Response, default: float) -> float:
         return min(float(response.headers.get("retry-after", default)), _MAX_RETRY_AFTER_SECONDS)
     except ValueError:
         return default
+
+
+def _archive(data: bytes, sha: str, *, max_bytes: int) -> RepoArchive:
+    """The files of a GitLab ``archive.tar.gz``, without its top folder (``<project>-<sha>/``).
+
+    Nothing touches the disk. Directories and anything that is not a file or a
+    symlink are skipped, and reading stops once the files pass ``max_bytes``.
+    """
+    files: dict[str, bytes] = {}
+    total = 0
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+            for member in tar:
+                path = member.name.partition("/")[2]
+                if not path:
+                    continue
+                if member.issym():
+                    files[path] = member.linkname.encode()
+                elif member.isfile():
+                    total += member.size
+                    if total > max_bytes:
+                        raise InvalidRequestError(
+                            f"the archive of {sha[:8]} is larger than {max_bytes} bytes"
+                        )
+                    extracted = tar.extractfile(member)
+                    files[path] = extracted.read() if extracted is not None else b""
+    except (tarfile.TarError, OSError, EOFError, zlib.error) as exc:
+        raise InvalidRequestError(f"the archive of {sha[:8]} is not a readable tar.gz") from exc
+    return RepoArchive(sha, files)
 
 
 def _moved_project(response: httpx.Response) -> str | None:
