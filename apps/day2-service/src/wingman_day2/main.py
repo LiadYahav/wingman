@@ -107,6 +107,7 @@ def create_app(
         session_tokens=SessionTokens(
             config.auth.jwt_secret_key.get_secret_value(),
             ttl=timedelta(hours=config.auth.jwt_expiry_hours),
+            clock=clock,
         ),
         readiness={"gitlab": gitlab_ready},
         lifespan=lifespan,
