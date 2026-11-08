@@ -86,6 +86,30 @@ test.describe("Clusters and the dashboard", () => {
     await expect(page.getByTestId("cluster-row-ocp4-prod-alpha-site1")).toBeVisible();
   });
 
+  test("approvals say all caught up only once both sources answered", async ({ page }) => {
+    await injectAdminAuth(page);
+    await mockDashboardApis(page);
+    let answer: () => void = () => {};
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    await page.route("**/api/day2/approvals", async (r: Route) => {
+      await answered;
+      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+    });
+    const day1Approvals = page.waitForResponse("**/api/day1/approvals");
+    await go(page, "/");
+    await day1Approvals;
+
+    // The day1 reads answered and rendered; day2's is still out
+    await expect(page.getByTestId("health-empty")).toBeVisible();
+    await expect(page.getByTestId("approvals-empty")).toHaveCount(0);
+    const pending = page.getByTestId("stat-pending-approvals");
+    await expect(pending.locator("[data-slot=skeleton]")).toBeVisible();
+    answer();
+    await expect(page.getByTestId("approvals-empty")).toContainText("All caught up");
+    await expect(pending).toContainText("0");
+    await expect(pending.locator("[data-slot=skeleton]")).toHaveCount(0);
+  });
+
   test("a failed read shows the problem, never an empty list", async ({ page }) => {
     await injectAdminAuth(page);
     await mockDashboardApis(page);

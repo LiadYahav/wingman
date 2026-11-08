@@ -30,7 +30,7 @@ function StatCard({
   };
   const c = colorMap[color];
   return (
-    <Link href={href} className="block group">
+    <Link href={href} className="block group" data-testid={`stat-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       <div className="bg-card rounded-xl border shadow-sm hover:shadow-md hover:border-primary/30 transition-all p-5 cursor-pointer h-full">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
@@ -64,13 +64,13 @@ export default function DashboardPage() {
     queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
   });
 
-  const { data: approvalsDay1, error: day1ApprovalsError } = useQuery<MRDetail[]>({
+  const { data: approvalsDay1, isPending: day1ApprovalsPending, error: day1ApprovalsError } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day1"],
     queryFn: () => api.get<MRDetail[]>("/api/day1/approvals"),
     staleTime: 60_000,
   });
 
-  const { data: approvalsDay2, error: day2ApprovalsError } = useQuery<MRDetail[]>({
+  const { data: approvalsDay2, isPending: day2ApprovalsPending, error: day2ApprovalsError } = useQuery<MRDetail[]>({
     queryKey: ["approvals", "day2"],
     queryFn: () => api.get<MRDetail[]>("/api/day2/approvals"),
     staleTime: 60_000,
@@ -103,7 +103,8 @@ export default function DashboardPage() {
   const recentApprovals = [...allApprovals]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 6);
-  const approvalsLoading = !approvalsDay1 && !approvalsDay2 && !day1ApprovalsError && !day2ApprovalsError;
+  // Until both sources answered (or failed), a count or "all caught up" would be one source's.
+  const approvalsLoading = day1ApprovalsPending || day2ApprovalsPending;
   const unavailableApprovals = [day1ApprovalsError && "day1", day2ApprovalsError && "day2"].filter(Boolean);
   const totalApprovals = allApprovals.length;
 
