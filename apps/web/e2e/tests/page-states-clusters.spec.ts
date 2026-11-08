@@ -8,23 +8,12 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
 import type { ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts, Mce, SpecEntry, TemplateField } from "../../types";
 
 const SITE = "site1";
 const MCE = "ocp4-prod-mce-site1-a";
 const NAME = "ocp4-prod-herzi-site1";
-
-const json = (route: Route, body: unknown, status = 200) =>
-  route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-
-/** Land on "/" first so the persisted session hydrates, then open the page. */
-async function go(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
-}
 
 // ── Cluster detail ──────────────────────────────────────────────────────────
 

@@ -1,4 +1,5 @@
 import { Page, Locator } from "@playwright/test";
+import { go } from "../fixtures/api-handlers";
 
 /** The two-step create form at /clusters/new: choose a spec, then configure the cluster. */
 export class ClusterNewPage {
@@ -33,10 +34,7 @@ export class ClusterNewPage {
 
   /** Land on "/" first so the persisted session hydrates, then open the form. */
   async goto() {
-    await this.page.goto("/");
-    await this.page.waitForLoadState("domcontentloaded");
-    await this.page.goto("/clusters/new");
-    await this.page.waitForLoadState("domcontentloaded");
+    await go(this.page, "/clusters/new");
   }
 
   specCard(name: string): Locator {

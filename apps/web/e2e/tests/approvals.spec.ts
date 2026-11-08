@@ -7,7 +7,7 @@
  */
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
 import type { ApprovalDetail, CommitRecord, MRDetail } from "../../types";
 
 const DAY1_MR = mockMR({ iid: 42, title: "[Wingman/Day1] Create cluster ocp4-prod-nova-site1", author: { username: "alice", name: "alice", avatar_url: "" } });
@@ -43,13 +43,6 @@ async function open(page: Page, username = "test-admin") {
   await page.route("**/api/day2/approvals", (r: Route) =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([DAY2_MR]) })
   );
-}
-
-async function go(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
 }
 
 test.describe("Approvals list", () => {

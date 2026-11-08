@@ -7,7 +7,7 @@
  */
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
 import type { ClusterDetail, ClusterDrift, ClusterStatus, DestinationCharts, DriftSummaryItem, InstalledChart } from "../../types";
 
 const SITE = "site1";
@@ -117,13 +117,6 @@ function drift(overrides: Partial<ClusterDrift> = {}): ClusterDrift {
     spec_name: "agent-standard", spec_version: "1.0.0", current_spec_version: "1.0.0",
     addon_drift: [], version_differences: [], error: null, ...overrides,
   };
-}
-
-async function go(page: Page, path: string) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto(path);
-  await page.waitForLoadState("domcontentloaded");
 }
 
 async function statusOff(page: Page) {

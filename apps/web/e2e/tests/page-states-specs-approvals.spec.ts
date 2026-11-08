@@ -7,7 +7,7 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
+import { fulfillProblem, go, held, injectAdminAuth, json, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
 import type { ApprovalDetail, CommitRecord, SpecCommit, SpecEntry } from "../../types";
 
 const UNREACHABLE = "GitLab could not be reached";
@@ -25,21 +25,7 @@ const SPEC: SpecEntry = {
   load_problems: [],
 };
 
-const ok = (route: Route, body: unknown) =>
-  route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
-
 const unreachable = (route: Route) => fulfillProblem(route, 503, "GIT_UNAVAILABLE", UNREACHABLE);
-
-/** A response held until `release()`, so the page's loading state stays on screen meanwhile. */
-function held(body: unknown) {
-  let release: () => void = () => {};
-  const released = new Promise<void>((resolve) => (release = resolve));
-  const handler = async (route: Route) => {
-    await released;
-    await ok(route, body);
-  };
-  return { handler, release: () => release() };
-}
 
 /** The problem panel with `title`; filtered because Next's route announcer is also `role="alert"`. */
 const problem = (page: Page, title: string) => page.getByRole("alert").filter({ hasText: title });
@@ -49,12 +35,7 @@ async function open(page: Page, path: string, routes: (page: Page) => Promise<un
   await injectAdminAuth(page);
   await mockDashboardApis(page);
   await routes(page);
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  if (path !== "/") {
-    await page.goto(path);
-    await page.waitForLoadState("domcontentloaded");
-  }
+  await go(page, path);
 }
 
 // ── Spec list ────────────────────────────────────────────────────────────────
@@ -62,8 +43,8 @@ async function open(page: Page, path: string, routes: (page: Page) => Promise<un
 test.describe("Spec list", () => {
   test("while the specs load, the cards and the count are skeletons", async ({ page }) => {
     await open(page, "/");
-    const specs = held([SPEC]);
-    await page.route("**/api/day1/specs", specs.handler);
+    const specs = held();
+    await page.route("**/api/day1/specs", specs.answer([SPEC]));
     await page.goto("/specs");
 
     const skeletons = page.getByRole("main").locator("[data-slot=skeleton]");
@@ -97,7 +78,7 @@ test.describe("Spec list", () => {
   });
 
   test("a search that matches nothing says so and clears in one click", async ({ page }) => {
-    await open(page, "/specs", (p) => p.route("**/api/day1/specs", (r) => ok(r, [SPEC])));
+    await open(page, "/specs", (p) => p.route("**/api/day1/specs", (r) => json(r, [SPEC])));
 
     await page.getByPlaceholder("Search specs...").fill("no-such-spec");
     await expect(page.getByText("No specs match")).toBeVisible();
@@ -114,7 +95,7 @@ test.describe("Spec detail", () => {
 
   /** The spec itself, then the routes a test adds. */
   const withSpec = (more: (p: Page) => Promise<unknown> = async () => {}) => async (p: Page) => {
-    await p.route("**/api/day1/specs/agent-standard", (r) => ok(r, SPEC));
+    await p.route("**/api/day1/specs/agent-standard", (r) => json(r, SPEC));
     await more(p);
   };
 
@@ -136,7 +117,7 @@ test.describe("Spec detail", () => {
   });
 
   test("a spec no cluster uses says so and offers to create one", async ({ page }) => {
-    await open(page, "/specs/agent-standard", withSpec((p) => p.route(CLUSTERS, (r) => ok(r, []))));
+    await open(page, "/specs/agent-standard", withSpec((p) => p.route(CLUSTERS, (r) => json(r, []))));
     await page.getByRole("button", { name: /^Clusters/ }).click();
 
     const empty = page.getByTestId("spec-clusters-empty");
@@ -145,10 +126,10 @@ test.describe("Spec detail", () => {
   });
 
   test("while drift is computed, the summary and the rows are skeletons", async ({ page }) => {
-    const drift = held([]);
+    const drift = held();
     await open(page, "/specs/agent-standard", withSpec(async (p) => {
-      await p.route(CLUSTERS, (r) => ok(r, []));
-      await p.route("**/api/day1/specs/agent-standard/drift", drift.handler);
+      await p.route(CLUSTERS, (r) => json(r, []));
+      await p.route("**/api/day1/specs/agent-standard/drift", drift.answer([]));
     }));
     await page.getByRole("button", { name: "Drift", exact: true }).click();
 
@@ -177,7 +158,7 @@ test.describe("Spec detail", () => {
       web_url: "https://gitlab.example.com/wingman/cluster-specs/-/commit/abc123de",
     };
     await open(page, "/specs/agent-standard", withSpec(async (p) => {
-      await p.route(HISTORY, (r) => ok(r, [commit]));
+      await p.route(HISTORY, (r) => json(r, [commit]));
       await p.route("**/api/day1/specs/agent-standard/at/*", unreachable);
     }));
     await page.getByRole("button", { name: "History" }).click();
@@ -205,7 +186,7 @@ test.describe("Audit", () => {
   /** Every audit source answers an empty list, then the routes a test adds (matched first). */
   const withAudit = (more: (p: Page) => Promise<unknown> = async () => {}) => async (p: Page) => {
     for (const source of ["day1/audit/commits", "day2/audit/commits", "day1/audit/merge-requests", "day2/audit/merge-requests"]) {
-      await p.route(`**/api/${source}`, (r) => ok(r, []));
+      await p.route(`**/api/${source}`, (r) => json(r, []));
     }
     await more(p);
   };
@@ -235,7 +216,7 @@ test.describe("Audit", () => {
   });
 
   test("filters that match nothing say so and clear in one click", async ({ page }) => {
-    await open(page, "/audit", withAudit((p) => p.route("**/api/day1/audit/commits", (r) => ok(r, [COMMIT]))));
+    await open(page, "/audit", withAudit((p) => p.route("**/api/day1/audit/commits", (r) => json(r, [COMMIT]))));
 
     await page.getByPlaceholder("Search commits...").fill("no-such-commit");
     const none = page.getByTestId("audit-commits-no-matches");
@@ -246,7 +227,7 @@ test.describe("Audit", () => {
 
   test("a commit diff that cannot be read is a problem with its request id", async ({ page }) => {
     await open(page, "/audit", withAudit(async (p) => {
-      await p.route("**/api/day1/audit/commits", (r) => ok(r, [COMMIT]));
+      await p.route("**/api/day1/audit/commits", (r) => json(r, [COMMIT]));
       await p.route("**/api/day1/audit/commits/specs/*/diff", unreachable);
     }));
     await page.getByRole("button", { name: /Update spec agent-standard/ }).click();
@@ -258,7 +239,7 @@ test.describe("Audit", () => {
 
   test("an MR diff that cannot be read is a problem", async ({ page }) => {
     await open(page, "/audit", withAudit(async (p) => {
-      await p.route("**/api/day1/audit/merge-requests", (r) => ok(r, [SPECS_MR]));
+      await p.route("**/api/day1/audit/merge-requests", (r) => json(r, [SPECS_MR]));
       await p.route("**/api/day1/approvals/5?repo=specs", unreachable);
     }));
     await page.getByRole("button", { name: /merge requests/i }).click();
@@ -284,7 +265,7 @@ test.describe("Approvals", () => {
   });
 
   test("filters that match nothing say so and clear in one click", async ({ page }) => {
-    await open(page, "/approvals", (p) => p.route("**/api/day1/approvals", (r) => ok(r, [MR])));
+    await open(page, "/approvals", (p) => p.route("**/api/day1/approvals", (r) => json(r, [MR])));
 
     await page.getByPlaceholder("Search by title or author...").fill("no-such-mr");
     const none = page.getByTestId("approvals-no-matches");
@@ -309,8 +290,8 @@ test.describe("Approvals", () => {
   test("while an MR loads its card and files are skeletons; an MR without files says so", async ({ page }) => {
     await open(page, "/");
     const detail: ApprovalDetail = { mr: MR, diffs: [] };
-    const read = held(detail);
-    await page.route("**/api/day1/approvals/42?repo=day1", read.handler);
+    const read = held();
+    await page.route("**/api/day1/approvals/42?repo=day1", read.answer(detail));
     await page.goto("/approvals/day1-42");
 
     const loading = page.getByTestId("approval-loading");

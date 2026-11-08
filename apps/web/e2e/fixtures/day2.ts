@@ -1,5 +1,6 @@
-import type { Page, Route } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { mockAddons } from "./addons";
+import { json } from "./api-handlers";
 import type {
   BulkBody,
   BulkResult,
@@ -305,9 +306,6 @@ export function problem(status: number, code: string, detail: string, details: R
     body: JSON.stringify({ type: `/problems/${code.toLowerCase()}`, title: code, status, detail, instance: "", code, request_id: "req_test", details }),
   };
 }
-
-const json = (route: Route, body: unknown, status = 200) =>
-  route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
 /** Requests the page made, for assertions on what it sent. */
 export interface Day2Requests {

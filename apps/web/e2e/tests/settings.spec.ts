@@ -6,10 +6,7 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
-
-const json = (route: Route, body: unknown) =>
-  route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
 
 async function builds(page: Page, day1: (r: Route) => Promise<void>, day2: (r: Route) => Promise<void>) {
   await injectAdminAuth(page);
@@ -19,12 +16,7 @@ async function builds(page: Page, day1: (r: Route) => Promise<void>, day2: (r: R
 }
 
 /** Land on "/" first so the persisted session hydrates, then open settings. */
-async function open(page: Page) {
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.goto("/settings");
-  await page.waitForLoadState("domcontentloaded");
-}
+const open = (page: Page) => go(page, "/settings");
 
 test.describe("Settings", () => {
   test("shows the version and commit each service runs", async ({ page }) => {
