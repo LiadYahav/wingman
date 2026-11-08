@@ -144,6 +144,13 @@ types/
 └── day2.ts             # The day2 service's bodies (from its Pydantic schemas)
 ```
 
+## UI conventions
+
+- **Dropdowns** are `Select` (`components/ui/select.tsx`), never a native `<select>`: the
+  browser draws its arrow against the border. The arrow sits as far from the right border as
+  the text from the left; sizes `sm` and `default` match `Input`, `lg` the page forms' own
+  `px-3 py-2` inputs.
+
 ## Environment Variables
 
 The web app uses relative API paths — no `NEXT_PUBLIC_*` env vars are required. In a deployment,
