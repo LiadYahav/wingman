@@ -71,8 +71,8 @@ async def test_versions_template_and_schema(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     headers = auth(support.VIEWER)
-    versions = (await client.get("/api/day1/specs/versions/openshift", headers=headers)).json()
-    assert versions[0] == "4.16.27-x86_64"
+    gone = await client.get("/api/day1/specs/versions/openshift", headers=headers)
+    assert gone.status_code == 404  # each MCE's upgrade/ files say it now (ADR-0034)
     template = (await client.get("/api/day1/specs/template", headers=headers)).json()
     assert isinstance(template, str)
     assert "nodepool:" in template

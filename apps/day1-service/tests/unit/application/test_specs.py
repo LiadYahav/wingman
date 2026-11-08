@@ -73,14 +73,6 @@ async def test_an_unknown_spec_is_not_found(context: Day1Context) -> None:
         await context.specs.get("../escape")
 
 
-async def test_versions_skip_comments_and_blank_lines(context: Day1Context) -> None:
-    assert await context.specs.versions() == [
-        "4.16.27-x86_64",
-        "4.18.22-x86_64",
-        "4.21.40-x86_64",
-    ]
-
-
 async def test_schema_hides_reserved_inputs_unless_asked(context: Day1Context) -> None:
     plain = [f.name for f in await context.specs.schema()]
     full = [f.name for f in await context.specs.schema(include_reserved=True)]

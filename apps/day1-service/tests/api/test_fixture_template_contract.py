@@ -56,7 +56,7 @@ def create(**variables: Any) -> CreateCluster:
             "owner_merkaz": "1234",
             "owner_anaf": "56",
             "owner_mador": "7",
-            "openshift_release_version": "4.18.22-x86_64",
+            "openshift_release_version": "4.18.56-x86_64",
             "nodepools": NODEPOOLS,
             **variables,
         },
@@ -76,7 +76,7 @@ async def test_a_rendered_agent_cluster_has_only_the_keys_people_write(
     assert not FORBIDDEN & set(values)
     assert values["owner"] == {"merkaz": "1234", "anaf": "56", "mador": "7"}
     assert all(isinstance(v, str) for v in values["owner"].values())
-    assert values["mastertag"] == "4.18.22-x86_64"
+    assert values["mastertag"] == "4.18.56-x86_64"
     zone_a, spare = values["nodepool"]
     assert zone_a == {
         "infraEnvName": "dell-r660-site1-128c-1024gb-5tb",

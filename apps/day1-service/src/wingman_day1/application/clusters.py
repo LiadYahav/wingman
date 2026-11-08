@@ -3,8 +3,9 @@
 Reads come from the day1 repo's default branch; changes go through the
 ``ClusterProvisioner`` (today a merge request, ADR-0017). A new cluster file
 is rendered from the shared template, then checked against the values-file
-contract before anything is written (ADR-0012), and its name against the
-naming rules (ADR-0014). A file that cannot be parsed is shown with its
+contract before anything is written (ADR-0012), its name against the
+naming rules (ADR-0014), and its release against what the MCE can host
+(ADR-0034). A file that cannot be parsed is shown with its
 error, never dropped from the list (ADR-0004).
 """
 
@@ -52,6 +53,7 @@ from wingman_day1.domain.names import (
     describe_cluster,
     new_cluster_problems,
 )
+from wingman_day1.domain.openshift_versions import unhostable_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
@@ -185,6 +187,7 @@ class ClusterService:
             )
         addons = spec.requested_addons(request.addon_overrides)
         content = self._render(ref, spec, request.variables)
+        await self._require_hostable(ref.mce, content)
         provenance = Provenance(spec.metadata.name, spec.metadata.version, tuple(addons))
         return RenderedCluster(ref, with_provenance(content, provenance), spec, tuple(addons))
 
@@ -289,6 +292,13 @@ class ClusterService:
             message="the rendered cluster file breaks the values-file contract",
         )
         return rendered
+
+    async def _require_hostable(self, mce: str, content: str) -> None:
+        """The new file's ``mastertag`` must be a release the MCE can host (ADR-0034)."""
+        version = str(load_values(content).get("mastertag", ""))
+        problems = unhostable_problems(version, await self._sites.openshift_versions(mce))
+        if problems:
+            raise InvalidInputError(f"OpenShift {version} is not offered on MCE {mce}", problems)
 
     async def _require_unused(self, ref: ClusterRef) -> None:
         """Cluster names are unique across the whole repo, and across open create MRs."""
