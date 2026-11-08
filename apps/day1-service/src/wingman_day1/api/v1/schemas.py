@@ -26,11 +26,13 @@ from wingman_day1.application.sites import MceView
 from wingman_day1.application.specs import SpecEntry
 from wingman_day1.domain.addons import AddonDrift, RequestedAddon, VersionDifference
 from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
+from wingman_day1.domain.locks import MISSING
 from wingman_day1.domain.machine_configs import NETWORK_CONFIG
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
 from wingman_day1.domain.paths import NODEPOOL_DEFAULTS_FILE
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata, rule_problems
 from wingman_day1.domain.status import LiveStatus
+from wingman_day1.domain.value_drift import ValueDrift
 
 MAX_FILE_BYTES = 256 * 1024
 NO_SPEC = None
@@ -759,6 +761,55 @@ class VersionDifferenceOut(BaseModel):
         )
 
 
+class NodepoolRefOut(BaseModel):
+    """A nodepool of the cluster file: its position and the NodePool the chart renders."""
+
+    index: int
+    name: str
+
+
+class ValueDriftOut(BaseModel):
+    """A locked value the cluster file does not hold (ADR-0033)."""
+
+    path: str
+    """The flavor's locked path: ``owner_anaf``, ``nodepools[0].configs`` or the rule."""
+    file_key: str
+    """Where it is in the file: ``owner.anaf``, ``nodepool[1].configs``."""
+    nodepool: NodepoolRefOut | None
+    flavor_value: Any
+    """The locked value in the file's form (``nm-conf`` expanded for this cluster)."""
+    cluster_value: Any
+    """What the file holds; ``null`` with ``in_file: false`` when the key is absent."""
+    in_file: bool
+    added: list[str]
+    """Configs only: the names a sync adds."""
+    removed: list[str]
+    """Configs only: the names a sync removes."""
+    needs_decision: str | None
+    """Set when a person must decide before sync can set this value."""
+    reboots: bool
+    """A nodepool's configs: syncing them reboots the nodepool's nodes, one at a time."""
+
+    @classmethod
+    def of(cls, drift: ValueDrift) -> ValueDriftOut:
+        """From a value drift."""
+        in_file = drift.cluster_value is not MISSING
+        return cls(
+            path=str(drift.lock),
+            file_key=str(drift.file_key),
+            nodepool=NodepoolRefOut(index=drift.nodepool.index, name=drift.nodepool.name)
+            if drift.nodepool
+            else None,
+            flavor_value=drift.flavor_value,
+            cluster_value=drift.cluster_value if in_file else None,
+            in_file=in_file,
+            added=list(drift.added),
+            removed=list(drift.removed),
+            needs_decision=drift.needs_decision,
+            reboots=drift.is_configs,
+        )
+
+
 DriftStateOut = Literal["in_sync", "drifted", "unknown", "not_linked"]
 
 
@@ -775,8 +826,10 @@ class ClusterDriftOut(BaseModel):
     spec_version: str | None
     current_spec_version: str | None
     unified_diff: str = ""
+    value_drift: list[ValueDriftOut] = Field(default_factory=list)
+    """Locked values the file does not hold: one of the two things that make it ``drifted``."""
     addon_drift: list[AddonDriftOut]
-    """Spec addons the cluster does not have: what makes it ``drifted``."""
+    """Spec addons the cluster does not have: the other thing that makes it ``drifted``."""
     version_differences: list[VersionDifferenceOut] = Field(default_factory=list)
     """Spec addons at another version; reported only, never fixed (ADR-0025)."""
     error: str | None
@@ -793,6 +846,7 @@ class ClusterDriftOut(BaseModel):
             spec_name=drift.spec_name,
             spec_version=drift.spec_version,
             current_spec_version=drift.current_spec_version,
+            value_drift=[ValueDriftOut.of(d) for d in drift.value_drift],
             addon_drift=[AddonDriftOut.of(d) for d in drift.addon_drift],
             version_differences=[VersionDifferenceOut.of(d) for d in drift.version_differences],
             error=drift.error,

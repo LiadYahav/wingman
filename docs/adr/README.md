@@ -53,3 +53,4 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main |
 | [0031](0031-commit-derived-versions.md) | (Proposed) Derive the version from Conventional Commits, as server-scan and herzi do |
 | [0032](0032-ci-supply-chain.md) | CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks |
+| [0033](0033-day1-drift-is-locked-values-and-missing-addons.md) | Day1 drift is the flavor's locked values the file does not hold, and its missing add-ons; unknown is never in sync |

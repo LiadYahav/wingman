@@ -151,7 +151,7 @@ async def cluster_current_yaml(
 async def cluster_drift(
     name: str, context: Context, user: CurrentUser, site: Site = None, mce: Mce = None
 ) -> ClusterDriftOut:
-    """The cluster against its spec's day2 addons."""
+    """The cluster against its flavor: locked values the file does not hold, missing add-ons."""
     ref = await _ref(context, name, site, mce)
     return ClusterDriftOut.of(await context.drift.for_cluster(ref))
 

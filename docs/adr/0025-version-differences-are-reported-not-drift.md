@@ -1,7 +1,7 @@
 # ADR-0025: A chart version other than the spec's is reported, never drift
 
 Date: 2026-11-08
-Status: Accepted (supersedes in part ADR-0016)
+Status: Accepted (supersedes in part ADR-0016); superseded in part by ADR-0033 (a locked value the file does not hold is drift too)
 
 ## Context
 

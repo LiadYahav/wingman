@@ -231,7 +231,10 @@ def build_context(
         approvals=ApprovalService(gitlab, repos),
         audit=AuditService(repos),
         drift=DriftService(
-            cluster_service, spec_catalog, CachedDay2Addons(adapters.day2, cache, ttl=ttl)
+            cluster_service,
+            spec_catalog,
+            CachedDay2Addons(adapters.day2, cache, ttl=ttl),
+            machine_configs,
         ),
         auth=AuthService(
             session_tokens,
