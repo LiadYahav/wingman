@@ -200,9 +200,9 @@ const NAV_SECTIONS = [
 const REFUSALS = [
   {
     code: "409 REVISION_CONFLICT",
-    see: "“… changed since you opened it”, or “The branch moved since you loaded this MR”, with a Reload button",
+    see: "“… changed since you opened it”, or “The branch moved since you loaded this MR”: most pages offer Reload, and a chart's values editor reloads itself and says so",
     why: "Someone committed to the file or the MR branch after you loaded it: another person, the day1 CI or the allocate-segment workflow. Nothing was written or merged.",
-    fix: "Reload, look at what changed, and make your change (or review) again.",
+    fix: "Reload if the page has not, look at what changed, and make your change (or review) again.",
   },
   {
     code: "409 ALREADY_EXISTS",
@@ -218,8 +218,8 @@ const REFUSALS = [
   },
   {
     code: "403 FORBIDDEN",
-    see: "“This needs the admin role.”, or “Insufficient permissions” on a create page",
-    why: "You are a Viewer. At sign-in, the same code means you are in no Wingman group.",
+    see: "“This needs the admin role.”, or at sign-in “You are not in a Wingman group. Ask an admin for access.”",
+    why: "You are a Viewer. At sign-in, the same code means you are in no Wingman group. (A Viewer who opens a create page is shown “Insufficient permissions” without any request being made.)",
     fix: "Ask your platform team to add you to an admin group, then sign in again.",
   },
   {
@@ -242,7 +242,7 @@ const REFUSALS = [
   },
   {
     code: "504 AMBIGUOUS_WRITE",
-    see: "GitLab did not confirm the change",
+    see: "A message that GitLab did not confirm the change, so it may or may not have been made",
     why: "GitLab timed out after receiving the write, so it may or may not have happened. Wingman never retries a write.",
     fix: "Check the Approvals page (or the repo in GitLab) for the MR before trying again.",
   },
@@ -1373,8 +1373,9 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
                 q: "I cannot see Create / Install / Remove / Approve buttons",
                 a: (
                   <>
-                    You have the <strong>Viewer</strong> role, or the MR is your own. Write operations require the{" "}
-                    <strong>Admin</strong> role: ask your platform team, then sign in again.
+                    You have the <strong>Viewer</strong> role. Write operations require the <strong>Admin</strong>{" "}
+                    role: ask your platform team, then sign in again. On your own MR, <strong>Review &amp; Approve</strong>{" "}
+                    is shown but disabled: another admin must approve it.
                   </>
                 ),
               },
