@@ -1,0 +1,16 @@
+# Fixture placeholder: a time-sync config for workers. The real file lives in
+# the team's platform-config repo; nothing here is a real server.
+variant: openshift
+version: 4.16.0
+metadata:
+  name: 99-workers-chrony-configuration
+  labels:
+    machineconfiguration.openshift.io/role: worker
+storage:
+  files:
+    - path: /etc/chrony.conf
+      mode: 0644
+      overwrite: true
+      contents:
+        inline: |
+          server ntp.example.invalid iburst

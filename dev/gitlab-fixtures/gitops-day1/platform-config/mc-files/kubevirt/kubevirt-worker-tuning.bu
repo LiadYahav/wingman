@@ -1,0 +1,7 @@
+# Fixture placeholder: tuning for KubeVirt (VM) workers.
+variant: openshift
+version: 4.16.0
+metadata:
+  name: 99-kubevirt-worker-tuning
+  labels:
+    machineconfiguration.openshift.io/role: worker

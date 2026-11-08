@@ -35,6 +35,10 @@ class InvalidSpecError(InvalidInputError):
     """A spec document is not a valid ClusterSpec."""
 
 
+class InvalidNodepoolDefaultsError(InvalidInputError):
+    """``nodepool-defaults.yaml`` exists but is not a valid defaults document."""
+
+
 class ResourceNotFoundError(Day1Error):
     """A site, MCE, cluster, spec or commit that the request names does not exist."""
 

@@ -41,6 +41,7 @@ from wingman_day1.api.v1 import approvals as approvals_api
 from wingman_day1.api.v1 import audit as audit_api
 from wingman_day1.api.v1 import auth as auth_api
 from wingman_day1.api.v1 import clusters as clusters_api
+from wingman_day1.api.v1 import machine_configs as machine_configs_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import webhooks as webhooks_api
@@ -49,6 +50,7 @@ from wingman_day1.application.audit import AuditService
 from wingman_day1.application.auth import AuthService
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
+from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
@@ -76,6 +78,7 @@ ROUTERS: Final = (
     sites_api.sites_router,
     sites_api.mces_router,
     specs_api.router,
+    machine_configs_api.router,
     approvals_api.router,
     audit_api.router,
     webhooks_api.router,
@@ -199,6 +202,7 @@ def build_context(
     )
     naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
     site_catalog = SiteCatalog(day1)
+    machine_configs = MachineConfigService(day1, specs_repo)
     spec_catalog = SpecCatalog(
         specs_repo,
         GitSpecChanges(
@@ -235,6 +239,7 @@ def build_context(
             dev_secret=dev_secret,
         ),
         repos=repos,
+        machine_configs=machine_configs,
         status=(
             StatusService(
                 adapters.hub,

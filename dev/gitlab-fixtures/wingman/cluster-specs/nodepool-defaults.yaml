@@ -1,0 +1,9 @@
+# The configs a new nodepool starts with, in the flavor editor and on the
+# create form (ADR-0027). Changing this file never changes an existing
+# flavor or cluster. Each entry is {name: <static config in mc-files/>} or
+# {name: nm-conf}: the cluster's own network config, whose hardware type is
+# picked per nodepool (one of mc-files/templates/nm-conf-template-hw-<hw>.bu).
+configs:
+  - name: nm-conf
+  - name: workers-chrony-configuration
+  - name: nic-ring-buffer

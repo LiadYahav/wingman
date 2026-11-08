@@ -8,11 +8,13 @@ ApplicationSets read (ADR-0012)::
     sites/<site>/mces/<mce>/values.yaml      # the MCE's defaults, incl. mastertag
     sites/<site>/mces/<mce>/version.yaml     # the hub's own version (day2 reads it)
     sites/<site>/mces/<mce>/hostedClusters/<cluster>.yaml
+    mc-files/...                             # machine-config sources CI renders (read only)
 
 Specs repo (``wingman/cluster-specs``)::
 
     cluster-template.j2
     openshift-versions.txt
+    nodepool-defaults.yaml                   # the configs a new nodepool starts with
     specs/<spec>.yaml
 
 Every path is built through ``RepoPath.of``, so a name from a request can
@@ -30,9 +32,11 @@ SITES: Final = RepoPath("sites")
 GLOBAL_VALUES: Final = RepoPath("sites/configValues.yaml")
 HOSTED_CLUSTERS_DIR: Final = "hostedClusters"
 CLUSTER_SUFFIX: Final = ".yaml"
+MC_FILES: Final = RepoPath("mc-files")
 
 TEMPLATE_FILE: Final = RepoPath("cluster-template.j2")
 VERSIONS_FILE: Final = RepoPath("openshift-versions.txt")
+NODEPOOL_DEFAULTS_FILE: Final = RepoPath("nodepool-defaults.yaml")
 SPEC_SUFFIX: Final = ".yaml"
 
 

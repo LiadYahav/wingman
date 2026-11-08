@@ -1,0 +1,15 @@
+# Fixture placeholder: the network config of one dell worker, per cluster.
+# The CI replaces {CLUSTER_NAME}, {OPENSHIFT_VERSION} and VLAN_ID.
+variant: openshift
+version: {OPENSHIFT_VERSION}
+metadata:
+  name: 99-nm-conf-{CLUSTER_NAME}-dell
+  labels:
+    machineconfiguration.openshift.io/role: worker
+storage:
+  files:
+    - path: /etc/nmstate/placeholder-dell.yaml
+      mode: 0644
+      contents:
+        inline: |
+          # bond0.VLAN_ID on dell hardware

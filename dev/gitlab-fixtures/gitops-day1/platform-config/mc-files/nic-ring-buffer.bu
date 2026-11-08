@@ -1,0 +1,19 @@
+# Fixture placeholder: NIC ring-buffer sizes for workers.
+variant: openshift
+version: 4.16.0
+metadata:
+  name: 99-nic-ring-buffer
+  labels:
+    machineconfiguration.openshift.io/role: worker
+systemd:
+  units:
+    - name: nic-ring-buffer.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Placeholder ring-buffer settings
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/true
+        [Install]
+        WantedBy=multi-user.target
