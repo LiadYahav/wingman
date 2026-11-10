@@ -5,7 +5,11 @@ Reads come from the day1 repo's default branch; changes go through the
 is rendered from the shared template, then checked against the values-file
 contract before anything is written (ADR-0012), its name against the
 naming rules (ADR-0014), and its release against what the MCE can host
-(ADR-0034). A file that cannot be parsed is shown with its
+(ADR-0034). The spec's locked values are used and may not be sent different
+(ADR-0026), its owners must be numbers (ADR-0028), its machine configs must
+resolve by the day1 CI's rule, and the cluster's network config entry is
+expanded to the name the CI reads before the template renders (ADR-0027). A
+file that cannot be parsed is shown with its
 error, never dropped from the list (ADR-0004).
 """
 
@@ -20,6 +24,7 @@ from wingman_core.domain.git import Commit, FileContent
 from wingman_core.domain.merge_request import MRState
 from wingman_core.domain.mr_conventions import Repo, ResourceType, Verb, parse_mr_title
 from wingman_core.domain.users import User
+from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import read_tree
@@ -46,6 +51,12 @@ from wingman_day1.domain.errors import (
     ResourceNotFoundError,
     StaleError,
 )
+from wingman_day1.domain.locks import apply_locks, lock_conflicts
+from wingman_day1.domain.machine_configs import (
+    MachineConfigCatalog,
+    cluster_config_problems,
+    expand_network_configs,
+)
 from wingman_day1.domain.names import (
     ClusterNaming,
     HostedClusterNaming,
@@ -54,6 +65,7 @@ from wingman_day1.domain.names import (
     new_cluster_problems,
 )
 from wingman_day1.domain.openshift_versions import unhostable_problems
+from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
@@ -111,6 +123,7 @@ class ClusterService:
         sites: SiteCatalog,
         specs: SpecCatalog,
         provisioner: ClusterProvisioner,
+        machine_configs: MachineConfigService,
         *,
         naming: HostedClusterNaming,
     ) -> None:
@@ -119,6 +132,7 @@ class ClusterService:
         self._sites = sites
         self._specs = specs
         self._provisioner = provisioner
+        self._machine_configs = machine_configs
         self._naming = naming
 
     # ── Reads ───────────────────────────────────────────────────────────────
@@ -164,6 +178,17 @@ class ClusterService:
         """Commits that changed the cluster's file, newest first."""
         return await self._day1.history(ref.path)
 
+    async def changed_since(self, ref: ClusterRef, commit_id: str) -> bool:
+        """Whether the cluster's file changed after ``commit_id``, a commit it was read at.
+
+        A read's ``last_commit_id`` is the commit the repo was read at (ADR-0035):
+        another id now means the repo moved, not that this file did.
+        """
+        current = await self._read(ref)
+        return commit_id != current.last_commit_id and await self._day1.changed_since(
+            ref.path, commit_id
+        )
+
     async def web_url(self, ref: ClusterRef) -> str:
         """The file in GitLab's UI, at the default branch."""
         project = await self._day1.project()
@@ -186,7 +211,8 @@ class ClusterService:
                 f"v{request.spec_version}; reload the form"
             )
         addons = spec.requested_addons(request.addon_overrides)
-        content = self._render(ref, spec, request.variables)
+        catalog = await self._machine_configs.catalog()
+        content = self._render(ref, spec, request.variables, catalog)
         await self._require_hostable(ref.mce, content)
         provenance = Provenance(spec.metadata.name, spec.metadata.version, tuple(addons))
         return RenderedCluster(ref, with_provenance(content, provenance), spec, tuple(addons))
@@ -267,22 +293,33 @@ class ClusterService:
 
     # ── Internals ───────────────────────────────────────────────────────────
 
-    def _render(self, ref: ClusterRef, spec: ClusterSpec, variables: Mapping[str, object]) -> str:
-        presets: dict[str, object] = {
-            v.name: v.default for v in spec.spec.day1.variables if v.default is not None
-        }
-        presets.update(spec.spec.day1.values)
+    def _render(
+        self,
+        ref: ClusterRef,
+        spec: ClusterSpec,
+        variables: Mapping[str, object],
+        catalog: MachineConfigCatalog,
+    ) -> str:
+        locks = spec.locks()
+        conflicts = lock_conflicts(variables, locks, flavor=spec.metadata.name)
         inputs = build_inputs(
             variables=variables,
             cluster_name=ref.name,
             site=ref.site,
             mce=ref.mce,
             openshift_release_version=None,
-            presets=presets,
+            presets=spec.presets(),
         )
+        inputs, missing = apply_locks(inputs, locks)
         problems = check_inputs(inputs)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
+        cluster_name = self._naming.for_file(ref.name).cluster_name
+        problems = [*conflicts, *missing, *owner_problems(inputs)]
+        problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
+        if problems:
+            raise InvalidInputError("the cluster's inputs are not acceptable", problems)
+        inputs = expand_network_configs(inputs, cluster_name=cluster_name)
         template = spec.spec.day1.template
         if not template.strip():
             raise RenderError("the specs project has no cluster-template.j2")

@@ -28,7 +28,7 @@ checked against it.
 | Idea | Status | File |
 |---|---|---|
 | Where Wingman sits in the architecture: who owns what, the rules that follow, questions for the architect | Reference | [architecture-fit.md](architecture-fit.md) |
-| Flavors v2: machine configs per nodepool, nodepool defaults, enforced locks, owner numbers, importing existing clusters, a redesigned flavor page | **Decided** 2026-11-08 | [flavors-v2.md](flavors-v2.md) |
+| Flavors v2: machine configs per nodepool, nodepool defaults, enforced locks, owner numbers, importing existing clusters, a redesigned flavor page | **Built** 2026-11-08 (3.3); a few items left for later | [flavors-v2.md](flavors-v2.md) |
 | Workflow runs on the cluster page, OCP upgrades (control plane, then workers) and reviewing workflow branches | Proposed | [workflow-runs.md](workflow-runs.md) |
 | Servers per hosted cluster from server-scan, why a cluster waits for workers, and moving capacity between clusters | Proposed | [servers-and-nodes.md](servers-and-nodes.md) |
 | Day2 permissions per team: a team edits only its own `sigs/<team>` repo | Proposed | [day2-team-permissions.md](day2-team-permissions.md) |

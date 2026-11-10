@@ -46,6 +46,10 @@ class Verb(StrEnum):
     INSTALL = "Install"
     UPDATE = "Update"
     REMOVE = "Remove"
+    IMPORT = "Import"
+    """Link existing clusters to a flavor (day1)."""
+    SYNC = "Sync"
+    """Set a cluster's drifted locked values to its flavor's (day1)."""
 
 
 class ResourceType(StrEnum):

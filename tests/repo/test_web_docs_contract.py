@@ -102,11 +102,7 @@ REMOVED: tuple[Removed, ...] = (
         re.compile(r"POST\s+(?:/api/day1)?/sites/\{site\}/mces"),
         "POST /api/day1/sites/{site}/mces",
     ),
-    Removed(
-        "POST /clusters/{name}/sync (ADR-0016)",
-        re.compile(r"/clusters/\{[^}]*\}/sync\b"),
-        "POST /api/day1/clusters/{name}/sync",
-    ),
+    # POST /clusters/{name}/sync is back with another meaning: sync to the flavor (ADR-0037).
     Removed(
         "sync-yaml and its Sync button (ADR-0016)",
         re.compile(r"sync[-_ ]?yaml", re.IGNORECASE),

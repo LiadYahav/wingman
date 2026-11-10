@@ -32,7 +32,9 @@ async def test_read_views_list_the_fixture_repo(
 
     clusters = (await client.get("/api/day1/clusters", headers=headers)).json()
     by_name = {c["name"]: c for c in clusters}
-    assert len(clusters) == 12
+    assert len(clusters) == 14
+    lark = by_name["ocp4-prod-lark-site1"]
+    assert lark["owner"] == {"merkaz": "1234", "anaf": "56", "mador": "7"}
     demo = by_name["ocp4-upgrade-demo"]
     assert demo["naming"]["follows_convention"] is False
     assert demo["mastertag"] == "4.21.40-x86_64"

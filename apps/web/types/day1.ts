@@ -1,6 +1,7 @@
 // Types of the day1 service (`/api/day1`), from its Pydantic schemas in
 // apps/day1-service/src/wingman_day1/api/v1/schemas.py. Every web-visible
-// change is listed in docs/notes/2026-11-07-day1-api-changes.md.
+// change is listed in docs/notes/2026-11-07-day1-api-changes.md and, for
+// flavors v2, docs/notes/2026-11-08-flavors-v2-api-changes.md ("§n" below).
 
 // ── Template schema (parsed from the Jinja2 AST by the backend) ─────────────
 
@@ -55,10 +56,15 @@ export interface ClusterSpec {
     day1: {
       variables: SpecVariable[];
       structure: Record<string, unknown>;
-      immutable_paths: string[];
+      /**
+       * Template-input paths whose value in `values` is fixed (§5, §6, ADR-0026):
+       * `owner_anaf`, `nodepools[0].configs`, or the rule `nodepools[*].configs`
+       * (§9, ADR-0029). Every other value in `values` is a preset.
+       */
+      locked_paths: string[];
       /** The shared cluster-template.j2, filled on read; never stored in the spec. */
       template: string;
-      /** Preset template inputs, merged under what the create form sends. */
+      /** Template inputs: presets, and the locked values (`locked_paths`). */
       values?: Record<string, unknown>;
     };
     day2: {
@@ -71,6 +77,59 @@ export interface ClusterSpec {
 export interface SpecEntry extends ClusterSpec {
   load_error?: string | null;
   load_problems?: string[];
+  /** Rules the stored flavor breaks: it loads, but saving it unchanged is refused (§5). */
+  warnings?: string[];
+  /** The `locked_paths` a create enforces (§5); a lock that breaks the rules is not in it. */
+  enforced_locks?: string[];
+}
+
+// ── Machine configs (§1, §3, ADR-0027) ──────────────────────────────────────
+
+/**
+ * A nodepool's `configs` entry: a static config by name, or the cluster's own
+ * network config `{name: "nm-conf", hardware}`, which day1 writes to the file
+ * as `nm-conf-<clusterName>-<hardware>`. `hardware` belongs only to `nm-conf`.
+ */
+export interface ConfigEntry {
+  name: string;
+  hardware?: string | null;
+}
+
+/** A file under `mc-files/` (never `legacy/`); `folder` is `""` for the root. */
+export interface StaticConfig {
+  name: string;
+  folder: string;
+  path: string;
+}
+
+/** A network template `mc-files/templates/nm-conf-template-hw-<name>.bu`. */
+export interface HardwareType {
+  name: string;
+  template: string;
+}
+
+/** The specs repo's `nodepool-defaults.yaml`: the configs a new nodepool starts with. */
+export interface NodepoolDefaults {
+  path: string;
+  /** `false`: there is no such file; no defaults, not an error. */
+  found: boolean;
+  /** `nm-conf` may leave out its hardware: the nodepool picks it. */
+  configs: ConfigEntry[];
+  /** Set when the file exists but cannot be used; `configs` is then empty. */
+  error: string | null;
+  /** Why some default entries would not resolve, or why the file is unusable. */
+  problems: string[];
+}
+
+/** `GET /api/day1/machine-configs` (any session). */
+export interface MachineConfigs {
+  /** Always `"nm-conf"`. */
+  network_config: string;
+  static_configs: StaticConfig[];
+  hardware_types: HardwareType[];
+  nodepool_defaults: NodepoolDefaults;
+  /** Files in `mc-files/` that are not offered, and why (for admins). */
+  problems: string[];
 }
 
 /** `GET /specs/{name}`: one spec, with the commit its file was read at. */
@@ -159,6 +218,8 @@ export interface ClusterStatus {
   path: string;
   hosted_cluster: HostedClusterRef;
   naming: ClusterNaming;
+  /** The file's owner numbers as text (`{merkaz, anaf, mador}`); `{}` when it has none (§13). */
+  owner: Record<string, string>;
   /** Why the file does not parse; empty when it does. */
   problems: string[];
 }
@@ -301,7 +362,37 @@ export interface VersionDifference {
   installed_version: string;
 }
 
-/** `GET /clusters/{name}/drift`. */
+/** A nodepool of the cluster file: its position and the NodePool the chart renders. */
+export interface NodepoolRef {
+  index: number;
+  name: string;
+}
+
+/** A locked value the cluster file does not hold (§10, ADR-0036). */
+export interface ValueDrift {
+  /** The flavor's lock: `owner_anaf`, `nodepools[0].configs` or the rule `nodepools[*].configs`. */
+  path: string;
+  /** Where the file holds it: `owner.anaf`, `nodepool[1].configs`. */
+  file_key: string;
+  nodepool: NodepoolRef | null;
+  /** The locked value in the file's form; `nm-conf` expanded where the nodepool's hardware is known. */
+  flavor_value: unknown;
+  /** What the file holds; `null` with `in_file: false` when the key is absent. */
+  cluster_value: unknown;
+  in_file: boolean;
+  /** Configs only: the names a sync adds. */
+  added: string[];
+  /** Configs only: the names a sync removes. */
+  removed: string[];
+  /** Why a sync cannot set this value until a person decides; `null` when it can. */
+  needs_decision: string | null;
+  /** The decision is the nodepool's network hardware type: a sync request can choose it. */
+  needs_hardware: boolean;
+  /** A nodepool's configs: syncing them rolls its nodes. */
+  reboots: boolean;
+}
+
+/** `GET /clusters/{name}/drift`. Drifted: a locked value differs, or an add-on is missing. */
 export interface ClusterDrift {
   cluster: string;
   site: string;
@@ -312,6 +403,7 @@ export interface ClusterDrift {
   spec_name: string | null;
   spec_version: string | null;
   current_spec_version: string | null;
+  value_drift: ValueDrift[];
   addon_drift: AddonDrift[];
   version_differences: VersionDifference[];
   error: string | null;
@@ -347,6 +439,136 @@ export interface SpecDrift {
   is_drifted: boolean | null;
   spec_version: string | null;
   error: string | null;
+}
+
+// ── Import existing clusters into a flavor (§11, ADR-0037) ──────────────────
+
+/** A cluster to compare with a flavor; `site` and `mce` only when the name is ambiguous. */
+export interface ClusterPick {
+  name: string;
+  site?: string | null;
+  mce?: string | null;
+}
+
+/** `POST /specs/{name}/import/preview` body (up to 500 clusters). */
+export interface ImportPreviewRequest {
+  clusters: ClusterPick[];
+}
+
+/** `ready`: no flavor yet; `relink`: follows another; `linked`: follows this one; `refused`: can't be edited. */
+export type ImportStatus = "ready" | "relink" | "linked" | "refused";
+
+export interface ImportCandidate {
+  name: string;
+  site: string;
+  mce: string;
+  path: string;
+  /** Send it back with the import. */
+  last_commit_id: string;
+  status: ImportStatus;
+  /** The flavor the file follows now. */
+  linked_spec: { name: string; version: string | null } | null;
+  /** Why it cannot be imported as it is (empty for `ready`). */
+  problems: string[];
+  /** The cluster against this flavor: what will show as drift once it is linked. */
+  drift: ClusterDrift;
+}
+
+/** `POST /specs/{name}/import/preview`. */
+export interface ImportPreview {
+  spec_name: string;
+  /** Send it back with the import. */
+  spec_version: string;
+  /** About the flavor: positional nodepool locks compare whichever nodepool is there. */
+  warnings: string[];
+  clusters: ImportCandidate[];
+}
+
+/** One cluster of `POST /specs/{name}/import`, as the preview returned it. */
+export interface ImportPick {
+  name: string;
+  site: string;
+  mce: string;
+  last_commit_id: string;
+  /** `true` to move a cluster that follows another flavor to this one. */
+  relink?: boolean;
+}
+
+/** `POST /specs/{name}/import` body: one day1 MR, at most 50 clusters. */
+export interface ImportRequest {
+  spec_version: string;
+  clusters: ImportPick[];
+}
+
+// ── Sync a cluster to its flavor (§12, ADR-0037) ────────────────────────────
+
+/** A person's network hardware choice for a nodepool whose own can't be read. */
+export interface HardwareChoice {
+  nodepool: number;
+  hardware: string;
+}
+
+/** `POST /clusters/{name}/sync/preview` body. */
+export interface SyncPreviewRequest {
+  hardware?: HardwareChoice[];
+}
+
+/** A config the sync removes; each must be confirmed. */
+export interface ConfigRemoval {
+  nodepool: NodepoolRef;
+  name: string;
+}
+
+/** A nodepool whose configs change: merging rolls its nodes. */
+export interface Rebooting {
+  nodepool: NodepoolRef;
+  replicas: number | null;
+  /** `null` when unset: the chart's `InPlace` (drain and reboot). */
+  upgrade_type: string | null;
+  /** `inPlace.maxUnavailable`; `null`: one node at a time. */
+  max_unavailable: number | string | null;
+  /** `upgradeType: Replace`: new nodes are provisioned and the old ones removed. */
+  replaces_nodes: boolean;
+}
+
+/** `POST /clusters/{name}/sync/preview`. */
+export interface SyncPreview {
+  cluster: string;
+  site: string;
+  mce: string;
+  path: string;
+  /** Send it back with the sync. */
+  last_commit_id: string;
+  spec_name: string;
+  /** The flavor's current version; send it back with the sync. */
+  spec_version: string;
+  /** The version the file's header names now. */
+  file_spec_version: string | null;
+  /** Every locked value the file does not hold, with the hardware choices applied. */
+  changes: ValueDrift[];
+  /** The cluster file change as a unified diff; empty when nothing changes. */
+  diff: string;
+  removals: ConfigRemoval[];
+  rebooting: Rebooting[];
+  /** Why the sync can't run now; `can_sync` is then false. */
+  problems: string[];
+  /** Worth checking before merging; they don't block. */
+  warnings: string[];
+  can_sync: boolean;
+  /** Not in the day1 MR: install them through day2 (one MR per team). */
+  addons_to_install: AddonDrift[];
+  version_differences: VersionDifference[];
+  /** Set when day2 did not answer: missing add-ons are unknown. */
+  addons_error: string | null;
+}
+
+/** `POST /clusters/{name}/sync` body: what the preview showed, the removals confirmed. */
+export interface SyncRequest {
+  last_commit_id: string;
+  spec_version: string;
+  hardware?: HardwareChoice[];
+  /** Exactly the preview's `removals`, or the sync is refused. */
+  confirm_removals: { nodepool: number; name: string }[];
 }
 
 // ── The delete-cluster workflow (ADR-0033) ──────────────────────────────────

@@ -46,9 +46,15 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0023](0023-day2-lints.md) | day2 lints are render_chain.py's rules as errors plus Wingman's own; a change that adds an error is refused |
 | [0024](0024-chart-versions-and-defaults.md) | Chart versions and defaults come from the chart repo on the same GitLab, at the resolved revision and path |
 | [0025](0025-version-differences-are-reported-not-drift.md) | A chart version other than the spec's is reported, never drift; a fix only installs a missing chart |
-| [0033](0033-delete-cluster-workflow-contract.md) | The delete-cluster workflow has a contract and a ready web panel; both say "not available yet" until it exists |
-| [0034](0034-openshift-versions-from-the-upgrade-ladder.md) | A new cluster's OpenShift versions come from the upgrade ladder, per MCE; an MCE without its file offers none |
-| [0035](0035-read-each-repo-once-per-commit.md) | The day1, specs and team repos are read once per commit, from GitLab's archive; a read's `last_commit_id` is the commit read at |
+| [0026](0026-a-flavor-lock-is-a-fixed-value.md) | A flavor lock is a fixed value the flavor enforces; `locked_paths` replaces `immutable_paths`, which is still read |
+| [0027](0027-machine-configs-from-mc-files-and-nodepool-defaults.md) | Machine configs come from mc-files and are checked; new nodepools start from the team's defaults |
+| [0028](0028-owner-fields-are-numbers.md) | The owner fields are numbers |
+| [0029](0029-a-configs-rule-locks-every-nodepool.md) | A flavor can lock every nodepool's configs as one rule (`nodepools[*].configs`), compared exactly by name, in any order |
 | [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main (superseded in part by 0031) |
 | [0031](0031-commit-derived-versions.md) | Every merge to main is a release whose version comes from Conventional Commits, as in server-scan |
 | [0032](0032-ci-supply-chain.md) | CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks |
+| [0033](0033-delete-cluster-workflow-contract.md) | The delete-cluster workflow has a contract and a ready web panel; both say "not available yet" until it exists |
+| [0034](0034-openshift-versions-from-the-upgrade-ladder.md) | A new cluster's OpenShift versions come from the upgrade ladder, per MCE; an MCE without its file offers none |
+| [0035](0035-read-each-repo-once-per-commit.md) | The day1, specs and team repos are read once per commit, from GitLab's archive; a read's `last_commit_id` is the commit read at |
+| [0036](0036-day1-drift-is-locked-values-and-missing-addons.md) | Day1 drift is the flavor's locked values the file does not hold, and its missing add-ons; unknown is never in sync |
+| [0037](0037-import-and-sync-edit-the-cluster-file-text.md) | Existing clusters join a flavor by one MR that writes only the link and sync to it by one MR each, removals confirmed; cluster files are edited as text, checked, never round-tripped |

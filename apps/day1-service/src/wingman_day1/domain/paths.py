@@ -8,12 +8,14 @@ ApplicationSets read (ADR-0012)::
     sites/<site>/mces/<mce>/values.yaml      # the MCE's defaults, incl. mastertag
     sites/<site>/mces/<mce>/version.yaml     # the hub's own version (day2 reads it)
     sites/<site>/mces/<mce>/hostedClusters/<cluster>.yaml
+    mc-files/...                             # machine-config sources CI renders (read only)
     upgrade/ladder.yaml                      # the verified releases (ADR-0034)
     upgrade/mces/<mce>.yaml                  # the minors each MCE can host
 
 Specs repo (``wingman/cluster-specs``)::
 
     cluster-template.j2
+    nodepool-defaults.yaml                   # the configs a new nodepool starts with
     specs/<spec>.yaml
 
 Every path is built through ``RepoPath.of``, so a name from a request can
@@ -30,10 +32,12 @@ from wingman_core.domain.git import RepoPath
 SITES: Final = RepoPath("sites")
 HOSTED_CLUSTERS_DIR: Final = "hostedClusters"
 CLUSTER_SUFFIX: Final = ".yaml"
+MC_FILES: Final = RepoPath("mc-files")
 UPGRADE_LADDER: Final = RepoPath("upgrade/ladder.yaml")
 """The releases the upgrade workflow steps through; the create form offers them (ADR-0034)."""
 
 TEMPLATE_FILE: Final = RepoPath("cluster-template.j2")
+NODEPOOL_DEFAULTS_FILE: Final = RepoPath("nodepool-defaults.yaml")
 SPEC_SUFFIX: Final = ".yaml"
 
 

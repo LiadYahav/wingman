@@ -27,7 +27,16 @@ import type {
   CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OpenShiftVersions, OverrideableField, SpecEntry,
   TemplateField,
 } from "@/types";
-import { DynamicVariableForm, seedFromStructure, type FieldValue, type FormValues } from "@/components/clusters/dynamic-variable-form";
+import {
+  DynamicVariableForm, FlavorBadge, fieldInputClassName, type FieldInputContext, type FieldValue, type FormValues,
+} from "@/components/clusters/dynamic-variable-form";
+import { ConfigListEditor } from "@/components/machine-configs/config-list-editor";
+import { asEntries, NETWORK_CONFIG, useMachineConfigs } from "@/lib/machine-configs";
+import {
+  CONFIGS, NODEPOOLS, fieldPaths, flavorLocks, flavorProblems, formEntries, isConfigsPath, lookup, newNodepool,
+  nodepoolConfigsPath, ownerProblems, OWNER_INPUTS, placeProblems, presetPaths, requestVariables, seedCreateForm,
+  type PlacedProblems,
+} from "./flavor-form";
 
 const inputCls =
   "w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow";
@@ -125,18 +134,25 @@ function isEmptyValue(value: unknown): boolean {
   return false;
 }
 
-/** Every required input left empty, at any depth (`nodepools[1].infra_env`). */
-function missingRequired(schema: TemplateField[], values: Record<string, unknown>, prefix = ""): string[] {
+/**
+ * Every required input left empty, at any depth (`nodepools[1].infra_env`).
+ * Not a locked value (the flavor's, which the person cannot change) nor a
+ * config list's entries (the picker checks those, `flavorProblems`).
+ */
+function missingRequired(
+  schema: TemplateField[], values: Record<string, unknown>, locked: ReadonlyMap<string, unknown>, prefix = ""
+): string[] {
   const missing: string[] = [];
   for (const field of schema) {
     const path = prefix ? `${prefix}.${field.name}` : field.name;
     const value = values[field.name];
+    if (locked.has(path) || isConfigsPath(path)) continue;
     if (field.type === "list" && field.fields?.length) {
       const items = Array.isArray(value) ? value : [];
       if (field.required && items.length === 0) missing.push(path);
       items.forEach((item, i) => {
         if (item && typeof item === "object") {
-          missing.push(...missingRequired(field.fields!, item as Record<string, unknown>, `${path}[${i}]`));
+          missing.push(...missingRequired(field.fields!, item as Record<string, unknown>, locked, `${path}[${i}]`));
         }
       });
     } else if (field.required && isEmptyValue(value)) {
@@ -191,15 +207,30 @@ function defaultOverrides(fields: OverrideableField[]): Record<string, unknown> 
   return values;
 }
 
-function seedForm(spec: SpecEntry, schema: TemplateField[]): FormValues {
-  const seeded = seedFromStructure(spec.spec.day1.structure ?? {}, schema);
-  // Presets are merged under what the form sends, so a blank field would win over
-  // a preset: start the form from them instead.
-  const presets = spec.spec.day1.values ?? {};
-  for (const field of schema) {
-    if (field.name in presets) seeded[field.name] = presets[field.name] as FieldValue;
-  }
-  return seeded;
+/** The chart's clusterName for the file name of a network config: the default `ocp4-` stripped (ADR-0015). */
+function chartClusterName(name: string): string {
+  return name.replace(/^ocp4-/, "");
+}
+
+/** An owner number (ADR-0028): text, typed on a numeric keypad, sent as the text. */
+function OwnerInput({ field, value, onChange, invalid }: {
+  field: TemplateField; value: FieldValue; onChange: (v: FieldValue) => void; invalid: boolean;
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      spellCheck={false}
+      data-testid={`owner-input-${field.name}`}
+      className={cn(fieldInputClassName, "font-mono", invalid && "border-destructive focus:ring-destructive/20")}
+      value={value === undefined || value === null ? "" : String(value)}
+      placeholder={field.example ? `e.g. ${field.example}` : "digits, like 1234"}
+      aria-label={formatVariableName(field.name)}
+      aria-invalid={invalid}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
 }
 
 function summarizeValue(value: unknown): string {
@@ -497,8 +528,24 @@ type FormError =
       hint?: string;
       /** The spec changed under the form: offer to start again from the current one. */
       reloadSpec?: boolean;
+      /** Day1's problems that are about a field of the form, shown there; the rest is listed here. */
+      placed?: PlacedProblems & { values: FormValues };
     }
   | { kind: "form"; lines: string[] };
+
+/**
+ * Day1's 422 problems, each at the field its path names (§2 of the API note),
+ * with the form's values they were about: a field shows them only until it
+ * changes. `null` when none is about a field.
+ */
+function placeFailure(error: unknown, schema: TemplateField[], values: FormValues): (PlacedProblems & { values: FormValues }) | null {
+  if (!isApiError(error, "VALIDATION_ERROR") || error.problems.length === 0) return null;
+  const placed = placeProblems(error.problems, fieldPaths(schema, values));
+  if (placed.placed === 0) return null;
+  // FastAPI's field errors follow the problems in `messages()`; nothing of the form is about them
+  const others = error.fieldErrors.length > 0 ? error.messages().slice(error.problems.length) : [];
+  return { ...placed, rest: [...placed.rest, ...others], values };
+}
 
 function describeFailure(error: unknown, what: "preview" | "create"): FormError {
   const verb = what === "preview" ? "The cluster file could not be rendered" : "The merge request was not opened";
@@ -514,14 +561,14 @@ function describeFailure(error: unknown, what: "preview" | "create"): FormError 
     return {
       kind: "server",
       error,
-      title: "The spec changed since you opened it",
-      hint: "Reload the specs and fill the form again from the current version.",
+      title: "The flavor changed since you opened it",
+      hint: "Reload the flavors and fill the form again from the current version.",
       reloadSpec: true,
     };
   }
   if (isApiError(error, "VALIDATION_ERROR")) return { kind: "server", error, title: `${verb}: fix the following` };
   if (isApiError(error, "NOT_FOUND")) {
-    return { kind: "server", error, title: verb, hint: "The site, MCE or spec no longer exists in GitLab. Reload the page." };
+    return { kind: "server", error, title: verb, hint: "The site, MCE or flavor no longer exists in GitLab. Reload the page." };
   }
   return { kind: "server", error, title: writeErrorTitle(error, verb) };
 }
@@ -556,6 +603,8 @@ export default function NewClusterPage() {
   const [addonYamlText, setAddonYamlText] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<FormError | null>(null);
   const [reviewed, setReviewed] = useState<{ request: CreateClusterRequest; preview: ClusterPreview } | null>(null);
+  // The form's values when it was last sent: day1's problems are about these
+  const submitted = useRef<FormValues | null>(null);
 
   const { data: specs, isLoading: specsLoading, error: specsError } = useQuery<SpecEntry[]>({
     queryKey: ["specs"],
@@ -647,12 +696,72 @@ export default function NewClusterPage() {
   const siteOptions = sites.map(asOption);
   const mceOptions = mces.map(mceOption);
 
-  const seededValues = useMemo(
-    () => (selectedSpec ? seedForm(selectedSpec, schema) : {}),
-    [selectedSpec, schema]
+  // What a nodepool's configs may name, and the defaults a new nodepool starts with (§1)
+  const {
+    data: catalog, isLoading: catalogLoading, error: catalogError,
+  } = useMachineConfigs(step === "vars");
+  const nodepoolsField = schema.find((f) => f.name === NODEPOOLS && f.type === "list" && f.fields?.length);
+  const hasConfigs = Boolean(nodepoolsField?.fields?.some((f) => f.name === CONFIGS && f.type === "list"));
+
+  // The flavor's locks, presets and starting nodepools (ADR-0026 to ADR-0029)
+  const locks = useMemo(
+    () => (selectedSpec ? flavorLocks(selectedSpec) : { values: new Map<string, unknown>(), rule: null }),
+    [selectedSpec]
   );
-  const formValues = dynamicValues ?? seededValues;
-  const presetKeys = Object.keys(selectedSpec?.spec.day1.values ?? {});
+  const seed = useMemo(
+    () => (selectedSpec ? seedCreateForm(selectedSpec, schema, locks, catalog) : { values: {}, fixedNodepools: 0 }),
+    [selectedSpec, schema, locks, catalog]
+  );
+  const formValues = dynamicValues ?? seed.values;
+  const presets = useMemo(
+    () => (selectedSpec ? presetPaths(selectedSpec, schema, locks) : new Set<string>()),
+    [selectedSpec, schema, locks]
+  );
+  const lockedPaths = useMemo(() => new Set(locks.values.keys()), [locks]);
+  const nodepoolCount = Array.isArray(formValues[NODEPOOLS]) ? formValues[NODEPOOLS].length : 0;
+  // Under the rule each nodepool's config names are fixed, its nm-conf hardware is chosen
+  const lockLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    if (locks.rule) for (let i = 0; i < nodepoolCount; i++) labels[nodepoolConfigsPath(i)] = "names locked";
+    return labels;
+  }, [locks, nodepoolCount]);
+  const growableLists = useMemo(
+    () => (nodepoolsField ? { [NODEPOOLS]: { fixed: seed.fixedNodepools, create: () => newNodepool(schema, locks, catalog) } } : undefined),
+    [nodepoolsField, seed.fixedNodepools, schema, locks, catalog]
+  );
+  const chartName = chartClusterName(trimmedName);
+
+  // Problems at their fields: day1's (while the field still holds what was sent), and the owners' as typed
+  const placed = formError?.kind === "server" ? formError.placed : undefined;
+  const unchanged = (path: string) =>
+    placed !== undefined && JSON.stringify(lookup(formValues, path)) === JSON.stringify(lookup(placed.values, path));
+  const liveOwners = ownerProblems(formValues, schema, locks);
+  const fieldProblems: Record<string, string[]> = {};
+  for (const [path, lines] of Object.entries(placed?.byField ?? {})) if (unchanged(path)) fieldProblems[path] = lines;
+  for (const [path, problem] of Object.entries(liveOwners)) (fieldProblems[path] ??= []).push(problem);
+
+  const renderInput = ({ field, path, value, onChange, locked }: FieldInputContext) => {
+    if (OWNER_INPUTS.includes(path) && !locked) {
+      return <OwnerInput field={field} value={value} onChange={onChange} invalid={path in liveOwners} />;
+    }
+    if (!isConfigsPath(path)) return undefined;
+    const index = Number(/\[(\d+)\]/.exec(path)?.[1] ?? 0);
+    return (
+      <ConfigListEditor
+        entries={asEntries(value)}
+        onChange={(entries) => onChange(formEntries(entries))}
+        catalog={catalog}
+        loading={catalogLoading}
+        readOnly={locked}
+        namesLocked={locks.rule !== null}
+        clusterName={chartName || undefined}
+        problems={unchanged(path) ? placed?.byEntry[path] : undefined}
+        label={`Nodepool ${index + 1} configs`}
+        hideLabel
+        testId={`nodepool-${index}-configs`}
+      />
+    );
+  };
 
   // A failed MCE read is not "no MCE of this env": check the name only against MCEs that loaded.
   const namingIssues = trimmedName
@@ -662,13 +771,25 @@ export default function NewClusterPage() {
 
   const showError = (error: FormError) => {
     setFormError(error);
-    requestAnimationFrame(() => errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+    requestAnimationFrame(() => {
+      // The first field day1 is about, when there is one; else the list above the submit button
+      const field = error.kind === "server" && error.placed
+        ? document.querySelector('[data-field-path] [role="alert"]')
+        : null;
+      (field ?? errorRef.current)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
+  /** A failed preview or create, with day1's problems placed at the fields of the form that was sent. */
+  const showFailure = (error: unknown, what: "preview" | "create") => {
+    const placement = placeFailure(error, schema, submitted.current ?? formValues);
+    showError({ ...describeFailure(error, what), ...(placement ? { placed: placement } : {}) });
   };
 
   const previewMutation = useMutation({
     mutationFn: (request: CreateClusterRequest) => api.post<ClusterPreview>("/api/day1/clusters/preview", request),
     onSuccess: (preview, request) => setReviewed({ request, preview }),
-    onError: (error) => showError(describeFailure(error, "preview")),
+    onError: (error) => showFailure(error, "preview"),
   });
 
   const createMutation = useMutation({
@@ -683,7 +804,7 @@ export default function NewClusterPage() {
     },
     onError: (error) => {
       setReviewed(null);
-      showError(describeFailure(error, "create"));
+      showFailure(error, "create");
     },
   });
 
@@ -702,6 +823,7 @@ export default function NewClusterPage() {
     setOcpChoice(null);
     setDynamicValues(null);
     setFormError(null);
+    submitted.current = null;
     const overrides: Record<string, Record<string, unknown>> = {};
     for (const addon of spec.spec.day2.addons) {
       const defaults = defaultOverrides(addon.overrideable ?? []);
@@ -750,20 +872,24 @@ export default function NewClusterPage() {
     // Without the template's inputs the form can neither show nor check them: never send without them.
     if (schemaError) problems.push("The cluster template's inputs could not be loaded: reload the page to try again");
     else if (!templateSchema) problems.push("The cluster template's inputs are still loading");
-    problems.push(...missingRequired(schema, formValues).map((path) => `${labelForPath(path)} is required`));
+    problems.push(...missingRequired(schema, formValues, locks.values).map((path) => `${labelForPath(path)} is required`));
+    if (hasConfigs && catalogLoading) problems.push("The machine configs are still loading");
+    problems.push(...flavorProblems(formValues, schema, locks, catalog, labelForPath));
     const { overrides, problems: overrideProblems } = collectOverrides();
     problems.push(...overrideProblems);
     if (problems.length > 0) {
       showError({ kind: "form", lines: problems });
       return;
     }
+    submitted.current = formValues;
     previewMutation.mutate({
       name: trimmedName,
       site,
       mce,
       spec_name: selectedSpec!.metadata.name,
       spec_version: selectedSpec!.metadata.version,
-      variables: { ...formValues, openshift_release_version: ocpVersion.trim() },
+      // Locked values exactly as the flavor has them; config entries and owners as day1 reads them
+      variables: { ...requestVariables(formValues, locks), openshift_release_version: ocpVersion.trim() },
       ...(Object.keys(overrides).length > 0 ? { addon_overrides: overrides } : {}),
     });
   };
@@ -825,7 +951,7 @@ export default function NewClusterPage() {
           step === "spec" ? "bg-primary text-white" : "bg-status-ready text-white")}>
           {step === "spec" ? "1" : <CheckCircle2 className="h-4 w-4" />}
         </span>
-        <span className={step === "spec" ? "font-semibold" : "text-muted-foreground"}>Choose Spec</span>
+        <span className={step === "spec" ? "font-semibold" : "text-muted-foreground"}>Choose Flavor</span>
         <div className="h-px w-8 bg-border" />
         <span className={cn("flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
           step === "vars" ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
@@ -840,11 +966,11 @@ export default function NewClusterPage() {
           {specsLoading ? (
             Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
           ) : specsError ? (
-            <ProblemList error={specsError} title="The specs could not be loaded" />
+            <ProblemList error={specsError} title="The flavors could not be loaded" />
           ) : specs?.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title="No specs yet"
+              title="No flavors yet"
               description="A cluster is created from a cluster spec. Create one first."
               action={<EmptyStateLink href="/specs/new">New spec</EmptyStateLink>}
               bordered
@@ -1112,7 +1238,7 @@ export default function NewClusterPage() {
           </div>
 
           {/* Cluster Configuration — structure from spec, values filled here */}
-          {schemaLoading ? (
+          {schemaLoading || (hasConfigs && catalogLoading) ? (
             <Skeleton className="h-48 rounded-xl" />
           ) : schemaError ? (
             <ProblemList error={schemaError} title="The cluster template's inputs could not be loaded" />
@@ -1126,17 +1252,67 @@ export default function NewClusterPage() {
               <div>
                 <h2 className="text-sm font-semibold">Cluster Configuration</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Fill in the values below. The structure (number of nodepools, etc.) is fixed by the <span className="font-medium">{selectedSpec.metadata.name}</span> spec.
+                  Fill in the values below. <span className="font-medium">{selectedSpec.metadata.name}</span> sets the nodepools the cluster starts with{nodepoolsField ? "; add more at the end" : ""}.
                 </p>
-                {presetKeys.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1.5" data-testid="spec-presets">
-                    Preset by the spec: {presetKeys.map((k) => <code key={k} className="font-mono text-[11px] mr-1.5">{k}</code>)}
+                {(lockedPaths.size > 0 || locks.rule || presets.size > 0) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground" data-testid="flavor-legend">
+                    {(lockedPaths.size > 0 || locks.rule) && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <FlavorBadge kind="locked" flavor={selectedSpec.metadata.name} />
+                        the flavor&apos;s value; every cluster of it gets it
+                      </span>
+                    )}
+                    {presets.size > 0 && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <FlavorBadge kind="preset" flavor={selectedSpec.metadata.name} />
+                        prefilled; yours to change
+                      </span>
+                    )}
+                  </div>
+                )}
+                {locks.rule && (
+                  <p className="mt-2 text-xs text-muted-foreground flex items-start gap-1.5" data-testid="configs-rule">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+                    <span className="min-w-0 break-words">
+                      Every nodepool has exactly{" "}
+                      {locks.rule.map((e, i) => (
+                        <span key={e.name}>
+                          {i > 0 && ", "}
+                          <code className="font-mono text-[11px]">{e.name}</code>
+                        </span>
+                      ))}
+                      . The names are locked; choose each nodepool&apos;s hardware type for its {NETWORK_CONFIG}.
+                    </span>
                   </p>
                 )}
               </div>
+              {selectedSpec.warnings && selectedSpec.warnings.length > 0 && (
+                <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3.5 py-3 text-xs text-status-warning-fg space-y-1" data-testid="flavor-warnings">
+                  <p className="font-medium flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {selectedSpec.metadata.name} breaks rules day1 checks when a flavor is saved; a lock among them is not enforced
+                  </p>
+                  <ul className="list-disc pl-5 space-y-0.5">
+                    {selectedSpec.warnings.map((w, i) => <li key={i} className="break-words">{w}</li>)}
+                  </ul>
+                </div>
+              )}
               {infraEnvsError && (
                 <div data-testid="infraenv-hint">
                   <ProblemList error={infraEnvsError} title={`InfraEnvs could not be listed from ${mce}; type their names below`} />
+                </div>
+              )}
+              {hasConfigs && Boolean(catalogError) && (
+                <div data-testid="machine-configs-error">
+                  <ProblemList error={catalogError} title="The machine configs could not be loaded: new nodepools start without the defaults, and day1 checks the names" />
+                </div>
+              )}
+              {hasConfigs && catalog?.nodepool_defaults.error && (
+                <div data-testid="nodepool-defaults-error">
+                  <ProblemList
+                    lines={catalog.nodepool_defaults.problems.length > 0 ? catalog.nodepool_defaults.problems : [catalog.nodepool_defaults.error]}
+                    title={`${catalog.nodepool_defaults.path} cannot be used, so new nodepools start with no machine configs`}
+                  />
                 </div>
               )}
               <DynamicVariableForm
@@ -1144,9 +1320,15 @@ export default function NewClusterPage() {
                 values={formValues}
                 onChange={setDynamicValues}
                 mode="cluster-create"
-                immutablePaths={new Set(selectedSpec.spec.day1.immutable_paths ?? [])}
                 infraEnvOptions={infraEnvs ?? undefined}
                 infraEnvsLoading={infraEnvsLoading && Boolean(mce)}
+                flavorName={selectedSpec.metadata.name}
+                lockedPaths={lockedPaths}
+                lockLabels={lockLabels}
+                presetPaths={presets}
+                problems={fieldProblems}
+                renderInput={renderInput}
+                growableLists={growableLists}
               />
             </div>
           )}
@@ -1157,7 +1339,7 @@ export default function NewClusterPage() {
               <div className="px-5 py-4 border-b bg-muted/30">
                 <h2 className="text-sm font-semibold">Addon Configuration</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Values for the spec&apos;s day2 addons on this cluster. They are recorded in the cluster file and used when the addons are installed.
+                  Values for the flavor&apos;s day2 add-ons on this cluster. They are recorded in the cluster file and used when the addons are installed.
                 </p>
               </div>
               <div className="p-5 space-y-4">
@@ -1257,6 +1439,18 @@ export default function NewClusterPage() {
             <div ref={errorRef} className="space-y-2 scroll-mt-24" data-testid="form-problems">
               {formError.kind === "form" ? (
                 <ProblemList lines={formError.lines} title="Some fields need attention" />
+              ) : formError.placed ? (
+                // Day1's problems about a field are shown there; the rest are listed here
+                <ProblemList
+                  error={formError.error}
+                  title={formError.title}
+                  lines={[
+                    ...formError.placed.rest,
+                    formError.placed.rest.length > 0
+                      ? `And ${formError.placed.placed} more, marked at the fields they are about.`
+                      : `${formError.placed.placed === 1 ? "One problem is" : `${formError.placed.placed} problems are`} marked at the fields above.`,
+                  ]}
+                />
               ) : (
                 <ProblemList error={formError.error} title={formError.title} />
               )}
@@ -1265,7 +1459,7 @@ export default function NewClusterPage() {
                   {formError.hint && <p className="text-xs text-muted-foreground">{formError.hint}</p>}
                   {formError.reloadSpec && (
                     <button type="button" onClick={reloadSpecs} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}>
-                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload specs
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload flavors
                     </button>
                   )}
                 </div>
@@ -1319,7 +1513,7 @@ export default function NewClusterPage() {
             </div>
 
             <div className="border-t pt-3 space-y-1">
-              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Spec</p>
+              <p className="text-xs font-sans font-semibold text-muted-foreground uppercase tracking-wide mb-2">Flavor</p>
               <div className="flex gap-3">
                 <span className="text-muted-foreground w-32 shrink-0">Name</span>
                 <span className="font-medium break-all min-w-0">{reviewed.request.spec_name}</span>

@@ -11,6 +11,9 @@ from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_day1.api.deps import Context
 from wingman_day1.api.v1.schemas import (
     CommitOut,
+    ImportIn,
+    ImportPreviewIn,
+    ImportPreviewOut,
     MRDetailOut,
     SpecClusterOut,
     SpecDriftOut,
@@ -18,6 +21,8 @@ from wingman_day1.api.v1.schemas import (
     change_out,
 )
 from wingman_day1.application.approvals import RepoKey
+from wingman_day1.application.imports import ImportPick
+from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
 
 router = APIRouter(prefix="/api/day1/specs", tags=["specs"])
@@ -94,6 +99,30 @@ async def spec_drift(name: Name, context: Context, user: CurrentUser) -> list[Sp
         )
         for d in await context.drift.for_spec(name)
     ]
+
+
+@router.post("/{name}/import/preview")
+async def import_preview(
+    name: Name, body: ImportPreviewIn, context: Context, user: AdminUser
+) -> ImportPreviewOut:
+    """Each picked cluster against the flavor: whether it can join it, and what would drift."""
+    refs = [await context.clusters.locate(c.name, site=c.site, mce=c.mce) for c in body.clusters]
+    return ImportPreviewOut.of(await context.imports.preview(name, refs))
+
+
+@router.post("/{name}/import", status_code=201)
+async def import_clusters(
+    name: Name, body: ImportIn, context: Context, user: AdminUser
+) -> MRDetailOut:
+    """Open one day1 MR that links every picked cluster file to the flavor, and nothing else."""
+    picks = [
+        ImportPick(ClusterRef(c.site, c.mce, c.name), c.last_commit_id, relink=c.relink)
+        for c in body.clusters
+    ]
+    result = await context.imports.import_clusters(
+        name, picks, spec_version=body.spec_version, user=user
+    )
+    return change_out(RepoKey.DAY1, result.merge_request)
 
 
 @router.get("/{name}")

@@ -19,7 +19,7 @@ const SPEC: SpecEntry = {
   kind: "ClusterSpec",
   metadata: { name: "agent-standard", description: "Bare-metal workers on the Agent platform", version: "1.0.0", labels: {} },
   spec: {
-    day1: { variables: [], structure: { nodepools: [{}] }, immutable_paths: [], template: "# template", values: {} },
+    day1: { variables: [], structure: { nodepools: [{}] }, locked_paths: [], template: "# template", values: {} },
     day2: {
       addons: [
         {
@@ -42,7 +42,7 @@ const BROKEN_SPEC: SpecEntry = {
   apiVersion: "wingman.io/v1",
   kind: "ClusterSpec",
   metadata: { name: "broken-spec", description: "", version: "", labels: {} },
-  spec: { day1: { variables: [], structure: {}, immutable_paths: [], template: "", values: {} }, day2: { addons: [] } },
+  spec: { day1: { variables: [], structure: {}, locked_paths: [], template: "", values: {} }, day2: { addons: [] } },
   load_error: "the spec is not a valid ClusterSpec",
   load_problems: ["metadata.version: spec version 'one two' must be one word, like 1.2.0"],
 };
@@ -536,8 +536,8 @@ test.describe("Cluster create form", () => {
     await fillValidForm(form);
 
     await form.review();
-    await expect(form.formProblems).toContainText("The spec changed since you opened it");
-    await form.formProblems.getByRole("button", { name: /reload specs/i }).click();
+    await expect(form.formProblems).toContainText("The flavor changed since you opened it");
+    await form.formProblems.getByRole("button", { name: /reload flavors/i }).click();
     await expect(page.getByText(/step 1 of 2/i)).toBeVisible();
   });
 });

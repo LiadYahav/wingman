@@ -18,7 +18,7 @@ const SPEC: SpecEntry = {
   kind: "ClusterSpec",
   metadata: { name: "agent-standard", description: "Bare-metal workers on the Agent platform", version: "1.0.0", labels: {} },
   spec: {
-    day1: { variables: [], structure: {}, immutable_paths: [], template: "", values: {} },
+    day1: { variables: [], structure: {}, locked_paths: [], template: "", values: {} },
     day2: { addons: [] },
   },
   load_error: null,
@@ -51,10 +51,10 @@ test.describe("Spec list", () => {
     await expect(skeletons.first()).toBeVisible();
     // Not yet known to be empty: neither the empty state nor a count of zero
     await expect(page.getByTestId("specs-empty")).toHaveCount(0);
-    await expect(page.getByText("0 specs")).toHaveCount(0);
+    await expect(page.getByText("0 flavors")).toHaveCount(0);
     specs.release();
     await expect(page.getByTestId("spec-card-agent-standard")).toBeVisible();
-    await expect(page.getByText("1 spec", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 flavor", { exact: true })).toBeVisible();
     await expect(skeletons).toHaveCount(0);
   });
 
@@ -62,26 +62,26 @@ test.describe("Spec list", () => {
     await open(page, "/specs", (p) => p.route("**/api/day1/specs", unreachable));
 
     // The default query retries twice (1s, 2s) before the error shows
-    const alert = problem(page, "The specs could not be loaded");
+    const alert = problem(page, "The flavors could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
     await expect(page.getByTestId("specs-empty")).toHaveCount(0);
-    await expect(page.getByText("0 specs")).toHaveCount(0);
+    await expect(page.getByText("0 flavors")).toHaveCount(0);
   });
 
   test("with no specs it says so and offers to create one", async ({ page }) => {
     await open(page, "/specs");
 
     const empty = page.getByTestId("specs-empty");
-    await expect(empty).toContainText("No specs yet");
+    await expect(empty).toContainText("No flavors yet");
     await expect(empty.getByRole("link", { name: "New spec" })).toHaveAttribute("href", "/specs/new");
   });
 
   test("a search that matches nothing says so and clears in one click", async ({ page }) => {
     await open(page, "/specs", (p) => p.route("**/api/day1/specs", (r) => json(r, [SPEC])));
 
-    await page.getByPlaceholder("Search specs...").fill("no-such-spec");
-    await expect(page.getByText("No specs match")).toBeVisible();
+    await page.getByPlaceholder("Search flavors...").fill("no-such-spec");
+    await expect(page.getByText("No flavors match")).toBeVisible();
     await page.getByRole("button", { name: "Clear search" }).click();
     await expect(page.getByTestId("spec-card-agent-standard")).toBeVisible();
   });
@@ -93,9 +93,10 @@ test.describe("Spec detail", () => {
   const CLUSTERS = "**/api/day1/specs/agent-standard/clusters";
   const HISTORY = "**/api/day1/specs/agent-standard/history";
 
-  /** The spec itself, then the routes a test adds. */
+  /** The flavor itself and no clusters following it (the page reads them on every tab), then the routes a test adds. */
   const withSpec = (more: (p: Page) => Promise<unknown> = async () => {}) => async (p: Page) => {
     await p.route("**/api/day1/specs/agent-standard", (r) => json(r, SPEC));
+    await p.route(CLUSTERS, (r) => json(r, []));
     await more(p);
   };
 
@@ -103,13 +104,13 @@ test.describe("Spec detail", () => {
     await open(page, "/specs/agent-standard", withSpec((p) => p.route(CLUSTERS, unreachable)));
     await page.getByRole("button", { name: /^Clusters/ }).click();
 
-    const alert = problem(page, "The clusters using this spec could not be loaded");
+    const alert = problem(page, "The clusters following this flavor could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
     await expect(page.getByRole("main").locator("table")).toHaveCount(0);
     await expect(page.getByTestId("spec-clusters-empty")).toHaveCount(0);
 
-    // The delete review cannot say how many clusters lose their spec: it says it does not know
+    // The delete review cannot say whether clusters follow the flavor: it says it does not know
     await page.getByRole("main").getByRole("button", { name: "Delete", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByTestId("spec-delete-clusters-unknown")).toContainText("Could not be checked");
@@ -121,7 +122,7 @@ test.describe("Spec detail", () => {
     await page.getByRole("button", { name: /^Clusters/ }).click();
 
     const empty = page.getByTestId("spec-clusters-empty");
-    await expect(empty).toContainText("No clusters created from this spec yet");
+    await expect(empty).toContainText("No clusters follow this flavor yet");
     await expect(empty.getByRole("link", { name: "New cluster" })).toHaveAttribute("href", "/clusters/new");
   });
 
@@ -137,7 +138,7 @@ test.describe("Spec detail", () => {
     await expect(skeletons.first()).toBeVisible();
     expect(await skeletons.count()).toBeGreaterThan(3); // a summary bar and several rows, not one block
     drift.release();
-    await expect(page.getByTestId("spec-drift-empty")).toContainText("No clusters use this spec");
+    await expect(page.getByTestId("spec-drift-empty")).toContainText("No clusters follow this flavor");
     await expect(skeletons).toHaveCount(0);
   });
 
@@ -145,7 +146,7 @@ test.describe("Spec detail", () => {
     await open(page, "/specs/agent-standard", withSpec((p) => p.route(HISTORY, unreachable)));
     await page.getByRole("button", { name: "History" }).click();
 
-    const alert = problem(page, "The spec's history could not be loaded");
+    const alert = problem(page, "The flavor's history could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
     await expect(page.getByTestId("spec-history-empty")).toHaveCount(0);
@@ -164,7 +165,7 @@ test.describe("Spec detail", () => {
     await page.getByRole("button", { name: "History" }).click();
     await page.getByRole("button", { name: /Update spec agent-standard/ }).click();
 
-    const alert = problem(page, "The spec at this commit could not be loaded");
+    const alert = problem(page, "The flavor at this commit could not be loaded");
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
     await expect(page.getByRole("main").locator("pre")).toHaveCount(0);

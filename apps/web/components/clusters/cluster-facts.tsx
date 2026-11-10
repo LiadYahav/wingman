@@ -200,7 +200,7 @@ export function SpecCard({ cluster }: { cluster: ClusterDetail }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm text-muted-foreground">Spec</CardTitle>
+        <CardTitle className="text-sm text-muted-foreground">Flavor</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         {spec_name ? (
@@ -228,7 +228,7 @@ export function SpecCard({ cluster }: { cluster: ClusterDetail }) {
             )}
           </>
         ) : (
-          <p className="text-muted-foreground italic">Not linked to a spec</p>
+          <p className="text-muted-foreground italic">Follows no flavor</p>
         )}
       </CardContent>
     </Card>

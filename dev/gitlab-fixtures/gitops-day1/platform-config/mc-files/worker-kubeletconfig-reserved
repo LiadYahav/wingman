@@ -1,0 +1,11 @@
+# Fixture placeholder: a KubeletConfig that reserves system resources.
+# No .bu extension: the CI copies a non-butane file as it is.
+apiVersion: machineconfiguration.openshift.io/v1
+kind: KubeletConfig
+metadata:
+  name: worker-kubeletconfig-reserved
+spec:
+  kubeletConfig:
+    systemReserved:
+      cpu: 500m
+      memory: 1Gi

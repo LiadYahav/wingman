@@ -1,6 +1,6 @@
 import { Page, Route } from "@playwright/test";
 import { mockAddons, mockSpecs } from "./addons";
-import type { MRDetail, Mce, Problem, ErrorCode } from "../../types";
+import type { MRDetail, MachineConfigs, Mce, Problem, ErrorCode } from "../../types";
 
 // Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/schemas.py,
 // apps/day2-service/.../api/v1/schemas.py), typed so a shape change fails `tsc`.
@@ -84,6 +84,34 @@ const mockMces: Mce[] = [
   mockMce({ name: "ocp4-prep-mce-site1-a", env: "prep", default_mastertag: "4.20.9-x86_64", hub_version: "4.20.9-x86_64" }),
   mockMce({ name: "ocp4-prod-mce-site2-a", site: "site2" }),
 ];
+
+/**
+ * `GET /api/day1/machine-configs` on the fixtures (the API note's §1): static
+ * configs at the root and in `kubevirt/`, three hardware types that overlap
+ * (`dell`, `dell-data`), and the team's three nodepool defaults.
+ */
+export const mockMachineConfigs: MachineConfigs = {
+  network_config: "nm-conf",
+  static_configs: [
+    { name: "nic-ring-buffer", folder: "", path: "mc-files/nic-ring-buffer.bu" },
+    { name: "worker-kubeletconfig-reserved", folder: "", path: "mc-files/worker-kubeletconfig-reserved" },
+    { name: "workers-chrony-configuration", folder: "", path: "mc-files/workers-chrony-configuration.bu" },
+    { name: "kubevirt-worker-tuning", folder: "kubevirt", path: "mc-files/kubevirt/kubevirt-worker-tuning.bu" },
+  ],
+  hardware_types: [
+    { name: "cisco", template: "mc-files/templates/nm-conf-template-hw-cisco.bu" },
+    { name: "dell", template: "mc-files/templates/nm-conf-template-hw-dell.bu" },
+    { name: "dell-data", template: "mc-files/templates/nm-conf-template-hw-dell-data.bu" },
+  ],
+  nodepool_defaults: {
+    path: "nodepool-defaults.yaml",
+    found: true,
+    configs: [{ name: "nm-conf" }, { name: "workers-chrony-configuration" }, { name: "nic-ring-buffer" }],
+    error: null,
+    problems: [],
+  },
+  problems: [],
+};
 
 /** Answer a route with a JSON body. */
 export const json = (route: Route, body: unknown, status = 200) =>
@@ -175,6 +203,7 @@ export async function mockDashboardApis(page: Page) {
     fulfillProblem(route, 501, "FEATURE_DISABLED", "The delete-cluster workflow is not available yet.")
   );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
+  await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));
   await page.route("**/api/day2/approvals", (route: Route) => json(route, []));
 }
@@ -246,6 +275,8 @@ async function mockDay1Api(page: Page) {
   });
 
   await page.route("**/api/day1/sites", (route: Route) => json(route, ["site1", "site2"]));
+
+  await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
 }
 
 export async function mockAllApis(page: Page) {

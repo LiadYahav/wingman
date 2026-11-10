@@ -138,14 +138,14 @@ export default function SpecsPage() {
           <h1
             className="text-2xl font-bold tracking-tight"
             style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}
-          >Cluster Specs</h1>
+          >Flavors</h1>
           {isLoading ? (
             <Skeleton className="mt-1.5 h-4 w-24" />
           ) : (
             <p className="text-sm text-muted-foreground mt-0.5">
               {specs
-                ? `${filtered.length}${hasActiveFilters ? ` of ${total}` : ""} spec${total !== 1 ? "s" : ""}`
-                : "Cluster specs in the specs repo"}
+                ? `${filtered.length}${hasActiveFilters ? ` of ${total}` : ""} flavor${total !== 1 ? "s" : ""}`
+                : "Cluster flavors in the specs repo"}
               {brokenCount > 0 && (
                 <span className="text-destructive"> · {brokenCount} do{brokenCount === 1 ? "es" : ""} not load</span>
               )}
@@ -157,14 +157,14 @@ export default function SpecsPage() {
             onClick={() => queryClient.invalidateQueries({ queryKey: ["specs"] })}
             disabled={isFetching}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-            title="Refresh specs"
+            title="Refresh flavors"
           >
             <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
             Refresh
           </button>
           {isAdmin && (
             <Link href="/specs/new" className={buttonVariants({ size: "sm" })}>
-              <Plus className="h-4 w-4 mr-1.5" />New Spec
+              <Plus className="h-4 w-4 mr-1.5" />New Flavor
             </Link>
           )}
         </div>
@@ -176,7 +176,7 @@ export default function SpecsPage() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <input
             type="text"
-            placeholder="Search specs..."
+            placeholder="Search flavors..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border bg-card pl-8 pr-4 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow"
@@ -213,7 +213,7 @@ export default function SpecsPage() {
       </div>
 
       {error ? (
-        <ProblemList error={error} title="The specs could not be loaded" />
+        <ProblemList error={error} title="The flavors could not be loaded" />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {isLoading
@@ -228,8 +228,8 @@ export default function SpecsPage() {
           {!isLoading && specs?.length === 0 && (
             <EmptyState
               icon={Layers}
-              title="No specs yet"
-              description="A spec presets a cluster's values, nodepool shape and addons; clusters are created from one."
+              title="No flavors yet"
+              description="A flavor presets or locks a cluster's values, nodepool shape and add-ons; clusters are created from one, and existing ones can join it."
               action={isAdmin && <EmptyStateLink href="/specs/new">New spec</EmptyStateLink>}
               bordered
               className="col-span-full"
@@ -238,7 +238,7 @@ export default function SpecsPage() {
           )}
           {!isLoading && specs && specs.length > 0 && filtered.length === 0 && (
             <NoMatches
-              what="specs"
+              what="flavors"
               clearLabel="Clear search"
               onClear={() => setSearch("")}
               bordered

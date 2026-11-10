@@ -27,6 +27,7 @@ function listItem(name: string, overrides: Partial<ClusterStatus> = {}): Cluster
     path: `sites/${SITE}/mces/${MCE}/hostedClusters/${name}.yaml`,
     hosted_cluster: { cluster_name: name.replace(/^ocp4-/, ""), name: `openshift-${name.replace(/^ocp4-/, "")}`, namespace: `hcp-${name.replace(/^ocp4-/, "")}` },
     naming: { follows_convention: true, env: "prod", short_name: "x", sequence: null, problems: [] },
+    owner: { merkaz: "1234", anaf: "56", mador: "7" },
     problems: [],
     ...overrides,
   };
@@ -115,7 +116,7 @@ function drift(overrides: Partial<ClusterDrift> = {}): ClusterDrift {
   return {
     cluster: NAME, site: SITE, mce: MCE, state: "in_sync", is_drifted: false,
     spec_name: "agent-standard", spec_version: "1.0.0", current_spec_version: "1.0.0",
-    addon_drift: [], version_differences: [], error: null, ...overrides,
+    value_drift: [], addon_drift: [], version_differences: [], error: null, ...overrides,
   };
 }
 
@@ -327,12 +328,13 @@ test.describe("Cluster detail", () => {
     await openDetail(page, drift({ spec_version: "1.0.0", current_spec_version: "1.1.0" }));
 
     await page.getByRole("tab", { name: "Drift" }).click();
-    await expect(page.getByText("Every addon of agent-standard v1.1.0 is installed.")).toBeVisible();
-    await expect(page.getByText("This cluster was created from v1.0.0; drift compares against the spec as it is now, v1.1.0."))
-      .toBeVisible();
+    await expect(page.getByText("The cluster holds every value agent-standard v1.1.0 locks and has every add-on it lists.")).toBeVisible();
+    await expect(page.getByText(
+      "The file's header names v1.0.0; drift compares against the flavor as it is now, v1.1.0. A sync moves the header to v1.1.0."
+    )).toBeVisible();
   });
 
-  test("drifted addons are fixed with the values requested at create; there is no YAML sync", async ({ page }) => {
+  test("drifted addons are fixed with the values requested at create; with no value drift there is no sync", async ({ page }) => {
     await openDetail(page, drift({
       state: "drifted", is_drifted: true,
       addon_drift: [{ addon_name: "cluster-roles", team: "redbull", reason: "missing", expected_version: "main", override_values: { replicas: 2 } }],
@@ -343,7 +345,9 @@ test.describe("Cluster detail", () => {
     );
 
     await page.getByRole("tab", { name: "Drift" }).click();
+    await expect(page.getByText("The cluster has drifted from agent-standard v1.0.0: 1 add-on is missing.")).toBeVisible();
     await expect(page.getByText(/sync yaml/i)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sync to flavor" })).toHaveCount(0);
     await page.getByRole("button", { name: "Install" }).click();
     await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
 
@@ -365,8 +369,8 @@ test.describe("Cluster detail", () => {
     }), [CLUSTER_ROLES]);
 
     await page.getByRole("tab", { name: "Drift" }).click();
-    await expect(page.getByText(/is installed\./)).toBeVisible();
-    await expect(page.getByText("release-1 installed · spec names main")).toBeVisible();
+    await expect(page.getByText(/has every add-on it lists\./)).toBeVisible();
+    await expect(page.getByText("release-1 installed · flavor names main")).toBeVisible();
     await expect(page.getByText(/not drift/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /^(install|update|fix)/i })).toHaveCount(0);
     expect(writes).toBe(0);

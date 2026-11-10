@@ -31,7 +31,12 @@ async def test_the_catalog_lists_every_spec_with_the_shared_template(
     context: Day1Context,
 ) -> None:
     entries = await context.specs.entries()
-    assert [e.name for e in entries] == ["agent-single", "agent-standard"]
+    assert [e.name for e in entries] == [
+        "agent-baseline",
+        "agent-dell",
+        "agent-single",
+        "agent-standard",
+    ]
     assert all(e.spec is not None and "nodepool:" in e.spec.spec.day1.template for e in entries)
 
 

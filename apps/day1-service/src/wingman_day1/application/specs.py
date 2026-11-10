@@ -1,7 +1,10 @@
 """Specs and the shared template, read from and changed in the specs project.
 
 A spec that fails to parse is listed with its error rather than dropped
-(ADR-0004: a read error is never swallowed). Every change is a merge request.
+(ADR-0004: a read error is never swallowed). Every change is a merge request,
+and a spec is saved only when it meets the flavor rules: safe values
+(ADR-0013), locks that fix a value (ADR-0026), machine configs that resolve
+(ADR-0027) and owner numbers (ADR-0028).
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ from dataclasses import dataclass
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, EntryKind, RepoPath
 from wingman_core.domain.users import User
+from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.domain import paths
 from wingman_day1.domain.changes import ProvisionResult, SpecAction, SpecChange
 from wingman_day1.domain.errors import (
@@ -22,7 +26,14 @@ from wingman_day1.domain.errors import (
     ResourceNotFoundError,
     StaleError,
 )
-from wingman_day1.domain.specs import ClusterSpec, dump_spec, parse_spec, with_template
+from wingman_day1.domain.machine_configs import flavor_config_problems
+from wingman_day1.domain.specs import (
+    ClusterSpec,
+    dump_spec,
+    parse_spec,
+    rule_problems,
+    with_template,
+)
 from wingman_day1.domain.template import TemplateField, analyze_template
 from wingman_day1.ports import RepoReads, SpecChanges
 
@@ -41,10 +52,18 @@ class SpecEntry:
 class SpecCatalog:
     """Read specs and the template; propose spec changes."""
 
-    def __init__(self, specs: RepoReads, changes: SpecChanges, *, specs_root: str) -> None:
-        """Read through ``specs`` (cached) and write through ``changes``."""
+    def __init__(
+        self,
+        specs: RepoReads,
+        changes: SpecChanges,
+        machine_configs: MachineConfigService,
+        *,
+        specs_root: str,
+    ) -> None:
+        """Read through ``specs`` (cached), write through ``changes``, resolve configs."""
         self._specs = specs
         self._changes = changes
+        self._machine_configs = machine_configs
         self._root = specs_root
 
     # ── Reads ───────────────────────────────────────────────────────────────
@@ -104,6 +123,7 @@ class SpecCatalog:
 
     async def create(self, spec: ClusterSpec, *, user: User) -> ProvisionResult:
         """Propose a new spec."""
+        await self._require_savable(spec)
         name = spec.metadata.name
         try:
             await self._specs.read(self._path(name))
@@ -131,6 +151,7 @@ class SpecCatalog:
                 "a spec cannot be renamed",
                 [f"metadata.name is {spec.metadata.name!r}, the spec being updated is {name!r}"],
             )
+        await self._require_savable(spec)
         current = await self._current(name, last_commit_id)
         return await self._changes.apply(
             SpecChange(
@@ -167,6 +188,14 @@ class SpecCatalog:
         )
 
     # ── Internals ───────────────────────────────────────────────────────────
+
+    async def _require_savable(self, spec: ClusterSpec) -> None:
+        """Every flavor rule a spec must meet before it is proposed; all problems at once."""
+        problems = rule_problems(spec)
+        catalog = await self._machine_configs.catalog()
+        problems += flavor_config_problems(spec.spec.day1.values, catalog)
+        if problems:
+            raise InvalidSpecError(f"spec {spec.metadata.name!r} cannot be saved", problems)
 
     def _path(self, name: str) -> RepoPath:
         try:

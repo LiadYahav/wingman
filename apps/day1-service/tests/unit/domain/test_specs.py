@@ -1,4 +1,4 @@
-"""Cluster specs: the legacy document shape, presets, and strict validation."""
+"""Cluster specs: the legacy document shape, presets and locks, and strict validation."""
 
 from __future__ import annotations
 
@@ -7,13 +7,17 @@ from pathlib import Path
 import pytest
 import yaml
 
+from wingman_core.domain.git import RepoPath
 from wingman_core.testing.fixtures import default_fixture_root
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.errors import InvalidSpecError
+from wingman_day1.domain.locks import InputPath, Lock
+from wingman_day1.domain.machine_configs import MachineConfigCatalog, flavor_config_problems
 from wingman_day1.domain.specs import (
     ClusterSpec,
     dump_spec,
     parse_spec,
+    rule_problems,
     validate_spec,
     with_template,
 )
@@ -159,3 +163,91 @@ def test_a_minimal_spec_gets_empty_day1_and_day2() -> None:
     assert spec.metadata.version == "1.0.0"
     assert spec.spec.day1.values == {}
     assert spec.spec.day2.addons == []
+
+
+# ── Locks (ADR-0026) ─────────────────────────────────────────────────────────
+
+
+def test_the_legacy_immutable_paths_are_read_as_locked_paths() -> None:
+    spec = validate_spec(_document(day1={"immutable_paths": ["platform"]}))
+    assert spec.spec.day1.locked_paths == ["platform"]
+    stored = yaml.safe_load(dump_spec(spec))["spec"]["day1"]
+    assert stored["locked_paths"] == ["platform"]
+    assert "immutable_paths" not in stored
+
+
+def test_both_names_at_once_are_refused() -> None:
+    with pytest.raises(InvalidSpecError) as caught:
+        validate_spec(_document(day1={"immutable_paths": [], "locked_paths": []}))
+    assert "immutable_paths is the old name of locked_paths" in caught.value.problems[0]
+
+
+def test_a_stored_spec_with_a_lock_that_fixes_nothing_loads_and_is_not_enforced() -> None:
+    content = yaml.safe_dump(
+        _document(
+            day1={
+                "immutable_paths": ["cluster_name", "platform", "owner_merkaz"],
+                "values": {"owner_merkaz": "1234"},
+            }
+        )
+    )
+    spec = parse_spec(content)
+    assert spec.locks() == (Lock(InputPath.parse("owner_merkaz"), "1234"),)
+    assert [p.split(" ")[1] for p in rule_problems(spec)] == ["cluster_name", "platform"]
+
+
+def test_rule_problems_cover_values_owners_and_locks() -> None:
+    spec = validate_spec(
+        _document(
+            day1={
+                "values": {"owner_anaf": "a\nb", "owner_mador": "x"},
+                "locked_paths": ["nodepools[0].replicas"],
+            }
+        )
+    )
+    problems = rule_problems(spec)
+    assert len(problems) == 4
+    assert problems[0].startswith("owner_anaf: a value must be one line")
+    assert problems[1].startswith("owner_anaf: must be a number")
+    assert problems[2].startswith("owner_mador: must be a number")
+    assert problems[3].startswith("locked_paths: nodepools[0].replicas is locked but")
+
+
+def test_presets_put_the_values_over_legacy_variable_defaults() -> None:
+    spec = validate_spec(
+        _document(
+            day1={
+                "variables": [
+                    {"name": "platform", "type": "string", "default": "agent"},
+                    {"name": "owner_mador", "type": "string", "default": "7"},
+                    {"name": "x", "type": "string"},
+                ],
+                "values": {"platform": "kubevirt"},
+            }
+        )
+    )
+    assert spec.presets() == {"platform": "kubevirt", "owner_mador": "7"}
+
+
+@pytest.mark.parametrize("path", FIXTURE_SPECS, ids=lambda p: Path(p).stem)
+def test_every_fixture_spec_meets_the_flavor_rules(path: Path) -> None:
+    mc_files = default_fixture_root() / "gitops-day1" / "platform-config" / "mc-files"
+    catalog = MachineConfigCatalog.from_files(
+        RepoPath(f"mc-files/{f.relative_to(mc_files).as_posix()}")
+        for f in mc_files.rglob("*")
+        if f.is_file()
+    )
+    spec = parse_spec(path.read_text(encoding="utf-8"), expected_name=path.stem)
+    assert rule_problems(spec) == []
+    assert flavor_config_problems(spec.spec.day1.values, catalog) == []
+
+
+def test_the_dell_fixture_flavor_locks_its_first_nodepools_configs() -> None:
+    spec = parse_spec((SPECS_DIR / "agent-dell.yaml").read_text(encoding="utf-8"))
+    (lock,) = spec.locks()
+    assert str(lock.path) == "nodepools[0].configs"
+    assert lock.value == [
+        {"name": "nm-conf", "hardware": "dell"},
+        {"name": "workers-chrony-configuration"},
+        {"name": "nic-ring-buffer"},
+    ]

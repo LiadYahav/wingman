@@ -4,6 +4,28 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-08 — PR #20 released 3.1.0; repos read once per commit (ADR-0035).**
+PR #20: a renamed chart repo no longer fails the catalog (`get_project` follows
+GitLab's rename redirect, `chart-repo-unreadable`, `repourl-moved` on the Lints
+page); the ladder is read without `schemaVersion`; CI retries tool downloads.
+Then, on `roiblum/feat-repo-snapshots` (the user chose it):
+- `GitLabPort.get_branch` and `read_archive`, with `RepoSnapshots` in core;
+- day1 and day2 read files and trees through them;
+- a read's `last_commit_id` is now the commit read at (see the key facts);
+- day1's stale check asks `changed_since`, and "changed by" comes from
+  `last_change`.
+Old and new answers were compared on scaled local data and are identical.
+
+**Next:**
+- day1's first cluster list after a merge still costs one history lookup per
+  cluster; carry unchanged files forward from a compare (ADR-0035,
+  Consequences);
+- flavors v2 on `roiblum/feat-flavors-v2`: stage 2's sync is half done in the
+  worktree `agent-a35695ba357fd9bb2` as a WIP commit; then stage 3, the web
+  pages and the flavor page redesign (apple-design skill); an upgrade guide
+  for its operator steps. Merge main into it first: its ADRs 0033 and 0034
+  collide with main's and become 0036 and 0037.
+
 **2026-11-08 — releases 3.0.1 to 3.1.0: numbering, status, chart move, two
 production bugs.** 3.0.1 versions every release from its commits (ADR-0031);
 3.0.2 reads the HostedCluster `ocp4-<clusterName>` (ADR-0015 correction) and

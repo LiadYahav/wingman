@@ -112,11 +112,15 @@ Explicit user instructions; violating one is a real mistake, not style.
 - Done (2026-11-08): the day1, specs and team repos are read once per commit
   from GitLab's archive (ADR-0035); the catalog on a production-sized repo went
   from 9 s and 357 GitLab calls per load to 0.03 s cached, 0.46 s after the TTL.
-- **Not done yet, in order:** (1) flavors v2 (`docs/ideas/flavors-v2.md`;
-  stages 1 and 2 on `roiblum/feat-flavors-v2`, the web pages to build);
-  (2) the architect's
-  answers (`docs/ideas/architecture-fit.md`); (3) chart hardening (a values
-  schema, a pinned nginx image); (4) ecosystem features (`docs/ideas/`).
+- Done (2026-11-08): flavors v2 (`docs/ideas/flavors-v2.md`, ADRs 0026-0029,
+  0036, 0037): enforced locks, machine configs from `mc-files/` with nodepool
+  defaults, numeric owners, drift on locked values, importing existing
+  clusters into a flavor and syncing a cluster to it; the web pages for all of
+  it; the UI says Flavor (the API keeps `/specs`).
+- **Not done yet, in order:** (1) the architect's
+  answers (`docs/ideas/architecture-fit.md`); (2) chart hardening (a values
+  schema, a pinned nginx image); (3) flavors v2's "Left for later";
+  (4) ecosystem features (`docs/ideas/`).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -181,7 +185,7 @@ helm template <cluster> <chart-dir> -f sites/configValues.yaml -f sites/<site>/v
 Web: `npm run lint --workspace=web`, `cd apps/web && npx tsc --noEmit`,
 `npm run build --workspace=web`. Playwright: `npm run test:e2e:mocked
 --workspace=web` runs the `mocked` project (every spec but `live-*`; CI runs
-it); the `live` project is `live-day1-flows.spec.ts` and `live-day2.spec.ts`,
+it); the `live` project is `live-day1-flows.spec.ts`, `live-day2.spec.ts` and `live-flavors.spec.ts`,
 against a running stack on a disposable GitLab (`PLAYWRIGHT_BASE_URL`, the dev
 login secret; commands in `apps/web/README.md`). Playwright traps: route mocks match LIFO; SSE
 keeps the network busy, so wait on `domcontentloaded`, never `networkidle`;
@@ -263,24 +267,20 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-08 — PR #20 released 3.1.0; repos read once per commit (ADR-0035).**
-PR #20: a renamed chart repo no longer fails the catalog (`get_project` follows
-GitLab's rename redirect, `chart-repo-unreadable`, `repourl-moved` on the Lints
-page); the ladder is read without `schemaVersion`; CI retries tool downloads.
-Then, on `roiblum/feat-repo-snapshots` (the user chose it):
-- `GitLabPort.get_branch` and `read_archive`, with `RepoSnapshots` in core;
-- day1 and day2 read files and trees through them;
-- a read's `last_commit_id` is now the commit read at (see the key facts);
-- day1's stale check asks `changed_since`, and "changed by" comes from
-  `last_change`.
-Old and new answers were compared on scaled local data and are identical.
+**2026-11-08 — flavors v2, all stages, on `roiblum/feat-flavors-v2`.**
+Main merged in (the branch's ADRs 0033/0034 became 0036/0037; the import asks
+`changed_since`, ADR-0035). Day1: sync (`POST /clusters/{name}/sync[/preview]`,
+removals confirmed, how each nodepool rolls), `owner` on cluster rows,
+`enforced_locks` on flavors. Web (four parallel agents, then merged): the
+flavor editor, the create form, the flavor page with import, value drift and
+the sync dialog, owner filters; the UI says Flavor. Checked: the gate, 283
+mocked E2E, the three live suites on the reseeded GitLab CE, and
+`day1_live_e2e.py` (import and sync against real GitLab). Upgrade guide:
+`docs/upgrade/3.2-to-3.3.md`.
 
 **Next:**
+- merge the PR (release 3.3) and deploy with the upgrade guide;
+- flavors v2's "Left for later" (`docs/ideas/flavors-v2.md`);
 - day1's first cluster list after a merge still costs one history lookup per
-  cluster; carry unchanged files forward from a compare (ADR-0035,
-  Consequences);
-- flavors v2 on `roiblum/feat-flavors-v2`: stage 2's sync is half done in the
-  worktree `agent-a35695ba357fd9bb2` as a WIP commit; then stage 3, the web
-  pages and the flavor page redesign (apple-design skill); an upgrade guide
-  for its operator steps. Merge main into it first: its ADRs 0033 and 0034
-  collide with main's and become 0036 and 0037.
+  cluster (ADR-0035, Consequences);
+- the architect's answers (`docs/ideas/architecture-fit.md`).

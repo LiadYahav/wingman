@@ -1,0 +1,7 @@
+# Fixture placeholder: a restored original, kept for a cluster not yet onboarded.
+variant: openshift
+version: 4.14.0
+metadata:
+  name: 99-restored-example-config
+  labels:
+    machineconfiguration.openshift.io/role: worker

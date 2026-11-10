@@ -1,0 +1,59 @@
+# Placeholder data for Wingman's tests: a cluster written by hand before
+# Wingman, shaped like production's files. It has no flavor link yet.
+owner:
+  merkaz: "1234"
+  anaf: "56"
+  mador: "7"
+
+mastertag: 4.18.22-x86_64
+
+nodepool:
+- infraEnvName: dell-r660-site1-128c-1024gb-5tb
+  replicas: 3
+  labels:
+    allowDeletion: false
+  configs:
+  - name: nm-conf-prod-lark-site1-dell
+  - name: worker-kubeletconfig-reserved
+  - name: nic-ring-buffer
+  - name: workers-chrony-configuration
+
+# Storage nodes: their data NICs have their own network config.
+- infraEnvName: dell-r760-site1-64c-512gb-20tb
+  replicas: 2
+  labels:
+    allowDeletion: false
+  configs:
+  - name: nm-conf-prod-lark-site1-dell-data
+  - name: workers-chrony-configuration
+  - name: restored-example-config  # restored by hand, not onboarded yet
+  nodeLabels:
+    node-role.kubernetes.io/storage: ""
+
+vlanId: 1412
+
+dhcp_values:
+  network: "10.20.46.0"
+
+# === Added by CI ===
+mcFiles:
+- nm-conf-prod-lark-site1-dell
+- worker-kubeletconfig-reserved
+- nic-ring-buffer
+- workers-chrony-configuration
+- nm-conf-prod-lark-site1-dell-data
+- restored-example-config
+
+mcConfigMap:
+- name: nm-conf-prod-lark-site1-dell
+  config: PLACEHOLDER-gzip-base64-1
+- name: worker-kubeletconfig-reserved
+  config: PLACEHOLDER-gzip-base64-2
+- name: nic-ring-buffer
+  config: PLACEHOLDER-gzip-base64-3
+- name: workers-chrony-configuration
+  config: PLACEHOLDER-gzip-base64-4
+- name: nm-conf-prod-lark-site1-dell-data
+  config: PLACEHOLDER-gzip-base64-5
+- name: restored-example-config
+  config: PLACEHOLDER-gzip-base64-6

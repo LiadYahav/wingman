@@ -39,12 +39,25 @@ async def test_the_list_carries_the_legacy_spec_shape_and_the_template(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     specs = (await client.get("/api/day1/specs", headers=auth(support.VIEWER))).json()
-    assert [s["metadata"]["name"] for s in specs] == ["agent-single", "agent-standard"]
-    first = specs[0]
-    assert set(first) >= {"apiVersion", "kind", "metadata", "spec", "load_error"}
-    assert first["load_error"] is None
-    assert first["spec"]["day1"]["template"].startswith("{#-")
-    assert first["spec"]["day1"]["structure"] == {"nodepools": [{}]}
+    assert [s["metadata"]["name"] for s in specs] == [
+        "agent-baseline",
+        "agent-dell",
+        "agent-single",
+        "agent-standard",
+    ]
+    single = specs[2]
+    assert set(single) >= {"apiVersion", "kind", "metadata", "spec", "load_error", "warnings"}
+    assert single["load_error"] is None
+    assert single["spec"]["day1"]["template"].startswith("{#-")
+    assert single["spec"]["day1"]["structure"] == {"nodepools": [{}]}
+    # The fixture file still says immutable_paths; the API answers with the new name.
+    assert single["spec"]["day1"]["locked_paths"] == []
+    assert "immutable_paths" not in single["spec"]["day1"]
+    dell = specs[1]["spec"]["day1"]
+    assert dell["locked_paths"] == ["nodepools[0].configs"]
+    assert dell["values"]["nodepools"][0]["configs"][0] == {"name": "nm-conf", "hardware": "dell"}
+    assert specs[1]["warnings"] == []
+    assert specs[1]["enforced_locks"] == ["nodepools[0].configs"]
 
 
 async def test_a_broken_spec_is_listed_with_its_error(

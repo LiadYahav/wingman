@@ -31,6 +31,9 @@ from wingman_day1.api.v1.schemas import (
     MRDetailOut,
     PreviewOut,
     StartDeleteWorkflowIn,
+    SyncIn,
+    SyncPreviewIn,
+    SyncPreviewOut,
     WorkflowRunOut,
     change_out,
     cluster_detail,
@@ -154,9 +157,46 @@ async def cluster_current_yaml(
 async def cluster_drift(
     name: str, context: Context, user: CurrentUser, site: Site = None, mce: Mce = None
 ) -> ClusterDriftOut:
-    """The cluster against its spec's day2 addons."""
+    """The cluster against its flavor: locked values the file does not hold, missing add-ons."""
     ref = await _ref(context, name, site, mce)
     return ClusterDriftOut.of(await context.drift.for_cluster(ref))
+
+
+@router.post("/{name}/sync/preview")
+async def sync_preview(
+    name: str,
+    body: SyncPreviewIn,
+    context: Context,
+    user: AdminUser,
+    site: Site = None,
+    mce: Mce = None,
+) -> SyncPreviewOut:
+    """What syncing the cluster to its flavor would write, remove and reboot (ADR-0037)."""
+    ref = await _ref(context, name, site, mce)
+    hardware = {c.nodepool: c.hardware for c in body.hardware}
+    return SyncPreviewOut.of(await context.sync.preview(ref, hardware=hardware))
+
+
+@router.post("/{name}/sync", status_code=201)
+async def sync_cluster(
+    name: str,
+    body: SyncIn,
+    context: Context,
+    user: AdminUser,
+    site: Site = None,
+    mce: Mce = None,
+) -> MRDetailOut:
+    """Open one day1 MR that sets every locked value the file does not hold to the flavor's."""
+    ref = await _ref(context, name, site, mce)
+    result = await context.sync.sync(
+        ref,
+        last_commit_id=body.last_commit_id,
+        spec_version=body.spec_version,
+        hardware={c.nodepool: c.hardware for c in body.hardware},
+        confirm_removals=[(r.nodepool, r.name) for r in body.confirm_removals],
+        user=user,
+    )
+    return change_out(RepoKey.DAY1, result.provision.merge_request)
 
 
 @router.get("/{name}")

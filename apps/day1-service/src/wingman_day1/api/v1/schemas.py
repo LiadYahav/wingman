@@ -22,14 +22,21 @@ from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.audit import AuditCommit
 from wingman_day1.application.clusters import ClusterFile
 from wingman_day1.application.drift import ClusterDrift
+from wingman_day1.application.imports import ImportCandidate, ImportPreview
+from wingman_day1.application.machine_configs import MachineConfigOverview
 from wingman_day1.application.sites import MceView
 from wingman_day1.application.specs import SpecEntry
+from wingman_day1.application.sync import SyncPlan
 from wingman_day1.domain.addons import AddonDrift, RequestedAddon, VersionDifference
 from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
+from wingman_day1.domain.locks import MISSING
+from wingman_day1.domain.machine_configs import NETWORK_CONFIG
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
 from wingman_day1.domain.openshift_versions import OpenShiftVersions
-from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata
+from wingman_day1.domain.paths import NODEPOOL_DEFAULTS_FILE
+from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata, rule_problems
 from wingman_day1.domain.status import LiveStatus
+from wingman_day1.domain.value_drift import ValueDrift
 from wingman_day1.domain.workflows import WorkflowRun
 
 MAX_FILE_BYTES = 256 * 1024
@@ -350,12 +357,15 @@ class ClusterStatusOut(BaseModel):
     path: str
     hosted_cluster: HostedClusterOut
     naming: NamingOut
+    owner: dict[str, str]
+    """The file's ``owner`` numbers (merkaz, anaf, mador) as text; ``{}`` when it has none."""
     problems: list[str]
 
     @classmethod
     def of(cls, cluster: ClusterFile) -> ClusterStatusOut:
         """From a cluster file."""
         change = cluster.last_change
+        owner = cluster.values.owner if cluster.values and cluster.values.owner else {}
         return cls(
             name=cluster.ref.name,
             site=cluster.ref.site,
@@ -368,6 +378,11 @@ class ClusterStatusOut(BaseModel):
             path=str(cluster.ref.path),
             hosted_cluster=HostedClusterOut.of(cluster.hosted_cluster),
             naming=NamingOut.of(cluster.naming),
+            owner={
+                str(key): str(value)
+                for key, value in owner.items()
+                if isinstance(value, str | int) and not isinstance(value, bool)
+            },
             problems=list(cluster.problems),
         )
 
@@ -610,13 +625,22 @@ class SpecOut(ClusterSpec):
     load_problems: list[str] = Field(default_factory=list)
     last_commit_id: str | None = None
     """The commit that last changed the file: send it back with an edit or delete."""
+    warnings: list[str] = Field(default_factory=list)
+    """Flavor rules the stored spec breaks: it loads, but a save would be refused."""
+    enforced_locks: list[str] = Field(default_factory=list)
+    """The ``locked_paths`` a create enforces: a stored lock that breaks the rules is not one."""
 
     @classmethod
     def of(cls, entry: SpecEntry) -> SpecOut:
         """From a catalog entry."""
         if entry.spec is not None:
             return cls.model_validate(
-                {**entry.spec.model_dump(), "last_commit_id": entry.last_commit_id}
+                {
+                    **entry.spec.model_dump(),
+                    "last_commit_id": entry.last_commit_id,
+                    "warnings": rule_problems(entry.spec),
+                    "enforced_locks": [str(lock.path) for lock in entry.spec.locks()],
+                }
             )
         error = entry.error
         return cls.model_construct(
@@ -627,6 +651,75 @@ class SpecOut(ClusterSpec):
             load_error=str(error) if error else "unreadable",
             load_problems=list(error.problems) if error else [],
             last_commit_id=entry.last_commit_id,
+        )
+
+
+# ── Machine configs ──────────────────────────────────────────────────────────
+
+
+class StaticConfigOut(BaseModel):
+    """A static config a nodepool may name: ``{name: <name>}``."""
+
+    name: str
+    folder: str
+    """Its folder under ``mc-files/``; ``""`` for the root."""
+    path: str
+
+
+class HardwareTypeOut(BaseModel):
+    """A hardware type for ``{name: nm-conf, hardware: <name>}``."""
+
+    name: str
+    template: str
+
+
+class NodepoolDefaultsOut(BaseModel):
+    """``nodepool-defaults.yaml``: the entries a new nodepool starts with."""
+
+    path: str
+    found: bool
+    """``false``: the specs project has no such file, so there are no defaults."""
+    configs: list[dict[str, str]]
+    """Entries in the template-input shape; ``hardware`` is absent when the nodepool picks it."""
+    error: str | None
+    """Set when the file exists but cannot be used; ``configs`` is then empty."""
+    problems: list[str]
+    """With ``error``: why. Without: the entries that would not resolve."""
+
+
+class MachineConfigsOut(BaseModel):
+    """``GET /api/day1/machine-configs``: the catalogue and the nodepool defaults."""
+
+    network_config: str
+    static_configs: list[StaticConfigOut]
+    hardware_types: list[HardwareTypeOut]
+    nodepool_defaults: NodepoolDefaultsOut
+    problems: list[str]
+    """Files in ``mc-files/`` that are not offered, and why."""
+
+    @classmethod
+    def of(cls, overview: MachineConfigOverview) -> MachineConfigsOut:
+        """From the overview."""
+        catalog, reading = overview.catalog, overview.defaults
+        error = reading.error
+        return cls(
+            network_config=NETWORK_CONFIG,
+            static_configs=[
+                StaticConfigOut(name=c.name, folder=c.folder, path=str(c.path))
+                for c in catalog.static_configs()
+            ],
+            hardware_types=[
+                HardwareTypeOut(name=h.name, template=str(h.template))
+                for h in catalog.hardware_types()
+            ],
+            nodepool_defaults=NodepoolDefaultsOut(
+                path=str(NODEPOOL_DEFAULTS_FILE),
+                found=reading.found,
+                configs=[e.to_input() for e in reading.defaults.configs],
+                error=str(error) if error else None,
+                problems=list(error.problems) if error else list(overview.defaults_problems),
+            ),
+            problems=list(catalog.problems),
         )
 
 
@@ -674,6 +767,58 @@ class VersionDifferenceOut(BaseModel):
         )
 
 
+class NodepoolRefOut(BaseModel):
+    """A nodepool of the cluster file: its position and the NodePool the chart renders."""
+
+    index: int
+    name: str
+
+
+class ValueDriftOut(BaseModel):
+    """A locked value the cluster file does not hold (ADR-0036)."""
+
+    path: str
+    """The flavor's locked path: ``owner_anaf``, ``nodepools[0].configs`` or the rule."""
+    file_key: str
+    """Where it is in the file: ``owner.anaf``, ``nodepool[1].configs``."""
+    nodepool: NodepoolRefOut | None
+    flavor_value: Any
+    """The locked value in the file's form (``nm-conf`` expanded for this cluster)."""
+    cluster_value: Any
+    """What the file holds; ``null`` with ``in_file: false`` when the key is absent."""
+    in_file: bool
+    added: list[str]
+    """Configs only: the names a sync adds."""
+    removed: list[str]
+    """Configs only: the names a sync removes."""
+    needs_decision: str | None
+    """Set when a person must decide before sync can set this value."""
+    needs_hardware: bool
+    """The decision is the nodepool's network hardware: a sync can send it in ``hardware``."""
+    reboots: bool
+    """A nodepool's configs: syncing them rolls its nodes (drain and reboot, or replace)."""
+
+    @classmethod
+    def of(cls, drift: ValueDrift) -> ValueDriftOut:
+        """From a value drift."""
+        in_file = drift.cluster_value is not MISSING
+        return cls(
+            path=str(drift.lock),
+            file_key=str(drift.file_key),
+            nodepool=NodepoolRefOut(index=drift.nodepool.index, name=drift.nodepool.name)
+            if drift.nodepool
+            else None,
+            flavor_value=drift.flavor_value,
+            cluster_value=drift.cluster_value if in_file else None,
+            in_file=in_file,
+            added=list(drift.added),
+            removed=list(drift.removed),
+            needs_decision=drift.needs_decision,
+            needs_hardware=drift.needs_hardware,
+            reboots=drift.is_configs,
+        )
+
+
 DriftStateOut = Literal["in_sync", "drifted", "unknown", "not_linked"]
 
 
@@ -689,8 +834,10 @@ class ClusterDriftOut(BaseModel):
     spec_name: str | None
     spec_version: str | None
     current_spec_version: str | None
+    value_drift: list[ValueDriftOut]
+    """Locked values the file does not hold: one of the two things that make it ``drifted``."""
     addon_drift: list[AddonDriftOut]
-    """Spec addons the cluster does not have: what makes it ``drifted``."""
+    """Spec addons the cluster does not have: the other thing that makes it ``drifted``."""
     version_differences: list[VersionDifferenceOut]
     """Spec addons at another version; reported only, never fixed (ADR-0025)."""
     error: str | None
@@ -707,6 +854,7 @@ class ClusterDriftOut(BaseModel):
             spec_name=drift.spec_name,
             spec_version=drift.spec_version,
             current_spec_version=drift.current_spec_version,
+            value_drift=[ValueDriftOut.of(d) for d in drift.value_drift],
             addon_drift=[AddonDriftOut.of(d) for d in drift.addon_drift],
             version_differences=[VersionDifferenceOut.of(d) for d in drift.version_differences],
             error=drift.error,
@@ -746,6 +894,241 @@ class SpecClusterOut(BaseModel):
     state: DriftStateOut
     is_drifted: bool | None
     error: str | None
+
+
+MAX_PICKED = 500
+"""A request-size bound; the import itself takes at most ``imports.MAX_IMPORT``."""
+
+
+class ClusterPickIn(_In):
+    """A cluster to compare with a flavor; ``site`` and ``mce`` only when the name is ambiguous."""
+
+    name: str = Field(min_length=1, max_length=63)
+    site: str | None = Field(default=None, min_length=1, max_length=63)
+    mce: str | None = Field(default=None, min_length=1, max_length=63)
+
+
+class ImportPreviewIn(_In):
+    """The clusters to preview an import of."""
+
+    clusters: list[ClusterPickIn] = Field(min_length=1, max_length=MAX_PICKED)
+
+
+class ImportPickIn(_In):
+    """A cluster to import, as the preview returned it."""
+
+    name: str = Field(min_length=1, max_length=63)
+    site: str = Field(min_length=1, max_length=63)
+    mce: str = Field(min_length=1, max_length=63)
+    last_commit_id: str = Field(min_length=7, max_length=64)
+    """The preview's ``last_commit_id``: a file that moved since fails the import."""
+    relink: bool = False
+    """``true`` to link a cluster that follows another flavor to this one instead."""
+
+
+class ImportIn(_In):
+    """Link existing clusters to the flavor: one day1 MR."""
+
+    spec_version: str = Field(min_length=1, max_length=64)
+    """The flavor version the preview showed."""
+    clusters: list[ImportPickIn] = Field(min_length=1, max_length=MAX_PICKED)
+
+
+class LinkedSpecOut(BaseModel):
+    """The flavor a cluster file's header names."""
+
+    name: str
+    version: str | None
+
+
+class ImportCandidateOut(BaseModel):
+    """One picked cluster in an import preview."""
+
+    name: str
+    site: str
+    mce: str
+    path: str
+    last_commit_id: str
+    """Send it back with the import."""
+    status: Literal["ready", "relink", "linked", "refused"]
+    linked_spec: LinkedSpecOut | None
+    """The flavor the file follows now, if any."""
+    problems: list[str]
+    """Why it cannot be imported as it is (empty for ``ready``)."""
+    drift: ClusterDriftOut
+    """The cluster against this flavor: what will show as drift once it is linked."""
+
+    @classmethod
+    def of(cls, candidate: ImportCandidate) -> ImportCandidateOut:
+        """From an import candidate."""
+        cluster = candidate.cluster
+        provenance = cluster.provenance
+        return cls(
+            name=cluster.ref.name,
+            site=cluster.ref.site,
+            mce=cluster.ref.mce,
+            path=str(cluster.ref.path),
+            last_commit_id=cluster.last_commit_id,
+            status=candidate.status.value,
+            linked_spec=LinkedSpecOut(name=provenance.spec_name, version=provenance.spec_version)
+            if provenance.spec_name
+            else None,
+            problems=list(candidate.problems),
+            drift=ClusterDriftOut.of(candidate.drift),
+        )
+
+
+class ImportPreviewOut(BaseModel):
+    """``POST /specs/{name}/import/preview``."""
+
+    spec_name: str
+    spec_version: str
+    """Send it back with the import."""
+    warnings: list[str]
+    """About the flavor: locks by nodepool position, which compare whichever nodepool is there."""
+    clusters: list[ImportCandidateOut]
+
+    @classmethod
+    def of(cls, preview: ImportPreview) -> ImportPreviewOut:
+        """From an import preview."""
+        return cls(
+            spec_name=preview.spec_name,
+            spec_version=preview.spec_version,
+            warnings=list(preview.warnings),
+            clusters=[ImportCandidateOut.of(c) for c in preview.candidates],
+        )
+
+
+# ── Sync (ADR-0037) ──────────────────────────────────────────────────────────
+
+
+class HardwareChoiceIn(_In):
+    """A person's choice of network hardware for a nodepool whose own cannot be read."""
+
+    nodepool: int = Field(ge=0, lt=100)
+    """The nodepool's position in the file (``nodepool[i]``)."""
+    hardware: str = Field(min_length=1, max_length=63)
+    """A type from ``GET /machine-configs``; the file gets ``nm-conf-<clusterName>-<hw>``."""
+
+
+class ConfigRemovalIn(_In):
+    """A config the sync removes, confirmed by the person who asked for it."""
+
+    nodepool: int = Field(ge=0, lt=100)
+    name: str = Field(min_length=1, max_length=253)
+
+
+class SyncPreviewIn(_In):
+    """``POST /clusters/{name}/sync/preview``: the hardware choices, if drift needs them."""
+
+    hardware: list[HardwareChoiceIn] = Field(default_factory=list, max_length=100)
+
+
+class SyncIn(SyncPreviewIn):
+    """``POST /clusters/{name}/sync``: what the preview showed, and the removals confirmed."""
+
+    last_commit_id: str = Field(min_length=7, max_length=64)
+    """The preview's: a file that changed since fails the sync."""
+    spec_version: str = Field(min_length=1, max_length=64)
+    """The flavor version the preview showed."""
+    confirm_removals: list[ConfigRemovalIn] = Field(default_factory=list, max_length=1000)
+    """Exactly the preview's ``removals``: the sync is refused otherwise."""
+
+
+class ConfigRemovalOut(BaseModel):
+    """A config a sync removes from a nodepool."""
+
+    nodepool: NodepoolRefOut
+    name: str
+
+
+class RebootingOut(BaseModel):
+    """A nodepool whose configs a sync changes: merging rolls its nodes."""
+
+    nodepool: NodepoolRefOut
+    replicas: int | None
+    upgrade_type: str | None
+    """The nodepool's ``upgradeType``; ``null`` when unset (the chart's ``InPlace``)."""
+    max_unavailable: int | str | None
+    """The nodepool's ``inPlace.maxUnavailable``; ``null`` when unset (one node at a time)."""
+    replaces_nodes: bool
+    """``upgradeType: Replace``: new nodes are provisioned and the old ones removed."""
+
+
+class SyncPreviewOut(BaseModel):
+    """``POST /clusters/{name}/sync/preview``: what syncing the cluster to its flavor would do."""
+
+    cluster: str
+    site: str
+    mce: str
+    path: str
+    last_commit_id: str
+    """Send it back with the sync."""
+    spec_name: str
+    spec_version: str
+    """The flavor's current version; send it back with the sync."""
+    file_spec_version: str | None
+    """The version the file's header names now."""
+    changes: list[ValueDriftOut]
+    """Every locked value the file does not hold, with the hardware choices applied."""
+    diff: str
+    """The cluster file change, as a unified diff (empty when nothing changes)."""
+    removals: list[ConfigRemovalOut]
+    """Configs the sync removes; send each back in ``confirm_removals``."""
+    rebooting: list[RebootingOut]
+    """Nodepools whose configs change: merging reboots their nodes, rolling."""
+    problems: list[str]
+    """Why the sync cannot run now: a decision a person must make, a layout Wingman can't edit."""
+    warnings: list[str]
+    """Worth checking before merging; they do not block the sync."""
+    can_sync: bool
+    """No problems, and the file changes."""
+    addons_to_install: list[AddonDriftOut]
+    """Missing add-ons: not in the day1 MR; install them through day2."""
+    version_differences: list[VersionDifferenceOut]
+    addons_error: str | None
+    """Set when day2 did not answer: missing add-ons are unknown."""
+
+    @classmethod
+    def of(cls, plan: SyncPlan) -> SyncPreviewOut:
+        """From a sync plan."""
+        ref = plan.cluster.ref
+
+        def pool(index: int, name: str) -> NodepoolRefOut:
+            return NodepoolRefOut(index=index, name=name)
+
+        return cls(
+            cluster=ref.name,
+            site=ref.site,
+            mce=ref.mce,
+            path=str(ref.path),
+            last_commit_id=plan.cluster.last_commit_id,
+            spec_name=plan.spec.metadata.name,
+            spec_version=plan.spec.metadata.version,
+            file_spec_version=plan.cluster.provenance.spec_version,
+            changes=[ValueDriftOut.of(d) for d in plan.changes],
+            diff=plan.diff,
+            removals=[
+                ConfigRemovalOut(nodepool=pool(r.nodepool.index, r.nodepool.name), name=r.name)
+                for r in plan.removals
+            ],
+            rebooting=[
+                RebootingOut(
+                    nodepool=pool(r.nodepool.index, r.nodepool.name),
+                    replicas=r.replicas,
+                    upgrade_type=r.upgrade_type,
+                    max_unavailable=r.max_unavailable,
+                    replaces_nodes=r.replaces_nodes,
+                )
+                for r in plan.rebooting
+            ],
+            problems=list(plan.problems),
+            warnings=list(plan.warnings),
+            can_sync=not plan.problems and plan.changes_file,
+            addons_to_install=[AddonDriftOut.of(a) for a in plan.addons_to_install],
+            version_differences=[VersionDifferenceOut.of(d) for d in plan.version_differences],
+            addons_error=plan.addons_error,
+        )
 
 
 class SpecDriftOut(BaseModel):

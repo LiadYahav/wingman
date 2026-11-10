@@ -27,12 +27,20 @@ class InvalidClusterFileError(InvalidInputError):
     """A cluster values file (rendered or edited) breaks the values-file contract."""
 
 
+class UneditableFileError(InvalidInputError):
+    """Wingman cannot change a cluster file's text safely; a person edits it by hand."""
+
+
 class RenderError(InvalidInputError):
     """The cluster template could not be rendered with the given inputs."""
 
 
 class InvalidSpecError(InvalidInputError):
     """A spec document is not a valid ClusterSpec."""
+
+
+class InvalidNodepoolDefaultsError(InvalidInputError):
+    """``nodepool-defaults.yaml`` exists but is not a valid defaults document."""
 
 
 class ResourceNotFoundError(Day1Error):

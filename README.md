@@ -104,7 +104,7 @@ wingman/
 
 | Feature | Description |
 |---------|-------------|
-| **Two-phase spec/cluster form** | Specs define structure + "immutable after create" hints; clusters fill values. The form adapts to the spec shape at cluster-creation time — nodepool count is locked by the spec. |
+| **Two-phase spec/cluster form** | Specs (flavors) set the nodepools a cluster starts with, presets and locked values; clusters fill the rest. The create form shows a locked value read-only, prefills presets, starts each nodepool (and one added at create) with the team's machine-config defaults, picks configs and hardware types from `mc-files/`, and shows day1's problems at their fields (ADR-0026 to ADR-0029). |
 | **Marketplace addon picker** | Browse and select Day2 addons from a marketplace UI on the spec creation/edit pages. Configure which fields are overrideable per cluster. |
 | **YAML fields everywhere** | Dynamic form fields accept plain YAML — no JSON syntax required. Scalars (`high-perf-tuned`), maps, and lists all work naturally. |
 | **Sites and MCEs from GitLab folders** | Site and MCE dropdowns list the day1 repo's folders. They are read-only: Wingman never creates a site or an MCE (ADR-0018). |
@@ -161,7 +161,9 @@ Changes since the legacy services:
 | `POST` | `/api/day1/clusters/{name}/delete-workflow` | Start the delete-cluster workflow, with `{"confirm": true}` (admin; 501 until it exists) |
 | `GET` | `/api/day1/clusters/{name}/current-yaml` | The file's text on the default branch |
 | `GET` | `/api/day1/clusters/{name}/history` | Commits that changed the file |
-| `GET` | `/api/day1/clusters/{name}/drift` | The cluster against its spec's Day2 addons |
+| `GET` | `/api/day1/clusters/{name}/drift` | The cluster against its flavor: the locked values its file does not hold, and its missing Day2 add-ons |
+| `POST` | `/api/day1/clusters/{name}/sync/preview` | What syncing the cluster to its flavor would write: each locked value it does not hold, the configs removed, the nodepools whose nodes roll, and what blocks it (`hardware` choices when a nodepool's network config can't be read) |
+| `POST` | `/api/day1/clusters/{name}/sync` | Open one day1 MR that sets those values; refused unless `confirm_removals` names exactly the preview's removals |
 | `GET` | `/api/day1/clusters/{name}/status` | The HostedCluster and NodePools on the MCE hub (`?mce=`; 501 when live status is off) |
 | `GET` | `/api/day1/clusters/{name}/status/stream` | The same as server-sent events, every `DAY1_STATUS_POLL_SECONDS` |
 
@@ -174,6 +176,7 @@ Changes since the legacy services:
 | `GET` | `/api/day1/mces` | Every MCE (or one site's, `?site=`), with its default mastertag, hub version and naming |
 | `GET` | `/api/day1/mces/{mce}/openshift-versions` | The releases a new cluster on the MCE may use (`upgrade/` in the day1 repo), newest first, with `problems` when its files are missing or broken |
 | `GET` | `/api/day1/mces/{mce}/infraenvs` | InfraEnv names on the MCE hub (501 when live status is off) |
+| `GET` | `/api/day1/machine-configs` | The machine configs a nodepool can use (`mc-files/` in the day1 repo: static configs and network hardware types) and the specs repo's nodepool defaults |
 
 #### Specs (presets for the create form)
 
@@ -190,6 +193,8 @@ Changes since the legacy services:
 | `GET` | `/api/day1/specs/{name}/at/{sha}` | The spec file's text at a commit |
 | `GET` | `/api/day1/specs/{name}/clusters` | Clusters created from the spec, with their drift |
 | `GET` | `/api/day1/specs/{name}/drift` | Drift of every cluster created from the spec |
+| `POST` | `/api/day1/specs/{name}/import/preview` | Each picked existing cluster against the spec: whether it can join (`ready`, `relink`, `linked`, `refused`) and what will show as drift |
+| `POST` | `/api/day1/specs/{name}/import` | Link up to 50 existing clusters to the spec: one MR that writes only each file's flavor header |
 
 #### Approvals and audit
 
@@ -475,7 +480,7 @@ sigs/<team>/
 
 - **Spec**: A preset for the create form (nodepool shape, preset template inputs, the Day2 addons its clusters should get); every spec fills the one shared `cluster-template.j2`
 - **Cluster**: An actual cluster instance, optionally linked to a spec
-- **Drift**: An addon the cluster's spec lists is not installed (ADR-0016); a different version is reported, not drift (ADR-0025)
+- **Drift**: A value the cluster's flavor locks that its file does not hold, or an add-on the flavor lists that is not installed (ADR-0036); a different version is reported, not drift (ADR-0025). Sync to flavor fixes the values in one MR (ADR-0037)
 
 ### Addon Layers
 

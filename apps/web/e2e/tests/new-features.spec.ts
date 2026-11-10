@@ -1,7 +1,7 @@
 /**
  * E2E tests for new features:
  *  F7 — Conflicted badge on approvals list and detail page
- *  F3 — Variable preview dialog on /specs/new
+ *  F3 — The review part of the flavor editor on /specs/new
  *  F4 — Spec history tab on /specs/[name]
  *
  * Auth pattern:
@@ -67,7 +67,7 @@ const mockSpec = {
   kind: "ClusterSpec",
   metadata: { name: "some-spec", description: "", version: "1.0.0", labels: {} },
   spec: {
-    day1: { variables: [], structure: {}, immutable_paths: [], template: "", values: {} },
+    day1: { variables: [], structure: {}, locked_paths: [], template: "", values: {} },
     day2: { addons: [] },
   },
   load_error: null,
@@ -198,27 +198,13 @@ test.describe("F7 — Conflicted badge", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// F3 — Variable preview dialog
+// F3 — The review part of the flavor editor (it replaced the "Preview variables" dialog)
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe("F3 — Variable preview dialog", () => {
+test.describe("F3 — Flavor review part", () => {
   async function setupSpecNewPage(page: Page) {
     await setupAndNavigate(page, "/specs/new", async (p) => {
       await p.route("**/api/day2/addons", async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify([]),
-        });
-      });
-      await p.route("**/api/day1/specs/template", async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(""),
-        });
-      });
-      await p.route("**/api/day1/specs/template/schema**", async (route) => {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -232,54 +218,65 @@ test.describe("F3 — Variable preview dialog", () => {
           body: JSON.stringify([]),
         });
       });
+      // Registered after "specs**" so they win (Playwright matches LIFO)
+      await p.route("**/api/day1/specs/template", async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify("mastertag: {{ openshift_release_version }}"),
+        });
+      });
+      await p.route("**/api/day1/specs/template/schema**", async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+      });
     });
+    await expect(page.getByRole("heading", { name: "New Flavor" })).toBeVisible();
   }
 
-  test("Preview variables button is visible on spec creation page", async ({ page }) => {
+  test("the parts bar jumps to the review part", async ({ page }) => {
     await setupSpecNewPage(page);
-    await expect(page.getByRole("button", { name: /preview variables/i })).toBeVisible();
+    await page.getByRole("navigation", { name: "Flavor parts" }).getByRole("button", { name: /Review$/ }).click();
+    await expect(page.getByRole("heading", { name: "Review", level: 2 })).toBeInViewport();
   });
 
-  test("clicking Preview variables button opens dialog", async ({ page }) => {
+  test("the review shows the flavor file a save proposes, as YAML", async ({ page }) => {
     await setupSpecNewPage(page);
-
-    await page.getByRole("button", { name: /preview variables/i }).click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/Preview variables/i)).toBeVisible();
+    const review = page.locator("section#review");
+    await review.getByRole("tab", { name: "Flavor file" }).click();
+    const yaml = review.getByTestId("flavor-yaml");
+    await expect(yaml).toContainText("kind: ClusterSpec");
+    // The values that flow into the cluster template, here the nodepool defaults
+    await expect(yaml).toContainText("nodepools:");
+    await expect(yaml).toContainText("name: workers-chrony-configuration");
   });
 
-  test("preview dialog shows YAML pre block", async ({ page }) => {
+  test("the flavor file follows the form as it is typed", async ({ page }) => {
     await setupSpecNewPage(page);
-
-    await page.getByRole("button", { name: /preview variables/i }).click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    // The dialog renders a <pre> block with the YAML content
-    await expect(dialog.locator("pre")).toBeVisible();
+    await page.getByTestId("spec-name-input").fill("qa-flavor");
+    await page.getByLabel("Merkaz", { exact: true }).fill("1234");
+    const yaml = page.locator("section#review").getByTestId("flavor-yaml");
+    await expect(yaml).toContainText("name: qa-flavor");
+    await expect(yaml).toContainText('owner_merkaz: "1234"');
   });
 
-  test("preview dialog can be closed with Escape key", async ({ page }) => {
+  test("the review lists the presets every cluster starts with", async ({ page }) => {
     await setupSpecNewPage(page);
-
-    await page.getByRole("button", { name: /preview variables/i }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await page.getByLabel("Merkaz", { exact: true }).fill("1234");
+    const presets = page.getByTestId("review-presets");
+    await expect(presets).toContainText("Owner · Merkaz");
+    await expect(presets).toContainText("1234");
+    await expect(page.getByTestId("review-locked")).toContainText("Nothing is locked");
   });
 
-  test("preview dialog description mentions structure values", async ({ page }) => {
+  test("the template tab shows the shared cluster template", async ({ page }) => {
     await setupSpecNewPage(page);
-
-    await page.getByRole("button", { name: /preview variables/i }).click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/structure values/i)).toBeVisible();
+    const review = page.locator("section#review");
+    await review.getByRole("tab", { name: "Template" }).click();
+    await expect(review.getByText("mastertag: {{ openshift_release_version }}")).toBeVisible();
   });
 });
 

@@ -96,7 +96,7 @@ test("the dashboard counts the clusters and specs; the sidebar and the docs are 
   await expect(clusters).toContainText(/\d+/);
   await expect(clusters).toContainText(/\d+ specs?/);
   const nav = alice.getByLabel("Main");
-  for (const page of ["Clusters", "Specs", "Addons", "Approvals", "Audit", "Documentation"]) {
+  for (const page of ["Clusters", "Flavors", "Addons", "Approvals", "Audit", "Documentation"]) {
     await expect(nav.getByRole("link", { name: new RegExp(`^${page}`) })).toBeVisible();
   }
 
@@ -118,8 +118,15 @@ test("create a cluster from a spec opens an MR its requester cannot approve", as
   await alice.getByPlaceholder("e.g. 7").fill("7");
   const infraEnvs = alice.getByPlaceholder("e.g. dell-r660-site1-128c-1024gb-5tb");
   for (let i = 0; i < (await infraEnvs.count()); i++) await infraEnvs.nth(i).fill(`dell-r660-site1-pool${i + 1}`);
-  const configs = alice.getByPlaceholder("e.g. worker-kubeletconfig-reserved");
-  for (let i = 0; i < (await configs.count()); i++) await configs.nth(i).fill("worker-chrony-configuration");
+  // Each nodepool starts with the nodepool defaults (nm-conf, workers-chrony-configuration,
+  // nic-ring-buffer); its nm-conf needs the nodepool's hardware type
+  const hardwareTypes = alice.getByRole("combobox", { name: /configs: entry \d+ hardware type$/ });
+  await expect(hardwareTypes.first()).toBeVisible();
+  for (let i = 0; i < (await hardwareTypes.count()); i++) {
+    await hardwareTypes.nth(i).click();
+    await alice.getByRole("option").filter({ has: alice.getByText("dell", { exact: true }) }).click();
+    await expect(alice.getByRole("option")).toHaveCount(0);
+  }
   // The spec's addon is found in the day2 catalog, so its full values can be edited
   await expect(alice.getByTestId("addon-redbull-cluster-roles").getByRole("button", { name: "Full Values" })).toBeVisible();
 
@@ -247,19 +254,23 @@ test("a spec built from the catalog opens a specs MR that merges", async () => {
   await bmhgen.getByRole("button", { name: "Add", exact: true }).click();
   await expect(alice.getByTestId("selected-addon-redbull-bmhgen")).toBeVisible();
 
-  await alice.getByRole("button", { name: /preview variables/i }).click();
-  const preview = alice.getByRole("dialog");
-  await expect(preview.getByRole("heading", { name: "Preview variables" })).toBeVisible();
-  await expect(preview.locator("pre")).toBeVisible();
-  await alice.keyboard.press("Escape");
-  await expect(preview).toHaveCount(0);
+  // The first nodepool starts with the nodepool defaults; a flavor's nm-conf needs its hardware type
+  await alice.getByTestId("nodepool-0-configs").getByRole("combobox", { name: /entry 1 hardware type$/ }).click();
+  await alice.getByRole("option").filter({ has: alice.getByText("dell", { exact: true }) }).click();
+  await expect(alice.getByRole("option")).toHaveCount(0);
+
+  // The review part shows the flavor file a save proposes
+  const flavorFile = alice.locator("section#review").getByTestId("flavor-yaml");
+  await alice.locator("section#review").getByRole("tab", { name: "Flavor file" }).click();
+  await expect(flavorFile).toContainText(`name: ${NEW_SPEC}`);
+  await expect(flavorFile).toContainText("hardware: dell");
 
   await alice.getByRole("button", { name: /review & create/i }).click();
   const dialog = alice.getByRole("dialog");
   await expect(dialog).toContainText(NEW_SPEC);
   await expect(dialog).toContainText("bmhgen");
   await dialog.getByRole("button", { name: /confirm/i }).click();
-  await approveAndMerge(bob, await followToast(alice, /Spec MR !\d+ opened/));
+  await approveAndMerge(bob, await followToast(alice, /Flavor MR !\d+ opened/));
 });
 
 test("the spec is listed, and its history shows the file at a commit", async () => {

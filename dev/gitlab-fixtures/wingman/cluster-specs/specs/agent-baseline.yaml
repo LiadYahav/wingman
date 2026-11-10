@@ -1,0 +1,34 @@
+apiVersion: wingman.io/v1
+kind: ClusterSpec
+metadata:
+  name: agent-baseline
+  description: "Every nodepool gets the team's machine configs; for clusters joining a flavor"
+  version: "1.0.0"
+  labels:
+    platform: agent
+spec:
+  day1:
+    structure:
+      nodepools:
+        - configs:
+            - {}
+            - {}
+            - {}
+    # Locked as a rule (ADR-0029): every nodepool of the cluster has exactly
+    # these configs, in any order. nm-conf is each nodepool's own network
+    # config for its own hardware type; dell is the first nodepool's preset.
+    locked_paths:
+      - nodepools[*].configs
+    values:
+      nodepools:
+        - configs:
+            - name: nm-conf
+              hardware: dell
+            - name: workers-chrony-configuration
+            - name: nic-ring-buffer
+  day2:
+    addons:
+      - team: redbull
+        name: cluster-roles
+        version: main
+        overrideable: []

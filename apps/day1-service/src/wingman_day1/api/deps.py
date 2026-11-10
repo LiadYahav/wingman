@@ -18,9 +18,12 @@ from wingman_day1.application.audit import AuditService
 from wingman_day1.application.auth import AuthService
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
+from wingman_day1.application.imports import ImportService
+from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
+from wingman_day1.application.sync import SyncService
 from wingman_day1.ports import ClusterDeleteWorkflow, RepoReads
 
 
@@ -34,8 +37,11 @@ class Day1Context:
     approvals: ApprovalService
     audit: AuditService
     drift: DriftService
+    imports: ImportService
+    sync: SyncService
     auth: AuthService
     repos: Mapping[RepoKey, RepoReads]
+    machine_configs: MachineConfigService
     status: StatusService | None = None
     """``None`` when ``CLUSTER_STATUS_ENABLED`` is off: those routes answer 501."""
     webhook_secret: str | None = None
