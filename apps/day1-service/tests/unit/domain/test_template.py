@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from hypothesis import assume, given
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from wingman_core.testing.fixtures import default_fixture_root
@@ -477,6 +477,9 @@ def test_the_number_of_values_is_bounded() -> None:
         max_size=MAX_VALUE_LENGTH,
     )
 )
+# Arbitrary text is the point, and check_inputs refuses much of it: the filtering is
+# the test, so its health check (which failed about one run in three) is not.
+@settings(suppress_health_check=[HealthCheck.filter_too_much])
 def test_an_accepted_value_never_changes_the_documents_top_level_keys(value: str) -> None:
     inputs = base_inputs(owner_mador=value)
     assume(check_inputs(inputs) == [])

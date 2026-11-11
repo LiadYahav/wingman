@@ -70,6 +70,7 @@ async def test_status_has_the_legacy_shape_and_names_the_hosted_cluster(
                 "ready_replicas": 2,
                 "desired_replicas": 2,
                 "problems": [],
+                "updating": None,
             }
         ],
         "error": None,

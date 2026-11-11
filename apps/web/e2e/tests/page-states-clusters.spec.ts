@@ -42,6 +42,7 @@ const DETAIL: ClusterDetail = {
   naming: { follows_convention: true, env: "prod", short_name: "herzi", sequence: null, problems: [] },
   mce_default_mastertag: "4.16.27-x86_64",
   problems: [],
+  segments_manager: null,
 };
 
 const DRIFT: ClusterDrift = {
@@ -162,7 +163,7 @@ test.describe("Cluster detail", () => {
     await go(page, `/clusters/${NAME}?site=${SITE}&mce=${MCE}`);
 
     await expect(liveStatusCard(page)).toBeVisible();
-    await expect(page.getByTestId("live-status-no-node-pools")).toHaveText("No node pools reported");
+    await expect(page.getByTestId("live-status-node-pools-note")).toHaveText("No node pools reported");
   });
 
   test("a delete GitLab did not confirm says it may have happened, not that it was refused", async ({ page }) => {

@@ -13,10 +13,21 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Final
 
+from wingman_day1.domain.selectors import LabelSelector
+
 HOSTED_CLUSTER_MUST_BE_TRUE: Final = ("Available",)
 HOSTED_CLUSTER_MUST_NOT_BE_TRUE: Final = ("Degraded", "Progressing")
 NODE_POOL_MUST_BE_TRUE: Final = ("Ready",)
-NODE_POOL_MUST_NOT_BE_TRUE: Final = ("UpdatingVersion", "UpdatingConfig")
+NODE_POOL_MUST_NOT_BE_TRUE: Final = ()
+"""None: an update rolling through a NodePool is its normal work, shown as
+``updating``, not a problem. Only a failed in-place update is a problem."""
+UPDATE_CONDITIONS: Final = (
+    ("UpdatingVersion", "version"),
+    ("UpdatingConfig", "config"),
+    ("UpdatingPlatformMachineTemplate", "machine_template"),
+)
+"""The NodePool conditions that say it is updating, and the ``kind`` each is."""
+INPLACE_FAILED: Final = "InplaceUpgradeFailed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +50,16 @@ class HostedClusterObservation:
     version: str | None
     """The newest entry of ``status.version.history``."""
     conditions: tuple[Condition, ...] = ()
+    agent_namespace: str | None = None
+    """``spec.platform.agent.agentNamespace``: where its NodePools' Agents are."""
+
+
+@dataclass(frozen=True, slots=True)
+class Autoscaling:
+    """A NodePool's ``spec.autoScaling``."""
+
+    min: int
+    max: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,13 +67,23 @@ class NodePoolObservation:
     """A NodePool's status, as read from the hub.
 
     HyperShift NodePools have no ``readyReplicas``: ``current_replicas`` is
-    ``status.replicas`` and ``desired_replicas`` is ``spec.replicas``.
+    ``status.replicas`` and ``desired_replicas`` is ``spec.replicas`` (or the
+    current count when it is unset, for live status).
     """
 
     name: str
     desired_replicas: int
     current_replicas: int
     conditions: tuple[Condition, ...] = ()
+    replicas: int | None = None
+    """``spec.replicas`` as written; ``None`` when the pool autoscales."""
+    autoscaling: Autoscaling | None = None
+    upgrade_type: str | None = None
+    """``spec.management.upgradeType``: ``InPlace`` or ``Replace``."""
+    version: str | None = None
+    """``status.version``: the version it last finished updating to."""
+    agent_selector: LabelSelector | None = None
+    """``spec.platform.agent.agentLabelSelector``."""
 
 
 def condition_problems(
@@ -87,6 +118,31 @@ class NodePoolHealth:
     ready_replicas: int
     desired_replicas: int
     problems: tuple[str, ...]
+    updating: str | None = None
+    """``version``, ``config`` or ``machine_template`` while an update rolls through it."""
+
+
+def pool_updating(conditions: Iterable[Condition]) -> str | None:
+    """The kind of update rolling through a NodePool: its first updating condition not False.
+
+    HyperShift 4.16 to 4.18 can write the literal status ``unknown`` while an
+    in-place update starts, so anything but False counts.
+    """
+    by_type = {c.type: c for c in conditions}
+    for kind_type, kind in UPDATE_CONDITIONS:
+        found = by_type.get(kind_type)
+        if found is not None and found.status != "False":
+            return kind
+    return None
+
+
+def failed_update(conditions: Iterable[Condition]) -> list[str]:
+    """A failed in-place update, as a problem: it is False with ``InplaceUpgradeFailed``."""
+    return [
+        f"{c.type}: {INPLACE_FAILED}: {c.message}".rstrip(": ")
+        for c in conditions
+        if c.type in dict(UPDATE_CONDITIONS) and c.reason == INPLACE_FAILED
+    ]
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,7 +186,9 @@ def live_status(
                     must_be_true=NODE_POOL_MUST_BE_TRUE,
                     must_not_be_true=NODE_POOL_MUST_NOT_BE_TRUE,
                 )
+                + failed_update(pool.conditions)
             ),
+            updating=pool_updating(pool.conditions),
         )
         for pool in node_pools
     )

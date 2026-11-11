@@ -17,8 +17,12 @@ from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.settings import AuthSettings, Environment, GitBackend, RuntimeSettings
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
+from wingman_day1.infrastructure.fake_fleet import FakeServerInventory, FakeUninstallWorkflow
+from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
+from wingman_day1.infrastructure.server_scan import HttpServerInventory
+from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.main import Adapters, build_adapters, create_app
 from wingman_day1.settings import Day1Settings
 
@@ -56,6 +60,7 @@ async def test_the_fake_backend_is_seeded_with_every_fixture_project() -> None:
             assert project.default_branch == "main"
         assert adapters.hub is None
         assert adapters.identity is None
+        assert (adapters.inventory, adapters.uninstall) == (None, None)
         assert len(adapters.closers) == 1, "only the day2 client holds a connection"
     finally:
         await close(adapters)
@@ -99,6 +104,69 @@ async def test_the_gitlab_backend_builds_every_real_adapter_without_calling_anyt
         await close(adapters)
 
 
+async def test_server_scan_and_the_orchestrator_get_real_adapters_when_configured() -> None:
+    configured = settings(
+        server_scan_url="http://server-scan-api.inventory.svc:8000",
+        server_scan_token=SecretStr("viewer-token-never-logged-0001"),
+        workflows_api_url="http://workflows-orchestrator-api.redbull-workflows.svc:8080",
+    )
+    adapters = build_adapters(configured, FAKE, metrics=metrics(), service_token=lambda: "t")
+    try:
+        assert isinstance(adapters.inventory, HttpServerInventory)
+        assert isinstance(adapters.uninstall, HttpUninstallWorkflow)
+        assert len(adapters.closers) == 3
+    finally:
+        await close(adapters)
+
+
+async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -> None:
+    adapters = build_adapters(
+        settings(
+            day1_fake_fleet=True,
+            server_scan_url="http://server-scan.example",
+            cluster_status_enabled=True,
+            mce_tokens_file=tmp_path / "absent",
+        ),
+        FAKE,
+        metrics=metrics(),
+        service_token=lambda: "t",
+    )
+    try:
+        assert isinstance(adapters.inventory, FakeServerInventory)
+        assert isinstance(adapters.uninstall, FakeUninstallWorkflow)
+        assert len(await adapters.inventory.rows()) > 10
+        assert isinstance(adapters.hub, FakeHubApi), "the fake MCE, not the tokens file"
+        lark = await adapters.hub.hosted_cluster(
+            "ocp4-prod-mce-site1-a", namespace="hcp-prod-lark-site1", name="ocp4-prod-lark-site1"
+        )
+        assert lark.agent_namespace == "inventory"
+        assert len(adapters.closers) == 1, "the fakes hold no connection"
+    finally:
+        await close(adapters)
+
+
+def test_the_nodes_view_needs_the_mce_hubs(app: FastAPI) -> None:
+    assert app.state.day1.nodes is not None, "the conftest app has a (fake) hub"
+    off = create_app(
+        settings=settings(),
+        auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
+        runtime=FAKE,
+        adapters=Adapters(gitlab=InMemoryGitLab(), day2=FakeDay2Addons()),
+    )
+    assert off.state.day1.nodes is None
+
+
+def test_the_fake_fleet_refuses_to_start_outside_development() -> None:
+    test_runtime = RuntimeSettings(environment=Environment.TEST, git_backend=GitBackend.FAKE)
+    with pytest.raises(ValueError, match="DAY1_FAKE_FLEET"):
+        create_app(
+            settings=settings(day1_fake_fleet=True),
+            auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
+            runtime=test_runtime,
+            adapters=Adapters(gitlab=InMemoryGitLab(), day2=FakeDay2Addons()),
+        )
+
+
 def test_status_enabled_without_a_tokens_file_refuses_to_start(tmp_path: Path) -> None:
     with pytest.raises(OSError):
         build_adapters(
@@ -134,6 +202,10 @@ def test_the_app_serves_the_legacy_paths_and_no_site_or_mce_creation(app: FastAP
         ("/api/day1/clusters/{name}/drift", "GET"),
         ("/api/day1/clusters/{name}/sync/preview", "POST"),
         ("/api/day1/clusters/{name}/sync", "POST"),
+        ("/api/day1/clusters/{name}/delete-workflow", "GET"),
+        ("/api/day1/clusters/{name}/delete-workflow", "POST"),
+        ("/api/day1/clusters/{name}/nodes", "GET"),
+        ("/api/day1/clusters/{name}/nodes/{server_id}/uninstall", "POST"),
         ("/api/day1/sites", "GET"),
         ("/api/day1/sites/{site}/mces", "GET"),
         ("/api/day1/mces", "GET"),

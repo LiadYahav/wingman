@@ -55,6 +55,33 @@ data:
   MCE_TOKENS_FILE: "/etc/wingman/mce-tokens/tokens"
   {{- end }}
 
+  # ── Cluster nodes from server-scan (the token: day1-deployment.yaml) ─────────
+  # Each guard checks the map first and each key has a default: values reused
+  # from a release before 3.4 (helm upgrade --reuse-values) have neither.
+  {{- if and .Values.serverScan .Values.serverScan.url }}
+  SERVER_SCAN_URL: {{ .Values.serverScan.url | quote }}
+  {{- if .Values.serverScan.uiUrl }}
+  SERVER_SCAN_UI_URL: {{ .Values.serverScan.uiUrl | quote }}
+  {{- end }}
+  SERVER_SCAN_SSL_VERIFY: {{ .Values.serverScan.sslVerify | default "true" | quote }}
+  SERVER_SCAN_TIMEOUT_SECONDS: {{ .Values.serverScan.timeoutSeconds | default 10 | quote }}
+  {{- end }}
+
+  # ── Node uninstall through the workflows orchestrator ────────────────────────
+  {{- if and .Values.workflows .Values.workflows.url }}
+  {{- if not (and .Values.serverScan .Values.serverScan.url) }}
+  {{- fail "workflows.url needs serverScan.url: an uninstall checks the server in server-scan first" }}
+  {{- end }}
+  WORKFLOWS_API_URL: {{ .Values.workflows.url | quote }}
+  WORKFLOWS_SSL_VERIFY: {{ .Values.workflows.sslVerify | default "true" | quote }}
+  WORKFLOWS_TIMEOUT_SECONDS: {{ .Values.workflows.timeoutSeconds | default 10 | quote }}
+  {{- end }}
+
+  # ── A link to segments-manager on the cluster page (day1 never calls it) ─────
+  {{- if and .Values.segmentsManager .Values.segmentsManager.uiUrl }}
+  SEGMENTS_MANAGER_UI_URL: {{ .Values.segmentsManager.uiUrl | quote }}
+  {{- end }}
+
   # ── TLS CA bundle path (used when caBundle is set) ───────────────────────────
   {{- if .Values.tls.caBundle }}
   SSL_CERT_FILE: {{ .Values.tls.caBundleMountPath | quote }}

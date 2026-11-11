@@ -227,6 +227,38 @@ clusterStatus:
   tokensSecretName: "mce-sa-tokens"  # name of the k8s secret holding SA tokens
   sslVerify: "false"                 # set to "true" or CA bundle path for production
 
+# ── Cluster nodes from server-scan (ADR-0038) ─────────────────────────────────
+# Off by default. With a url, day1 lists the servers under each hosted cluster
+# from server-scan's API; the node links point at its UI.
+serverScan:
+  url: ""                 # the API, e.g. "http://server-scan-api.<ns>.svc:8000"; empty: off
+  uiUrl: ""               # the UI, e.g. "https://server-scan.example"; empty: url
+  sslVerify: "true"       # "true", "false" or a CA bundle path
+  timeoutSeconds: 10      # per request, at most 60
+  # A viewer token (sent as "Authorization: Bearer"), from an existing Secret:
+  #   oc create secret generic server-scan-viewer -n <ns> --from-literal=token=<token>
+  # Empty name: no token, for a server-scan with auth off. Never put the token
+  # itself in values. day1 reads it at start: restart day1 after rotating it.
+  tokenSecret:
+    name: ""
+    key: "token"
+
+# ── Node uninstall through the workflows orchestrator (ADR-0038) ──────────────
+# Off by default. With a url, day1 starts the platform's uninstall-server-from-hc
+# workflow and shows its run. The orchestrator has no auth. Needs serverScan.url
+# (an uninstall checks the server in server-scan first): the chart fails without it.
+workflows:
+  url: ""                 # e.g. "http://workflows-orchestrator-api.<ns>.svc:8080"; empty: off
+  sslVerify: "true"       # "true", "false" or a CA bundle path
+  timeoutSeconds: 10      # per request, at most 60
+
+# ── A link to segments-manager on the cluster page ────────────────────────────
+# Off by default. With a uiUrl, the cluster page's "HostedCluster & network"
+# card links to segments-manager's UI and to its search for the cluster's
+# segment (JSON). Only a link: day1 never calls segments-manager.
+segmentsManager:
+  uiUrl: ""               # e.g. "https://segments-manager.example"; empty: no link
+
 # ── Namespace ──────────────────────────────────────────────────────────────────
 # Override with --namespace on helm install
 namespace: ""  # defaults to .Release.Namespace

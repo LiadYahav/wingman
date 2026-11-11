@@ -125,6 +125,20 @@ def test_live_status_applies_the_hostedcluster_and_nodepool_rules() -> None:
     pools = [
         NodePoolObservation("x-a", 3, 2, (Condition("Ready", "True"),)),
         NodePoolObservation("x-b", 1, 1, (Condition("UpdatingConfig", "True"),)),
+        NodePoolObservation(
+            "x-c",
+            2,
+            2,
+            (
+                Condition("Ready", "True"),
+                Condition(
+                    "UpdatingVersion",
+                    "False",
+                    "InplaceUpgradeFailed",
+                    "Node w in nodepool degraded: x",
+                ),
+            ),
+        ),
     ]
     status = live_status("ocp4-x", hosted, pools)
     assert (status.cluster_name, status.hosted_cluster, status.namespace) == (
@@ -134,16 +148,20 @@ def test_live_status_applies_the_hostedcluster_and_nodepool_rules() -> None:
     )
     assert (status.hc_phase, status.ocp_version, status.error) == ("Completed", "4.18.22", None)
     assert status.hc_problems == ("Degraded=True reason=Bad msg=",)
-    first, second = status.node_pools
+    first, second, third = status.node_pools
     assert (first.name, first.ready_replicas, first.desired_replicas, first.problems) == (
         "x-a",
         2,
         3,
         (),
     )
-    assert second.problems == (
-        "Ready: condition not found",
-        "UpdatingConfig=True reason= msg=",
+    assert first.updating is None
+    # An update rolling through a pool is its work, not a problem
+    assert second.problems == ("Ready: condition not found",)
+    assert second.updating == "config"
+    # A failed in-place update is one
+    assert third.problems == (
+        "UpdatingVersion: InplaceUpgradeFailed: Node w in nodepool degraded: x",
     )
 
 

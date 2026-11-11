@@ -15,18 +15,23 @@ from fastapi.responses import JSONResponse
 from wingman_core.domain.errors import InvalidRepoPathError
 from wingman_core.web.errors import (
     AlreadyExists,
+    AmbiguousWrite,
     AppError,
     DependencyUnavailable,
+    FeatureDisabled,
     Forbidden,
+    NodeNotInCluster,
     NotFound,
     RevisionConflict,
     Unauthorized,
+    UninstallAlreadyRunning,
     ValidationFailed,
 )
 from wingman_core.web.exception_handlers import app_error_response, register_domain_errors
 from wingman_day1.domain.errors import (
     AlreadyInUseError,
     AmbiguousNameError,
+    AmbiguousStartError,
     Day1Error,
     Day2UnavailableError,
     HubDeniedError,
@@ -37,8 +42,15 @@ from wingman_day1.domain.errors import (
     IdentityUnavailableError,
     InvalidInputError,
     LoginRefusedError,
+    NodeNotInClusterError,
     ResourceNotFoundError,
+    ServerNotFoundError,
+    ServerScanNotConfiguredError,
+    ServerScanUnavailableError,
     StaleError,
+    UninstallAlreadyRunningError,
+    WorkflowsNotConfiguredError,
+    WorkflowsUnavailableError,
 )
 
 _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
@@ -55,6 +67,14 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (IdentityError, Unauthorized),
     (LoginRefusedError, Forbidden),
     (Day2UnavailableError, DependencyUnavailable),
+    (ServerNotFoundError, NotFound),
+    (ServerScanNotConfiguredError, FeatureDisabled),
+    (ServerScanUnavailableError, DependencyUnavailable),
+    (NodeNotInClusterError, NodeNotInCluster),
+    (WorkflowsNotConfiguredError, FeatureDisabled),
+    (WorkflowsUnavailableError, DependencyUnavailable),
+    (UninstallAlreadyRunningError, UninstallAlreadyRunning),
+    (AmbiguousStartError, AmbiguousWrite),
 )
 
 

@@ -1,7 +1,8 @@
 """Metrics for day1's calls to systems other than GitLab (ADR-0010).
 
 GitLab calls are counted by ``InstrumentedGitLab``. The MCE hub APIs,
-OpenShift OAuth and the day2 service are counted here, on the same
+OpenShift OAuth, the day2 service, server-scan and the workflows
+orchestrator are counted here, on the same
 ``wingman_dependency_*`` families, with an ``operation`` from a fixed enum
 (listed in ``docs/ops/metrics.md``) and an ``outcome`` derived from the
 day1 domain error the adapter raised.
@@ -15,6 +16,7 @@ from enum import StrEnum
 
 from wingman_core.observability.metrics import Dependency, Outcome, WingmanMetrics
 from wingman_day1.domain.errors import (
+    AmbiguousStartError,
     Day2UnavailableError,
     HubDeniedError,
     HubNotConfiguredError,
@@ -22,6 +24,12 @@ from wingman_day1.domain.errors import (
     HubUnavailableError,
     IdentityError,
     IdentityUnavailableError,
+    ServerNotFoundError,
+    ServerScanDeniedError,
+    ServerScanUnavailableError,
+    UninstallAlreadyRunningError,
+    WorkflowRefusedError,
+    WorkflowsUnavailableError,
 )
 
 Timer = Callable[[], float]
@@ -33,6 +41,10 @@ class HubOperation(StrEnum):
     GET_HOSTED_CLUSTER = "get_hosted_cluster"
     LIST_NODE_POOLS = "list_node_pools"
     LIST_INFRA_ENVS = "list_infra_envs"
+    LIST_MACHINES = "list_machines"
+    LIST_MACHINE_SETS = "list_machine_sets"
+    LIST_AGENT_MACHINES = "list_agent_machines"
+    LIST_AGENTS = "list_agents"
 
 
 class OAuthOperation(StrEnum):
@@ -49,6 +61,21 @@ class Day2Operation(StrEnum):
     LIST_INSTALLED_ADDONS = "list_installed_addons"
 
 
+class ServerScanOperation(StrEnum):
+    """Calls to server-scan (``dependency="server_scan"``)."""
+
+    LIST_SERVER_ROWS = "list_server_rows"
+    GET_SERVER = "get_server"
+
+
+class WorkflowsOperation(StrEnum):
+    """Calls to the workflows orchestrator (``dependency="workflows"``)."""
+
+    LIST_RUNS = "list_runs"
+    GET_RUN = "get_run"
+    START_UNINSTALL = "start_uninstall"
+
+
 _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (HubObjectNotFoundError, Outcome.NOT_FOUND),
     (HubDeniedError, Outcome.DENIED),
@@ -57,6 +84,13 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (HubNotConfiguredError, Outcome.REJECTED),
     (IdentityUnavailableError, Outcome.UNAVAILABLE),
     (IdentityError, Outcome.DENIED),
+    (ServerNotFoundError, Outcome.NOT_FOUND),
+    (ServerScanDeniedError, Outcome.DENIED),
+    (ServerScanUnavailableError, Outcome.UNAVAILABLE),
+    (UninstallAlreadyRunningError, Outcome.CONFLICT),
+    (AmbiguousStartError, Outcome.AMBIGUOUS),
+    (WorkflowRefusedError, Outcome.REJECTED),
+    (WorkflowsUnavailableError, Outcome.UNAVAILABLE),
 )
 
 

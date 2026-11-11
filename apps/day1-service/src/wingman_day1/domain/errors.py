@@ -99,3 +99,54 @@ class LoginRefusedError(Day1Error):
 
 class Day2UnavailableError(Day1Error):
     """The day2 service could not answer, so addon state is unknown (never "none")."""
+
+
+# ── server-scan and the workflows orchestrator (cluster nodes, ADR-0038) ─────
+
+
+class ServerScanError(Day1Error):
+    """Base class for errors reading server-scan."""
+
+
+class ServerScanUnavailableError(ServerScanError):
+    """server-scan could not be reached or answered with an error: nodes are unknown, not none."""
+
+
+class ServerScanDeniedError(ServerScanUnavailableError):
+    """server-scan refused Wingman's viewer token (401 or 403): a deployment problem."""
+
+
+class ServerScanNotConfiguredError(ServerScanError):
+    """This deployment has no server-scan (``SERVER_SCAN_URL`` is empty)."""
+
+
+class ServerNotFoundError(ServerScanError):
+    """server-scan has no server with this id."""
+
+
+class NodeNotInClusterError(Day1Error):
+    """server-scan does not place the server in the cluster the request names."""
+
+
+class WorkflowsError(Day1Error):
+    """Base class for errors talking to the workflows orchestrator."""
+
+
+class WorkflowsNotConfiguredError(WorkflowsError):
+    """This deployment has no orchestrator (``WORKFLOWS_API_URL`` is empty)."""
+
+
+class WorkflowsUnavailableError(WorkflowsError):
+    """The orchestrator could not be reached or answered with an error; nothing was started."""
+
+
+class WorkflowRefusedError(WorkflowsUnavailableError):
+    """The orchestrator refused the request as invalid (a 4xx); nothing was started."""
+
+
+class UninstallAlreadyRunningError(WorkflowsError):
+    """The orchestrator already runs an uninstall of this server (its 409)."""
+
+
+class AmbiguousStartError(WorkflowsError):
+    """A start was sent but its outcome is unknown: the run may exist. Never retried (ADR-0006)."""

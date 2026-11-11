@@ -241,6 +241,11 @@ Delete: `05-delete-hosted-cluster.md`. Version-band migration allocates a NEW se
   client-side exactly; treat list for UPI. One cheap call for the whole cluster list (avoid N+1 — SM has no cluster filter).
 - MCE view: the MCE's INVENTORY segment (`type=INVENTORY`, `cluster_name==<mce>`) — show "inventory VLAN missing" as a readiness gate for adding servers.
 - Cache with Wingman's `cache.get_or_fetch` ~30–60 s (SM itself caches 60 s).
+- **Linking to it**: the UI reads no URL parameters (its `static/js/app.js`, read on the live sandbox with GET only,
+  2026-11-11). No route or query opens one cluster's or one segment's row; its search box filters client-side over
+  cluster names, EPG, CIDR and VLAN. A link can only open the UI and name what to search for; for one cluster's segment
+  as JSON, `GET /api/segments/search?q=<file stem>`. Wingman's cluster page does both (`SEGMENTS_MANAGER_UI_URL`,
+  `docs/notes/2026-11-11-cluster-nodes-api.md` §5).
 
 ### CALL (order during HC creation) — prefer the orchestrator, not SM writes
 Wingman should **not** hold the SM token or call `POST /api/segments/allocate` itself; the ecosystem routes every SM write through

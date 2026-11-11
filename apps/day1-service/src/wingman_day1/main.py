@@ -8,7 +8,9 @@ the tests build the whole service on the in-memory GitLab and the fakes.
 
 ``WINGMAN_GIT_BACKEND=fake`` runs on an in-memory GitLab seeded from
 ``dev/gitlab-fixtures`` (local development and E2E); settings refuse it in
-production (ADR-0009).
+production (ADR-0009). ``DAY1_FAKE_FLEET=true`` does the same for the MCE
+hubs, server-scan and the workflows orchestrator, from ``dev/fleet-fixtures``,
+in development only (ADR-0038).
 """
 
 from __future__ import annotations
@@ -59,12 +61,16 @@ from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
 from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
+from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
+from wingman_day1.infrastructure.cached_hub import CachedHubApi
+from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
+from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons
 from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_tokens
 from wingman_day1.infrastructure.merge_requests import (
@@ -74,13 +80,28 @@ from wingman_day1.infrastructure.merge_requests import (
 )
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.repositories import CachedRepository
-from wingman_day1.ports import ClusterDeleteWorkflow, Day2Addons, HubApi, IdentityProvider
-from wingman_day1.settings import Day1Settings
+from wingman_day1.infrastructure.server_scan import HttpServerInventory
+from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
+from wingman_day1.ports import (
+    ClusterDeleteWorkflow,
+    Day2Addons,
+    HubApi,
+    IdentityProvider,
+    ServerInventory,
+    UninstallWorkflow,
+)
+from wingman_day1.settings import Day1Settings, check_runtime
 
 SERVICE = "day1"
 SERVICE_USER: Final = User(username="system:wingman-day1", role=Role.VIEWER)
 """Who day1 is when it asks day2 for installed addons (a short-lived viewer session)."""
 SERVICE_TOKEN_TTL: Final = timedelta(minutes=5)
+RUNS_TTL_SECONDS: Final = 10.0
+"""The longest an uninstall run's status is cached: the web polls a running one."""
+HUB_TTL_SECONDS: Final = 10.0
+"""The longest the nodes view caches an MCE read (live status reads the hub directly)."""
+FAKE_SERVER_SCAN_UI: Final = "http://server-scan.example"
+"""Where the fake fleet's node links point when ``SERVER_SCAN_UI_URL`` is empty."""
 ROUTERS: Final = (
     auth_api.router,
     clusters_api.router,
@@ -103,11 +124,15 @@ class Adapters:
     gitlab: GitLabPort
     day2: Day2Addons
     hub: HubApi | None = None
-    """``None`` when ``CLUSTER_STATUS_ENABLED`` is off."""
+    """``None`` when ``CLUSTER_STATUS_ENABLED`` is off (the fake MCE with ``DAY1_FAKE_FLEET``)."""
     identity: IdentityProvider | None = None
     """``None`` when OpenShift OAuth is not configured (dev login only)."""
     delete_workflow: ClusterDeleteWorkflow | None = None
     """``None`` until the delete-cluster workflow exists (ADR-0033)."""
+    inventory: ServerInventory | None = None
+    """server-scan; ``None`` when ``SERVER_SCAN_URL`` is empty (ADR-0038)."""
+    uninstall: UninstallWorkflow | None = None
+    """The orchestrator's uninstall workflow; ``None`` when ``WORKFLOWS_API_URL`` is empty."""
     closers: tuple[Close, ...] = field(default=())
 
 
@@ -147,7 +172,7 @@ def build_adapters(
     )
     closers.append(day2.aclose)
     hub: HubApi | None = None
-    if settings.cluster_status_enabled:
+    if settings.cluster_status_enabled and not settings.day1_fake_fleet:
         hub_api = HttpHubApi(
             tokens=load_mce_tokens(settings.mce_tokens_file),
             domain=settings.mce_api_domain,
@@ -171,13 +196,66 @@ def build_adapters(
         )
         closers.append(oauth.aclose)
         identity = oauth
+    fake_hub, inventory, uninstall = _fleet_adapters(
+        settings, metrics=metrics, clock=clock, closers=closers
+    )
     return Adapters(
         gitlab=InstrumentedGitLab(inner, metrics),
         day2=day2,
-        hub=hub,
+        hub=fake_hub or hub,
         identity=identity,
+        inventory=inventory,
+        uninstall=uninstall,
         closers=tuple(closers),
     )
+
+
+def _fleet_adapters(
+    settings: Day1Settings, *, metrics: WingmanMetrics, clock: Clock, closers: list[Close]
+) -> tuple[HubApi | None, ServerInventory | None, UninstallWorkflow | None]:
+    """server-scan and the orchestrator, real or none; or the fake fleet (ADR-0038).
+
+    The fake fleet is both fakes and a fake MCE, which then also serves live
+    status and InfraEnvs.
+    """
+    if settings.day1_fake_fleet:
+        from wingman_day1.infrastructure.fake_fleet import (
+            FakeServerInventory,
+            FakeUninstallWorkflow,
+            default_fleet_file,
+            load_fleet,
+        )
+        from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
+
+        rows, runs = load_fleet(default_fleet_file())
+        fake = FakeServerInventory(rows)
+        workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)
+        naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
+        mce = load_fake_mce(default_mce_file(), servers=rows, naming=naming)
+        workflow.after_uninstall(mce.remove_server)
+        return mce, fake, workflow
+    inventory: ServerInventory | None = None
+    if settings.server_scan_url:
+        scan = HttpServerInventory(
+            base_url=settings.server_scan_url,
+            token=settings.server_scan_token.get_secret_value(),
+            verify=settings.server_scan_tls_verify,
+            timeout_seconds=settings.server_scan_timeout_seconds,
+            metrics=metrics,
+        )
+        closers.append(scan.aclose)
+        inventory = scan
+    uninstall: UninstallWorkflow | None = None
+    if settings.workflows_api_url:
+        orchestrator = HttpUninstallWorkflow(
+            base_url=settings.workflows_api_url,
+            verify=settings.workflows_tls_verify,
+            timeout_seconds=settings.workflows_timeout_seconds,
+            metrics=metrics,
+        )
+        closers.append(orchestrator.aclose)
+        uninstall = orchestrator
+    return None, inventory, uninstall
 
 
 def build_context(
@@ -234,6 +312,25 @@ def build_context(
         machine_configs,
     )
     repos = {RepoKey.DAY1: day1, RepoKey.SPECS: specs_repo}
+    nodes: NodeService | None = None
+    if adapters.hub is not None:
+        runs_ttl = min(ttl, RUNS_TTL_SECONDS)
+        nodes = NodeService(
+            CachedHubApi(adapters.hub, cache, ttl=min(ttl, HUB_TTL_SECONDS)),
+            cluster_service,
+            inventory=(
+                CachedServerInventory(adapters.inventory, cache, ttl=ttl)
+                if adapters.inventory is not None
+                else None
+            ),
+            ui_url=settings.server_scan_ui_base or FAKE_SERVER_SCAN_UI,
+            workflows=(
+                CachedUninstallWorkflow(adapters.uninstall, cache, ttl=runs_ttl)
+                if adapters.uninstall is not None
+                else None
+            ),
+            infraenv_namespace=settings.mce_infraenv_namespace or None,
+        )
     dev_secret = settings.dev_auth_secret.get_secret_value() if settings.dev_auth_enabled else None
     return Day1Context(
         clusters=cluster_service,
@@ -254,6 +351,7 @@ def build_context(
         repos=repos,
         machine_configs=machine_configs,
         delete_workflow=adapters.delete_workflow,
+        nodes=nodes,
         status=(
             StatusService(
                 adapters.hub,
@@ -266,6 +364,7 @@ def build_context(
         ),
         webhook_secret=settings.gitlab_webhook_secret.get_secret_value() or None,
         status_poll_seconds=settings.day1_status_poll_seconds,
+        segments_manager_ui_url=settings.segments_manager_ui_url or None,
     )
 
 
@@ -281,6 +380,7 @@ def create_app(
     settings = settings or Day1Settings()
     auth = auth or AuthSettings()
     runtime = runtime or RuntimeSettings()
+    check_runtime(settings, runtime)
     metrics = WingmanMetrics(
         CollectorRegistry(),
         component=SERVICE,

@@ -1,20 +1,33 @@
 # Servers per hosted cluster, waiting for workers, and moving capacity
 
-**Status:** proposed. Checked against [architecture-fit.md](architecture-fit.md):
-server-scan is the platform's state tracker for servers and VMs (AD15), and
-nodes come from shared pools, not from named servers (AD21).
+**Status:** a hosted cluster's nodes by NodePool, and why a pool waits for
+workers, **built** 2026-11-11 (ADR-0038), with uninstalling one node through
+the platform's workflow; the rest proposed.
+Checked against [architecture-fit.md](architecture-fit.md): server-scan is
+the platform's state tracker for servers and VMs (AD15), and nodes come from
+shared pools, not from named servers (AD21).
 
 ## Servers per hosted cluster
 
-On a hosted cluster's page, list the servers under it, read from server-scan's
-servers-by-cluster read:
-- name, MCE, InfraEnv;
-- hardware (model, CPU, memory, disks);
-- health.
+**Built** (ADR-0038; the API is `docs/notes/2026-11-11-cluster-nodes-api.md`,
+the sources `docs/ecosystem/notes/hypershift-node-state.md`). A hosted
+cluster's page shows each NodePool's nodes from its MCE, each Machine followed
+to its Agent and its server in server-scan:
+- each node's state, what is happening to it now, and whether the pool's
+  update is working on it;
+- for a short pool, the missing Machines and why a Machine waits (no free
+  Agent, and why each matching one is not free);
+- each server's serial, vendor and model, health, maintenance, the stale and
+  contested flags, and a link to its page in server-scan;
+- the servers server-scan places in the cluster that no Machine leads to.
 
-A server's name links to its page in server-scan. This is read-only, through a
-`ServerInventory` port with an adapter and a fake; it needs a server-scan
-viewer token in a Secret.
+An admin can start the platform's `uninstall-server-from-hc` workflow on one
+node and follow its run. The workflow owns the procedure and its checks;
+Wingman starts it and shows the run.
+
+Left for later: the InfraEnv and the hardware detail (CPU, memory, disks).
+server-scan's fleet rows do not carry them; they need one detail read per
+server.
 
 ## Why a cluster waits for workers
 

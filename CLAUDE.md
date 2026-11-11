@@ -117,6 +117,10 @@ Explicit user instructions; violating one is a real mistake, not style.
   defaults, numeric owners, drift on locked values, importing existing
   clusters into a flavor and syncing a cluster to it; the web pages for all of
   it; the UI says Flavor (the API keeps `/specs`).
+- Done (2026-11-11): the cluster page's Nodes tab by NodePool from the MCE
+  (missing pieces, the node an update works on), joined to server-scan, and
+  node uninstall through the platform's workflow (ADR-0038); 3.3.1 reads
+  network templates by the CI's name.
 - **Not done yet, in order:** (1) the architect's
   answers (`docs/ideas/architecture-fit.md`); (2) chart hardening (a values
   schema, a pinned nginx image); (3) flavors v2's "Left for later";
@@ -267,20 +271,28 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-08 — flavors v2, all stages, on `roiblum/feat-flavors-v2`.**
-Main merged in (the branch's ADRs 0033/0034 became 0036/0037; the import asks
-`changed_since`, ADR-0035). Day1: sync (`POST /clusters/{name}/sync[/preview]`,
-removals confirmed, how each nodepool rolls), `owner` on cluster rows,
-`enforced_locks` on flavors. Web (four parallel agents, then merged): the
-flavor editor, the create form, the flavor page with import, value drift and
-the sync dialog, owner filters; the UI says Flavor. Checked: the gate, 283
-mocked E2E, the three live suites on the reseeded GitLab CE, and
-`day1_live_e2e.py` (import and sync against real GitLab). Upgrade guide:
-`docs/upgrade/3.2-to-3.3.md`.
+**2026-11-11 — 3.3.1 template fix; nodes by NodePool and node uninstall (ADR-0038).**
+PR #23 (3.3.1): network templates are `nm-conf-template-<hw>.bu`, the CI's
+name; 3.3.0 wanted `-hw-` and refused every network config (ADR-0027's
+correction). Then, on `roiblum/feat-cluster-nodes` (a backend and a web agent
+against `docs/notes/2026-11-11-cluster-nodes-api.md`, redesigned once by the
+user):
+- the cluster page's Nodes tab shows each NodePool from the MCE: its nodes
+  (Machine → AgentMachine → Agent → BareMetalHost = server-scan's server),
+  each missing piece and why, and which node an update is working on; servers
+  server-scan lists that no Machine has sit apart. Nothing on the cluster list.
+- Uninstall beside a node starts the platform's `uninstall-server-from-hc`
+  and shows its run. Wingman only triggers and shows: the procedure and its
+  checks are the workflow's.
+- In-place updates: the MCE shows progress, the rebooting node and a failed
+  one, never the drain before a reboot (`docs/ecosystem/notes/hypershift-node-state.md`).
+  The guest Nodes would need each cluster's admin kubeconfig: not done.
+- The MCE token needs more reads (the API note's §4, `docs/upgrade/3.3-to-3.4.md`).
+  `DAY1_FAKE_FLEET=true` (development) fakes server-scan, the orchestrator and
+  the MCE for demos.
 
 **Next:**
-- merge the PR (release 3.3) and deploy with the upgrade guide;
-- flavors v2's "Left for later" (`docs/ideas/flavors-v2.md`);
-- day1's first cluster list after a merge still costs one history lookup per
-  cluster (ADR-0035, Consequences);
-- the architect's answers (`docs/ideas/architecture-fit.md`).
+- merge PR #23 (3.3.1), then the nodes PR (3.4.0); deploy with the 3.3→3.4 guide;
+- check the workflow class name `UninstallServerFromHcWorkflow` (the runs list
+  answers `[]` for any unknown type) and the MCE reads against a real hub;
+- flavors v2's "Left for later"; the architect's answers.

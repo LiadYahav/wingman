@@ -1,12 +1,18 @@
-"""FakeHubApi: a HubApi over seeded objects, for tests.
+"""FakeHubApi: a HubApi over seeded objects, for tests and the fake fleet.
 
 It raises the same domain errors as ``HttpHubApi``: an MCE it does not know
 is not configured, one marked unavailable fails as an unreachable hub would,
-and an object that was not seeded is not found.
+and an object that was not seeded is not found (a list that was not seeded
+is empty, as a namespace without objects lists on a real hub).
+
+``remove_server`` is what a completed uninstall leaves on a real MCE: the
+server's Agent, AgentMachine and Machine are gone, and the NodePool's
+MachineSet creates a replacement Machine that waits for a free Agent.
 """
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Iterable, Mapping
 
 from wingman_day1.domain.errors import (
@@ -14,7 +20,17 @@ from wingman_day1.domain.errors import (
     HubObjectNotFoundError,
     HubUnavailableError,
 )
-from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
+from wingman_day1.domain.machines import (
+    AgentMachineObservation,
+    AgentObservation,
+    MachineObservation,
+    MachineSetObservation,
+)
+from wingman_day1.domain.status import Condition, HostedClusterObservation, NodePoolObservation
+
+Key = tuple[str, str]
+"""``(mce, namespace)``."""
+NO_SUITABLE_AGENTS = Condition("AgentReserved", "False", "NoSuitableAgents", "")
 
 
 class FakeHubApi:
@@ -24,8 +40,12 @@ class FakeHubApi:
         self,
         *,
         hosted_clusters: Mapping[str, Iterable[HostedClusterObservation]] | None = None,
-        node_pools: Mapping[tuple[str, str], Iterable[NodePoolObservation]] | None = None,
+        node_pools: Mapping[Key, Iterable[NodePoolObservation]] | None = None,
         infra_envs: Mapping[str, Mapping[str, Iterable[str]]] | None = None,
+        machines: Mapping[Key, Iterable[MachineObservation]] | None = None,
+        machine_sets: Mapping[Key, Iterable[MachineSetObservation]] | None = None,
+        agent_machines: Mapping[Key, Iterable[AgentMachineObservation]] | None = None,
+        agents: Mapping[Key, Iterable[AgentObservation]] | None = None,
         mces: Iterable[str] = (),
         unavailable: Iterable[str] = (),
     ) -> None:
@@ -35,6 +55,10 @@ class FakeHubApi:
             hosted_clusters: Per MCE, the HostedClusters on its hub.
             node_pools: Per ``(mce, namespace)``, the NodePools there.
             infra_envs: Per MCE, InfraEnv names per namespace.
+            machines: Per ``(mce, control-plane namespace)``, the Machines there.
+            machine_sets: Per ``(mce, control-plane namespace)``, the MachineSets.
+            agent_machines: Per ``(mce, control-plane namespace)``, the AgentMachines.
+            agents: Per ``(mce, agent namespace)``, the Agents.
             mces: Extra MCEs that are configured but empty.
             unavailable: MCEs whose hub cannot be reached.
         """
@@ -43,19 +67,25 @@ class FakeHubApi:
             for mce, clusters in (hosted_clusters or {}).items()
             for hc in clusters
         }
-        self._node_pools = {key: list(pools) for key, pools in (node_pools or {}).items()}
+        self._node_pools = _lists(node_pools)
         self._infra_envs = {
             mce: {ns: list(names) for ns, names in by_ns.items()}
             for mce, by_ns in (infra_envs or {}).items()
         }
+        self._machines = _lists(machines)
+        self._machine_sets = _lists(machine_sets)
+        self._agent_machines = _lists(agent_machines)
+        self._agents = _lists(agents)
+        keyed = (self._node_pools, self._machines, self._machine_sets, self._agent_machines)
         self._configured = (
             set(mces)
             | {mce for mce, _, _ in self._hosted_clusters}
-            | {mce for mce, _ in self._node_pools}
+            | {mce for table in (*keyed, self._agents) for mce, _ in table}
             | set(self._infra_envs)
         )
         self._unavailable = set(unavailable)
         self._configured |= self._unavailable
+        self._backfills = itertools.count(1)
 
     def _check(self, mce: str) -> None:
         if mce not in self._configured:
@@ -91,3 +121,75 @@ class FakeHubApi:
         if namespace:
             return sorted(by_ns.get(namespace, []))
         return sorted(name for names in by_ns.values() for name in names)
+
+    async def machines(self, mce: str, *, namespace: str) -> list[MachineObservation]:
+        """See HubApi.machines."""
+        self._check(mce)
+        return sorted(self._machines.get((mce, namespace), []), key=lambda m: m.name)
+
+    async def machine_sets(self, mce: str, *, namespace: str) -> list[MachineSetObservation]:
+        """See HubApi.machine_sets."""
+        self._check(mce)
+        return sorted(self._machine_sets.get((mce, namespace), []), key=lambda s: s.name)
+
+    async def agent_machines(self, mce: str, *, namespace: str) -> list[AgentMachineObservation]:
+        """See HubApi.agent_machines."""
+        self._check(mce)
+        return sorted(self._agent_machines.get((mce, namespace), []), key=lambda a: a.name)
+
+    async def agents(self, mce: str, *, namespace: str) -> list[AgentObservation]:
+        """See HubApi.agents."""
+        self._check(mce)
+        return sorted(self._agents.get((mce, namespace), []), key=lambda a: a.name)
+
+    def remove_server(self, server_name: str) -> bool:
+        """Remove the Agent, AgentMachine and Machine of a server, and backfill its Machine.
+
+        The server is found by its Agent's BareMetalHost label (ignoring case).
+        Returns whether anything was removed.
+        """
+        for (mce, _), agents in self._agents.items():
+            agent = next((a for a in agents if (a.bmh or "").lower() == server_name.lower()), None)
+            if agent is None:
+                continue
+            agents.remove(agent)
+            for (am_mce, namespace), agent_machines in self._agent_machines.items():
+                if am_mce != mce:
+                    continue
+                taken = [am for am in agent_machines if am.agent_name == agent.name]
+                for agent_machine in taken:
+                    agent_machines.remove(agent_machine)
+                    self._replace_machine(mce, namespace, agent_machine.name)
+            return True
+        return False
+
+    def _replace_machine(self, mce: str, namespace: str, agent_machine: str) -> None:
+        machines = self._machines.get((mce, namespace), [])
+        old = next((m for m in machines if m.infrastructure_ref == agent_machine), None)
+        if old is None:
+            return
+        machines.remove(old)
+        prefix = old.machine_set or old.name.rsplit("-", 1)[0]
+        name = f"{prefix}-b{next(self._backfills):04d}"
+        machines.append(
+            MachineObservation(
+                name=name,
+                node_pool=old.node_pool,
+                machine_set=old.machine_set,
+                infrastructure_ref=name,
+                phase="Pending",
+                conditions=(
+                    Condition(
+                        "InfrastructureReady", "False", "NoSuitableAgents", "0 of 5 completed"
+                    ),
+                    Condition("NodeHealthy", "False", "WaitingForNodeRef", ""),
+                ),
+            )
+        )
+        self._agent_machines.setdefault((mce, namespace), []).append(
+            AgentMachineObservation(name=name, conditions=(NO_SUITABLE_AGENTS,))
+        )
+
+
+def _lists[T](table: Mapping[Key, Iterable[T]] | None) -> dict[Key, list[T]]:
+    return {key: list(values) for key, values in (table or {}).items()}

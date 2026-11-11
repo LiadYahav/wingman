@@ -67,7 +67,8 @@ a new `auth.jwtSecret` signs everyone out.
 
 ### Key Values
 
-Every variable the services read is set from these (`templates/configmap.yaml`, `templates/secret.yaml`);
+Every variable the services read is set from these (`templates/configmap.yaml`, `templates/secret.yaml`,
+and day1's `env` in `templates/day1-deployment.yaml` for the server-scan token);
 the names are explained in the root README's [Environment Variables](../README.md#environment-variables).
 
 | Key | Sets | Default | Description |
@@ -97,10 +98,20 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `auth.viewerGroups` | `WINGMAN_VIEWER_GROUPS` | `""` | Empty: no viewer role |
 | `devAuth.enabled` | `DEV_AUTH_ENABLED` | `false` | Dev login instead of OpenShift: local use only |
 | `devAuth.secret` | `DEV_AUTH_SECRET` (Secret) | `""` | At least 32 characters |
-| `clusterStatus.enabled` | `CLUSTER_STATUS_ENABLED` | `false` | Live status from the MCE hubs |
+| `clusterStatus.enabled` | `CLUSTER_STATUS_ENABLED` | `false` | Live status and the cluster nodes, from the MCE hubs ([Live cluster status](#live-cluster-status-mce-hubs)) |
 | `clusterStatus.mceDomain` | `MCE_API_DOMAIN` | `""` | A hub is `https://api.{mce}.{mceDomain}:6443` |
 | `clusterStatus.sslVerify` | `MCE_SSL_VERIFY` | `"false"` | `"true"`, `"false"` or a CA bundle path |
 | `clusterStatus.tokensSecretName` | | `mce-sa-tokens` | The Secret whose key `tokens` (a YAML map of MCE name to token) is mounted as `MCE_TOKENS_FILE` |
+| `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. Empty: nodes are listed without their servers ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)) |
+| `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the node links point. Empty: `serverScan.url` |
+| `serverScan.sslVerify` | `SERVER_SCAN_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
+| `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
+| `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token. Empty: no token, for a server-scan with auth off |
+| `serverScan.tokenSecret.key` | `SERVER_SCAN_TOKEN` (day1 only) | `token` | The token's key in that Secret |
+| `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
+| `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
+| `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
+| `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The cluster page links to it and to its search for the cluster's segment ([segments-manager link](#segments-manager-link)). Empty: no link |
 | `tls.caBundle` | | `""` | An internal CA (PEM), mounted in every pod |
 | `tls.caBundleMountPath` | `SSL_CERT_FILE` | `/etc/pki/tls/certs/ca-bundle.crt` | Where it is mounted (set only with a `tls.caBundle`) |
 | `route.host` | | `wingman.apps.your-cluster.internal` | The Route's host |
@@ -154,6 +165,111 @@ One token, `gitlab.accessToken`, with the `api` scope. Its account must be a mem
 project, the specs project and every team project in the sigs group, with at least the Developer
 role (it pushes branches and opens merge requests) and the right to merge into the branches the
 MRs target. `docs/ops/runbook.md` (WingmanGitLabTokenRejected) says how to replace it.
+
+### Live cluster status (MCE hubs)
+
+With `clusterStatus.enabled`, day1 reads each MCE hub at `https://api.<mce>.<domain>:6443`
+(`clusterStatus.mceDomain`) with that MCE's service-account token, from the Secret
+`clusterStatus.tokensSecretName` (key `tokens`, a YAML map of MCE name to token). It reads the
+HostedCluster and NodePools for live status, the InfraEnvs for the create form, and, for a cluster's
+nodes (`GET /api/day1/clusters/{name}/nodes`), each NodePool's Machines and Agents.
+
+The service account behind each token needs `get` and `list` on:
+
+| Resources | API group | Namespace |
+|---|---|---|
+| hostedclusters, nodepools | `hypershift.openshift.io` | `hcp-<clusterName>` |
+| machines, machinesets | `cluster.x-k8s.io` | the control plane's, `hcp-<clusterName>-ocp4-<clusterName>` |
+| agentmachines | `capi-provider.agent-install.openshift.io` | the control plane's |
+| agents, infraenvs | `agent-install.openshift.io` | the HostedCluster's `spec.platform.agent.agentNamespace` |
+
+A control-plane namespace is created per cluster, so the grant is a ClusterRole with a
+ClusterRoleBinding. Apply it on every hub that has a token, binding the service account whose token
+is in the Secret:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wingman-mce-reader
+rules:
+  - apiGroups: [hypershift.openshift.io]
+    resources: [hostedclusters, nodepools]
+    verbs: [get, list]
+  - apiGroups: [cluster.x-k8s.io]
+    resources: [machines, machinesets]
+    verbs: [get, list]
+  - apiGroups: [capi-provider.agent-install.openshift.io]
+    resources: [agentmachines]
+    verbs: [get, list]
+  - apiGroups: [agent-install.openshift.io]
+    resources: [agents, infraenvs]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wingman-mce-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: wingman-mce-reader
+subjects:
+  - kind: ServiceAccount
+    name: <service account>
+    namespace: <its namespace>
+```
+
+```bash
+oc apply -f wingman-mce-reader.yaml      # logged in to the hub
+oc auth can-i list machines.cluster.x-k8s.io -n hcp-<clusterName>-ocp4-<clusterName> \
+  --as=system:serviceaccount:<its namespace>:<service account>   # yes
+```
+
+No Secrets: Wingman never reads a hosted cluster's own API, so the drain before an in-place
+reboot, and which node goes next, are not shown (`docs/ecosystem/notes/hypershift-node-state.md`).
+Without the grant the nodes read answers `502 DEPENDENCY_UNAVAILABLE`, naming the path the hub
+denied; with live status off, `501 FEATURE_DISABLED`. A running Wingman's steps are in
+`docs/upgrade/3.3-to-3.4.md`.
+
+### Cluster nodes (server-scan and the workflows orchestrator)
+
+A cluster's nodes come from its MCE ([Live cluster status](#live-cluster-status-mce-hubs)). Both of
+these are optional and off by default. With `serverScan.url`, day1 adds each node's server record
+from server-scan (health, a link to its page) and the servers server-scan places in the cluster that
+no Machine leads to; with `workflows.url`, it also starts the platform's `uninstall-server-from-hc`
+workflow for one of them and shows its run. The orchestrator has no auth. An uninstall checks the
+server in server-scan first, so `workflows.url` without `serverScan.url` fails the chart.
+
+The server-scan token never goes in values: put a viewer token in a Secret and name the Secret.
+
+```bash
+oc create secret generic server-scan-viewer -n wingman --from-literal=token=<token>
+```
+
+```yaml
+serverScan:
+  url: http://server-scan-api.<ns>.svc:8000
+  uiUrl: https://server-scan.example      # where the node links point
+  tokenSecret: { name: server-scan-viewer }
+workflows:
+  url: http://workflows-orchestrator-api.<ns>.svc:8080
+```
+
+day1 reads the token at start: restart it (`oc rollout restart deploy/wingman-day1`) after
+replacing the Secret.
+
+### segments-manager link
+
+Off by default. With `segmentsManager.uiUrl`, the cluster page's **HostedCluster & network** card
+links to segments-manager's UI, names the cluster to search for there (its UI opens no single
+cluster), and links to its open search API for the cluster's segment as JSON. It is only a link:
+day1 never calls segments-manager, and the browser needs to reach the UI.
+
+```yaml
+segmentsManager:
+  uiUrl: https://segments-manager.example
+```
 
 ## Loading Pre-built Images (Air-gapped)
 

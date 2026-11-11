@@ -4,6 +4,24 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-08 — flavors v2, all stages, on `roiblum/feat-flavors-v2`.**
+Main merged in (the branch's ADRs 0033/0034 became 0036/0037; the import asks
+`changed_since`, ADR-0035). Day1: sync (`POST /clusters/{name}/sync[/preview]`,
+removals confirmed, how each nodepool rolls), `owner` on cluster rows,
+`enforced_locks` on flavors. Web (four parallel agents, then merged): the
+flavor editor, the create form, the flavor page with import, value drift and
+the sync dialog, owner filters; the UI says Flavor. Checked: the gate, 283
+mocked E2E, the three live suites on the reseeded GitLab CE, and
+`day1_live_e2e.py` (import and sync against real GitLab). Upgrade guide:
+`docs/upgrade/3.2-to-3.3.md`.
+
+**Next:**
+- merge the PR (release 3.3) and deploy with the upgrade guide;
+- flavors v2's "Left for later" (`docs/ideas/flavors-v2.md`);
+- day1's first cluster list after a merge still costs one history lookup per
+  cluster (ADR-0035, Consequences);
+- the architect's answers (`docs/ideas/architecture-fit.md`).
+
 **2026-11-08 — PR #20 released 3.1.0; repos read once per commit (ADR-0035).**
 PR #20: a renamed chart repo no longer fails the catalog (`get_project` follows
 GitLab's rename redirect, `chart-repo-unreadable`, `repourl-moved` on the Lints

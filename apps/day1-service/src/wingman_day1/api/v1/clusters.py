@@ -11,17 +11,18 @@ import json
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Path, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from wingman_core.domain.errors import GitError
 from wingman_core.web.auth import AdminUser, CurrentUser
-from wingman_day1.api.deps import Context, DeleteWorkflow, Status
+from wingman_day1.api.deps import Context, DeleteWorkflow, Nodes, Status
 from wingman_day1.api.v1.schemas import (
     BulkStatusIn,
     ClusterDetailOut,
     ClusterDriftOut,
     ClusterLiveStatusOut,
+    ClusterNodesOut,
     ClusterStatusOut,
     CommitOut,
     CreateClusterIn,
@@ -34,6 +35,7 @@ from wingman_day1.api.v1.schemas import (
     SyncIn,
     SyncPreviewIn,
     SyncPreviewOut,
+    UninstallNodeIn,
     WorkflowRunOut,
     change_out,
     cluster_detail,
@@ -42,12 +44,17 @@ from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.clusters import CreateCluster
 from wingman_day1.domain.errors import Day1Error
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.segments_manager import segments_manager_links
 
 router = APIRouter(prefix="/api/day1/clusters", tags=["clusters"])
 
 Site = Annotated[str | None, Query(max_length=63, description="Site folder")]
 Mce = Annotated[str | None, Query(max_length=63, description="MCE folder")]
 RequiredMce = Annotated[str, Query(min_length=1, max_length=63, description="MCE folder")]
+ServerId = Annotated[
+    str,
+    Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.-]+$", description="server-scan id"),
+]
 
 
 def _create(body: CreateClusterIn) -> CreateCluster:
@@ -206,10 +213,12 @@ async def cluster(
     """The cluster's file, values and naming. ``site``/``mce`` are optional: names are unique."""
     ref = await _ref(context, name, site, mce)
     found = await context.clusters.get(ref)
+    ui = context.segments_manager_ui_url
     return cluster_detail(
         found,
         gitlab_url=await context.clusters.web_url(ref),
         mce_default_mastertag=await context.sites.default_mastertag(ref.site, ref.mce),
+        segments_manager=segments_manager_links(ui, ref.name) if ui else None,
     )
 
 
@@ -262,6 +271,37 @@ async def start_delete_workflow(
     """Start the delete-cluster workflow (501 until it exists, ADR-0033)."""
     ref = await _ref(context, name, site, mce)
     return WorkflowRunOut.of(await workflow.start(ref, requested_by=user))
+
+
+@router.get("/{name}/nodes")
+async def cluster_nodes(
+    name: str,
+    context: Context,
+    user: CurrentUser,
+    nodes: Nodes,
+    site: Site = None,
+    mce: Mce = None,
+) -> ClusterNodesOut:
+    """The servers server-scan places in the cluster, with their newest uninstall run (ADR-0038)."""
+    ref = await _ref(context, name, site, mce)
+    return ClusterNodesOut.of(await nodes.nodes(ref))
+
+
+@router.post("/{name}/nodes/{server_id}/uninstall", status_code=202)
+async def uninstall_node(
+    name: str,
+    server_id: ServerId,
+    body: UninstallNodeIn,
+    context: Context,
+    user: AdminUser,
+    nodes: Nodes,
+    site: Site = None,
+    mce: Mce = None,
+) -> WorkflowRunOut:
+    """Start the platform's uninstall-server-from-hc workflow on one node (ADR-0038)."""
+    ref = await _ref(context, name, site, mce)
+    run = await nodes.uninstall(ref, server_id, server_name=body.server_name, user=user)
+    return WorkflowRunOut.of(run)
 
 
 @router.delete("/{name}")
