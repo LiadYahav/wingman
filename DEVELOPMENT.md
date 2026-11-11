@@ -70,23 +70,30 @@ WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1
 ```
 
 Add `DAY1_FAKE_FLEET=true` to day1's line for the cluster page's Nodes tab and node uninstall
-(ADR-0038). It replaces the MCE hubs, server-scan and the workflows orchestrator with fakes
-seeded from `dev/fleet-fixtures/`:
+(ADR-0038), and the EPG on its **HostedCluster & network** card (ADR-0039). It replaces the MCE
+hubs, server-scan, the workflows orchestrator and segments-manager with fakes seeded from
+`dev/fleet-fixtures/`:
 - `servers.yaml` is a made-up fleet in server-scan's own row shape;
 - `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update
   half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
   approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace
   rollout (one node draining, its replacement writing its image to disk);
-  `ocp4-prod-hawk-site1` and `ocp4-prep-amit-site2-a` are simply ready.
+  `ocp4-prod-hawk-site1` and `ocp4-prep-amit-site2-a` are simply ready;
+- `segments.yaml` is a made-up segments-manager ledger in its own `by-segment` shape: the
+  segments the fixture clusters' files hold, with their EPGs, and two free ones. It agrees with
+  the files except for `ocp4-prod-herzi-site1`, whose VLAN differs on purpose (1418 against the
+  file's 1410), so the card's warning can be seen. `ocp4-prod-hawk-site1` has no segment yet:
+  its VLAN and segment are pending.
 
 The fake MCE also serves live status and InfraEnvs, as if `CLUSTER_STATUS_ENABLED` were on. An
 uninstall walks a few sample phases, about 8 s each, then frees the server and removes its
 Machine; the NodePool's replacement Machine then waits for a free Agent. The fake fleet is
 refused unless `WINGMAN_ENVIRONMENT=development`, and it works with either Git backend.
 
-Add `SEGMENTS_MANAGER_UI_URL=https://segments-manager.example` to day1's line to see the cluster
-page's link to segments-manager (in the Overview's **HostedCluster & network** card). It is only a
-link, so nothing answers there locally, and `DAY1_FAKE_FLEET` does not change it.
+With `DAY1_FAKE_FLEET`, the card's links to segments-manager point at
+`http://segments-manager.example` unless `SEGMENTS_MANAGER_UI_URL` says otherwise; nothing answers
+there locally. Without the fake fleet, `SEGMENTS_MANAGER_UI_URL=https://segments-manager.example`
+shows the links alone, and the EPG is "—".
 
 `DAY2_SERVICE_URL` matters: without it day1 asks the chart's `http://wingman-day2:8002`, and
 every cluster's drift is Unknown. The web dev server proxies only when both

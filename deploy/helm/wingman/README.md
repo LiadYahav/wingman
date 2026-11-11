@@ -111,7 +111,10 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
-| `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The cluster page links to it and to its search for the cluster's segment ([segments-manager link](#segments-manager-link)). Empty: no link |
+| `segmentsManager.url` | `SEGMENTS_MANAGER_URL` | `""` | segments-manager's API, e.g. `http://segments-manager.<ns>.svc:8000`. The cluster page shows its EPG for the cluster's segment and where it disagrees with the file ([segments-manager](#segments-manager)). Empty: no EPG |
+| `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The cluster page links to it and to its search for the cluster's segment. Empty: `segmentsManager.url`; both empty: no link |
+| `segmentsManager.sslVerify` | `SEGMENTS_MANAGER_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
+| `segmentsManager.timeoutSeconds` | `SEGMENTS_MANAGER_TIMEOUT_SECONDS` | `5` | Per request, at most 60 |
 | `tls.caBundle` | | `""` | An internal CA (PEM), mounted in every pod |
 | `tls.caBundleMountPath` | `SSL_CERT_FILE` | `/etc/pki/tls/certs/ca-bundle.crt` | Where it is mounted (set only with a `tls.caBundle`) |
 | `route.host` | | `wingman.apps.your-cluster.internal` | The Route's host |
@@ -259,17 +262,27 @@ workflows:
 day1 reads the token at start: restart it (`oc rollout restart deploy/wingman-day1`) after
 replacing the Secret.
 
-### segments-manager link
+### segments-manager
 
-Off by default. With `segmentsManager.uiUrl`, the cluster page's **HostedCluster & network** card
-links to segments-manager's UI, names the cluster to search for there (its UI opens no single
-cluster), and links to its open search API for the cluster's segment as JSON. It is only a link:
-day1 never calls segments-manager, and the browser needs to reach the UI.
+Off by default. The cluster page's **HostedCluster & network** card shows the cluster's VLAN and
+segment from its file either way (Git is the source of truth, ADR-0039). With
+`segmentsManager.url`, day1 also reads that one segment from segments-manager's API (its
+reads are open: no token) and shows its EPG, with a warning where
+segments-manager disagrees with the file (another VLAN, another cluster, a segment not
+Allocated, or none). day1 never writes to segments-manager, and segments-manager down only
+hides the EPG.
+
+The card also links to segments-manager's UI, names the cluster to search for there (its UI
+opens no single cluster), and links to its open search API for the cluster's segment as JSON.
+The links use `uiUrl`, or `url` when `uiUrl` is empty; the browser needs to reach them.
 
 ```yaml
 segmentsManager:
+  url: http://segments-manager.<ns>.svc:8000
   uiUrl: https://segments-manager.example
 ```
+
+A running 3.4 adds it with `docs/upgrade/3.4-to-3.5.md`.
 
 ## Loading Pre-built Images (Air-gapped)
 

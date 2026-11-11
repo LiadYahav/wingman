@@ -20,6 +20,7 @@ from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
 from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
+from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
@@ -43,6 +44,8 @@ class Day1Context:
     auth: AuthService
     repos: Mapping[RepoKey, RepoReads]
     machine_configs: MachineConfigService
+    network: NetworkService
+    """A cluster's network from its file; segments-manager adds the EPG when it is configured."""
     status: StatusService | None = None
     """``None`` when ``CLUSTER_STATUS_ENABLED`` is off: those routes answer 501."""
     webhook_secret: str | None = None
@@ -53,7 +56,8 @@ class Day1Context:
     nodes: NodeService | None = None
     """``None`` when live status (the MCE hubs) is off: the nodes routes answer 501."""
     segments_manager_ui_url: str | None = None
-    """``None`` when ``SEGMENTS_MANAGER_UI_URL`` is empty: a cluster carries no link to it."""
+    """``None`` when neither ``SEGMENTS_MANAGER_UI_URL`` nor ``SEGMENTS_MANAGER_URL`` is set:
+    a cluster carries no link to segments-manager."""
 
 
 def day1_context(request: Request) -> Day1Context:

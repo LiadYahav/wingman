@@ -1,5 +1,5 @@
 # helm template fixture: cluster nodes from server-scan, the uninstall workflow and
-# the segments-manager link on.
+# segments-manager (the EPG and the links) on.
 serverScan:
   url: http://server-scan-api.ns.svc:8000
   uiUrl: https://server-scan.example
@@ -7,4 +7,5 @@ serverScan:
 workflows:
   url: http://workflows-orchestrator-api.ns.svc:8080
 segmentsManager:
+  url: http://segments-manager.ns.svc:8000
   uiUrl: https://segments-manager.example

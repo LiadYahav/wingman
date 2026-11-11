@@ -15,6 +15,7 @@ Families:
 - ``day2:installed:<site>:<mce>:<name>``  day2's installed addons for one cluster
 - ``hub:<mce>:<kind>:<namespace>[:<name>]`` an MCE hub read for the nodes view
 - ``server-scan:rows``                     server-scan's whole fleet, as rows
+- ``segments-manager:segment:<cidr>``      segments-manager's answer for one segment
 - ``workflows:uninstall:...``              the orchestrator's uninstall runs: the list, one run
 """
 
@@ -69,6 +70,11 @@ def hub(mce: str, kind: str, namespace: str, name: str | None = None) -> str:
 def server_scan_rows() -> str:
     """server-scan's fleet rows (expires; server-scan has no webhook to day1)."""
     return "server-scan:rows"
+
+
+def segment(cidr: str) -> str:
+    """segments-manager's answer for one segment (expires; it has no webhook to day1)."""
+    return f"segments-manager:segment:{cidr}"
 
 
 def uninstall_runs_prefix() -> str:
