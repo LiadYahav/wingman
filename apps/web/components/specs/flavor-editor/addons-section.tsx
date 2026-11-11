@@ -253,8 +253,10 @@ export function AddonsSection({ addons, onChange }: { addons: SpecAddon[]; onCha
   if (isLoading) return <Skeleton className="h-64 rounded-xl" />;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className="min-w-0 space-y-4">
+    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+      {/* Side by side, the catalog stays in view below the editor's tab bar while a long
+          selection scrolls, and its list uses the screen's height, not a fixed 500px */}
+      <div className="min-w-0 space-y-4 lg:sticky lg:top-[4.25rem]" data-testid="addons-available">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold">Available</h3>
           <div className="relative">
@@ -272,7 +274,7 @@ export function AddonsSection({ addons, onChange }: { addons: SpecAddon[]; onCha
         {error ? (
           <ProblemList error={error} title="The chart catalog could not be read" />
         ) : (
-          <div className="max-h-[500px] space-y-6 overflow-y-auto pr-2">
+          <div className="max-h-[500px] space-y-6 overflow-y-auto overscroll-contain pr-2 lg:max-h-[calc(100dvh-13rem)]">
             {Object.keys(byTeam).length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
                 {search ? "No addons match your search" : "No addons available"}
