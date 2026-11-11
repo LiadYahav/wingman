@@ -587,3 +587,55 @@ export interface WorkflowRun {
 export interface DeleteWorkflowState {
   run: WorkflowRun | null;
 }
+
+// ── Cluster nodes and node uninstall (server-scan, ADR-0038) ────────────────
+
+/** server-scan's overall verdict on a server; `UNKNOWN` is not a verdict. */
+export type NodeHealth = "HEALTHY" | "WARNING" | "MAJOR" | "CRITICAL" | "UNKNOWN";
+
+/** A server server-scan places in the cluster (its `cluster_name` is the cluster's). */
+export interface ClusterNode {
+  /** server-scan's server id: the uninstall route names the node by it. */
+  id: string;
+  name: string;
+  /** The server's page in server-scan's UI. */
+  url: string;
+  serial: string | null;
+  vendor: string | null;
+  model: string | null;
+  site: string;
+  mce: string | null;
+  /** server-scan's `openshift_state`: `INSTALLED`, `INSTALLED_TO_INVENTORY`, `AVAILABLE`. */
+  state: string;
+  health: NodeHealth;
+  maintenance: boolean;
+  reachable: boolean;
+  stale: boolean;
+  /** Two clusters' jobs claim the server. Shown only: the workflow refuses such a server itself. */
+  contested: boolean;
+  last_seen_at: string | null;
+  /** The node's newest uninstall run (the 202's shape), or `null`. `phase` is the workflow's own string. */
+  uninstall: WorkflowRun | null;
+}
+
+/** Whether this deployment can start an uninstall; `detail` says why not. */
+export interface UninstallAvailability {
+  available: boolean;
+  detail: string | null;
+}
+
+/** `GET /clusters/{name}/nodes` (501 FEATURE_DISABLED without server-scan). */
+export interface ClusterNodes {
+  /** The HostedCluster server-scan's `cluster_name` names. */
+  hosted_cluster: string;
+  /** Sorted by name. Empty means server-scan places no server here, never "not read". */
+  nodes: ClusterNode[];
+  uninstall: UninstallAvailability;
+  /** The orchestrator could not be read: every `uninstall` is `null`, and run states are unknown. */
+  runs_error: string | null;
+}
+
+/** `POST /clusters/{name}/nodes/{server_id}/uninstall` body: the node's name typed again. Answers 202 with a `WorkflowRun`. */
+export interface UninstallNodeRequest {
+  server_name: string;
+}

@@ -236,15 +236,15 @@ const REFUSALS = [
   },
   {
     code: "501 FEATURE_DISABLED",
-    see: "“Live status is off”, “Live status is off in this deployment”",
-    why: "This deployment does not read HostedClusters from the MCE hubs. It is not an error.",
-    fix: "Nothing to fix. InfraEnv names are typed instead of picked.",
+    see: "“Live status is off”, “Live status is off in this deployment”, or “Nodes need server-scan, and this deployment has not configured it.”",
+    why: "This deployment does not read HostedClusters from the MCE hubs, or has no server-scan. It is not an error.",
+    fix: "Nothing to fix. Without live status, InfraEnv names are typed instead of picked; without server-scan, no nodes are listed.",
   },
   {
     code: "504 AMBIGUOUS_WRITE",
-    see: "A message that GitLab did not confirm the change, so it may or may not have been made",
-    why: "GitLab timed out after receiving the write, so it may or may not have happened. Wingman never retries a write.",
-    fix: "Check the Approvals page (or the repo in GitLab) for the MR before trying again.",
+    see: "A message that GitLab did not confirm the change, so it may or may not have been made; or that an uninstall's start was not confirmed",
+    why: "GitLab (for an uninstall, the workflows orchestrator) timed out after receiving the write, so it may or may not have happened. Wingman never retries a write.",
+    fix: "Check the Approvals page (or the repo in GitLab) for the MR, or the node's run for an uninstall, before trying again.",
   },
 ] as const;
 
@@ -786,7 +786,7 @@ nodepool:
           <h3 className="text-base font-semibold mt-6 mb-3">The cluster page</h3>
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
             The tabs are <strong>Overview</strong> (the cluster, its HostedCluster and network, nodepools, flavor and,
-            when it is on, live status), <strong>YAML</strong>, <strong>Drift</strong> and <strong>History</strong>{" "}
+            when it is on, live status), <strong>Nodes</strong> (below), <strong>YAML</strong>, <strong>Drift</strong> and <strong>History</strong>{" "}
             (the cluster file&apos;s commits in the day1 repo, and its chart values&apos; commits in the team repos).
             The header has <strong>GitLab</strong> (the file), <strong>Addons</strong> (its charts) and, for admins,{" "}
             <strong>Edit</strong> and <strong>Delete</strong>. A name off the naming convention is flagged{" "}
@@ -820,6 +820,33 @@ nodepool:
               </div>
             </div>
           </div>
+
+          <h3 className="text-base font-semibold mt-6 mb-3">Nodes and uninstall</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+            A cluster&apos;s <strong>nodes</strong> are the servers server-scan places in it. They are listed under its row
+            on the Clusters page (the arrow before its name opens them, several rows at once) and on its{" "}
+            <strong>Nodes</strong> tab: serial, hardware, state and health as server-scan reports them, with flags for a
+            server in maintenance, stale, unreachable or contested (claimed by two clusters). A node&apos;s name opens its
+            page in server-scan. Health server-scan could not determine shows as <strong>Unknown</strong>, never as
+            healthy.
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+            An admin&apos;s <strong>Uninstall</strong> beside a node starts the platform&apos;s{" "}
+            <InlineCode>uninstall-server-from-hc</InlineCode> workflow on it, once the server&apos;s name is typed again.
+            Wingman starts the workflow and shows its run beside the node, with the step it is on, and the workflow does
+            the work and its own checks. In short, it drains the node and deletes its Machine, then takes the server out
+            of the hosted cluster and out of the MCE (powered off, its BareMetalHost and Agent removed), after which
+            server-scan shows it free.
+          </p>
+          <Callout type="warning" title="A replacement, not a shrink">
+            The NodePool keeps its size, so it binds a replacement node in the server&apos;s place. Nothing is undone if
+            the run fails, and running it again resumes. A server the workflow refuses (a contested one, say) fails its
+            run, and the error shows beside the node.
+          </Callout>
+          <p className="text-sm text-muted-foreground leading-relaxed mt-3">
+            Without server-scan, a deployment lists no nodes and says so (<InlineCode>501 FEATURE_DISABLED</InlineCode>
+            ); without the workflows orchestrator, it lists them with no Uninstall button.
+          </p>
         </section>
 
         {/* Addons */}

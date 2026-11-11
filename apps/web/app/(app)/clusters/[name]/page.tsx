@@ -19,6 +19,7 @@ import { DriftBadge } from "@/components/clusters/drift-badge";
 import { ClusterDriftPanel } from "@/components/clusters/cluster-drift";
 import { SyncDialog } from "@/components/clusters/sync-dialog";
 import { DeleteWorkflowPanel } from "@/components/clusters/delete-workflow-panel";
+import { ClusterNodes } from "@/components/clusters/cluster-nodes";
 import { LiveStatusCard } from "@/components/clusters/live-status-card";
 import {
   ClusterInfoCard, FileProblems, HostedClusterCard, NamingNotice, NodePoolsCard, SpecCard,
@@ -476,6 +477,7 @@ function ClusterDetailContent() {
       >
         <TabsList>
           <TabsTrigger value="overview" disabled={isEditing}>Overview</TabsTrigger>
+          <TabsTrigger value="nodes" disabled={isEditing}>Nodes</TabsTrigger>
           <TabsTrigger value="yaml">YAML</TabsTrigger>
           <TabsTrigger value="drift" disabled={isEditing}>
             Drift
@@ -509,6 +511,11 @@ function ClusterDetailContent() {
               )}
             </>
           )}
+        </TabsContent>
+
+        {/* The servers server-scan places in the cluster; read when the tab opens (inactive panels unmount) */}
+        <TabsContent value="nodes" className="mt-4">
+          <ClusterNodes name={name} where={where} isAdmin={isAdmin} enabled={activeTab === "nodes"} />
         </TabsContent>
 
         <TabsContent value="yaml" className="mt-4">

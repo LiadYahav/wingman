@@ -19,7 +19,11 @@ export type ErrorCode =
   | "INTERNAL_ERROR"
   | "SELF_APPROVAL"
   | "FEATURE_DISABLED"
-  | "DEPENDENCY_UNAVAILABLE";
+  | "DEPENDENCY_UNAVAILABLE"
+  /** 409: server-scan no longer places the server in this cluster (an uninstall). */
+  | "NODE_NOT_IN_CLUSTER"
+  /** 409: the orchestrator already runs an uninstall of this server. */
+  | "UNINSTALL_ALREADY_RUNNING";
 
 /** One entry of FastAPI's own request validation (`details.errors`). */
 export interface RequestFieldError {
