@@ -1,6 +1,6 @@
 import { Page, Route } from "@playwright/test";
 import { mockAddons, mockSpecs } from "./addons";
-import type { MRDetail, MachineConfigs, Mce, Problem, ErrorCode } from "../../types";
+import type { ClusterNode, ClusterNodes, MRDetail, MachineConfigs, Mce, Problem, ErrorCode, WorkflowRun } from "../../types";
 
 // Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/schemas.py,
 // apps/day2-service/.../api/v1/schemas.py), typed so a shape change fails `tsc`.
@@ -117,6 +117,94 @@ export const mockMachineConfigs: MachineConfigs = {
 export const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
+// ── Cluster nodes and node uninstall (docs/notes/2026-11-11-cluster-nodes-api.md) ──
+
+/** A node as `GET /api/day1/clusters/{name}/nodes` lists it (§1): healthy, installed, no run. */
+export function mockNode(overrides: Partial<ClusterNode> = {}): ClusterNode {
+  const id = overrides.id ?? "srv_0d48131a4fcc4b4c9cc8eec6ef72c421";
+  return {
+    id,
+    name: "ocp-dell-r660-site1-64c-512gb-DL0000123",
+    url: `https://server-scan.example/servers/${id}`,
+    serial: "DL0000123",
+    vendor: "dell",
+    model: "PowerEdge R660",
+    site: "site1",
+    mce: "ocp4-prod-mce-site1-a",
+    state: "INSTALLED",
+    health: "HEALTHY",
+    maintenance: false,
+    reachable: true,
+    stale: false,
+    contested: false,
+    last_seen_at: "2026-11-11T08:00:03Z",
+    uninstall: null,
+    ...overrides,
+  };
+}
+
+/** `GET /api/day1/clusters/{name}/nodes` (§1): `nodes` (by default one healthy node), uninstall available. */
+export function mockNodes(nodes: ClusterNode[] = [mockNode()], overrides: Partial<ClusterNodes> = {}): ClusterNodes {
+  return {
+    hosted_cluster: "ocp4-prod-lark-site1",
+    nodes,
+    uninstall: { available: true, detail: null },
+    runs_error: null,
+    ...overrides,
+  };
+}
+
+/** The run an uninstall's 202 returns (§2): running, no phase yet. */
+export function mockUninstallRun(node: ClusterNode, overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+  return {
+    workflow_id: `uninstall-server-from-hc-${node.name.toLowerCase()}`,
+    status: "running",
+    phase: null,
+    error: null,
+    ...overrides,
+  };
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Route `GET /api/day1/clusters/<cluster>/nodes?...` to `answer`: a body, or
+ * a handler (called on each read, so a test can count reads or change what
+ * the next one returns).
+ */
+export async function mockClusterNodes(
+  page: Page,
+  cluster: string,
+  answer: ClusterNodes | ((route: Route) => Promise<void> | void)
+) {
+  await page.route(new RegExp(`/api/day1/clusters/${escapeRegExp(cluster)}/nodes(\\?.*)?$`), (route: Route) =>
+    typeof answer === "function" ? answer(route) : json(route, answer)
+  );
+}
+
+/**
+ * Route `POST /api/day1/clusters/<cluster>/nodes/<server_id>/uninstall?...`:
+ * `answer` gets the route and the node's id (by default a 202 with a running
+ * run). Every request is kept in `posts`, with its body and query.
+ */
+export async function mockUninstallNode(
+  page: Page,
+  cluster: string,
+  answer?: (route: Route, serverId: string) => Promise<void> | void
+) {
+  const posts: { serverId: string; body: unknown; search: URLSearchParams }[] = [];
+  const pattern = new RegExp(`/api/day1/clusters/${escapeRegExp(cluster)}/nodes/([^/?]+)/uninstall(\\?.*)?$`);
+  await page.route(pattern, async (route: Route) => {
+    const url = new URL(route.request().url());
+    const serverId = decodeURIComponent(url.pathname.match(pattern)?.[1] ?? "");
+    posts.push({ serverId, body: route.request().postDataJSON(), search: url.searchParams });
+    if (answer) return answer(route, serverId);
+    const run: WorkflowRun = { workflow_id: `uninstall-server-from-hc-${serverId}`, status: "running", phase: null, error: null };
+    return json(route, run, 202);
+  });
+  return { posts };
+}
+
 /**
  * A response held until `release()`, so the page's loading state stays on
  * screen meanwhile: `answer(body)` is a route handler that answers once
@@ -201,6 +289,10 @@ export async function mockDashboardApis(page: Page) {
   // Not built yet (ADR-0033): the panel says "Not available yet" until it is.
   await page.route("**/api/day1/clusters/*/delete-workflow**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "The delete-cluster workflow is not available yet.")
+  );
+  // No server-scan unless a test sets one up (mockClusterNodes): the nodes say "off", quietly
+  await page.route("**/api/day1/clusters/*/nodes**", (route: Route) =>
+    fulfillProblem(route, 501, "FEATURE_DISABLED", "server-scan is not configured in this deployment.")
   );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
