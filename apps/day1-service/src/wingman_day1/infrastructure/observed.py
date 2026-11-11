@@ -41,6 +41,10 @@ class HubOperation(StrEnum):
     GET_HOSTED_CLUSTER = "get_hosted_cluster"
     LIST_NODE_POOLS = "list_node_pools"
     LIST_INFRA_ENVS = "list_infra_envs"
+    LIST_MACHINES = "list_machines"
+    LIST_MACHINE_SETS = "list_machine_sets"
+    LIST_AGENT_MACHINES = "list_agent_machines"
+    LIST_AGENTS = "list_agents"
 
 
 class OAuthOperation(StrEnum):

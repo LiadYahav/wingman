@@ -13,6 +13,7 @@ Families:
 - ``<repo>:commit:<sha>``                  one commit (immutable)
 - ``<repo>:mrs:...``                       merge-request lists
 - ``day2:installed:<site>:<mce>:<name>``  day2's installed addons for one cluster
+- ``hub:<mce>:<kind>:<namespace>[:<name>]`` an MCE hub read for the nodes view
 - ``server-scan:rows``                     server-scan's whole fleet, as rows
 - ``workflows:uninstall:...``              the orchestrator's uninstall runs: the list, one run
 """
@@ -58,6 +59,11 @@ def commit_diff(repo: str, sha: str) -> str:
 def day2_installed(site: str, mce: str, cluster: str) -> str:
     """What day2 reports as installed on one cluster (expires; day2 has no webhook to day1)."""
     return f"day2:installed:{site}:{mce}:{cluster}"
+
+
+def hub(mce: str, kind: str, namespace: str, name: str | None = None) -> str:
+    """One MCE hub read for the nodes view: a list in a namespace, or one object."""
+    return f"hub:{mce}:{kind}:{namespace}" + (f":{name}" if name else "")
 
 
 def server_scan_rows() -> str:

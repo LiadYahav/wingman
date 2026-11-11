@@ -116,6 +116,10 @@ class ServerScanDeniedError(ServerScanUnavailableError):
     """server-scan refused Wingman's viewer token (401 or 403): a deployment problem."""
 
 
+class ServerScanNotConfiguredError(ServerScanError):
+    """This deployment has no server-scan (``SERVER_SCAN_URL`` is empty)."""
+
+
 class ServerNotFoundError(ServerScanError):
     """server-scan has no server with this id."""
 

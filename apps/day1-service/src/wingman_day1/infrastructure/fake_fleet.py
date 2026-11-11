@@ -6,7 +6,9 @@ row shape and read by the HTTP adapter's parser. They raise the same domain
 errors as the real adapters.
 
 An uninstall walks through a few sample phases on the injected clock and then
-frees the server, so the local demo shows the whole flow. The phases are a
+frees the server, and its hooks remove the node from the fake MCE (which
+backfills a Machine that waits for an Agent), so the local demo shows the
+whole flow. The phases are a
 sample for the demo, nothing more: day1 passes the real workflow's phases
 through and keeps no list of them. A second start while one runs answers
 like the orchestrator's 409, and a server the fake does not know fails its
@@ -136,7 +138,12 @@ class FakeUninstallWorkflow:
         """When set, ``start`` raises it (an ambiguous or refused start, for tests)."""
         self.starts: list[dict[str, str | None]] = []
         """Every start's input, in order."""
+        self._completed: list[Callable[[str], object]] = []
         inventory.before_read(self._advance)
+
+    def after_uninstall(self, hook: Callable[[str], object]) -> None:
+        """Call ``hook(server_name)`` when a run completes: the fake MCE drops its node."""
+        self._completed.append(hook)
 
     async def runs(self) -> list[RunSummary]:
         """See UninstallWorkflow.runs."""
@@ -193,6 +200,8 @@ class FakeUninstallWorkflow:
                         server, state="AVAILABLE", cluster_name=None, mce=None, reserved_by=None
                     )
                 )
+                for hook in self._completed:
+                    hook(server.name)
 
 
 def default_fleet_file() -> Path:

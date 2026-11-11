@@ -13,6 +13,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Final
 
+from wingman_day1.domain.selectors import LabelSelector
+
 HOSTED_CLUSTER_MUST_BE_TRUE: Final = ("Available",)
 HOSTED_CLUSTER_MUST_NOT_BE_TRUE: Final = ("Degraded", "Progressing")
 NODE_POOL_MUST_BE_TRUE: Final = ("Ready",)
@@ -39,6 +41,16 @@ class HostedClusterObservation:
     version: str | None
     """The newest entry of ``status.version.history``."""
     conditions: tuple[Condition, ...] = ()
+    agent_namespace: str | None = None
+    """``spec.platform.agent.agentNamespace``: where its NodePools' Agents are."""
+
+
+@dataclass(frozen=True, slots=True)
+class Autoscaling:
+    """A NodePool's ``spec.autoScaling``."""
+
+    min: int
+    max: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,13 +58,23 @@ class NodePoolObservation:
     """A NodePool's status, as read from the hub.
 
     HyperShift NodePools have no ``readyReplicas``: ``current_replicas`` is
-    ``status.replicas`` and ``desired_replicas`` is ``spec.replicas``.
+    ``status.replicas`` and ``desired_replicas`` is ``spec.replicas`` (or the
+    current count when it is unset, for live status).
     """
 
     name: str
     desired_replicas: int
     current_replicas: int
     conditions: tuple[Condition, ...] = ()
+    replicas: int | None = None
+    """``spec.replicas`` as written; ``None`` when the pool autoscales."""
+    autoscaling: Autoscaling | None = None
+    upgrade_type: str | None = None
+    """``spec.management.upgradeType``: ``InPlace`` or ``Replace``."""
+    version: str | None = None
+    """``status.version``: the version it last finished updating to."""
+    agent_selector: LabelSelector | None = None
+    """``spec.platform.agent.agentLabelSelector``."""
 
 
 def condition_problems(

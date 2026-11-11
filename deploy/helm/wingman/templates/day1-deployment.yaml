@@ -41,14 +41,14 @@ spec:
                 name: wingman-config
             - secretRef:
                 name: wingman-secrets
-          {{- if and .Values.serverScan.url .Values.serverScan.tokenSecret.name }}
+          {{- if and .Values.serverScan .Values.serverScan.url .Values.serverScan.tokenSecret .Values.serverScan.tokenSecret.name }}
           env:
             # server-scan's viewer token, from an existing Secret (never from values)
             - name: SERVER_SCAN_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.serverScan.tokenSecret.name | quote }}
-                  key: {{ .Values.serverScan.tokenSecret.key | quote }}
+                  key: {{ .Values.serverScan.tokenSecret.key | default "token" | quote }}
           {{- end }}
           {{- if or .Values.tls.caBundle .Values.clusterStatus.enabled }}
           volumeMounts:

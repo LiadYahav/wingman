@@ -51,7 +51,7 @@ class Day1Context:
     delete_workflow: ClusterDeleteWorkflow | None = None
     """``None`` until the delete-cluster workflow exists: its routes answer 501 (ADR-0033)."""
     nodes: NodeService | None = None
-    """``None`` when server-scan is not configured: the nodes routes answer 501 (ADR-0038)."""
+    """``None`` when live status (the MCE hubs) is off: the nodes routes answer 501."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -84,13 +84,13 @@ def delete_workflow(
 
 
 NODES_NOT_AVAILABLE = (
-    "Cluster nodes are not available in this deployment: server-scan is not configured "
-    "(SERVER_SCAN_URL)."
+    "Cluster nodes are not available in this deployment: they are read from the MCE, and "
+    "live cluster status is off (CLUSTER_STATUS_ENABLED=false)."
 )
 
 
 def node_service(context: Annotated[Day1Context, Depends(day1_context)]) -> NodeService:
-    """The cluster nodes use case, or 501 when server-scan is not configured (ADR-0038)."""
+    """The cluster nodes use case, or 501 when the MCE hubs cannot be read (ADR-0038)."""
     if context.nodes is None:
         raise FeatureDisabled(NODES_NOT_AVAILABLE)
     return context.nodes

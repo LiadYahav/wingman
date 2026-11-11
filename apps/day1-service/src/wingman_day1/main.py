@@ -8,9 +8,9 @@ the tests build the whole service on the in-memory GitLab and the fakes.
 
 ``WINGMAN_GIT_BACKEND=fake`` runs on an in-memory GitLab seeded from
 ``dev/gitlab-fixtures`` (local development and E2E); settings refuse it in
-production (ADR-0009). ``DAY1_FAKE_FLEET=true`` does the same for server-scan
-and the workflows orchestrator, from ``dev/fleet-fixtures``, in development
-only (ADR-0038).
+production (ADR-0009). ``DAY1_FAKE_FLEET=true`` does the same for the MCE
+hubs, server-scan and the workflows orchestrator, from ``dev/fleet-fixtures``,
+in development only (ADR-0038).
 """
 
 from __future__ import annotations
@@ -68,6 +68,7 @@ from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
+from wingman_day1.infrastructure.cached_hub import CachedHubApi
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons
@@ -97,6 +98,8 @@ SERVICE_USER: Final = User(username="system:wingman-day1", role=Role.VIEWER)
 SERVICE_TOKEN_TTL: Final = timedelta(minutes=5)
 RUNS_TTL_SECONDS: Final = 10.0
 """The longest an uninstall run's status is cached: the web polls a running one."""
+HUB_TTL_SECONDS: Final = 10.0
+"""The longest the nodes view caches an MCE read (live status reads the hub directly)."""
 FAKE_SERVER_SCAN_UI: Final = "http://server-scan.example"
 """Where the fake fleet's node links point when ``SERVER_SCAN_UI_URL`` is empty."""
 ROUTERS: Final = (
@@ -121,7 +124,7 @@ class Adapters:
     gitlab: GitLabPort
     day2: Day2Addons
     hub: HubApi | None = None
-    """``None`` when ``CLUSTER_STATUS_ENABLED`` is off."""
+    """``None`` when ``CLUSTER_STATUS_ENABLED`` is off (the fake MCE with ``DAY1_FAKE_FLEET``)."""
     identity: IdentityProvider | None = None
     """``None`` when OpenShift OAuth is not configured (dev login only)."""
     delete_workflow: ClusterDeleteWorkflow | None = None
@@ -169,7 +172,7 @@ def build_adapters(
     )
     closers.append(day2.aclose)
     hub: HubApi | None = None
-    if settings.cluster_status_enabled:
+    if settings.cluster_status_enabled and not settings.day1_fake_fleet:
         hub_api = HttpHubApi(
             tokens=load_mce_tokens(settings.mce_tokens_file),
             domain=settings.mce_api_domain,
@@ -193,11 +196,13 @@ def build_adapters(
         )
         closers.append(oauth.aclose)
         identity = oauth
-    inventory, uninstall = _fleet_adapters(settings, metrics=metrics, clock=clock, closers=closers)
+    fake_hub, inventory, uninstall = _fleet_adapters(
+        settings, metrics=metrics, clock=clock, closers=closers
+    )
     return Adapters(
         gitlab=InstrumentedGitLab(inner, metrics),
         day2=day2,
-        hub=hub,
+        hub=fake_hub or hub,
         identity=identity,
         inventory=inventory,
         uninstall=uninstall,
@@ -207,8 +212,12 @@ def build_adapters(
 
 def _fleet_adapters(
     settings: Day1Settings, *, metrics: WingmanMetrics, clock: Clock, closers: list[Close]
-) -> tuple[ServerInventory | None, UninstallWorkflow | None]:
-    """server-scan and the orchestrator: the fakes, the real ones, or none (ADR-0038)."""
+) -> tuple[HubApi | None, ServerInventory | None, UninstallWorkflow | None]:
+    """server-scan and the orchestrator, real or none; or the fake fleet (ADR-0038).
+
+    The fake fleet is both fakes and a fake MCE, which then also serves live
+    status and InfraEnvs.
+    """
     if settings.day1_fake_fleet:
         from wingman_day1.infrastructure.fake_fleet import (
             FakeServerInventory,
@@ -216,10 +225,15 @@ def _fleet_adapters(
             default_fleet_file,
             load_fleet,
         )
+        from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
 
         rows, runs = load_fleet(default_fleet_file())
         fake = FakeServerInventory(rows)
-        return fake, FakeUninstallWorkflow(fake, clock=clock, runs=runs)
+        workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)
+        naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
+        mce = load_fake_mce(default_mce_file(), servers=rows, naming=naming)
+        workflow.after_uninstall(mce.remove_server)
+        return mce, fake, workflow
     inventory: ServerInventory | None = None
     if settings.server_scan_url:
         scan = HttpServerInventory(
@@ -241,7 +255,7 @@ def _fleet_adapters(
         )
         closers.append(orchestrator.aclose)
         uninstall = orchestrator
-    return inventory, uninstall
+    return None, inventory, uninstall
 
 
 def build_context(
@@ -299,11 +313,16 @@ def build_context(
     )
     repos = {RepoKey.DAY1: day1, RepoKey.SPECS: specs_repo}
     nodes: NodeService | None = None
-    if adapters.inventory is not None:
+    if adapters.hub is not None:
         runs_ttl = min(ttl, RUNS_TTL_SECONDS)
         nodes = NodeService(
-            CachedServerInventory(adapters.inventory, cache, ttl=ttl),
+            CachedHubApi(adapters.hub, cache, ttl=min(ttl, HUB_TTL_SECONDS)),
             cluster_service,
+            inventory=(
+                CachedServerInventory(adapters.inventory, cache, ttl=ttl)
+                if adapters.inventory is not None
+                else None
+            ),
             ui_url=settings.server_scan_ui_base or FAKE_SERVER_SCAN_UI,
             workflows=(
                 CachedUninstallWorkflow(adapters.uninstall, cache, ttl=runs_ttl)

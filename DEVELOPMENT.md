@@ -69,12 +69,20 @@ WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1
   npm run dev --workspace=web
 ```
 
-Add `DAY1_FAKE_FLEET=true` to day1's line for a cluster's nodes and their uninstall
-(ADR-0038). It replaces server-scan and the workflows orchestrator with fakes seeded from
-`dev/fleet-fixtures/servers.yaml`, made-up servers in server-scan's own row shape under a few
-fixture clusters (`ocp4-prod-lark-site1` has five). An uninstall walks a few sample phases, about
-8 s each, then frees the server. The fake fleet is refused unless
-`WINGMAN_ENVIRONMENT=development`, and it works with either Git backend.
+Add `DAY1_FAKE_FLEET=true` to day1's line for the cluster page's Nodes tab and node uninstall
+(ADR-0038). It replaces the MCE hubs, server-scan and the workflows orchestrator with fakes
+seeded from `dev/fleet-fixtures/`:
+- `servers.yaml` is a made-up fleet in server-scan's own row shape;
+- `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update
+  half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
+  approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace
+  rollout (one node draining, its replacement writing its image to disk);
+  `ocp4-prod-hawk-site1` and `ocp4-prep-amit-site2-a` are simply ready.
+
+The fake MCE also serves live status and InfraEnvs, as if `CLUSTER_STATUS_ENABLED` were on. An
+uninstall walks a few sample phases, about 8 s each, then frees the server and removes its
+Machine; the NodePool's replacement Machine then waits for a free Agent. The fake fleet is
+refused unless `WINGMAN_ENVIRONMENT=development`, and it works with either Git backend.
 
 `DAY2_SERVICE_URL` matters: without it day1 asks the chart's `http://wingman-day2:8002`, and
 every cluster's drift is Unknown. The web dev server proxies only when both

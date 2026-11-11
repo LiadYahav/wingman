@@ -169,6 +169,7 @@ def server_row(raw: JSON) -> ServerRow:
         contested=_optional_text(raw, "contested_with") is not None,
         last_seen_at=_timestamp(raw, "last_seen_at"),
         reserved_by=_optional_text(reservation, "holder") if held else None,
+        macs=_macs(raw),
     )
 
 
@@ -216,6 +217,13 @@ def _flag(raw: Mapping[str, JSON], key: str, *, default: bool | None = None) -> 
     if not isinstance(value, bool):
         raise TypeError(f"{key} is not a boolean")
     return value
+
+
+def _macs(raw: Mapping[str, JSON]) -> tuple[str, ...]:
+    value = raw.get("macs") or []
+    if not isinstance(value, list) or not all(isinstance(mac, str) for mac in value):
+        raise TypeError("macs is not a list of strings")
+    return tuple(mac.lower() for mac in value)
 
 
 def _timestamp(raw: Mapping[str, JSON], key: str) -> datetime | None:

@@ -51,6 +51,8 @@ class ServerRow:
     last_seen_at: datetime | None = None
     reserved_by: str | None = None
     """The reservation's holder while the reservation is held, else ``None``."""
+    macs: tuple[str, ...] = ()
+    """Its NICs' MAC addresses, lowercase."""
 
 
 @dataclass(frozen=True, slots=True)

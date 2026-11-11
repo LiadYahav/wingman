@@ -17,6 +17,12 @@ from wingman_core.domain.users import User
 from wingman_day1.domain.addons import InstalledAddon
 from wingman_day1.domain.auth import Identity
 from wingman_day1.domain.changes import ClusterChange, ImportChange, ProvisionResult, SpecChange
+from wingman_day1.domain.machines import (
+    AgentMachineObservation,
+    AgentObservation,
+    MachineObservation,
+    MachineSetObservation,
+)
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
@@ -128,7 +134,10 @@ class SpecChanges(Protocol):
 
 
 class HubApi(Protocol):
-    """An MCE hub's Kubernetes API: HostedClusters, NodePools, InfraEnvs.
+    """An MCE hub's Kubernetes API, read only.
+
+    HostedClusters, NodePools and InfraEnvs, and each cluster's Machines,
+    MachineSets, AgentMachines and Agents (ADR-0038).
 
     Raises ``HubNotConfiguredError``, ``HubObjectNotFoundError``,
     ``HubDeniedError`` or ``HubUnavailableError`` (``wingman_day1.domain.errors``).
@@ -146,6 +155,22 @@ class HubApi(Protocol):
 
     async def infra_envs(self, mce: str, *, namespace: str | None) -> list[str]:
         """InfraEnv names in ``namespace`` (or the whole hub), sorted."""
+        ...
+
+    async def machines(self, mce: str, *, namespace: str) -> list[MachineObservation]:
+        """CAPI Machines in a cluster's control-plane namespace, sorted by name."""
+        ...
+
+    async def machine_sets(self, mce: str, *, namespace: str) -> list[MachineSetObservation]:
+        """CAPI MachineSets in a cluster's control-plane namespace, sorted by name."""
+        ...
+
+    async def agent_machines(self, mce: str, *, namespace: str) -> list[AgentMachineObservation]:
+        """AgentMachines in a cluster's control-plane namespace, sorted by name."""
+        ...
+
+    async def agents(self, mce: str, *, namespace: str) -> list[AgentObservation]:
+        """Agents in a HostedCluster's agent namespace, sorted by name."""
         ...
 
 

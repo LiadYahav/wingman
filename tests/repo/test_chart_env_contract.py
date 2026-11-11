@@ -126,3 +126,20 @@ def test_the_server_scan_token_comes_from_its_secret_to_day1_only() -> None:
     }
     assert "SERVER_SCAN_TOKEN" not in env["wingman-day2"]
     assert "SERVER_SCAN_TOKEN" not in chart_variables(), "the token is set with server-scan off"
+
+
+def test_values_kept_from_a_release_before_3_4_still_render() -> None:
+    """``helm upgrade --reuse-values`` from 3.3 has no ``serverScan`` or ``workflows`` map."""
+    old = ["--set", "serverScan=null", "--set", "workflows=null"]
+    new = {v for v in chart_variables(*old) if v.startswith(("SERVER_SCAN_", "WORKFLOWS_"))}
+    assert not new
+    reused = [
+        *ALL_ON,
+        *("--set", "serverScan.sslVerify=null", "--set", "serverScan.timeoutSeconds=null"),
+        *("--set", "serverScan.tokenSecret.key=null", "--set", "workflows.timeoutSeconds=null"),
+    ]
+    config = render(*reused)["wingman-config"]["data"]
+    assert config["SERVER_SCAN_SSL_VERIFY"] == "true"
+    assert config["SERVER_SCAN_TIMEOUT_SECONDS"] == config["WORKFLOWS_TIMEOUT_SECONDS"] == "10"
+    token = service_env(*reused)["wingman-day1"]["SERVER_SCAN_TOKEN"]
+    assert token["valueFrom"]["secretKeyRef"]["key"] == "token"
