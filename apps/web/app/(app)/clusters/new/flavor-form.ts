@@ -381,3 +381,40 @@ export function placeProblems(lines: string[], fields: ReadonlySet<string>): Pla
   }
   return placed;
 }
+
+// ── The nodepool ratio (ADR-0040) ─────────────────────────────────────────────
+
+/**
+ * The ratio day1 enforces on create: the flavor's `nodepool_ratio`, unless it
+ * breaks the save rules (then it is a warning and day1 does not enforce it).
+ */
+export function sizingRatio(spec: SpecEntry | null): number[] {
+  const ratio = spec?.spec.day1.nodepool_ratio ?? [];
+  if (ratio.length === 0) return [];
+  return (spec?.warnings ?? []).some((w) => w.startsWith("nodepool_ratio")) ? [] : ratio;
+}
+
+/** `nodepools[1].replicas` → 1 when the ratio sizes that nodepool; else `null`. */
+export function sizedIndex(path: string, ratio: number[]): number | null {
+  const match = /^nodepools\[(\d+)\]\.replicas$/.exec(path);
+  const index = match ? Number(match[1]) : -1;
+  return index >= 0 && index < ratio.length ? index : null;
+}
+
+/** The size the form starts at: the flavor's preset replicas, when they follow the ratio; else 1. */
+export function startingSize(values: FormValues, ratio: number[]): number {
+  const pools = Array.isArray(values[NODEPOOLS]) ? values[NODEPOOLS] : [];
+  const replicas = ratio.map((_, i) => Number(isMap(pools[i]) ? (pools[i] as FieldValueMap).replicas : NaN));
+  const size = replicas[0] / ratio[0];
+  return Number.isInteger(size) && size >= 1 && replicas.every((r, i) => r === ratio[i] * size) ? size : 1;
+}
+
+/** `values` with each sized nodepool's replicas set to its ratio times `size`. */
+export function withSize(values: FormValues, ratio: number[], size: number): FormValues {
+  const pools = values[NODEPOOLS];
+  if (!Array.isArray(pools)) return values;
+  return {
+    ...values,
+    [NODEPOOLS]: pools.map((pool, i) => (i < ratio.length && isMap(pool) ? { ...(pool as FieldValueMap), replicas: ratio[i] * size } : pool)),
+  };
+}

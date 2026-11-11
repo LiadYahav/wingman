@@ -491,3 +491,43 @@ test.describe("Flavor editor: editing a flavor", () => {
     );
   });
 });
+
+test.describe("Flavor editor: the nodepool ratio (ADR-0040)", () => {
+  test("nodepools sized by a ratio are saved as nodepool_ratio, one part per nodepool", async ({ page }) => {
+    const writes = await openNew(page);
+    await page.getByTestId("spec-name-input").fill("agent-zones");
+    // One nodepool has no ratio to choose
+    await expect(page.getByTestId("nodepool-ratio")).toHaveCount(0);
+    for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "Add nodepool" }).click();
+    for (const [i, type] of ["dell", "dell", "cisco"].entries()) {
+      await choose(page, page.getByTestId(`nodepool-${i}-configs`).getByRole("combobox", { name: /entry 1 hardware type$/ }), type);
+    }
+
+    const ratio = page.getByTestId("nodepool-ratio");
+    await expect(ratio).toContainText("Off");
+    await ratio.getByRole("switch", { name: "Size the nodepools by a ratio" }).click();
+    await expect(page.getByTestId("nodepool-ratio-label")).toHaveText("1:1:1");
+    await page.getByTestId("nodepool-1-ratio").getByRole("textbox", { name: "Ratio" }).fill("2");
+    await expect(page.getByTestId("nodepool-ratio-label")).toHaveText("1:2:1");
+
+    // A part that is not a whole number from 1 to 100 is refused before anything is sent
+    await page.getByTestId("nodepool-2-ratio").getByRole("textbox", { name: "Ratio" }).fill("0");
+    await expect(page.getByTestId("nodepool-2-ratio").getByRole("alert")).toContainText("A whole number from 1 to 100");
+    await page.getByTestId("nodepool-2-ratio").getByRole("textbox", { name: "Ratio" }).fill("1");
+
+    await reviewAndConfirm(page);
+    await expect(page.getByText("Flavor MR !21 opened")).toBeVisible();
+    const day1 = writes[0].body.spec.day1;
+    expect(day1.nodepool_ratio).toEqual([1, 2, 1]);
+    expect(day1.structure).toEqual({ nodepools: [{}, {}, {}] });
+  });
+
+  test("a flavor saved without a ratio sends none", async ({ page }) => {
+    const writes = await openNew(page);
+    await page.getByTestId("spec-name-input").fill("agent-plain");
+    await choose(page, page.getByTestId("nodepool-0-configs").getByRole("combobox", { name: /entry 1 hardware type$/ }), "dell");
+    await reviewAndConfirm(page);
+    await expect(page.getByText("Flavor MR !21 opened")).toBeVisible();
+    expect(writes[0].body.spec.day1).not.toHaveProperty("nodepool_ratio");
+  });
+});

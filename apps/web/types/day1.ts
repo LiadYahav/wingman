@@ -66,11 +66,23 @@ export interface ClusterSpec {
       template: string;
       /** Template inputs: presets, and the locked values (`locked_paths`). */
       values?: Record<string, unknown>;
+      /** One whole number per nodepool: they grow together, `ratio[i] * size` replicas (ADR-0040). */
+      nodepool_ratio?: number[];
     };
     day2: {
       addons: SpecAddon[];
     };
   };
+}
+
+/** `GET /clusters/name-suggestion`: a free name for a new cluster from a flavor (ADR-0040). */
+export interface NameSuggestion {
+  /** `ocp4-<env>-<flavor>-<site>-<letter>`; `null` when there is none (`problems` says why). */
+  name: string | null;
+  env: string | null;
+  short_name: string;
+  sequence: string | null;
+  problems: string[];
 }
 
 /** A spec as `GET /specs` lists it: a file that does not parse carries `load_error`. */

@@ -432,6 +432,10 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/*/nodes**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Live cluster status is disabled in this deployment (CLUSTER_STATUS_ENABLED=false).")
   );
+  // No name to suggest unless a test says otherwise (ADR-0040): the create form's name stays as typed
+  await page.route("**/api/day1/clusters/name-suggestion**", (route: Route) =>
+    json(route, { name: null, env: null, short_name: "", sequence: null, problems: [] })
+  );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));

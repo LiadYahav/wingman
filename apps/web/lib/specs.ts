@@ -60,6 +60,7 @@ export function specDocument(spec: ClusterSpec): ClusterSpec {
         locked_paths: day1.locked_paths ?? [],
         template: "",
         values: day1.values ?? {},
+        ...(day1.nodepool_ratio?.length ? { nodepool_ratio: day1.nodepool_ratio } : {}),
       },
       day2: { addons: day2.addons ?? [] },
     },

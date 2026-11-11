@@ -76,6 +76,8 @@ export interface FlavorDraft {
   addons: SpecAddon[];
   /** One stable key per nodepool, for the page only (never saved). */
   keys: number[];
+  /** `spec.day1.nodepool_ratio` as typed, one per nodepool; empty: no ratio (ADR-0040). */
+  ratio: string[];
 }
 
 export type ConfigsMode = "each" | "rule";
@@ -97,6 +99,7 @@ export function newDraft(defaults: ConfigEntry[]): FlavorDraft {
     structure: { nodepools: [{}] },
     addons: [],
     keys: [0],
+    ratio: [],
   };
 }
 
@@ -126,7 +129,30 @@ export function draftFromSpec(spec: ClusterSpec): FlavorDraft {
     structure,
     addons: clone(spec.spec.day2.addons ?? []),
     keys: Array.from({ length: Array.isArray(structure.nodepools) ? structure.nodepools.length : 0 }, (_, i) => i),
+    ratio: (day1.nodepool_ratio ?? []).map(String),
   };
+}
+
+// ── The nodepool ratio (ADR-0040) ───────────────────────────────────────────
+
+export const RATIO_HINT = "A whole number from 1 to 100";
+
+/** Turn the ratio on (every nodepool at 1) or off. */
+export function setRatioOn(draft: FlavorDraft, on: boolean): FlavorDraft {
+  return { ...draft, ratio: on ? Array.from({ length: nodepoolCount(draft) }, () => "1") : [] };
+}
+
+export function setPoolRatio(draft: FlavorDraft, index: number, value: string): FlavorDraft {
+  return { ...draft, ratio: draft.ratio.map((r, i) => (i === index ? value : r)) };
+}
+
+/** `1:2:1`; a part that is not a number yet shows as `?`. */
+export function ratioLabel(draft: FlavorDraft): string {
+  return draft.ratio.map((r) => (/^\d+$/.test(r.trim()) ? String(Number(r)) : "?")).join(":");
+}
+
+function ratioValue(text: string): number | string {
+  return /^\d+$/.test(text.trim()) ? Number(text) : text;
 }
 
 export function nodepoolCount(draft: FlavorDraft): number {
@@ -257,6 +283,7 @@ export function addNodepool(draft: FlavorDraft, defaults: ConfigEntry[]): Flavor
   };
   const configs = configsMode(draft) === "rule" ? ruleEntries(draft) : defaults.map(cleanEntry);
   if (configs.length > 0) next = setNodepoolValue(next, index, "configs", configs);
+  if (draft.ratio.length > 0) next = { ...next, ratio: [...draft.ratio, "1"] };
   return next;
 }
 
@@ -281,6 +308,7 @@ export function removeNodepool(draft: FlavorDraft, index: number): FlavorDraft {
     locked,
     structure: { ...draft.structure, nodepools: placeholders.filter((_, i) => i !== index) },
     keys: draft.keys.filter((_, i) => i !== index),
+    ratio: draft.ratio.length > 0 && count > 0 ? draft.ratio.filter((_, i) => i !== index) : [],
   };
 }
 
@@ -347,6 +375,9 @@ export function buildDocument(draft: FlavorDraft, loaded: ClusterSpec | null): C
         metadata: { name: "", description: "", version: "", labels: {} },
         spec: { day1: { variables: [], structure: {}, locked_paths: [], template: "", values: {} }, day2: { addons: [] } },
       };
+  // The draft's ratio replaces the stored one; off, the document has none
+  const day1 = { ...base.spec.day1 };
+  delete day1.nodepool_ratio;
   return {
     ...base,
     metadata: {
@@ -357,11 +388,13 @@ export function buildDocument(draft: FlavorDraft, loaded: ClusterSpec | null): C
     },
     spec: {
       day1: {
-        ...base.spec.day1,
+        ...day1,
         structure: draft.structure,
         locked_paths: draft.locked,
         template: "",
         values: draft.values,
+        // Numbers as day1 reads them; a part not typed as one is sent as typed, and day1 says why
+        ...(draft.ratio.length > 0 ? { nodepool_ratio: draft.ratio.map(ratioValue) as number[] } : {}),
       },
       day2: { addons: draft.addons },
     },
@@ -419,6 +452,12 @@ export function draftIssues(
     if (pool.replicas === undefined || pool.replicas === "") {
       if (isLocked(draft, replicas)) add(replicas, LOCK_NEEDS_VALUE);
     } else if (!isWholeNumber(pool.replicas)) add(replicas, "A whole number, like 3");
+
+    if (draft.ratio.length > 0) {
+      const part = (draft.ratio[i] ?? "").trim();
+      if (!/^\d+$/.test(part) || Number(part) < 1 || Number(part) > 100) add(nodepoolPath(i, "ratio"), RATIO_HINT);
+      if (isLocked(draft, replicas)) add(replicas, "The ratio sizes this nodepool: make its replicas a preset, not locked");
+    }
 
     const configs = nodepoolPath(i, "configs");
     const entries = asEntries(pool.configs);
@@ -697,6 +736,18 @@ export function previewPlan(args: {
         variables.nodepools = pools.map((p, i) => (i === Number(pool[1]) ? { ...p, [pool[2]]: want } : p));
         asSaved.push(path);
       }
+    }
+  }
+
+  // Day1 enforces the saved ratio: replicas off it are sent at size 1 (ADR-0040)
+  const savedRatio = saved.spec.day1.nodepool_ratio ?? [];
+  const sizedPools = poolList(variables);
+  if (savedRatio.length > 0 && sizedPools.length >= savedRatio.length) {
+    const replicas = savedRatio.map((_, i) => Number(sizedPools[i].replicas));
+    const size = replicas[0] / savedRatio[0];
+    if (!(Number.isInteger(size) && size >= 1 && replicas.every((r, i) => r === savedRatio[i] * size))) {
+      variables.nodepools = sizedPools.map((p, i) => (i < savedRatio.length ? { ...p, replicas: savedRatio[i] } : p));
+      savedRatio.forEach((_, i) => samples.push(nodepoolPath(i, "replicas")));
     }
   }
 

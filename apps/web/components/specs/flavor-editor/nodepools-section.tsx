@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronRight, Lock, Network, Plus, Trash2 } from "lucide
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
+import { Switch } from "@/components/ui/switch";
 import { ConfigListEditor } from "@/components/machine-configs/config-list-editor";
 import { NETWORK_CONFIG, isNetworkEntry } from "@/lib/machine-configs";
 import { cn } from "@/lib/utils";
@@ -22,12 +23,15 @@ import {
   nodepoolValues,
   otherPoolInputs,
   poolConfigs,
+  ratioLabel,
   removeNodepool,
   ruleEntries,
   setConfigsMode,
   setLocked,
   setNodepoolValue,
   setPoolHardware,
+  setPoolRatio,
+  setRatioOn,
   setRuleEntries,
   type ConfigsMode,
   type FlavorDraft,
@@ -213,6 +217,8 @@ export function NodepoolsSection({
         </div>
       )}
 
+      {count > 1 && <RatioChoice draft={draft} update={update} />}
+
       {count === 0 ? (
         <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
           No nodepools: each cluster adds its own.
@@ -246,6 +252,33 @@ export function NodepoolsSection({
           <DefaultsNote catalog={catalog} rule={rule} defaults={defaults} />
         </p>
       </div>
+    </div>
+  );
+}
+
+/** Whether the nodepools grow together by a ratio; each card then has its part (ADR-0040). */
+function RatioChoice({ draft, update }: { draft: FlavorDraft; update: Update }) {
+  const on = draft.ratio.length > 0;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5" data-testid="nodepool-ratio">
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold">Sized by a ratio</h3>
+        <p className="text-xs text-muted-foreground">
+          {on ? (
+            <>
+              Nodepools grow together at <span className="font-mono text-foreground" data-testid="nodepool-ratio-label">{ratioLabel(draft)}</span>
+              : a cluster picks one size, and each nodepool gets its part times that size.
+            </>
+          ) : (
+            "Off: each cluster sets every nodepool's replicas. Turn on to keep them in proportion, like zones at 1:2:1."
+          )}
+        </p>
+      </div>
+      <Switch
+        aria-label="Size the nodepools by a ratio"
+        checked={on}
+        onCheckedChange={(checked) => update((d) => setRatioOn(d, checked))}
+      />
     </div>
   );
 }
@@ -289,6 +322,8 @@ function NodepoolCard({
   const replicas = pool.replicas;
   const hardware = hardwareOf(entries);
   const configsLocked = isLocked(draft, configsPath);
+  const ratioPath = nodepoolPath(index, "ratio");
+  const ratioProblems = problems(ratioPath);
 
   return (
     <li className="rounded-xl border bg-card shadow-card" data-testid={`nodepool-${index}`} aria-label={title}>
@@ -334,6 +369,34 @@ function NodepoolCard({
             />
           )}
         </ValueField>
+
+        {draft.ratio.length > 0 && (
+          <div id={fieldId(ratioPath)} className="scroll-mt-28 space-y-1.5" data-testid={`nodepool-${index}-ratio`}>
+            <label htmlFor={`${fieldId(ratioPath)}-input`} className="text-sm font-medium">
+              Ratio
+            </label>
+            <input
+              id={`${fieldId(ratioPath)}-input`}
+              aria-invalid={ratioProblems.length > 0}
+              aria-describedby={`${fieldId(ratioPath)}-hint`}
+              className={cn(inputCls, "w-28 font-mono tabular")}
+              inputMode="numeric"
+              autoComplete="off"
+              value={draft.ratio[index] ?? ""}
+              onChange={(e) => update((d) => setPoolRatio(d, index, e.target.value))}
+            />
+            <p id={`${fieldId(ratioPath)}-hint`} className="text-xs text-muted-foreground">
+              Its part of each size: replicas are this times the size a cluster picks. Replicas above stay the size&apos;s preset.
+            </p>
+            {ratioProblems.length > 0 && (
+              <ul role="alert" className="space-y-0.5 text-xs text-destructive">
+                {ratioProblems.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {rule ? (
           <ValueField
