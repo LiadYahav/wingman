@@ -1,6 +1,8 @@
 import { Page, Route } from "@playwright/test";
 import { mockAddons, mockSpecs } from "./addons";
-import type { ClusterNode, ClusterNodes, MRDetail, MachineConfigs, Mce, Problem, ErrorCode, WorkflowRun } from "../../types";
+import type {
+  ClusterNodes, MRDetail, MachineConfigs, Mce, NodePoolNodes, PoolNode, Problem, ErrorCode, ServerRecord, WorkflowRun,
+} from "../../types";
 
 // Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/schemas.py,
 // apps/day2-service/.../api/v1/schemas.py), typed so a shape change fails `tsc`.
@@ -117,16 +119,20 @@ export const mockMachineConfigs: MachineConfigs = {
 export const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
-// ── Cluster nodes and node uninstall (docs/notes/2026-11-11-cluster-nodes-api.md) ──
+// ── Cluster nodes by NodePool, and node uninstall (docs/notes/2026-11-11-cluster-nodes-api.md) ──
 
-/** A node as `GET /api/day1/clusters/{name}/nodes` lists it (§1): healthy, installed, no run. */
-export function mockNode(overrides: Partial<ClusterNode> = {}): ClusterNode {
-  const id = overrides.id ?? "srv_0d48131a4fcc4b4c9cc8eec6ef72c421";
+/**
+ * server-scan's record of the server called `name` (§1): healthy, installed;
+ * its serial is the name's last part, its id and url follow from it.
+ */
+export function mockServer(name = "ocp-dell-r660-site1-64c-512gb-DL0000123", overrides: Partial<ServerRecord> = {}): ServerRecord {
+  const serial = name.split("-").pop() ?? name;
+  const id = `srv_${serial.toLowerCase()}`;
   return {
     id,
-    name: "ocp-dell-r660-site1-64c-512gb-DL0000123",
+    name,
     url: `https://server-scan.example/servers/${id}`,
-    serial: "DL0000123",
+    serial,
     vendor: "dell",
     model: "PowerEdge R660",
     site: "site1",
@@ -137,32 +143,164 @@ export function mockNode(overrides: Partial<ClusterNode> = {}): ClusterNode {
     reachable: true,
     stale: false,
     contested: false,
-    last_seen_at: "2026-11-11T08:00:03Z",
+    last_seen_at: "2026-11-11T08:00:03+00:00",
+    ...overrides,
+  };
+}
+
+/** A Machine of a NodePool (§1): ready, its Agent done, `server` behind it (by default the one of `mockServer()`). */
+export function mockPoolNode(machine: string, overrides: Partial<PoolNode> = {}): PoolNode {
+  const server = overrides.server === undefined ? mockServer() : overrides.server;
+  return {
+    machine,
+    node_name: `worker-${machine.slice(-5)}`,
+    state: "ready",
+    current: false,
+    activity: null,
+    waiting_for: null,
+    outdated: null,
+    agent: { name: `agent-${machine.slice(-5)}`, state: "added-to-existing-cluster", stage: "Done" },
+    server_name: server?.name ?? null,
+    server,
     uninstall: null,
     ...overrides,
   };
 }
 
-/** `GET /api/day1/clusters/{name}/nodes` (§1): `nodes` (by default one healthy node), uninstall available. */
-export function mockNodes(nodes: ClusterNode[] = [mockNode()], overrides: Partial<ClusterNodes> = {}): ClusterNodes {
+/** A NodePool (§1): InPlace, three ready nodes, no update, no problems. */
+export function mockNodePool(overrides: Partial<NodePoolNodes> = {}): NodePoolNodes {
+  const name = overrides.name ?? "prod-lark-site1-dell-r660-site1";
+  return {
+    name,
+    wanted: 3,
+    autoscaling: null,
+    ready: 3,
+    version: "4.18.22",
+    upgrade_type: "InPlace",
+    agent_selector: "infraenvs.agent-install.openshift.io=dell-r660-site1",
+    update: null,
+    problems: [],
+    free_agents: { matching: 4, free: 1 },
+    nodes: ["b2c4d", "k8j3h", "m3n8v"].map((suffix, i) =>
+      mockPoolNode(`${name}-${suffix}`, { server: mockServer(`ocp-dell-r660-site1-64c-512gb-DL000012${i + 1}`) })
+    ),
+    ...overrides,
+  };
+}
+
+/** `GET /api/day1/clusters/{name}/nodes` (§1): one quiet NodePool, nothing unassigned, everything readable. */
+export function mockNodes(overrides: Partial<ClusterNodes> = {}): ClusterNodes {
   return {
     hosted_cluster: "ocp4-prod-lark-site1",
-    nodes,
+    node_pools: [mockNodePool()],
+    unassigned: [],
     uninstall: { available: true, detail: null },
+    server_scan_error: null,
     runs_error: null,
     ...overrides,
   };
 }
 
-/** The run an uninstall's 202 returns (§2): running, no phase yet. */
-export function mockUninstallRun(node: ClusterNode, overrides: Partial<WorkflowRun> = {}): WorkflowRun {
-  return {
-    workflow_id: `uninstall-server-from-hc-${node.name.toLowerCase()}`,
-    status: "running",
-    phase: null,
-    error: null,
+/** The board's servers, by role. */
+export const BOARD = {
+  rebooting: mockServer("ocp-dell-r660-site1-64c-512gb-DL0000123"),
+  readyA: mockServer("ocp-dell-r660-site1-64c-512gb-DL0000121"),
+  readyB: mockServer("ocp-dell-r660-site1-64c-512gb-DL0000122", { health: "WARNING", maintenance: true }),
+  r760A: mockServer("ocp-dell-r760-site1-96c-768gb-DL0000140", { model: "PowerEdge R760" }),
+  r760B: mockServer("ocp-dell-r760-site1-96c-768gb-DL0000141", { model: "PowerEdge R760" }),
+  draining: mockServer("ocp-cisco-c240-site1-96c-768gb-CS0000077", { vendor: "cisco", model: "UCS C240 M7" }),
+  installing: mockServer("ocp-cisco-c240-site1-96c-768gb-CS0000079", { vendor: "cisco", model: "UCS C240 M7" }),
+  outdated: mockServer("ocp-cisco-c240-site1-96c-768gb-CS0000078", { vendor: "cisco", model: "UCS C240 M7" }),
+  left: mockServer("ocp-dell-r660-site1-64c-512gb-DL0000099", { stale: true }),
+} as const;
+
+/**
+ * A cluster mid-change, every case of the API note's §1 in one read:
+ * - an InPlace pool updating its version, one node of three updated, the
+ *   node it reboots `current`;
+ * - an InPlace pool short of servers: a Machine `waiting` for a free Agent
+ *   (none of the 4 matching is free), a `missing` node, three problems;
+ * - a Replace pool rolling out a config: the old Machine `deleting` (draining)
+ *   and its replacement `installing`, both `current`, and an `outdated` one
+ *   still ready;
+ * - a server server-scan still places here that no Machine has, its
+ *   uninstall completed.
+ */
+export function mockNodesBoard(overrides: Partial<ClusterNodes> = {}): ClusterNodes {
+  const r660 = "prod-lark-site1-dell-r660-site1";
+  const r760 = "prod-lark-site1-dell-r760-site1";
+  const c240 = "prod-lark-site1-cisco-c240-site1";
+  return mockNodes({
+    node_pools: [
+      mockNodePool({
+        name: c240,
+        wanted: 2,
+        ready: 1,
+        version: "4.18.20",
+        upgrade_type: "Replace",
+        agent_selector: "infraenvs.agent-install.openshift.io=cisco-c240-site1",
+        update: { kind: "config", message: "Updating config in progress. Target config: 9a7e1d", progress: null, failed: false },
+        free_agents: { matching: 3, free: 1 },
+        nodes: [
+          mockPoolNode(`${c240}-7d9fq`, {
+            state: "deleting", current: true, activity: "Draining", outdated: true, server: BOARD.draining,
+          }),
+          mockPoolNode(`${c240}-h2l6s`, {
+            state: "installing", current: true, activity: "Installing: Writing image to disk", outdated: false, node_name: null,
+            agent: { name: "agent-h2l6s", state: "installing-in-progress", stage: "Writing image to disk" }, server: BOARD.installing,
+          }),
+          mockPoolNode(`${c240}-p4r8x`, { outdated: true, server: BOARD.outdated }),
+        ],
+      }),
+      mockNodePool({
+        name: r660,
+        ready: 2,
+        update: {
+          kind: "version",
+          message: "Nodepool update in progress. Target Config version: 6c1f2b. Total Nodes: 3. Upgraded: 1",
+          progress: { total: 3, updated: 1 },
+          failed: false,
+        },
+        problems: [`AllNodesHealthy: Machine ${r660}-x7k2p: NodeConditionsFailed`],
+        nodes: [
+          mockPoolNode(`${r660}-x7k2p`, {
+            state: "not_ready", current: true, node_name: "worker-2",
+            activity: "Rebooting for the update (Node condition Ready is Unknown)", server: BOARD.rebooting,
+          }),
+          mockPoolNode(`${r660}-b2c4d`, { server: BOARD.readyA }),
+          mockPoolNode(`${r660}-k8j3h`, { server: BOARD.readyB }),
+        ],
+      }),
+      mockNodePool({
+        name: r760,
+        wanted: 4,
+        ready: 2,
+        agent_selector: "infraenvs.agent-install.openshift.io=dell-r760-site1",
+        problems: [
+          "Ready: WaitingForAvailableMachines: Minimum availability requires 4 replicas, current 2 available",
+          "AllMachinesReady: WaitingForInfrastructure: 1 of 3 Machines is not ready",
+          "AllNodesHealthy: NodeProvisioning",
+        ],
+        free_agents: { matching: 4, free: 0 },
+        nodes: [
+          mockPoolNode(`${r760}-q9w4m`, {
+            state: "waiting", node_name: null, agent: null, server_name: null, server: null,
+            waiting_for: "No free Agent matches this NodePool: 4 Agents match its selector, none is free (3 bound, 1 not approved)",
+          }),
+          { ...mockPoolNode("", { state: "missing", node_name: null, agent: null, server: null }), machine: null },
+          mockPoolNode(`${r760}-c5v7b`, { server: BOARD.r760A }),
+          mockPoolNode(`${r760}-g1f9e`, { server: BOARD.r760B }),
+        ],
+      }),
+    ],
+    unassigned: [
+      {
+        ...BOARD.left,
+        uninstall: { workflow_id: `uninstall-server-from-hc-${BOARD.left.name.toLowerCase()}`, status: "completed", phase: null, error: null },
+      },
+    ],
     ...overrides,
-  };
+  });
 }
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -290,9 +428,9 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/*/delete-workflow**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "The delete-cluster workflow is not available yet.")
   );
-  // No server-scan unless a test sets one up (mockClusterNodes): the nodes say "off", quietly
+  // The MCE is not read unless a test sets the nodes up (mockClusterNodes): the Nodes tab says "off", quietly
   await page.route("**/api/day1/clusters/*/nodes**", (route: Route) =>
-    fulfillProblem(route, 501, "FEATURE_DISABLED", "server-scan is not configured in this deployment.")
+    fulfillProblem(route, 501, "FEATURE_DISABLED", "Live cluster status is disabled in this deployment (CLUSTER_STATUS_ENABLED=false).")
   );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
