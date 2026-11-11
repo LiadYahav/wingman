@@ -222,7 +222,7 @@ async def test_the_nodes_answer_has_exactly_the_contracts_shape(
         "wanted": 3,
         "autoscaling": None,
         "ready": 2,
-        "version": "4.18.22",
+        "version": "4.18.20",
         "upgrade_type": "InPlace",
         "agent_selector": "infraenvs.agent-install.openshift.io=dell-r660-site1-128c-1024gb-5tb",
         "update": {

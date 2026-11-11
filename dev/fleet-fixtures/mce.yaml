@@ -14,12 +14,18 @@
 # deleting. A Replace pool's node names the MachineSet `revision` it is from.
 # `spare_agents` are Agents in the agent namespace that no Machine of the
 # cluster took: `bound` (left behind, still labelled) or `unapproved`.
+#
+# Versions follow each cluster file's mastertag in dev/gitlab-fixtures, as
+# ArgoCD (auto-sync) would make them: a HostedCluster runs its file's version,
+# and a pool still updating to it shows the version it last finished.
 
 agent_namespace: inventory
 
 clusters:
-  # An in-place version update half done, a pool short a node, and a server
-  # server-scan still places in the cluster that no Machine leads to (0105).
+  # Git moved the cluster to 4.18.22: the control plane is there, and one
+  # pool's workers are updating in place (one of three done, one rebooting).
+  # Also a pool short a node, and a server server-scan still places in the
+  # cluster that no Machine leads to (0105).
   - name: ocp4-prod-lark-site1
     mce: ocp4-prod-mce-site1-a
     version: 4.18.22
@@ -27,8 +33,8 @@ clusters:
       - infra_env: dell-r660-site1-128c-1024gb-5tb
         upgrade: InPlace
         replicas: 3
-        version: 4.18.22
-        updating: {kind: version, target: 4.18.30, upgraded: 1}
+        version: 4.18.20
+        updating: {kind: version, target: 4.18.22, upgraded: 1}
         nodes:
           - {server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0101}
           - {server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0102, as: rebooting}
@@ -44,16 +50,17 @@ clusters:
       - {server: ocp-dell-r760-site1-64c-512gb-DLFAKE0105, infra_env: dell-r760-site1-64c-512gb-20tb, as: bound}
       - {server: ocp-dell-r760-site1-64c-512gb-DLFAKE0106, infra_env: dell-r760-site1-64c-512gb-20tb, as: unapproved}
 
-  # A Replace rollout: the old revision's Machine drains, the new one installs.
+  # A config change merged in Git rolls out by replacing Machines: the old
+  # revision's Machine drains, the new one installs. Version as in Git.
   - name: ocp4-prod-herzi-site1
     mce: ocp4-prod-mce-site1-a
-    version: 4.18.22
+    version: 4.16.27
     node_pools:
       - infra_env: hp-gen11-site1-64c-512gb
         upgrade: Replace
         replicas: 3
-        version: 4.18.22
-        updating: {kind: version, target: 4.18.30}
+        version: 4.16.27
+        updating: {kind: config, target: 5c2e1f0a}
         nodes:
           - {server: ocp-hp-gen11-site1-64c-512gb-HPFAKE0201, revision: 1}
           - {server: ocp-hp-gen11-site1-64c-512gb-HPFAKE0203, revision: 1}
@@ -74,24 +81,24 @@ clusters:
           - {server: ocp-cisco-m6-site1-128c-512gb-CSFAKE0302, revision: 1}
   - name: ocp4-prep-amit-site2-a
     mce: ocp4-prep-mce-site2-a
-    version: 4.18.22
+    version: 4.16.27
     node_pools:
       - infra_env: dell-r660-site2-64c-256gb
         upgrade: InPlace
         replicas: 2
-        version: 4.18.22
+        version: 4.16.27
         nodes:
           - {server: ocp-dell-r660-site2-64c-256gb-DLFAKE0401}
           - {server: ocp-dell-r660-site2-64c-256gb-DLFAKE0402}
 
   # The other fixture clusters: on their MCE, with no NodePools.
   - {name: ocp4-prod-heron-site1, mce: ocp4-prod-mce-site1-a, version: 4.18.22}
-  - {name: ocp4-prod-karniol-site1, mce: ocp4-prod-mce-site1-a, version: 4.18.22}
+  - {name: ocp4-prod-karniol-site1, mce: ocp4-prod-mce-site1-a, version: 4.16.27}
   - {name: ocp4-prod-owl-site1, mce: ocp4-prod-mce-site1-a, version: 4.18.22}
-  - {name: ocp4-prep-eyal-site1, mce: ocp4-prep-mce-site1-a, version: 4.18.22}
-  - {name: ocp4-prep-itay-site1, mce: ocp4-prep-mce-site1-a, version: 4.18.22}
-  - {name: ocp4-upgrade-demo, mce: ocp4-mce-workflow-test, version: 4.18.22}
-  - {name: ocp4-prep-ilay-site2-a, mce: ocp4-prep-mce-site2-a, version: 4.18.22}
-  - {name: ocp4-prep-kite-site2, mce: ocp4-prep-mce-site2-a, version: 4.18.22}
-  - {name: ocp4-prep-wren-site2, mce: ocp4-prep-mce-site2-a, version: 4.18.22}
-  - {name: ocp4-prod-didush-site2-a, mce: ocp4-prod-mce-site2-a, version: 4.18.22}
+  - {name: ocp4-prep-eyal-site1, mce: ocp4-prep-mce-site1-a, version: 4.20.9}
+  - {name: ocp4-prep-itay-site1, mce: ocp4-prep-mce-site1-a, version: 4.20.9}
+  - {name: ocp4-upgrade-demo, mce: ocp4-mce-workflow-test, version: 4.21.40}
+  - {name: ocp4-prep-ilay-site2-a, mce: ocp4-prep-mce-site2-a, version: 4.16.27}
+  - {name: ocp4-prep-kite-site2, mce: ocp4-prep-mce-site2-a, version: 4.19.10}
+  - {name: ocp4-prep-wren-site2, mce: ocp4-prep-mce-site2-a, version: 4.19.10}
+  - {name: ocp4-prod-didush-site2-a, mce: ocp4-prod-mce-site2-a, version: 4.16.27}
