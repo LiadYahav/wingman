@@ -791,7 +791,11 @@ nodepool:
             The header has <strong>GitLab</strong> (the file), <strong>Addons</strong> (its charts) and, for admins,{" "}
             <strong>Edit</strong> and <strong>Delete</strong>. A name off the naming convention is flagged{" "}
             <strong>Off the naming convention</strong>, here and in the list, never hidden: existing clusters keep
-            working, and only new names are refused.
+            working, and only new names are refused. When segments-manager is configured
+            (<InlineCode>SEGMENTS_MANAGER_UI_URL</InlineCode>), the <strong>HostedCluster &amp; network</strong> card
+            links to it. Its UI opens no single cluster, so the card names the cluster to search for there, with a
+            copy button, and <strong>this cluster&apos;s segment (JSON)</strong> opens its search for the
+            cluster&apos;s segment.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex gap-4 rounded-xl border bg-card p-4">

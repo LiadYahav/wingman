@@ -84,6 +84,10 @@ uninstall walks a few sample phases, about 8 s each, then frees the server and r
 Machine; the NodePool's replacement Machine then waits for a free Agent. The fake fleet is
 refused unless `WINGMAN_ENVIRONMENT=development`, and it works with either Git backend.
 
+Add `SEGMENTS_MANAGER_UI_URL=https://segments-manager.example` to day1's line to see the cluster
+page's link to segments-manager (in the Overview's **HostedCluster & network** card). It is only a
+link, so nothing answers there locally, and `DAY1_FAKE_FLEET` does not change it.
+
 `DAY2_SERVICE_URL` matters: without it day1 asks the chart's `http://wingman-day2:8002`, and
 every cluster's drift is Unknown. The web dev server proxies only when both
 `WINGMAN_DEV_*_URL` are set (`apps/web/next.config.ts`); a production build never proxies.

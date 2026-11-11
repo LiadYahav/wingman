@@ -290,6 +290,20 @@ export interface ClusterDetail {
   naming: ClusterNaming;
   mce_default_mastertag: string | null;
   problems: string[];
+  /** `null` unless day1's `SEGMENTS_MANAGER_UI_URL` is set. */
+  segments_manager: SegmentsManagerLinks | null;
+}
+
+/**
+ * Links to segments-manager, built by day1. Its UI opens no single cluster,
+ * so the page names the cluster (`ClusterDetail.name`, the file stem) to
+ * search for there.
+ */
+export interface SegmentsManagerLinks {
+  /** The UI. */
+  url: string;
+  /** `GET /api/segments/search?q=<name>`: the cluster's segment as JSON. */
+  search_url: string;
 }
 
 /** `POST /clusters` and `POST /clusters/preview`. */

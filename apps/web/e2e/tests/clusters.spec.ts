@@ -80,6 +80,7 @@ const DETAIL: ClusterDetail = {
   naming: { follows_convention: true, env: "prod", short_name: "herzi", sequence: null, problems: [] },
   mce_default_mastertag: "4.16.27-x86_64",
   problems: [],
+  segments_manager: null,
 };
 
 /** The id day2 resolves the bare name to; writes use it. */
@@ -180,12 +181,14 @@ test.describe("Cluster list", () => {
 });
 
 test.describe("Cluster detail", () => {
-  async function openDetail(page: Page, clusterDrift: ClusterDrift = drift(), installed: InstalledChart[] = []) {
+  async function openDetail(
+    page: Page, clusterDrift: ClusterDrift = drift(), installed: InstalledChart[] = [], detail: ClusterDetail = DETAIL
+  ) {
     await injectAdminAuth(page);
     await mockDashboardApis(page);
     await statusOff(page);
     await page.route(`**/api/day1/clusters/${NAME}?**`, (r: Route) =>
-      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(DETAIL) })
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(detail) })
     );
     await page.route(`**/api/day1/clusters/${NAME}/drift?**`, (r: Route) =>
       r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(clusterDrift) })
@@ -213,6 +216,72 @@ test.describe("Cluster detail", () => {
     await expect(page.getByText("pending")).toHaveCount(2);
     await expect(page.getByText(DETAIL.path)).toBeVisible();
     await expect(page.getByText("cluster-roles")).toBeVisible();
+  });
+
+  // segments-manager's UI reads no URL parameters, so the card opens the UI, names
+  // the cluster to search for (with a copy button), and links its search API's JSON.
+  // Day1 builds both URLs; the page never assembles them (the API note's §5).
+  const SEGMENTS_MANAGER = {
+    url: "https://segments-manager.example/",
+    search_url: `https://segments-manager.example/api/segments/search?q=${NAME}`,
+  };
+
+  /** Replace the clipboard: `writeText` records what it is given, or refuses when `refuse`. */
+  async function stubClipboard(page: Page, { refuse = false }: { refuse?: boolean } = {}) {
+    await page.addInitScript((refuseWrites: boolean) => {
+      const copied: string[] = [];
+      (window as unknown as { __copied: string[] }).__copied = copied;
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            if (refuseWrites) throw new DOMException("denied", "NotAllowedError");
+            copied.push(text);
+          },
+        },
+      });
+    }, refuse);
+  }
+
+  test("with segments-manager on, the HostedCluster card links to its UI and to the cluster's segment as JSON", async ({ page }) => {
+    await stubClipboard(page);
+    await openDetail(page, drift(), [], { ...DETAIL, segments_manager: SEGMENTS_MANAGER });
+
+    const card = page.getByTestId("segments-manager");
+    const ui = card.getByRole("link", { name: "Segments Manager" });
+    await expect(ui).toHaveAttribute("href", SEGMENTS_MANAGER.url);
+    await expect(ui).toHaveAttribute("target", "_blank");
+    await expect(ui).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(card.getByTestId("segments-manager-search")).toHaveText(NAME);
+    await expect(card).toContainText(`search for ${NAME}`);
+
+    const segment = card.getByRole("link", { name: "this cluster's segment (JSON)" });
+    await expect(segment).toHaveAttribute("href", SEGMENTS_MANAGER.search_url);
+    await expect(segment).toHaveAttribute("target", "_blank");
+    await expect(segment).toHaveAttribute("rel", "noopener noreferrer");
+
+    await card.getByRole("button", { name: `Copy ${NAME}` }).click();
+    await expect(card.getByRole("status")).toHaveText("Copied");
+    expect(await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual([NAME]);
+  });
+
+  test("a clipboard that refuses says so, and the name stays on the card", async ({ page }) => {
+    await stubClipboard(page, { refuse: true });
+    await openDetail(page, drift(), [], { ...DETAIL, segments_manager: SEGMENTS_MANAGER });
+
+    const card = page.getByTestId("segments-manager");
+    await card.getByRole("button", { name: `Copy ${NAME}` }).click();
+    await expect(card.getByRole("status")).toHaveText("Could not copy");
+    await expect(card.getByTestId("segments-manager-search")).toHaveText(NAME);
+  });
+
+  test("with segments-manager off, the HostedCluster card has no link to it", async ({ page }) => {
+    await openDetail(page);
+
+    await expect(page.getByText("HostedCluster & network")).toBeVisible();
+    await expect(page.getByText("hcp-prod-herzi-site1")).toBeVisible();
+    await expect(page.getByTestId("segments-manager")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /segments manager|segment \(json\)/i })).toHaveCount(0);
   });
 
   test("an edit is sent with the last_commit_id it started from", async ({ page }) => {

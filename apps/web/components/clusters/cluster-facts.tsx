@@ -1,14 +1,14 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Clock3, ExternalLink, FileWarning, TriangleAlert } from "lucide-react";
+import { Check, ChevronRight, Clock3, Copy, ExternalLink, FileWarning, TriangleAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PoolNodesInline, matchPool } from "@/components/clusters/pool-nodes-inline";
 import { useClusterNodes } from "@/lib/nodes";
 import { cn, formatDate } from "@/lib/utils";
-import type { ClusterDetail, ClusterValues } from "@/types";
+import type { ClusterDetail, ClusterValues, SegmentsManagerLinks } from "@/types";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -119,6 +119,76 @@ export function ClusterInfoCard({ cluster }: { cluster: ClusterDetail }) {
   );
 }
 
+/** Copies `text`; the icon turns to a check for a moment, and a screen reader hears it. */
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  useEffect(() => {
+    if (state === "idle") return;
+    const timer = setTimeout(() => setState("idle"), 1500);
+    return () => clearTimeout(timer);
+  }, [state]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setState("copied");
+    } catch {
+      // No clipboard (not a secure context, or denied): the name stays selectable
+      setState("failed");
+    }
+  };
+  const Icon = state === "copied" ? Check : Copy;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void copy()}
+        aria-label={label}
+        title={state === "failed" ? "Could not copy: select the name instead" : label}
+        className="rounded p-0.5 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <Icon className={cn("h-3.5 w-3.5", state === "copied" && "text-status-ready-fg")} aria-hidden />
+      </button>
+      <span role="status" className="sr-only">
+        {state === "copied" ? "Copied" : state === "failed" ? "Could not copy" : ""}
+      </span>
+    </>
+  );
+}
+
+/**
+ * segments-manager's UI opens no single cluster, so the link opens the UI and
+ * names what to search for there: the file stem, its `cluster_name`. Day1
+ * builds both URLs (`segments_manager`); the page only shows them.
+ */
+function SegmentsManagerLink({ name, links }: { name: string; links: SegmentsManagerLinks }) {
+  return (
+    <div data-testid="segments-manager" className="pt-2 border-t border-border/50 space-y-1">
+      <a
+        href={links.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group inline-flex items-center gap-1 font-medium hover:text-primary transition-colors"
+      >
+        Segments Manager
+        <ExternalLink className="h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100" aria-hidden />
+      </a>
+      <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+        search for <span data-testid="segments-manager-search" className="font-mono text-foreground break-all">{name}</span>
+        <CopyButton text={name} label={`Copy ${name}`} />
+      </p>
+      <a
+        href={links.search_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+      >
+        this cluster&apos;s segment (JSON)
+        <ExternalLink className="h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100" aria-hidden />
+      </a>
+    </div>
+  );
+}
+
 export function HostedClusterCard({ cluster }: { cluster: ClusterDetail }) {
   const network = cluster.values?.network;
   const vlan = network?.vlan_id;
@@ -145,6 +215,7 @@ export function HostedClusterCard({ cluster }: { cluster: ClusterDetail }) {
             </Row>
           </>
         )}
+        {cluster.segments_manager && <SegmentsManagerLink name={cluster.name} links={cluster.segments_manager} />}
       </CardContent>
     </Card>
   );
