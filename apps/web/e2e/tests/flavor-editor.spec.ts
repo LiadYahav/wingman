@@ -491,3 +491,21 @@ test.describe("Flavor editor: editing a flavor", () => {
     );
   });
 });
+
+// ── Add-ons layout ───────────────────────────────────────────────────────────
+
+test.describe("Flavor editor: the add-ons catalog beside a long selection", () => {
+  test("side by side, the catalog stays in view and uses the screen's height; stacked, it keeps its own 500px box", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openNew(page);
+    const available = page.getByTestId("addons-available");
+    const list = available.locator("div.overflow-y-auto").first();
+    await expect(available).toHaveCSS("position", "sticky");
+    // 100dvh - 13rem: taller than the old fixed 500px on a 900px screen
+    expect(parseFloat(await list.evaluate((el) => getComputedStyle(el).maxHeight))).toBeGreaterThan(500);
+
+    await page.setViewportSize({ width: 800, height: 900 });
+    await expect(available).toHaveCSS("position", "static");
+    await expect(list).toHaveCSS("max-height", "500px");
+  });
+});
