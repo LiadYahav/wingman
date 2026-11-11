@@ -1,0 +1,7 @@
+# helm template fixture: cluster nodes from server-scan and the uninstall workflow on.
+serverScan:
+  url: http://server-scan-api.ns.svc:8000
+  uiUrl: https://server-scan.example
+  tokenSecret: { name: server-scan-viewer }
+workflows:
+  url: http://workflows-orchestrator-api.ns.svc:8080

@@ -16,6 +16,8 @@ from wingman_core.web.errors import (
     DependencyUnavailable,
     ErrorCode,
     FeatureDisabled,
+    NodeNotInCluster,
+    UninstallAlreadyRunning,
     ValidationFailed,
 )
 from wingman_core.web.exception_handlers import (
@@ -121,11 +123,11 @@ async def test_unexpected_errors_hide_internals_and_mint_a_request_id(
     [
         (FeatureDisabled("status is off"), 501, "FEATURE_DISABLED"),
         (DependencyUnavailable("hub down"), 502, "DEPENDENCY_UNAVAILABLE"),
+        (NodeNotInCluster("moved"), 409, "NODE_NOT_IN_CLUSTER"),
+        (UninstallAlreadyRunning("running"), 409, "UNINSTALL_ALREADY_RUNNING"),
     ],
 )
-async def test_non_git_dependency_errors_have_their_own_codes(
-    error: AppError, status: int, code: str
-) -> None:
+async def test_non_git_errors_have_their_own_codes(error: AppError, status: int, code: str) -> None:
     app = make_app()
 
     @app.get("/dependency")

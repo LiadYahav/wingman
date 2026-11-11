@@ -24,6 +24,7 @@ from wingman_day1.application.clusters import ClusterFile
 from wingman_day1.application.drift import ClusterDrift
 from wingman_day1.application.imports import ImportCandidate, ImportPreview
 from wingman_day1.application.machine_configs import MachineConfigOverview
+from wingman_day1.application.nodes import ClusterNodes, Node
 from wingman_day1.application.sites import MceView
 from wingman_day1.application.specs import SpecEntry
 from wingman_day1.application.sync import SyncPlan
@@ -1172,3 +1173,86 @@ class StartDeleteWorkflowIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirm: Literal[True]
+
+
+# ── Cluster nodes (server-scan) and node uninstall (ADR-0038) ────────────────
+
+
+class NodeOut(BaseModel):
+    """One server under the cluster, as server-scan reports it."""
+
+    id: str
+    name: str
+    url: str
+    """The server's page in server-scan's UI."""
+    serial: str | None
+    vendor: str | None
+    model: str | None
+    site: str | None
+    mce: str | None
+    state: str
+    health: str
+    maintenance: bool
+    reachable: bool
+    stale: bool
+    contested: bool
+    last_seen_at: str | None
+    uninstall: WorkflowRunOut | None
+    """The node's newest uninstall run; ``null`` when none, or when runs are unknown."""
+
+    @classmethod
+    def of(cls, node: Node) -> NodeOut:
+        """From a node."""
+        server = node.server
+        return cls(
+            id=server.id,
+            name=server.name,
+            url=node.url,
+            serial=server.serial,
+            vendor=server.vendor,
+            model=server.model,
+            site=server.site,
+            mce=server.mce,
+            state=server.state,
+            health=server.health,
+            maintenance=server.maintenance,
+            reachable=server.reachable,
+            stale=server.stale,
+            contested=server.contested,
+            last_seen_at=_iso(server.last_seen_at),
+            uninstall=WorkflowRunOut.of(node.uninstall) if node.uninstall else None,
+        )
+
+
+class UninstallAvailabilityOut(BaseModel):
+    """Whether the Uninstall button can be offered, and why not."""
+
+    available: bool
+    detail: str | None
+
+
+class ClusterNodesOut(BaseModel):
+    """``GET /clusters/{name}/nodes``."""
+
+    hosted_cluster: str
+    nodes: list[NodeOut]
+    uninstall: UninstallAvailabilityOut
+    runs_error: str | None
+
+    @classmethod
+    def of(cls, found: ClusterNodes) -> ClusterNodesOut:
+        """From a cluster's nodes."""
+        return cls(
+            hosted_cluster=found.hosted_cluster,
+            nodes=[NodeOut.of(node) for node in found.nodes],
+            uninstall=UninstallAvailabilityOut(
+                available=found.uninstall_available, detail=found.uninstall_detail
+            ),
+            runs_error=found.runs_error,
+        )
+
+
+class UninstallNodeIn(_In):
+    """``POST /clusters/{name}/nodes/{server_id}/uninstall``: the node's name, typed again."""
+
+    server_name: str = Field(min_length=1, max_length=253)

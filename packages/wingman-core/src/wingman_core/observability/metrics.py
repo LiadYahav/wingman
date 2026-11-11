@@ -45,6 +45,8 @@ class Dependency(StrEnum):
     KUBERNETES = "kubernetes"
     OPENSHIFT_OAUTH = "openshift_oauth"
     DAY2 = "day2"
+    SERVER_SCAN = "server_scan"
+    WORKFLOWS = "workflows"
 
 
 class Outcome(StrEnum):

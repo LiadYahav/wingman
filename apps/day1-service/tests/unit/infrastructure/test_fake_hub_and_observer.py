@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from prometheus_client import CollectorRegistry
 
 from wingman_core.observability.metrics import Dependency, Outcome, WingmanMetrics
 from wingman_day1.domain.errors import (
+    AmbiguousStartError,
     Day2UnavailableError,
     HubDeniedError,
     HubNotConfiguredError,
@@ -14,13 +18,28 @@ from wingman_day1.domain.errors import (
     HubUnavailableError,
     IdentityError,
     InvalidInputError,
+    ServerNotFoundError,
+    ServerScanDeniedError,
+    ServerScanUnavailableError,
+    UninstallAlreadyRunningError,
+    WorkflowRefusedError,
+    WorkflowsUnavailableError,
 )
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
-from wingman_day1.infrastructure.observed import HubOperation, Observer, outcome_of
+from wingman_day1.infrastructure.observed import (
+    Day2Operation,
+    HubOperation,
+    OAuthOperation,
+    Observer,
+    ServerScanOperation,
+    WorkflowsOperation,
+    outcome_of,
+)
 
 MCE = "ocp4-prod-mce-site1-a"
 HC = HostedClusterObservation("ocp4-x", "hcp-x", None, "4.16.27")
+METRICS_DOC = Path(__file__).resolve().parents[5] / "docs/ops/metrics.md"
 
 
 def fake() -> FakeHubApi:
@@ -68,12 +87,40 @@ async def test_fake_hub_raises_the_adapters_errors() -> None:
         (Day2UnavailableError("x"), Outcome.UNAVAILABLE),
         (HubNotConfiguredError("x"), Outcome.REJECTED),
         (IdentityError("x"), Outcome.DENIED),
+        (ServerNotFoundError("x"), Outcome.NOT_FOUND),
+        (ServerScanDeniedError("x"), Outcome.DENIED),
+        (ServerScanUnavailableError("x"), Outcome.UNAVAILABLE),
+        (UninstallAlreadyRunningError("x"), Outcome.CONFLICT),
+        (AmbiguousStartError("x"), Outcome.AMBIGUOUS),
+        (WorkflowRefusedError("x"), Outcome.REJECTED),
+        (WorkflowsUnavailableError("x"), Outcome.UNAVAILABLE),
         (InvalidInputError("x"), Outcome.ERROR),
         (RuntimeError("x"), Outcome.ERROR),
     ],
 )
 def test_outcomes_come_from_a_fixed_set(error: BaseException | None, outcome: Outcome) -> None:
     assert outcome_of(error) is outcome
+
+
+def test_the_metrics_catalogue_lists_exactly_day1s_operations_per_dependency() -> None:
+    """docs/ops/metrics.md's operations table is the contract dashboards read (ADR-0010)."""
+    rows = re.findall(
+        r"^\| `([a-z0-9_]+)` \| (`[a-z_]+`(?:, `[a-z_]+`)*) \|$",
+        METRICS_DOC.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    documented = {
+        dependency: set(re.findall(r"`([a-z_]+)`", ops))
+        for dependency, ops in rows
+        if dependency != "dependency"  # the header row
+    }
+    assert documented == {
+        Dependency.KUBERNETES: set(HubOperation),
+        Dependency.OPENSHIFT_OAUTH: set(OAuthOperation),
+        Dependency.DAY2: set(Day2Operation),
+        Dependency.SERVER_SCAN: set(ServerScanOperation),
+        Dependency.WORKFLOWS: set(WorkflowsOperation),
+    }
 
 
 async def test_observer_without_metrics_is_a_passthrough() -> None:

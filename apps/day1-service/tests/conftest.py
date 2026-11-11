@@ -32,6 +32,7 @@ from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
 from wingman_day1.main import Adapters, create_app
+from wingman_day1.ports import ServerInventory, UninstallWorkflow
 from wingman_day1.settings import Day1Settings
 
 DAY1 = "gitops-day1/platform-config"
@@ -187,13 +188,22 @@ def build_app(
     identity: FakeIdentityProvider | None,
     day2: FakeDay2Addons,
     clock: StepClock,
+    inventory: ServerInventory | None = None,
+    uninstall: UninstallWorkflow | None = None,
     **settings: object,
 ) -> FastAPI:
     return create_app(
         settings=make_settings(**settings),
         auth=make_auth(),
         runtime=RuntimeSettings(environment=Environment.TEST, git_backend=GitBackend.FAKE),
-        adapters=Adapters(gitlab=gitlab, day2=day2, hub=hub, identity=identity),
+        adapters=Adapters(
+            gitlab=gitlab,
+            day2=day2,
+            hub=hub,
+            identity=identity,
+            inventory=inventory,
+            uninstall=uninstall,
+        ),
         clock=clock,
     )
 

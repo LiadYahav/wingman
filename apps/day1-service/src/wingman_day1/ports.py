@@ -18,6 +18,7 @@ from wingman_day1.domain.addons import InstalledAddon
 from wingman_day1.domain.auth import Identity
 from wingman_day1.domain.changes import ClusterChange, ImportChange, ProvisionResult, SpecChange
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 from wingman_day1.domain.workflows import WorkflowRun
 
@@ -173,4 +174,46 @@ class Day2Addons(Protocol):
 
     async def installed(self, cluster: ClusterRef) -> list[InstalledAddon]:
         """Addons installed on ``cluster``."""
+        ...
+
+
+class ServerInventory(Protocol):
+    """server-scan: the platform's record of physical servers (read only, ADR-0038).
+
+    Raises ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a
+    refused token) when server-scan cannot answer: servers are then unknown,
+    never "none".
+    """
+
+    async def rows(self) -> list[ServerRow]:
+        """Every server in the fleet, as flat rows."""
+        ...
+
+    async def server(self, server_id: str) -> ServerDetail:
+        """One server, read now. An unknown id is ``ServerNotFoundError``."""
+        ...
+
+
+class UninstallWorkflow(Protocol):
+    """The orchestrator's ``uninstall-server-from-hc`` workflow (ADR-0038).
+
+    The workflow owns the procedure and its checks; Wingman only starts a run
+    and reads how it is going. Reads raise ``WorkflowsUnavailableError``.
+    """
+
+    async def runs(self) -> list[RunSummary]:
+        """The newest uninstall runs of the whole fleet, newest first."""
+        ...
+
+    async def run(self, workflow_id: str) -> WorkflowRun | None:
+        """One run's status, step and error; ``None`` when the orchestrator has no such run."""
+        ...
+
+    async def start(self, *, server_name: str, mce: str, namespace: str | None) -> WorkflowRun:
+        """Start an uninstall of one server. Never retried (ADR-0006).
+
+        Raises ``UninstallAlreadyRunningError`` while one runs for the server,
+        ``WorkflowsUnavailableError`` when nothing was started, and
+        ``AmbiguousStartError`` when it was sent but the answer was lost.
+        """
         ...

@@ -1,20 +1,28 @@
 # Servers per hosted cluster, waiting for workers, and moving capacity
 
-**Status:** proposed. Checked against [architecture-fit.md](architecture-fit.md):
-server-scan is the platform's state tracker for servers and VMs (AD15), and
-nodes come from shared pools, not from named servers (AD21).
+**Status:** servers per hosted cluster **built** 2026-11-11 (ADR-0038), with
+uninstalling one node through the platform's workflow; the rest proposed.
+Checked against [architecture-fit.md](architecture-fit.md): server-scan is
+the platform's state tracker for servers and VMs (AD15), and nodes come from
+shared pools, not from named servers (AD21).
 
 ## Servers per hosted cluster
 
-On a hosted cluster's page, list the servers under it, read from server-scan's
-servers-by-cluster read:
-- name, MCE, InfraEnv;
-- hardware (model, CPU, memory, disks);
-- health.
+**Built** (ADR-0038; the API is `docs/notes/2026-11-11-cluster-nodes-api.md`).
+A hosted cluster's page lists the servers server-scan places in it, from one
+read of the whole fleet through a `ServerInventory` port (an adapter, a fake,
+a viewer token from a Secret):
+- name, serial, vendor and model, MCE, state;
+- health, maintenance, and the stale and contested flags;
+- a link to the server's page in server-scan.
 
-A server's name links to its page in server-scan. This is read-only, through a
-`ServerInventory` port with an adapter and a fake; it needs a server-scan
-viewer token in a Secret.
+An admin can start the platform's `uninstall-server-from-hc` workflow on one
+node and follow its run. The workflow owns the procedure and its checks;
+Wingman starts it and shows the run.
+
+Left for later: the InfraEnv and the hardware detail (CPU, memory, disks).
+server-scan's fleet rows do not carry them; they need one detail read per
+server.
 
 ## Why a cluster waits for workers
 
