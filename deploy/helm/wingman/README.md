@@ -67,7 +67,8 @@ a new `auth.jwtSecret` signs everyone out.
 
 ### Key Values
 
-Every variable the services read is set from these (`templates/configmap.yaml`, `templates/secret.yaml`);
+Every variable the services read is set from these (`templates/configmap.yaml`, `templates/secret.yaml`,
+and day1's `env` in `templates/day1-deployment.yaml` for the server-scan token);
 the names are explained in the root README's [Environment Variables](../README.md#environment-variables).
 
 | Key | Sets | Default | Description |
@@ -101,6 +102,15 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `clusterStatus.mceDomain` | `MCE_API_DOMAIN` | `""` | A hub is `https://api.{mce}.{mceDomain}:6443` |
 | `clusterStatus.sslVerify` | `MCE_SSL_VERIFY` | `"false"` | `"true"`, `"false"` or a CA bundle path |
 | `clusterStatus.tokensSecretName` | | `mce-sa-tokens` | The Secret whose key `tokens` (a YAML map of MCE name to token) is mounted as `MCE_TOKENS_FILE` |
+| `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. Empty: no cluster nodes ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)) |
+| `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the node links point. Empty: `serverScan.url` |
+| `serverScan.sslVerify` | `SERVER_SCAN_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
+| `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
+| `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token. Empty: no token, for a server-scan with auth off |
+| `serverScan.tokenSecret.key` | `SERVER_SCAN_TOKEN` (day1 only) | `token` | The token's key in that Secret |
+| `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
+| `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
+| `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `tls.caBundle` | | `""` | An internal CA (PEM), mounted in every pod |
 | `tls.caBundleMountPath` | `SSL_CERT_FILE` | `/etc/pki/tls/certs/ca-bundle.crt` | Where it is mounted (set only with a `tls.caBundle`) |
 | `route.host` | | `wingman.apps.your-cluster.internal` | The Route's host |
@@ -154,6 +164,31 @@ One token, `gitlab.accessToken`, with the `api` scope. Its account must be a mem
 project, the specs project and every team project in the sigs group, with at least the Developer
 role (it pushes branches and opens merge requests) and the right to merge into the branches the
 MRs target. `docs/ops/runbook.md` (WingmanGitLabTokenRejected) says how to replace it.
+
+### Cluster nodes (server-scan and the workflows orchestrator)
+
+Both are off by default. With `serverScan.url`, day1 lists the servers under each hosted cluster
+from server-scan; with `workflows.url`, it also starts the platform's `uninstall-server-from-hc`
+workflow for one of them and shows its run. The orchestrator has no auth. An uninstall checks the
+server in server-scan first, so `workflows.url` without `serverScan.url` fails the chart.
+
+The server-scan token never goes in values: put a viewer token in a Secret and name the Secret.
+
+```bash
+oc create secret generic server-scan-viewer -n wingman --from-literal=token=<token>
+```
+
+```yaml
+serverScan:
+  url: http://server-scan-api.<ns>.svc:8000
+  uiUrl: https://server-scan.example      # where the node links point
+  tokenSecret: { name: server-scan-viewer }
+workflows:
+  url: http://workflows-orchestrator-api.<ns>.svc:8080
+```
+
+day1 reads the token at start: restart it (`oc rollout restart deploy/wingman-day1`) after
+replacing the Secret.
 
 ## Loading Pre-built Images (Air-gapped)
 

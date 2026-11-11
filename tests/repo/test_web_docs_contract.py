@@ -13,7 +13,8 @@ These tests read the docs' source and compare what they name with the code:
   (ADR-0004) or the short ``NOT_SETTINGS`` allowlist;
 - every ``<status> <CODE>`` with that code's status in ``wingman_core.web.errors``;
 - every Helm key with ``deploy/helm/wingman/values.yaml``, and every key-to-variable pair
-  with what ``deploy/helm/wingman/templates/configmap.yaml`` and ``secret.yaml`` set;
+  with what ``deploy/helm/wingman/templates/configmap.yaml`` and ``secret.yaml`` set,
+  and the ``env`` entries of its ``*-deployment.yaml`` templates;
 - and nothing the rewrite removed (``REMOVED``) comes back.
 
 Guarded: ``README.md``, ``DEVELOPMENT.md``, ``deploy/helm/wingman/README.md``,
@@ -397,6 +398,8 @@ HELM_TO_ENV = re.compile(
 )
 FILE_NAME = re.compile(r"\.(?:py|tsx?|ya?ml|md|json|txt|j2|sh|toml|tpl)$")
 CHART_ENV_LINE = re.compile(r"^\s*([A-Z][A-Z0-9_]*):\s*(\{\{.*\}\})", re.MULTILINE)
+CHART_ENV_ENTRY = re.compile(r"^( *)- name: ([A-Z][A-Z0-9_]*)\n((?:\1  .*\n)+)", re.MULTILINE)
+"""A container's ``env`` entry: ``- name: NAME`` and the lines indented under it."""
 VALUES_REF = re.compile(r"\.Values\.([\w.]+)")
 INCLUDE = re.compile(r'include\s+"([\w.]+)"')
 
@@ -461,19 +464,32 @@ def helm_keys_named(text: str, *, tsx: bool, chart_readme: bool) -> set[str]:
 
 @cache
 def chart_env_sources() -> Mapping[str, frozenset[str]]:
-    """Each variable the chart sets, and the values keys its template reads (helpers included)."""
+    """Each variable the chart sets, and the values keys its template reads (helpers included).
+
+    The ConfigMap and the Secret set most, one ``NAME: {{ ... }}`` line each; a
+    Deployment's ``env`` entry sets the rest (``SERVER_SCAN_TOKEN``, from a
+    ``secretKeyRef`` to an existing Secret), from the keys the entry reads.
+    """
     templates = CHART / "templates"
     helpers_tpl = (templates / "_helpers.tpl").read_text(encoding="utf-8")
     pieces = re.split(r'\{\{-?\s*define\s+"([\w.]+)"', helpers_tpl)
     helpers = dict(itertools.batched(pieces[1:], 2, strict=True))
+
+    def reads(expression: str) -> frozenset[str]:
+        refs = set(VALUES_REF.findall(expression))
+        for helper in INCLUDE.findall(expression):
+            refs |= set(VALUES_REF.findall(helpers[helper]))
+        return frozenset(refs)
+
     sources: dict[str, frozenset[str]] = {}
     for template in ("configmap.yaml", "secret.yaml"):
         text = (templates / template).read_text(encoding="utf-8")
         for env, expression in CHART_ENV_LINE.findall(text):
-            refs = set(VALUES_REF.findall(expression))
-            for helper in INCLUDE.findall(expression):
-                refs |= set(VALUES_REF.findall(helpers[helper]))
-            sources[env] = frozenset(refs)
+            sources[env] = reads(expression)
+    for deployment in sorted(templates.glob("*-deployment.yaml")):
+        text = deployment.read_text(encoding="utf-8")
+        for _, env, entry in CHART_ENV_ENTRY.findall(text):
+            sources[env] = reads(entry)
     return sources
 
 
@@ -515,9 +531,15 @@ SENTINEL_NAMES: Mapping[str, frozenset[str]] = {
     "docs/ops/runbook.md": frozenset({"GITLAB_TOKEN", "GITLAB_VERIFY_TLS"}),
     PAGE: frozenset({"WINGMAN_ADMIN_GROUPS", "DEV_AUTH_SECRET", "MCE_INFRAENV_NAMESPACE"}),
 }
-SENTINEL_PAIRS: Mapping[str, tuple[str, str]] = {
-    PAGE: ("gitlab.day1ProjectId", "DAY1_GITLAB_PROJECT_ID"),
-    "deploy/helm/wingman/README.md": ("gitlab.accessToken", "GITLAB_TOKEN"),
+SENTINEL_PAIRS: Mapping[str, frozenset[tuple[str, str]]] = {
+    PAGE: frozenset({("gitlab.day1ProjectId", "DAY1_GITLAB_PROJECT_ID")}),
+    # One pair from the Secret, one from a Deployment's env entry.
+    "deploy/helm/wingman/README.md": frozenset(
+        {
+            ("gitlab.accessToken", "GITLAB_TOKEN"),
+            ("serverScan.tokenSecret.name", "SERVER_SCAN_TOKEN"),
+        }
+    ),
 }
 MIN_REFUSALS = 8
 MIN_PAGE_PAIRS = 4
@@ -533,7 +555,7 @@ def page_coverage_gaps(text: str) -> list[str]:
     if len(refusals(text)) < MIN_REFUSALS:
         gaps.append(f"fewer than {MIN_REFUSALS} refusals found")
     pairs = helm_env_pairs(text, chart_readme=False)
-    if len(pairs) < MIN_PAGE_PAIRS or SENTINEL_PAIRS[PAGE] not in pairs:
+    if len(pairs) < MIN_PAGE_PAIRS or not SENTINEL_PAIRS[PAGE] <= pairs:
         gaps.append(f"too few Helm → env pairs found: {sorted(pairs)}")
     return gaps
 
@@ -613,7 +635,11 @@ def test_the_page_checks_find_what_they_must() -> None:
 def test_the_chart_readme_checks_find_what_they_must() -> None:
     text = CHART_README.read_text(encoding="utf-8")
     pairs = helm_env_pairs(text, chart_readme=True)
-    assert SENTINEL_PAIRS["deploy/helm/wingman/README.md"] in pairs
+    sentinels = SENTINEL_PAIRS["deploy/helm/wingman/README.md"]
+    assert sentinels <= pairs, f"the table parser no longer finds {sorted(sentinels - pairs)}"
+    sources = chart_env_sources()
+    unset = sorted((key, env) for key, env in sentinels if key not in sources.get(env, ()))
+    assert not unset, f"the template parser no longer finds {unset}"
     assert len(pairs) >= MIN_CHART_README_PAIRS, f"only {len(pairs)} key → variable pairs found"
     keys = helm_keys_named(text, tsx=False, chart_readme=True)
     assert len(keys) >= MIN_CHART_README_KEYS, f"only {len(keys)} Helm keys found"
@@ -718,6 +744,7 @@ def markdown_problems(text: str) -> list[str]:
         "a `422 NOT_MERGEABLE` problem",
         "--set image.tag=$SHA",
         "| `gitlab.day1ProjectId` | `SPECS_GITLAB_PROJECT_ID` | | |",
+        "| `serverScan.url` | `SERVER_SCAN_TOKEN` | | |",
         "| `global.baseDomain` | | `wingman.local` | |",
     ],
 )
