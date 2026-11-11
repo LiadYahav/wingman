@@ -52,6 +52,8 @@ class Day1Context:
     """``None`` until the delete-cluster workflow exists: its routes answer 501 (ADR-0033)."""
     nodes: NodeService | None = None
     """``None`` when live status (the MCE hubs) is off: the nodes routes answer 501."""
+    segments_manager_ui_url: str | None = None
+    """``None`` when ``SEGMENTS_MANAGER_UI_URL`` is empty: a cluster carries no link to it."""
 
 
 def day1_context(request: Request) -> Day1Context:

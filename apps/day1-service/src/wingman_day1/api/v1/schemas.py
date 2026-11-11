@@ -36,6 +36,7 @@ from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
 from wingman_day1.domain.node_pools import NodePoolView, NodeView
 from wingman_day1.domain.openshift_versions import OpenShiftVersions
 from wingman_day1.domain.paths import NODEPOOL_DEFAULTS_FILE
+from wingman_day1.domain.segments_manager import SegmentsManagerLinks
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata, rule_problems
 from wingman_day1.domain.status import LiveStatus
@@ -482,6 +483,20 @@ class ClusterValuesOut(BaseModel):
         )
 
 
+class SegmentsManagerOut(BaseModel):
+    """Links to segments-manager for one cluster; its UI cannot open one cluster's segment."""
+
+    url: str
+    """The UI: search there for the cluster's ``name``."""
+    search_url: str
+    """``GET /api/segments/search?q=<name>``: the cluster's segment as JSON."""
+
+    @classmethod
+    def of(cls, links: SegmentsManagerLinks) -> SegmentsManagerOut:
+        """From the domain links."""
+        return cls(url=links.url, search_url=links.search_url)
+
+
 class ClusterDetailOut(BaseModel):
     """A cluster's file, its values, and where it lives."""
 
@@ -499,10 +514,16 @@ class ClusterDetailOut(BaseModel):
     naming: NamingOut
     mce_default_mastertag: str | None
     problems: list[str]
+    segments_manager: SegmentsManagerOut | None
+    """``None`` when ``SEGMENTS_MANAGER_UI_URL`` is empty."""
 
 
 def cluster_detail(
-    cluster: ClusterFile, *, gitlab_url: str, mce_default_mastertag: str | None
+    cluster: ClusterFile,
+    *,
+    gitlab_url: str,
+    mce_default_mastertag: str | None,
+    segments_manager: SegmentsManagerLinks | None,
 ) -> ClusterDetailOut:
     """The detail body for a cluster file."""
     change = cluster.last_change
@@ -528,6 +549,7 @@ def cluster_detail(
         naming=NamingOut.of(cluster.naming),
         mce_default_mastertag=mce_default_mastertag,
         problems=list(cluster.problems),
+        segments_manager=SegmentsManagerOut.of(segments_manager) if segments_manager else None,
     )
 
 

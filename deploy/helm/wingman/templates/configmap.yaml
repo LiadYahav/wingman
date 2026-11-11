@@ -77,6 +77,11 @@ data:
   WORKFLOWS_TIMEOUT_SECONDS: {{ .Values.workflows.timeoutSeconds | default 10 | quote }}
   {{- end }}
 
+  # ── A link to segments-manager on the cluster page (day1 never calls it) ─────
+  {{- if and .Values.segmentsManager .Values.segmentsManager.uiUrl }}
+  SEGMENTS_MANAGER_UI_URL: {{ .Values.segmentsManager.uiUrl | quote }}
+  {{- end }}
+
   # ── TLS CA bundle path (used when caBundle is set) ───────────────────────────
   {{- if .Values.tls.caBundle }}
   SSL_CERT_FILE: {{ .Values.tls.caBundleMountPath | quote }}

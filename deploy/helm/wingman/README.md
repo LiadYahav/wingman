@@ -111,6 +111,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
+| `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The cluster page links to it and to its search for the cluster's segment ([segments-manager link](#segments-manager-link)). Empty: no link |
 | `tls.caBundle` | | `""` | An internal CA (PEM), mounted in every pod |
 | `tls.caBundleMountPath` | `SSL_CERT_FILE` | `/etc/pki/tls/certs/ca-bundle.crt` | Where it is mounted (set only with a `tls.caBundle`) |
 | `route.host` | | `wingman.apps.your-cluster.internal` | The Route's host |
@@ -257,6 +258,18 @@ workflows:
 
 day1 reads the token at start: restart it (`oc rollout restart deploy/wingman-day1`) after
 replacing the Secret.
+
+### segments-manager link
+
+Off by default. With `segmentsManager.uiUrl`, the cluster page's **HostedCluster & network** card
+links to segments-manager's UI, names the cluster to search for there (its UI opens no single
+cluster), and links to its open search API for the cluster's segment as JSON. It is only a link:
+day1 never calls segments-manager, and the browser needs to reach the UI.
+
+```yaml
+segmentsManager:
+  uiUrl: https://segments-manager.example
+```
 
 ## Loading Pre-built Images (Air-gapped)
 

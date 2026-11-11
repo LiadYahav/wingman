@@ -50,6 +50,7 @@ ALL_ON = [
         "serverScan.uiUrl=https://server-scan.example",
         "serverScan.tokenSecret.name=server-scan-viewer",
         "workflows.url=http://workflows-orchestrator-api.wingman.svc:8080",
+        "segmentsManager.uiUrl=https://segments-manager.example",
     )
     for arg in ("--set", value)
 ]
@@ -129,9 +130,11 @@ def test_the_server_scan_token_comes_from_its_secret_to_day1_only() -> None:
 
 
 def test_values_kept_from_a_release_before_3_4_still_render() -> None:
-    """``helm upgrade --reuse-values`` from 3.3 has no ``serverScan`` or ``workflows`` map."""
-    old = ["--set", "serverScan=null", "--set", "workflows=null"]
-    new = {v for v in chart_variables(*old) if v.startswith(("SERVER_SCAN_", "WORKFLOWS_"))}
+    """``helm upgrade --reuse-values`` from 3.3 has no ``serverScan``, ``workflows`` or
+    ``segmentsManager`` map."""
+    old = ["--set", "serverScan=null", "--set", "workflows=null", "--set", "segmentsManager=null"]
+    prefixes = ("SERVER_SCAN_", "WORKFLOWS_", "SEGMENTS_MANAGER_")
+    new = {v for v in chart_variables(*old) if v.startswith(prefixes)}
     assert not new
     reused = [
         *ALL_ON,
@@ -143,3 +146,10 @@ def test_values_kept_from_a_release_before_3_4_still_render() -> None:
     assert config["SERVER_SCAN_TIMEOUT_SECONDS"] == config["WORKFLOWS_TIMEOUT_SECONDS"] == "10"
     token = service_env(*reused)["wingman-day1"]["SERVER_SCAN_TOKEN"]
     assert token["valueFrom"]["secretKeyRef"]["key"] == "token"
+
+
+def test_the_segments_manager_link_is_off_by_default_and_set_for_day1() -> None:
+    assert "SEGMENTS_MANAGER_UI_URL" in env_names(Day1Settings)
+    assert "SEGMENTS_MANAGER_UI_URL" not in chart_variables()
+    config = render(*ALL_ON)["wingman-config"]["data"]
+    assert config["SEGMENTS_MANAGER_UI_URL"] == "https://segments-manager.example"

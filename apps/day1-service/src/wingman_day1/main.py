@@ -364,6 +364,7 @@ def build_context(
         ),
         webhook_secret=settings.gitlab_webhook_secret.get_secret_value() or None,
         status_poll_seconds=settings.day1_status_poll_seconds,
+        segments_manager_ui_url=settings.segments_manager_ui_url or None,
     )
 
 

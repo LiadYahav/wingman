@@ -99,6 +99,10 @@ class Day1Settings(BaseSettings):
     workflows_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     day1_fake_fleet: bool = False
 
+    # ── A link to segments-manager's UI on the cluster page (off by default) ──
+    # Day1 never calls it; the cluster detail carries the links. Empty: no link.
+    segments_manager_ui_url: str = ""
+
     @field_validator("specs_root_path")
     @classmethod
     def _specs_root_is_a_repo_path(cls, value: str) -> str:
@@ -112,7 +116,9 @@ class Day1Settings(BaseSettings):
             raise ValueError("DAY1_CLUSTER_NAME_STRIP_PREFIX must be empty or like 'ocp4-'")
         return value
 
-    @field_validator("server_scan_url", "server_scan_ui_url", "workflows_api_url")
+    @field_validator(
+        "server_scan_url", "server_scan_ui_url", "workflows_api_url", "segments_manager_ui_url"
+    )
     @classmethod
     def _empty_or_an_http_url(cls, value: str) -> str:
         value = value.strip().rstrip("/")

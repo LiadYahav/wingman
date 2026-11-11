@@ -355,6 +355,9 @@ WORKFLOWS_API_URL=                        # e.g. http://workflows-orchestrator-a
 WORKFLOWS_SSL_VERIFY=true                 # true, false, or a CA bundle path
 WORKFLOWS_TIMEOUT_SECONDS=10
 DAY1_FAKE_FLEET=false                     # development only: an MCE, server-scan and the orchestrator in memory, from dev/fleet-fixtures
+
+# A link to segments-manager on the cluster page (off by default; day1 never calls it)
+SEGMENTS_MANAGER_UI_URL=                  # its UI, e.g. https://segments-manager.example; empty: no link
 ```
 
 ### Day2 Service
