@@ -1,8 +1,13 @@
+"use client";
+
+import { Fragment, useState } from "react";
 import Link from "next/link";
-import { Clock3, ExternalLink, FileWarning, TriangleAlert } from "lucide-react";
+import { ChevronRight, Clock3, ExternalLink, FileWarning, TriangleAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/lib/utils";
+import { PoolNodesInline, matchPool } from "@/components/clusters/pool-nodes-inline";
+import { useClusterNodes } from "@/lib/nodes";
+import { cn, formatDate } from "@/lib/utils";
 import type { ClusterDetail, ClusterValues } from "@/types";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -145,7 +150,28 @@ export function HostedClusterCard({ cluster }: { cluster: ClusterDetail }) {
   );
 }
 
-export function NodePoolsCard({ values }: { values: ClusterValues }) {
+/** Where the Overview reads the nodes from; without it the card shows the file only. */
+export interface NodePoolsNodes {
+  /** The cluster file's name and the `?site=&mce=` query the page reads it with. */
+  name: string;
+  where: string;
+  /** The chart's `clusterName`: a nodepool without a name is `<clusterName>-<infraEnv>` on the MCE. */
+  clusterName: string;
+  onOpenNodesTab: () => void;
+}
+
+export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?: NodePoolsNodes }) {
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  // Read only once a pool is opened; the Nodes tab shares the same query
+  const query = useClusterNodes(nodes?.name ?? "", nodes?.where ?? "", { enabled: Boolean(nodes) && open.size > 0 });
+  const toggle = (i: number) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  const columns = 5;
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -167,25 +193,68 @@ export function NodePoolsCard({ values }: { values: ClusterValues }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {values.nodepools.map((np, i) => (
-                  <tr key={i}>
-                    <td className="px-3 py-2 font-mono break-all">{np.infra_env_name ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono break-all text-muted-foreground">{np.name ?? "derived"}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{np.replicas ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      {np.configs.length === 0 ? <span className="text-muted-foreground">—</span> : (
-                        <div className="flex flex-wrap gap-1">
-                          {np.configs.map((c) => (
-                            <span key={c} className="rounded bg-muted px-1.5 py-0.5 font-mono break-all">{c}</span>
-                          ))}
-                        </div>
+                {values.nodepools.map((np, i) => {
+                  const isOpen = open.has(i);
+                  const poolName = np.name ?? (np.infra_env_name && nodes ? `${nodes.clusterName}-${np.infra_env_name}` : null);
+                  const read = query.data;
+                  const pool =
+                    nodes && read && !read.off
+                      ? matchPool(read.data.node_pools, { name: np.name, infraEnv: np.infra_env_name, clusterName: nodes.clusterName })
+                      : null;
+                  const panelId = `nodepool-nodes-${i}`;
+                  return (
+                    <Fragment key={i}>
+                      <tr data-testid={`nodepool-row-${i}`} className={cn(isOpen && "bg-muted/20")}>
+                        <td className="px-3 py-2 font-mono break-all">
+                          <div className="flex items-center gap-1.5">
+                            {nodes && (
+                              <button
+                                type="button"
+                                onClick={() => toggle(i)}
+                                aria-expanded={isOpen}
+                                aria-controls={panelId}
+                                aria-label={`${isOpen ? "Hide" : "Show"} the nodes of ${poolName ?? np.infra_env_name ?? "this nodepool"}`}
+                                className="-ml-1 rounded p-0.5 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                              >
+                                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} aria-hidden />
+                              </button>
+                            )}
+                            <span>{np.infra_env_name ?? "—"}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 font-mono break-all text-muted-foreground">{np.name ?? "derived"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{np.replicas ?? "—"}</td>
+                        <td className="px-3 py-2">
+                          {np.configs.length === 0 ? <span className="text-muted-foreground">—</span> : (
+                            <div className="flex flex-wrap gap-1">
+                              {np.configs.map((c) => (
+                                <span key={c} className="rounded bg-muted px-1.5 py-0.5 font-mono break-all">{c}</span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 font-mono break-all">
+                          {np.tuning_config ? String(np.tuning_config) : <span className="text-muted-foreground">—</span>}
+                        </td>
+                      </tr>
+                      {nodes && isOpen && (
+                        <tr id={panelId} className="bg-muted/20">
+                          <td colSpan={columns} className="px-3 pb-3 pt-0">
+                            <PoolNodesInline
+                              read={read}
+                              isPending={query.isPending}
+                              error={query.error}
+                              onRetry={() => void query.refetch()}
+                              pool={pool}
+                              poolName={poolName}
+                              onOpenNodesTab={nodes.onOpenNodesTab}
+                            />
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="px-3 py-2 font-mono break-all">
-                      {np.tuning_config ? String(np.tuning_config) : <span className="text-muted-foreground">—</span>}
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

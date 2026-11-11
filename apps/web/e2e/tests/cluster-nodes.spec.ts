@@ -442,3 +442,44 @@ test.describe("What the tab says when a source is missing", () => {
     await expect(tab.getByRole("alert")).toHaveCount(0);
   });
 });
+
+test.describe("The Overview's nodepools open to their nodes", () => {
+  /** The cluster page on its Overview tab, with `nodes` as the nodes read. */
+  async function openOverview(page: Page, nodes: ClusterNodes | ((route: Route) => Promise<void> | void)) {
+    await openNodesTab(page, nodes);
+    await page.getByRole("tab", { name: "Overview" }).click();
+  }
+
+  test("a nodepool opens to its MCE NodePool's nodes, each opening its server in server-scan", async ({ page }) => {
+    const board = mockNodesBoard();
+    await openOverview(page, board);
+    // The file's nodepool has no name: the chart derives <clusterName>-<infraEnv>
+    const toggle = page.getByRole("button", { name: `Show the nodes of ${R660}` });
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+    await expect(page.getByRole("button", { name: `Hide the nodes of ${R660}` })).toHaveAttribute("aria-expanded", "true");
+    const panel = page.getByTestId("pool-nodes-inline");
+    const r660 = board.node_pools.find((p) => p.name === R660)!;
+    await expect(panel.getByTestId("pool-node")).toHaveCount(r660.nodes.length);
+    for (const node of r660.nodes.filter((n) => n.server)) {
+      const link = panel.getByRole("link", { name: `${node.server!.name}: open in server-scan (new tab)` });
+      await expect(link).toHaveAttribute("href", node.server!.url);
+      await expect(link).toHaveAttribute("target", "_blank");
+    }
+    await expect(panel).toContainText(`${r660.update!.progress!.updated} of ${r660.update!.progress!.total} updated`);
+    await panel.getByRole("button", { name: /Details and uninstall in the Nodes tab/ }).click();
+    await expect(page.getByRole("tab", { name: "Nodes" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("a nodepool the MCE does not report says so", async ({ page }) => {
+    await openOverview(page, mockNodes({ node_pools: [] }));
+    await page.getByRole("button", { name: `Show the nodes of ${R660}` }).click();
+    await expect(page.getByTestId("pool-nodes-inline")).toContainText(`The MCE reports no NodePool ${R660} yet.`);
+  });
+
+  test("without live status the opened nodepool says what the nodes need", async ({ page }) => {
+    await openOverview(page, (route) => fulfillProblem(route, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
+    await page.getByRole("button", { name: `Show the nodes of ${R660}` }).click();
+    await expect(page.getByTestId("pool-nodes-inline")).toContainText("Nodes need live status from the MCE");
+  });
+});

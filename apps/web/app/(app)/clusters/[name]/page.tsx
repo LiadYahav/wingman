@@ -499,7 +499,17 @@ function ClusterDetailContent() {
                 <ClusterInfoCard cluster={cluster} />
                 <HostedClusterCard cluster={cluster} />
               </div>
-              {cluster.values && <NodePoolsCard values={cluster.values} />}
+              {cluster.values && (
+                <NodePoolsCard
+                  values={cluster.values}
+                  nodes={{
+                    name,
+                    where,
+                    clusterName: cluster.hosted_cluster.cluster_name,
+                    onOpenNodesTab: () => setActiveTab("nodes"),
+                  }}
+                />
+              )}
               <SpecCard cluster={cluster} />
               {/* Only when the deployment reads HostedClusters from the hubs */}
               {liveStatusError ? (
