@@ -40,7 +40,7 @@ async def test_the_catalogue_and_defaults_from_the_fixture_repos(
             },
         ],
         "hardware_types": [
-            {"name": hw, "template": f"mc-files/templates/nm-conf-template-hw-{hw}.bu"}
+            {"name": hw, "template": f"mc-files/templates/nm-conf-template-{hw}.bu"}
             for hw in ("cisco", "dell", "dell-data")
         ],
         "nodepool_defaults": {

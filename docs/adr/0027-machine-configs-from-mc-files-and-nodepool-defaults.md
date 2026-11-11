@@ -1,7 +1,7 @@
 # ADR-0027: Machine configs come from mc-files and are checked; new nodepools start from the team's defaults
 
 Date: 2026-11-08
-Status: Accepted
+Status: Accepted (corrected 2026-11-11, see the note at the end)
 
 ## Context
 
@@ -25,7 +25,7 @@ of the day1 repo's default branch, cached like every other read
 **The rule is the CI's**, in Wingman's words
 (`wingman_day1.domain.machine_configs`):
 
-1. Each `mc-files/templates/nm-conf-template-hw-<hw>.bu` is a hardware type
+1. Each `mc-files/templates/nm-conf-template-<hw>.bu` is a hardware type
    `<hw>`. A name ending in `-<hw>` is rendered from that template; when
    several types match, the longest wins (`-dell-data` before `-dell`).
    Templates are tried before static files.
@@ -41,7 +41,7 @@ yet onboarded: the CI would find a name there, but Wingman neither offers
 nor accepts it. Documentation (`*.md`, dot files) is not a config. A config
 name is lowercase letters, digits, `-` and `.`. A static file that a
 template captures (its name ends in `-<hw>`), a name found twice, and a
-template file not named `nm-conf-template-hw-<hw>.bu` are not offered and
+template file not named `nm-conf-template-<hw>.bu` are not offered and
 are listed in the response's `problems`. A day1 repo without `mc-files/`
 is an empty catalogue that says so: nothing resolves there.
 
@@ -118,3 +118,16 @@ in its `problems`; a failed GitLab read fails the request (ADR-0004).
   `apps/day1-service/tests/api/test_flavor_rules_api.py`: the expansion in
   the rendered file (in both `DAY1_CLUSTER_NAME_STRIP_PREFIX` modes), and
   the 422s at flavor save and at create.
+
+## Correction (2026-11-11, 3.3.1)
+
+3.3.0 named the templates `nm-conf-template-hw-<hw>.bu`, from a copy of
+the day1 repo whose templates carried a `-hw-` segment. The production
+repo's 15 templates are `nm-conf-template-<hw>.bu`, and its CI
+(`scripts/generate_from_template.py`) takes the hardware type to be
+whatever follows `nm-conf-template`. So 3.3.0 found no hardware type and
+refused every nodepool that names a network config. 3.3.1 strips
+`nm-conf-template-`, which is the CI's reading for any file name: a file
+`nm-conf-template-hw-dell.bu` is the hardware type `hw-dell`, to the CI and
+to Wingman alike. The decision is unchanged; only the file name it quoted
+was wrong.
