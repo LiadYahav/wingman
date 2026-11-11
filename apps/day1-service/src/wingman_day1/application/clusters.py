@@ -61,12 +61,15 @@ from wingman_day1.domain.names import (
     ClusterNaming,
     HostedClusterNaming,
     HostedClusterRef,
+    NameSuggestion,
     describe_cluster,
     new_cluster_problems,
+    suggest_cluster_name,
 )
 from wingman_day1.domain.openshift_versions import unhostable_problems
 from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.sizing import sizing_problems
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
 from wingman_day1.ports import ClusterProvisioner, RepoReads
@@ -203,6 +206,20 @@ class ClusterService:
 
     # ── Create ──────────────────────────────────────────────────────────────
 
+    async def suggest_name(self, *, site: str, mce: str, flavor: str) -> NameSuggestion:
+        """A free name for a new cluster from ``flavor`` under ``site``/``mce`` (ADR-0040).
+
+        Taken are every cluster file under any site and every open create MR.
+        Raises ``ResourceNotFoundError`` for an unknown site, MCE or flavor.
+        """
+        await self._sites.require_mce(site, mce)
+        spec = await self._specs.get(flavor)
+        taken = {ref.name for ref in (await read_tree(self._day1)).clusters}
+        taken.update(name for name, _ in await self._open_creates())
+        return suggest_cluster_name(
+            spec.metadata.name, site=site, mce=mce, taken=taken, naming=self._naming
+        )
+
     async def preview(self, request: CreateCluster) -> RenderedCluster:
         """Render and check a new cluster file without writing anything."""
         ref = ClusterRef(request.site, request.mce, request.name)
@@ -323,6 +340,7 @@ class ClusterService:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
         cluster_name = self._naming.for_file(ref.name).cluster_name
         problems = [*conflicts, *missing, *owner_problems(inputs)]
+        problems += sizing_problems(inputs, spec.sizing_ratio(), flavor=spec.metadata.name)
         problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
@@ -352,20 +370,26 @@ class ClusterService:
             raise AlreadyInUseError(
                 f"cluster {ref.name!r} already exists under {where.site}/{where.mce}"
             )
+        for name, web_url in await self._open_creates():
+            if name == ref.name:
+                raise AlreadyInUseError(
+                    f"an open merge request already creates cluster {ref.name!r}: {web_url}"
+                )
+
+    async def _open_creates(self) -> list[tuple[str, str]]:
+        """``(cluster name, MR URL)`` of every open Wingman MR that creates a cluster."""
+        creates: list[tuple[str, str]] = []
         for merge_request in await self._day1.merge_requests(
             state=MRState.OPENED, labels=("wingman",)
         ):
             title = parse_mr_title(merge_request.title)
-            if (
-                title is not None
-                and (title.repo, title.verb, title.resource_type)
-                == (Repo.DAY1, Verb.CREATE, ResourceType.CLUSTER)
-                and title.resource_name == ref.name
+            if title is not None and (title.repo, title.verb, title.resource_type) == (
+                Repo.DAY1,
+                Verb.CREATE,
+                ResourceType.CLUSTER,
             ):
-                raise AlreadyInUseError(
-                    f"an open merge request already creates cluster {ref.name!r}: "
-                    f"{merge_request.web_url}"
-                )
+                creates.append((title.resource_name, merge_request.web_url))
+        return creates
 
     async def _read(self, ref: ClusterRef) -> FileContent:
         try:

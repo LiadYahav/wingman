@@ -32,7 +32,7 @@ from wingman_day1.domain.addons import AddonDrift, RequestedAddon, VersionDiffer
 from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
 from wingman_day1.domain.locks import MISSING
 from wingman_day1.domain.machine_configs import NETWORK_CONFIG
-from wingman_day1.domain.names import ClusterNaming, HostedClusterRef
+from wingman_day1.domain.names import ClusterNaming, HostedClusterRef, NameSuggestion
 from wingman_day1.domain.node_pools import NodePoolView, NodeView
 from wingman_day1.domain.openshift_versions import OpenShiftVersions
 from wingman_day1.domain.paths import NODEPOOL_DEFAULTS_FILE
@@ -328,6 +328,28 @@ class NamingOut(BaseModel):
             short_name=naming.short_name,
             sequence=naming.sequence,
             problems=list(naming.problems),
+        )
+
+
+class NameSuggestionOut(BaseModel):
+    """``GET /clusters/name-suggestion``: a free name from a flavor (ADR-0040)."""
+
+    name: str | None
+    """``ocp4-<env>-<flavor>-<site>-<letter>``; ``None`` when there is none (``problems``)."""
+    env: str | None
+    short_name: str
+    sequence: str | None
+    problems: list[str]
+
+    @classmethod
+    def of(cls, suggestion: NameSuggestion) -> NameSuggestionOut:
+        """From a suggestion."""
+        return cls(
+            name=suggestion.name,
+            env=suggestion.env.value if suggestion.env else None,
+            short_name=suggestion.short_name,
+            sequence=suggestion.sequence,
+            problems=list(suggestion.problems),
         )
 
 

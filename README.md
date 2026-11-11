@@ -114,7 +114,9 @@ wingman/
 | **Aggregated approvals** | Approvals page aggregates open MRs from the day1, specs and every Day2 team repo in one view. |
 | **Reserved template inputs** | `cluster_name`, `site`, `mce` and `openshift_release_version` are set by the create form itself — they are not part of the dynamic variable form and always override spec presets in Jinja2 rendering. |
 | **Cluster nodes by NodePool** | The cluster page's Nodes tab shows each NodePool's nodes from the cluster's MCE: what is there, what a short pool is missing and why (no free Agent, and why each matching one is not free), and which node an update is working on, traced Machine → AgentMachine → Agent → server. server-scan adds each server's health and link, and the servers it places in the cluster that no Machine leads to. An admin can start the platform's `uninstall-server-from-hc` workflow on one node and follow its run; the workflow owns the procedure and its checks (ADR-0038). Needs `CLUSTER_STATUS_ENABLED`; `SERVER_SCAN_URL` and `WORKFLOWS_API_URL` add the rest. |
-| **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
+| **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. day1 keeps each hub's list for `MCE_INFRAENV_CACHE_SECONDS` (10 minutes). Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
+| **A suggested cluster name** | Creating from a flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>`: the MCE's env and the first letter no cluster or open create MR has. The name stays editable. A new cluster's sequence is one letter, `a` to `z`, never a number (ADR-0040). |
+| **Nodepools sized by a ratio** | A flavor may give its nodepools a ratio (`nodepool_ratio: [1, 2, 1]`): the create form asks for one size and sets each nodepool's replicas to its ratio times that size; create refuses replicas off the ratio (ADR-0040). |
 
 ## Deployment
 
@@ -154,6 +156,7 @@ Changes since the legacy services:
 | `POST` | `/api/day1/clusters` | Create a cluster from a spec (opens the MR that adds its file) |
 | `POST` | `/api/day1/clusters/preview` | Exactly the file a create would commit, after every check a create runs |
 | `GET` | `/api/day1/clusters/drift-summary` | Drift of every cluster |
+| `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040) |
 | `POST` | `/api/day1/clusters/bulk-status` | Live status of many clusters |
 | `GET` | `/api/day1/clusters/{name}` | The cluster's file, values and naming |
 | `PATCH` | `/api/day1/clusters/{name}` | Modify the cluster (opens the MR that replaces its file) |
@@ -343,6 +346,7 @@ MCE_TOKENS_FILE=/etc/wingman/mce-tokens/tokens
 MCE_SSL_VERIFY=true                       # true, false, or a CA bundle path
 MCE_TIMEOUT_SECONDS=10
 MCE_INFRAENV_NAMESPACE=                   # empty = all namespaces (the chart does not set it yet)
+MCE_INFRAENV_CACHE_SECONDS=600            # how long a hub's InfraEnv list is kept; 0 = read every time
 DAY1_STATUS_POLL_SECONDS=30               # the live status stream (the chart does not set it yet)
 
 # The nodes' servers from server-scan, uninstall through the workflows orchestrator (ADR-0038; off by default)

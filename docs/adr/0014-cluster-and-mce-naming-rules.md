@@ -1,7 +1,7 @@
 # ADR-0014: New cluster names follow ocp4-<env>-<name>-<site>[-<seq>]; existing ones are flagged, not hidden
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; amended by ADR-0040 (a new cluster's `<seq>` is one letter, `a` to `z`)
 
 ## Context
 

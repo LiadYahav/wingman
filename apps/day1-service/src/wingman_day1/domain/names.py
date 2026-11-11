@@ -4,6 +4,7 @@ The team's conventions:
 
 - MCE folder:      ``ocp4-<env>-mce-<site>-<letter>``
 - cluster file:    ``ocp4-<env>-<name>-<site>[-<seq>].yaml``, env in {prod, prep, test}
+- a new cluster's ``<seq>`` is one letter, ``a`` to ``z`` (ADR-0040)
 
 The site token may itself contain dashes (``site-a``, ``bat-yam``), so a site
 is never parsed out of a name by splitting on dashes: a name is matched
@@ -20,6 +21,8 @@ the whole stem. Which one applies is a deployment setting (ADR-0015).
 from __future__ import annotations
 
 import re
+import string
+from collections.abc import Collection
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -32,6 +35,9 @@ HOSTED_CLUSTER_PREFIX: Final = "ocp4-"
 _DNS_LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 _SEGMENT = r"[a-z0-9]+"
 _NAME = r"[a-z0-9](?:[-a-z0-9]*[a-z0-9])?"
+SEQUENCE_LETTERS: Final = string.ascii_lowercase
+"""A new cluster's sequence, in the order they are given (ADR-0040)."""
+_NOT_LABEL_CHARS = re.compile(r"[^a-z0-9]+")
 
 
 class Env(StrEnum):
@@ -195,13 +201,80 @@ def new_cluster_problems(
             f"cluster env {cluster.env.value!r} does not match MCE {mce!r} env "
             f"{mce_naming.env.value if mce_naming.env else '?'!r}"
         )
-    ref = naming.for_file(stem)
-    for what, value in (
-        ("HostedCluster name", ref.name),
-        ("control-plane namespace", ref.control_plane_namespace),
-    ):
-        if len(value) > MAX_DNS_LABEL:
-            problems.append(
-                f"{what} {value!r} would be {len(value)} characters; the limit is {MAX_DNS_LABEL}"
-            )
+    sequence = cluster.sequence
+    if sequence is not None and (len(sequence) != 1 or sequence not in SEQUENCE_LETTERS):
+        base = stem.removesuffix(f"-{sequence}")
+        problems.append(
+            f"sequence {sequence!r} of cluster {stem!r} must be one letter, a to z "
+            f"({base}-a): a number is not the convention"
+        )
+    problems.extend(_length_problems(stem, naming))
     return problems
+
+
+def _length_problems(stem: str, naming: HostedClusterNaming) -> list[str]:
+    """The chart's object names for ``stem`` that would not fit in a DNS-1123 label."""
+    ref = naming.for_file(stem)
+    return [
+        f"{what} {value!r} would be {len(value)} characters; the limit is {MAX_DNS_LABEL}"
+        for what, value in (
+            ("HostedCluster name", ref.name),
+            ("control-plane namespace", ref.control_plane_namespace),
+        )
+        if len(value) > MAX_DNS_LABEL
+    ]
+
+
+def short_name_of(flavor: str) -> str:
+    """A flavor's name as a cluster's ``<name>``: lowercase, other characters as single dashes."""
+    return _NOT_LABEL_CHARS.sub("-", flavor.lower()).strip("-")
+
+
+@dataclass(frozen=True, slots=True)
+class NameSuggestion:
+    """A name for a new cluster from a flavor, or why there is none (ADR-0040)."""
+
+    name: str | None
+    env: Env | None
+    short_name: str
+    sequence: str | None
+    problems: tuple[str, ...] = ()
+
+
+def suggest_cluster_name(
+    flavor: str,
+    *,
+    site: str,
+    mce: str,
+    taken: Collection[str],
+    naming: HostedClusterNaming,
+) -> NameSuggestion:
+    """``ocp4-<env>-<flavor>-<site>-<letter>`` with the first letter no name in ``taken`` has.
+
+    The env is the MCE's. The flavor's name is cut short (never below one
+    character) until the chart's object names fit in a DNS-1123 label.
+    """
+    short = short_name_of(flavor)
+    env = describe_mce(mce, site=site).env
+    if env is None:
+        return NameSuggestion(
+            None,
+            None,
+            short,
+            None,
+            (f"MCE {mce!r} does not follow ocp4-<env>-mce-{site}-<letter>, so it gives no env",),
+        )
+    while len(short) > 1 and _length_problems(f"ocp4-{env}-{short}-{site}-a", naming):
+        short = short[:-1].rstrip("-")
+    base = f"ocp4-{env}-{short}-{site}"
+    free = next((letter for letter in SEQUENCE_LETTERS if f"{base}-{letter}" not in taken), None)
+    if free is None:
+        return NameSuggestion(
+            None,
+            env,
+            short,
+            None,
+            (f"every name from {base}-a to {base}-z is taken; type another name",),
+        )
+    name = f"{base}-{free}"
+    return NameSuggestion(name, env, short, free, tuple(_length_problems(name, naming)))
