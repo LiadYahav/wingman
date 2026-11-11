@@ -497,7 +497,7 @@ function ClusterDetailContent() {
               <NamingNotice cluster={cluster} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <ClusterInfoCard cluster={cluster} />
-                <HostedClusterCard cluster={cluster} />
+                <HostedClusterCard cluster={cluster} where={where} />
               </div>
               {/* Only when the deployment reads HostedClusters from the hubs; then its nodepools, then its flavor */}
               {liveStatusError ? (

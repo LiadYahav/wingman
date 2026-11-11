@@ -6,9 +6,11 @@ import { Check, ChevronRight, Clock3, Copy, ExternalLink, FileWarning, TriangleA
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PoolLiveState, PoolNodesInline, matchPool } from "@/components/clusters/pool-nodes-inline";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useClusterNetwork } from "@/lib/network";
 import { useClusterNodes } from "@/lib/nodes";
 import { cn, formatDate } from "@/lib/utils";
-import type { ClusterDetail, ClusterValues, NodePoolNodes, SegmentsManagerLinks } from "@/types";
+import type { ClusterDetail, ClusterNetworkRead, ClusterValues, NodePoolNodes, SegmentsManagerLinks } from "@/types";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -189,9 +191,32 @@ function SegmentsManagerLink({ name, links }: { name: string; links: SegmentsMan
   );
 }
 
-export function HostedClusterCard({ cluster }: { cluster: ClusterDetail }) {
+/**
+ * The EPG: the one network fact the file does not carry, from
+ * segments-manager's record of the file's segment. Never blocks the card.
+ */
+function EpgValue({ read, isPending, error }: { read: ClusterNetworkRead | undefined; isPending: boolean; error: unknown }) {
+  if (isPending) return <Skeleton className="h-3.5 w-28" />;
+  if (error || read?.ledger_error) {
+    return (
+      <span
+        data-testid="network-epg-unknown"
+        className="text-xs font-normal text-muted-foreground"
+        title={read?.ledger_error ?? "The network could not be read"}
+      >
+        unknown
+      </span>
+    );
+  }
+  if (!read?.epg) return <span className="text-muted-foreground">—</span>;
+  return <span data-testid="network-epg" className="font-mono text-xs">{read.epg}</span>;
+}
+
+export function HostedClusterCard({ cluster, where }: { cluster: ClusterDetail; where: string }) {
   const network = cluster.values?.network;
   const vlan = network?.vlan_id;
+  const net = useClusterNetwork(cluster.name, where);
+  const problems = net.data?.problems ?? [];
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -205,14 +230,29 @@ export function HostedClusterCard({ cluster }: { cluster: ClusterDetail }) {
           <>
             <Row label="VLAN">
               {vlan !== null && vlan !== undefined && vlan !== ""
-                ? <span className="font-mono text-xs">{String(vlan)}</span>
+                ? <span data-testid="network-vlan" className="font-mono text-xs">{String(vlan)}</span>
                 : <Pending what="The allocate-segment workflow writes vlanId on the MR branch" />}
             </Row>
-            <Row label="DHCP network">
-              {network?.dhcp_network
-                ? <span className="font-mono text-xs">{network.dhcp_network}</span>
-                : <Pending what="The allocate-segment workflow writes dhcp_values on the MR branch" />}
+            <Row label="Segment">
+              {network?.segment
+                ? <span data-testid="network-segment" className="font-mono text-xs">{network.segment}</span>
+                : network?.dhcp_network
+                  ? <span className="font-mono text-xs" title="Not a /24 network address">{network.dhcp_network}</span>
+                  : <Pending what="The allocate-segment workflow writes dhcp_values on the MR branch" />}
             </Row>
+            <Row label="EPG">
+              <EpgValue read={net.data} isPending={net.isPending} error={net.error} />
+            </Row>
+            {problems.length > 0 && (
+              <ul data-testid="network-problems" className="space-y-1 rounded-md bg-status-warning/10 px-2.5 py-1.5 text-xs text-status-warning-fg">
+                {problems.map((p) => (
+                  <li key={p} className="flex items-start gap-1.5">
+                    <TriangleAlert className="mt-px h-3 w-3 shrink-0" aria-hidden />
+                    <span>{p}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         )}
         {cluster.segments_manager && <SegmentsManagerLink name={cluster.name} links={cluster.segments_manager} />}
