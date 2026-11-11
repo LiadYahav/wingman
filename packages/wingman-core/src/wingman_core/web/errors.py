@@ -58,6 +58,8 @@ class ErrorCode(StrEnum):
     SELF_APPROVAL = "SELF_APPROVAL"
     FEATURE_DISABLED = "FEATURE_DISABLED"
     DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
+    NODE_NOT_IN_CLUSTER = "NODE_NOT_IN_CLUSTER"
+    UNINSTALL_ALREADY_RUNNING = "UNINSTALL_ALREADY_RUNNING"
 
     @property
     def slug(self) -> str:
@@ -179,6 +181,20 @@ class DependencyUnavailable(AppError):
 
     status = 502
     code = ErrorCode.DEPENDENCY_UNAVAILABLE
+
+
+class NodeNotInCluster(AppError):
+    """server-scan does not place the server in the cluster the request names."""
+
+    status = 409
+    code = ErrorCode.NODE_NOT_IN_CLUSTER
+
+
+class UninstallAlreadyRunning(AppError):
+    """The orchestrator already runs an uninstall of this server."""
+
+    status = 409
+    code = ErrorCode.UNINSTALL_ALREADY_RUNNING
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (
