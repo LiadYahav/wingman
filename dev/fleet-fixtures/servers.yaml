@@ -1,0 +1,365 @@
+# A made-up server-scan fleet for DAY1_FAKE_FLEET=true (development only, ADR-0038).
+#
+# `items` has the exact shape of server-scan's `GET /api/v1/servers/rows`
+# items, and day1 reads it with the same parser as the real answer
+# (wingman_day1.infrastructure.server_scan.server_row). Nothing here is real:
+# the ids, serials and MACs are invented, and the BMC addresses are in the
+# documentation range 192.0.2.0/24.
+#
+# `cluster_name` is what server-scan's nodes-status jobs write: the
+# HostedCluster (ocp4-<clusterName>, the file stem with the default
+# DAY1_CLUSTER_NAME_STRIP_PREFIX) or the bare clusterName. Both mean the same
+# cluster; one lark node uses the bare name to show it.
+#
+# `runs` seeds uninstall runs that stay as they are (the fake's own runs walk
+# a few sample phases and then free the server).
+
+x-free: &free {held: false, holder: null, mce_cluster: null, infra_env: null, expires_at: null}
+x-no-maintenance: &no-maintenance {enabled: false, reason: null, created_by: null}
+
+items:
+  # ── ocp4-prod-lark-site1 (site1, ocp4-prod-mce-site1-a): five nodes ──────────
+  - id: srv_00000000000000000000000000000101
+    name: ocp-dell-r660-site1-128c-1024gb-DLFAKE0101
+    vendor: dell
+    model: PowerEdge R660
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-lark-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0101
+    bmc_host: 192.0.2.101
+    macs: ["02:00:00:00:01:01", "02:00:00:00:01:02"]
+  - id: srv_00000000000000000000000000000102
+    name: ocp-dell-r660-site1-128c-1024gb-DLFAKE0102
+    vendor: dell
+    model: PowerEdge R660
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: WARNING
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-lark-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0102
+    bmc_host: 192.0.2.102
+    macs: ["02:00:00:00:01:03", "02:00:00:00:01:04"]
+  - id: srv_00000000000000000000000000000103
+    name: ocp-dell-r660-site1-128c-1024gb-DLFAKE0103
+    vendor: dell
+    model: PowerEdge R660
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: {enabled: true, reason: fan replacement, created_by: dev}
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-lark-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0103
+    bmc_host: 192.0.2.103
+    macs: ["02:00:00:00:01:05", "02:00:00:00:01:06"]
+  - id: srv_00000000000000000000000000000104
+    name: ocp-dell-r760-site1-64c-512gb-DLFAKE0104
+    vendor: dell
+    model: PowerEdge R760
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: prod-lark-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R760-Storage
+    last_seen_at: "2026-11-09T02:00:03Z"
+    stale: true
+    reachable: true
+    serial: DLFAKE0104
+    bmc_host: 192.0.2.104
+    macs: ["02:00:00:00:01:07", "02:00:00:00:01:08"]
+  - id: srv_00000000000000000000000000000105
+    name: ocp-dell-r760-site1-64c-512gb-DLFAKE0105
+    vendor: dell
+    model: PowerEdge R760
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-lark-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R760-Storage
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0105
+    bmc_host: 192.0.2.105
+    macs: ["02:00:00:00:01:09", "02:00:00:00:01:0a"]
+
+  # ── ocp4-prod-herzi-site1: a failed uninstall run, and a contested node ─────
+  - id: srv_00000000000000000000000000000201
+    name: ocp-hp-gen11-site1-64c-512gb-HPFAKE0201
+    vendor: hp
+    model: ProLiant DL360 Gen11
+    site_id: site1
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-herzi-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: null
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0201
+    bmc_host: 192.0.2.121
+    macs: ["02:00:00:00:02:01", "02:00:00:00:02:02"]
+  - id: srv_00000000000000000000000000000202
+    name: ocp-hp-gen11-site1-64c-512gb-HPFAKE0202
+    vendor: hp
+    model: ProLiant DL360 Gen11
+    site_id: site1
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: MAJOR
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-herzi-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: null
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0202
+    bmc_host: 192.0.2.122
+    macs: ["02:00:00:00:02:03", "02:00:00:00:02:04"]
+  - id: srv_00000000000000000000000000000203
+    name: ocp-hp-gen11-site1-64c-512gb-HPFAKE0203
+    vendor: hp
+    model: ProLiant DL360 Gen11
+    site_id: site1
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-herzi-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: ocp4-prod-heron-site1
+    profile_template_name: null
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0203
+    bmc_host: 192.0.2.123
+    macs: ["02:00:00:00:02:05", "02:00:00:00:02:06"]
+
+  # ── ocp4-prod-hawk-site1: two nodes, one unreachable ─────────────────────────
+  - id: srv_00000000000000000000000000000301
+    name: ocp-cisco-m6-site1-128c-512gb-CSFAKE0301
+    vendor: cisco
+    model: UCS C220 M6
+    site_id: site1
+    source_provider: INTERSIGHT
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-hawk-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: UCS-X-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: CSFAKE0301
+    bmc_host: 192.0.2.131
+    macs: ["02:00:00:00:03:01", "02:00:00:00:03:02"]
+  - id: srv_00000000000000000000000000000302
+    name: ocp-cisco-m6-site1-128c-512gb-CSFAKE0302
+    vendor: cisco
+    model: UCS C220 M6
+    site_id: site1
+    source_provider: INTERSIGHT
+    installation_type: HOSTED_CLUSTER
+    health: CRITICAL
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-hawk-site1
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: UCS-X-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: false
+    serial: CSFAKE0302
+    bmc_host: 192.0.2.132
+    macs: ["02:00:00:00:03:03", "02:00:00:00:03:04"]
+
+  # ── ocp4-prep-amit-site2-a (site2, ocp4-prep-mce-site2-a): two nodes ─────────
+  - id: srv_00000000000000000000000000000401
+    name: ocp-dell-r660-site2-64c-256gb-DLFAKE0401
+    vendor: dell
+    model: PowerEdge R660
+    site_id: site2
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prep-amit-site2-a
+    mce_name: ocp4-prep-mce-site2-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0401
+    bmc_host: 192.0.2.141
+    macs: ["02:00:00:00:04:01", "02:00:00:00:04:02"]
+  - id: srv_00000000000000000000000000000402
+    name: ocp-dell-r660-site2-64c-256gb-DLFAKE0402
+    vendor: dell
+    model: PowerEdge R660
+    site_id: site2
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: UNKNOWN
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prep-amit-site2-a
+    mce_name: ocp4-prep-mce-site2-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Standard
+    last_seen_at: null
+    stale: false
+    reachable: true
+    serial: DLFAKE0402
+    bmc_host: 192.0.2.142
+    macs: ["02:00:00:00:04:03", "02:00:00:00:04:04"]
+
+  # ── In no cluster: free, or an unbound Agent in an MCE's inventory ───────────
+  - id: srv_00000000000000000000000000000501
+    name: ocp-dell-r660-site1-128c-1024gb-DLFAKE0501
+    vendor: dell
+    model: PowerEdge R660
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0501
+    bmc_host: 192.0.2.151
+    macs: ["02:00:00:00:05:01", "02:00:00:00:05:02"]
+  - id: srv_00000000000000000000000000000502
+    name: ocp-hp-gen11-site2-64c-512gb-HPFAKE0502
+    vendor: hp
+    model: ProLiant DL360 Gen11
+    site_id: site2
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: null
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0502
+    bmc_host: 192.0.2.152
+    macs: ["02:00:00:00:05:03", "02:00:00:00:05:04"]
+  - id: srv_00000000000000000000000000000503
+    name: ocp-cisco-m6-site1-128c-512gb-CSFAKE0503
+    vendor: cisco
+    model: UCS C220 M6
+    site_id: site1
+    source_provider: INTERSIGHT
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: UCS-X-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: CSFAKE0503
+    bmc_host: 192.0.2.153
+    macs: ["02:00:00:00:05:05", "02:00:00:00:05:06"]
+
+runs:
+  - server: ocp-hp-gen11-site1-64c-512gb-HPFAKE0202
+    status: FAILED
+    phase: reserving-server
+    error: "ServerReservedError: the server is held by install-server until its lock expires (fake)"
