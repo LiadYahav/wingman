@@ -2,7 +2,9 @@
 
 What day1 adds so the web can show the servers under each hosted cluster
 (from server-scan) and start the platform's `uninstall-server-from-hc`
-workflow on one of them. Decision and reasons: ADR-0038. Background:
+workflow on one of them. Wingman only starts the workflow and shows its
+run: the procedure (drain, lock, removal, and the checks before them) is
+the workflow's, and Wingman neither repeats nor second-guesses it. Decision and reasons: ADR-0038. Background:
 `docs/ecosystem/notes/server-scan.md` §7 and `docs/ecosystem/notes/workflows.md`
 §1a.6 and §2.
 
@@ -55,13 +57,14 @@ list page that expands many clusters costs one read.
   verdict); `serial`, `vendor`, `model`, `mce` and `last_seen_at` may be
   `null`.
 - `contested` means two clusters' jobs claim the server (server-scan's
-  `contested_with`). Uninstall is not offered on a contested node.
+  `contested_with`). It is shown, nothing more: the workflow refuses a
+  contested server itself.
 - `uninstall` is the node's newest uninstall run, or `null`:
   `{"workflow_id", "status", "phase", "error"}`. `status` is the
   orchestrator's, lowercase (`running`, `completed`, `failed`, `canceled`,
-  `terminated`, `timed_out`). `phase` is the run's step while it runs
-  (`checking-inventory`, `inspecting`, `reserving-server`,
-  `awaiting-machine-deletion`, `removing-from-inventory`, ...); `error` is
+  `terminated`, `timed_out`). `phase` is the run's step while it runs, the
+  workflow's own string, passed through (`checking-inventory`,
+  `awaiting-machine-deletion`, ...); Wingman keeps no list of them. `error` is
   the orchestrator's message when it failed (it names the error type, e.g.
   `ServerReservedError: ...`).
 - `uninstall.available` (top level) is `false` when the orchestrator is not
@@ -88,10 +91,10 @@ admins only.
 ```
 
 `server_name` is the node's name typed again (compared case-insensitively),
-because the uninstall cannot be undone. Before starting, day1 reads the
-server from server-scan, fresh rather than from the cache, and refuses the
-uninstall unless that read places the server in this cluster and on its MCE.
-It then starts the workflow with
+because the uninstall cannot be undone. Day1 reads the server from
+server-scan, fresh rather than from the cache, to check that it is one of
+this cluster's nodes, so the button acts on what the page showed. It
+checks nothing else: the workflow does its own checks. It then starts it with
 `{"server_names": "<name>", "mce_cluster": "<the cluster's MCE>"}` (plus
 `namespace` when `MCE_INFRAENV_NAMESPACE` is set), and logs who started it.
 
@@ -102,7 +105,8 @@ It then starts the workflow with
  "status": "running", "phase": null, "error": null}
 ```
 
-What the run does, for the confirmation dialog:
+What the run does, for a short summary in the confirmation dialog (the
+workflow's documentation is the authority):
 - It drains the node and deletes its Machine.
 - The server leaves the hosted cluster, then the MCE: powered off, and its
   BareMetalHost and Agent removed. It is free in server-scan afterwards.
@@ -115,7 +119,7 @@ Most refusals happen inside the run: it fails, and its `error` says why.
 | Status | `code` | When |
 |---|---|---|
 | 404 | `NOT_FOUND` | No such cluster, or no such server in server-scan. |
-| 409 | `NODE_NOT_IN_CLUSTER` | server-scan does not place the server in this cluster, places it on another MCE, or reports it contested. |
+| 409 | `NODE_NOT_IN_CLUSTER` | server-scan does not place the server in this cluster. |
 | 409 | `UNINSTALL_ALREADY_RUNNING` | The orchestrator already runs an uninstall of this server. |
 | 422 | `VALIDATION_ERROR` | `server_name` is not the server's name. |
 | 501 | `FEATURE_DISABLED` | server-scan or the orchestrator is not configured. |
