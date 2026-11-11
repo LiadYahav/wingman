@@ -18,6 +18,7 @@ from wingman_core.settings import AuthSettings, Environment, GitBackend, Runtime
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory, FakeUninstallWorkflow
+from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
@@ -118,9 +119,14 @@ async def test_server_scan_and_the_orchestrator_get_real_adapters_when_configure
         await close(adapters)
 
 
-async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture() -> None:
+async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -> None:
     adapters = build_adapters(
-        settings(day1_fake_fleet=True, server_scan_url="http://server-scan.example"),
+        settings(
+            day1_fake_fleet=True,
+            server_scan_url="http://server-scan.example",
+            cluster_status_enabled=True,
+            mce_tokens_file=tmp_path / "absent",
+        ),
         FAKE,
         metrics=metrics(),
         service_token=lambda: "t",
@@ -129,9 +135,25 @@ async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture() -> None:
         assert isinstance(adapters.inventory, FakeServerInventory)
         assert isinstance(adapters.uninstall, FakeUninstallWorkflow)
         assert len(await adapters.inventory.rows()) > 10
+        assert isinstance(adapters.hub, FakeHubApi), "the fake MCE, not the tokens file"
+        lark = await adapters.hub.hosted_cluster(
+            "ocp4-prod-mce-site1-a", namespace="hcp-prod-lark-site1", name="ocp4-prod-lark-site1"
+        )
+        assert lark.agent_namespace == "inventory"
         assert len(adapters.closers) == 1, "the fakes hold no connection"
     finally:
         await close(adapters)
+
+
+def test_the_nodes_view_needs_the_mce_hubs(app: FastAPI) -> None:
+    assert app.state.day1.nodes is not None, "the conftest app has a (fake) hub"
+    off = create_app(
+        settings=settings(),
+        auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
+        runtime=FAKE,
+        adapters=Adapters(gitlab=InMemoryGitLab(), day2=FakeDay2Addons()),
+    )
+    assert off.state.day1.nodes is None
 
 
 def test_the_fake_fleet_refuses_to_start_outside_development() -> None:

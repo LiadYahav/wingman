@@ -72,6 +72,7 @@ PARSED = ServerRow(
     contested=False,
     last_seen_at=datetime(2026, 11, 10, 22, 0, 3, 530203, tzinfo=UTC),
     reserved_by=None,
+    macs=("02:00:00:00:00:01", "02:00:00:00:00:02"),
 )
 DETAIL: dict[str, Any] = {
     "id": SERVER_ID,
@@ -221,6 +222,7 @@ async def test_transport_failures_are_unavailable(exc: type[httpx.TransportError
         {"items": [{**ROW, "reachable": "yes"}]},
         {"items": [{**ROW, "maintenance": "off"}]},
         {"items": [{**ROW, "last_seen_at": "yesterday"}]},
+        {"items": [{**ROW, "macs": "02:00:00:00:00:01"}]},
     ],
 )
 async def test_malformed_rows_are_unavailable(body: object) -> None:

@@ -1,0 +1,97 @@
+# The fake MCE hubs for DAY1_FAKE_FLEET=true (development only, ADR-0038).
+#
+# Each cluster here becomes a HostedCluster with its NodePools, MachineSets,
+# Machines, AgentMachines and Agents, built in the Kubernetes shape the MCE
+# serves and read with the real adapter's parsers
+# (wingman_day1.infrastructure.fake_mce). Servers are the made-up ones in
+# servers.yaml: an Agent's agent-install.openshift.io/bmh label is its
+# server's name, lowercased as a Kubernetes name is.
+#
+# `name` is the cluster file stem; the HostedCluster, its namespaces and the
+# NodePool names (<clusterName>-<infra_env>) follow the deployment's
+# DAY1_CLUSTER_NAME_STRIP_PREFIX. A node's `as` is what its Machine is doing:
+# ready (the default), rebooting, waiting (no Agent reserved), installing,
+# deleting. A Replace pool's node names the MachineSet `revision` it is from.
+# `spare_agents` are Agents in the agent namespace that no Machine of the
+# cluster took: `bound` (left behind, still labelled) or `unapproved`.
+
+agent_namespace: inventory
+
+clusters:
+  # An in-place version update half done, a pool short a node, and a server
+  # server-scan still places in the cluster that no Machine leads to (0105).
+  - name: ocp4-prod-lark-site1
+    mce: ocp4-prod-mce-site1-a
+    version: 4.18.22
+    node_pools:
+      - infra_env: dell-r660-site1-128c-1024gb-5tb
+        upgrade: InPlace
+        replicas: 3
+        version: 4.18.22
+        updating: {kind: version, target: 4.18.30, upgraded: 1}
+        nodes:
+          - {server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0101}
+          - {server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0102, as: rebooting}
+          - {server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0103}
+      - infra_env: dell-r760-site1-64c-512gb-20tb
+        upgrade: Replace
+        replicas: 2
+        version: 4.18.22
+        nodes:
+          - {server: ocp-dell-r760-site1-64c-512gb-DLFAKE0104}
+          - {as: waiting}
+    spare_agents:
+      - {server: ocp-dell-r760-site1-64c-512gb-DLFAKE0105, infra_env: dell-r760-site1-64c-512gb-20tb, as: bound}
+      - {server: ocp-dell-r760-site1-64c-512gb-DLFAKE0106, infra_env: dell-r760-site1-64c-512gb-20tb, as: unapproved}
+
+  # A Replace rollout: the old revision's Machine drains, the new one installs.
+  - name: ocp4-prod-herzi-site1
+    mce: ocp4-prod-mce-site1-a
+    version: 4.18.22
+    node_pools:
+      - infra_env: hp-gen11-site1-64c-512gb
+        upgrade: Replace
+        replicas: 3
+        version: 4.18.22
+        updating: {kind: version, target: 4.18.30}
+        nodes:
+          - {server: ocp-hp-gen11-site1-64c-512gb-HPFAKE0201, revision: 1}
+          - {server: ocp-hp-gen11-site1-64c-512gb-HPFAKE0203, revision: 1}
+          - {server: ocp-hp-gen11-site1-64c-512gb-HPFAKE0202, revision: 1, as: deleting}
+          - {server: ocp-hp-gen11-site1-64c-512gb-HPFAKE0204, revision: 2, as: installing}
+
+  # Simple and ready.
+  - name: ocp4-prod-hawk-site1
+    mce: ocp4-prod-mce-site1-a
+    version: 4.18.22
+    node_pools:
+      - infra_env: cisco-m6-site1-128c-512gb
+        upgrade: Replace
+        replicas: 2
+        version: 4.18.22
+        nodes:
+          - {server: ocp-cisco-m6-site1-128c-512gb-CSFAKE0301, revision: 1}
+          - {server: ocp-cisco-m6-site1-128c-512gb-CSFAKE0302, revision: 1}
+  - name: ocp4-prep-amit-site2-a
+    mce: ocp4-prep-mce-site2-a
+    version: 4.18.22
+    node_pools:
+      - infra_env: dell-r660-site2-64c-256gb
+        upgrade: InPlace
+        replicas: 2
+        version: 4.18.22
+        nodes:
+          - {server: ocp-dell-r660-site2-64c-256gb-DLFAKE0401}
+          - {server: ocp-dell-r660-site2-64c-256gb-DLFAKE0402}
+
+  # The other fixture clusters: on their MCE, with no NodePools.
+  - {name: ocp4-prod-heron-site1, mce: ocp4-prod-mce-site1-a, version: 4.18.22}
+  - {name: ocp4-prod-karniol-site1, mce: ocp4-prod-mce-site1-a, version: 4.18.22}
+  - {name: ocp4-prod-owl-site1, mce: ocp4-prod-mce-site1-a, version: 4.18.22}
+  - {name: ocp4-prep-eyal-site1, mce: ocp4-prep-mce-site1-a, version: 4.18.22}
+  - {name: ocp4-prep-itay-site1, mce: ocp4-prep-mce-site1-a, version: 4.18.22}
+  - {name: ocp4-upgrade-demo, mce: ocp4-mce-workflow-test, version: 4.18.22}
+  - {name: ocp4-prep-ilay-site2-a, mce: ocp4-prep-mce-site2-a, version: 4.18.22}
+  - {name: ocp4-prep-kite-site2, mce: ocp4-prep-mce-site2-a, version: 4.18.22}
+  - {name: ocp4-prep-wren-site2, mce: ocp4-prep-mce-site2-a, version: 4.18.22}
+  - {name: ocp4-prod-didush-site2-a, mce: ocp4-prod-mce-site2-a, version: 4.18.22}

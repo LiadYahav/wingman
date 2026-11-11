@@ -13,6 +13,9 @@
 #
 # `runs` seeds uninstall runs that stay as they are (the fake's own runs walk
 # a few sample phases and then free the server).
+#
+# The fake MCE in mce.yaml places these servers in NodePools; the two files
+# tell one story.
 
 x-free: &free {held: false, holder: null, mce_cluster: null, infra_env: null, expires_at: null}
 x-no-maintenance: &no-maintenance {enabled: false, reason: null, created_by: null}
@@ -130,6 +133,31 @@ items:
     bmc_host: 192.0.2.105
     macs: ["02:00:00:00:01:09", "02:00:00:00:01:0a"]
 
+  # An Agent in the MCE's inventory, discovered and not yet approved: it matches
+  # lark's dell-r760 NodePool, which cannot take it.
+  - id: srv_00000000000000000000000000000106
+    name: ocp-dell-r760-site1-64c-512gb-DLFAKE0106
+    vendor: dell
+    model: PowerEdge R760
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R760-Storage
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0106
+    bmc_host: 192.0.2.106
+    macs: ["02:00:00:00:01:0b", "02:00:00:00:01:0c"]
+
   # ── ocp4-prod-herzi-site1: a failed uninstall run, and a contested node ─────
   - id: srv_00000000000000000000000000000201
     name: ocp-hp-gen11-site1-64c-512gb-HPFAKE0201
@@ -197,6 +225,31 @@ items:
     serial: HPFAKE0203
     bmc_host: 192.0.2.123
     macs: ["02:00:00:00:02:05", "02:00:00:00:02:06"]
+
+  # Being installed into herzi by its Replace rollout: server-scan has no cluster
+  # for it until it joins.
+  - id: srv_00000000000000000000000000000204
+    name: ocp-hp-gen11-site1-64c-512gb-HPFAKE0204
+    vendor: hp
+    model: ProLiant DL360 Gen11
+    site_id: site1
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: null
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0204
+    bmc_host: 192.0.2.124
+    macs: ["02:00:00:00:02:07", "02:00:00:00:02:08"]
 
   # ── ocp4-prod-hawk-site1: two nodes, one unreachable ─────────────────────────
   - id: srv_00000000000000000000000000000301
