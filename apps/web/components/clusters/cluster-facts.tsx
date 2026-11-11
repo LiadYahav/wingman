@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { PoolNodesInline, matchPool } from "@/components/clusters/pool-nodes-inline";
 import { useClusterNodes } from "@/lib/nodes";
 import { cn, formatDate } from "@/lib/utils";
-import type { ClusterDetail, ClusterValues } from "@/types";
+import type { ClusterDetail, ClusterValues, NodePoolNodes } from "@/types";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -160,26 +160,61 @@ export interface NodePoolsNodes {
   onOpenNodesTab: () => void;
 }
 
+type PoolRow =
+  | { key: string; kind: "file"; index: number; np: ClusterValues["nodepools"][number]; poolName: string | null; pool: NodePoolNodes | null }
+  | { key: string; kind: "mce"; pool: NodePoolNodes };
+
+/** The InfraEnv a NodePool draws on, from its selector in words (`…infraenvs.agent-install.openshift.io=<name>`). */
+function infraEnvOf(pool: NodePoolNodes): string | null {
+  const selector = pool.agent_selector;
+  if (!selector) return null;
+  const match = /infraenvs\.agent-install\.openshift\.io=([^,\s]+)/.exec(selector);
+  return match ? match[1] : null;
+}
+
+/**
+ * The cluster's nodepools: those its file lists, and those the MCE reports
+ * that the file does not (they come from the site or MCE values the platform
+ * layers under the file). Each opens to its nodes on the MCE.
+ */
 export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?: NodePoolsNodes }) {
-  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
-  // Read only once a pool is opened; the Nodes tab shares the same query
-  const query = useClusterNodes(nodes?.name ?? "", nodes?.where ?? "", { enabled: Boolean(nodes) && open.size > 0 });
-  const toggle = (i: number) =>
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  // Read with the page: a nodepool from the site or MCE values is known only from the MCE.
+  // The Nodes tab shares the query, and day1 caches the MCE reads.
+  const query = useClusterNodes(nodes?.name ?? "", nodes?.where ?? "", { enabled: Boolean(nodes) });
+  const read = query.data;
+  const pools = nodes && read && !read.off ? read.data.node_pools : [];
+  const toggle = (key: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
+
+  const rows: PoolRow[] = values.nodepools.map((np, index) => {
+    const poolName = np.name ?? (np.infra_env_name && nodes ? `${nodes.clusterName}-${np.infra_env_name}` : null);
+    const pool = nodes ? matchPool(pools, { name: np.name, infraEnv: np.infra_env_name, clusterName: nodes.clusterName }) : null;
+    return { key: `file-${index}`, kind: "file", index, np, poolName, pool };
+  });
+  const matched = new Set(rows.flatMap((r) => (r.kind === "file" && r.pool ? [r.pool.name] : [])));
+  for (const pool of pools) {
+    if (!matched.has(pool.name)) rows.push({ key: `mce-${pool.name}`, kind: "mce", pool });
+  }
   const columns = 5;
+
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm text-muted-foreground">Nodepools ({values.nodepools.length})</CardTitle>
+        <CardTitle className="text-sm text-muted-foreground">Nodepools ({rows.length})</CardTitle>
       </CardHeader>
       <CardContent className="text-sm">
-        {values.nodepools.length === 0 ? (
-          <p className="text-muted-foreground italic">No nodepools in this file (they may come from the site or MCE values).</p>
+        {rows.length === 0 ? (
+          <p className="text-muted-foreground italic">
+            {nodes && query.isPending
+              ? "Reading the NodePools from the MCE…"
+              : "No nodepools in this file (they may come from the site or MCE values)."}
+          </p>
         ) : (
           <div className="rounded-lg border overflow-x-auto">
             <table className="w-full text-xs">
@@ -193,49 +228,63 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {values.nodepools.map((np, i) => {
-                  const isOpen = open.has(i);
-                  const poolName = np.name ?? (np.infra_env_name && nodes ? `${nodes.clusterName}-${np.infra_env_name}` : null);
-                  const read = query.data;
-                  const pool =
-                    nodes && read && !read.off
-                      ? matchPool(read.data.node_pools, { name: np.name, infraEnv: np.infra_env_name, clusterName: nodes.clusterName })
-                      : null;
-                  const panelId = `nodepool-nodes-${i}`;
+                {rows.map((row) => {
+                  const isOpen = open.has(row.key);
+                  const panelId = `nodepool-nodes-${row.key}`;
+                  const label = row.kind === "file" ? row.poolName ?? row.np.infra_env_name ?? "this nodepool" : row.pool.name;
+                  const infraEnv = row.kind === "file" ? row.np.infra_env_name : infraEnvOf(row.pool);
+                  const testId = row.kind === "file" ? `nodepool-row-${row.index}` : `nodepool-row-mce-${row.pool.name}`;
                   return (
-                    <Fragment key={i}>
-                      <tr data-testid={`nodepool-row-${i}`} className={cn(isOpen && "bg-muted/20")}>
+                    <Fragment key={row.key}>
+                      <tr data-testid={testId} className={cn(isOpen && "bg-muted/20")}>
                         <td className="px-3 py-2 font-mono break-all">
                           <div className="flex items-center gap-1.5">
                             {nodes && (
                               <button
                                 type="button"
-                                onClick={() => toggle(i)}
+                                onClick={() => toggle(row.key)}
                                 aria-expanded={isOpen}
                                 aria-controls={panelId}
-                                aria-label={`${isOpen ? "Hide" : "Show"} the nodes of ${poolName ?? np.infra_env_name ?? "this nodepool"}`}
+                                aria-label={`${isOpen ? "Hide" : "Show"} the nodes of ${label}`}
                                 className="-ml-1 rounded p-0.5 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
                               >
                                 <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} aria-hidden />
                               </button>
                             )}
-                            <span>{np.infra_env_name ?? "—"}</span>
+                            <span>{infraEnv ?? "—"}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-2 font-mono break-all text-muted-foreground">{np.name ?? "derived"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{np.replicas ?? "—"}</td>
-                        <td className="px-3 py-2">
-                          {np.configs.length === 0 ? <span className="text-muted-foreground">—</span> : (
-                            <div className="flex flex-wrap gap-1">
-                              {np.configs.map((c) => (
-                                <span key={c} className="rounded bg-muted px-1.5 py-0.5 font-mono break-all">{c}</span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 font-mono break-all">
-                          {np.tuning_config ? String(np.tuning_config) : <span className="text-muted-foreground">—</span>}
-                        </td>
+                        {row.kind === "file" ? (
+                          <>
+                            <td className="px-3 py-2 font-mono break-all text-muted-foreground">{row.np.name ?? "derived"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{row.np.replicas ?? "—"}</td>
+                            <td className="px-3 py-2">
+                              {row.np.configs.length === 0 ? <span className="text-muted-foreground">—</span> : (
+                                <div className="flex flex-wrap gap-1">
+                                  {row.np.configs.map((c) => (
+                                    <span key={c} className="rounded bg-muted px-1.5 py-0.5 font-mono break-all">{c}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 font-mono break-all">
+                              {row.np.tuning_config ? String(row.np.tuning_config) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-2 font-mono break-all text-muted-foreground">
+                              {row.pool.name}
+                              <span className="ml-1.5 whitespace-nowrap rounded bg-muted px-1.5 py-0.5 font-sans text-[11px] text-muted-foreground">
+                                from site or MCE values
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {row.pool.wanted ?? (row.pool.autoscaling ? `${row.pool.autoscaling.min}–${row.pool.autoscaling.max}` : "—")}
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground" colSpan={2}>Not in this file</td>
+                          </>
+                        )}
                       </tr>
                       {nodes && isOpen && (
                         <tr id={panelId} className="bg-muted/20">
@@ -245,8 +294,8 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                               isPending={query.isPending}
                               error={query.error}
                               onRetry={() => void query.refetch()}
-                              pool={pool}
-                              poolName={poolName}
+                              pool={row.pool}
+                              poolName={row.kind === "file" ? row.poolName : row.pool.name}
                               onOpenNodesTab={nodes.onOpenNodesTab}
                             />
                           </td>

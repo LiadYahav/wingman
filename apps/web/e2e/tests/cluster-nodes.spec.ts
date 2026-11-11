@@ -471,6 +471,19 @@ test.describe("The Overview's nodepools open to their nodes", () => {
     await expect(page.getByRole("tab", { name: "Nodes" })).toHaveAttribute("aria-selected", "true");
   });
 
+  test("a NodePool from the site or MCE values, not in the file, is listed and opens too", async ({ page }) => {
+    const board = mockNodesBoard();
+    await openOverview(page, board);
+    // The file lists only the r660 pool: the MCE's other pools come from layered values
+    for (const name of [R760, C240]) {
+      const extra = page.getByTestId(`nodepool-row-mce-${name}`);
+      await expect(extra).toContainText("from site or MCE values");
+    }
+    await page.getByRole("button", { name: `Show the nodes of ${C240}` }).click();
+    const c240 = board.node_pools.find((p) => p.name === C240)!;
+    await expect(page.getByTestId("pool-nodes-inline").getByTestId("pool-node")).toHaveCount(c240.nodes.length);
+  });
+
   test("a nodepool the MCE does not report says so", async ({ page }) => {
     await openOverview(page, mockNodes({ node_pools: [] }));
     await page.getByRole("button", { name: `Show the nodes of ${R660}` }).click();
