@@ -38,6 +38,7 @@ ENV = (
     "WORKFLOWS_SSL_VERIFY",
     "WORKFLOWS_TIMEOUT_SECONDS",
     "DAY1_FAKE_FLEET",
+    "SEGMENTS_MANAGER_UI_URL",
 )
 OAUTH = {
     "openshift_api_host": "api.hub.example.invalid:6443",
@@ -204,7 +205,15 @@ def test_node_links_point_at_the_api_unless_the_ui_has_its_own_url() -> None:
     assert ui.server_scan_ui_base == "https://server-scan.example"
 
 
-@pytest.mark.parametrize("field", ["server_scan_url", "server_scan_ui_url", "workflows_api_url"])
+URL_SETTINGS = [
+    "server_scan_url",
+    "server_scan_ui_url",
+    "workflows_api_url",
+    "segments_manager_ui_url",
+]
+
+
+@pytest.mark.parametrize("field", URL_SETTINGS)
 @pytest.mark.parametrize("url", ["server-scan", "ftp://server-scan.example", "http://"])
 def test_a_url_setting_is_empty_or_an_http_url(field: str, url: str) -> None:
     values = {"server_scan_url": SERVER_SCAN, field: url}
@@ -278,3 +287,32 @@ def test_the_nodes_settings_come_from_the_environment(monkeypatch: pytest.Monkey
     assert loaded.workflows_api_url == WORKFLOWS
     assert (loaded.workflows_tls_verify, loaded.workflows_timeout_seconds) == ("/ca.pem", 5.0)
     assert loaded.day1_fake_fleet
+
+
+# ── The link to segments-manager on the cluster page ─────────────────────────
+
+SEGMENTS_MANAGER = "https://segments-manager.example"
+
+
+def test_the_segments_manager_link_is_off_by_default() -> None:
+    assert dev().segments_manager_ui_url == ""
+
+
+def test_the_segments_manager_url_loses_its_trailing_slash() -> None:
+    loaded = dev(segments_manager_ui_url=f"  {SEGMENTS_MANAGER}/ ")
+    assert loaded.segments_manager_ui_url == SEGMENTS_MANAGER
+
+
+def test_the_segments_manager_link_needs_nothing_else(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a link: no server-scan, no orchestrator, no token."""
+    for name, value in {
+        "DAY1_GITLAB_PROJECT_ID": "42",
+        "SPECS_GITLAB_PROJECT_ID": "43",
+        "DEV_AUTH_ENABLED": "true",
+        "DEV_AUTH_SECRET": "e" * 40,
+        "SEGMENTS_MANAGER_UI_URL": SEGMENTS_MANAGER + "/",
+    }.items():
+        monkeypatch.setenv(name, value)
+    loaded = Day1Settings()
+    assert loaded.segments_manager_ui_url == SEGMENTS_MANAGER
+    assert (loaded.server_scan_url, loaded.workflows_api_url) == ("", "")

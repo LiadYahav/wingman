@@ -42,6 +42,7 @@ const DETAIL: ClusterDetail = {
   naming: { follows_convention: true, env: "prod", short_name: "herzi", sequence: null, problems: [] },
   mce_default_mastertag: "4.16.27-x86_64",
   problems: [],
+  segments_manager: null,
 };
 
 const DRIFT: ClusterDrift = {

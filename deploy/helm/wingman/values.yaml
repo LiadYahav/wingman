@@ -252,6 +252,13 @@ workflows:
   sslVerify: "true"       # "true", "false" or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
 
+# ── A link to segments-manager on the cluster page ────────────────────────────
+# Off by default. With a uiUrl, the cluster page's "HostedCluster & network"
+# card links to segments-manager's UI and to its search for the cluster's
+# segment (JSON). Only a link: day1 never calls segments-manager.
+segmentsManager:
+  uiUrl: ""               # e.g. "https://segments-manager.example"; empty: no link
+
 # ── Namespace ──────────────────────────────────────────────────────────────────
 # Override with --namespace on helm install
 namespace: ""  # defaults to .Release.Namespace

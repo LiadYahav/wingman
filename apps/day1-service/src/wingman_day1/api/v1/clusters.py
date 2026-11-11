@@ -44,6 +44,7 @@ from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.clusters import CreateCluster
 from wingman_day1.domain.errors import Day1Error
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.segments_manager import segments_manager_links
 
 router = APIRouter(prefix="/api/day1/clusters", tags=["clusters"])
 
@@ -212,10 +213,12 @@ async def cluster(
     """The cluster's file, values and naming. ``site``/``mce`` are optional: names are unique."""
     ref = await _ref(context, name, site, mce)
     found = await context.clusters.get(ref)
+    ui = context.segments_manager_ui_url
     return cluster_detail(
         found,
         gitlab_url=await context.clusters.web_url(ref),
         mce_default_mastertag=await context.sites.default_mastertag(ref.site, ref.mce),
+        segments_manager=segments_manager_links(ui, ref.name) if ui else None,
     )
 
 

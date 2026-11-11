@@ -44,6 +44,7 @@ const DETAIL: ClusterDetail = {
   naming: { follows_convention: true, env: "prod", short_name: "lark", sequence: null, problems: [] },
   mce_default_mastertag: "4.18.22-x86_64",
   problems: [],
+  segments_manager: null,
 };
 
 const CHARTS: DestinationCharts = {

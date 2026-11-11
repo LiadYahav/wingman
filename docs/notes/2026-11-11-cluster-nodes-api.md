@@ -252,3 +252,33 @@ account behind each MCE token needs `get` and `list` on:
 Control-plane namespaces are created per cluster, so a ClusterRole with a
 ClusterRoleBinding is the simple grant. No Secrets: Wingman never reads a
 hosted cluster's own API.
+
+## 5. The segments-manager link
+
+`GET /api/day1/clusters/{name}` gains one field, read by the Overview's
+**HostedCluster & network** card:
+
+```json
+"segments_manager": {
+  "url": "https://segments-manager.example/",
+  "search_url": "https://segments-manager.example/api/segments/search?q=ocp4-prod-lark-site1"
+}
+```
+
+It is `null` unless day1's `SEGMENTS_MANAGER_UI_URL` is set (chart:
+`segmentsManager.uiUrl`; empty by default). Day1 builds both URLs and never
+calls segments-manager; the web never assembles them itself.
+
+segments-manager's UI reads no URL parameters, so no link opens one
+cluster's segment: `url` opens the UI, and the card names the cluster to
+search for there, with a copy button. `search_url` is its open
+`GET /api/segments/search?q=`, the matching segments as JSON. Both search by
+the cluster's `name`, the file stem, because that is the `cluster_name`
+allocate-segment gives segments-manager
+(`docs/ecosystem/notes/segments-manager.md` §4, §5), not the chart's
+`clusterName`. The search matches substrings, so it may also list a cluster
+whose name contains this one (`<name>-b`).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SEGMENTS_MANAGER_UI_URL` | empty (off) | segments-manager's UI, e.g. `https://segments-manager.example`. The browser opens it; day1 does not. |
