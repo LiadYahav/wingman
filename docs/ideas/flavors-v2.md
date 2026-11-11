@@ -38,7 +38,7 @@ lock icon, but:
 - **Catalogue.** Day1 reads `mc-files/` in the day1 repo (`platform-config`)
   through `GitLabPort`. It never writes there. A new read endpoint lists:
   - static configs, which are files in the root and its subfolders (for example `kubevirt/`);
-  - per-cluster network configs, from `templates/nm-conf-template-hw-<hw>.bu`. A
+  - per-cluster network configs, from `templates/nm-conf-template-<hw>.bu`. A
     nodepool picks the hardware type `<hw>`, and the name written to the file
     is `nm-conf-<clusterName>-<hw>`, the convention the CI resolves.
   - Not `legacy/`: those are restored originals for clusters not yet

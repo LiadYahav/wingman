@@ -218,7 +218,7 @@ nodepool:
   replicas: 2
   labels: {allowDeletion: false}
   configs:
-  - name: nm-conf-test-storage-site-a-a-dell-data   # template nm-conf-template-hw-dell-data.bu
+  - name: nm-conf-test-storage-site-a-a-dell-data   # template nm-conf-template-dell-data.bu
   - name: worker-kubeletconfig-reserved
   - name: nic-ring-buffer
   - name: workers-chrony-configuration

@@ -36,9 +36,9 @@ repo, plus the nodepool defaults from the specs project. Cached for
     {"name": "kubevirt-worker-tuning", "folder": "kubevirt", "path": "mc-files/kubevirt/kubevirt-worker-tuning.bu"}
   ],
   "hardware_types": [
-    {"name": "cisco", "template": "mc-files/templates/nm-conf-template-hw-cisco.bu"},
-    {"name": "dell", "template": "mc-files/templates/nm-conf-template-hw-dell.bu"},
-    {"name": "dell-data", "template": "mc-files/templates/nm-conf-template-hw-dell-data.bu"}
+    {"name": "cisco", "template": "mc-files/templates/nm-conf-template-cisco.bu"},
+    {"name": "dell", "template": "mc-files/templates/nm-conf-template-dell.bu"},
+    {"name": "dell-data", "template": "mc-files/templates/nm-conf-template-dell-data.bu"}
   ],
   "nodepool_defaults": {
     "path": "nodepool-defaults.yaml",
@@ -75,7 +75,7 @@ repo, plus the nodepool defaults from the specs project. Cached for
     them leads to the same 422 at save.
 - `problems` (top level): files in `mc-files/` that are not offered, and
   why (a static file a template's suffix would capture, a name found twice,
-  a template not named `nm-conf-template-hw-<hw>.bu`, or no `mc-files/`
+  a template not named `nm-conf-template-<hw>.bu`, or no `mc-files/`
   folder at all). For an admin view; the picker can ignore it.
 - A GitLab read failure is a 503 problem, as for every read.
 

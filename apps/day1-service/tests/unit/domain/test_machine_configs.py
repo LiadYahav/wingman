@@ -57,9 +57,7 @@ def test_the_fixture_tree_offers_its_static_configs_and_hardware_types() -> None
         ("kubevirt", "kubevirt-worker-tuning"),
     ]
     assert [h.name for h in CATALOG.hardware_types()] == ["cisco", "dell", "dell-data"]
-    assert str(CATALOG.hardware["dell"].template) == (
-        "mc-files/templates/nm-conf-template-hw-dell.bu"
-    )
+    assert str(CATALOG.hardware["dell"].template) == ("mc-files/templates/nm-conf-template-dell.bu")
     assert str(CATALOG.static["nic-ring-buffer"].path) == "mc-files/nic-ring-buffer.bu"
     assert str(CATALOG.static["worker-kubeletconfig-reserved"].path) == (
         "mc-files/worker-kubeletconfig-reserved"
@@ -96,23 +94,41 @@ def test_legacy_names_are_not_offered_and_a_legacy_win_is_reported() -> None:
 
 
 def test_a_static_name_a_template_captures_is_not_offered() -> None:
-    found = catalog("templates/nm-conf-template-hw-dell.bu", "tuning-dell.bu", "dell.bu")
+    found = catalog("templates/nm-conf-template-dell.bu", "tuning-dell.bu", "dell.bu")
     assert set(found.static) == {"dell"}
     assert any("tuning-dell.bu: the name ends in -dell" in p for p in found.problems)
 
 
 def test_templates_must_follow_the_hardware_naming_and_are_never_static() -> None:
     found = catalog(
-        "templates/nm-conf-template-hw-dell.bu",
+        "templates/nm-conf-template-dell.bu",
         "templates/nm-conf-template.bu",
         "templates/other.bu",
-        "templates/deeper/nm-conf-template-hw-cisco.bu",
-        "templates/nm-conf-template-hw-Bad_Name.bu",
+        "templates/deeper/nm-conf-template-cisco.bu",
+        "templates/nm-conf-template-Bad_Name.bu",
     )
     assert set(found.hardware) == {"dell"}
     assert found.static == {}
     assert len(found.problems) == 4
     assert all("is no hardware type" in p for p in found.problems)
+
+
+def test_the_hardware_type_is_what_the_ci_strips_nm_conf_template_from() -> None:
+    """The CI maps ``nm-conf-template-<hw>.bu`` to the suffix ``-<hw>``; 3.3.0 wanted ``-hw-<hw>``.
+
+    With 3.3.0's prefix every production template was refused, and so was every
+    nodepool naming a network config. A ``-hw-`` file is ``hw-<x>`` to the CI too.
+    """
+    found = catalog(
+        "templates/nm-conf-template-dell.bu",
+        "templates/nm-conf-template-dell-data.bu",
+        "templates/nm-conf-template-hw-cisco.bu",
+    )
+    assert set(found.hardware) == {"dell", "dell-data", "hw-cisco"}
+    assert found.problems == ()
+    assert (
+        found.template_for(network_config_name("prod-rcs-five-a", "dell")) == found.hardware["dell"]
+    )
 
 
 def test_docs_dot_files_and_paths_outside_mc_files_are_ignored() -> None:
@@ -234,7 +250,7 @@ def test_an_empty_catalogue_resolves_nothing() -> None:
     problems = flavor_config_problems(
         pools([{"name": "nm-conf", "hardware": "dell"}, {"name": "x"}]), MachineConfigCatalog()
     )
-    assert "mc-files/templates/ has no nm-conf-template-hw-<hardware>.bu" in problems[0]
+    assert "mc-files/templates/ has no nm-conf-template-<hardware>.bu" in problems[0]
     assert problems[1] == "nodepools[0].configs[1]: no machine config 'x' in mc-files/"
 
 
@@ -281,9 +297,7 @@ def test_at_create_the_clusters_own_network_name_may_be_written_out() -> None:
 
 
 def test_a_network_name_the_ci_would_read_as_other_hardware_is_refused() -> None:
-    found = catalog(
-        "templates/nm-conf-template-hw-l4.bu", "templates/nm-conf-template-hw-cisco-l4.bu"
-    )
+    found = catalog("templates/nm-conf-template-l4.bu", "templates/nm-conf-template-cisco-l4.bu")
     entry = pools([{"name": "nm-conf", "hardware": "l4"}])
     assert cluster_config_problems(entry, found, cluster_name="prod-a-site1") == []
     assert cluster_config_problems(entry, found, cluster_name="prod-cisco") == [
@@ -313,7 +327,7 @@ def test_a_network_name_too_long_for_the_ci_is_refused() -> None:
 def test_an_accepted_network_entry_is_one_the_ci_renders_from_its_template(
     hardware: list[str], cluster: str, pick: int
 ) -> None:
-    found = catalog(*(f"templates/nm-conf-template-hw-{h}.bu" for h in hardware))
+    found = catalog(*(f"templates/nm-conf-template-{h}.bu" for h in hardware))
     chosen = hardware[pick % len(hardware)]
     entry = pools([{"name": "nm-conf", "hardware": chosen}])
     if cluster_config_problems(entry, found, cluster_name=cluster):

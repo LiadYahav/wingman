@@ -10,7 +10,7 @@ typo is a 422 on the form instead.
 How the CI resolves a name, described here in Wingman's words:
 
 1. **A network template comes first.** Each
-   ``mc-files/templates/nm-conf-template-hw-<hw>.bu`` is one hardware type
+   ``mc-files/templates/nm-conf-template-<hw>.bu`` is one hardware type
    ``<hw>``. A name that ends in ``-<hw>`` is rendered from that template
    for the cluster whose file lists it. When several types match, the
    longest wins: ``nm-conf-x-dell-data`` is ``dell-data``, not ``dell``.
@@ -55,7 +55,7 @@ NETWORK_CONFIG: Final = "nm-conf"
 """The entry name that stands for the cluster's own network config."""
 TEMPLATES_DIR: Final = "templates"
 LEGACY_DIR: Final = "legacy"
-TEMPLATE_PREFIX: Final = "nm-conf-template-hw-"
+TEMPLATE_PREFIX: Final = "nm-conf-template-"
 BUTANE_SUFFIX: Final = ".bu"
 MAX_CONFIG_NAME: Final = 253
 MAX_HARDWARE_NAME: Final = 63
@@ -79,7 +79,7 @@ class StaticConfig:
 
 @dataclass(frozen=True, slots=True)
 class HardwareType:
-    """A hardware type: one ``templates/nm-conf-template-hw-<name>.bu``."""
+    """A hardware type: one ``templates/nm-conf-template-<name>.bu``."""
 
     name: str
     template: RepoPath
@@ -107,7 +107,7 @@ def _is_config_name(name: str) -> bool:
 
 
 def _hardware_of(relative: Sequence[str]) -> str | None:
-    """``("templates", "nm-conf-template-hw-dell.bu")`` → ``dell``; anything else → ``None``."""
+    """``("templates", "nm-conf-template-dell.bu")`` → ``dell``; anything else → ``None``."""
     if len(relative) != 2:  # templates/<file>: the CI does not look deeper
         return None
     filename = relative[1]

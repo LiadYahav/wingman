@@ -99,9 +99,9 @@ export const mockMachineConfigs: MachineConfigs = {
     { name: "kubevirt-worker-tuning", folder: "kubevirt", path: "mc-files/kubevirt/kubevirt-worker-tuning.bu" },
   ],
   hardware_types: [
-    { name: "cisco", template: "mc-files/templates/nm-conf-template-hw-cisco.bu" },
-    { name: "dell", template: "mc-files/templates/nm-conf-template-hw-dell.bu" },
-    { name: "dell-data", template: "mc-files/templates/nm-conf-template-hw-dell-data.bu" },
+    { name: "cisco", template: "mc-files/templates/nm-conf-template-cisco.bu" },
+    { name: "dell", template: "mc-files/templates/nm-conf-template-dell.bu" },
+    { name: "dell-data", template: "mc-files/templates/nm-conf-template-dell-data.bu" },
   ],
   nodepool_defaults: {
     path: "nodepool-defaults.yaml",

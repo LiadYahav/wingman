@@ -102,7 +102,7 @@ export interface StaticConfig {
   path: string;
 }
 
-/** A network template `mc-files/templates/nm-conf-template-hw-<name>.bu`. */
+/** A network template `mc-files/templates/nm-conf-template-<name>.bu`. */
 export interface HardwareType {
   name: string;
   template: string;
