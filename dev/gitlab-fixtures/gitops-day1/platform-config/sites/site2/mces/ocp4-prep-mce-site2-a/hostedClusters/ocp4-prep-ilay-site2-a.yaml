@@ -1,3 +1,5 @@
+vlanId: 2450
+
 dhcp_values:
   # scopeName omitted: derives from this file's name.
   network: "10.20.50.0"

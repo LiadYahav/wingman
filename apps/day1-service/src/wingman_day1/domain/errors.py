@@ -150,3 +150,10 @@ class UninstallAlreadyRunningError(WorkflowsError):
 
 class AmbiguousStartError(WorkflowsError):
     """A start was sent but its outcome is unknown: the run may exist. Never retried (ADR-0006)."""
+
+
+# ── segments-manager (a cluster's EPG, checked against Git; ADR-0039) ────────
+
+
+class SegmentsManagerUnavailableError(Day1Error):
+    """segments-manager could not be reached or answered with an error: the EPG is unknown."""

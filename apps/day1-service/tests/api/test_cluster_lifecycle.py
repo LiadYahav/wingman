@@ -158,7 +158,11 @@ async def test_create_approve_edit_delete(
     )
     assert hook.json() == {"status": "ok"}
     fresh = (await client.get(f"/api/day1/clusters/{NEW}", headers=alice)).json()
-    assert fresh["values"]["network"] == {"vlan_id": 412, "dhcp_network": "10.20.99.0"}
+    assert fresh["values"]["network"] == {
+        "vlan_id": 412,
+        "dhcp_network": "10.20.99.0",
+        "segment": "10.20.99.0/24",
+    }
     # Dropping automation's keys is refused.
     dropped = await client.patch(
         f"/api/day1/clusters/{NEW}",

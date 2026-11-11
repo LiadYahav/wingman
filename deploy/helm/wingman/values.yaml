@@ -252,12 +252,18 @@ workflows:
   sslVerify: "true"       # "true", "false" or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
 
-# ── A link to segments-manager on the cluster page ────────────────────────────
-# Off by default. With a uiUrl, the cluster page's "HostedCluster & network"
-# card links to segments-manager's UI and to its search for the cluster's
-# segment (JSON). Only a link: day1 never calls segments-manager.
+# ── segments-manager: the cluster's EPG, checked against Git (ADR-0039) ───────
+# Off by default. With a url, the cluster page's "HostedCluster & network" card
+# shows the EPG segments-manager records for the cluster's segment, and warns
+# where segments-manager disagrees with the cluster file (the VLAN and segment
+# shown are always the file's). day1 only reads one segment (its reads need no
+# token) and never writes. The card also links to the UI and to its search for
+# the cluster's segment (JSON): uiUrl, or url when uiUrl is empty.
 segmentsManager:
-  uiUrl: ""               # e.g. "https://segments-manager.example"; empty: no link
+  url: ""                 # the API, e.g. "http://segments-manager.<ns>.svc:8000"; empty: no EPG
+  uiUrl: ""               # the UI, e.g. "https://segments-manager.example"; empty: url (none: no link)
+  sslVerify: "true"       # "true", "false" or a CA bundle path
+  timeoutSeconds: 5       # per request, at most 60
 
 # ── Namespace ──────────────────────────────────────────────────────────────────
 # Override with --namespace on helm install

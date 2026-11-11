@@ -18,6 +18,7 @@ from wingman_day1.domain.errors import (
     HubUnavailableError,
     IdentityError,
     InvalidInputError,
+    SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanDeniedError,
     ServerScanUnavailableError,
@@ -32,6 +33,7 @@ from wingman_day1.infrastructure.observed import (
     HubOperation,
     OAuthOperation,
     Observer,
+    SegmentsManagerOperation,
     ServerScanOperation,
     WorkflowsOperation,
     outcome_of,
@@ -94,6 +96,7 @@ async def test_fake_hub_raises_the_adapters_errors() -> None:
         (AmbiguousStartError("x"), Outcome.AMBIGUOUS),
         (WorkflowRefusedError("x"), Outcome.REJECTED),
         (WorkflowsUnavailableError("x"), Outcome.UNAVAILABLE),
+        (SegmentsManagerUnavailableError("x"), Outcome.UNAVAILABLE),
         (InvalidInputError("x"), Outcome.ERROR),
         (RuntimeError("x"), Outcome.ERROR),
     ],
@@ -120,6 +123,7 @@ def test_the_metrics_catalogue_lists_exactly_day1s_operations_per_dependency() -
         Dependency.DAY2: set(Day2Operation),
         Dependency.SERVER_SCAN: set(ServerScanOperation),
         Dependency.WORKFLOWS: set(WorkflowsOperation),
+        Dependency.SEGMENTS_MANAGER: set(SegmentsManagerOperation),
     }
 
 

@@ -1,8 +1,9 @@
 """The cluster detail's links to segments-manager (docs/notes/2026-11-11-cluster-nodes-api.md §5).
 
-Day1 builds both URLs from ``SEGMENTS_MANAGER_UI_URL``; the web only shows
-them. Off (the default), the field is ``null``. The search is by the cluster
-file's stem, the ``cluster_name`` allocate-segment gave segments-manager.
+Day1 builds both URLs from ``SEGMENTS_MANAGER_UI_URL``, else from
+``SEGMENTS_MANAGER_URL`` (ADR-0039); the web only shows them. Off (the
+default), the field is ``null``. The search is by the cluster file's stem,
+the ``cluster_name`` allocate-segment gave segments-manager.
 """
 
 from __future__ import annotations
@@ -80,3 +81,20 @@ async def test_the_name_is_encoded_in_the_search_and_a_base_path_is_kept(
         "url": f"{UI}/sm/",
         "search_url": f"{UI}/sm/api/segments/search?q=ocp4-lab%2Ba%26b-site1",
     }
+
+
+async def test_without_a_ui_url_the_links_point_at_the_api(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    body = await detail(support, gitlab, clock, auth, HERZI, SEGMENTS_MANAGER_URL=UI)
+    assert body["segments_manager"]["url"] == f"{UI}/"
+    other = await detail(
+        support,
+        gitlab,
+        clock,
+        auth,
+        HERZI,
+        SEGMENTS_MANAGER_URL="http://segments-manager.segments.svc:8000",
+        SEGMENTS_MANAGER_UI_URL=UI,
+    )
+    assert other["segments_manager"]["url"] == f"{UI}/"

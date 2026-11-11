@@ -47,7 +47,7 @@ const DETAIL: ClusterDetail = {
       { name: POOL0, infra_env_name: "dell", replicas: 3, allow_deletion: false, configs: ["workers-chrony-configuration"], node_labels: {}, tuning_config: null },
       { name: POOL1, infra_env_name: "dell", replicas: 2, allow_deletion: false, configs: ["restored-example-config"], node_labels: {}, tuning_config: null },
     ],
-    network: { vlan_id: 120, dhcp_network: "10.0.0.0/24" },
+    network: { vlan_id: 120, dhcp_network: "10.0.0.0", segment: "10.0.0.0/24" },
     cluster_name: null,
     automation_keys: [],
   },

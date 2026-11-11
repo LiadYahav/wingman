@@ -266,8 +266,9 @@ hosted cluster's own API.
 ```
 
 It is `null` unless day1's `SEGMENTS_MANAGER_UI_URL` is set (chart:
-`segmentsManager.uiUrl`; empty by default). Day1 builds both URLs and never
-calls segments-manager; the web never assembles them itself.
+`segmentsManager.uiUrl`; empty by default). Day1 builds both URLs; the web
+never assembles them itself. (Since 3.5 day1 also reads the cluster's segment
+from segments-manager for its EPG: `docs/notes/2026-11-11-cluster-network-api.md`.)
 
 segments-manager's UI reads no URL parameters, so no link opens one
 cluster's segment: `url` opens the UI, and the card names the cluster to

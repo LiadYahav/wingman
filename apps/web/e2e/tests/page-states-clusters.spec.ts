@@ -34,7 +34,7 @@ const DETAIL: ClusterDetail = {
     mastertag: "4.16.27-x86_64",
     platform: "agent",
     nodepools: [],
-    network: { vlan_id: null, dhcp_network: null },
+    network: { vlan_id: null, dhcp_network: null, segment: null },
     cluster_name: null,
     automation_keys: [],
   },

@@ -72,7 +72,7 @@ const DETAIL: ClusterDetail = {
     mastertag: "4.16.27-x86_64",
     platform: "agent",
     nodepools: [{ name: null, infra_env_name: "dell", replicas: 2, allow_deletion: false, configs: ["worker-chrony"], node_labels: {}, tuning_config: null }],
-    network: { vlan_id: null, dhcp_network: null },
+    network: { vlan_id: null, dhcp_network: null, segment: null },
     cluster_name: null,
     automation_keys: [],
   },

@@ -1,3 +1,5 @@
+vlanId: 2451
+
 dhcp_values:
   # An explicit scopeName still wins over the name derived from this file, so nothing
   # already written had to change when the derivation landed.

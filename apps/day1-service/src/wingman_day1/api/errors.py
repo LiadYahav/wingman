@@ -44,6 +44,7 @@ from wingman_day1.domain.errors import (
     LoginRefusedError,
     NodeNotInClusterError,
     ResourceNotFoundError,
+    SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanNotConfiguredError,
     ServerScanUnavailableError,
@@ -75,6 +76,7 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (WorkflowsUnavailableError, DependencyUnavailable),
     (UninstallAlreadyRunningError, UninstallAlreadyRunning),
     (AmbiguousStartError, AmbiguousWrite),
+    (SegmentsManagerUnavailableError, DependencyUnavailable),
 )
 
 

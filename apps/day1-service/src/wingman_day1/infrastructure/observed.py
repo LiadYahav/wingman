@@ -1,8 +1,8 @@
 """Metrics for day1's calls to systems other than GitLab (ADR-0010).
 
 GitLab calls are counted by ``InstrumentedGitLab``. The MCE hub APIs,
-OpenShift OAuth, the day2 service, server-scan and the workflows
-orchestrator are counted here, on the same
+OpenShift OAuth, the day2 service, server-scan, the workflows orchestrator
+and segments-manager are counted here, on the same
 ``wingman_dependency_*`` families, with an ``operation`` from a fixed enum
 (listed in ``docs/ops/metrics.md``) and an ``outcome`` derived from the
 day1 domain error the adapter raised.
@@ -24,6 +24,7 @@ from wingman_day1.domain.errors import (
     HubUnavailableError,
     IdentityError,
     IdentityUnavailableError,
+    SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanDeniedError,
     ServerScanUnavailableError,
@@ -68,6 +69,12 @@ class ServerScanOperation(StrEnum):
     GET_SERVER = "get_server"
 
 
+class SegmentsManagerOperation(StrEnum):
+    """Calls to segments-manager (``dependency="segments_manager"``)."""
+
+    GET_SEGMENT = "get_segment"
+
+
 class WorkflowsOperation(StrEnum):
     """Calls to the workflows orchestrator (``dependency="workflows"``)."""
 
@@ -91,6 +98,7 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (AmbiguousStartError, Outcome.AMBIGUOUS),
     (WorkflowRefusedError, Outcome.REJECTED),
     (WorkflowsUnavailableError, Outcome.UNAVAILABLE),
+    (SegmentsManagerUnavailableError, Outcome.UNAVAILABLE),
 )
 
 
