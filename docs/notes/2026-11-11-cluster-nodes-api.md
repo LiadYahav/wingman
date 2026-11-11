@@ -49,7 +49,7 @@ list page that expands many clusters costs one read.
 
 - `nodes` are sorted by `name`. An empty list means server-scan places no
   server in this cluster; it never stands for "server-scan could not be
-  read" (that is a 503, below).
+  read" (that is a 502, below).
 - `url` is the server's page in server-scan's UI (`<SERVER_SCAN_UI_URL>/servers/<id>`).
 - `state` is server-scan's `openshift_state` (`INSTALLED`,
   `INSTALLED_TO_INVENTORY`, `AVAILABLE`); `health` its overall verdict
@@ -79,7 +79,7 @@ Errors (RFC 9457, ADR-0004):
 |---|---|---|
 | 404 | `NOT_FOUND` | No such cluster. |
 | 501 | `FEATURE_DISABLED` | server-scan is not configured (`SERVER_SCAN_URL` empty). |
-| 503 | `DEPENDENCY_UNAVAILABLE` | server-scan did not answer, or answered with an error. |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan did not answer, or answered with an error. |
 
 ## 2. Uninstall one node
 
@@ -123,8 +123,8 @@ Most refusals happen inside the run: it fails, and its `error` says why.
 | 409 | `UNINSTALL_ALREADY_RUNNING` | The orchestrator already runs an uninstall of this server. |
 | 422 | `VALIDATION_ERROR` | `server_name` is not the server's name. |
 | 501 | `FEATURE_DISABLED` | server-scan or the orchestrator is not configured. |
-| 503 | `DEPENDENCY_UNAVAILABLE` | server-scan or the orchestrator refused or could not be reached; nothing started. |
-| 502 | `AMBIGUOUS_WRITE` | The start was sent but no answer came back: it may have started. Look at the node's run before trying again; never retried (ADR-0006). |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan or the orchestrator refused or could not be reached; nothing started. |
+| 504 | `AMBIGUOUS_WRITE` | The start was sent but no answer came back: it may have started. Look at the node's run before trying again; never retried (ADR-0006). |
 
 ## 3. Settings (day1)
 
