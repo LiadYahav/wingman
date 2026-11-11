@@ -69,6 +69,13 @@ WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1
   npm run dev --workspace=web
 ```
 
+Add `DAY1_FAKE_FLEET=true` to day1's line for a cluster's nodes and their uninstall
+(ADR-0038). It replaces server-scan and the workflows orchestrator with fakes seeded from
+`dev/fleet-fixtures/servers.yaml`, made-up servers in server-scan's own row shape under a few
+fixture clusters (`ocp4-prod-lark-site1` has five). An uninstall walks a few sample phases, about
+8 s each, then frees the server. The fake fleet is refused unless
+`WINGMAN_ENVIRONMENT=development`, and it works with either Git backend.
+
 `DAY2_SERVICE_URL` matters: without it day1 asks the chart's `http://wingman-day2:8002`, and
 every cluster's drift is Unknown. The web dev server proxies only when both
 `WINGMAN_DEV_*_URL` are set (`apps/web/next.config.ts`); a production build never proxies.

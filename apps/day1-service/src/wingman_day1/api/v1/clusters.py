@@ -11,17 +11,18 @@ import json
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Path, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from wingman_core.domain.errors import GitError
 from wingman_core.web.auth import AdminUser, CurrentUser
-from wingman_day1.api.deps import Context, DeleteWorkflow, Status
+from wingman_day1.api.deps import Context, DeleteWorkflow, Nodes, Status
 from wingman_day1.api.v1.schemas import (
     BulkStatusIn,
     ClusterDetailOut,
     ClusterDriftOut,
     ClusterLiveStatusOut,
+    ClusterNodesOut,
     ClusterStatusOut,
     CommitOut,
     CreateClusterIn,
@@ -34,6 +35,7 @@ from wingman_day1.api.v1.schemas import (
     SyncIn,
     SyncPreviewIn,
     SyncPreviewOut,
+    UninstallNodeIn,
     WorkflowRunOut,
     change_out,
     cluster_detail,
@@ -48,6 +50,10 @@ router = APIRouter(prefix="/api/day1/clusters", tags=["clusters"])
 Site = Annotated[str | None, Query(max_length=63, description="Site folder")]
 Mce = Annotated[str | None, Query(max_length=63, description="MCE folder")]
 RequiredMce = Annotated[str, Query(min_length=1, max_length=63, description="MCE folder")]
+ServerId = Annotated[
+    str,
+    Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.-]+$", description="server-scan id"),
+]
 
 
 def _create(body: CreateClusterIn) -> CreateCluster:
@@ -262,6 +268,37 @@ async def start_delete_workflow(
     """Start the delete-cluster workflow (501 until it exists, ADR-0033)."""
     ref = await _ref(context, name, site, mce)
     return WorkflowRunOut.of(await workflow.start(ref, requested_by=user))
+
+
+@router.get("/{name}/nodes")
+async def cluster_nodes(
+    name: str,
+    context: Context,
+    user: CurrentUser,
+    nodes: Nodes,
+    site: Site = None,
+    mce: Mce = None,
+) -> ClusterNodesOut:
+    """The servers server-scan places in the cluster, with their newest uninstall run (ADR-0038)."""
+    ref = await _ref(context, name, site, mce)
+    return ClusterNodesOut.of(await nodes.nodes(ref))
+
+
+@router.post("/{name}/nodes/{server_id}/uninstall", status_code=202)
+async def uninstall_node(
+    name: str,
+    server_id: ServerId,
+    body: UninstallNodeIn,
+    context: Context,
+    user: AdminUser,
+    nodes: Nodes,
+    site: Site = None,
+    mce: Mce = None,
+) -> WorkflowRunOut:
+    """Start the platform's uninstall-server-from-hc workflow on one node (ADR-0038)."""
+    ref = await _ref(context, name, site, mce)
+    run = await nodes.uninstall(ref, server_id, server_name=body.server_name, user=user)
+    return WorkflowRunOut.of(run)
 
 
 @router.delete("/{name}")

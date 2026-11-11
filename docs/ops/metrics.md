@@ -27,7 +27,7 @@ fails when this table and the code disagree.
 | `wingman_build_info` | gauge | `component`, `version`, `commit` | Always 1; which build is running. `component` is `day1` or `day2` (not `service`: Prometheus adds that as a target label). Version skew shows here. |
 | `wingman_http_requests_total` | counter | `method`, `route`, `status_class` | HTTP requests served. `status_class` is `2xx`..`5xx`. |
 | `wingman_http_request_duration_seconds` | histogram | `method`, `route` | Time to serve a request. |
-| `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth` or `day2`; `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
+| `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth`, `day2`, `server_scan` or `workflows` (the workflows orchestrator); `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
 | `wingman_dependency_request_duration_seconds` | histogram | `dependency`, `operation` | Time spent in a call, retries included. |
 
 Operations of the other dependencies (day1):
@@ -37,6 +37,8 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons` |
+| `server_scan` | `list_server_rows`, `get_server` |
+| `workflows` | `list_runs`, `get_run`, `start_uninstall` |
 
 ## Reading the GitLab outcomes
 
@@ -48,3 +50,14 @@ Operations of the other dependencies (day1):
 - `ambiguous` means a write was sent but its result is unknown (a timeout or a
   5xx after sending). Writes are never retried (ADR-0006). Someone must check
   whether the commit or merge happened before trying again.
+
+## Reading the server-scan and workflows outcomes
+
+- `server_scan` `denied` means server-scan refused **Wingman's viewer token**
+  (`SERVER_SCAN_TOKEN`); `unavailable` means it could not be reached or
+  answered with an error. Either way the nodes routes answer 502 and no node
+  is shown as missing.
+- `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
+  and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
+  the node's uninstall run before starting it again. `conflict` is the
+  orchestrator's "already uninstalling"; `rejected` is a body it refused.

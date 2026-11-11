@@ -20,6 +20,7 @@ from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
 from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
+from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
@@ -49,6 +50,8 @@ class Day1Context:
     status_poll_seconds: float = 30.0
     delete_workflow: ClusterDeleteWorkflow | None = None
     """``None`` until the delete-cluster workflow exists: its routes answer 501 (ADR-0033)."""
+    nodes: NodeService | None = None
+    """``None`` when server-scan is not configured: the nodes routes answer 501 (ADR-0038)."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -80,6 +83,20 @@ def delete_workflow(
     return context.delete_workflow
 
 
+NODES_NOT_AVAILABLE = (
+    "Cluster nodes are not available in this deployment: server-scan is not configured "
+    "(SERVER_SCAN_URL)."
+)
+
+
+def node_service(context: Annotated[Day1Context, Depends(day1_context)]) -> NodeService:
+    """The cluster nodes use case, or 501 when server-scan is not configured (ADR-0038)."""
+    if context.nodes is None:
+        raise FeatureDisabled(NODES_NOT_AVAILABLE)
+    return context.nodes
+
+
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
+Nodes = Annotated[NodeService, Depends(node_service)]
 Status = Annotated[StatusService, Depends(status_service)]

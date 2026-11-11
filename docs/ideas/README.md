@@ -30,7 +30,7 @@ checked against it.
 | Where Wingman sits in the architecture: who owns what, the rules that follow, questions for the architect | Reference | [architecture-fit.md](architecture-fit.md) |
 | Flavors v2: machine configs per nodepool, nodepool defaults, enforced locks, owner numbers, importing existing clusters, a redesigned flavor page | **Built** 2026-11-08 (3.3); a few items left for later | [flavors-v2.md](flavors-v2.md) |
 | Workflow runs on the cluster page, OCP upgrades (control plane, then workers) and reviewing workflow branches | Proposed | [workflow-runs.md](workflow-runs.md) |
-| Servers per hosted cluster from server-scan, why a cluster waits for workers, and moving capacity between clusters | Proposed | [servers-and-nodes.md](servers-and-nodes.md) |
+| Servers per hosted cluster from server-scan, why a cluster waits for workers, and moving capacity between clusters | Servers per cluster and node uninstall **built** 2026-11-11 ([ADR-0038](../adr/0038-cluster-nodes-from-server-scan-and-the-uninstall-workflow.md)); the rest proposed | [servers-and-nodes.md](servers-and-nodes.md) |
 | Day2 permissions per team: a team edits only its own `sigs/<team>` repo | Proposed | [day2-team-permissions.md](day2-team-permissions.md) |
 | Common changes as one form each (scale by total, labels, configs, owner), API tokens for automation, a ticket key on every change | Proposed | [self-service-changes.md](self-service-changes.md) |
 | A merge gate: approve only when the pipeline passed and the segment is written | Proposed | [merge-gate.md](merge-gate.md) |

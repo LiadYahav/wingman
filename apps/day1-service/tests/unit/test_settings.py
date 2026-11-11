@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from wingman_day1.settings import MIN_DEV_AUTH_SECRET_LENGTH, Day1Settings, tls_verify
+from wingman_core.settings import Environment, GitBackend, RuntimeSettings
+from wingman_day1.settings import (
+    MIN_DEV_AUTH_SECRET_LENGTH,
+    Day1Settings,
+    check_runtime,
+    tls_verify,
+)
 
 ENV = (
     "DAY1_GITLAB_PROJECT_ID",
@@ -23,6 +29,15 @@ ENV = (
     "DEV_AUTH_ENABLED",
     "DEV_AUTH_SECRET",
     "GITLAB_WEBHOOK_SECRET",
+    "SERVER_SCAN_URL",
+    "SERVER_SCAN_UI_URL",
+    "SERVER_SCAN_TOKEN",
+    "SERVER_SCAN_SSL_VERIFY",
+    "SERVER_SCAN_TIMEOUT_SECONDS",
+    "WORKFLOWS_API_URL",
+    "WORKFLOWS_SSL_VERIFY",
+    "WORKFLOWS_TIMEOUT_SECONDS",
+    "DAY1_FAKE_FLEET",
 )
 OAUTH = {
     "openshift_api_host": "api.hub.example.invalid:6443",
@@ -163,3 +178,103 @@ def test_settings_come_from_the_environment(
     assert loaded.day1_gitlab_project_id == "gitops-day1/platform-config"
     assert loaded.mce_tokens_file == tmp_path / "tokens"
     assert not loaded.cluster_status_enabled
+
+
+# ── Cluster nodes: server-scan and the orchestrator (ADR-0038) ───────────────
+
+SERVER_SCAN = "http://server-scan-api.inventory.svc:8000"
+WORKFLOWS = "http://workflows-orchestrator-api.redbull-workflows.svc:8080"
+
+
+def test_cluster_nodes_are_off_by_default() -> None:
+    loaded = dev()
+    assert (loaded.server_scan_url, loaded.workflows_api_url, loaded.day1_fake_fleet) == (
+        "",
+        "",
+        False,
+    )
+    assert loaded.server_scan_token.get_secret_value() == ""
+    assert (loaded.server_scan_tls_verify, loaded.workflows_tls_verify) == (True, True)
+    assert (loaded.server_scan_timeout_seconds, loaded.workflows_timeout_seconds) == (10.0, 10.0)
+
+
+def test_node_links_point_at_the_api_unless_the_ui_has_its_own_url() -> None:
+    assert dev(server_scan_url=SERVER_SCAN + "/").server_scan_ui_base == SERVER_SCAN
+    ui = dev(server_scan_url=SERVER_SCAN, server_scan_ui_url="https://server-scan.example/")
+    assert ui.server_scan_ui_base == "https://server-scan.example"
+
+
+@pytest.mark.parametrize("field", ["server_scan_url", "server_scan_ui_url", "workflows_api_url"])
+@pytest.mark.parametrize("url", ["server-scan", "ftp://server-scan.example", "http://"])
+def test_a_url_setting_is_empty_or_an_http_url(field: str, url: str) -> None:
+    values = {"server_scan_url": SERVER_SCAN, field: url}
+    with pytest.raises(ValidationError, match="http"):
+        dev(**values)
+
+
+def test_the_orchestrator_without_server_scan_is_refused() -> None:
+    with pytest.raises(ValidationError, match="WORKFLOWS_API_URL needs SERVER_SCAN_URL"):
+        dev(workflows_api_url=WORKFLOWS)
+    assert dev(workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN).workflows_api_url
+    assert dev(workflows_api_url=WORKFLOWS, day1_fake_fleet=True).day1_fake_fleet
+
+
+def test_the_server_scan_token_is_a_secret() -> None:
+    loaded = dev(server_scan_url=SERVER_SCAN, server_scan_token=SecretStr("viewer-token-0001"))
+    assert "viewer-token-0001" not in repr(loaded)
+
+
+def test_the_tls_settings_take_the_ssl_verify_format() -> None:
+    loaded = dev(server_scan_ssl_verify="false", workflows_ssl_verify="/etc/pki/ca.pem")
+    assert (loaded.server_scan_tls_verify, loaded.workflows_tls_verify) == (
+        False,
+        "/etc/pki/ca.pem",
+    )
+
+
+def test_the_timeouts_are_bounded() -> None:
+    with pytest.raises(ValidationError):
+        dev(server_scan_timeout_seconds=0)
+    with pytest.raises(ValidationError):
+        dev(workflows_timeout_seconds=61)
+
+
+@pytest.mark.parametrize("environment", [Environment.PRODUCTION, Environment.TEST])
+def test_the_fake_fleet_is_refused_outside_development(environment: Environment) -> None:
+    runtime = RuntimeSettings(environment=environment, git_backend=GitBackend.GITLAB)
+    with pytest.raises(ValueError, match="DAY1_FAKE_FLEET=true is refused"):
+        check_runtime(dev(day1_fake_fleet=True), runtime)
+
+
+def test_the_fake_fleet_runs_in_development_with_either_git_backend() -> None:
+    for backend in GitBackend:
+        runtime = RuntimeSettings(environment=Environment.DEVELOPMENT, git_backend=backend)
+        check_runtime(dev(day1_fake_fleet=True), runtime)
+    check_runtime(dev(), RuntimeSettings(environment=Environment.PRODUCTION))
+
+
+def test_the_nodes_settings_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name, value in {
+        "DAY1_GITLAB_PROJECT_ID": "42",
+        "SPECS_GITLAB_PROJECT_ID": "43",
+        "DEV_AUTH_ENABLED": "true",
+        "DEV_AUTH_SECRET": "e" * 40,
+        "SERVER_SCAN_URL": SERVER_SCAN,
+        "SERVER_SCAN_UI_URL": "https://server-scan.example",
+        "SERVER_SCAN_TOKEN": "viewer-token-0001",
+        "SERVER_SCAN_SSL_VERIFY": "false",
+        "SERVER_SCAN_TIMEOUT_SECONDS": "20",
+        "WORKFLOWS_API_URL": WORKFLOWS,
+        "WORKFLOWS_SSL_VERIFY": "/ca.pem",
+        "WORKFLOWS_TIMEOUT_SECONDS": "5",
+        "DAY1_FAKE_FLEET": "true",
+    }.items():
+        monkeypatch.setenv(name, value)
+    loaded = Day1Settings()
+    assert loaded.server_scan_url == SERVER_SCAN
+    assert loaded.server_scan_ui_base == "https://server-scan.example"
+    assert loaded.server_scan_token.get_secret_value() == "viewer-token-0001"
+    assert (loaded.server_scan_tls_verify, loaded.server_scan_timeout_seconds) == (False, 20.0)
+    assert loaded.workflows_api_url == WORKFLOWS
+    assert (loaded.workflows_tls_verify, loaded.workflows_timeout_seconds) == ("/ca.pem", 5.0)
+    assert loaded.day1_fake_fleet
