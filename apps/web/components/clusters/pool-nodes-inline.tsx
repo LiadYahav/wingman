@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CircleDashed, ExternalLink } from "lucide-react";
+import { ArrowRight, CircleDashed, ExternalLink, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
 import { HealthBadge, NodeStateChip } from "@/components/clusters/node-badges";
@@ -173,5 +173,41 @@ export function PoolNodesInline({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A NodePool's live state in a row of the Nodepools card: ready of wanted,
+ * then an update rolling through it (in progress, not a problem), a failed
+ * update, or what is not well.
+ */
+export function PoolLiveState({ pool, loading, known }: { pool: NodePoolNodes | null; loading: boolean; known: boolean }) {
+  if (loading) return <Skeleton className="h-3.5 w-24" />;
+  if (!known) return <span className="text-muted-foreground">—</span>;
+  if (!pool) return <span className="text-muted-foreground">Not on the MCE</span>;
+  const short = pool.wanted !== null && pool.ready < pool.wanted;
+  const update = pool.update;
+  return (
+    <span data-testid="nodepool-live" className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 whitespace-nowrap">
+      <span className="tabular-nums">
+        <span className={cn("font-medium", short ? "text-status-warning-fg" : "text-foreground")}>{pool.ready}</span>
+        <span className="text-muted-foreground">{pool.wanted !== null ? ` / ${pool.wanted}` : ""} ready</span>
+      </span>
+      {update ? (
+        update.failed ? (
+          <span className="inline-flex items-center gap-1 text-status-error-fg">Update failed</span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-status-provisioning-fg">
+            <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden />
+            Updating {update.kind === "machine_template" ? "machines" : update.kind}
+            {update.progress ? ` · ${update.progress.updated} of ${update.progress.total}` : ""}
+          </span>
+        )
+      ) : pool.problems.length > 0 ? (
+        <span className="text-status-warning-fg" title={pool.problems.join("\n")}>
+          {pool.problems.length} problem{pool.problems.length === 1 ? "" : "s"}
+        </span>
+      ) : null}
+    </span>
   );
 }

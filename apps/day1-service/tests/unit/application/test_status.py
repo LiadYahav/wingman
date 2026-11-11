@@ -177,7 +177,9 @@ async def test_unhealthy_conditions_become_problems(
     status = await status_of(app).status(HERZI, MCE)
     assert len(status.hc_problems) == 2
     assert status.node_pools[0].ready_replicas == 1
-    assert len(status.node_pools[0].problems) == 2
+    # Ready=False is a problem; the config update rolling through is not one
+    assert len(status.node_pools[0].problems) == 1
+    assert status.node_pools[0].updating == "config"
 
 
 async def test_bulk_status_gives_every_cluster_an_entry(context: Day1Context) -> None:

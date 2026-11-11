@@ -108,36 +108,11 @@ export function LiveStatusCard({ status, isLoading }: { status: ClusterLiveStatu
               )}
             </div>
 
-            {status.node_pools.length === 0 ? (
-              <p className="text-muted-foreground" data-testid="live-status-no-node-pools">No node pools reported</p>
-            ) : (
-              <div>
-                <p className="text-muted-foreground mb-1.5">Node Pools</p>
-                <div className="divide-y divide-border rounded-md border overflow-hidden">
-                  {status.node_pools.map((np) => (
-                    <div key={np.name} className="flex items-center justify-between gap-3 px-3 py-2">
-                      <span className="font-mono text-xs truncate" title={np.name}>{np.name}</span>
-                      <div className="flex items-center gap-3 text-xs shrink-0">
-                        <span className="text-muted-foreground tabular-nums">
-                          {np.ready_replicas}/{np.desired_replicas} ready
-                        </span>
-                        {np.problems.length > 0 ? (
-                          <div className="flex items-center gap-1 text-status-error-fg" title={np.problems.join("\n")}>
-                            <XCircle className="h-3.5 w-3.5" />
-                            <span className="max-w-48 truncate">{np.problems[0]}</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 text-status-ready-fg">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>OK</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <p className="text-xs text-muted-foreground" data-testid="live-status-node-pools-note">
+              {status.node_pools.length === 0
+                ? "No node pools reported"
+                : `${status.node_pools.length} node pool${status.node_pools.length === 1 ? "" : "s"}: their state and nodes are in Nodepools below`}
+            </p>
           </>
         )}
       </CardContent>

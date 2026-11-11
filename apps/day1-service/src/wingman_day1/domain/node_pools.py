@@ -37,6 +37,8 @@ from wingman_day1.domain.names import HostedClusterRef
 from wingman_day1.domain.selectors import selects
 from wingman_day1.domain.servers import ServerRow, node_cluster_names
 from wingman_day1.domain.status import (
+    INPLACE_FAILED,
+    UPDATE_CONDITIONS,
     Autoscaling,
     Condition,
     HostedClusterObservation,
@@ -45,14 +47,7 @@ from wingman_day1.domain.status import (
 
 IN_PLACE: Final = "InPlace"
 REPLACE: Final = "Replace"
-UPDATE_CONDITIONS: Final = (
-    ("UpdatingVersion", "version"),
-    ("UpdatingConfig", "config"),
-    ("UpdatingPlatformMachineTemplate", "machine_template"),
-)
-"""The NodePool conditions that say it is updating, and the ``kind`` each is."""
 PROBLEM_CONDITIONS: Final = ("Ready", "AllMachinesReady", "AllNodesHealthy")
-INPLACE_FAILED: Final = "InplaceUpgradeFailed"
 INSTALLED_AGENT_STATES: Final = frozenset({"installed", "added-to-existing-cluster"})
 _PROGRESS: Final = re.compile(r"Total Nodes: (\d+)\. Upgraded: (\d+)")
 _DEGRADED: Final = re.compile(r"Node (\S+) in nodepool degraded: (.*)", re.DOTALL)

@@ -337,7 +337,10 @@ export interface NodePoolStatus {
   name: string;
   ready_replicas: number;
   desired_replicas: number;
+  /** A failed in-place update is one; an update rolling through is not (it is `updating`). */
   problems: string[];
+  /** `version`, `config` or `machine_template` while an update rolls through the pool. */
+  updating?: string | null;
 }
 
 export interface ClusterLiveStatus {

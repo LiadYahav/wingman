@@ -499,6 +499,14 @@ function ClusterDetailContent() {
                 <ClusterInfoCard cluster={cluster} />
                 <HostedClusterCard cluster={cluster} />
               </div>
+              {/* Only when the deployment reads HostedClusters from the hubs; then its nodepools, then its flavor */}
+              {liveStatusError ? (
+                <div data-testid="live-status-error">
+                  <ProblemList error={liveStatusError} title="Live status could not be read from the MCE hub" />
+                </div>
+              ) : (liveStatusLoading || statusOn) && (
+                <LiveStatusCard status={liveStatus ?? undefined} isLoading={liveStatusLoading} />
+              )}
               {cluster.values && (
                 <NodePoolsCard
                   values={cluster.values}
@@ -511,14 +519,6 @@ function ClusterDetailContent() {
                 />
               )}
               <SpecCard cluster={cluster} />
-              {/* Only when the deployment reads HostedClusters from the hubs */}
-              {liveStatusError ? (
-                <div data-testid="live-status-error">
-                  <ProblemList error={liveStatusError} title="Live status could not be read from the MCE hub" />
-                </div>
-              ) : (liveStatusLoading || statusOn) && (
-                <LiveStatusCard status={liveStatus ?? undefined} isLoading={liveStatusLoading} />
-              )}
             </>
           )}
         </TabsContent>

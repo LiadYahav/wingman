@@ -282,3 +282,14 @@ whose name contains this one (`<name>-b`).
 | Variable | Default | Meaning |
 |---|---|---|
 | `SEGMENTS_MANAGER_UI_URL` | empty (off) | segments-manager's UI, e.g. `https://segments-manager.example`. The browser opens it; day1 does not. |
+
+## 6. Live status: an update is not a problem
+
+`GET /api/day1/clusters/{name}/status` (and the bulk and stream reads)
+used to list a NodePool's `UpdatingVersion=True` or `UpdatingConfig=True`
+as a problem, so a normal rollout showed red. Each node pool now carries
+`updating` (`"version"`, `"config"`, `"machine_template"` or `null`), and
+only a failed in-place update (reason `InplaceUpgradeFailed`) is a problem,
+as `"<Type>: InplaceUpgradeFailed: <message>"`. The cluster page shows each
+pool's live state in the Nodepools card ("2 / 3 ready · Updating config");
+the Live Status card keeps the HostedCluster's version and health.

@@ -596,12 +596,14 @@ class BulkStatusIn(_In):
 
 
 class NodePoolStatusOut(BaseModel):
-    """A NodePool's replicas and problems."""
+    """A NodePool's replicas, problems, and the update rolling through it."""
 
     name: str
     ready_replicas: int
     desired_replicas: int
     problems: list[str]
+    updating: str | None = None
+    """``version``, ``config`` or ``machine_template`` while an update rolls through it."""
 
 
 class ClusterLiveStatusOut(BaseModel):
@@ -632,6 +634,7 @@ class ClusterLiveStatusOut(BaseModel):
                     ready_replicas=p.ready_replicas,
                     desired_replicas=p.desired_replicas,
                     problems=list(p.problems),
+                    updating=p.updating,
                 )
                 for p in status.node_pools
             ],

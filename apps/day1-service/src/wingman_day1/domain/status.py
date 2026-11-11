@@ -18,7 +18,16 @@ from wingman_day1.domain.selectors import LabelSelector
 HOSTED_CLUSTER_MUST_BE_TRUE: Final = ("Available",)
 HOSTED_CLUSTER_MUST_NOT_BE_TRUE: Final = ("Degraded", "Progressing")
 NODE_POOL_MUST_BE_TRUE: Final = ("Ready",)
-NODE_POOL_MUST_NOT_BE_TRUE: Final = ("UpdatingVersion", "UpdatingConfig")
+NODE_POOL_MUST_NOT_BE_TRUE: Final = ()
+"""None: an update rolling through a NodePool is its normal work, shown as
+``updating``, not a problem. Only a failed in-place update is a problem."""
+UPDATE_CONDITIONS: Final = (
+    ("UpdatingVersion", "version"),
+    ("UpdatingConfig", "config"),
+    ("UpdatingPlatformMachineTemplate", "machine_template"),
+)
+"""The NodePool conditions that say it is updating, and the ``kind`` each is."""
+INPLACE_FAILED: Final = "InplaceUpgradeFailed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +118,31 @@ class NodePoolHealth:
     ready_replicas: int
     desired_replicas: int
     problems: tuple[str, ...]
+    updating: str | None = None
+    """``version``, ``config`` or ``machine_template`` while an update rolls through it."""
+
+
+def pool_updating(conditions: Iterable[Condition]) -> str | None:
+    """The kind of update rolling through a NodePool: its first updating condition not False.
+
+    HyperShift 4.16 to 4.18 can write the literal status ``unknown`` while an
+    in-place update starts, so anything but False counts.
+    """
+    by_type = {c.type: c for c in conditions}
+    for kind_type, kind in UPDATE_CONDITIONS:
+        found = by_type.get(kind_type)
+        if found is not None and found.status != "False":
+            return kind
+    return None
+
+
+def failed_update(conditions: Iterable[Condition]) -> list[str]:
+    """A failed in-place update, as a problem: it is False with ``InplaceUpgradeFailed``."""
+    return [
+        f"{c.type}: {INPLACE_FAILED}: {c.message}".rstrip(": ")
+        for c in conditions
+        if c.type in dict(UPDATE_CONDITIONS) and c.reason == INPLACE_FAILED
+    ]
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +186,9 @@ def live_status(
                     must_be_true=NODE_POOL_MUST_BE_TRUE,
                     must_not_be_true=NODE_POOL_MUST_NOT_BE_TRUE,
                 )
+                + failed_update(pool.conditions)
             ),
+            updating=pool_updating(pool.conditions),
         )
         for pool in node_pools
     )

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Check, ChevronRight, Clock3, Copy, ExternalLink, FileWarning, TriangleAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PoolNodesInline, matchPool } from "@/components/clusters/pool-nodes-inline";
+import { PoolLiveState, PoolNodesInline, matchPool } from "@/components/clusters/pool-nodes-inline";
 import { useClusterNodes } from "@/lib/nodes";
 import { cn, formatDate } from "@/lib/utils";
 import type { ClusterDetail, ClusterValues, NodePoolNodes, SegmentsManagerLinks } from "@/types";
@@ -272,7 +272,8 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
   for (const pool of pools) {
     if (!matched.has(pool.name)) rows.push({ key: `mce-${pool.name}`, kind: "mce", pool });
   }
-  const columns = 5;
+  const columns = nodes ? 6 : 5;
+  const liveKnown = Boolean(read && !read.off);
 
   return (
     <Card>
@@ -294,6 +295,7 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                   <th className="text-left font-medium px-3 py-2">InfraEnv</th>
                   <th className="text-left font-medium px-3 py-2">Name</th>
                   <th className="text-right font-medium px-3 py-2">Replicas</th>
+                  {nodes && <th className="text-left font-medium px-3 py-2">Live</th>}
                   <th className="text-left font-medium px-3 py-2">Configs</th>
                   <th className="text-left font-medium px-3 py-2">Tuning</th>
                 </tr>
@@ -329,6 +331,11 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                           <>
                             <td className="px-3 py-2 font-mono break-all text-muted-foreground">{row.np.name ?? "derived"}</td>
                             <td className="px-3 py-2 text-right tabular-nums">{row.np.replicas ?? "—"}</td>
+                            {nodes && (
+                              <td className="px-3 py-2">
+                                <PoolLiveState pool={row.pool} loading={query.isPending} known={liveKnown} />
+                              </td>
+                            )}
                             <td className="px-3 py-2">
                               {row.np.configs.length === 0 ? <span className="text-muted-foreground">—</span> : (
                                 <div className="flex flex-wrap gap-1">
@@ -352,6 +359,9 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums">
                               {row.pool.wanted ?? (row.pool.autoscaling ? `${row.pool.autoscaling.min}–${row.pool.autoscaling.max}` : "—")}
+                            </td>
+                            <td className="px-3 py-2">
+                              <PoolLiveState pool={row.pool} loading={false} known />
                             </td>
                             <td className="px-3 py-2 text-muted-foreground" colSpan={2}>Not in this file</td>
                           </>

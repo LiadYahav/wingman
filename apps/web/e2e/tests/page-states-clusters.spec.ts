@@ -163,7 +163,7 @@ test.describe("Cluster detail", () => {
     await go(page, `/clusters/${NAME}?site=${SITE}&mce=${MCE}`);
 
     await expect(liveStatusCard(page)).toBeVisible();
-    await expect(page.getByTestId("live-status-no-node-pools")).toHaveText("No node pools reported");
+    await expect(page.getByTestId("live-status-node-pools-note")).toHaveText("No node pools reported");
   });
 
   test("a delete GitLab did not confirm says it may have happened, not that it was refused", async ({ page }) => {
