@@ -3,7 +3,7 @@
 import { Fragment, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, ChevronRight, X, FileWarning, Server, TriangleAlert } from "lucide-react";
+import { Plus, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, FileWarning, Server, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { api } from "@/lib/api-client";
@@ -12,13 +12,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
 import { DriftBadge } from "@/components/clusters/drift-badge";
-import { ClusterNodes } from "@/components/clusters/cluster-nodes";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
-import { clusterHref, clusterQuery } from "@/lib/clusters";
+import { clusterHref } from "@/lib/clusters";
 import { day2Api, day2Keys } from "@/lib/day2";
 import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftState, DriftSummaryItem } from "@/types";
 
@@ -122,31 +121,6 @@ function ClusterFlags({ cluster }: { cluster: ClusterStatus }) {
   );
 }
 
-/** The id of a cluster's nodes row, from its file path (unique even if a name is not). */
-function nodesRowId(c: ClusterStatus): string {
-  return `cluster-nodes-${c.path.replace(/[^A-Za-z0-9_-]/g, "-")}`;
-}
-
-/** Opens and closes the row under a cluster that lists its nodes (read only once opened). */
-function NodesToggle({ cluster, open, onToggle }: { cluster: ClusterStatus; open: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      aria-controls={nodesRowId(cluster)}
-      aria-label={`Show nodes of ${cluster.name}`}
-      data-testid={`cluster-nodes-toggle-${cluster.name}`}
-      className="-ml-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:text-foreground"
-    >
-      <ChevronRight
-        className={cn("h-4 w-4 transition-transform duration-150 ease-out motion-reduce:transition-none", open && "rotate-90")}
-        aria-hidden
-      />
-    </button>
-  );
-}
-
 function ClusterStatusCell({
   cluster,
   status,
@@ -205,15 +179,6 @@ export default function ClustersPage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  // The rows whose nodes are open, by file path; several at once
-  const [openNodes, setOpenNodes] = useState<Set<string>>(() => new Set());
-  const toggleNodes = (path: string) =>
-    setOpenNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
 
   const { data: clusters, isLoading, isFetching, error } = useQuery<ClusterStatus[]>({
     queryKey: ["clusters"],
@@ -573,8 +538,7 @@ export default function ClustersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
-                  {/* Inset by the nodes toggle, so the heading lines up with the names */}
-                  <th className="text-left px-3 py-3"><div className="pl-[1.625rem]">{sortHeader("name", "Name")}</div></th>
+                  <th className="text-left px-3 py-3">{sortHeader("name", "Name")}</th>
                   <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                   <th className="text-left px-3 py-3">{sortHeader("site", "Site / MCE")}</th>
                   <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap" title="Merkaz / anaf / mador">
@@ -601,7 +565,6 @@ export default function ClustersPage() {
                       // A group's heading opens it, and each page it continues on
                       const startsGroup = group !== null && (i === 0 || ownerOf(paginated[i - 1], groupBy as OwnerKey) !== group);
                       const size = group !== null ? groupSizes.get(group) ?? 0 : 0;
-                      const nodesOpen = openNodes.has(cluster.path);
                       return (
                         <Fragment key={cluster.path}>
                           {startsGroup && (
@@ -616,12 +579,11 @@ export default function ClustersPage() {
                           )}
                           <tr
                             data-testid={`cluster-row-${cluster.name}`}
-                            className={cn("hover:bg-primary/[0.03] transition-colors", nodesOpen && "bg-muted/25")}
+                            className="hover:bg-primary/[0.03] transition-colors"
                             onMouseEnter={() => prefetchCluster(cluster)}
                           >
                             <td className="px-3 py-3 max-w-[22rem]">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <NodesToggle cluster={cluster} open={nodesOpen} onToggle={() => toggleNodes(cluster.path)} />
                                 <Link
                                   href={clusterHref(cluster)}
                                   className="font-semibold text-foreground hover:text-primary transition-colors truncate"
@@ -681,21 +643,6 @@ export default function ClustersPage() {
                               {drift ? <DriftBadge state={drift.state} error={drift.error} /> : <Skeleton className="h-5 w-16" />}
                             </td>
                           </tr>
-                          {nodesOpen && (
-                            <tr id={nodesRowId(cluster)} data-testid={`cluster-nodes-row-${cluster.name}`} className="bg-muted/25">
-                              <td colSpan={columns} className="p-0">
-                                {/* Zero intrinsic width: the open row never widens the table's columns */}
-                                <div className="w-0 min-w-full pb-4 pl-[2.375rem] pr-3 pt-1">
-                                  <ClusterNodes
-                                    compact
-                                    name={cluster.name}
-                                    where={clusterQuery(cluster.site, cluster.mce)}
-                                    isAdmin={isAdmin}
-                                  />
-                                </div>
-                              </td>
-                            </tr>
-                          )}
                         </Fragment>
                       );
                     })}

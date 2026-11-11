@@ -9,7 +9,7 @@ import { ProblemList } from "@/components/common/problem-list";
 import { isApiError } from "@/lib/api-client";
 import { STALE_LIST_CODES, useUninstallNode } from "@/lib/nodes";
 import { cn } from "@/lib/utils";
-import type { ClusterNode, WorkflowRun } from "@/types";
+import type { ServerRecord, WorkflowRun } from "@/types";
 
 /**
  * What the workflow does, in short (the API note's §2). The workflow's own
@@ -31,7 +31,9 @@ const SUMMARY: { icon: LucideIcon; text: string; emphasis?: boolean }[] = [
 
 /** The heading of a refused start, by its `code`; the problem's detail is listed under it. */
 function refusalTitle(error: unknown): string {
-  if (isApiError(error, "NODE_NOT_IN_CLUSTER")) return "server-scan no longer lists this server in this cluster; refresh the list.";
+  if (isApiError(error, "NODE_NOT_IN_CLUSTER")) {
+    return "Neither the MCE nor server-scan places this server in this cluster any more; refresh the list.";
+  }
   if (isApiError(error, "UNINSTALL_ALREADY_RUNNING")) return "An uninstall of this server is already running; the list shows its run.";
   if (isApiError(error, "AMBIGUOUS_WRITE")) {
     return "The start was sent but not confirmed, so it may have started: check the node's status before trying again.";
@@ -42,43 +44,51 @@ function refusalTitle(error: unknown): string {
   return "The uninstall did not start.";
 }
 
+/** Where the server is: its Machine and NodePool, or only the cluster for a server no Machine has. */
+export interface UninstallTarget {
+  server: ServerRecord;
+  pool: string | null;
+  machine: string | null;
+}
+
 /**
- * The confirmation for `uninstall-server-from-hc` on one node: a summary of
+ * The confirmation for `uninstall-server-from-hc` on one server: a summary of
  * what the workflow does, then the server's name typed again (it cannot be
  * undone). Mount it while open: its state is one start's.
  */
 export function UninstallNodeDialog({
   cluster,
   where,
-  node,
+  target,
   onClose,
   onStarted,
 }: {
   cluster: string;
   /** `?site=&mce=`, as the cluster's other calls send it. */
   where: string;
-  node: ClusterNode;
+  target: UninstallTarget;
   onClose: () => void;
-  /** The 202's run, so the list shows it at once. */
-  onStarted: (node: ClusterNode, run: WorkflowRun) => void;
+  /** The 202's run, so the page shows it at once. */
+  onStarted: (server: ServerRecord, run: WorkflowRun) => void;
 }) {
+  const { server, pool, machine } = target;
   const [typed, setTyped] = useState("");
   const uninstall = useUninstallNode(cluster, where);
-  const matches = typed.trim() === node.name;
-  // After these the list is read again and a second start would not help (ADR-0006: never retried)
+  const matches = typed.trim() === server.name;
+  // After these the page is read again and a second start would not help (ADR-0006: never retried)
   const settled = STALE_LIST_CODES.some((code) => isApiError(uninstall.error, code));
   const canSubmit = matches && !uninstall.isPending && !settled;
-  const hardware = [node.vendor, node.model].filter(Boolean).join(" ");
+  const hardware = [server.vendor, server.model].filter(Boolean).join(" ");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     uninstall.mutate(
-      { node, typed: typed.trim() },
+      { server, typed: typed.trim() },
       {
         onSuccess: (run) => {
-          toast.success("Uninstall started", { description: node.name });
-          onStarted(node, run);
+          toast.success("Uninstall started", { description: server.name });
+          onStarted(server, run);
           onClose();
         },
       }
@@ -98,16 +108,28 @@ export function UninstallNodeDialog({
           </DialogHeader>
 
           <div className="rounded-lg border bg-muted/30 px-3.5 py-3 space-y-0.5" data-testid="uninstall-node-identity">
-            <p className="font-mono text-xs font-medium text-foreground break-all">{node.name}</p>
+            <p className="font-mono text-xs font-medium text-foreground break-all">{server.name}</p>
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-              {node.serial && <span className="font-mono">{node.serial}</span>}
-              {node.serial && hardware && <span aria-hidden>·</span>}
+              {server.serial && <span className="font-mono">{server.serial}</span>}
+              {server.serial && hardware && <span aria-hidden>·</span>}
               {hardware && <span>{hardware}</span>}
-              {(node.serial || hardware) && <span aria-hidden>·</span>}
-              <span>
-                in <span className="font-mono break-all">{cluster}</span>
-              </span>
             </p>
+            {machine ? (
+              <>
+                <p className="text-xs text-muted-foreground break-words">
+                  Machine <span className="font-mono">{machine}</span>
+                </p>
+                {pool && (
+                  <p className="text-xs text-muted-foreground break-words">
+                    NodePool <span className="font-mono">{pool}</span>
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground break-words">
+                In <span className="font-mono">{cluster}</span>, in no NodePool
+              </p>
+            )}
           </div>
 
           <ul className="space-y-2" aria-label="What the workflow does">
@@ -123,7 +145,7 @@ export function UninstallNodeDialog({
           </ul>
 
           <label className="block text-xs text-muted-foreground">
-            Type <span className="font-mono text-foreground break-all">{node.name}</span> to confirm; it cannot be undone.
+            Type <span className="font-mono text-foreground break-all">{server.name}</span> to confirm; it cannot be undone.
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}

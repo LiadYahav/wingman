@@ -20,7 +20,7 @@ export type ErrorCode =
   | "SELF_APPROVAL"
   | "FEATURE_DISABLED"
   | "DEPENDENCY_UNAVAILABLE"
-  /** 409: server-scan no longer places the server in this cluster (an uninstall). */
+  /** 409: neither a Machine of the cluster nor server-scan places the server in it (an uninstall). */
   | "NODE_NOT_IN_CLUSTER"
   /** 409: the orchestrator already runs an uninstall of this server. */
   | "UNINSTALL_ALREADY_RUNNING";

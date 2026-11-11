@@ -236,9 +236,9 @@ const REFUSALS = [
   },
   {
     code: "501 FEATURE_DISABLED",
-    see: "“Live status is off”, “Live status is off in this deployment”, or “Nodes need server-scan, and this deployment has not configured it.”",
-    why: "This deployment does not read HostedClusters from the MCE hubs, or has no server-scan. It is not an error.",
-    fix: "Nothing to fix. Without live status, InfraEnv names are typed instead of picked; without server-scan, no nodes are listed.",
+    see: "“Live status is off”, “Live status is off in this deployment”, or “Nodes need live status from the MCE”",
+    why: "This deployment does not read HostedClusters from the MCE hubs. It is not an error.",
+    fix: "Nothing to fix. InfraEnv names are typed instead of picked, and the Nodes tab lists no NodePools.",
   },
   {
     code: "504 AMBIGUOUS_WRITE",
@@ -821,31 +821,60 @@ nodepool:
             </div>
           </div>
 
-          <h3 className="text-base font-semibold mt-6 mb-3">Nodes and uninstall</h3>
+          <h3 className="text-base font-semibold mt-6 mb-3">Nodes</h3>
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            A cluster&apos;s <strong>nodes</strong> are the servers server-scan places in it. They are listed under its row
-            on the Clusters page (the arrow before its name opens them, several rows at once) and on its{" "}
-            <strong>Nodes</strong> tab: serial, hardware, state and health as server-scan reports them, with flags for a
-            server in maintenance, stale, unreachable or contested (claimed by two clusters). A node&apos;s name opens its
-            page in server-scan. Health server-scan could not determine shows as <strong>Unknown</strong>, never as
-            healthy.
+            The cluster page&apos;s <strong>Nodes</strong> tab shows each NodePool as the cluster&apos;s MCE reports it.
+            Its header sums it up: how many nodes are ready of how many it wants (or the range it autoscales in), the
+            version it last finished updating to, whether an update reboots its nodes in place (<strong>InPlace</strong>)
+            or replaces them (<strong>Replace</strong>), and which Agents it takes. Under it is one row per Machine: the
+            server behind it, linked to its page in server-scan, with its serial, hardware, Machine, Agent, state and
+            health, and flags for a server in maintenance, stale, unreachable or contested (claimed by two clusters).
+            Health server-scan could not determine shows as <strong>Unknown</strong>, never as healthy. Ready, healthy
+            rows stay quiet, so what needs a look stands out.
           </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            {[
+              {
+                title: "An update in progress",
+                desc: "A banner says what is being updated (the version or the config), how many nodes are done when an in-place update counts them, and the NodePool's own message. The node the update is working on now is marked, with what is happening to it: “Rebooting for the update”, “Draining”. A failed update is shown in red.",
+              },
+              {
+                title: "The missing piece",
+                desc: "A Machine that waits for a server, or a node the NodePool wants and has no Machine for, is a dashed placeholder that says why: usually that no free Agent matches the NodePool. The header then counts the matching Agents and how many are free.",
+              },
+              {
+                title: "In no NodePool",
+                desc: "Servers server-scan still places in the cluster that no Machine has are listed apart, under the NodePools. That is usual for a few minutes after an uninstall.",
+              },
+            ].map(({ title, desc }) => (
+              <div key={title} className="rounded-xl border bg-card p-4">
+                <p className="text-sm font-semibold mb-1">{title}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            An admin&apos;s <strong>Uninstall</strong> beside a node starts the platform&apos;s{" "}
+            The tab reads the MCE as live status does, so it needs <InlineCode>CLUSTER_STATUS_ENABLED</InlineCode>; without
+            it, the tab says so (<InlineCode>501 FEATURE_DISABLED</InlineCode>). When server-scan does not answer, the
+            Machines are still listed, without links or health.
+          </p>
+
+          <h3 className="text-base font-semibold mt-6 mb-3">Uninstall a server</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+            An admin&apos;s <strong>Uninstall</strong> beside a server starts the platform&apos;s{" "}
             <InlineCode>uninstall-server-from-hc</InlineCode> workflow on it, once the server&apos;s name is typed again.
-            Wingman starts the workflow and shows its run beside the node, with the step it is on, and the workflow does
-            the work and its own checks. In short, it drains the node and deletes its Machine, then takes the server out
-            of the hosted cluster and out of the MCE (powered off, its BareMetalHost and Agent removed), after which
-            server-scan shows it free.
+            Wingman starts the workflow and shows its run beside the server, with the step it is on, and the workflow
+            does the work and its own checks. In short, it drains the node and deletes its Machine, then takes the
+            server out of the hosted cluster and out of the MCE (powered off, its BareMetalHost and Agent removed), after
+            which server-scan shows it free.
           </p>
           <Callout type="warning" title="A replacement, not a shrink">
-            The NodePool keeps its size, so it binds a replacement node in the server&apos;s place. Nothing is undone if
-            the run fails, and running it again resumes. A server the workflow refuses (a contested one, say) fails its
-            run, and the error shows beside the node.
+            The NodePool keeps its size, so it binds a replacement node in the server&apos;s place: watch for it as the
+            missing piece. Nothing is undone if the run fails, and running it again resumes. A server the workflow
+            refuses (a contested one, say) fails its run, and the error shows beside the server.
           </Callout>
           <p className="text-sm text-muted-foreground leading-relaxed mt-3">
-            Without server-scan, a deployment lists no nodes and says so (<InlineCode>501 FEATURE_DISABLED</InlineCode>
-            ); without the workflows orchestrator, it lists them with no Uninstall button.
+            Without the workflows orchestrator or server-scan, the servers are listed with no Uninstall button.
           </p>
         </section>
 
