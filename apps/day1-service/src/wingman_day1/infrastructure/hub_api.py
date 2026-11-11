@@ -1,10 +1,15 @@
-"""HttpHubApi: the MCE hub Kubernetes APIs (HostedClusters, NodePools, InfraEnvs) over httpx.
+"""HttpHubApi: the MCE hub Kubernetes APIs over httpx, read only.
+
+HostedClusters, NodePools and InfraEnvs (live status), and each cluster's
+Machines, MachineSets, AgentMachines and Agents (its nodes by NodePool,
+ADR-0038). CAPI is always asked for ``cluster.x-k8s.io/v1beta1``: every MCE
+from 4.16 serves it, and 4.16 to 4.18 serve nothing newer.
 
 Each MCE hub has its own API server, ``https://api.<mce>.<domain>:6443``,
 and its own service-account token, mounted as the legacy YAML file
 ``{<mce-name>: <token>}`` (``MCE_TOKENS_FILE``). The legacy service used the
-synchronous kubernetes client in a thread; these are three GETs, so this is
-plain async httpx with explicit timeouts, like the GitLab adapter (ADR-0002).
+synchronous kubernetes client in a thread; these are plain GETs, so this is
+async httpx with explicit timeouts, like the GitLab adapter (ADR-0002).
 
 Errors are day1 domain errors. A token never appears in an error or a log
 line: messages name the MCE and the resource path only.
@@ -14,9 +19,9 @@ from __future__ import annotations
 
 import ssl
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Protocol
 
 import httpx
 import yaml
@@ -28,16 +33,45 @@ from wingman_day1.domain.errors import (
     HubObjectNotFoundError,
     HubUnavailableError,
 )
+from wingman_day1.domain.machines import (
+    DEPLOYMENT_NAME_LABEL,
+    NODE_POOL_ANNOTATION,
+    REVISION_ANNOTATION,
+    SET_NAME_LABEL,
+    UPGRADE_DEGRADED_ANNOTATION,
+    UPGRADE_IN_PROGRESS_ANNOTATION,
+    AgentMachineObservation,
+    AgentObservation,
+    MachineObservation,
+    MachineSetObservation,
+)
 from wingman_day1.domain.names import dns_label_problems
-from wingman_day1.domain.status import Condition, HostedClusterObservation, NodePoolObservation
+from wingman_day1.domain.selectors import LabelRequirement, LabelSelector, Operator
+from wingman_day1.domain.status import (
+    Autoscaling,
+    Condition,
+    HostedClusterObservation,
+    NodePoolObservation,
+)
 from wingman_day1.infrastructure.observed import HubOperation, Observer, Timer
 
 _HYPERSHIFT: Final = "/apis/hypershift.openshift.io/v1beta1"
 _AGENT_INSTALL: Final = "/apis/agent-install.openshift.io/v1beta1"
+_CAPI: Final = "/apis/cluster.x-k8s.io/v1beta1"
+_CAPI_AGENT: Final = "/apis/capi-provider.agent-install.openshift.io/v1beta1"
 _API_PORT: Final = 6443
 
 JSON = Any
 """A decoded Kubernetes JSON value; narrowed by the parsers below."""
+
+
+class Named(Protocol):
+    """An object a list is sorted by: it has a name."""
+
+    @property
+    def name(self) -> str:
+        """Its ``metadata.name``."""
+        ...
 
 
 def load_mce_tokens(path: Path) -> dict[str, str]:
@@ -128,6 +162,34 @@ class HttpHubApi:
             HubOperation.LIST_INFRA_ENVS, self._infra_envs(mce, namespace or None)
         )
 
+    async def machines(self, mce: str, *, namespace: str) -> list[MachineObservation]:
+        """See HubApi.machines."""
+        return await self._observer.call(
+            HubOperation.LIST_MACHINES,
+            self._list(mce, namespace, f"{_CAPI}/namespaces/{namespace}/machines", machine_from),
+        )
+
+    async def machine_sets(self, mce: str, *, namespace: str) -> list[MachineSetObservation]:
+        """See HubApi.machine_sets."""
+        path = f"{_CAPI}/namespaces/{namespace}/machinesets"
+        return await self._observer.call(
+            HubOperation.LIST_MACHINE_SETS, self._list(mce, namespace, path, machine_set_from)
+        )
+
+    async def agent_machines(self, mce: str, *, namespace: str) -> list[AgentMachineObservation]:
+        """See HubApi.agent_machines."""
+        path = f"{_CAPI_AGENT}/namespaces/{namespace}/agentmachines"
+        return await self._observer.call(
+            HubOperation.LIST_AGENT_MACHINES, self._list(mce, namespace, path, agent_machine_from)
+        )
+
+    async def agents(self, mce: str, *, namespace: str) -> list[AgentObservation]:
+        """See HubApi.agents."""
+        path = f"{_AGENT_INSTALL}/namespaces/{namespace}/agents"
+        return await self._observer.call(
+            HubOperation.LIST_AGENTS, self._list(mce, namespace, path, agent_from)
+        )
+
     # ── Calls ───────────────────────────────────────────────────────────────
 
     async def _hosted_cluster(
@@ -137,7 +199,7 @@ class HttpHubApi:
         _object_name("HostedCluster", name)
         raw = await self._get(mce, f"{_HYPERSHIFT}/namespaces/{namespace}/hostedclusters/{name}")
         try:
-            return _hosted_cluster(raw, namespace=namespace, name=name)
+            return hosted_cluster_from(raw, namespace=namespace, name=name)
         except (KeyError, TypeError, ValueError) as exc:
             raise HubUnavailableError(
                 f"MCE {mce!r} returned a malformed HostedCluster {namespace}/{name}"
@@ -147,7 +209,7 @@ class HttpHubApi:
         _object_name("namespace", namespace)
         raw = await self._get(mce, f"{_HYPERSHIFT}/namespaces/{namespace}/nodepools")
         try:
-            pools = [_node_pool(item) for item in _items(raw)]
+            pools = [node_pool_from(item) for item in _items(raw)]
         except (KeyError, TypeError, ValueError) as exc:
             raise HubUnavailableError(
                 f"MCE {mce!r} returned a malformed NodePool list in {namespace}"
@@ -166,6 +228,28 @@ class HttpHubApi:
         except (KeyError, TypeError, ValueError) as exc:
             raise HubUnavailableError(f"MCE {mce!r} returned a malformed InfraEnv list") from exc
         return sorted(names)
+
+    async def _list[T: Named](
+        self, mce: str, namespace: str, path: str, parse: Callable[[JSON], T]
+    ) -> list[T]:
+        """A namespaced list, parsed and sorted by name.
+
+        A namespace that does not exist lists as empty. A 404 means the hub
+        does not serve the resource at all: the hub's fault, not a missing
+        cluster's.
+        """
+        _object_name("namespace", namespace)
+        try:
+            raw = await self._get(mce, path)
+        except HubObjectNotFoundError as exc:
+            raise HubUnavailableError(f"MCE {mce!r} does not serve GET {path} (404)") from exc
+        try:
+            parsed = [parse(item) for item in _items(raw)]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HubUnavailableError(
+                f"MCE {mce!r} returned a malformed list on GET {path}"
+            ) from exc
+        return sorted(parsed, key=lambda item: item.name)
 
     # ── HTTP ────────────────────────────────────────────────────────────────
 
@@ -278,7 +362,27 @@ def _conditions(status: dict[str, JSON]) -> tuple[Condition, ...]:
     return tuple(conditions)
 
 
-def _hosted_cluster(raw: JSON, *, namespace: str, name: str) -> HostedClusterObservation:
+def _strings(value: JSON, what: str) -> dict[str, str]:
+    mapping = _mapping(value)
+    if not all(isinstance(k, str) and isinstance(v, str) for k, v in mapping.items()):
+        raise TypeError(f"{what} is not a map of strings")
+    return mapping
+
+
+def _metadata(raw: JSON) -> tuple[dict[str, JSON], dict[str, str], dict[str, str]]:
+    """``metadata``, its labels and its annotations."""
+    metadata = _mapping(_mapping(raw).get("metadata"))
+    return (
+        metadata,
+        _strings(metadata.get("labels"), "metadata.labels"),
+        _strings(metadata.get("annotations"), "metadata.annotations"),
+    )
+
+
+def hosted_cluster_from(raw: JSON, *, namespace: str, name: str) -> HostedClusterObservation:
+    """A HostedCluster (``hypershift.openshift.io/v1beta1``)."""
+    spec = _mapping(_mapping(raw).get("spec"))
+    agent = _mapping(_mapping(spec.get("platform")).get("agent"))
     status = _mapping(_mapping(raw).get("status"))
     history = _mapping(status.get("version")).get("history") or []
     if not isinstance(history, list):
@@ -290,18 +394,128 @@ def _hosted_cluster(raw: JSON, *, namespace: str, name: str) -> HostedClusterObs
         phase=_text(status.get("phase")),
         version=version,
         conditions=_conditions(status),
+        agent_namespace=_text(agent.get("agentNamespace")),
     )
 
 
-def _node_pool(raw: JSON) -> NodePoolObservation:
+def node_pool_from(raw: JSON) -> NodePoolObservation:
+    """A NodePool (``hypershift.openshift.io/v1beta1``)."""
     pool = _mapping(raw)
     spec = _mapping(pool.get("spec"))
     status = _mapping(pool.get("status"))
     current = _replicas(status.get("replicas"))
     desired = _replicas(spec.get("replicas"))
+    scaling = spec.get("autoScaling")
+    autoscaling = None
+    if scaling is not None:
+        bounds = _mapping(scaling)
+        autoscaling = Autoscaling(
+            min=_replicas(bounds.get("min")) or 0, max=_replicas(bounds["max"]) or 0
+        )
+    platform = _mapping(_mapping(spec.get("platform")).get("agent"))
     return NodePoolObservation(
         name=_metadata_name(pool),
         desired_replicas=desired if desired is not None else (current or 0),
         current_replicas=current or 0,
+        conditions=_conditions(status),
+        replicas=desired,
+        autoscaling=autoscaling,
+        upgrade_type=_text(_mapping(spec.get("management")).get("upgradeType")),
+        version=_text(status.get("version")),
+        agent_selector=label_selector_from(platform.get("agentLabelSelector")),
+    )
+
+
+def label_selector_from(raw: JSON) -> LabelSelector | None:
+    """A ``metav1.LabelSelector``; ``None`` when absent. An unknown operator is malformed."""
+    if raw is None:
+        return None
+    selector = _mapping(raw)
+    expressions = selector.get("matchExpressions") or []
+    if not isinstance(expressions, list):
+        raise TypeError("matchExpressions is not a list")
+    requirements = []
+    for item in expressions:
+        expression = _mapping(item)
+        values = expression.get("values") or []
+        if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+            raise TypeError("matchExpressions values is not a list of strings")
+        requirements.append(
+            LabelRequirement(
+                key=str(expression["key"]),
+                operator=Operator(expression["operator"]),
+                values=tuple(values),
+            )
+        )
+    labels = _strings(selector.get("matchLabels"), "matchLabels")
+    return LabelSelector(
+        match_labels=tuple(sorted(labels.items())), match_expressions=tuple(requirements)
+    )
+
+
+def machine_from(raw: JSON) -> MachineObservation:
+    """A CAPI Machine (``cluster.x-k8s.io/v1beta1``)."""
+    metadata, labels, annotations = _metadata(raw)
+    spec = _mapping(_mapping(raw).get("spec"))
+    status = _mapping(_mapping(raw).get("status"))
+    return MachineObservation(
+        name=_metadata_name(raw),
+        node_pool=_text(annotations.get(NODE_POOL_ANNOTATION)),
+        machine_set=_text(labels.get(SET_NAME_LABEL)),
+        infrastructure_ref=_text(_mapping(spec.get("infrastructureRef")).get("name")),
+        provider_id=_text(spec.get("providerID")),
+        phase=_text(status.get("phase")),
+        node_name=_text(_mapping(status.get("nodeRef")).get("name")),
+        deleting=bool(metadata.get("deletionTimestamp")),
+        failure_reason=_text(status.get("failureReason")),
+        failure_message=_text(status.get("failureMessage")),
+        conditions=_conditions(status),
+        v1beta2_conditions=_conditions(_mapping(status.get("v1beta2"))),
+    )
+
+
+def machine_set_from(raw: JSON) -> MachineSetObservation:
+    """A CAPI MachineSet (``cluster.x-k8s.io/v1beta1``)."""
+    _, labels, annotations = _metadata(raw)
+    revision = annotations.get(REVISION_ANNOTATION)
+    return MachineSetObservation(
+        name=_metadata_name(raw),
+        node_pool=_text(annotations.get(NODE_POOL_ANNOTATION)),
+        deployment=_text(labels.get(DEPLOYMENT_NAME_LABEL)),
+        revision=int(revision) if revision else None,
+        upgrade_in_progress=_text(annotations.get(UPGRADE_IN_PROGRESS_ANNOTATION)),
+        upgrade_degraded=_text(annotations.get(UPGRADE_DEGRADED_ANNOTATION)),
+    )
+
+
+def agent_machine_from(raw: JSON) -> AgentMachineObservation:
+    """An AgentMachine (``capi-provider.agent-install.openshift.io/v1beta1``)."""
+    status = _mapping(_mapping(raw).get("status"))
+    return AgentMachineObservation(
+        name=_metadata_name(raw),
+        agent_name=_text(_mapping(status.get("agentRef")).get("name")),
+        conditions=_conditions(status),
+    )
+
+
+def agent_from(raw: JSON) -> AgentObservation:
+    """An Agent (``agent-install.openshift.io/v1beta1``)."""
+    _, labels, _ = _metadata(raw)
+    spec = _mapping(_mapping(raw).get("spec"))
+    status = _mapping(_mapping(raw).get("status"))
+    inventory = _mapping(status.get("inventory"))
+    interfaces = inventory.get("interfaces") or []
+    if not isinstance(interfaces, list):
+        raise TypeError("status.inventory.interfaces is not a list")
+    macs = [_text(_mapping(item).get("macAddress")) for item in interfaces]
+    return AgentObservation(
+        name=_metadata_name(raw),
+        labels=labels,
+        approved=spec.get("approved") is True,
+        hostname=_text(spec.get("hostname")) or _text(inventory.get("hostname")),
+        state=_text(_mapping(status.get("debugInfo")).get("state")),
+        stage=_text(_mapping(status.get("progress")).get("currentStage")),
+        serial=_text(_mapping(inventory.get("systemVendor")).get("serialNumber")),
+        macs=tuple(mac.lower() for mac in macs if mac),
         conditions=_conditions(status),
     )

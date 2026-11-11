@@ -34,7 +34,7 @@ Operations of the other dependencies (day1):
 
 | `dependency` | `operation` |
 |---|---|
-| `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs` |
+| `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons` |
 | `server_scan` | `list_server_rows`, `get_server` |
@@ -55,8 +55,8 @@ Operations of the other dependencies (day1):
 
 - `server_scan` `denied` means server-scan refused **Wingman's viewer token**
   (`SERVER_SCAN_TOKEN`); `unavailable` means it could not be reached or
-  answered with an error. Either way the nodes routes answer 502 and no node
-  is shown as missing.
+  answered with an error. The nodes are still listed, without their servers,
+  and the answer's `server_scan_error` says why; an uninstall answers 502.
 - `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the

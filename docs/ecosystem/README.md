@@ -402,6 +402,7 @@ We used only GET requests against these. We skipped server-scan `/servers/availa
 | sim-day2-{argocd-day2-platform, sigs-falcon, sigs-lynx, sigs-orca, helm-charts, argo-appproject, day1-platform-config} (temporary day2 simulation, one repo per GitLab project) | 2026-09-29 | 2026-09-29 | This README |
 | cluster-navigator | `710498c` | 2026-10-14 | [Vision](#vision-wingman-as-the-one-platform-later) |
 | `~/Downloads/stack-export` (sanitized production export: chart, docs, ArgoCD platform) | n/a | — | [notes/hosted-clusters.md](notes/hosted-clusters.md) |
+| Upstream open source, not team-redbull: `openshift/hypershift`, `openshift/cluster-api-provider-agent`, `openshift/assisted-service`, `kubernetes-sigs/cluster-api` (what an MCE hub shows about each node) | hypershift `main@1caea768` and `release-4.16`..`4.20`; the others' `main`, `release-ocm-2.11`, `release-ocm-2.14` and CAPI `v1.8.4`, `v1.10.4`, `v1.14.3` | 2026-11-11 | [notes/hypershift-node-state.md](notes/hypershift-node-state.md) |
 | Wingman itself | `47b0e02` | 2026-11-07 | [notes/wingman-today.md](notes/wingman-today.md) |
 
 The file paths inside the notes are relative to those repos at those commits. The clones were shallow (`main` only), so the remote branches, including any in-progress Day1 workflow branch, were not checked. Secrets were never copied; where they exist, the notes say where.
