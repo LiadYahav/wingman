@@ -708,6 +708,16 @@ spec:
                 flavor&apos;s preset, else the MCE&apos;s mastertag, but only when the MCE offers it. The release becomes
                 the file&apos;s <InlineCode>mastertag</InlineCode>.
               </p>
+              <p className="mt-2">
+                Where Wingman reads the MCEs, it <strong>picks the MCE</strong> instead: choose the site,{" "}
+                <InlineCode>prod</InlineCode> or <InlineCode>prep</InlineCode> and the version (the releases the
+                candidate MCEs host), and enter the owner&apos;s mador below. A candidate must host the version, have
+                enough free pods for a control plane, and answer Wingman; among those, the pick has the fewest clusters
+                of this owner, then the fewest clusters, then the most usable spare servers. The form shows the pick
+                and why, and every candidate&apos;s numbers; one that fails a check says why and cannot be chosen. An
+                admin may choose another MCE that passes, with a reason; the merge request records the numbers, the
+                pick and the reason. The name, the InfraEnvs and the request follow the chosen MCE.
+              </p>
             </Step>
             <Step n={3} title="Cluster configuration">
               The fields are the inputs of the shared template. With the default template: the owner numbers

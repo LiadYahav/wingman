@@ -8,6 +8,9 @@ import { useMemo, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 
+/** Queries never restored from localStorage: what they show must be read now. */
+const NOT_PERSISTED = new Set(["approvals", "placement"]);
+
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once - must be stable across renders
   const queryClient = useMemo(
@@ -41,9 +44,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       dehydrateOptions: {
         // An approval's detail is what the reviewer approves (its sha), so it is
         // never restored from storage: a page opened later always shows the
-        // branch as it is now, not a diff cached minutes ago.
+        // branch as it is now, not a diff cached minutes ago. An MCE placement
+        // is the MCEs' free pods now (ADR-0050), never minutes-old numbers.
         shouldDehydrateQuery: (query) =>
-          query.state.status === "success" && query.queryKey[0] !== "approvals",
+          query.state.status === "success" && !NOT_PERSISTED.has(String(query.queryKey[0])),
       },
     });
   }, [queryClient]);
