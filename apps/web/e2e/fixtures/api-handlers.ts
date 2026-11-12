@@ -447,6 +447,10 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/name-suggestion**", (route: Route) =>
     json(route, { name: null, env: null, short_name: "", sequence: null, problems: [] })
   );
+  // No MCE placement unless a test mocks it (ADR-0050): the create form keeps its MCE select
+  await page.route("**/api/day1/placement**", (route: Route) =>
+    fulfillProblem(route, 501, "FEATURE_DISABLED", "Live cluster status is disabled in this deployment (CLUSTER_STATUS_ENABLED=false).")
+  );
   // A create opens Wingman's merge request unless a test turns the provision-cluster workflow on (ADR-0042)
   await page.route("**/api/day1/clusters/provisioner", (route: Route) => json(route, { mode: "merge-request" }));
   // segments-manager is off unless a test says otherwise (mockClusterNetwork): the card shows the file, EPG "—"

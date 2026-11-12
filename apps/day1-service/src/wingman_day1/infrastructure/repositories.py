@@ -199,6 +199,14 @@ class CachedRepository:
             ttl=self._ttl,
         )
 
+    async def merge_request_diff(self, merge_request: MergeRequest) -> list[FileDiff]:
+        """See RepoReads.merge_request_diff: kept per head ``sha`` for the TTL."""
+        return await self._cache.get_or_fetch(
+            keys.merge_request_diff(self._key, merge_request.ref.iid, merge_request.sha),
+            lambda: self._gitlab.merge_request_diff(merge_request.ref),
+            ttl=self._ttl,
+        )
+
     def forget_files(self) -> None:
         """See RepoReads.forget_files."""
         self._cache.invalidate_prefix(keys.files_prefix(self._key))

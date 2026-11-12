@@ -54,6 +54,7 @@ from wingman_day1.api.v1 import audit as audit_api
 from wingman_day1.api.v1 import auth as auth_api
 from wingman_day1.api.v1 import clusters as clusters_api
 from wingman_day1.api.v1 import machine_configs as machine_configs_api
+from wingman_day1.api.v1 import placement as placement_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
@@ -67,6 +68,7 @@ from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
+from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.rollouts import ROLLOUT_USER, RolloutService
 from wingman_day1.application.sites import SiteCatalog
@@ -83,7 +85,7 @@ from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLed
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons, HttpDay2Installs
-from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_tokens
+from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_access
 from wingman_day1.infrastructure.link_probe import HttpLinkProbe
 from wingman_day1.infrastructure.links_file import FileLinksSource
 from wingman_day1.infrastructure.merge_requests import (
@@ -122,6 +124,8 @@ RUNS_TTL_SECONDS: Final = 10.0
 """The longest an uninstall run's status is cached: the web polls a running one."""
 HUB_TTL_SECONDS: Final = 10.0
 """The longest live status and the nodes view cache an MCE read (ADR-0041)."""
+PLACEMENT_TTL_SECONDS: Final = 5.0
+"""The longest placement keeps an MCE's nodes and pods: read when a create asks (ADR-0050)."""
 FAKE_SERVER_SCAN_UI: Final = "http://server-scan.example"
 """Where the fake fleet's node links point when ``SERVER_SCAN_UI_URL`` is empty."""
 FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
@@ -133,6 +137,7 @@ ROUTERS: Final = (
     sites_api.mces_router,
     specs_api.router,
     machine_configs_api.router,
+    placement_api.router,
     quick_links_api.router,
     approvals_api.router,
     audit_api.router,
@@ -220,8 +225,10 @@ def build_adapters(
         day2_installs = installs
     hub: HubApi | None = None
     if settings.cluster_status_enabled and not settings.day1_fake_fleet:
+        access = load_mce_access(settings.mce_tokens_file)
         hub_api = HttpHubApi(
-            tokens=load_mce_tokens(settings.mce_tokens_file),
+            tokens=access.tokens,
+            urls=access.urls,
             domain=settings.mce_api_domain,
             verify=settings.mce_tls_verify,
             timeout_seconds=settings.mce_timeout_seconds,
@@ -450,6 +457,27 @@ def build_context(
     day1_writer = MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
     provisioner = GitClusterProvisioner(day1_writer)
     rollout_writer = GitRolloutMergeRequests(gitlab, day1, day1_writer)
+    # server-scan's fleet rows, one cache for the nodes view and placement (ADR-0038)
+    inventory = (
+        CachedServerInventory(adapters.inventory, cache, ttl=ttl)
+        if adapters.inventory is not None
+        else None
+    )
+    # An MCE's nodes and pods are read when a create asks, kept for seconds (ADR-0050)
+    placement = (
+        PlacementService(
+            day1,
+            site_catalog,
+            CachedHubApi(adapters.hub, cache, ttl=PLACEMENT_TTL_SECONDS),
+            inventory=inventory,
+            min_free_pods=settings.placement_min_free_pods,
+            specs=spec_catalog,
+            infraenv_namespace=settings.mce_infraenv_namespace or None,
+            record=metrics.observe_placement if metrics is not None else None,
+        )
+        if adapters.hub is not None
+        else None
+    )
     cluster_service = ClusterService(
         day1,
         site_catalog,
@@ -458,6 +486,7 @@ def build_context(
         machine_configs,
         naming=naming,
         provision=adapters.provision,
+        placement=placement,
     )
     drift = DriftService(
         cluster_service,
@@ -485,11 +514,7 @@ def build_context(
         nodes = NodeService(
             hub,
             cluster_service,
-            inventory=(
-                CachedServerInventory(adapters.inventory, cache, ttl=ttl)
-                if adapters.inventory is not None
-                else None
-            ),
+            inventory=inventory,
             ui_url=settings.server_scan_ui_base or FAKE_SERVER_SCAN_UI,
             workflows=(
                 CachedUninstallWorkflow(adapters.uninstall, cache, ttl=runs_ttl)
@@ -581,6 +606,7 @@ def build_context(
         webhook_secret=settings.gitlab_webhook_secret.get_secret_value() or None,
         status_poll_seconds=settings.day1_status_poll_seconds,
         segments_manager_ui_url=settings.segments_manager_ui_base or fake_ui or None,
+        placement=placement,
         quick_links=quick_links,
     )
 

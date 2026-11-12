@@ -22,6 +22,7 @@ from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import (
     OTHER,
     Outcome,
+    PlacementDecision,
     RolloutOutcome,
     RolloutTrigger,
     WingmanMetrics,
@@ -39,6 +40,7 @@ EXPECTED = {
     "wingman_http_request_duration_seconds": ("histogram", {"method", "route"}),
     "wingman_dependency_requests": ("counter", {"dependency", "operation", "outcome"}),
     "wingman_dependency_request_duration_seconds": ("histogram", {"dependency", "operation"}),
+    "wingman_placement_decisions": ("counter", {"decision"}),
     "wingman_rollout_runs": ("counter", {"trigger"}),
     "wingman_rollout_merge_requests": ("counter", {"outcome"}),
 }
@@ -84,6 +86,17 @@ def test_alerted_outcomes_exist_at_zero_before_any_call() -> None:
         sample(metrics, "wingman_build_info", component="day1", version="1.2.3", commit="abc1234")
         == 1.0
     )
+
+
+def test_placement_decisions_are_a_fixed_set() -> None:
+    metrics = make_metrics()
+    for decision in (*PlacementDecision, "picked", "maybe"):
+        metrics.observe_placement(decision)
+    name = "wingman_placement_decisions_total"
+    assert sample(metrics, name, decision="picked") == 2.0
+    assert sample(metrics, name, decision="override") == 1.0
+    assert sample(metrics, name, decision="refused") == 1.0
+    assert sample(metrics, name, decision=OTHER) == 1.0
 
 
 def test_every_rollout_series_exists_at_zero_and_counts() -> None:

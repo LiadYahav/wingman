@@ -118,6 +118,7 @@ wingman/
 | **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. day1 keeps each hub's list for `MCE_INFRAENV_CACHE_SECONDS` (10 minutes). Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
 | **A suggested cluster name** | Creating from a flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>`: the MCE's env and the first letter no cluster or open create MR has. The name stays editable. A new cluster's sequence is one letter, `a` to `z`, never a number (ADR-0040). |
 | **Nodepools sized by a ratio** | A flavor may give its nodepools a ratio (`nodepool_ratio: [1, 2, 1]`): the create form asks for one size and sets each nodepool's replicas to its ratio times that size; create refuses replicas off the ratio (ADR-0040). |
+| **Wingman picks the MCE** | With live status on, the create form asks for the site, prod or prep, the OpenShift version and the owner, and Wingman picks the MCE: of the MCEs at the site whose name says the env, those that host the version, have at least `PLACEMENT_MIN_FREE_PODS` free pods on their workers (allocatable pods less pods in use; masters, infra and tainted nodes left out), have enough healthy free servers of each node type the nodepools need (free Agents in that InfraEnv, healthy in server-scan) and can be read, the one with the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers in server-scan. The form shows every candidate's numbers and why the pick won; an admin may choose another MCE that passes every check, with a reason, and the MR description records it all (ADR-0050). |
 | **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. |
 | **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. day1 checks every link (up, down or unknown, with the reason) and an ArgoCD with a read-only token shows its applications' sync and health counts; the browser never pings anything, and icons ship with Wingman (ADR-0052). |
 
@@ -159,7 +160,7 @@ Changes since the legacy services:
 | `POST` | `/api/day1/clusters` | Create a cluster from a spec: opens the MR that adds its file (`201`), or with `DAY1_PROVISIONER=workflow` starts the platform's `provision-cluster` workflow and answers its run (`202`, ADR-0042) |
 | `GET` | `/api/day1/clusters/provisioner` | What Create does here: `{"mode": "merge-request" \| "workflow"}` |
 | `GET` | `/api/day1/clusters/{name}/provision-run` | The new cluster's provision-cluster run: the workflow's status, phase, merge request and error (404 none; 501 in merge-request mode) |
-| `POST` | `/api/day1/clusters/preview` | Exactly the file a create would commit, after every check a create runs |
+| `POST` | `/api/day1/clusters/preview` | Exactly the file a create would commit, after every check a create runs (with placement on, the MCE against the placement rule: an override of Wingman's pick needs `placement.reason`) |
 | `GET` | `/api/day1/clusters/drift-summary` | Drift of every cluster |
 | `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040) |
 | `POST` | `/api/day1/clusters/bulk-status` | Live status of many clusters |
@@ -188,6 +189,7 @@ Changes since the legacy services:
 | `GET` | `/api/day1/mces` | Every MCE (or one site's, `?site=`), with its default mastertag, hub version and naming |
 | `GET` | `/api/day1/mces/{mce}/openshift-versions` | The releases a new cluster on the MCE may use (`upgrade/` in the day1 repo), newest first, with `problems` when its files are missing or broken |
 | `GET` | `/api/day1/mces/{mce}/infraenvs` | InfraEnv names on the MCE hub (501 when live status is off) |
+| `GET` | `/api/day1/placement` | Where a new hosted cluster goes (`?site=&env=&version=&owner=&flavor=`, ADR-0050): every candidate MCE with its checks, clusters, this owner's clusters, spare servers and free pods, and Wingman's pick with why (501 when live status is off) |
 | `GET` | `/api/day1/machine-configs` | The machine configs a nodepool can use (`mc-files/` in the day1 repo: static configs and network hardware types, `generic` first when the generic template exists) and the specs repo's nodepool defaults |
 
 #### Specs (presets for the create form)
@@ -374,7 +376,7 @@ DAY2_TIMEOUT_SECONDS=5
 # the nodes need more MCE reads: deploy/helm/wingman/README.md, the MCE token's RBAC)
 CLUSTER_STATUS_ENABLED=false
 MCE_API_DOMAIN=mgmt.example.com           # https://api.<mce>.<domain>:6443
-MCE_TOKENS_FILE=/etc/wingman/mce-tokens/tokens
+MCE_TOKENS_FILE=/etc/wingman/mce-tokens/tokens  # YAML: <mce>: <token>, or <mce>: {token: <token>, url: https://<host>:<port>} (ADR-0045)
 MCE_SSL_VERIFY=true                       # true, false, or a CA bundle path
 MCE_TIMEOUT_SECONDS=10
 MCE_INFRAENV_NAMESPACE=                   # empty = all namespaces (the chart does not set it yet)
@@ -392,6 +394,7 @@ WORKFLOWS_SSL_VERIFY=true                 # true, false, or a CA bundle path
 WORKFLOWS_TIMEOUT_SECONDS=10
 DAY1_FAKE_FLEET=false                     # development only: an MCE, server-scan, the orchestrator and segments-manager in memory, from dev/fleet-fixtures
 DAY1_PROVISIONER=merge-request            # how a create is proposed (ADR-0042): merge-request, or workflow (start provision-cluster; needs WORKFLOWS_API_URL)
+PLACEMENT_MIN_FREE_PODS=70                # MCE placement (ADR-0050; on with CLUSTER_STATUS_ENABLED): the free pods on its workers an MCE needs, the cost of one hosted control plane
 
 # segments-manager: the cluster's EPG, checked against the file (ADR-0039; off by default; read only)
 SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG

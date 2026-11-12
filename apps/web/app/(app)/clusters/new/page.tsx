@@ -28,7 +28,12 @@ import type {
   ProvisionRun, SpecEntry, TemplateField,
 } from "@/types";
 import { ProvisionRunPanel } from "@/components/clusters/provision-run";
+import { MCEPlacementPanel } from "@/components/clusters/mce-placement";
 import { isProvisionRun, useProvisioner } from "@/lib/provision";
+import {
+  PLACEMENT_ENVS, REASON_MAX, changedPick, cleanReason, placementNeeds, placementOwner, useDebounced, usePlacement,
+  type PlacementEnv,
+} from "@/lib/placement";
 import {
   DynamicVariableForm, FlavorBadge, fieldInputClassName, type FieldInputContext, type FieldValue, type FormValues,
 } from "@/components/clusters/dynamic-variable-form";
@@ -122,6 +127,17 @@ function offeredRelease(version: unknown, offered: string[]): string | null {
   const bare = version.trim().replace(/-x86_64$/, "");
   return offered.includes(bare) ? bare : null;
 }
+
+/** The env a name following the site's convention carries, when a cluster can be placed in it (prod or prep). */
+function envFromName(name: string, site: string): PlacementEnv | null {
+  const env = clusterNamePattern(site).exec(name)?.[1];
+  return PLACEMENT_ENVS.find((e) => e === env) ?? null;
+}
+
+/** The owner input placement ranks by (ADR-0028, decision 6). */
+const OWNER_MADOR = "owner_mador";
+/** How long the owner must stay as typed before placement is asked again. */
+const OWNER_DEBOUNCE_MS = 400;
 
 /** The one conventional MCE of the site whose env the name carries. */
 function mceFromName(name: string, site: string, mces: Mce[]): string | null {
@@ -562,6 +578,16 @@ function describeFailure(error: unknown, what: "preview" | "create"): FormError 
       hint: "A cluster with this name exists, or an open MR already creates it. Pick another name.",
     };
   }
+  // The MCEs' numbers moved since the form showed them, so day1 now picks another (ADR-0050)
+  const newPick = changedPick(error);
+  if (newPick) {
+    return {
+      kind: "server",
+      error,
+      title: "Wingman's pick changed",
+      hint: `Wingman now picks ${newPick}: the MCEs' numbers changed since the form showed them. Check the MCE above, then review again.`,
+    };
+  }
   if (isApiError(error, "REVISION_CONFLICT")) {
     return {
       kind: "server",
@@ -590,6 +616,7 @@ export default function NewClusterPage() {
   // The visible labels name the site, MCE and version controls
   const siteLabelId = useId();
   const mceLabelId = useId();
+  const envLabelId = useId();
   const versionLabelId = useId();
 
   const [step, setStep] = useState<"spec" | "vars">("spec");
@@ -602,6 +629,12 @@ export default function NewClusterPage() {
   // `null` = not chosen: the value is detected from the cluster name.
   const [siteChoice, setSiteChoice] = useState<string | null>(null);
   const [mceChoice, setMceChoice] = useState<string | null>(null);
+  // With MCE placement (ADR-0050): `null` = not chosen, the env a typed name carries
+  const [envChoice, setEnvChoice] = useState<PlacementEnv | null>(null);
+  // An admin's other MCE than Wingman's pick, and why (decision 15); `null` = the pick
+  const [mceOverride, setMceOverride] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [reasonMissing, setReasonMissing] = useState(false);
   // `null` = not chosen: the spec's preset, else the MCE's default mastertag, when the MCE offers it.
   const [ocpChoice, setOcpChoice] = useState<string | null>(null);
   // `null` = untouched: the form shows the spec's structure and presets.
@@ -644,22 +677,9 @@ export default function NewClusterPage() {
     enabled: step === "vars",
   });
 
-  // A free name from the flavor, the chosen site and the chosen MCE's env, with the next letter (ADR-0040)
-  const suggestFor = step === "vars" && selectedSpec && siteChoice && mceChoice
-    ? { site: siteChoice, mce: mceChoice, flavor: selectedSpec.metadata.name }
-    : null;
-  const { data: suggestion } = useQuery<NameSuggestion>({
-    queryKey: ["name-suggestion", suggestFor],
-    queryFn: () =>
-      api.get<NameSuggestion>(`/api/day1/clusters/name-suggestion?${new URLSearchParams(suggestFor ?? {}).toString()}`),
-    enabled: suggestFor !== null,
-    staleTime: 10_000,
-    retry: false,
-  });
-  const suggestedName = suggestFor && suggestion?.name ? suggestion.name : null;
-  const shownName = nameEdited ? clusterName : (suggestedName ?? clusterName);
-  const trimmedName = shownName.trim();
-  const detectedSite = trimmedName ? siteFromName(trimmedName, sites) : null;
+  // The site and MCE a typed name follows; a suggested name follows the ones chosen
+  const typedName = nameEdited ? clusterName.trim() : "";
+  const detectedSite = typedName ? siteFromName(typedName, sites) : null;
   const site = siteChoice ?? detectedSite ?? "";
 
   const { data: mces = [], isLoading: mcesLoading, error: mcesError } = useQuery<Mce[]>({
@@ -669,49 +689,50 @@ export default function NewClusterPage() {
     staleTime: 60_000,
   });
 
-  const detectedMce = site && trimmedName ? mceFromName(trimmedName, site, mces) : null;
-  const mce = mceChoice && mces.some((m) => m.name === mceChoice) ? mceChoice : (detectedMce ?? "");
-  const selectedMce = mces.find((m) => m.name === mce);
+  // MCE placement (ADR-0050): Wingman picks the MCE from the site, prod or prep, the version and the
+  // owner. Its first read, without a version, gives the versions the candidates host. It is `null`
+  // (501) where this deployment does not read the MCEs: the form then keeps its MCE select.
+  const detectedEnv = site && typedName ? envFromName(typedName, site) : null;
+  const env = envChoice ?? detectedEnv ?? "";
+  const flavorName = selectedSpec?.metadata.name;
+  const versionsRead = usePlacement(step === "vars" && site ? { site, env: env || "prod", flavor: flavorName } : null);
+  const placementMode = versionsRead.data != null || versionsRead.isError;
+  const versionsFresh = placementMode && env !== "" && !versionsRead.isPlaceholderData && !versionsRead.isError;
+  const placementVersions = versionsFresh ? (versionsRead.data?.versions ?? []) : [];
+
+  // Without placement: the MCE chosen, or the one conventional MCE of the env a typed name carries
+  const detectedMce = !placementMode && site && typedName ? mceFromName(typedName, site, mces) : null;
+  const fallbackMce = mceChoice && mces.some((m) => m.name === mceChoice) ? mceChoice : (detectedMce ?? "");
+  const fallbackSelected = mces.find((m) => m.name === fallbackMce);
   const offConventionMces = mces.filter((m) => !m.follows_convention);
 
   // The releases a new cluster on this MCE may use: the day1 repo's upgrade ladder in the
   // minors the MCE can host (ADR-0034). `problems` says why the list is short or empty.
-  const { data: offered, isLoading: versionsLoading, error: versionsError } = useQuery<OpenShiftVersions>({
-    queryKey: ["mce-openshift-versions", mce],
-    queryFn: () => api.get<OpenShiftVersions>(`/api/day1/mces/${encodeURIComponent(mce)}/openshift-versions`),
-    enabled: Boolean(mce) && step === "vars",
+  // With placement, the releases some candidate hosts (each candidate's version check says which).
+  const { data: offered, isLoading: offeredLoading, error: offeredError } = useQuery<OpenShiftVersions>({
+    queryKey: ["mce-openshift-versions", fallbackMce],
+    queryFn: () => api.get<OpenShiftVersions>(`/api/day1/mces/${encodeURIComponent(fallbackMce)}/openshift-versions`),
+    enabled: Boolean(fallbackMce) && step === "vars" && !placementMode,
     staleTime: 60_000,
   });
-  const ocpVersions = offered?.versions ?? [];
-  const versionProblems = offered?.problems ?? [];
-
-  // InfraEnvs on the MCE hub; `null` when live status is off (then the field is free text).
-  const { data: infraEnvs, isLoading: infraEnvsLoading, error: infraEnvsError } = useQuery<string[] | null>({
-    queryKey: ["mce-infraenvs", mce],
-    queryFn: async () => {
-      try {
-        return await api.get<string[]>(`/api/day1/mces/${encodeURIComponent(mce)}/infraenvs`);
-      } catch (error) {
-        if (isApiError(error, "FEATURE_DISABLED")) return null;
-        throw error;
-      }
-    },
-    enabled: Boolean(mce) && step === "vars",
-    staleTime: 60_000,
-    retry: false,
-  });
+  const ocpVersions = placementMode ? placementVersions : (offered?.versions ?? []);
+  const versionProblems = placementMode ? [] : (offered?.problems ?? []);
+  const versionsLoading = placementMode
+    ? env !== "" && (versionsRead.isLoading || versionsRead.isPlaceholderData)
+    : offeredLoading;
+  const versionsError = placementMode ? (env ? versionsRead.error : null) : offeredError;
 
   // A preset prefills only a release the MCE offers; one it can't host leaves the field empty.
   const presetVersion = selectedSpec?.spec.day1.values?.openshift_release_version;
   const hasPreset = typeof presetVersion === "string" && presetVersion.trim() !== "";
   const presetOffered = offeredRelease(presetVersion, ocpVersions);
-  const mceDefaultOffered = offeredRelease(selectedMce?.default_mastertag, ocpVersions);
+  const mceDefaultOffered = placementMode ? null : offeredRelease(fallbackSelected?.default_mastertag, ocpVersions);
   const versionDefault = hasPreset
     ? presetOffered ? { value: presetOffered, source: `preset by spec ${selectedSpec?.metadata.name}` } : null
-    : mceDefaultOffered && selectedMce
-    ? { value: mceDefaultOffered, source: `default of ${selectedMce.name}` }
+    : mceDefaultOffered && fallbackSelected
+    ? { value: mceDefaultOffered, source: `default of ${fallbackSelected.name}` }
     : null;
-  const presetNotOffered = hasPreset && offered !== undefined && !presetOffered;
+  const presetNotOffered = hasPreset && (placementMode ? versionsFresh : offered !== undefined) && !presetOffered;
   // Typed when the list could not be read; otherwise a choice made for another MCE counts only if this one offers it.
   const chosenVersion = versionsError ? ocpChoice : ocpChoice !== null && ocpVersions.includes(ocpChoice) ? ocpChoice : null;
   const ocpVersion = chosenVersion ?? versionDefault?.value ?? "";
@@ -757,6 +778,67 @@ export default function NewClusterPage() {
     () => (nodepoolsField ? { [NODEPOOLS]: { fixed: seed.fixedNodepools, create: () => newNodepool(schema, locks, catalog) } } : undefined),
     [nodepoolsField, seed.fixedNodepools, schema, locks, catalog]
   );
+
+  // The owner placement ranks by: the mador, or the flavor's when it locks one (ADR-0028)
+  const mador = placementOwner(locks.values.has(OWNER_MADOR) ? locks.values.get(OWNER_MADOR) : formValues[OWNER_MADOR]);
+  const rankOwner = useDebounced(mador, OWNER_DEBOUNCE_MS);
+  // The servers the cluster needs: each nodepool's InfraEnv and the replicas the form shows (a ratio's
+  // included, a lock's applied), as `need`s; debounced as one string, so a new array is not a new read
+  const needsKey = useMemo(
+    () => placementNeeds(requestVariables(formValues, locks)[NODEPOOLS]).join(" "),
+    [formValues, locks]
+  );
+  const rankNeedsKey = useDebounced(needsKey, OWNER_DEBOUNCE_MS);
+  const rankNeeds = useMemo(() => (rankNeedsKey ? rankNeedsKey.split(" ") : []), [rankNeedsKey]);
+  const placementRead = usePlacement(
+    placementMode && versionsFresh && ocpVersion.trim()
+      ? { site, env, version: ocpVersion.trim(), owner: rankOwner, flavor: flavorName, needs: rankNeeds }
+      : null
+  );
+  const placement = placementRead.data ?? undefined;
+  // The numbers for the previous inputs stay on screen while the new ones load
+  const placementPending =
+    placementRead.isLoading || placementRead.isPlaceholderData || mador !== rankOwner || needsKey !== rankNeedsKey;
+  const pick = placement?.pick ?? null;
+  // An admin's other choice counts while it passes every check and is not the pick (decision 15)
+  const overridden =
+    mceOverride && placement?.candidates.some((c) => c.mce === mceOverride && c.eligible && !c.picked) ? mceOverride : null;
+  const placedMce = overridden ?? pick;
+  const mce = placementMode ? (placedMce ?? "") : fallbackMce;
+  const selectedMce = mces.find((m) => m.name === mce);
+
+  // A free name from the flavor, the chosen site and the chosen MCE's env, with the next letter (ADR-0040)
+  const suggestMce = placementMode ? placedMce : mceChoice;
+  const suggestFor = step === "vars" && selectedSpec && siteChoice && suggestMce
+    ? { site: siteChoice, mce: suggestMce, flavor: selectedSpec.metadata.name }
+    : null;
+  const { data: suggestion } = useQuery<NameSuggestion>({
+    queryKey: ["name-suggestion", suggestFor],
+    queryFn: () =>
+      api.get<NameSuggestion>(`/api/day1/clusters/name-suggestion?${new URLSearchParams(suggestFor ?? {}).toString()}`),
+    enabled: suggestFor !== null,
+    staleTime: 10_000,
+    retry: false,
+  });
+  const suggestedName = suggestFor && suggestion?.name ? suggestion.name : null;
+  const shownName = nameEdited ? clusterName : (suggestedName ?? clusterName);
+  const trimmedName = shownName.trim();
+
+  // InfraEnvs on the MCE hub; `null` when live status is off (then the field is free text).
+  const { data: infraEnvs, isLoading: infraEnvsLoading, error: infraEnvsError } = useQuery<string[] | null>({
+    queryKey: ["mce-infraenvs", mce],
+    queryFn: async () => {
+      try {
+        return await api.get<string[]>(`/api/day1/mces/${encodeURIComponent(mce)}/infraenvs`);
+      } catch (error) {
+        if (isApiError(error, "FEATURE_DISABLED")) return null;
+        throw error;
+      }
+    },
+    enabled: Boolean(mce) && step === "vars",
+    staleTime: 60_000,
+    retry: false,
+  });
   const chartName = chartClusterName(trimmedName);
 
   // Problems at their fields: day1's (while the field still holds what was sent), and the owners' as typed
@@ -819,8 +901,10 @@ export default function NewClusterPage() {
 
   /** A failed preview or create, with day1's problems placed at the fields of the form that was sent. */
   const showFailure = (error: unknown, what: "preview" | "create") => {
-    const placement = placeFailure(error, schema, submitted.current ?? formValues);
-    showError({ ...describeFailure(error, what), ...(placement ? { placed: placement } : {}) });
+    const placed = placeFailure(error, schema, submitted.current ?? formValues);
+    showError({ ...describeFailure(error, what), ...(placed ? { placed } : {}) });
+    // Day1 checked the MCE against numbers read now: show the person those numbers too (ADR-0050)
+    if (placementMode) queryClient.invalidateQueries({ queryKey: ["placement"] });
   };
 
   const previewMutation = useMutation({
@@ -894,6 +978,9 @@ export default function NewClusterPage() {
     setDynamicValues(null);
     setSizeInput(null);
     setFormError(null);
+    setMceOverride(null);
+    setOverrideReason("");
+    setReasonMissing(false);
     submitted.current = null;
     const overrides: Record<string, Record<string, unknown>> = {};
     for (const addon of spec.spec.day2.addons) {
@@ -936,11 +1023,25 @@ export default function NewClusterPage() {
   const handleReview = () => {
     setFormError(null);
     const problems: string[] = [];
+    const reason = cleanReason(overrideReason);
     if (!site) problems.push("Choose a site");
-    if (!mce) problems.push("Choose an MCE");
+    if (!placementMode) {
+      if (!mce) problems.push("Choose an MCE");
+    } else if (!env) {
+      problems.push("Choose the environment: prod or prep");
+    }
     if (!trimmedName) problems.push("Enter a cluster name");
     if (ratio.length > 0 && size === null) problems.push("Enter the nodepools' size: a whole number of at least 1");
     if (!ocpVersion.trim()) problems.push("Choose an OpenShift version");
+    // The MCE Wingman picked, or an admin's other choice with its reason (ADR-0050, decision 15)
+    if (placementMode && site && env && ocpVersion.trim()) {
+      if (placementRead.isError && !placement) problems.push("Wingman could not pick the MCE: try again, under MCE");
+      // Numbers for another version or env are not sent; a pick an owner just typed would move is day1's 409
+      else if (!placement || placementRead.isPlaceholderData) problems.push("Wingman is still picking the MCE");
+      else if (!mce) problems.push(`No ${env} MCE on ${site} can take this cluster: see MCE`);
+      else if (overridden && !reason) problems.push(`Say why ${overridden} instead of Wingman's pick ${pick}, under MCE`);
+    }
+    setReasonMissing(Boolean(overridden) && !reason);
     // Without the template's inputs the form can neither show nor check them: never send without them.
     if (schemaError) problems.push("The cluster template's inputs could not be loaded: reload the page to try again");
     else if (!templateSchema) problems.push("The cluster template's inputs are still loading");
@@ -963,7 +1064,22 @@ export default function NewClusterPage() {
       // Locked values exactly as the flavor has them; config entries and owners as day1 reads them
       variables: { ...requestVariables(formValues, locks), openshift_release_version: ocpVersion.trim() },
       ...(Object.keys(overrides).length > 0 ? { addon_overrides: overrides } : {}),
+      // Day1 runs the placement again: the pick shown, so a changed pick is a 409, not a silent move
+      ...(placementMode ? { placement: { pick, reason: overridden ? reason : null } } : {}),
     });
+  };
+
+  /** Choose an MCE of the placement: the pick drops any other choice (its reason is kept, in case). */
+  const chooseMce = (value: string) => {
+    setMceOverride(value === pick ? null : value);
+    setReasonMissing(false);
+  };
+
+  /** Focus the owner's mador, which placement ranks by. */
+  const focusOwner = () => {
+    const input = document.querySelector<HTMLInputElement>(`[data-testid="owner-input-${OWNER_MADOR}"]`);
+    input?.focus();
+    input?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   const reloadSpecs = () => {
@@ -996,6 +1112,339 @@ export default function NewClusterPage() {
     ([k]) => k !== "openshift_release_version"
   );
   const pending = previewMutation.isPending;
+
+  // ── The Cluster Details card's fields, ordered by mode below ────────────────
+
+  const siteField = (
+    <div className="space-y-1.5 min-w-0">
+      <label id={siteLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        Site <span className="text-destructive">*</span>
+      </label>
+      <Combobox
+        size="lg"
+        options={siteOptions}
+        value={site || null}
+        onValueChange={(v) => { setSiteChoice(v); setMceChoice(null); setMceOverride(null); }}
+        disabled={sitesLoading || sites.length === 0}
+        placeholder={
+          sitesLoading ? "Loading sites…"
+            : sitesError ? "Sites could not be loaded"
+            : sites.length === 0 ? "No sites in the day1 repo"
+            : "Select site…"
+        }
+        searchPlaceholder="Search sites…"
+        emptyMessage="No site matches."
+        data-testid="site-select"
+        aria-labelledby={siteLabelId}
+      />
+      {!siteChoice && detectedSite && (
+        <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
+      )}
+      {Boolean(sitesError) && <ProblemList error={sitesError} title="The sites could not be loaded" />}
+    </div>
+  );
+
+  const mceField = (
+    <div className="space-y-1.5 min-w-0">
+      <label id={mceLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        MCE <span className="text-destructive">*</span>
+      </label>
+      <Combobox
+        size="lg"
+        options={mceOptions}
+        value={mce || null}
+        onValueChange={(v) => {
+          // Choosing an MCE pins its site too, so editing the name no longer moves either.
+          setSiteChoice(site);
+          setMceChoice(v);
+        }}
+        disabled={!site || mcesLoading || mces.length === 0}
+        placeholder={
+          !site ? "Select site first…"
+            : mcesLoading ? "Loading MCEs…"
+            : mcesError ? "MCEs could not be loaded"
+            : mces.length === 0 ? "No MCEs on this site"
+            : "Select MCE…"
+        }
+        searchPlaceholder="Search MCEs…"
+        emptyMessage="No MCE matches."
+        data-testid="mce-select"
+        aria-labelledby={mceLabelId}
+      />
+      {!mceChoice && detectedMce && (
+        <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
+      )}
+      {Boolean(mcesError) && <ProblemList error={mcesError} title={`The MCEs of ${site} could not be loaded`} />}
+    </div>
+  );
+
+  // With placement: prod or prep, a native radio group (arrow keys move the choice)
+  const envField = (
+    <div className="space-y-1.5 min-w-0">
+      <span id={envLabelId} className="block text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        Environment <span className="text-destructive">*</span>
+      </span>
+      <div
+        role="radiogroup"
+        aria-labelledby={envLabelId}
+        data-testid="env-select"
+        className="grid h-9.5 grid-cols-2 gap-0.5 rounded-lg border border-input p-0.5"
+      >
+        {PLACEMENT_ENVS.map((value) => (
+          <label
+            key={value}
+            className={cn(
+              "flex cursor-pointer items-center justify-center rounded-md text-sm font-medium transition-colors",
+              "has-focus-visible:ring-2 has-focus-visible:ring-primary/50",
+              env === value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            )}
+          >
+            <input
+              type="radio"
+              name="cluster-env"
+              value={value}
+              checked={env === value}
+              onChange={() => { setEnvChoice(value); setMceOverride(null); }}
+              className="sr-only"
+            />
+            {value === "prod" ? "Prod" : "Prep"}
+          </label>
+        ))}
+      </div>
+      {!envChoice && detectedEnv && (
+        <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
+      )}
+    </div>
+  );
+
+  const offConventionNote = offConventionMces.length > 0 && (
+    <p className="text-xs text-muted-foreground flex items-start gap-1.5" data-testid="off-convention-mces">
+      <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+      <span className="min-w-0 break-words">
+        {offConventionMces.map((m) => m.name).join(", ")} {offConventionMces.length === 1 ? "does" : "do"} not
+        follow ocp4-&lt;env&gt;-mce-{site}-&lt;letter&gt;; Wingman creates clusters only under MCEs that do.
+      </span>
+    </p>
+  );
+
+  const mceWarnings = selectedMce && (selectedMce.stray_files.length > 0 || selectedMce.problems.length > 0) && (
+    <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3.5 py-3 text-xs text-status-warning-fg space-y-1" data-testid="mce-warnings">
+      <p className="font-medium flex items-center gap-1.5">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        {selectedMce.name} needs attention
+      </p>
+      <ul className="list-disc pl-5 space-y-0.5">
+        {selectedMce.stray_files.map((f) => (
+          <li key={f} className="break-all">
+            <span className="font-mono">{f}</span> is in hostedClusters/ but is not a cluster file; it breaks the MCE&apos;s ApplicationSet
+          </li>
+        ))}
+        {selectedMce.problems.map((p, i) => <li key={i} className="break-words">{p}</li>)}
+      </ul>
+    </div>
+  );
+
+  const nameField = (className: string) => (
+    <div className={className}>
+      <label htmlFor="cluster-name" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        Cluster Name <span className="text-destructive">*</span>
+      </label>
+      <input
+        id="cluster-name"
+        type="text"
+        data-testid="cluster-name-input"
+        className={cn(inputCls, "font-mono")}
+        placeholder={namePlaceholder}
+        value={shownName}
+        onChange={(e) => {
+          setClusterName(e.target.value);
+          setNameEdited(true);
+        }}
+        autoComplete="off"
+        spellCheck={false}
+        aria-describedby="cluster-name-hint"
+        aria-invalid={namingIssues.length > 0}
+      />
+      {!nameEdited && suggestedName && (
+        <p data-testid="name-suggested" className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Sparkles className="h-3 w-3 shrink-0" aria-hidden />
+          Suggested from flavor {selectedSpec?.metadata.name}, {siteChoice} and the MCE&apos;s env, with the next free
+          letter. Type to change it.
+        </p>
+      )}
+      {nameEdited && suggestedName && trimmedName !== suggestedName && (
+        <button
+          type="button"
+          data-testid="use-suggested-name"
+          onClick={() => {
+            setNameEdited(false);
+            setClusterName("");
+          }}
+          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+        >
+          <RotateCcw className="h-3 w-3" aria-hidden />
+          Use the suggested name <span className="font-mono">{suggestedName}</span>
+        </button>
+      )}
+      {!nameEdited && suggestFor && suggestion && !suggestion.name && suggestion.problems.length > 0 && (
+        <p data-testid="name-suggestion-problems" className="text-[11px] text-muted-foreground">
+          No name to suggest: {suggestion.problems.join("; ")}
+        </p>
+      )}
+      <div id="cluster-name-hint" data-testid="naming-hint" className="text-[11px] leading-relaxed">
+        {!trimmedName ? (
+          <p className="text-muted-foreground">
+            Format <span className="font-mono">ocp4-&lt;env&gt;-&lt;name&gt;-&lt;site&gt;-&lt;letter&gt;</span>; the env must be the MCE&apos;s, the letter one of a to z.
+          </p>
+        ) : namingIssues.length > 0 ? (
+          <ul className="text-status-warning-fg space-y-0.5">
+            {namingIssues.map((p) => (
+              <li key={p} className="flex items-start gap-1.5">
+                <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                <span className="break-words">{p}</span>
+              </li>
+            ))}
+          </ul>
+        ) : site && selectedMce ? (
+          <p className="text-status-ready-fg flex items-center gap-1.5">
+            <CheckCircle2 className="h-3 w-3 shrink-0" />
+            Follows the naming convention
+          </p>
+        ) : placementMode ? (
+          <p className="text-muted-foreground">Checked against the MCE once Wingman has picked it.</p>
+        ) : (
+          <p className="text-muted-foreground">Choose the {site ? "MCE" : "site and MCE"} to check the name against.</p>
+        )}
+      </div>
+    </div>
+  );
+
+  // Where the version list comes from: the chosen MCE, or (with placement) the candidates together
+  const versionsFrom = placementMode ? (env && site ? `the ${env} MCEs on ${site}` : "") : mce;
+  const versionPlaceholder = placementMode
+    ? !site ? "Choose a site first"
+      : !env ? "Choose prod or prep first"
+      : versionsLoading ? "Loading versions…"
+      : versionOptions.length === 0 ? `No ${env} MCE on ${site} hosts a version`
+      : "Select OpenShift version…"
+    : !mce ? "Choose an MCE first"
+      : versionsLoading ? "Loading versions…"
+      : versionOptions.length === 0 ? `No versions offered on ${mce}`
+      : "Select OpenShift version…";
+
+  const versionField = (className: string) => (
+    <div className={className}>
+      <label id={versionLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        OpenShift Version <span className="text-destructive">*</span>
+      </label>
+      {/* The MCE's releases; free text only when they could not be read (create still checks) */}
+      {versionsError ? (
+        <input
+          type="text"
+          data-testid="ocp-version-input" aria-labelledby={versionLabelId}
+          className={cn(inputCls, "font-mono")}
+          placeholder="e.g. 4.18.56"
+          value={ocpVersion}
+          onChange={(e) => setOcpChoice(e.target.value)}
+        />
+      ) : (
+        <Combobox
+          size="lg"
+          options={versionOptions}
+          value={ocpVersion || null}
+          onValueChange={setOcpChoice}
+          disabled={(placementMode ? !env : !mce) || versionsLoading || versionOptions.length === 0}
+          placeholder={versionPlaceholder}
+          searchPlaceholder="Search versions…"
+          emptyMessage="No version matches."
+          data-testid="ocp-version-select"
+          aria-labelledby={versionLabelId}
+        />
+      )}
+      {Boolean(versionsError) && (
+        <ProblemList
+          error={versionsError}
+          title={placementMode ? "The versions could not be listed: type the version" : `The OpenShift versions of ${mce} could not be listed: type the version`}
+        />
+      )}
+      {versionProblems.length > 0 && (
+        <div data-testid="ocp-version-problems">
+          <ProblemList
+            lines={versionProblems}
+            title={ocpVersions.length > 0 ? `Some of ${mce}'s upgrade files need attention` : `${mce} offers no OpenShift version`}
+          />
+        </div>
+      )}
+      {presetNotOffered && (
+        <p className="text-[11px] text-status-warning-fg flex items-start gap-1.5" data-testid="ocp-version-preset-note">
+          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+          <span className="break-words">
+            {placementMode
+              ? `Spec ${selectedSpec?.metadata.name} presets ${String(presetVersion)}, which no ${env} MCE on ${site} hosts: choose a version they offer.`
+              : `Spec ${selectedSpec?.metadata.name} presets ${String(presetVersion)}, which ${mce} can't host: choose a version it offers.`}
+          </span>
+        </p>
+      )}
+      <p className="text-[11px] text-muted-foreground" data-testid="ocp-version-source">
+        {chosenVersion === null && versionDefault
+          ? `Becomes the file's mastertag; ${versionDefault.source}.`
+          : versionsFrom
+          ? `Becomes the file's mastertag. The releases ${versionsFrom} can host, from the day1 repo's upgrade/ folder.`
+          : "Becomes the file's mastertag. Each MCE offers the releases it can host."}
+      </p>
+    </div>
+  );
+
+  // Wingman's pick for the cluster, and every candidate (ADR-0050)
+  const placementField = (
+    <div className="space-y-2 border-t pt-4" data-testid="mce-placement">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span id={mceLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          MCE
+        </span>
+        <span className="text-[11px] text-muted-foreground" data-testid="placement-owner">
+          {mador && placement?.owner === mador ? (
+            <>Ranked for owner <span className="font-mono text-foreground">{mador}</span></>
+          ) : mador ? (
+            <>Ranking for owner <span className="font-mono text-foreground">{mador}</span>…</>
+          ) : (
+            <>
+              <button type="button" onClick={focusOwner} className="text-primary hover:underline">
+                Enter the owner&apos;s mador
+              </button>{" "}
+              to spread this owner&apos;s clusters
+            </>
+          )}
+        </span>
+      </div>
+      {!env || !ocpVersion.trim() ? (
+        <p data-testid="placement-waiting" className="rounded-lg border border-dashed px-4 py-3 text-xs text-muted-foreground">
+          Wingman picks the MCE from the site, the environment, the version and the owner, once{" "}
+          {!env ? "the environment and the OpenShift version are" : "the OpenShift version is"} chosen.
+        </p>
+      ) : (
+        <div
+          className={cn("transition-opacity motion-reduce:transition-none", placementPending && placement && "opacity-60")}
+          aria-busy={placementPending}
+        >
+          <MCEPlacementPanel
+            placement={placement}
+            loading={placementRead.isLoading || (!placement && placementPending)}
+            error={placementRead.error}
+            onRetry={() => void placementRead.refetch()}
+            chosen={placedMce}
+            onChoose={chooseMce}
+            reason={overrideReason}
+            onReason={(value) => {
+              setOverrideReason(value.slice(0, REASON_MAX));
+              if (cleanReason(value)) setReasonMissing(false);
+            }}
+            reasonInvalid={reasonMissing}
+          />
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-6">
@@ -1119,222 +1568,24 @@ export default function NewClusterPage() {
             </div>
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5 min-w-0">
-                  <label id={siteLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Site <span className="text-destructive">*</span>
-                  </label>
-                  <Combobox
-                    size="lg"
-                    options={siteOptions}
-                    value={site || null}
-                    onValueChange={(v) => { setSiteChoice(v); setMceChoice(null); }}
-                    disabled={sitesLoading || sites.length === 0}
-                    placeholder={
-                      sitesLoading ? "Loading sites…"
-                        : sitesError ? "Sites could not be loaded"
-                        : sites.length === 0 ? "No sites in the day1 repo"
-                        : "Select site…"
-                    }
-                    searchPlaceholder="Search sites…"
-                    emptyMessage="No site matches."
-                    data-testid="site-select"
-                    aria-labelledby={siteLabelId}
-                  />
-                  {!siteChoice && detectedSite && (
-                    <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
-                  )}
-                  {Boolean(sitesError) && <ProblemList error={sitesError} title="The sites could not be loaded" />}
-                </div>
-                <div className="space-y-1.5 min-w-0">
-                  <label id={mceLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    MCE <span className="text-destructive">*</span>
-                  </label>
-                  <Combobox
-                    size="lg"
-                    options={mceOptions}
-                    value={mce || null}
-                    onValueChange={(v) => {
-                      // Choosing an MCE pins its site too, so editing the name no longer moves either.
-                      setSiteChoice(site);
-                      setMceChoice(v);
-                    }}
-                    disabled={!site || mcesLoading || mces.length === 0}
-                    placeholder={
-                      !site ? "Select site first…"
-                        : mcesLoading ? "Loading MCEs…"
-                        : mcesError ? "MCEs could not be loaded"
-                        : mces.length === 0 ? "No MCEs on this site"
-                        : "Select MCE…"
-                    }
-                    searchPlaceholder="Search MCEs…"
-                    emptyMessage="No MCE matches."
-                    data-testid="mce-select"
-                    aria-labelledby={mceLabelId}
-                  />
-                  {!mceChoice && detectedMce && (
-                    <p className="text-[11px] text-muted-foreground">Detected from the cluster name</p>
-                  )}
-                  {Boolean(mcesError) && <ProblemList error={mcesError} title={`The MCEs of ${site} could not be loaded`} />}
-                </div>
+                {siteField}
+                {placementMode ? envField : mceField}
               </div>
-
-              {offConventionMces.length > 0 && (
-                <p className="text-xs text-muted-foreground flex items-start gap-1.5" data-testid="off-convention-mces">
-                  <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
-                  <span className="min-w-0 break-words">
-                    {offConventionMces.map((m) => m.name).join(", ")} {offConventionMces.length === 1 ? "does" : "do"} not
-                    follow ocp4-&lt;env&gt;-mce-{site}-&lt;letter&gt;; Wingman creates clusters only under MCEs that do.
-                  </span>
-                </p>
+              {offConventionNote}
+              {placementMode ? (
+                <>
+                  {versionField("space-y-1.5")}
+                  {placementField}
+                  {mceWarnings}
+                  {nameField("space-y-1.5 border-t pt-4")}
+                </>
+              ) : (
+                <>
+                  {mceWarnings}
+                  {nameField("space-y-1.5")}
+                  {versionField("space-y-1.5 border-t pt-4")}
+                </>
               )}
-              {selectedMce && (selectedMce.stray_files.length > 0 || selectedMce.problems.length > 0) && (
-                <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3.5 py-3 text-xs text-status-warning-fg space-y-1" data-testid="mce-warnings">
-                  <p className="font-medium flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    {selectedMce.name} needs attention
-                  </p>
-                  <ul className="list-disc pl-5 space-y-0.5">
-                    {selectedMce.stray_files.map((f) => (
-                      <li key={f} className="break-all">
-                        <span className="font-mono">{f}</span> is in hostedClusters/ but is not a cluster file; it breaks the MCE&apos;s ApplicationSet
-                      </li>
-                    ))}
-                    {selectedMce.problems.map((p, i) => <li key={i} className="break-words">{p}</li>)}
-                  </ul>
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <label htmlFor="cluster-name" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Cluster Name <span className="text-destructive">*</span>
-                </label>
-                <input
-                  id="cluster-name"
-                  type="text"
-                  data-testid="cluster-name-input"
-                  className={cn(inputCls, "font-mono")}
-                  placeholder={namePlaceholder}
-                  value={shownName}
-                  onChange={(e) => {
-                    setClusterName(e.target.value);
-                    setNameEdited(true);
-                  }}
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-describedby="cluster-name-hint"
-                  aria-invalid={namingIssues.length > 0}
-                />
-                {!nameEdited && suggestedName && (
-                  <p data-testid="name-suggested" className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <Sparkles className="h-3 w-3 shrink-0" aria-hidden />
-                    Suggested from flavor {selectedSpec?.metadata.name}, {siteChoice} and the MCE&apos;s env, with the next free
-                    letter. Type to change it.
-                  </p>
-                )}
-                {nameEdited && suggestedName && trimmedName !== suggestedName && (
-                  <button
-                    type="button"
-                    data-testid="use-suggested-name"
-                    onClick={() => {
-                      setNameEdited(false);
-                      setClusterName("");
-                    }}
-                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                  >
-                    <RotateCcw className="h-3 w-3" aria-hidden />
-                    Use the suggested name <span className="font-mono">{suggestedName}</span>
-                  </button>
-                )}
-                {!nameEdited && suggestFor && suggestion && !suggestion.name && suggestion.problems.length > 0 && (
-                  <p data-testid="name-suggestion-problems" className="text-[11px] text-muted-foreground">
-                    No name to suggest: {suggestion.problems.join("; ")}
-                  </p>
-                )}
-                <div id="cluster-name-hint" data-testid="naming-hint" className="text-[11px] leading-relaxed">
-                  {!trimmedName ? (
-                    <p className="text-muted-foreground">
-                      Format <span className="font-mono">ocp4-&lt;env&gt;-&lt;name&gt;-&lt;site&gt;-&lt;letter&gt;</span>; the env must be the MCE&apos;s, the letter one of a to z.
-                    </p>
-                  ) : namingIssues.length > 0 ? (
-                    <ul className="text-status-warning-fg space-y-0.5">
-                      {namingIssues.map((p) => (
-                        <li key={p} className="flex items-start gap-1.5">
-                          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-                          <span className="break-words">{p}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : site && selectedMce ? (
-                    <p className="text-status-ready-fg flex items-center gap-1.5">
-                      <CheckCircle2 className="h-3 w-3 shrink-0" />
-                      Follows the naming convention
-                    </p>
-                  ) : (
-                    <p className="text-muted-foreground">Choose the {site ? "MCE" : "site and MCE"} to check the name against.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-1.5 border-t pt-4">
-                <label id={versionLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  OpenShift Version <span className="text-destructive">*</span>
-                </label>
-                {/* The MCE's releases; free text only when they could not be read (create still checks) */}
-                {versionsError ? (
-                  <input
-                    type="text"
-                    data-testid="ocp-version-input" aria-labelledby={versionLabelId}
-                    className={cn(inputCls, "font-mono")}
-                    placeholder="e.g. 4.18.56"
-                    value={ocpVersion}
-                    onChange={(e) => setOcpChoice(e.target.value)}
-                  />
-                ) : (
-                  <Combobox
-                    size="lg"
-                    options={versionOptions}
-                    value={ocpVersion || null}
-                    onValueChange={setOcpChoice}
-                    disabled={!mce || versionsLoading || versionOptions.length === 0}
-                    placeholder={
-                      !mce ? "Choose an MCE first"
-                        : versionsLoading ? "Loading versions…"
-                        : versionOptions.length === 0 ? `No versions offered on ${mce}`
-                        : "Select OpenShift version…"
-                    }
-                    searchPlaceholder="Search versions…"
-                    emptyMessage="No version matches."
-                    data-testid="ocp-version-select"
-                    aria-labelledby={versionLabelId}
-                  />
-                )}
-                {Boolean(versionsError) && (
-                  <ProblemList error={versionsError} title={`The OpenShift versions of ${mce} could not be listed: type the version`} />
-                )}
-                {versionProblems.length > 0 && (
-                  <div data-testid="ocp-version-problems">
-                    <ProblemList
-                      lines={versionProblems}
-                      title={ocpVersions.length > 0 ? `Some of ${mce}'s upgrade files need attention` : `${mce} offers no OpenShift version`}
-                    />
-                  </div>
-                )}
-                {presetNotOffered && (
-                  <p className="text-[11px] text-status-warning-fg flex items-start gap-1.5" data-testid="ocp-version-preset-note">
-                    <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
-                    <span className="break-words">
-                      Spec {selectedSpec?.metadata.name} presets {String(presetVersion)}, which {mce} can&apos;t host: choose a version it offers.
-                    </span>
-                  </p>
-                )}
-                <p className="text-[11px] text-muted-foreground" data-testid="ocp-version-source">
-                  {chosenVersion === null && versionDefault
-                    ? `Becomes the file's mastertag; ${versionDefault.source}.`
-                    : mce
-                    ? `Becomes the file's mastertag. The releases ${mce} can host, from the day1 repo's upgrade/ folder.`
-                    : "Becomes the file's mastertag. Each MCE offers the releases it can host."}
-                </p>
-              </div>
             </div>
           </div>
 
@@ -1650,6 +1901,14 @@ export default function NewClusterPage() {
                 ["Cluster Name", reviewed.request.name],
                 ["Site", reviewed.request.site],
                 ["MCE", reviewed.request.mce],
+                ...(reviewed.request.placement
+                  ? [[
+                      "Chosen by",
+                      reviewed.request.placement.reason
+                        ? `You, over Wingman's pick ${reviewed.request.placement.pick}: ${reviewed.request.placement.reason}`
+                        : "Wingman's pick",
+                    ]]
+                  : []),
                 ["OpenShift", String(reviewed.request.variables.openshift_release_version ?? "")],
               ].map(([label, value]) => (
                 <div key={label} className="flex gap-3">

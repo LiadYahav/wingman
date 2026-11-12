@@ -8,6 +8,14 @@ from pathlib import Path
 import pytest
 
 from wingman_core.testing.fixtures import default_fixture_root
+from wingman_day1.domain.mce_capacity import (
+    ExcludedNodes,
+    SpareServers,
+    Supply,
+    free_pods,
+    node_type_supply,
+    spare_servers,
+)
 from wingman_day1.domain.names import HostedClusterNaming, HostedClusterRef
 from wingman_day1.domain.node_pools import (
     ClusterMachines,
@@ -174,3 +182,53 @@ def test_a_scenario_the_builder_does_not_know_is_refused(tmp_path: Path) -> None
     fixture.write_text("- not a mapping\n", "utf-8")
     with pytest.raises(TypeError, match="clusters"):
         load_fake_mce(fixture, servers=[], naming=NAMING)
+
+
+async def test_every_convention_mce_of_the_fixtures_has_a_hub_with_nodes() -> None:
+    """MCE placement reads each candidate's nodes and pods (ADR-0050)."""
+    sites = default_fixture_root() / "gitops-day1/platform-config/sites"
+    folders = {p.name for p in sites.glob("*/mces/*") if p.is_dir()}
+    hub = fake()
+    for mce in folders - {"ocp4-mce-workflow-test"}:
+        assert await hub.nodes(mce), mce
+    assert (await hub.pods_per_node(SITE1_A))["worker-0"] == 200
+
+
+async def test_the_demo_hubs_tell_the_placement_story() -> None:
+    """site1 prod: -b has room, -a less, -c too little (one worker not ready)."""
+    hub = fake()
+    mces = ("ocp4-prod-mce-site1-a", "ocp4-prod-mce-site1-b", "ocp4-prod-mce-site1-c")
+    free = {}
+    for mce in mces:
+        counted = free_pods(await hub.nodes(mce), await hub.pods_per_node(mce))
+        free[mce] = (counted.free, counted.excluded)
+    assert free == {
+        "ocp4-prod-mce-site1-a": (150, ExcludedNodes(control_plane=3)),
+        "ocp4-prod-mce-site1-b": (
+            400,
+            ExcludedNodes(control_plane=3, infra=3, unschedulable=1),
+        ),
+        "ocp4-prod-mce-site1-c": (40, ExcludedNodes(control_plane=3, not_ready=1)),
+    }
+    assert {m: spare_servers(rows(), m) for m in mces} == {
+        "ocp4-prod-mce-site1-a": SpareServers(total=6, usable=6),
+        "ocp4-prod-mce-site1-b": SpareServers(total=4, usable=3),
+        "ocp4-prod-mce-site1-c": None,
+    }
+
+
+async def test_the_demo_has_a_node_type_short_on_each_of_two_mces() -> None:
+    """Two Dell R650: -a has them, -b is one healthy short; two HP Gen12: the other way."""
+    hub = fake()
+    dell, hp = "dell-r650-site1-96c-768gb", "hp-gen12-site1-64c-512gb"
+    needs = [(dell, 2), (hp, 2)]
+    supply = {}
+    for mce in ("ocp4-prod-mce-site1-a", "ocp4-prod-mce-site1-b", "ocp4-prod-mce-site1-c"):
+        agents = await hub.infra_env_agents(mce, infra_envs=[dell, hp], namespace=None)
+        supply[mce] = [(t.infra_env, t.status) for t in node_type_supply(needs, agents, rows())]
+    assert supply == {
+        "ocp4-prod-mce-site1-a": [(dell, Supply.ENOUGH), (hp, Supply.SHORT)],
+        "ocp4-prod-mce-site1-b": [(dell, Supply.SHORT), (hp, Supply.ENOUGH)],
+        "ocp4-prod-mce-site1-c": [(dell, Supply.SHORT), (hp, Supply.SHORT)],
+    }
+    assert dell in await hub.infra_envs("ocp4-prod-mce-site1-b", namespace=None)

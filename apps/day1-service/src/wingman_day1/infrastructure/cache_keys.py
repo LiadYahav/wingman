@@ -11,7 +11,7 @@ Families:
 - ``<repo>:project``                       the project and its default branch
 - ``<repo>:files:...``                     trees, files, history at the default branch
 - ``<repo>:commit:<sha>``                  one commit (immutable)
-- ``<repo>:mrs:...``                       merge-request lists
+- ``<repo>:mrs:...``                       merge-request lists, and one MR's diff at a head
 - ``day2:installed:<site>:<mce>:<name>``  day2's installed addons for one cluster
 - ``hub:<mce>:<kind>:<namespace>[:<name>]`` an MCE hub read for the nodes view
 - ``server-scan:rows``                     server-scan's whole fleet, as rows
@@ -107,6 +107,11 @@ def uninstall_run(workflow_id: str) -> str:
 def merge_requests_prefix(repo: str) -> str:
     """Every merge-request list; cleared when an MR is opened, updated, merged or closed."""
     return f"{repo}:mrs:"
+
+
+def merge_request_diff(repo: str, iid: int, sha: str) -> str:
+    """What one merge request changes, at its head ``sha`` (placement's open creates)."""
+    return f"{merge_requests_prefix(repo)}diff:{iid}:{sha}"
 
 
 def merge_requests(repo: str, *, state: MRState | None, labels: Sequence[str], limit: int) -> str:

@@ -28,6 +28,7 @@ from wingman_day1.domain.machines import (
     MachineObservation,
     MachineSetObservation,
 )
+from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.quick_links import ArgoCdReading, LinkReading
@@ -93,6 +94,14 @@ class RepoReads(Protocol):
         self, *, state: MRState | None, labels: Sequence[str] = (), limit: int = 100
     ) -> list[MergeRequest]:
         """Merge requests, newest first."""
+        ...
+
+    async def merge_request_diff(self, merge_request: MergeRequest) -> list[FileDiff]:
+        """What an open merge request changes, at its head ``sha``.
+
+        GitLab computes an MR's stored diff in the background, so a new MR's
+        may be empty for a moment.
+        """
         ...
 
     def forget_files(self) -> None:
@@ -182,8 +191,9 @@ class SpecChanges(Protocol):
 class HubApi(Protocol):
     """An MCE hub's Kubernetes API, read only.
 
-    HostedClusters, NodePools and InfraEnvs, and each cluster's Machines,
-    MachineSets, AgentMachines and Agents (ADR-0038).
+    HostedClusters, NodePools and InfraEnvs, each cluster's Machines,
+    MachineSets, AgentMachines and Agents (ADR-0038), and the hub's own nodes
+    and how many pods each runs, for placement's free pods (ADR-0050).
 
     Raises ``HubNotConfiguredError``, ``HubObjectNotFoundError``,
     ``HubDeniedError`` or ``HubUnavailableError`` (``wingman_day1.domain.errors``).
@@ -217,6 +227,23 @@ class HubApi(Protocol):
 
     async def agents(self, mce: str, *, namespace: str) -> list[AgentObservation]:
         """Agents in a HostedCluster's agent namespace, sorted by name."""
+        ...
+
+    async def nodes(self, mce: str) -> list[NodeObservation]:
+        """The hub cluster's own nodes, sorted by name."""
+        ...
+
+    async def infra_env_agents(
+        self, mce: str, *, infra_envs: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """The Agents of these InfraEnvs, in ``namespace`` or the whole hub, sorted by name."""
+        ...
+
+    async def pods_per_node(self, mce: str) -> dict[str, int]:
+        """How many pods that are not ``Succeeded`` or ``Failed`` each node runs.
+
+        Across every namespace; a pod not bound to a node yet counts for none.
+        """
         ...
 
 

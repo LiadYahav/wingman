@@ -17,7 +17,7 @@ from wingman_day1.domain.errors import (
     HubUnavailableError,
 )
 from wingman_day1.domain.status import Condition
-from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_tokens
+from wingman_day1.infrastructure.hub_api import HttpHubApi, MceAccess, load_mce_access
 
 TOKEN = "sha256~hub-token-never-shown-0001"
 MCE = "ocp4-prod-mce-site1-a"
@@ -293,13 +293,30 @@ async def test_calls_are_counted_and_timed_by_outcome() -> None:
     assert sample(metrics, seconds, **base, operation="get_hosted_cluster") == 1.0
 
 
-def test_load_mce_tokens_reads_the_legacy_file(tmp_path: Path) -> None:
+def test_load_mce_access_reads_the_legacy_file(tmp_path: Path) -> None:
     path = tmp_path / "tokens"
     path.write_text(f"{MCE}: {TOKEN}\nocp4-prep-mce-site1-a: '  spaced  '\n", encoding="utf-8")
-    assert load_mce_tokens(path) == {MCE: TOKEN, "ocp4-prep-mce-site1-a": "spaced"}
+    assert load_mce_access(path) == MceAccess({MCE: TOKEN, "ocp4-prep-mce-site1-a": "spaced"})
     empty = tmp_path / "empty"
     empty.write_text("", encoding="utf-8")
-    assert load_mce_tokens(empty) == {}
+    assert load_mce_access(empty) == MceAccess({})
+
+
+def test_load_mce_access_reads_an_mce_with_its_own_address(tmp_path: Path) -> None:
+    """ADR-0045: an MCE may name its API address beside its token; the plain form still works."""
+    path = tmp_path / "tokens"
+    path.write_text(
+        f"{MCE}: {TOKEN}\n"
+        "ocp4-prep-mce-site1-a:\n"
+        "  token: other-token\n"
+        "  url: https://api.hub-b.example.invalid:6443/\n"
+        "ocp4-prod-mce-site2-a: {token: third}\n",
+        encoding="utf-8",
+    )
+    assert load_mce_access(path) == MceAccess(
+        {MCE: TOKEN, "ocp4-prep-mce-site1-a": "other-token", "ocp4-prod-mce-site2-a": "third"},
+        {"ocp4-prep-mce-site1-a": "https://api.hub-b.example.invalid:6443"},
+    )
 
 
 @pytest.mark.parametrize(
@@ -311,18 +328,54 @@ def test_load_mce_tokens_reads_the_legacy_file(tmp_path: Path) -> None:
         (f"{MCE}: 42\n", MCE),
         (f'{MCE}: "line1\\nline2"\n', "more than one line"),
         (f'{MCE}: "tok\\r"\n', "more than one line"),
+        (f"{MCE}: {{url: 'https://h.example.invalid'}}\n", "token for MCE"),
+        (f"{MCE}: {{token: 42, url: 'https://h.example.invalid'}}\n", "token for MCE"),
+        (f"{MCE}: {{token: line1, address: 'https://h'}}\n", "unknown keys"),
+        (f"{MCE}: {{token: line1, url: 'http://h.example.invalid:6443'}}\n", "https://"),
+        (f"{MCE}: {{token: line1, url: 'https://h.example.invalid/api'}}\n", "nothing after"),
+        (f"{MCE}: {{token: line1, url: 'https://h.example.invalid?x=1'}}\n", "nothing after"),
+        (f"{MCE}: {{token: line1, url: 'https://u:p@h.example.invalid'}}\n", "nothing after"),
+        (f"{MCE}: {{token: line1, url: 'https://h.example.invalid:http'}}\n", "not a number"),
+        (f"{MCE}: {{token: line1, url: 'https://'}}\n", "https://<host>"),
+        (f"{MCE}: {{token: line1, url: 6443}}\n", "not a string"),
     ],
 )
-def test_load_mce_tokens_refuses_bad_files_without_echoing_tokens(
+def test_load_mce_access_refuses_bad_files_without_echoing_tokens(
     tmp_path: Path, content: str, match: str
 ) -> None:
     path = tmp_path / "tokens"
     path.write_text(content, encoding="utf-8")
     with pytest.raises(ValueError, match=match) as caught:
-        load_mce_tokens(path)
+        load_mce_access(path)
     message = str(caught.value).replace(str(path), "<path>")
     assert "line1" not in message
     assert "42" not in message
+
+
+async def test_an_mce_with_its_own_address_is_read_there_with_its_token() -> None:
+    """ADR-0045: the per-MCE url replaces the convention's; every other MCE keeps it."""
+    recorder = Recorder(reply(200, {"items": []}))
+    api = HttpHubApi(
+        tokens={MCE: TOKEN, "ocp4-prep-mce-site1-a": "other-token"},
+        urls={"ocp4-prep-mce-site1-a": "https://api.hub-b.example.invalid:6443"},
+        domain="hubs.example.invalid",
+        transport=httpx.MockTransport(recorder),
+    )
+    await api.infra_envs("ocp4-prep-mce-site1-a", namespace=None)
+    await api.infra_envs(MCE, namespace=None)
+    assert [str(r.url) for r in recorder.requests] == [
+        "https://api.hub-b.example.invalid:6443/apis/agent-install.openshift.io/v1beta1/infraenvs",
+        f"https://api.{MCE}.hubs.example.invalid:6443/apis/agent-install.openshift.io/v1beta1/infraenvs",
+    ]
+    assert recorder.requests[0].headers["authorization"] == "Bearer other-token"
+
+
+async def test_an_address_without_a_token_is_not_configured() -> None:
+    api = HttpHubApi(
+        tokens={}, urls={MCE: "https://api.hub.example.invalid:6443"}, domain="d.example.invalid"
+    )
+    with pytest.raises(HubNotConfiguredError, match="no service-account token"):
+        await api.infra_envs(MCE, namespace=None)
 
 
 def test_a_ca_bundle_path_is_loaded_at_construction(tmp_path: Path) -> None:

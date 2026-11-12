@@ -21,6 +21,86 @@
 
 agent_namespace: inventory
 
+# Each MCE hub's own nodes and free Agents, for MCE placement (ADR-0050).
+#
+# `nodes`: `pods` is how many pods that are not Succeeded or Failed run on the
+# node (each hub also has one Pending pod bound to no node, which counts
+# nowhere); `allocatable` is its pod limit (250 when not given). A node is a
+# worker unless `role: control-plane` or `role: infra`; `ready: false`,
+# `cordoned: true` and `tainted: true` (a NoSchedule taint) take it out of the
+# count too. Only workers count.
+#
+# `free_agents`: Agents in an InfraEnv (the node type) that no cluster took,
+# approved and validated; each is a server in servers.yaml, whose health
+# decides whether it counts. An MCE listed nowhere in this file cannot be
+# read, so it is never picked.
+#
+# site1 prod has three candidates: -a (the six fixture clusters, 150 free
+# pods, two healthy Dell R650 and one HP Gen12 free), -b (no cluster, 400
+# free, a worker cordoned, three infra nodes; one healthy Dell, the other in
+# maintenance, and two HP free) and -c (no cluster, 40 free, a worker not
+# ready; it hosts 4.16 and 4.17 only). Before any nodepool names a type the
+# form picks -b; two dell-r650-site1-96c-768gb move the pick to -a (-b is one
+# healthy Dell short), two hp-gen12-site1-64c-512gb keep -b (-a is one short).
+# No fixture cluster uses these two types, so the nodes view is unchanged.
+hubs:
+  ocp4-prod-mce-site1-a:
+    nodes:
+      - {name: master-0, role: control-plane, pods: 120}
+      - {name: master-1, role: control-plane, pods: 118}
+      - {name: master-2, role: control-plane, pods: 121}
+      - {name: worker-0, pods: 200}
+      - {name: worker-1, pods: 190}
+      - {name: worker-2, pods: 210}
+    free_agents:
+      - {server: ocp-dell-r650-site1-96c-768gb-DLFAKE0701, infra_env: dell-r650-site1-96c-768gb}
+      - {server: ocp-dell-r650-site1-96c-768gb-DLFAKE0702, infra_env: dell-r650-site1-96c-768gb}
+      - {server: ocp-hp-gen12-site1-64c-512gb-HPFAKE0703, infra_env: hp-gen12-site1-64c-512gb}
+  ocp4-prod-mce-site1-b:
+    nodes:
+      - {name: master-0, role: control-plane, pods: 95}
+      - {name: master-1, role: control-plane, pods: 97}
+      - {name: master-2, role: control-plane, pods: 96}
+      - {name: worker-0, pods: 60}
+      - {name: worker-1, pods: 40}
+      - {name: worker-2, pods: 12, cordoned: true}
+      - {name: infra-0, role: infra, pods: 30}
+      - {name: infra-1, role: infra, pods: 31}
+      - {name: infra-2, role: infra, pods: 29}
+    free_agents:
+      - {server: ocp-dell-r650-site1-96c-768gb-DLFAKE0601, infra_env: dell-r650-site1-96c-768gb}
+      - {server: ocp-dell-r650-site1-96c-768gb-DLFAKE0602, infra_env: dell-r650-site1-96c-768gb}
+      - {server: ocp-hp-gen12-site1-64c-512gb-HPFAKE0603, infra_env: hp-gen12-site1-64c-512gb}
+      - {server: ocp-hp-gen12-site1-64c-512gb-HPFAKE0604, infra_env: hp-gen12-site1-64c-512gb}
+  ocp4-prod-mce-site1-c:
+    nodes:
+      - {name: master-0, role: control-plane, pods: 101}
+      - {name: master-1, role: control-plane, pods: 99}
+      - {name: master-2, role: control-plane, pods: 100}
+      - {name: worker-0, pods: 210}
+      - {name: worker-1, pods: 0, ready: false}
+  ocp4-prep-mce-site1-a:
+    nodes:
+      - {name: master-0, role: control-plane, pods: 110}
+      - {name: master-1, role: control-plane, pods: 108}
+      - {name: master-2, role: control-plane, pods: 109}
+      - {name: worker-0, pods: 150}
+      - {name: worker-1, pods: 160}
+  ocp4-prod-mce-site2-a:
+    nodes:
+      - {name: master-0, role: control-plane, pods: 90}
+      - {name: master-1, role: control-plane, pods: 92}
+      - {name: master-2, role: control-plane, pods: 91}
+      - {name: worker-0, pods: 80}
+      - {name: worker-1, pods: 75}
+  ocp4-prep-mce-site2-a:
+    nodes:
+      - {name: master-0, role: control-plane, pods: 105}
+      - {name: master-1, role: control-plane, pods: 104}
+      - {name: master-2, role: control-plane, pods: 106}
+      - {name: worker-0, pods: 170}
+      - {name: worker-1, pods: 160}
+
 clusters:
   # Git moved the cluster to 4.18.22: the control plane is there, and one
   # pool's workers are updating in place (one of three done, one rebooting).
