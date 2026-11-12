@@ -12,6 +12,7 @@ import type {
   MergePreviewBody,
   AddonDetail,
   AddonSummary,
+  MceInstalls,
   PlannedFileChange,
   RepoFile,
   ScopeDestination,
@@ -122,8 +123,6 @@ function panel(
             exists: false,
             names: [],
             unknown_names: [],
-            editable: true,
-            problem: null,
             last_commit_id: commitOf(team),
           },
     destinations,
@@ -164,8 +163,6 @@ function certManagerMces(): ScopePanel {
         exists: true,
         names: [MCE_EXCLUDED_NAME, MCE_OWN_NAME, "ocp4-old-mce"],
         unknown_names: ["ocp4-old-mce"],
-        editable: true,
-        problem: null,
         last_commit_id: "platform-exclusions-1",
       },
       unregistered: [{ id: MCE_UNREGISTERED, name: "ocp4-prod-mce-site9-z", site: "site9", env: "prod", mce: "ocp4-prod-mce-site9-z" }],
@@ -174,6 +171,31 @@ function certManagerMces(): ScopePanel {
 }
 
 const RICH = (team: string, chart: string) => team === "platform" && chart === "cert-manager";
+
+/** platform/external-secrets on the MCEs: no default; installed on one MCE, others to deploy on. */
+function externalSecretsMces(): ScopePanel {
+  const t = "platform";
+  const c = "external-secrets";
+  const d = (id: string, state: DestinationState, extra: Partial<ScopeDestination> = {}) => destination(t, c, "mces", id, state, extra);
+  return panel(
+    t,
+    c,
+    "mces",
+    false,
+    [
+      d(MCE_A, "none"),
+      d(MCE_EXCLUDED, "own-folder", {
+        own_folder: `sites/site1/prod/mces/${MCE_EXCLUDED_NAME}/in-cluster/${c}`,
+        app_name: `${t}-in-cluster-${c}-deploy`,
+      }),
+      d(MCE_UNRENDERED, "not-rendered"),
+    ],
+    { unregistered: [{ id: MCE_UNREGISTERED, name: "ocp4-prod-mce-site9-z", site: "site9", env: "prod", mce: "ocp4-prod-mce-site9-z" }] },
+  );
+}
+
+const MCE_PANEL = (team: string, chart: string) =>
+  RICH(team, chart) ? certManagerMces() : team === "platform" && chart === "external-secrets" ? externalSecretsMces() : null;
 
 /** The destinations of a scope, and their state, for a generated add-on. */
 function generatedPanel(team: string, chart: string, scope: FleetScope, catalog: CatalogEntry | null): ScopePanel {
@@ -203,8 +225,6 @@ function generatedPanel(team: string, chart: string, scope: FleetScope, catalog:
             exists: Boolean(fd?.excluded.length),
             names: fd?.excluded.map((id) => parts(id).name) ?? [],
             unknown_names: [],
-            editable: true,
-            problem: null,
             last_commit_id: commitOf(team),
           },
   });
@@ -217,7 +237,7 @@ export function addonDetailOf(team: string, chart: string): AddonDetail | null {
   if (!catalog && fleet.length === 0) return null;
   const access = TEAMS.find((t) => t.name === team);
   const writable = access?.writable ?? true;
-  const scopes = SCOPES.map((scope) => (RICH(team, chart) && scope === "mces" ? certManagerMces() : generatedPanel(team, chart, scope, catalog)));
+  const scopes = SCOPES.map((scope) => (scope === "mces" && MCE_PANEL(team, chart)) || generatedPanel(team, chart, scope, catalog));
   const op = `operators/${chart}`;
   return {
     team,
@@ -349,7 +369,6 @@ export function addonPreview(body: MergePreviewBody): ValuesPreview {
 
 // ── Writes ───────────────────────────────────────────────────────────────────
 
-const NOTE_ORPHAN = "ArgoCD orphans the workload where the Application goes: it keeps running, unmanaged.";
 
 function file(action: PlannedFileChange["action"], path: string, content: string | null, previous: string | null): PlannedFileChange {
   return { action, path, content, previous };
@@ -377,43 +396,12 @@ function addonPlan(method: string, url: URL, body: Values, version: number): Aut
   const confirmOf = (i: DestinationImpact[]) => i.filter((x) => x.effect !== "added").map((x) => x.cluster);
   const finish = (plan: Omit<AuthoringPlan, "digest">): AuthoringPlan => ({ ...plan, digest:`digest-v${version}-${plan.action}-${chart ?? ""}-${scope ?? ""}` });
 
-  if (detail && scope && p[8] === "exclusions") {
-    const panelOf = detail.scopes.find((s) => s.scope === scope) as ScopePanel;
-    const before = new Set(panelOf.destinations.filter((d) => d.state === "excluded" || d.state === "own-deploy").map((d) => d.id));
-    const after = new Set((body.excluded as string[]) ?? []);
-    const imp = [
-      ...[...after].filter((id) => !before.has(id)).map((id) => impact(detail, id, "removed")),
-      ...[...before].filter((id) => !after.has(id)).map((id) => impact(detail, id, "added")),
-    ];
-    const names = (e: string) => imp.filter((i) => i.effect === e).map((i) => i.name).join(", ");
-    const title = imp.every((i) => i.effect === "removed")
-      ? `[Wingman/Day2] Exclude addon ${team}/${chart} from ${names("removed")} (fleet default on ${LABEL[scope]})`
-      : imp.every((i) => i.effect === "added")
-        ? `[Wingman/Day2] Include addon ${team}/${chart} on ${names("added")} (fleet default on ${LABEL[scope]})`
-        : `[Wingman/Day2] Update addon ${team}/${chart} exclusions (fleet default on ${LABEL[scope]})`;
-    return finish({
-      team,
-      action: "set-exclusions",
-      chart,
-      scope,
-      title,
-      files: [file("update", `defaults/${scope}/exclusions.yaml`, `# kept off by hand\n${chart}:\n${[...after].map((id) => `- ${parts(id).name}`).join("\n")}\n`, `# kept off by hand\n${chart}:\n- ${MCE_EXCLUDED_NAME}\n`)],
-      reach: panelOf.destinations.filter((d) => !after.has(d.id) && d.renders).map((d) => d.id),
-      adopted: [],
-      needs_confirmation: confirmOf(imp),
-      warnings: [],
-      notes: imp.some((i) => i.effect === "removed") ? [NOTE_ORPHAN] : [],
-      impact: imp,
-      excluded: [...after],
-    });
-  }
-
   if (detail && scope && p[8] === "destinations") {
     const cluster = p[9];
-    const kind = p[10];
     const dest = detail.scopes.flatMap((s) => s.destinations).find((d) => d.id === cluster);
     const name = dest?.name ?? parts(cluster).name;
-    if (kind === "values") {
+    // Values of one destination: the only per-destination write (no exclusions, no own deploy config).
+    {
       const values = body.values as Values | null;
       const team_values = detail.catalog?.default_values ?? {};
       const changes: AdoptionChange[] = Object.entries(values ?? dest?.override?.values ?? {}).map(([key, v]) => ({
@@ -446,36 +434,6 @@ function addonPlan(method: string, url: URL, body: Values, version: number): Aut
         excluded: [],
       });
     }
-    const deploy = body.deploy as Values | null;
-    const keyOf: Record<string, string> = { target_revision: "targetRevision", repourl: "repourl", path: "path", project_namespace: "projectNamespace" };
-    const changes: AdoptionChange[] = deploy
-      ? Object.entries(deploy)
-          .filter(([, v]) => v !== null)
-          .map(([k, v]) => ({ stack: "deploy", key: keyOf[k] ?? k, before: null, after: v }))
-      : Object.entries(dest?.own_deploy?.values ?? {}).map(([k, v]) => ({ stack: "deploy", key: k, before: v, after: null }));
-    const own = dest?.own_folder ?? `sites/${dest?.site}/${dest?.env}/mces/${name}/in-cluster/${chart}`;
-    return finish({
-      team,
-      action: "override-deploy",
-      chart,
-      scope,
-      title: deploy
-        ? `[Wingman/Day2] Override addon ${team}/${chart} deploy config on ${name} (fleet default on ${LABEL[scope]})`
-        : `[Wingman/Day2] Override addon ${team}/${chart} deploy config on ${name}: back to the fleet default (fleet default on ${LABEL[scope]})`,
-      files: deploy
-        ? [
-            file("create", `${own}/${chart}.yaml`, changes.map((c) => `${c.key}: ${String(c.after)}`).join("\n") + "\n", null),
-            file("update", `defaults/${scope}/exclusions.yaml`, `${chart}:\n- ${name}\n`, `${chart}: []\n`),
-          ]
-        : [file("delete", `${own}/${chart}.yaml`, null, dest?.own_deploy?.text ?? "")],
-      reach: [cluster],
-      adopted: [],
-      needs_confirmation: [cluster],
-      warnings: [],
-      notes: ["The Application keeps its name: both folders generate the same one, so ArgoCD keeps it."],
-      impact: [impact(detail, cluster, "changed", changes)],
-      excluded: [],
-    });
   }
 
   // The 3.8 writes (create, team default, make default, fleet default), with 3.10's impact.
@@ -513,7 +471,16 @@ const sorted = (ids: unknown) => (Array.isArray(ids) ? [...ids].map(String).sort
  */
 export async function mockAddonDetail(
   page: Page,
-  { teams, planChangedOnce = false }: { teams?: Team[]; planChangedOnce?: boolean } = {},
+  {
+    teams,
+    planChangedOnce = false,
+    failMce = null,
+  }: {
+    teams?: Team[];
+    planChangedOnce?: boolean;
+    /** An MCE whose install MR GitLab refuses (the others open). */
+    failMce?: string | null;
+  } = {},
 ): Promise<AddonRequests> {
   const seen: AddonRequests = { writes: [], previews: [] };
   let version = 1;
@@ -564,7 +531,62 @@ export async function mockAddonDetail(
   await page.route(/\/api\/day2\/addons\/[^/?]+(\?.*)?$/, write);
   await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+(\?.*)?$/, write);
   await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+(\?.*)?$/, write);
-  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/exclusions(\?.*)?$/, write);
-  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/destinations\/[^/?]+\/(values|deploy)(\?.*)?$/, write);
+  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/destinations\/[^/?]+\/values(\?.*)?$/, write);
+  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/mce-installs(\?.*)?$/, (r) => {
+    const url = new URL(r.request().url());
+    const dryRun = url.searchParams.get("dry_run") === "true";
+    const body = (r.request().postDataJSON() ?? {}) as Values;
+    seen.writes.push({ method: "POST", path: url.pathname, dryRun, body });
+    const [team, chart] = url.pathname.split("/").map(decodeURIComponent).slice(4, 6);
+    const result = mceInstalls(team, chart, (body.clusters as string[]) ?? [], dryRun, failMce);
+    return json(r, result, !dryRun && result.installs.some((i: MceInstalls["installs"][number]) => i.status === "opened") ? 201 : 200);
+  });
   return seen;
 }
+
+let installIid = 40;
+
+/** `POST /addons/{team}/{addon}/mce-installs`: one install per MCE; a site3 one renders nothing. */
+export function mceInstalls(team: string, chart: string, clusters: string[], dryRun: boolean, failMce: string | null = null): MceInstalls {
+  return {
+    team,
+    chart,
+    installs: clusters.map((id) => {
+      const { name, site, env } = parts(id);
+      const path = `sites/${site}/${env}/mces/${name}/in-cluster/${chart}/values.yaml`;
+      const base = {
+        cluster: id,
+        name,
+        files: [{ action: "create", path }],
+        notes: [`After the merge, ArgoCD on ${name} generates ${team}-in-cluster-${chart}-deploy, which is manual-sync.`],
+        warnings: [],
+        merge_request: null,
+        detail: null,
+        rule: null,
+      };
+      if (site === "site3")
+        return { ...base, files: [], notes: [], status: "refused" as const, detail: `day1 has no mastertag for ${name}`, rule: "day1-version-missing" };
+      if (dryRun) return { ...base, status: "planned" as const };
+      if (id === failMce) return { ...base, status: "failed" as const, detail: "GitLab refused the branch" };
+      installIid += 1;
+      const mr = changeOf({
+        team,
+        action: "create-addon",
+        chart,
+        scope: null,
+        title: `[Wingman/Day2] Install addon ${team}/${chart} on ${name}`,
+        files: [],
+        reach: [],
+        adopted: [],
+        needs_confirmation: [],
+        warnings: [],
+        notes: [],
+        impact: [],
+        excluded: [],
+        digest: "",
+      });
+      return { ...base, status: "opened" as const, merge_request: { ...mr, iid: installIid, web_url: `https://gitlab.example.com/sigs/${team}/-/merge_requests/${installIid}` } };
+    }),
+  };
+}
+

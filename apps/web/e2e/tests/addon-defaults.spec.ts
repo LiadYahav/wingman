@@ -1,26 +1,26 @@
 /**
  * An add-on's page on Addons (ADR-0053), mocked: its team default and fleet
- * defaults, which destinations a default deploys to
- * (exclusions, which orphan the workload), a destination's value override
- * with the effective values before and after, and its own deploy config.
- * Every write is previewed, confirmed, and sent with the preview's
+ * defaults, per-MCE values, deploying it on specific MCEs (one install MR per
+ * MCE, with remove), the hosted-clusters panel (the default only), and a
+ * destination's value override with the effective values before and after.
+ * No exclusion is offered (ADR-0053's amendment). Every write is previewed, confirmed, and sent with the preview's
  * `needs_confirmation` and `digest`; a 409 plan-changed shows the new plan
  * (docs/notes/2026-11-12-operators-page-api.md).
  */
 
 import { test, expect, type Page } from "@playwright/test";
 import { go, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
-import { HOSTED_ID, TWIN_IDS, mockDay2World } from "../fixtures/day2";
+import { mockDay2World } from "../fixtures/day2";
 import { READ_ONLY_REASON, TEAMS, mockAuthoring } from "../fixtures/authoring";
 import {
   CERT_MANAGER_YAML,
   MCE_A,
   MCE_A_NAME,
   MCE_EXCLUDED,
+  MCE_EXCLUDED_NAME,
   MCE_OVERRIDE,
   MCE_OVERRIDE_NAME,
-  MCE_OWN,
-  MCE_OWN_NAME,
+  MCE_UNREGISTERED,
   mockAddonDetail,
   type AddonRequests,
 } from "../fixtures/addon-detail";
@@ -99,15 +99,22 @@ test.describe("An add-on's page", () => {
     await expect(page.getByTestId("scope-hosted-clusters").getByTestId("scope-status")).toHaveText("not a default");
     await expect(mces(page).getByTestId("scope-status")).toHaveText("a default");
 
-    // Each destination's state, grouped by site and env.
+    // Each destination's state, grouped by site and env, with its values; no exclusion is offered.
     await expect(mces(page).getByRole("group", { name: "site1 · prep" })).toContainText(MCE_A_NAME);
-    await expect(mces(page).getByTestId(`destination-${MCE_OWN_NAME}`)).toContainText("own deploy config");
-    await expect(mces(page).getByRole("checkbox", { name: `Deployed by this default on ${MCE_OWN_NAME}` })).toBeDisabled();
-    await expect(mces(page).getByRole("checkbox", { name: "Deployed by this default on ocp4-prep-mce-site3-d" })).toBeDisabled();
-    await expect(mces(page).getByRole("checkbox", { name: `Deployed by this default on ${MCE_A_NAME}` })).toBeChecked();
-    await expect(mces(page).getByRole("checkbox", { name: "Deployed by this default on ocp4-prod-mce-site1-a" })).not.toBeChecked();
-    await expect(mces(page)).toContainText("ocp4-old-mce");
-    await expect(page.getByTestId("unregistered-mces")).toContainText("not registered with platform, a default does not reach it");
+    await expect(mces(page).getByTestId(`destination-${MCE_OVERRIDE_NAME}`)).toContainText(`values-${MCE_OVERRIDE_NAME}.yaml`);
+    await expect(mces(page).getByRole("button", { name: `Edit values override on ${MCE_OVERRIDE_NAME}` })).toBeEnabled();
+    await expect(mces(page).getByRole("checkbox")).toHaveCount(0);
+    await expect(mces(page).getByRole("button", { name: /exclusions|deploy config/i })).toHaveCount(0);
+    // A repo's own exclusions.yaml is shown as it is, read only.
+    await expect(page.getByTestId("exclusions-note")).toContainText("Wingman reads that file and does not edit it");
+    // An MCE default is not also installed per MCE (the XOR rule).
+    await expect(mces(page).getByTestId("deploy-on-mces-blocked")).toContainText("the XOR rule");
+
+    // Hosted clusters: the default only; their own add-ons are their flavor's.
+    const hosted = page.getByTestId("scope-hosted-clusters");
+    await expect(hosted.getByTestId("hosted-clusters-note")).toContainText("come from its flavor and the create form");
+    await expect(hosted.getByRole("link", { name: "Flavors" })).toHaveAttribute("href", "/specs");
+    await expect(hosted.locator("[data-testid^=destination-]")).toHaveCount(0);
   });
 
   test("an edit of the team default is confirmed and sent with the preview's digest", async ({ page }) => {
@@ -171,76 +178,6 @@ test.describe("An add-on's page", () => {
   });
 });
 
-test.describe("Which destinations a default deploys to", () => {
-  test.beforeEach(async ({ page }) => setUp(page));
-
-  test("excluding one orphans its workload: the plan lists exactly it, and it must be confirmed", async ({ page }) => {
-    await go(page, "/addons/platform/cert-manager");
-    const preview = mces(page).getByRole("button", { name: "Preview exclusions" });
-    await expect(preview).toBeDisabled();
-    await mces(page).getByRole("checkbox", { name: `Deployed by this default on ${MCE_A_NAME}` }).click();
-    await expect(mces(page).getByTestId("exclude-warning")).toContainText(`Excluding deletes the Application on ${MCE_A_NAME}`);
-    await expect(mces(page).getByTestId(`destination-${MCE_A_NAME}`)).toContainText("will be excluded");
-    await preview.click();
-
-    const plan = review(page);
-    const orphans = plan.getByTestId("orphan-warning");
-    await expect(orphans).toContainText(`The Application on ${MCE_A_NAME} is deleted, and its workload keeps running.`);
-    await expect(orphans.getByRole("list", { name: "Applications deleted" }).getByRole("listitem")).toHaveCount(1);
-    await expect(orphans).toContainText(`platform-${MCE_A_NAME}-cert-manager-deploy`);
-    await expect(plan.getByTestId("plan-title")).toHaveText(
-      `[Wingman/Day2] Exclude addon platform/cert-manager from ${MCE_A_NAME} (fleet default on every MCE)`,
-    );
-    const confirm = plan.getByRole("button", { name: /Create MR/ });
-    await expect(confirm).toBeDisabled();
-    await plan.getByRole("checkbox", { name: `Delete the Application on ${MCE_A_NAME} and leave its workload running, unmanaged` }).click();
-    await confirm.click();
-
-    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("Exclude addon platform/cert-manager");
-    const real = realWrites()[0];
-    expect(real.method).toBe("PUT");
-    expect(real.path).toBe("/api/day2/addons/platform/cert-manager/defaults/mces/exclusions");
-    expect(real.body).toEqual({
-      excluded: [MCE_A, MCE_EXCLUDED, MCE_OWN],
-      last_commit_id: "platform-exclusions-1",
-      confirm_changes: [MCE_A],
-      expected_digest: "digest-v1-set-exclusions-cert-manager-mces",
-      message: null,
-    });
-    expect(dryRuns()[0].body).toEqual({ ...real.body, confirm_changes: [], expected_digest: null });
-  });
-
-  test("destinations that share a name are excluded together", async ({ page }) => {
-    await go(page, "/addons/observability/grafana");
-    const hosted = page.getByTestId("scope-hosted-clusters");
-    const twins = hosted.getByRole("checkbox", { name: "Deployed by this default on twin" });
-    await expect(twins).toHaveCount(2);
-    await expect(hosted.getByTestId("shared-name").first()).toContainText("excluded or included together");
-    await twins.first().click();
-    await expect(twins.nth(0)).not.toBeChecked();
-    await expect(twins.nth(1)).not.toBeChecked();
-    await hosted.getByRole("button", { name: "Preview exclusions" }).click();
-    const plan = review(page);
-    await expect(plan.getByTestId("orphan-warning").getByRole("listitem")).toHaveCount(2);
-    await plan.getByRole("checkbox", { name: `Delete the Applications on ${TWIN_IDS.join(", ")} and leave their workloads running, unmanaged` }).click();
-    await plan.getByRole("button", { name: /Create MR/ }).click();
-    await expect(page.getByRole("region", { name: "Opened merge requests" })).toBeVisible();
-    expect(realWrites()[0].body).toMatchObject({ excluded: [HOSTED_ID, ...TWIN_IDS], confirm_changes: TWIN_IDS });
-  });
-
-  test("including one generates its app again, with nothing to confirm", async ({ page }) => {
-    await go(page, "/addons/platform/cert-manager");
-    await mces(page).getByRole("checkbox", { name: "Deployed by this default on ocp4-prod-mce-site1-a" }).click();
-    await expect(mces(page)).toContainText("generates the app there again");
-    await mces(page).getByRole("button", { name: "Preview exclusions" }).click();
-    const plan = review(page);
-    await expect(plan.getByTestId("impact-ocp4-prod-mce-site1-a")).toContainText("added");
-    await plan.getByRole("button", { name: /Create MR/ }).click();
-    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("Include addon platform/cert-manager");
-    expect(realWrites()[0].body).toMatchObject({ excluded: [MCE_OWN], confirm_changes: [] });
-  });
-});
-
 test.describe("A destination's overrides", () => {
   test.beforeEach(async ({ page }) => setUp(page));
 
@@ -296,27 +233,60 @@ test.describe("A destination's overrides", () => {
     expect(realWrites()[0].body).toMatchObject({ values: null, last_commit_id: "platform-repo-1" });
   });
 
-  test("an own deploy config sends only the keys that are set", async ({ page }) => {
-    await go(page, "/addons/platform/cert-manager");
-    await mces(page).getByRole("button", { name: `Set an own deploy config on ${MCE_A_NAME}` }).click();
-    const form = formDialog(page);
-    await expect(form).toContainText("The Application keeps its name");
-    await expect(form.getByRole("button", { name: "Preview changes" })).toBeDisabled();
-    await form.getByRole("textbox", { name: /Project namespace/ }).fill("certs");
-    await form.getByRole("button", { name: "Preview changes" }).click();
-    const plan = review(page);
-    await plan.getByRole("checkbox", { name: `I understand the app on ${MCE_A_NAME} changes as listed` }).click();
-    await plan.getByRole("button", { name: /Create MR/ }).click();
-    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("deploy config");
-    const real = realWrites()[0];
-    expect(real.path).toBe(`/api/day2/addons/platform/cert-manager/defaults/mces/destinations/${encodeURIComponent(MCE_A)}/deploy`);
-    expect(real.body).toEqual({
-      deploy: { target_revision: null, repourl: null, path: null, project_namespace: "certs" },
-      last_commit_id: "platform-repo-1",
-      confirm_changes: [MCE_A],
-      expected_digest: "digest-v1-override-deploy-cert-manager-mces",
-      message: null,
-    });
+});
+
+test.describe("Deploy on specific MCEs", () => {
+  const panel = (page: Page) => page.getByTestId("deploy-on-mces");
+
+  test("one install merge request per chosen MCE, previewed first", async ({ page }) => {
+    await setUp(page);
+    await go(page, "/addons/platform/external-secrets");
+    await expect(panel(page).getByTestId(`installed-${MCE_EXCLUDED_NAME}`)).toContainText(
+      `sites/site1/prod/mces/${MCE_EXCLUDED_NAME}/in-cluster/external-secrets`,
+    );
+    await expect(panel(page).getByRole("checkbox", { name: "Deploy on ocp4-prep-mce-site3-d" })).toBeDisabled();
+    await expect(panel(page)).toContainText("Not registered with platform yet: installing registers it");
+    await panel(page).getByRole("checkbox", { name: `Deploy on ${MCE_A_NAME}` }).click();
+    await panel(page).getByRole("checkbox", { name: "Deploy on ocp4-prod-mce-site9-z" }).click();
+    await panel(page).getByRole("button", { name: "Preview 2 installs" }).click();
+
+    const plan = page.getByRole("dialog").filter({ has: page.getByTestId("mce-install-plan") });
+    await expect(plan.getByTestId(`plan-${MCE_A_NAME}`)).toContainText("one merge request");
+    await expect(plan.getByTestId(`plan-${MCE_A_NAME}`)).toContainText(`in-cluster/external-secrets/values.yaml`);
+    await plan.getByRole("button", { name: "Open 2 merge requests" }).click();
+
+    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("2 merge requests opened");
+    const writes = requests.writes.filter((w) => w.path.endsWith("/mce-installs"));
+    expect(writes.map((w) => w.dryRun)).toEqual([true, false]);
+    expect(writes[0].body).toEqual({ clusters: [MCE_A, MCE_UNREGISTERED], values: {}, message: null });
+    expect(writes[1].body).toEqual(writes[0].body);
+  });
+
+  test("an MCE that fails fails alone, and the page says which", async ({ page }) => {
+    await setUp(page, { failMce: MCE_A });
+    await go(page, "/addons/platform/external-secrets");
+    await panel(page).getByRole("checkbox", { name: `Deploy on ${MCE_A_NAME}` }).click();
+    await panel(page).getByRole("checkbox", { name: "Deploy on ocp4-prod-mce-site9-z" }).click();
+    await panel(page).getByRole("button", { name: "Preview 2 installs" }).click();
+    await page.getByRole("button", { name: "Open 2 merge requests" }).click();
+    const opened = page.getByRole("region", { name: "Opened merge requests" });
+    await expect(opened).toContainText("Merge request opened");
+    await expect(opened).toContainText(`${MCE_A_NAME}: GitLab refused the branch`);
+  });
+
+  test("an installed MCE is removed with the usual orphaning warning", async ({ page }) => {
+    await setUp(page);
+    await go(page, "/addons/platform/external-secrets");
+    await panel(page).getByRole("button", { name: `Remove external-secrets from ${MCE_EXCLUDED_NAME}` }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("The workload keeps running.");
+    const confirm = dialog.getByRole("button", { name: "Open removal MR" });
+    await expect(confirm).toBeDisabled();
+    await dialog.getByRole("textbox").fill("external-secrets");
+    const removal = page.waitForRequest((r) => r.method() === "DELETE" && r.url().includes("/addons/platform/external-secrets"));
+    await confirm.click();
+    expect(decodeURIComponent((await removal).url())).toContain(`/api/day2/clusters/${MCE_EXCLUDED}/addons/platform/external-secrets`);
+    await expect(page.getByRole("region", { name: "Opened merge requests" })).toBeVisible();
   });
 });
 
@@ -335,8 +305,7 @@ test.describe("A read-only team", () => {
     await expect(page.getByRole("button", { name: "Edit team default" })).toBeDisabled();
     await expect(page.getByTestId("scope-mces").getByRole("button", { name: "Edit the default on every MCE" })).toBeDisabled();
     await expect(page.getByTestId("scope-hub").getByRole("button", { name: "Make it a default" })).toBeDisabled();
-    await expect(page.getByTestId("scope-mces").getByRole("checkbox").first()).toBeDisabled();
-    await expect(page.getByTestId("scope-mces").getByRole("button", { name: "Preview exclusions" })).toHaveCount(0);
+    await expect(page.getByTestId("scope-mces").getByRole("button", { name: /values override/ }).first()).toBeDisabled();
   });
 
   test("writes stay off while the team's access is unknown", async ({ page }) => {

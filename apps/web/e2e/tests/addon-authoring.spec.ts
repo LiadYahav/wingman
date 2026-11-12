@@ -158,7 +158,7 @@ test.describe("Make default", () => {
   test("lists the clusters that move into the default, and the changed one must be confirmed", async ({ page }) => {
     await go(page, "/addons/platform/cert-manager");
     const hosted = scope(page, "hosted-clusters");
-    await expect(hosted.getByTestId(`destination-${HOSTED_NAME}`)).toContainText("own folder");
+    await expect(hosted.locator("[data-testid^=destination-]")).toHaveCount(0);
     await hosted.getByRole("button", { name: "Make it a default on every hosted cluster" }).click();
     const form = formDialog(page);
     await expect(form.getByRole("heading", { name: "Make platform/cert-manager a default on every hosted cluster" })).toBeVisible();
