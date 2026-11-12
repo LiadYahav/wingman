@@ -6,16 +6,24 @@ does not is read-only in Wingman: every day2 write for it is refused before
 anything is planned or sent, with the reason, and its reads still work
 wherever the account can read. The access is read per team project and kept
 like the other reads (ADR-0011, ADR-0041).
+
+A team whose access GitLab does not answer reads as access unknown: read-only,
+with the cause, while every other team reads as usual. A failed read is not
+kept (the cache keeps answers only), so the next read asks GitLab again.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Sequence
 
+from wingman_core.domain.errors import GitError
 from wingman_day2.domain.errors import TeamReadOnlyError
-from wingman_day2.domain.teams import WRITE_LEVEL, Team, TeamAccess
+from wingman_day2.domain.teams import WRITE_LEVEL, Team, TeamAccess, UnknownAccess
 from wingman_day2.ports import SigsRepository
+
+logger = logging.getLogger(__name__)
 
 
 class AccessService:
@@ -26,12 +34,17 @@ class AccessService:
         self._sigs = sigs
 
     async def of(self, team: Team) -> TeamAccess:
-        """``team``'s access."""
-        level = await self._sigs.access(team)
-        return TeamAccess(team.name, team.project.path_with_namespace, level)
+        """``team``'s access; unknown (so read-only) when GitLab does not answer it."""
+        project = team.project.path_with_namespace
+        try:
+            level = await self._sigs.access(team)
+        except GitError as exc:
+            logger.warning("reading Wingman's access to %s failed: %s", project, _cause(exc))
+            return TeamAccess(team.name, project, UnknownAccess(_cause(exc)))
+        return TeamAccess(team.name, project, level)
 
     async def of_all(self, teams: Sequence[Team]) -> dict[str, TeamAccess]:
-        """Every team's access, by team name."""
+        """Every team's access, by team name; one team's failed read leaves the others."""
         found = await asyncio.gather(*(self.of(team) for team in teams))
         return {access.team: access for access in found}
 
@@ -50,3 +63,7 @@ class AccessService:
                 },
             )
         return access
+
+
+def _cause(exc: GitError) -> str:
+    return str(exc) or type(exc).__name__
