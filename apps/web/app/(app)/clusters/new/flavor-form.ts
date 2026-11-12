@@ -9,7 +9,16 @@
 
 import { seedFromStructure, type FieldValue, type FieldValueMap, type FormValues } from "@/components/clusters/dynamic-variable-form";
 import { configProblems } from "@/components/machine-configs/config-list-editor";
-import { asEntries, cleanEntry, defaultConfigs, entryProblems, isNetworkEntry, NETWORK_CONFIG } from "@/lib/machine-configs";
+import {
+  asEntries,
+  cleanEntry,
+  defaultConfigs,
+  defaultHardware,
+  entryProblems,
+  isNetworkEntry,
+  NETWORK_CONFIG,
+  withHardware,
+} from "@/lib/machine-configs";
 import type { ConfigEntry, MachineConfigs, SpecEntry, TemplateField } from "@/types";
 
 /** The template inputs day1's locks know by name (`wingman_day1.domain.locks.LOCKABLE`). */
@@ -153,7 +162,8 @@ export function formEntries(entries: ConfigEntry[]): FieldValueMap[] {
 
 /** The configs a nodepool without the flavor's starts with: the rule's names, else the nodepool defaults (§1). */
 function startingConfigs(locks: FlavorLocks, catalog: MachineConfigs | undefined): FieldValueMap[] {
-  return formEntries(locks.rule ?? defaultConfigs(catalog));
+  // The rule's nm-conf leaves the hardware to the nodepool: it starts at the default (generic, when there is one)
+  return formEntries(withHardware(locks.rule ?? defaultConfigs(catalog), defaultHardware(catalog)));
 }
 
 /** A nodepool added in the form: the template's defaults, with the starting configs. */

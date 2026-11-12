@@ -39,9 +39,21 @@ async def test_the_catalogue_and_defaults_from_the_fixture_repos(
                 "path": "mc-files/kubevirt/kubevirt-worker-tuning.bu",
             },
         ],
+        # The generic template first: plain nm-conf, for any hardware
         "hardware_types": [
-            {"name": hw, "template": f"mc-files/templates/nm-conf-template-{hw}.bu"}
-            for hw in ("cisco", "dell", "dell-data")
+            {
+                "name": "generic",
+                "template": "mc-files/templates/nm-conf-template.bu",
+                "generic": True,
+            },
+            *(
+                {
+                    "name": hw,
+                    "template": f"mc-files/templates/nm-conf-template-{hw}.bu",
+                    "generic": False,
+                }
+                for hw in ("cisco", "dell", "dell-data")
+            ),
         ],
         "nodepool_defaults": {
             "path": "nodepool-defaults.yaml",

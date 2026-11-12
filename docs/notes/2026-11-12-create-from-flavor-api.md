@@ -112,3 +112,26 @@ sequence '01' of cluster 'ocp4-prod-rcs-site1-01' must be one letter, a to z (oc
 A name with no sequence is still accepted. Existing clusters with a
 numeric sequence read, list and edit as before: the rule is for new names
 only.
+
+## 5. The generic network config (ADR-0027's 2026-11-12 amendment)
+
+`GET /api/day1/machine-configs`: each of `hardware_types` gains `generic`,
+`true` only for `mc-files/templates/nm-conf-template.bu`, which is listed
+first under the name `generic`:
+
+```json
+"hardware_types": [
+  {"name": "generic", "template": "mc-files/templates/nm-conf-template.bu", "generic": true},
+  {"name": "dell", "template": "mc-files/templates/nm-conf-template-dell.bu", "generic": false}
+]
+```
+
+A flavor, a create and a sync choice name it `{name: nm-conf, hardware:
+generic}`. The cluster file gets plain `{name: nm-conf}`, which the CI
+renders from the generic template. Without the template, `hardware:
+generic` is refused: `no generic network template
+mc-files/templates/nm-conf-template.bu; one of <the types>`.
+
+The web starts every network entry at `generic` when the catalogue has it:
+the defaults' and the rule's `nm-conf`, an added entry, and the sync
+dialog's choice for a nodepool whose own cannot be read.

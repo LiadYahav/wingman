@@ -100,10 +100,11 @@ export const mockMachineConfigs: MachineConfigs = {
     { name: "workers-chrony-configuration", folder: "", path: "mc-files/workers-chrony-configuration.bu" },
     { name: "kubevirt-worker-tuning", folder: "kubevirt", path: "mc-files/kubevirt/kubevirt-worker-tuning.bu" },
   ],
+  // No generic template here: a specs repo without nm-conf-template.bu behaves as before it (ADR-0027)
   hardware_types: [
-    { name: "cisco", template: "mc-files/templates/nm-conf-template-cisco.bu" },
-    { name: "dell", template: "mc-files/templates/nm-conf-template-dell.bu" },
-    { name: "dell-data", template: "mc-files/templates/nm-conf-template-dell-data.bu" },
+    { name: "cisco", template: "mc-files/templates/nm-conf-template-cisco.bu", generic: false },
+    { name: "dell", template: "mc-files/templates/nm-conf-template-dell.bu", generic: false },
+    { name: "dell-data", template: "mc-files/templates/nm-conf-template-dell-data.bu", generic: false },
   ],
   nodepool_defaults: {
     path: "nodepool-defaults.yaml",
@@ -113,6 +114,15 @@ export const mockMachineConfigs: MachineConfigs = {
     problems: [],
   },
   problems: [],
+};
+
+/** The catalogue with the generic network template, `nm-conf-template.bu`: day1 lists it first. */
+export const mockMachineConfigsWithGeneric: MachineConfigs = {
+  ...mockMachineConfigs,
+  hardware_types: [
+    { name: "generic", template: "mc-files/templates/nm-conf-template.bu", generic: true },
+    ...mockMachineConfigs.hardware_types,
+  ],
 };
 
 /** Answer a route with a JSON body. */

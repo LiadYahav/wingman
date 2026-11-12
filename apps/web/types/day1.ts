@@ -114,10 +114,12 @@ export interface StaticConfig {
   path: string;
 }
 
-/** A network template `mc-files/templates/nm-conf-template-<name>.bu`. */
+/** A network template `mc-files/templates/nm-conf-template-<name>.bu`, or the generic `nm-conf-template.bu`. */
 export interface HardwareType {
   name: string;
   template: string;
+  /** `generic`: for any hardware, written as plain `nm-conf`; listed first. */
+  generic: boolean;
 }
 
 /** The specs repo's `nodepool-defaults.yaml`: the configs a new nodepool starts with. */

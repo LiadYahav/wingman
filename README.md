@@ -104,7 +104,7 @@ wingman/
 
 | Feature | Description |
 |---------|-------------|
-| **Two-phase spec/cluster form** | Specs (flavors) set the nodepools a cluster starts with, presets and locked values; clusters fill the rest. The create form shows a locked value read-only, prefills presets, starts each nodepool (and one added at create) with the team's machine-config defaults, picks configs and hardware types from `mc-files/`, and shows day1's problems at their fields (ADR-0026 to ADR-0029). |
+| **Two-phase spec/cluster form** | Specs (flavors) set the nodepools a cluster starts with, presets and locked values; clusters fill the rest. The create form shows a locked value read-only, prefills presets, starts each nodepool (and one added at create) with the team's machine-config defaults, picks configs and hardware types from `mc-files/` (the generic network template `nm-conf-template.bu`, written as plain `nm-conf`, first and the default when the repo has it), and shows day1's problems at their fields (ADR-0026 to ADR-0029). |
 | **Marketplace addon picker** | Browse and select Day2 addons from a marketplace UI on the spec creation/edit pages. Configure which fields are overrideable per cluster. |
 | **YAML fields everywhere** | Dynamic form fields accept plain YAML — no JSON syntax required. Scalars (`high-perf-tuned`), maps, and lists all work naturally. |
 | **Sites and MCEs from GitLab folders** | Site and MCE dropdowns list the day1 repo's folders. They are read-only: Wingman never creates a site or an MCE (ADR-0018). |
@@ -184,7 +184,7 @@ Changes since the legacy services:
 | `GET` | `/api/day1/mces` | Every MCE (or one site's, `?site=`), with its default mastertag, hub version and naming |
 | `GET` | `/api/day1/mces/{mce}/openshift-versions` | The releases a new cluster on the MCE may use (`upgrade/` in the day1 repo), newest first, with `problems` when its files are missing or broken |
 | `GET` | `/api/day1/mces/{mce}/infraenvs` | InfraEnv names on the MCE hub (501 when live status is off) |
-| `GET` | `/api/day1/machine-configs` | The machine configs a nodepool can use (`mc-files/` in the day1 repo: static configs and network hardware types) and the specs repo's nodepool defaults |
+| `GET` | `/api/day1/machine-configs` | The machine configs a nodepool can use (`mc-files/` in the day1 repo: static configs and network hardware types, `generic` first when the generic template exists) and the specs repo's nodepool defaults |
 
 #### Specs (presets for the create form)
 

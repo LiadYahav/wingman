@@ -779,6 +779,8 @@ class HardwareTypeOut(BaseModel):
 
     name: str
     template: str
+    generic: bool
+    """``generic``: ``nm-conf-template.bu``, for any hardware, written as plain ``nm-conf``."""
 
 
 class NodepoolDefaultsOut(BaseModel):
@@ -817,7 +819,7 @@ class MachineConfigsOut(BaseModel):
                 for c in catalog.static_configs()
             ],
             hardware_types=[
-                HardwareTypeOut(name=h.name, template=str(h.template))
+                HardwareTypeOut(name=h.name, template=str(h.template), generic=h.generic)
                 for h in catalog.hardware_types()
             ],
             nodepool_defaults=NodepoolDefaultsOut(

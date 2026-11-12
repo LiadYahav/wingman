@@ -8,8 +8,8 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { go, injectAdminAuth, mockDashboardApis, mockMachineConfigs, mockMR } from "../fixtures/api-handlers";
-import type { ClusterSpec, CreateClusterRequest, ErrorCode, Mce, SpecDetail, TemplateField } from "../../types";
+import { go, injectAdminAuth, mockDashboardApis, mockMachineConfigs, mockMachineConfigsWithGeneric, mockMR } from "../fixtures/api-handlers";
+import type { ClusterSpec, CreateClusterRequest, ErrorCode, MachineConfigs, Mce, SpecDetail, TemplateField } from "../../types";
 
 // ── Mock data ────────────────────────────────────────────────────────────────
 
@@ -147,9 +147,14 @@ async function open(page: Page, path: string, routes: (page: Page) => Promise<vo
 }
 
 /** A new flavor whose create is answered by `onPost`; the writes are collected. */
-async function openNew(page: Page, onPost: (route: Route) => Promise<void> = (r) => json(r, mockMR({ repo: "specs", iid: 21 }), 201)) {
+async function openNew(
+  page: Page,
+  onPost: (route: Route) => Promise<void> = (r) => json(r, mockMR({ repo: "specs", iid: 21 }), 201),
+  catalog: MachineConfigs = mockMachineConfigs
+) {
   const writes: Write[] = [];
   await open(page, "/specs/new", async (p) => {
+    await p.route("**/api/day1/machine-configs", (r) => json(r, catalog));
     await p.route("**/api/day1/specs", (r) => {
       if (r.request().method() !== "POST") return json(r, []);
       writes.push({ body: r.request().postDataJSON(), url: new URL(r.request().url()) });
@@ -166,6 +171,39 @@ async function reviewAndConfirm(page: Page, button: RegExp = /review & create/i)
 }
 
 // ── New flavor ───────────────────────────────────────────────────────────────
+
+test.describe("Flavor editor: the generic network config (ADR-0027, 2026-11-12)", () => {
+  test("with nm-conf-template.bu, a nodepool's nm-conf starts as generic, first in the list, and is saved so", async ({ page }) => {
+    const writes = await openNew(page, undefined, mockMachineConfigsWithGeneric);
+    await page.getByTestId("spec-name-input").fill("agent-generic");
+
+    const first = page.getByTestId("nodepool-0-configs");
+    const picker = first.getByRole("combobox", { name: /entry 1 hardware type$/ });
+    await expect(picker).toContainText("generic");
+    await expect(first.getByTestId("nodepool-0-configs-entry-0-written")).toHaveText(
+      "Written as nm-conf: the generic template, for any hardware"
+    );
+    await expect(first.getByText(/Choose the hardware type/)).toHaveCount(0);
+    await picker.click();
+    await expect(page.getByRole("option").first()).toContainText("generic — any hardware");
+    await page.keyboard.press("Escape");
+
+    // An added nodepool starts there too, and under the rule each nodepool's hardware does
+    await page.getByRole("button", { name: "Add nodepool" }).click();
+    await expect(page.getByTestId("nodepool-1-configs").getByRole("combobox", { name: /entry 1 hardware type$/ })).toContainText("generic");
+    await page.getByRole("radio", { name: /The same on every nodepool/ }).click();
+    await expect(page.getByRole("combobox", { name: "Nodepool 2 network hardware" })).toContainText("generic");
+
+    await reviewAndConfirm(page);
+    await expect(page.getByText("Flavor MR !21 opened")).toBeVisible();
+    const pools = writes[0].body.spec.day1.values?.nodepools as { configs: { name: string; hardware?: string }[] }[];
+    expect(pools.map((pool) => pool.configs.find((c) => c.name === "nm-conf"))).toEqual([
+      { name: "nm-conf", hardware: "generic" },
+      { name: "nm-conf", hardware: "generic" },
+    ]);
+  });
+});
+
 
 test.describe("Flavor editor: a new flavor", () => {
   test("the first nodepool and every added one start with a copy of the nodepool defaults", async ({ page }) => {

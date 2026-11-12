@@ -19,6 +19,7 @@ import {
   cleanEntry,
   entryProblems,
   isNetworkEntry,
+  withHardware,
 } from "@/lib/machine-configs";
 import { specDocument } from "@/lib/specs";
 import { isMapping, sameValues, type Values } from "@/lib/values";
@@ -313,22 +314,41 @@ export function setPoolHardware(draft: FlavorDraft, index: number, hardware: str
  * replaces any positional configs lock; leaving it keeps each nodepool's
  * configs as its own preset.
  */
-export function setConfigsMode(draft: FlavorDraft, mode: ConfigsMode, defaults: ConfigEntry[]): FlavorDraft {
+export function setConfigsMode(
+  draft: FlavorDraft,
+  mode: ConfigsMode,
+  defaults: ConfigEntry[],
+  hardware: string | null = hardwareOf(defaults)
+): FlavorDraft {
   if (configsMode(draft) === mode) return draft;
   if (mode === "each") return removeLock(draft, CONFIGS_RULE);
-  let next = nodepoolCount(draft) === 0 ? addNodepool(draft, defaults) : draft;
+  let next = nodepoolCount(draft) === 0 ? addNodepool(draft, defaults, hardware) : draft;
   const first = poolConfigs(next, 0);
   const base = first.length > 0 ? first : defaults;
   const statics = base.filter((e) => !isNetworkEntry(e)).map((e) => ({ name: e.name }));
   const shared: ConfigEntry[] = [{ name: NETWORK_CONFIG, hardware: null }, ...statics];
   next = { ...next, locked: [...next.locked.filter((p) => !POSITIONAL_CONFIGS.test(p)), CONFIGS_RULE] };
-  return setRuleEntries(next, shared);
+  next = setRuleEntries(next, shared);
+  // A nodepool with no network hardware yet starts at the default (generic, when mc-files/ has it)
+  if (hardware) {
+    for (let i = 0; i < nodepoolCount(next); i++) {
+      if (!hardwareOf(poolConfigs(next, i))) next = setPoolHardware(next, i, hardware);
+    }
+  }
+  return next;
 }
 
 // ── Nodepools ───────────────────────────────────────────────────────────────
 
-/** A new nodepool: the rule's configs under the rule, else a copy of the defaults. */
-export function addNodepool(draft: FlavorDraft, defaults: ConfigEntry[]): FlavorDraft {
+/**
+ * A new nodepool: the rule's configs under the rule (its network hardware at
+ * `hardware`, the default), else a copy of the defaults.
+ */
+export function addNodepool(
+  draft: FlavorDraft,
+  defaults: ConfigEntry[],
+  hardware: string | null = hardwareOf(defaults)
+): FlavorDraft {
   const index = nodepoolCount(draft);
   const placeholders = Array.isArray(draft.structure.nodepools) ? draft.structure.nodepools : [];
   let next: FlavorDraft = {
@@ -336,7 +356,7 @@ export function addNodepool(draft: FlavorDraft, defaults: ConfigEntry[]): Flavor
     structure: { ...draft.structure, nodepools: [...placeholders, {}] },
     keys: [...draft.keys, Math.max(-1, ...draft.keys) + 1],
   };
-  const configs = configsMode(draft) === "rule" ? ruleEntries(draft) : defaults.map(cleanEntry);
+  const configs = configsMode(draft) === "rule" ? withHardware(ruleEntries(draft), hardware) : defaults.map(cleanEntry);
   if (configs.length > 0) next = setNodepoolValue(next, index, "configs", configs);
   if (draft.ratio.length > 0) {
     const size = ratioSize(draft);

@@ -47,7 +47,7 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0024](0024-chart-versions-and-defaults.md) | Chart versions and defaults come from the chart repo on the same GitLab, at the resolved revision and path |
 | [0025](0025-version-differences-are-reported-not-drift.md) | A chart version other than the spec's is reported, never drift; a fix only installs a missing chart |
 | [0026](0026-a-flavor-lock-is-a-fixed-value.md) | A flavor lock is a fixed value the flavor enforces; `locked_paths` replaces `immutable_paths`, which is still read |
-| [0027](0027-machine-configs-from-mc-files-and-nodepool-defaults.md) | Machine configs come from mc-files and are checked; new nodepools start from the team's defaults |
+| [0027](0027-machine-configs-from-mc-files-and-nodepool-defaults.md) | Machine configs come from mc-files and are checked; new nodepools start from the team's defaults (amended 2026-11-12: the generic network template, plain `nm-conf`, is the default) |
 | [0028](0028-owner-fields-are-numbers.md) | The owner fields are numbers |
 | [0029](0029-a-configs-rule-locks-every-nodepool.md) | A flavor can lock every nodepool's configs as one rule (`nodepools[*].configs`), compared exactly by name, in any order |
 | [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main (superseded in part by 0031) |

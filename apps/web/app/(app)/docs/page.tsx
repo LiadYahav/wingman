@@ -583,7 +583,9 @@ export default function DocsPage() {
               locked as a rule, so every nodepool of every cluster has exactly these configs, whatever its number or
               order. Configs come from the picker: a file of <InlineCode>mc-files/</InlineCode> by name, or{" "}
               <InlineCode>nm-conf</InlineCode>, the cluster&apos;s own network config, with a hardware type (under
-              the rule, each nodepool picks its own). Replicas and node labels are preset or locked per nodepool.
+              the rule, each nodepool picks its own). The type starts at <strong>generic</strong> when the day1 repo has
+              the generic template (<InlineCode>nm-conf-template.bu</InlineCode>, for any hardware, written as plain{" "}
+              <InlineCode>nm-conf</InlineCode>). Replicas and node labels are preset or locked per nodepool.
             </Step>
             <Step n={3} title="Add-ons">
               Pick charts from the catalog and put them in order. The gear opens{" "}
@@ -716,7 +718,9 @@ spec:
               a field it <strong>locks</strong> is shown read-only with the flavor&apos;s value. Machine configs come
               from a picker of the day1 repo&apos;s <InlineCode>mc-files/</InlineCode>: a static config by name, or{" "}
               <InlineCode>nm-conf</InlineCode> with a hardware type, the cluster&apos;s own network config, written as{" "}
-              <InlineCode>{"nm-conf-<clusterName>-<hardware>"}</InlineCode>. A nodepool you add starts with the
+              <InlineCode>{"nm-conf-<clusterName>-<hardware>"}</InlineCode>, or <strong>generic</strong> (the
+              default when the day1 repo has <InlineCode>nm-conf-template.bu</InlineCode>), written as plain{" "}
+              <InlineCode>nm-conf</InlineCode>. A nodepool you add starts with the
               team&apos;s defaults (<InlineCode>nodepool-defaults.yaml</InlineCode> in the specs repo), unless the
               flavor locks its configs. Every refusal shows at its field.
             </Step>

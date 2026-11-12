@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Switch } from "@/components/ui/switch";
 import { ConfigListEditor } from "@/components/machine-configs/config-list-editor";
-import { NETWORK_CONFIG, isNetworkEntry } from "@/lib/machine-configs";
+import { NETWORK_CONFIG, defaultHardware, hardwareOptions, isNetworkEntry } from "@/lib/machine-configs";
 import { cn } from "@/lib/utils";
 import type { ConfigEntry, MachineConfigs, TemplateField } from "@/types";
 import { fieldId, inputCls, NotEnforced, ValueField } from "./controls";
@@ -102,7 +102,13 @@ function ConfigsModeChoice({ mode, onChange }: { mode: ConfigsMode; onChange: (m
 
 /** What `nodepool-defaults.yaml` gives a new nodepool, or why it gives nothing. */
 function DefaultsNote({ catalog, rule, defaults }: { catalog: MachineConfigs | undefined; rule: boolean; defaults: ConfigEntry[] }) {
-  if (rule) return <>A new nodepool gets the rule&apos;s configs; choose its network hardware.</>;
+  if (rule) {
+    return defaultHardware(catalog) ? (
+      <>A new nodepool gets the rule&apos;s configs, its network hardware at generic (any hardware); change it if it needs its own.</>
+    ) : (
+      <>A new nodepool gets the rule&apos;s configs; choose its network hardware.</>
+    );
+  }
   const nd = catalog?.nodepool_defaults;
   if (!nd) return null;
   if (nd.error) return <>New nodepools start empty: {nd.path} cannot be used.</>;
@@ -171,7 +177,7 @@ export function NodepoolsSection({
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <ConfigsModeChoice mode={mode} onChange={(m) => update((d) => setConfigsMode(d, m, defaults))} />
+        <ConfigsModeChoice mode={mode} onChange={(m) => update((d) => setConfigsMode(d, m, defaults, defaultHardware(catalog)))} />
         <DefaultsProblems catalog={catalog} />
       </div>
 
@@ -247,7 +253,7 @@ export function NodepoolsSection({
       )}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button type="button" variant="outline" onClick={() => update((d) => addNodepool(d, defaults))}>
+        <Button type="button" variant="outline" onClick={() => update((d) => addNodepool(d, defaults, defaultHardware(catalog)))}>
           <Plus /> Add nodepool
         </Button>
         <p className="text-xs text-muted-foreground">
@@ -431,7 +437,7 @@ function NodepoolCard({
                   <Network className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <Combobox
                     className="w-56"
-                    options={(catalog?.hardware_types ?? []).map((h) => ({ value: h.name, label: h.name, description: h.template }))}
+                    options={hardwareOptions(catalog)}
                     value={hardware}
                     onValueChange={(hw) => update((d) => setPoolHardware(d, index, hw))}
                     placeholder={catalogLoading ? "Loading hardware types…" : "Choose hardware…"}

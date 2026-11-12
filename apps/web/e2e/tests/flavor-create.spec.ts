@@ -10,7 +10,7 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { injectAdminAuth, mockDashboardApis, mockMachineConfigsWithGeneric } from "../fixtures/api-handlers";
 import { ClusterNewPage } from "../pages/cluster-new.page";
 import type { ClusterPreview, CreateClusterRequest, Mce, Problem, SpecEntry, TemplateField } from "../../types";
 
@@ -326,6 +326,43 @@ test.describe("Create form: a flavor's locks and presets", () => {
       ...picked(DEFAULTS),
     ]);
     await expect(hardware(page, 1, 0)).toContainText("Hardware…");
+  });
+});
+
+test.describe("Create form: the generic network config (ADR-0027, 2026-11-12)", () => {
+  test("with nm-conf-template.bu, the defaults' and the rule's nm-conf start as generic and are sent so", async ({ page }) => {
+    const previews = await setup(page);
+    await page.route("**/api/day1/machine-configs", (r) => json(r, mockMachineConfigsWithGeneric));
+    const form = new ClusterNewPage(page);
+    await start(form, "agent-standard");
+
+    for (const nodepool of [0, 1]) await expect(hardware(page, nodepool, 0)).toContainText("generic");
+    await expect(configs(page, 0)).toContainText("Written as nm-conf: the generic template, for any hardware");
+    // One nodepool may still take its own hardware
+    await pickHardware(page, 1, 0, "dell-data");
+
+    await form.templateInput("1234").fill("1234");
+    await form.templateInput("56").fill("56");
+    await form.templateInput("7").fill("7");
+    await infraEnvs(page).nth(0).fill("dell-r660-site1-128c-1024gb-5tb");
+    await infraEnvs(page).nth(1).fill("dell-r760-site1-64c-512gb-20tb");
+    await form.review();
+    await expect(form.reviewDialog).toBeVisible();
+
+    const sent = previews[0].variables as { nodepools: { configs: unknown }[] };
+    expect(sent.nodepools.map((pool) => pool.configs)).toEqual([
+      [{ name: "nm-conf", hardware: "generic" }, { name: "workers-chrony-configuration" }, { name: "nic-ring-buffer" }],
+      [{ name: "nm-conf", hardware: "dell-data" }, { name: "workers-chrony-configuration" }, { name: "nic-ring-buffer" }],
+    ]);
+  });
+
+  test("under the configs rule, a nodepool added here starts at generic", async ({ page }) => {
+    await setup(page);
+    await page.route("**/api/day1/machine-configs", (r) => json(r, mockMachineConfigsWithGeneric));
+    const form = new ClusterNewPage(page);
+    await start(form, "agent-baseline");
+    await page.getByTestId("add-nodepools").click();
+    await expect(hardware(page, 1, 0)).toContainText("generic");
   });
 });
 
