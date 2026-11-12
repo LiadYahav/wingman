@@ -4,6 +4,35 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-12 — 3.7.0: create can start the provision-cluster workflow (ADR-0042), off by default.**
+Released today: 3.4.1 (#25), 3.5.0 (#26, the EPG from segments-manager,
+ADR-0039), 3.6.0 (#27, create from a flavor: a nodepool ratio whose
+replicas move together, a suggested name with the next free letter,
+letters-only sequences, ADR-0040; the generic network template
+`nm-conf-template.bu`, written as plain `nm-conf` and the default, ADR-0027's
+amendment) and 3.6.1 (#28, ADR-0041: stale-while-refresh in the core cache,
+a merge re-reads only the files it changed, warm-up, gzip; a review found
+and fixed a read after a write joining a pre-write refresh). The upgrade
+index lists every release, with a generic upgrade for those without a guide.
+
+3.7.0 (#29, with this docs work folded in): create can start the platform's
+`provision-cluster` workflow instead of opening Wingman's MR, behind
+`DAY1_PROVISIONER` (chart `day1.provisioner`, default `merge-request`, so
+nothing changes until the team turns it on; `docs/upgrade/3.6-to-3.7.md`).
+Wingman still renders and checks the file, then starts the run and shows its
+phase, MR and error. The API note's open questions
+(`docs/notes/2026-11-12-provision-cluster-workflow-api.md`) wait on the team:
+the 24-character `cluster` limit, the workflow's MR not in Wingman's format,
+add-ons, who started a run.
+
+**Next:**
+- the team's answers to ADR-0042's open questions, before turning the workflow on;
+- the user's decision: does a cluster name without a letter take `-a` for
+  the suggestion (ADR-0040)?
+- deploy 3.6.1 and check, on a real cluster, the Nodes tab, the EPG and
+  `docs/ops/performance.md`'s numbers;
+- ADR-0040's "Left for later"; flavors v2's; the architect's answers.
+
 **2026-11-12 — create from a flavor: a sizing ratio, a suggested name, letter sequences (ADR-0040).**
 PR #27 on `roiblum/feat-create-from-flavor` (built by a fork, reviewed here;
 API: `docs/notes/2026-11-12-create-from-flavor-api.md`). A flavor may size
