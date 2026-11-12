@@ -15,6 +15,7 @@ WINGMAN_TEST_GITLAB_TOKEN=... uv run pytest -m live_gitlab
 
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 import uuid
@@ -25,6 +26,7 @@ import httpx
 import pytest
 from pydantic import AnyHttpUrl, SecretStr
 
+from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import AccessLevel, Project
 from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
@@ -57,6 +59,23 @@ async def _group_id(admin: httpx.AsyncClient) -> int:
         )
     response.raise_for_status()
     return int(response.json()["id"])
+
+
+async def _until_visible(member: GitLabHttpAdapter, project: Project) -> None:
+    """Wait until a new member can see the project.
+
+    GitLab records a membership at once (``permissions`` reads it), but the
+    authorization that lets the account see a private project is refreshed by
+    a background job, seconds later; until then the project answers 404.
+    """
+    for _ in range(60):
+        try:
+            await member.get_project(project.id)
+        except NotFoundError:
+            await asyncio.sleep(1)
+        else:
+            return
+    raise AssertionError(f"the new member could not see {project.path_with_namespace} in 60s")
 
 
 class TestLiveGitLabContract(GitLabContract):
@@ -166,6 +185,7 @@ class TestLiveGitLabContract(GitLabContract):
             settings = GitLabSettings(url=AnyHttpUrl(URL), token=SecretStr(token.json()["token"]))
             adapter = GitLabHttpAdapter(build_client(settings))
             adapters.append(adapter)
+            await _until_visible(adapter, project)
             return adapter
 
         yield make

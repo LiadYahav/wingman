@@ -11,7 +11,8 @@ Subclass :class:`GitLabContract` in a test module and provide two fixtures:
   group_level=None) -> GitLabPort`` that makes a fresh account a member of
   the project and/or of the project's group at those levels (group first,
   as GitLab refuses a project role below an inherited one), and returns the
-  port acting as that account.
+  port acting as that account once it can see the project (GitLab grants
+  that in a background job, seconds after the membership).
 
 The suite runs against the in-memory fake on every test run and against a
 real GitLab when one is configured. A failure on the real one means the fake
