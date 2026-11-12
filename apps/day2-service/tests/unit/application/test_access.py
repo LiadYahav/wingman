@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from wingman_core.domain.errors import GitUnavailableError
+from wingman_core.domain.errors import GitUnavailableError, NotFoundError
 from wingman_core.domain.git import AccessLevel
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day2.application.services import Day2Services
@@ -75,3 +75,22 @@ async def test_a_failed_access_read_is_not_kept(
         assert not (await services.access.of(lynx)).writable
     # GitLab answers again: the next read asks it, inside the TTL a kept answer would have.
     assert (await services.access.of(lynx)).level is AccessLevel.OWNER
+
+
+async def test_a_project_the_account_cannot_see_is_no_access_not_unknown(
+    services: Day2Services, gitlab: InMemoryGitLab, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lynx = (await _teams(services))["lynx"]
+    calls: list[int] = []
+
+    async def access_level(project_id: int) -> AccessLevel:
+        calls.append(project_id)
+        raise NotFoundError(f"GET /api/v4/projects/{project_id}: 404 Project Not Found")
+
+    monkeypatch.setattr(gitlab, "access_level", access_level)
+    access = await services.access.of(lynx)
+    assert access.level is AccessLevel.NONE and not access.writable
+    assert "is not a member there" in (access.reason or "")
+    # An answer, so it is kept for the TTL like any other.
+    await services.access.of(lynx)
+    assert calls == [lynx.project.id]

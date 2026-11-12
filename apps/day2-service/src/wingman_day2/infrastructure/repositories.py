@@ -95,13 +95,21 @@ class GitLabSigsRepository:
         )
 
     async def access(self, team: Team) -> AccessLevel:
-        """See SigsRepository.access; kept like the team list, answered stale while refreshed."""
+        """See SigsRepository.access; kept like the team list, answered stale while refreshed.
+
+        A project the account cannot see (GitLab's 404 for a private project
+        it has no access to) is no access: an answer, kept like the others.
+        """
         pid = team.project.id
+
+        async def fetch() -> AccessLevel:
+            try:
+                return await self._gitlab.access_level(pid)
+            except NotFoundError:
+                return AccessLevel.NONE
+
         return await self._cache.get_or_fetch(
-            cache_keys.access(pid),
-            lambda: self._gitlab.access_level(pid),
-            ttl=self._ttl,
-            stale=stale_for(self._ttl),
+            cache_keys.access(pid), fetch, ttl=self._ttl, stale=stale_for(self._ttl)
         )
 
     async def tree(self, team: Team) -> RepoTree:
