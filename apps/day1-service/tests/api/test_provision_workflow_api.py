@@ -169,7 +169,9 @@ async def test_the_orchestrators_refusal_and_a_lost_answer_reach_the_form(
     assert (refused.status_code, problem["code"]) == (422, "VALIDATION_ERROR")
     assert problem["details"]["problems"] == ["cluster: at most 24 characters"]
     provision.fail_start = AmbiguousStartError("sent, no answer: it may have started")
-    lost = await workflow_client.post(CREATE, json=support.create_body(), headers=auth(support.ALICE))
+    lost = await workflow_client.post(
+        CREATE, json=support.create_body(), headers=auth(support.ALICE)
+    )
     assert (lost.status_code, lost.json()["code"]) == (504, "AMBIGUOUS_WRITE")
 
 

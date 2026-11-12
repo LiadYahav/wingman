@@ -1,7 +1,7 @@
 # ADR-0011: GitLab reads are cached per replica for seconds; writes clear what they made stale
 
 Date: 2026-11-07
-Status: Accepted; superseded in part by ADR-0035 (files and trees at the default branch are read once per commit; the TTL now bounds how often a branch head is checked)
+Status: Accepted; superseded in part by ADR-0035 (files and trees at the default branch are read once per commit; the TTL now bounds how often a branch head is checked) and ADR-0041 (a read may be answered stale, never older than a minute, while one fetch refreshes it)
 
 ## Context
 

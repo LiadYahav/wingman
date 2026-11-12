@@ -15,6 +15,7 @@ hubs, server-scan, the workflows orchestrator and segments-manager, from
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
 from wingman_core.infrastructure.session_tokens import SessionTokens
 from wingman_core.infrastructure.snapshots import RepoSnapshots
+from wingman_core.infrastructure.warm_up import start_warm_up
 from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
@@ -105,7 +107,7 @@ SERVICE_TOKEN_TTL: Final = timedelta(minutes=5)
 RUNS_TTL_SECONDS: Final = 10.0
 """The longest an uninstall run's status is cached: the web polls a running one."""
 HUB_TTL_SECONDS: Final = 10.0
-"""The longest the nodes view caches an MCE read (live status reads the hub directly)."""
+"""The longest live status and the nodes view cache an MCE read (ADR-0041)."""
 FAKE_SERVER_SCAN_UI: Final = "http://server-scan.example"
 """Where the fake fleet's node links point when ``SERVER_SCAN_UI_URL`` is empty."""
 FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
@@ -376,11 +378,23 @@ def build_context(
         machine_configs,
     )
     repos = {RepoKey.DAY1: day1, RepoKey.SPECS: specs_repo}
+    # One cache of hub reads for live status and the nodes view, shared by every user (ADR-0041)
+    hub = (
+        CachedHubApi(adapters.hub, cache, ttl=min(ttl, HUB_TTL_SECONDS))
+        if adapters.hub is not None
+        else None
+    )
+    # InfraEnvs rarely change: their list is kept longer than live status's reads (ADR-0040)
+    infra_env_hub = (
+        CachedHubApi(adapters.hub, cache, ttl=settings.mce_infraenv_cache_seconds)
+        if adapters.hub is not None
+        else None
+    )
     nodes: NodeService | None = None
-    if adapters.hub is not None:
+    if hub is not None:
         runs_ttl = min(ttl, RUNS_TTL_SECONDS)
         nodes = NodeService(
-            CachedHubApi(adapters.hub, cache, ttl=min(ttl, HUB_TTL_SECONDS)),
+            hub,
             cluster_service,
             inventory=(
                 CachedServerInventory(adapters.inventory, cache, ttl=ttl)
@@ -426,15 +440,13 @@ def build_context(
         nodes=nodes,
         status=(
             StatusService(
-                adapters.hub,
+                hub,
                 cluster_service,
                 naming=naming,
                 infraenv_namespace=settings.mce_infraenv_namespace or None,
-                infra_envs=CachedHubApi(
-                    adapters.hub, cache, ttl=settings.mce_infraenv_cache_seconds
-                ),
+                infra_envs=infra_env_hub,
             )
-            if adapters.hub is not None
+            if hub is not None
             else None
         ),
         webhook_secret=settings.gitlab_webhook_secret.get_secret_value() or None,
@@ -483,7 +495,9 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        warm = start_warm_up("day1", lambda: warm_up(context))
         yield
+        warm.cancel()
         for close in adapters.closers:
             await close()
 
@@ -512,6 +526,11 @@ def create_app(
     for router in ROUTERS:
         app.include_router(router)
     return app
+
+
+async def warm_up(context: Day1Context) -> None:
+    """What a new replica's first page reads: the cluster list, every last change, the flavors."""
+    await asyncio.gather(context.clusters.clusters(), context.specs.entries())
 
 
 _app: FastAPI | None = None

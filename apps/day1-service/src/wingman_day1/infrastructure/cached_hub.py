@@ -1,9 +1,9 @@
-"""CachedHubApi: an MCE hub's reads, cached for a few seconds per replica, for the nodes view.
+"""CachedHubApi: an MCE hub's reads, cached for a few seconds per replica.
 
-A cluster's nodes are six reads of its MCE (ADR-0038). The Nodes tab is
-polled, and the uninstall's check reads them again, so they are cached for
-a short TTL (ADR-0011). Live status keeps reading the hub directly. A failure
-is not cached.
+A cluster's nodes are six reads of its MCE (ADR-0038), and live status two
+per cluster on every open cluster list (ADR-0041). Both are polled, by every
+person with a page open, so the reads are cached for a short TTL (ADR-0011)
+and shared. A failure is not cached.
 """
 
 from __future__ import annotations

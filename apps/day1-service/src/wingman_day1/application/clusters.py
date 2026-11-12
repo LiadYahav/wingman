@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Final
 
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, FileContent
@@ -81,6 +83,17 @@ from wingman_day1.ports import ClusterProvisioner, ProvisionWorkflow, RepoReads
 logger = logging.getLogger(__name__)
 
 MAX_LIST_CONCURRENCY = 16
+MAX_PARSED: Final = 4096
+"""Parsed cluster files kept, by content (ADR-0041); a production repo has a few hundred."""
+
+
+@dataclass(frozen=True, slots=True)
+class _Parsed:
+    """What a cluster file's text says, which depends on nothing else."""
+
+    values: ClusterValues | None
+    provenance: Provenance
+    problems: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +163,7 @@ class ClusterService:
         self._machine_configs = machine_configs
         self._naming = naming
         self._provision = provision
+        self._parsed: OrderedDict[str, _Parsed] = OrderedDict()
 
     # ── Reads ───────────────────────────────────────────────────────────────
 
@@ -471,15 +485,9 @@ class ClusterService:
 
     async def _load(self, ref: ClusterRef, *, with_commit: bool) -> ClusterFile:
         file = await self._read(ref)
-        problems: list[str] = []
-        values: ClusterValues | None = None
-        try:
-            values = read_values(load_values(file.content))
-        except InvalidClusterFileError as exc:
-            problems.extend(exc.problems or [str(exc)])
-        provenance = read_provenance(file.content)
-        problems.extend(provenance.problems)
+        parsed = self._parse(file.content)
         last_change = await self._day1.last_change(ref.path) if with_commit else None
+        values = parsed.values
         explicit = values.cluster_name if values else None
         return ClusterFile(
             ref=ref,
@@ -487,8 +495,33 @@ class ClusterService:
             last_commit_id=file.last_commit_id,
             naming=describe_cluster(ref.name, site=ref.site),
             hosted_cluster=self._naming.for_file(ref.name, explicit=explicit),
-            provenance=provenance,
+            provenance=parsed.provenance,
             values=values,
-            problems=tuple(problems),
+            problems=parsed.problems,
             last_change=last_change,
         )
+
+    def _parse(self, content: str) -> _Parsed:
+        """The file's values, header and problems, parsed once per distinct text (ADR-0041).
+
+        YAML parsing was most of a list's time, repeated for every file on
+        every request; the result depends only on the text, and nothing
+        changes it after.
+        """
+        hit = self._parsed.get(content)
+        if hit is not None:
+            self._parsed.move_to_end(content)
+            return hit
+        problems: list[str] = []
+        values: ClusterValues | None = None
+        try:
+            values = read_values(load_values(content))
+        except InvalidClusterFileError as exc:
+            problems.extend(exc.problems or [str(exc)])
+        provenance = read_provenance(content)
+        problems.extend(provenance.problems)
+        hit = _Parsed(values, provenance, tuple(problems))
+        self._parsed[content] = hit
+        if len(self._parsed) > MAX_PARSED:
+            self._parsed.popitem(last=False)
+        return hit
