@@ -92,7 +92,7 @@ function drift(name: string, overrides: Partial<ClusterDrift> = {}): ClusterDrif
   return {
     cluster: c.name, site: c.site, mce: c.mce, state: "in_sync", is_drifted: false,
     spec_name: FLAVOR, spec_version: "1.0.0", current_spec_version: "1.0.0",
-    value_drift: [], addon_drift: [], version_differences: [], error: null, ...overrides,
+    value_drift: [], addon_drift: [], version_differences: [], error: null, update: null, ...overrides,
   };
 }
 
@@ -190,8 +190,8 @@ function notOpened(name: string, code: ImportFailure["code"], detail: string): I
 }
 
 const FOLLOWERS: SpecCluster[] = [
-  { name: "ocp4-prod-owl-site1", site: "site1", mce: MCE1, phase: "Unknown", state: "drifted", is_drifted: true, error: null },
-  { name: "ocp4-prod-herzi-site1", site: "site1", mce: MCE1, phase: "Unknown", state: "in_sync", is_drifted: false, error: null },
+  { name: "ocp4-prod-owl-site1", site: "site1", mce: MCE1, phase: "Unknown", state: "drifted", is_drifted: true, error: null, spec_version: "1.0.0", update: null },
+  { name: "ocp4-prod-herzi-site1", site: "site1", mce: MCE1, phase: "Unknown", state: "in_sync", is_drifted: false, error: null, spec_version: "1.0.0", update: null },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

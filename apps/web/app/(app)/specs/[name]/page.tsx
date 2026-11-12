@@ -15,14 +15,17 @@ import { cn, formatDate } from "@/lib/utils";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
-import { DriftBadge } from "@/components/clusters/drift-badge";
+import { FlavorStateBadge, FlavorStateLegend } from "@/components/clusters/drift-badge";
 import { FlavorInputsCard, WarningPanel } from "@/components/specs/flavor-inputs";
 import { ImportClustersSheet } from "@/components/specs/import-clusters/import-sheet";
+import { RolloutPanel } from "@/components/specs/rollout-panel";
 import { clusterHref } from "@/lib/clusters";
+import { DISPLAY_ORDER, flavorDisplayState } from "@/lib/flavor-state";
+import { rolloutSummary, useRollout } from "@/lib/rollout";
 import { specApiPath } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
-import type { DriftState, MRDetail, SpecCluster, SpecCommit, SpecDetail, SpecDrift } from "@/types";
+import type { MRDetail, SpecCluster, SpecCommit, SpecDetail, SpecDrift } from "@/types";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -32,8 +35,6 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
     </div>
   );
 }
-
-const DRIFT_ORDER: DriftState[] = ["drifted", "unknown", "in_sync", "not_linked"];
 
 /** A 409 REVISION_CONFLICT: the flavor's file moved since this page read it. */
 const STALE_SPEC =
@@ -105,6 +106,9 @@ export default function SpecDetailPage() {
     staleTime: 60_000,
   });
 
+  // The rollout of the newest version (ADR-0044): its panel on the Clusters tab, a line on the overview
+  const { data: rollout } = useRollout(specName, activeTab === "overview" || activeTab === "clusters");
+
   const { data: history, isLoading: historyLoading, error: historyError } = useQuery<SpecCommit[]>({
     queryKey: ["spec-history", specName],
     queryFn: () => api.get<SpecCommit[]>(`/api/day1/specs/${encodeURIComponent(specName)}/history`),
@@ -156,11 +160,16 @@ export default function SpecDetailPage() {
         "Move them to another flavor (Add existing clusters on that flavor's page) or delete them first."
       : null;
 
-  const driftCounts = DRIFT_ORDER
-    .map((state) => ({ state, count: driftResults?.filter((r) => r.state === state).length ?? 0 }))
+  // By what each row shows: drift against the cluster's own version, then its update (ADR-0044)
+  const driftCounts = DISPLAY_ORDER
+    .map((state) => ({ state, count: driftResults?.filter((r) => flavorDisplayState(r) === state).length ?? 0 }))
     .filter((c) => c.count > 0);
-  const allInSync = (driftResults?.length ?? 0) > 0 && driftResults!.every((r) => r.state === "in_sync");
+  const allInSync = (driftResults?.length ?? 0) > 0 && driftResults!.every((r) => flavorDisplayState(r) === "in_sync");
   const anyDrifted = driftResults?.some((r) => r.state === "drifted") ?? false;
+  const anyUpdate = driftResults?.some((r) => r.state === "in_sync" && r.update) ?? false;
+  const rolloutLine = rollout?.version && rollout.clusters.length > 0
+    ? rolloutSummary(rollout) || `every cluster is on v${rollout.version}`
+    : null;
 
   const canImport = isAdmin && !!spec;
   const importAction = canImport && (
@@ -303,6 +312,22 @@ export default function SpecDetailPage() {
                     )
                   }
                 />
+                {rolloutLine && (
+                  <InfoRow
+                    label="Rollout"
+                    value={
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("clusters")}
+                        className="hover:text-primary transition-colors text-right"
+                        data-testid="flavor-rollout-summary"
+                      >
+                        v{rollout!.version}: {rolloutLine}
+                        {rollout!.running && <span className="text-muted-foreground font-normal"> · opening merge requests…</span>}
+                      </button>
+                    }
+                  />
+                )}
               </>
             )}
           </div>
@@ -328,6 +353,7 @@ export default function SpecDetailPage() {
       )}
 
       {/* Clusters tab */}
+      {activeTab === "clusters" && <RolloutPanel flavor={specName} />}
       {activeTab === "clusters" && clustersError && (
         <ProblemList error={clustersError} title="The clusters following this flavor could not be loaded" />
       )}
@@ -379,7 +405,7 @@ export default function SpecDetailPage() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground break-all">{c.site} / {c.mce}</td>
                       <td className="px-4 py-3">
-                        <DriftBadge state={c.state} error={c.error} />
+                        <FlavorStateBadge row={c} />
                       </td>
                     </tr>
                   ))
@@ -436,30 +462,37 @@ export default function SpecDetailPage() {
                   <p className="flex items-center gap-2 text-sm font-medium text-status-ready-fg">
                     <CheckCircle2 className="h-4 w-4" />
                     {driftResults!.length === 1
-                      ? "The cluster matches the flavor"
-                      : `All ${driftResults!.length} clusters match the flavor`}
+                      ? "The cluster matches the flavor, at the newest version"
+                      : `All ${driftResults!.length} clusters match the flavor, at the newest version`}
                   </p>
                 ) : (
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <p className="text-sm font-medium">{plural(driftResults!.length, "cluster")}</p>
                     {driftCounts.map(({ state, count }) => (
                       <span key={state} data-testid={`spec-drift-count-${state}`} className="inline-flex items-center gap-1.5 text-sm">
-                        <DriftBadge state={state} />
+                        <FlavorStateLegend state={state} />
                         <span className="tabular-nums font-medium">{count}</span>
                       </span>
                     ))}
                   </div>
                 )}
-                {anyDrifted && (
-                  <p className="text-xs text-muted-foreground">
-                    A cluster has drifted when a value the flavor locks differs in its file, or an add-on the flavor
-                    lists is missing. Open it to see what differs and sync it.
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  Each cluster is compared with the version of the flavor it is on.
+                  {anyDrifted && (
+                    <> A cluster has drifted when a value that version locks differs in its file, or an add-on it lists
+                      is missing: open it to see what differs and sync it.</>
+                  )}
+                  {anyUpdate && (
+                    <> A newer version is an update, not drift: it reaches each cluster through its own merge request
+                      (the Clusters tab shows the rollout).</>
+                  )}
+                </p>
               </div>
               <div className="bg-card rounded-xl border shadow-sm divide-y divide-border overflow-hidden">
                 {[...driftResults!]
-                  .sort((a, b) => DRIFT_ORDER.indexOf(a.state) - DRIFT_ORDER.indexOf(b.state) || a.cluster.localeCompare(b.cluster))
+                  .sort((a, b) =>
+                    DISPLAY_ORDER.indexOf(flavorDisplayState(a)) - DISPLAY_ORDER.indexOf(flavorDisplayState(b)) || a.cluster.localeCompare(b.cluster)
+                  )
                   .map((r) => (
                     <div key={`${r.site}/${r.mce}/${r.cluster}`} data-testid={`spec-drift-${r.cluster}`} className="flex items-start gap-3 px-5 py-3.5">
                       <Server className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -472,15 +505,13 @@ export default function SpecDetailPage() {
                         </Link>
                         <p className="text-xs text-muted-foreground mt-0.5 break-all">
                           {r.site} / {r.mce}
-                          {r.spec_version && spec && r.spec_version !== spec.metadata.version && (
-                            <> · follows v{r.spec_version} (the flavor is v{spec.metadata.version})</>
-                          )}
+                          {r.spec_version && <> · compared with v{r.spec_version}, the version it is on</>}
                         </p>
                         {r.state === "unknown" && r.error && (
                           <p className="text-xs text-status-deleting-fg mt-1 break-words">{r.error}</p>
                         )}
                       </div>
-                      <DriftBadge state={r.state} error={r.error} className="shrink-0" />
+                      <FlavorStateBadge row={r} className="shrink-0" />
                     </div>
                   ))}
               </div>

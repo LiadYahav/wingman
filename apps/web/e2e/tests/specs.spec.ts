@@ -171,12 +171,12 @@ test.describe("Spec detail", () => {
   });
 
   const CLUSTERS: SpecCluster[] = [
-    { name: "ocp4-prod-a-site1", site: "site1", mce: "ocp4-prod-mce-site1-a", phase: "Unknown", state: "in_sync", is_drifted: false, error: null },
-    { name: "ocp4-prod-b-site1", site: "site1", mce: "ocp4-prod-mce-site1-a", phase: "Unknown", state: "drifted", is_drifted: true, error: null },
-    { name: "ocp4-prod-c-site1", site: "site1", mce: "ocp4-prod-mce-site1-a", phase: "Unknown", state: "unknown", is_drifted: null, error: "day2 did not answer: timed out" },
+    { name: "ocp4-prod-a-site1", site: "site1", mce: "ocp4-prod-mce-site1-a", phase: "Unknown", state: "in_sync", is_drifted: false, error: null, spec_version: "1.0.0", update: null },
+    { name: "ocp4-prod-b-site1", site: "site1", mce: "ocp4-prod-mce-site1-a", phase: "Unknown", state: "drifted", is_drifted: true, error: null, spec_version: "1.0.0", update: null },
+    { name: "ocp4-prod-c-site1", site: "site1", mce: "ocp4-prod-mce-site1-a", phase: "Unknown", state: "unknown", is_drifted: null, error: "day2 did not answer: timed out", spec_version: "1.0.0", update: null },
   ];
   const DRIFT: SpecDrift[] = CLUSTERS.map((c) => ({
-    cluster: c.name, site: c.site, mce: c.mce, state: c.state, is_drifted: c.is_drifted, spec_version: "1.0.0", error: c.error,
+    cluster: c.name, site: c.site, mce: c.mce, state: c.state, is_drifted: c.is_drifted, spec_version: "1.0.0", error: c.error, update: null,
   }));
 
   async function withDrift(p: Page, rows: SpecDrift[] = DRIFT, clusters: SpecCluster[] = CLUSTERS) {
@@ -308,6 +308,7 @@ test.describe("Spec edit", () => {
     const edit = new SpecEditPage(page);
     await edit.goto("agent-standard");
     await edit.descriptionInput.fill("Changed");
+    await edit.versionInput.fill("1.1.0"); // an edit needs a new version (ADR-0044)
     await edit.reviewAndConfirm();
 
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -331,6 +332,7 @@ test.describe("Spec edit", () => {
     const edit = new SpecEditPage(page);
     await edit.goto("agent-standard");
     await edit.descriptionInput.fill("Changed");
+    await edit.versionInput.fill("1.1.0"); // an edit needs a new version (ADR-0044)
     await edit.reviewAndConfirm();
 
     await expect(problemAlert(page, "changed since you opened it")).toBeVisible();
@@ -391,6 +393,7 @@ test.describe("Spec writes carry the last_commit_id they read", () => {
     await edit.goto("agent-standard");
 
     await edit.descriptionInput.fill("Changed");
+    await edit.versionInput.fill("1.1.0"); // an edit needs a new version (ADR-0044)
     await edit.reviewAndConfirm();
     await expect(problemAlert(page, "changed since you opened it")).toBeVisible();
     expect(puts[0].url.searchParams.get("last_commit_id")).toBe(READ_AT);
@@ -401,6 +404,7 @@ test.describe("Spec writes carry the last_commit_id they read", () => {
     await reloaded;
     await expect(problemAlert(page, "changed since you opened it")).toHaveCount(0);
     await edit.descriptionInput.fill("Changed again");
+    await edit.versionInput.fill("1.1.0");
     await edit.reviewAndConfirm();
 
     await expect(page.getByText("Update MR !12 opened")).toBeVisible();

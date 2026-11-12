@@ -48,7 +48,7 @@ const DETAIL: ClusterDetail = {
 const DRIFT: ClusterDrift = {
   cluster: NAME, site: SITE, mce: MCE, state: "not_linked", is_drifted: false,
   spec_name: null, spec_version: null, current_spec_version: null,
-  value_drift: [], addon_drift: [], version_differences: [], error: null,
+  value_drift: [], addon_drift: [], version_differences: [], error: null, update: null,
 };
 
 const CHARTS: DestinationCharts = {

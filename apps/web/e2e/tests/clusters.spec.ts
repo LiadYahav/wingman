@@ -44,12 +44,14 @@ const CLUSTERS: ClusterStatus[] = [
   listItem("ocp4-prod-broken-site1", { spec_name: null, spec_version: null, mastertag: null, problems: ["the file is not valid YAML: line 3"] }),
 ];
 
+const linked = { spec_name: "agent-standard", spec_version: "1.0.0", update: null };
+const unlinked = { spec_name: null, spec_version: null, update: null };
 const DRIFT_SUMMARY: DriftSummaryItem[] = [
-  { name: "ocp4-prod-alpha-site1", site: SITE, mce: MCE, state: "in_sync", is_drifted: false, error: null },
-  { name: "ocp4-prod-bravo-site1", site: SITE, mce: MCE, state: "drifted", is_drifted: true, error: null },
-  { name: "ocp4-prod-charlie-site1", site: SITE, mce: MCE, state: "unknown", is_drifted: null, error: "day2 did not answer" },
-  { name: "ocp4-upgrade-demo", site: SITE, mce: "ocp4-mce-workflow-test", state: "not_linked", is_drifted: false, error: null },
-  { name: "ocp4-prod-broken-site1", site: SITE, mce: MCE, state: "not_linked", is_drifted: false, error: null },
+  { name: "ocp4-prod-alpha-site1", site: SITE, mce: MCE, state: "in_sync", is_drifted: false, error: null, ...linked },
+  { name: "ocp4-prod-bravo-site1", site: SITE, mce: MCE, state: "drifted", is_drifted: true, error: null, ...linked },
+  { name: "ocp4-prod-charlie-site1", site: SITE, mce: MCE, state: "unknown", is_drifted: null, error: "day2 did not answer", ...linked },
+  { name: "ocp4-upgrade-demo", site: SITE, mce: "ocp4-mce-workflow-test", state: "not_linked", is_drifted: false, error: null, ...unlinked },
+  { name: "ocp4-prod-broken-site1", site: SITE, mce: MCE, state: "not_linked", is_drifted: false, error: null, ...unlinked },
 ];
 
 const NAME = "ocp4-prod-herzi-site1";
@@ -117,7 +119,7 @@ function drift(overrides: Partial<ClusterDrift> = {}): ClusterDrift {
   return {
     cluster: NAME, site: SITE, mce: MCE, state: "in_sync", is_drifted: false,
     spec_name: "agent-standard", spec_version: "1.0.0", current_spec_version: "1.0.0",
-    value_drift: [], addon_drift: [], version_differences: [], error: null, ...overrides,
+    value_drift: [], addon_drift: [], version_differences: [], error: null, update: null, ...overrides,
   };
 }
 
@@ -147,11 +149,11 @@ test.describe("Cluster list", () => {
     await go(page, "/clusters");
 
     const row = (name: string) => page.getByTestId(`cluster-row-${name}`);
-    await expect(row("ocp4-prod-alpha-site1")).toContainText("In sync");
+    await expect(row("ocp4-prod-alpha-site1")).toContainText("In sync · v1.0.0");
     await expect(row("ocp4-prod-bravo-site1")).toContainText("Drifted");
     await expect(row("ocp4-prod-charlie-site1")).toContainText("Unknown");
     await expect(row("ocp4-prod-charlie-site1")).not.toContainText("In sync");
-    await expect(row("ocp4-upgrade-demo")).toContainText("Not linked");
+    await expect(row("ocp4-upgrade-demo")).toContainText("No flavor");
   });
 
   test("filters by drift state with separate counts", async ({ page }) => {
@@ -160,7 +162,7 @@ test.describe("Cluster list", () => {
     await page.getByRole("button", { name: /^Unknown\s*1$/ }).click();
     await expect(page.getByTestId("cluster-row-ocp4-prod-charlie-site1")).toBeVisible();
     await expect(page.getByTestId("cluster-row-ocp4-prod-alpha-site1")).not.toBeVisible();
-    await expect(page.getByRole("button", { name: /^Not linked\s*2$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^No flavor\s*2$/ })).toBeVisible();
   });
 
   test("flags off-convention names and unreadable files instead of hiding them", async ({ page }) => {
@@ -393,14 +395,13 @@ test.describe("Cluster detail", () => {
     await expect(page.getByText(/in sync/i)).toHaveCount(0);
   });
 
-  test("a cluster of an older spec version is checked against the spec as it is now", async ({ page }) => {
-    await openDetail(page, drift({ spec_version: "1.0.0", current_spec_version: "1.1.0" }));
+  test("a cluster of an older flavor version is checked against its own version, and the newer one is an update", async ({ page }) => {
+    await openDetail(page, drift({ spec_version: "1.0.0", current_spec_version: "1.1.0", update: { version: "1.1.0", merge_request: null } }));
 
     await page.getByRole("tab", { name: "Drift" }).click();
-    await expect(page.getByText("The cluster holds every value agent-standard v1.1.0 locks and has every add-on it lists.")).toBeVisible();
-    await expect(page.getByText(
-      "The file's header names v1.0.0; drift compares against the flavor as it is now, v1.1.0. A sync moves the header to v1.1.0."
-    )).toBeVisible();
+    await expect(page.getByText("The cluster holds every value agent-standard v1.0.0 locks and has every add-on it lists.")).toBeVisible();
+    await expect(page.getByTestId("drift-compared-with")).toHaveText("Compared with agent-standard v1.0.0, the version this cluster is on.");
+    await expect(page.getByTestId("flavor-update")).toContainText("agent-standard v1.1.0 is out. No merge request moves this cluster to it yet.");
   });
 
   test("drifted addons are fixed with the values requested at create; with no value drift there is no sync", async ({ page }) => {
