@@ -40,6 +40,13 @@ Wingman becomes the platform team's one place to work from:
 | 10 | server-scan's and segments-manager's UIs move into Wingman; their APIs stay as they are | An administrator switches area from the top bar |
 | 11 | cluster-navigator's data for hosted clusters and MCEs, never UPI | |
 | 12 | Wingman runs on the team's sandbox, in namespace `wingman`, with its own GitLab, the orchestrator on | Whether that GitLab becomes the sandbox's Git store for the platform too is the team's call (workstream 1) |
+| 13 | Servers, Segments and server-scan's event history are for Wingman's admins, for now | Until the RBAC of decision 17 exists |
+| 14 | The Servers area does exactly what server-scan's UI does, every button included | Maintenance on/off with its reason and "run a job now" too: admin only, the same confirmations, recorded in Wingman's audit with the person's name |
+| 15 | A person may choose another MCE than Wingman's pick, if it passes the checks | Admins only, with a reason, written into the MR next to the numbers |
+| 16 | Free pods are counted on every Ready, schedulable node of the MCE | Control-plane (master) nodes excluded |
+| 17 | Fine-grained RBAC: groups with their own permissions, such as seeing every server or only your own | Identities and groups from **Keycloak, federating LDAP** (OIDC). There is no Keycloak in the air-gap: Wingman brings one (Red Hat build of Keycloak) |
+| 18 | Wingman may reuse whatever it needs from server-scan, segments-manager and cluster-navigator | Their repositories are public, as Wingman's is |
+| 19 | MCE placement is built first, after the day2 and import PRs | With the per-MCE API address it needs |
 
 ## What this changes in Wingman's rules
 
@@ -82,6 +89,7 @@ tag exists.
 | 5 | Hosted clusters and MCEs from cluster-navigator | 0049 | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
+| 8 | RBAC with Keycloak: permissions per group, scoped visibility | 0051 | L | Its design before code; 2 for the areas it guards |
 
 ### 0a. Day2: teams author add-ons (ADR-0043, in progress)
 
@@ -256,11 +264,18 @@ How it calls server-scan:
 | Architecture | S | Iframe server-scan's diagrams; copying them would go stale |
 | Claude | S | Link out: its token and MCP flow belong to server-scan's own login |
 
-**Reuse.** server-scan's pure TypeScript (row filtering and facets, sorting,
-event descriptions, date formatting, its types) could be reused almost as it
-is. **server-scan is a private repository and Wingman is public**: copying
-its code needs the team's agreement, or the code is rewritten (open question
-4).
+**Parity (decision 14).** Every page and every button behaves as in
+server-scan's UI, writes included: maintenance on/off (with its reason and
+expected end) and "run a job now", behind Wingman's admin check and the same
+confirmations, recorded in Wingman's audit with the person's name (server-scan
+records only the token). The one place exact parity is impossible is the
+Claude page's personal token: server-scan mints it only for someone logged
+in to server-scan itself, never for a token caller. The page keeps the skill
+download and the MCP command, and links to server-scan for the token.
+
+**Reuse (decision 18).** server-scan's repository is public, as Wingman's is.
+Its pure TypeScript (row filtering and facets, sorting, event descriptions,
+date formatting, its types) is reused as it is, with its unit tests.
 
 **Watch for names.** server-scan's MCE and site names must equal day1's MCE
 folders and site names, or the joins fail. They differ on the sandbox; check
@@ -314,7 +329,7 @@ environment.
 | Check | From | Rule |
 |---|---|---|
 | Supports the version | `upgrade/mces/<mce>.yaml` in the day1 repo (ADR-0034) | Required |
-| Free pods for a control plane | The MCE itself: allocatable pods minus running pods, on its schedulable nodes | At least `PLACEMENT_MIN_FREE_PODS` (default 70) |
+| Free pods for a control plane | The MCE itself: allocatable pods minus running pods, on every Ready, schedulable node, control-plane nodes excluded (decision 16) | At least `PLACEMENT_MIN_FREE_PODS` (default 70) |
 | Readable | Every read above answered | An MCE Wingman cannot read is "unknown" and never picked |
 
 **The ranking** among those that pass:
@@ -339,19 +354,53 @@ never seen is "unknown", not zero.
 - a token that may list nodes and pods across the cluster on each MCE. Its
   reads are namespaced today, so the upgrade guide says what to grant.
 
-The count uses only the nodes the hosted control planes can run on. It is
-read fresh at create time: two creates within the 30 minutes cluster-navigator
-would need must not see the same number.
+It is read fresh at create time: two creates within the 30 minutes
+cluster-navigator would need must not see the same number.
 
 **The create form**:
 - Wingman picks the MCE and shows every candidate's numbers and why it won;
-- the person may choose another MCE that passes the checks;
+- an admin may choose another MCE that passes the checks, giving a reason
+  (decision 15);
 - the MR description records the numbers and the choice;
 - with `day1.provisioner: workflow`, the chosen MCE goes to the
   provision-cluster workflow;
 - the InfraEnv list follows the chosen MCE, as today.
 
-**Settings**: the minimum free pods, and whether a person may override.
+**Settings**: the minimum free pods.
+
+**Names.** server-scan's `mce_name` must equal the day1 MCE folder for the
+spare count; production is being checked. Until then an MCE server-scan does
+not know shows "spare: unknown" and placement still works on the rest.
+
+### 8. RBAC with Keycloak (ADR-0051)
+
+Today Wingman has two roles, admin and viewer, from OpenShift groups (ADR-0009,
+`WINGMAN_ADMIN_GROUPS` / `WINGMAN_VIEWER_GROUPS`). Decision 17 replaces that
+with permissions per group:
+
+- **Identity**: Wingman logs in through Keycloak (OIDC, authorization code
+  with PKCE), which federates the LDAP/AD users and groups. There is none in
+  the air-gap, so Wingman's chart can install the Red Hat build of Keycloak
+  (its operator, a realm, the LDAP federation, Wingman's client) or point at
+  an existing one. OpenShift OAuth stays as an option, for installs that have
+  no Keycloak.
+- **Permissions, not roles**: each action and each view has a permission
+  (`clusters.create`, `servers.maintenance`, `segments.read`, `events.read`,
+  …), and a group gets a set of them. Admin and viewer become two such sets,
+  so today's installs keep working.
+- **Scope**: a permission applies to everything or only to what is the
+  person's own: their owner (mador) for clusters, and the servers under
+  those clusters ([owners-and-tenants.md](owners-and-tenants.md)). "See all
+  servers" and "see only my own" are the same permission with two scopes.
+- **Enforced on the server**, in day1 and day2, on every route, and on the
+  lists themselves (a scoped person gets only their rows). The web hides
+  what a person may not do, but never decides it.
+- **The JWT** carries the person's permissions and scopes (or the services
+  look them up and cache them), and every audit entry names the person.
+
+Its design (the permission list, the scopes, how groups map, the Keycloak
+install) is written and agreed before any code, because every area depends
+on it.
 
 ### 7. Docs and upgrade guides
 
@@ -374,16 +423,17 @@ Also:
 
 ## Order
 
-1. **Now**: review and merge 0a and 0b; finish 1 (seed, install, verify);
-   write the design for 2.
-2. **Next**:
+1. **Now**: review and merge 0a and 0b. Workstream 1 is deployed
+   (Wingman 3.7.0 and its GitLab on the sandbox); its per-MCE address is
+   built with 6.
+2. **Next (decision 19)**: 6, MCE placement, with the per-MCE address. In
+   parallel, write the designs of 2 (the single pane) and 8 (RBAC).
+3. **Then**:
    - build 2;
    - build 3 (Segments): the smallest area, it proves the pattern;
-   - build 6's backend with the per-MCE address.
-3. **Then**:
-   - build 4 (Servers), page by page in the order above;
-   - build 6's form.
-4. **When the team is ready**: build 5 (cluster-navigator), once collectors
+   - build 8 once its design is agreed.
+4. **After**: build 4 (Servers), page by page in the order above.
+5. **When the team is ready**: build 5 (cluster-navigator), once collectors
    report and Wingman has a token.
 
 Parallel work runs in separate worktrees and branches, with ADR numbers fixed
@@ -392,24 +442,21 @@ PRs never conflict there.
 
 ## Open questions
 
-1. **Who sees Servers and Segments**: admins only, or viewers read-only too?
-2. **server-scan's writes in Wingman**: maintenance on/off (with a reason) and
-   "run a job now". Offer them (admin, confirmed, audited), or keep the area
-   read-only?
-3. **server-scan's auditor role** (the event history): which Wingman users get
-   it? Wingman has only admin and viewer.
-4. **Reusing server-scan's TypeScript in a public repo**: does the team agree,
-   or is it rewritten?
-5. **The shared Git store on the sandbox** (workstream 1): does the team move
-   the platform to Wingman's GitLab?
-6. **cluster-navigator**: does the team roll out the collectors, issue
+Answered on 2026-11-12 (decisions 13 to 19): who sees Servers and Segments,
+server-scan's writes, the auditor role, reusing server-scan's code, which
+nodes count for free pods, and the placement override.
+
+Still open:
+
+1. **The shared Git store on the sandbox** (workstream 1): does the team move
+   the platform to Wingman's GitLab? (The user is talking to the other
+   developers.)
+2. **cluster-navigator**: does the team roll out the collectors, issue
    Wingman a token, and add a typed report endpoint?
-7. **Names**: do server-scan's `mce_name` and site names equal day1's in
-   production?
-8. **The free-pods rule**: count every schedulable node, or only those hosted
-   control planes are placed on?
-9. **Placement override**: may any admin override, and should the reason be
-   asked for?
+3. **Names**: do server-scan's `mce_name` and site names equal day1's in
+   production? (The user is checking.)
+4. **RBAC** (workstream 8): the permission list, the scopes, and which LDAP
+   groups map to which permissions; written as its design.
 
 ## Risks
 
@@ -418,8 +465,10 @@ PRs never conflict there.
 - **Two UIs for a while**: server-scan's and segments-manager's own UIs keep
   running; behaviour can drift until the team retires them.
 - **Wingman holds more power**: with server-scan's admin token, Wingman
-  becomes a privileged caller. Writes stay behind the admin check, a
-  confirmation and Wingman's audit.
+  becomes a privileged caller. Writes stay behind the admin check (later, the
+  permission of workstream 8), a confirmation and Wingman's audit.
+- **Keycloak is a new stateful service** in a disconnected install: its
+  database, backups and upgrades become part of running Wingman.
 - **Load**: the fleet rows are large and polled. One cache in day1 and the
   ETag keep this to one download per change.
 - **The public repo**: no sandbox addresses, tokens or findings about private
