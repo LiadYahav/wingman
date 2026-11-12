@@ -311,8 +311,22 @@ answer or rule changed.
 ADR-0053's amendment of 2026-11-13. §3's exclusions write and the
 per-destination deploy write are **gone** (their paths answer 404/405), and
 `ScopePanel.exclusions` lost `editable` and `problem`: the file is read and
-shown, never written. `PUT .../destinations/{cluster}/values` answers 422
-`override-scope` for the hub and for hosted clusters.
+shown, never written. `PUT .../destinations/{cluster}/values` takes an MCE,
+a hosted cluster or a UPI cluster, and answers 422 `override-scope` for the
+hub.
+
+### `PUT /addons/{team}/{addon}/defaults/{scope}/envs/{env}/values`
+
+One env's `values-<env>.yaml` of an MCE, hosted-cluster or UPI default (env:
+`prod`, `prep` or `test`; 422 `env-unknown` otherwise, `override-scope` for
+the hub). The body and the answer are those of the destination values write
+(`values: null` or `{}` deletes the file); the plan's `impact` lists every
+destination of that env it changes. The layer sits above the default's
+`values.yaml` and below each destination's `values-<name>.yaml`.
+
+`POST /merge-preview` takes `override_path`: the layer of the destination's
+stack that `override_values` replaces (422 `override-path` when it is none of
+them). The web previews an env file on a destination of that env with it.
 
 ### `POST /addons/{team}/{addon}/mce-installs`
 

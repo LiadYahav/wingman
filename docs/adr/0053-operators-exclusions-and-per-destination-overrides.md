@@ -227,11 +227,21 @@ superseding the exclusion and carve-out parts of the decision above:
   app. `domain.exclusions.set_excluded` stays for that.
 - **The per-destination deploy-config carve-out is gone** (`PUT .../destinations/{cluster}/deploy`):
   it was built on exclusion.
-- **Per-destination values stay, for MCEs and UPI clusters only**
-  (`values-<name>.yaml`, the effective values before and after). The hub is
-  one destination, its default's own values; a hosted cluster's own values
-  are its flavor's, the create form's and its page's (`override-scope`
-  refuses the others).
+- **Values per env and per destination, on the MCE, hosted-cluster and
+  UPI defaults alike.** The user, the same day: "There are also HC defaults,
+  and they work the same idea as the MCE"; the platform's own READMEs agree
+  (`defaults/hosted-clusters/` is "the hosted-cluster mirror of
+  defaults/mces/", and `defaults/upi/` the same). Each of the three layers,
+  lowest first, the default's `values.yaml`, `values-<env>.yaml` (prod, prep
+  or test: `PUT .../defaults/{scope}/envs/{env}/values`) and
+  `values-<name>.yaml` (one MCE, hosted cluster or UPI cluster:
+  `PUT .../defaults/{scope}/destinations/{cluster}/values`), below the
+  destination's MCE-wide or UPI-wide and cluster-wide files: env before
+  cluster, and the cluster wins (`domain.stacks`, checked by the oracle;
+  an env override is rendered by it too). The effective values before and
+  after come from `/merge-preview`, which takes an `override_path` for an env
+  file, previewed on a destination of that env. The hub is one destination,
+  its default's own values (`override-scope` refuses it).
 - **Deploy on specific MCEs** is new, on the MCE panel of an add-on's page
   (`POST /addons/{team}/{addon}/mce-installs`). An add-on wanted on some MCEs
   only is not a default: it is installed in each chosen MCE hub's own
@@ -245,8 +255,9 @@ superseding the exclusion and carve-out parts of the decision above:
   the usual remove and its orphaning warning. An MCE the team's repo does not
   register yet can be chosen: installing registers it, so the team's MCE
   defaults reach it too, and the plan says so.
-- **The hosted-clusters panel** is the default for every hosted cluster and
-  its values only, and says that a hosted cluster's own add-ons come from its
+- **The hosted-clusters panel** works like the MCE one (the default, its
+  values per env and per cluster) without deploying on specific hosted
+  clusters: which add-ons a hosted cluster has of its own comes from its
   flavor and the create form (a link to Flavors). A cluster's own page is
   unchanged.
 - Messages that suggested excluding (the XOR refusal of an install, the
