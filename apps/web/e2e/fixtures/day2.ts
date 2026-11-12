@@ -27,6 +27,7 @@ export const HOSTED_ID = "hosted:site1:prod:mce-a:ocp4-prod-hawk-site1";
 export const HOSTED_NAME = "ocp4-prod-hawk-site1";
 export const MCE_ID = "mce:site1:prod:mce-a";
 export const TWIN_IDS = ["hosted:site1:prod:mce-a:twin", "hosted:site2:prep:mce-b:twin"];
+export const UPI_ID = "upi:site2:prep:ocp4-dok-site2";
 
 const HOSTED_FOLDER = `sites/site1/prod/mces/mce-a/${HOSTED_NAME}`;
 
@@ -172,7 +173,7 @@ const destinations: Destination[] = [
   destination("hub", { teams: ["platform", "observability"] }),
   destination(MCE_ID),
   destination(HOSTED_ID, { teams: ["platform", "observability"] }),
-  destination("upi:site2:prep:ocp4-dok-site2", { site: "site2", env: "prep" }),
+  destination(UPI_ID, { site: "site2", env: "prep" }),
   ...TWIN_IDS.map((id) => destination(id)),
 ];
 

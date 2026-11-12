@@ -1,8 +1,7 @@
 /**
  * The day2 pages against the service's shapes (types/day2.ts): a destination's
  * charts, the values preview with provenance, install/update/remove/bulk, the
- * destinations and lints lists, and the catalog. Every API call is mocked
- * (e2e/fixtures/day2.ts).
+ * lints list, and the catalog. Every API call is mocked (e2e/fixtures/day2.ts).
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -14,6 +13,7 @@ import {
   ORPHAN_NOTE,
   SYNC_NOTE,
   TWIN_IDS,
+  UPI_ID,
   hostedCharts,
   mockDay2World,
   problem,
@@ -252,6 +252,18 @@ test.describe("A destination's charts", () => {
     await expect(page).toHaveURL(new RegExp(`/clusters/${encodeURIComponent(TWIN_IDS[1])}/addons`));
   });
 
+  test("the back link goes to a hosted cluster's page, and from any other kind to the add-ons", async ({ page }) => {
+    const back = page.getByRole("link", { name: "Back", exact: true });
+    await go(page, HOSTED_PAGE);
+    await expect(installedCard(page, "platform", "cert-manager")).toBeVisible();
+    await expect(back).toHaveAttribute("href", `/clusters/${HOSTED_NAME}?site=site1&mce=mce-a`);
+    for (const id of ["hub", MCE_ID, UPI_ID]) {
+      await go(page, `/clusters/${encodeURIComponent(id)}/addons`);
+      await expect(page.getByTestId("installed-empty")).toBeVisible();
+      await expect(back).toHaveAttribute("href", "/addons");
+    }
+  });
+
   test("the hub is a destination too, without an OCP version", async ({ page }) => {
     await go(page, "/clusters/hub/addons");
     await expect(page.getByRole("heading", { name: /hub/ })).toBeVisible();
@@ -262,15 +274,10 @@ test.describe("A destination's charts", () => {
 });
 
 test.describe("Destinations", () => {
-  test("lists all four kinds and filters by kind", async ({ page }) => {
+  test("the removed Destinations page's link opens the clusters, and the sidebar has no entry", async ({ page }) => {
     await go(page, "/destinations");
-    const rows = page.locator("tbody tr");
-    await expect(rows).toHaveCount(6);
-    await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: /MCE/ }).click();
-    await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toContainText(MCE_ID);
-    await rows.first().getByRole("link").click();
-    await expect(page).toHaveURL(new RegExp(`/clusters/${encodeURIComponent(MCE_ID)}/addons`));
+    await expect(page).toHaveURL(/\/clusters$/);
+    await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Destinations" })).toHaveCount(0);
   });
 });
 
