@@ -31,7 +31,7 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0008](0008-ty-type-checker.md) | ty is the type checker, as in server-scan |
 | [0009](0009-settings-fail-closed.md) | Settings refuse insecure or fake-in-production configurations at start-up |
 | [0010](0010-metrics-are-a-contract.md) | Metrics follow one catalogue with bounded labels, served off the public Route |
-| [0011](0011-per-replica-read-cache.md) | GitLab reads are cached per replica for seconds; writes clear what they made stale (files and trees: ADR-0035) |
+| [0011](0011-per-replica-read-cache.md) | GitLab reads are cached per replica for seconds; writes clear what they made stale (files and trees: ADR-0035; answered stale while refreshing: ADR-0041) |
 | [0012](0012-day1-values-file-and-key-ownership.md) | A cluster file is a chart values file; people and automation own disjoint keys |
 | [0013](0013-sandboxed-template-and-spec-presets.md) | The cluster file is rendered from the shared template in a sandbox; specs are value presets (its release list superseded by ADR-0034) |
 | [0014](0014-cluster-and-mce-naming-rules.md) | New cluster names follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing ones are flagged, not hidden |
@@ -59,3 +59,4 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0036](0036-day1-drift-is-locked-values-and-missing-addons.md) | Day1 drift is the flavor's locked values the file does not hold, and its missing add-ons; unknown is never in sync |
 | [0037](0037-import-and-sync-edit-the-cluster-file-text.md) | Existing clusters join a flavor by one MR that writes only the link and sync to it by one MR each, removals confirmed; cluster files are edited as text, checked, never round-tripped |
 | [0038](0038-cluster-nodes-from-server-scan-and-the-uninstall-workflow.md) | A cluster's nodes come from its MCE by NodePool, joined to server-scan's servers; Wingman starts the platform's uninstall workflow on one and shows its run, and the procedure and its checks stay the workflow's |
+| [0041](0041-reads-refresh-in-the-background.md) | Reads are answered from cache while one fetch refreshes them (never older than a minute), a merge costs a history lookup only for the files it changed, a new replica warms itself, and live status shares the hub cache |

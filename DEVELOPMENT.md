@@ -110,7 +110,9 @@ variable is listed in the README's [Environment Variables](README.md#environment
 1. **The rule**, if there is one, goes in `domain/`; **the use case** in `application/`, over
    the ports in `ports.py` (GitLab through `GitLabPort`). GitLab reads go through the service's
    cached repositories, which use `TtlCache.get_or_fetch` (`wingman_core.infrastructure.cache`)
-   with the service's TTL (ADR-0011); a write clears what it changed.
+   with the service's TTL (ADR-0011); a write clears what it changed. A read every page waits
+   on can pass `stale=stale_for(ttl)` to be answered while it refreshes (ADR-0041). Measure a
+   read path at production size with `scripts/dev/bench_day1_reads.py` (docs/ops/performance.md).
 2. **Wire it** in `main.py`: day1's `build_context` builds the `Day1Context`
    (`api/deps.py`); day2's `Day2Services.build` (`application/services.py`) builds day2's.
 3. **The router** goes in `api/v1/`. It takes the use cases from `Context` (day1, `api/deps.py`)

@@ -1,7 +1,7 @@
 # ADR-0038: Cluster nodes come from the MCE by NodePool, joined to server-scan; uninstall starts the platform's workflow
 
 Date: 2026-11-11
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0041 (live status reads the hub through the nodes view's cache)
 
 ## Context
 
@@ -49,7 +49,8 @@ has no auth and no field for who asked.
     §4; the chart README has the ClusterRole). Without the grant the route
     answers 502, naming the denied path.
   - The view caches the reads for at most 10 s per replica (ADR-0011). Live
-    status keeps reading the hub directly.
+    status keeps reading the hub directly (superseded by ADR-0041: live
+    status shares the same cache).
 - **The join is pure** (`wingman_day1.domain.node_pools`), and each rule of
   `docs/notes/2026-11-11-cluster-nodes-api.md` §1 is one function:
   - A Machine belongs to the NodePool its `hypershift.openshift.io/nodePool`
