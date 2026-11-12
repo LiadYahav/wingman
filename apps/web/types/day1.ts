@@ -213,22 +213,44 @@ export interface OpenShiftVersions {
 
 // ── MCE placement (docs/notes/2026-11-12-mce-placement-api.md, ADR-0050) ─────
 
-/** A placement check: the version, the free pods, whether Wingman could read the MCE. */
+/** A placement check: the version, the free pods, the servers of each node type, whether Wingman could read the MCE. */
 export interface PlacementCheck {
-  check: "version" | "free_pods" | "readable";
+  check: "version" | "free_pods" | "servers" | "readable";
   status: "pass" | "fail" | "unknown";
   /** One sentence in plain words. */
   detail: string;
 }
 
-/** The pods an MCE has free, counted on its Ready, schedulable, non-control-plane nodes. */
+/** What the new cluster needs of one node type (an InfraEnv): its nodepools' replicas, summed. */
+export interface PlacementNeed {
+  infra_env: string;
+  replicas: number;
+}
+
+/** One node type's part of a candidate's `servers` check. */
+export interface PlacementNodeType {
+  infra_env: string;
+  needed: number;
+  /** `null` when the MCE's Agents could not be read. */
+  free_agents: number | null;
+  /** `null` when server-scan could not be read, or is not configured. */
+  healthy: number | null;
+  /** Free Agents server-scan has no server for. */
+  not_in_server_scan: number;
+  status: "pass" | "fail" | "unknown";
+  /** E.g. "dell-r660: 4 healthy free of 3 needed". */
+  detail: string;
+}
+
+/** The pods an MCE has free, counted on its workers: Ready, schedulable, untainted, neither control-plane nor infra. */
 export interface PlacementPods {
   /** Never below 0. */
   free: number;
   allocatable: number;
   used: number;
   nodes_counted: number;
-  nodes_excluded: { control_plane: number; not_ready: number; unschedulable: number };
+  /** Each left-out node once, by the first reason: control-plane, infra, not Ready, cordoned, tainted. */
+  nodes_excluded: { control_plane: number; infra: number; not_ready: number; unschedulable: number; tainted: number };
 }
 
 /** One candidate MCE: its numbers, its checks, and where it ranks. */
@@ -242,7 +264,10 @@ export interface PlacementCandidate {
   rank: number | null;
   /** For an eligible candidate that is not the pick: the first ranking step the pick beats it on. */
   behind_on: "owner_clusters" | "clusters" | "spare_servers" | "name" | null;
+  /** Always the four, in this order: version, free_pods, servers, readable. */
   checks: PlacementCheck[];
+  /** One entry per need: the servers of that node type this MCE has free for it. */
+  node_types: PlacementNodeType[];
   /** The releases this MCE hosts, newest first. */
   versions: string[];
   /** Cluster files plus open create merge requests. */
@@ -266,6 +291,8 @@ export interface Placement {
   owner: string | null;
   flavor: string | null;
   min_free_pods: number;
+  /** The summed needs the `servers` check used, by InfraEnv; empty when no nodepool names a node type yet. */
+  needs: PlacementNeed[];
   /** Every version some candidate hosts, newest first. */
   versions: string[];
   /** `null` when no candidate passes every check (`problems` says why). */

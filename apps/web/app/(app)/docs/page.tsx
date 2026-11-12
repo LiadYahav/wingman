@@ -711,9 +711,11 @@ spec:
               <p className="mt-2">
                 Where Wingman reads the MCEs, it <strong>picks the MCE</strong> instead: choose the site,{" "}
                 <InlineCode>prod</InlineCode> or <InlineCode>prep</InlineCode> and the version (the releases the
-                candidate MCEs host), and enter the owner&apos;s mador below. A candidate must host the version, have
-                enough free pods for a control plane, and answer Wingman; among those, the pick has the fewest clusters
-                of this owner, then the fewest clusters, then the most usable spare servers. The form shows the pick
+                candidate MCEs host), and enter the owner&apos;s mador and the nodepools below. A candidate must host
+                the version, have enough free pods for a control plane on its workers, have enough healthy free
+                servers of each node type (InfraEnv) the nodepools use, and answer Wingman; among those, the pick has
+                the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers. The
+                pick can change once the nodepools have their InfraEnvs. The form shows the pick
                 and why, and every candidate&apos;s numbers; one that fails a check says why and cannot be chosen. An
                 admin may choose another MCE that passes, with a reason; the merge request records the numbers, the
                 pick and the reason. The name, the InfraEnvs and the request follow the chosen MCE.

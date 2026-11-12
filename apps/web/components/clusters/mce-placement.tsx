@@ -1,19 +1,19 @@
 "use client";
 
 import { useId } from "react";
-import { AlertTriangle, CircleCheck, CircleHelp, CircleX, Info, RotateCcw, Sparkles } from "lucide-react";
+import { AlertTriangle, CircleCheck, CircleHelp, CircleX, Info, RotateCcw, Server, Sparkles } from "lucide-react";
 import { ProblemList } from "@/components/common/problem-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BEHIND_ON, REASON_MAX, unmetChecks } from "@/lib/placement";
 import { cn } from "@/lib/utils";
-import type { Placement, PlacementCandidate } from "@/types";
+import type { Placement, PlacementCandidate, PlacementNodeType, PlacementPods } from "@/types";
 
 /** The candidates' columns: the label shown above a number on a phone, and in the header row from `sm` up. */
 const COLUMNS = [
   { key: "owner", label: "Owner", title: "This owner's clusters on the MCE (fewest first)" },
   { key: "clusters", label: "Clusters", title: "Cluster files, plus open merge requests that create one there" },
   { key: "spare", label: "Spare", title: "Usable spare servers server-scan registers to the MCE (most first), of all its spare" },
-  { key: "pods", label: "Free pods", title: "Allocatable pods less the pods running, on Ready, schedulable, non-control-plane nodes" },
+  { key: "pods", label: "Free pods", title: "Allocatable pods less the pods running, on the workers: Ready, schedulable, untainted, neither control-plane nor infra" },
 ] as const;
 
 const ROW = "grid grid-cols-[1.25rem_minmax(0,1fr)] sm:grid-cols-[1.25rem_minmax(0,1fr)_repeat(4,4.75rem)] gap-x-3";
@@ -189,10 +189,28 @@ export function MCEPlacementPanel({
         <p className="flex items-start gap-1.5">
           <Info className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
           <span>
-            An MCE must host the version, have at least {placement.min_free_pods} free pods and answer Wingman. Among
-            those: fewest clusters of this owner, then fewest clusters, then most usable spare servers.
+            An MCE must host the version, have at least {placement.min_free_pods} free pods on its workers and enough
+            healthy free servers of each node type the nodepools use, and answer Wingman. Among those: fewest clusters
+            of this owner, then fewest clusters, then most usable spare servers.
           </span>
         </p>
+        {placement.needs.length > 0 ? (
+          <p data-testid="placement-needs" className="flex items-start gap-1.5">
+            <Server className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
+            <span className="min-w-0 [overflow-wrap:anywhere]">
+              Servers counted for the nodepools:{" "}
+              {placement.needs.map((need) => `${need.replicas} × ${need.infra_env}`).join(", ")}.
+            </span>
+          </p>
+        ) : (
+          <p data-testid="placement-no-needs" className="flex items-start gap-1.5">
+            <Server className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
+            <span>
+              No nodepool names a node type yet, so servers are not checked. Once the nodepools have their InfraEnvs,
+              each MCE&apos;s free servers of those types are, and the pick may change.
+            </span>
+          </p>
+        )}
         {scanError && (
           <p data-testid="placement-server-scan" className="flex items-start gap-1.5">
             <Info className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
@@ -225,9 +243,8 @@ function CandidateRow({
   const unmet = unmetChecks(candidate);
   const pods = candidate.pods;
   const podsBreakdown = pods
-    ? `${pods.allocatable} allocatable less ${pods.used} in use, on ${pods.nodes_counted} node${pods.nodes_counted === 1 ? "" : "s"}; ` +
-      `left out: ${pods.nodes_excluded.control_plane} control-plane, ${pods.nodes_excluded.not_ready} not ready, ` +
-      `${pods.nodes_excluded.unschedulable} unschedulable`
+    ? `${pods.allocatable} allocatable less ${pods.used} in use, on ${pods.nodes_counted} worker${pods.nodes_counted === 1 ? "" : "s"}; ` +
+      leftOut(pods.nodes_excluded)
     : "Unknown: Wingman could not read the MCE";
   return (
     <label
@@ -273,7 +290,8 @@ function CandidateRow({
               </span>
             </p>
           ) : (
-            unmet.map((check) => (
+            // The servers check is told per node type, below
+            unmet.filter((check) => check.check !== "servers" || candidate.node_types.length === 0).map((check) => (
               <p
                 key={check.check}
                 data-testid={`placement-check-${check.check}`}
@@ -291,6 +309,7 @@ function CandidateRow({
               </p>
             ))
           )}
+          {candidate.node_types.length > 0 && <NodeTypes types={candidate.node_types} />}
           {!candidate.spare && candidate.spare_detail && !hideSpareDetail && (
             <p className="text-muted-foreground break-words">{candidate.spare_detail}</p>
           )}
@@ -326,6 +345,52 @@ function CandidateRow({
         </Cell>
       </div>
     </label>
+  );
+}
+
+/** Why nodes were left out of the free pods, in the API's order; only the reasons that apply. */
+const LEFT_OUT: [keyof PlacementPods["nodes_excluded"], string][] = [
+  ["control_plane", "control-plane"],
+  ["infra", "infra"],
+  ["not_ready", "not Ready"],
+  ["unschedulable", "cordoned"],
+  ["tainted", "tainted"],
+];
+
+function leftOut(excluded: PlacementPods["nodes_excluded"]): string {
+  const parts = LEFT_OUT.filter(([key]) => excluded[key] > 0).map(([key, label]) => `${excluded[key]} ${label}`);
+  return parts.length > 0 ? `left out: ${parts.join(", ")}` : "no node left out";
+}
+
+/**
+ * A candidate's servers, one line per node type the nodepools use: the
+ * healthy free servers of that type against what the new cluster needs. A
+ * type that fails or is unknown says why the MCE is not offered.
+ */
+function NodeTypes({ types }: { types: PlacementNodeType[] }) {
+  return (
+    <ul data-testid="placement-node-types" aria-label="Servers of each node type" className="space-y-0.5">
+      {types.map((type) => (
+        <li
+          key={type.infra_env}
+          data-testid={`placement-node-type-${type.infra_env}`}
+          data-status={type.status}
+          className={cn("flex items-start gap-1", type.status === "fail" ? "text-destructive" : "text-muted-foreground")}
+        >
+          {type.status === "fail" ? (
+            <CircleX className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
+          ) : type.status === "unknown" ? (
+            <CircleHelp className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
+          ) : (
+            <Server className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
+          )}
+          <span className="min-w-0 [overflow-wrap:anywhere]">
+            {type.status === "unknown" && "Unknown: "}
+            {type.detail}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

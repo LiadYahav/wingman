@@ -31,7 +31,8 @@ import { ProvisionRunPanel } from "@/components/clusters/provision-run";
 import { MCEPlacementPanel } from "@/components/clusters/mce-placement";
 import { isProvisionRun, useProvisioner } from "@/lib/provision";
 import {
-  PLACEMENT_ENVS, REASON_MAX, changedPick, cleanReason, placementOwner, useDebounced, usePlacement, type PlacementEnv,
+  PLACEMENT_ENVS, REASON_MAX, changedPick, cleanReason, placementNeeds, placementOwner, useDebounced, usePlacement,
+  type PlacementEnv,
 } from "@/lib/placement";
 import {
   DynamicVariableForm, FlavorBadge, fieldInputClassName, type FieldInputContext, type FieldValue, type FormValues,
@@ -781,14 +782,23 @@ export default function NewClusterPage() {
   // The owner placement ranks by: the mador, or the flavor's when it locks one (ADR-0028)
   const mador = placementOwner(locks.values.has(OWNER_MADOR) ? locks.values.get(OWNER_MADOR) : formValues[OWNER_MADOR]);
   const rankOwner = useDebounced(mador, OWNER_DEBOUNCE_MS);
+  // The servers the cluster needs: each nodepool's InfraEnv and the replicas the form shows (a ratio's
+  // included, a lock's applied), as `need`s; debounced as one string, so a new array is not a new read
+  const needsKey = useMemo(
+    () => placementNeeds(requestVariables(formValues, locks)[NODEPOOLS]).join(" "),
+    [formValues, locks]
+  );
+  const rankNeedsKey = useDebounced(needsKey, OWNER_DEBOUNCE_MS);
+  const rankNeeds = useMemo(() => (rankNeedsKey ? rankNeedsKey.split(" ") : []), [rankNeedsKey]);
   const placementRead = usePlacement(
     placementMode && versionsFresh && ocpVersion.trim()
-      ? { site, env, version: ocpVersion.trim(), owner: rankOwner, flavor: flavorName }
+      ? { site, env, version: ocpVersion.trim(), owner: rankOwner, flavor: flavorName, needs: rankNeeds }
       : null
   );
   const placement = placementRead.data ?? undefined;
   // The numbers for the previous inputs stay on screen while the new ones load
-  const placementPending = placementRead.isLoading || placementRead.isPlaceholderData || mador !== rankOwner;
+  const placementPending =
+    placementRead.isLoading || placementRead.isPlaceholderData || mador !== rankOwner || needsKey !== rankNeedsKey;
   const pick = placement?.pick ?? null;
   // An admin's other choice counts while it passes every check and is not the pick (decision 15)
   const overridden =

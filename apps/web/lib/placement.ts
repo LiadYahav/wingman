@@ -22,14 +22,22 @@ export type PlacementEnv = (typeof PLACEMENT_ENVS)[number];
 export const REASON_MAX = 500;
 
 const OWNER = /^[0-9]{1,10}$/;
+/** An InfraEnv is a Kubernetes name: one DNS-1123 label. */
+const INFRA_ENV = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
+/** The replicas day1 accepts in a need. */
+export const MAX_NEED_REPLICAS = 1000;
 
-/** What the form asks placement about. Only a valid owner (1 to 10 digits) is sent. */
+/**
+ * What the form asks placement about. Only a valid owner (1 to 10 digits) is
+ * sent; `needs` are `<infra_env>:<replicas>`, one per nodepool (day1 sums a type).
+ */
 export interface PlacementQuery {
   site: string;
   env: string;
   version?: string;
   owner?: string;
   flavor?: string;
+  needs?: string[];
 }
 
 /** The owner to rank by: the mador as typed, when it is a number day1 accepts; else none. */
@@ -39,10 +47,36 @@ export function placementOwner(value: unknown): string | undefined {
   return OWNER.test(text) ? text : undefined;
 }
 
-/** `GET /api/day1/placement?...` for `query`; empty parameters are left out. */
+/**
+ * The servers the new cluster needs, as `need` values: one per nodepool that
+ * names an InfraEnv (a DNS label) with 1 to 1000 replicas, in the form's order.
+ * A nodepool still being filled in is left out until it is both.
+ */
+export function placementNeeds(nodepools: unknown): string[] {
+  if (!Array.isArray(nodepools)) return [];
+  const needs: string[] = [];
+  for (const pool of nodepools) {
+    if (!pool || typeof pool !== "object" || Array.isArray(pool)) continue;
+    const { infra_env: infraEnv, replicas } = pool as Record<string, unknown>;
+    const name = typeof infraEnv === "string" ? infraEnv.trim() : "";
+    const count = typeof replicas === "number" ? replicas : /^\d+$/.test(String(replicas ?? "").trim()) ? Number(replicas) : NaN;
+    if (INFRA_ENV.test(name) && Number.isInteger(count) && count >= 1 && count <= MAX_NEED_REPLICAS) {
+      needs.push(`${name}:${count}`);
+    }
+  }
+  return needs;
+}
+
+/**
+ * `GET /api/day1/placement?...` for `query`; empty parameters are left out, each
+ * need is one `need`. With no need, an empty `need=` tells day1 the nodepools
+ * name no node type yet, so it does not fall back to the flavor's presets.
+ */
 export function placementPath(query: PlacementQuery): string {
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) if (value) params.set(key, value);
+  const { needs = [], ...single } = query;
+  for (const [key, value] of Object.entries(single)) if (value) params.set(key, value);
+  for (const need of needs.length > 0 ? needs : [""]) params.append("need", need);
   return `/api/day1/placement?${params.toString()}`;
 }
 
