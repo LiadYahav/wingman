@@ -372,7 +372,7 @@ function NodepoolCard({
 
         {draft.ratio.length > 0 && (
           <div id={fieldId(ratioPath)} className="scroll-mt-28 space-y-1.5" data-testid={`nodepool-${index}-ratio`}>
-            <label htmlFor={`${fieldId(ratioPath)}-input`} className="text-sm font-medium">
+            <label htmlFor={`${fieldId(ratioPath)}-input`} className="block text-sm font-medium">
               Ratio
             </label>
             <input
@@ -386,7 +386,11 @@ function NodepoolCard({
               onChange={(e) => update((d) => setPoolRatio(d, index, e.target.value))}
             />
             <p id={`${fieldId(ratioPath)}-hint`} className="text-xs text-muted-foreground">
-              Its part of each size: replicas are this times the size a cluster picks. Replicas above stay the size&apos;s preset.
+              This nodepool&apos;s share of the cluster&apos;s size
+              {/^\d+$/.test(String(draft.ratio[index] ?? "")) && Number(draft.ratio[index]) >= 1
+                ? `: at size 2 it gets ${2 * Number(draft.ratio[index])} replicas`
+                : ""}
+              . Replicas presets that follow the ratio set the size a new cluster starts at (else 1).
             </p>
             {ratioProblems.length > 0 && (
               <ul role="alert" className="space-y-0.5 text-xs text-destructive">
