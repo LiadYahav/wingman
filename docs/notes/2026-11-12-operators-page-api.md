@@ -275,6 +275,9 @@ destination is excluded from the default and gets its own
   `needs_confirmation` and its `adopted[]` item has `exclusion_removed: true`.
 - Fleet-default values with `null` show as changes (`after: null`).
 - A values file deleted after the read is a 409, not silently created again.
+- `DELETE /clusters/{cluster}/addons/{team}/{addon}` of a fleet default
+  (422 `fleet-default-remove`) points at the operator's page:
+  `details.operator = "/teams/<team>/operators/<op>"`.
 - `ignore_differences: []` removes the key.
 - Teams: a team whose access could not be read is read-only with
   `access_role: "unknown"` and a reason; the others are unaffected (one

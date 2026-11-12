@@ -570,12 +570,14 @@ class ChangeService:
             scope = app.ref.defaults_scope
             raise ChangeRefusedError(
                 f"{chart} reaches {summary.ref.name} as a fleet default of {team} ({app.folder}/). "
-                f"To keep it off this cluster, add {app.ref.exclusion_key} under "
-                f"exclusions.{chart} in {layout.exclusions_file(scope)} (runbook R10); that "
-                "orphans the workload too.",
+                f"To keep it off this cluster, exclude it on the operator's page ({team}'s "
+                f"Operators, {chart}, its {scope} default), which adds {app.ref.exclusion_key} "
+                f"under exclusions.{chart} in {layout.exclusions_file(scope)} (ADR-0053); that "
+                "orphans the workload too (runbook R10).",
                 details={
                     "rule": "fleet-default-remove",
                     "path": str(layout.exclusions_file(scope)),
+                    "operator": f"/teams/{team}/operators/{chart}",
                 },
             )
         deploy = await load_deploy(self._sigs, state.team, state.repo.tree, app)

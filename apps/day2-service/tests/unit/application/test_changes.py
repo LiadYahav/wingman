@@ -404,6 +404,7 @@ async def test_remove_refuses_a_fleet_default_and_points_at_exclusions(
     assert refused.value.details == {
         "rule": "fleet-default-remove",
         "path": "defaults/mces/exclusions.yaml",
+        "operator": "/teams/redbull/operators/dhcp-api-token",
     }
 
 
