@@ -13,7 +13,12 @@ clusters, then most usable spare servers (an unknown count after every
 known one), then name. The first is the pick.
 
 Nothing is reserved and there is no cap: two creates at the same moment can
-get the same pick, and both are accepted. An admin may choose another
+get the same pick, and both are accepted.
+
+Placement always runs. Without live MCE reads (``CLUSTER_STATUS_ENABLED``
+off) it decides on Git and server-scan alone: the free pods, the servers of
+each node type and the hub read are ``not_checked``, which does not block a
+pick, and the form and the merge request say so (ADR-0050's amendment). An admin may choose another
 candidate that passes every check, with a reason; the choice is checked
 again at create (:func:`admit`). Everything here is pure: the counts come in
 as :class:`McePicture`.
@@ -53,6 +58,12 @@ class Status(StrEnum):
     PASS = "pass"  # noqa: S105 - a check's outcome, not a password
     FAIL = "fail"
     UNKNOWN = "unknown"
+    NOT_CHECKED = "not_checked"
+    """Wingman did not look: live MCE reads are off. Unlike unknown, it does not block."""
+
+
+LIVE_READS_OFF: Final = "Not checked: live MCE reads are off (CLUSTER_STATUS_ENABLED=false)."
+"""Why a check that needs the MCE's own API was not made."""
 
 
 class Step(StrEnum):
@@ -119,6 +130,8 @@ class McePicture:
     """Per need, the MCE's healthy free servers of that type."""
     agents_error: str | None = None
     """Why the MCE's Agents could not be read, when they could not."""
+    live: bool = True
+    """``False`` when live MCE reads are off: nothing was asked of the MCE itself."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,8 +152,8 @@ class Candidate:
 
     @property
     def eligible(self) -> bool:
-        """Whether every check passes."""
-        return all(check.status is Status.PASS for check in self.checks)
+        """Whether every check passes, or was not made because live MCE reads are off."""
+        return all(check.status in (Status.PASS, Status.NOT_CHECKED) for check in self.checks)
 
     @property
     def picked(self) -> bool:
@@ -149,8 +162,17 @@ class Candidate:
 
     @property
     def failures(self) -> tuple[str, ...]:
-        """Each check that did not pass, as ``<check>: <why>``."""
-        return tuple(f"{c.check}: {c.detail}" for c in self.checks if c.status is not Status.PASS)
+        """Each check that failed or is unknown, as ``<check>: <why>``."""
+        return tuple(
+            f"{c.check}: {c.detail}"
+            for c in self.checks
+            if c.status not in (Status.PASS, Status.NOT_CHECKED)
+        )
+
+    @property
+    def not_checked(self) -> tuple[Check, ...]:
+        """The checks Wingman did not make (live MCE reads are off)."""
+        return tuple(c.check for c in self.checks if c.status is Status.NOT_CHECKED)
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +186,8 @@ class Placement:
     """Every version some candidate hosts, newest first."""
     problems: tuple[str, ...] = ()
     server_scan_error: str | None = None
+    live_reads: bool = True
+    """``False`` when live MCE reads are off: free pods and servers were not checked."""
 
     @property
     def pick(self) -> str | None:
@@ -258,7 +282,17 @@ def readable_check(hub_error: str | None) -> CheckResult:
 
 
 def checks_of(picture: McePicture, inputs: PlacementInputs) -> tuple[CheckResult, ...]:
-    """Every required check of one candidate, in order."""
+    """Every required check of one candidate, in order.
+
+    Without live MCE reads the three that need the MCE's own API are not made.
+    """
+    if not picture.live:
+        return (
+            version_check(picture.versions, inputs.version),
+            CheckResult(Check.FREE_PODS, Status.NOT_CHECKED, LIVE_READS_OFF),
+            CheckResult(Check.SERVERS, Status.NOT_CHECKED, LIVE_READS_OFF),
+            CheckResult(Check.READABLE, Status.NOT_CHECKED, LIVE_READS_OFF),
+        )
     return (
         version_check(picture.versions, inputs.version),
         free_pods_check(picture.pods, inputs.min_free_pods),
@@ -305,8 +339,13 @@ def place(
     *,
     problems: Sequence[str] = (),
     server_scan_error: str | None = None,
+    live_reads: bool = True,
 ) -> Placement:
-    """Check every candidate, rank those that pass, and pick the first."""
+    """Check every candidate, rank those that pass, and pick the first.
+
+    ``live_reads`` is ``False`` when the MCEs' own APIs were not asked (every
+    picture then says so too).
+    """
     judged = [Candidate(p, checks_of(p, inputs)) for p in pictures]
     owner = inputs.owner is not None
     eligible = sorted((c for c in judged if c.eligible), key=lambda c: _rank_key(c, owner=owner))
@@ -330,6 +369,7 @@ def place(
         versions=newest_first(v for c in judged for v in c.picture.versions.versions),
         problems=(*found, *problems),
         server_scan_error=server_scan_error,
+        live_reads=live_reads,
     )
 
 
@@ -463,12 +503,19 @@ def _servers_cell(node_types: Sequence[NodeTypeSupply]) -> str:
 
 
 def _checks_cell(candidate: Candidate) -> str:
-    if candidate.eligible:
-        return "pass"
-    failed = "; ".join(
-        c.detail.rstrip(".") for c in candidate.checks if c.status is not Status.PASS
+    unchecked = (
+        f" ({', '.join(str(c).replace('_', ' ') for c in candidate.not_checked)} not checked)"
+        if candidate.not_checked
+        else ""
     )
-    return f"not offered: {failed}".replace("|", "/")
+    if candidate.eligible:
+        return f"pass{unchecked}"
+    failed = "; ".join(
+        c.detail.rstrip(".")
+        for c in candidate.checks
+        if c.status not in (Status.PASS, Status.NOT_CHECKED)
+    )
+    return f"not offered: {failed}{unchecked}".replace("|", "/")
 
 
 def describe_placement(admission: Admission) -> str:
@@ -490,6 +537,13 @@ def describe_placement(admission: Admission) -> str:
         ]
     else:
         lines.append(f"Wingman picked `{admission.chosen}`: {placement.why}")
+    if not placement.live_reads:
+        lines += [
+            "",
+            "Free pods and servers were **not checked**: live MCE reads are off "
+            "(`CLUSTER_STATUS_ENABLED=false`). Wingman decided on the day1 repo and "
+            "server-scan only.",
+        ]
     lines += [
         "",
         f"Site `{inputs.site}`, {inputs.env}, OpenShift {inputs.version or '?'}, owner "
@@ -520,10 +574,16 @@ def describe_placement(admission: Admission) -> str:
             if picture.spare is None
             else f"{picture.spare.usable} ({picture.spare.total})"
         )
-        free = "unknown" if picture.pods is None else str(picture.pods.free)
+        free = (
+            "not checked"
+            if not picture.live
+            else "unknown"
+            if picture.pods is None
+            else str(picture.pods.free)
+        )
         owner = "—" if inputs.owner is None else _cell(picture.owner_clusters)
         checks = _checks_cell(candidate)
-        servers = _servers_cell(picture.node_types)
+        servers = _servers_cell(picture.node_types) if picture.live else "not checked"
         lines.append(
             f"| {name} | {owner} | {picture.clusters} | {spare} | {free} | {servers} | {checks} |"
         )

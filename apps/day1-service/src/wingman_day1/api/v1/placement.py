@@ -1,8 +1,9 @@
 """``/api/day1/placement``: where a new hosted cluster goes, and why (ADR-0050).
 
 Any signed-in user may ask; creating still needs an admin, and create checks
-the chosen MCE against the same rule. 501 when the MCE hubs cannot be read
-(live status off): the form then asks for the MCE as before.
+the chosen MCE against the same rule. With live status off it still answers,
+from the day1 repo and server-scan, with the free pods and servers
+``not_checked`` (ADR-0050's amendment).
 """
 
 from __future__ import annotations

@@ -86,9 +86,6 @@ async function setup(page: Page, mode: "merge-request" | "workflow") {
   await page.route("**/api/day1/specs/template/schema", (r) => json(r, SCHEMA));
   await page.route("**/api/day1/sites", (r) => json(r, ["site1"]));
   await page.route(/\/api\/day1\/mces(\?.*)?$/, (r) => json(r, MCES));
-  await page.route("**/api/day1/mces/*/openshift-versions", (r) =>
-    json(r, { mce: "ocp4-prod-mce-site1-a", versions: ["4.16.27"], problems: [] })
-  );
   await page.route("**/api/day1/mces/*/infraenvs", (r) =>
     json(r, problem(501, "FEATURE_DISABLED", "Live cluster status is disabled"), 501)
   );
@@ -104,8 +101,9 @@ async function review(page: Page) {
   const form = new ClusterNewPage(page);
   await form.goto();
   await form.chooseSpec("rcs");
-  await form.selectSite("site1");
-  await form.selectMce("ocp4-prod-mce-site1-a");
+  // Wingman picks ocp4-prod-mce-site1-a (the shared placement mock), whose name day1 suggests
+  await form.place({ site: "site1", env: "prod", version: "4.16.27" });
+  await expect(form.placementPickName).toHaveText("ocp4-prod-mce-site1-a");
   await expect(form.nameInput).toHaveValue(NAME);
   await form.templateInput("1234").fill("1234");
   await form.templateInput("56").fill("56");

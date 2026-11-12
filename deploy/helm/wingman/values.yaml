@@ -84,10 +84,11 @@ day1:
   # or "workflow" (Wingman starts the platform's provision-cluster workflow,
   # which opens it; needs workflows.url, which needs serverScan.url).
   provisioner: merge-request
-  # MCE placement (ADR-0050), on with clusterStatus.enabled: Wingman picks a new
-  # cluster's MCE. The cost of one hosted control plane: an MCE is offered only
-  # with at least this many free pods (allocatable less in use) on its workers
+  # MCE placement (ADR-0050): Wingman picks a new cluster's MCE. The cost of one
+  # hosted control plane: with clusterStatus.enabled, an MCE is offered only with
+  # at least this many free pods (allocatable less in use) on its workers
   # (masters, infra nodes and tainted, cordoned or NotReady nodes left out).
+  # Without live status the free pods are not checked.
   placementMinFreePods: 70
 day2:
   cacheTtlSeconds: 15     # GitLab reads, per replica (ADR-0011; at most 60)

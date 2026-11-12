@@ -16,6 +16,7 @@ from wingman_day1.domain.mce_capacity import (
 from wingman_day1.domain.names import Env
 from wingman_day1.domain.openshift_versions import OpenShiftVersions
 from wingman_day1.domain.placement import (
+    LIVE_READS_OFF,
     MAX_REASON,
     Admission,
     Candidate,
@@ -378,6 +379,66 @@ def test_the_agents_read_error_is_said_when_it_makes_the_check_unknown() -> None
     )
     (candidate,) = place(NEEDS, [unread]).candidates
     assert servers(candidate)[1].endswith("Its token may not list Agents (403).")
+
+
+# ── Without live MCE reads (ADR-0050's amendment) ────────────────────────────
+
+
+def unread(mce: str, **changes: object) -> McePicture:
+    """A candidate as Wingman sees it with live status off: Git and server-scan only."""
+    return picture(mce, pods=None, live=False, **changes)
+
+
+def test_without_live_reads_the_mce_checks_are_not_checked_and_do_not_block() -> None:
+    placement = place(
+        replace(INPUTS, needs=((DELL, 6),)), [unread(A, clusters=4), unread(B)], live_reads=False
+    )
+    assert placement.live_reads is False
+    assert placement.pick == B
+    for candidate in placement.candidates:
+        assert statuses(candidate) == {
+            Check.VERSION: Status.PASS,
+            Check.FREE_PODS: Status.NOT_CHECKED,
+            Check.SERVERS: Status.NOT_CHECKED,
+            Check.READABLE: Status.NOT_CHECKED,
+        }
+        assert candidate.eligible
+        assert candidate.failures == ()
+        assert candidate.not_checked == (Check.FREE_PODS, Check.SERVERS, Check.READABLE)
+        assert {c.detail for c in candidate.checks[1:]} == {LIVE_READS_OFF}
+
+
+def test_without_live_reads_the_version_still_decides() -> None:
+    older = OpenShiftVersions(A, ("4.17.30",))
+    placement = place(
+        INPUTS, [unread(A, versions=older, clusters=0), unread(B, clusters=9)], live_reads=False
+    )
+    candidate = placement.candidate(A)
+    assert candidate is not None
+    assert (candidate.eligible, placement.pick) == (False, B)
+    assert candidate.failures == ("version: Does not host OpenShift 4.18.22; it hosts 4.17.30.",), (
+        "a not-checked check is not a failure"
+    )
+
+
+def test_not_checked_is_not_unknown_an_unknown_still_blocks() -> None:
+    unknown = picture(A, pods=None, hub_error="it did not answer.")
+    placement = place(INPUTS, [unknown, unread(B, clusters=9)])
+    assert placement.pick == B
+    assert statuses(placement.candidates[1])[Check.FREE_PODS] is Status.UNKNOWN
+
+
+def test_the_description_says_what_was_not_checked() -> None:
+    placement = place(INPUTS, [unread(A), unread(B, clusters=9)], live_reads=False)
+    text = describe_placement(Admission(placement, A))
+    assert (
+        "Free pods and servers were **not checked**: live MCE reads are off "
+        "(`CLUSTER_STATUS_ENABLED=false`). Wingman decided on the day1 repo and server-scan only."
+    ) in text
+    assert (
+        f"| `{A}` (pick, chosen) | 1 | 3 | 2 (4) | not checked | not checked | "
+        "pass (free pods, servers, readable not checked) |"
+    ) in text
 
 
 # ── The merge request's record ───────────────────────────────────────────────
