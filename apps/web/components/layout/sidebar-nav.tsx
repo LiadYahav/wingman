@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
-import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, Network, ShieldAlert, Link2, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, ShieldAlert, Link2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
 
@@ -22,7 +22,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard, exact: true },
       { label: "Clusters", href: "/clusters", icon: Server },
-      { label: "Destinations", href: "/destinations", icon: Network },
       { label: "Flavors", href: "/specs", icon: Layers },
       { label: "Addons", href: "/addons", icon: Package },
       { label: "Quick Links", href: "/quick-links", icon: Link2, adminOnly: true },

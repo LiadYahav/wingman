@@ -13,8 +13,6 @@ import type { CatalogEntry, DestinationKind, Finding, FleetScope, LayerRole, Syn
 
 // ── Addressing ───────────────────────────────────────────────────────────────
 
-export const DESTINATION_KINDS: readonly DestinationKind[] = ["hub", "mce", "hosted", "upi"];
-
 export const KIND_LABEL: Record<DestinationKind, string> = {
   hub: "Hub",
   mce: "MCE",

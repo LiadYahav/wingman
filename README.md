@@ -58,7 +58,7 @@ wingman/
 ├── apps/
 │   ├── web/                       # Next.js frontend (apps/web/README.md)
 │   │   ├── app/                   # App Router: login/, and the signed-in pages in (app)/:
-│   │   │                          #   clusters, specs, addons, destinations, lints,
+│   │   │                          #   clusters, specs, addons, lints, quick-links,
 │   │   │                          #   approvals, audit, docs, settings
 │   │   ├── components/            # ui, common, layout, clusters, specs, addons
 │   │   ├── hooks/ lib/ stores/    # query hooks, the API client and helpers, the auth store
