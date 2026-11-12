@@ -1,0 +1,4 @@
+# ocp4-prod-mce-site1-c: written for Wingman's MCE placement (ADR-0050), an empty hub short of free pods, on an older HyperShift.
+# No cluster file yet: an MCE folder needs no hostedClusters/ until its first
+# cluster, and an empty file there would be a broken Application.
+mastertag: 4.16.27-x86_64

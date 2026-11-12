@@ -8,6 +8,11 @@ agent namespace. They are built as Kubernetes JSON and read with
 understands. Agents carry the servers' serials and MACs from the fake
 server-scan fleet, and their BareMetalHost label is the server's name,
 lowercased as a Kubernetes name is.
+
+Each hub's own nodes and pods (``hubs:``, for MCE placement's free pods,
+ADR-0050) are built as Node objects and a pod Table, read with the
+adapter's parsers too. An MCE that is neither in ``hubs`` nor hosts a
+fixture cluster is not configured, so placement never picks it.
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ from wingman_day1.domain.machines import (
     MachineObservation,
     MachineSetObservation,
 )
+from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.names import HostedClusterNaming, HostedClusterRef
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
@@ -45,7 +51,9 @@ from wingman_day1.infrastructure.hub_api import (
     hosted_cluster_from,
     machine_from,
     machine_set_from,
+    node_from,
     node_pool_from,
+    pods_per_node_from,
 )
 
 JSON = dict[str, Any]
@@ -84,12 +92,62 @@ def load_fake_mce(
     builder = _Builder(servers, naming=naming, agent_namespace=str(raw["agent_namespace"]))
     for cluster in raw["clusters"]:
         builder.cluster(cluster)
+    for mce, nodes in (raw.get("hubs") or {}).items():
+        builder.hub_nodes(str(mce), nodes)
     return builder.hub()
 
 
 def _short(text: str) -> str:
     """Five stable lowercase characters, like the random suffixes CAPI gives names."""
     return hashlib.sha256(text.encode()).hexdigest()[:5]
+
+
+def _node_object(raw: Mapping[str, Any]) -> JSON:
+    """A Node as the API server serves it: its role labels, cordon, Ready and allocatable pods."""
+    role = str(raw.get("role", "worker"))
+    roles = ("master", "control-plane") if role == "control-plane" else (role,)
+    ready = bool(raw.get("ready", True))
+    return {
+        "metadata": {
+            "name": str(raw["name"]),
+            "labels": {f"node-role.kubernetes.io/{r}": "" for r in roles},
+        },
+        "spec": {"unschedulable": True} if raw.get("cordoned") else {},
+        "status": {
+            "allocatable": {"pods": str(raw.get("allocatable", 250))},
+            "conditions": [
+                _condition("Ready", ready, "KubeletReady" if ready else "NodeStatusUnknown")
+            ],
+        },
+    }
+
+
+def _pod_table(nodes: Sequence[Mapping[str, Any]]) -> JSON:
+    """The hub's non-terminal pods as a Table: ``pods`` rows per node, plus one not bound yet."""
+    columns = ("Name", "Ready", "Status", "Restarts", "Age", "IP", "Node")
+    rows = [
+        {
+            "cells": [
+                f"{node['name']}-pod-{i}",
+                "1/1",
+                "Running",
+                "0",
+                "9d",
+                "10.128.0.2",
+                str(node["name"]),
+            ]
+        }
+        for node in nodes
+        for i in range(int(node.get("pods", 0)))
+    ]
+    rows.append({"cells": ["pending-0", "0/1", "Pending", "0", "1m", "<none>", "<none>"]})
+    return {
+        "kind": "Table",
+        "apiVersion": "meta.k8s.io/v1",
+        "metadata": {"continue": ""},
+        "columnDefinitions": [{"name": name, "type": "string"} for name in columns],
+        "rows": rows,
+    }
 
 
 def _condition(kind: str, status: bool, reason: str = "", message: str = "") -> JSON:
@@ -119,9 +177,18 @@ class _Builder:
         )
         self._agents: dict[tuple[str, str], list[AgentObservation]] = defaultdict(list)
         self._infra_envs: dict[str, set[str]] = defaultdict(set)
+        self._nodes: dict[str, list[NodeObservation]] = {}
+        self._pods: dict[str, dict[str, int]] = {}
+
+    def hub_nodes(self, mce: str, nodes: Sequence[Mapping[str, Any]]) -> None:
+        """An MCE's own nodes and their pods, as a Node list and a pod Table the adapter reads."""
+        self._nodes[mce] = [node_from(_node_object(node)) for node in nodes]
+        self._pods[mce] = pods_per_node_from(_pod_table(nodes))
 
     def hub(self) -> FakeHubApi:
         return FakeHubApi(
+            nodes=self._nodes,
+            pods=self._pods,
             hosted_clusters=self._hosted,
             node_pools=self._pools,
             infra_envs={mce: {self._agent_ns: sorted(n)} for mce, n in self._infra_envs.items()},

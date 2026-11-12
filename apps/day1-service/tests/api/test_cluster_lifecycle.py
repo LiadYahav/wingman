@@ -28,7 +28,13 @@ async def test_read_views_list_the_fixture_repo(
     headers = auth(support.VIEWER)
     assert (await client.get("/api/day1/sites", headers=headers)).json() == ["site1", "site2"]
     mces = (await client.get("/api/day1/sites/site1/mces", headers=headers)).json()
-    assert mces == ["ocp4-mce-workflow-test", "ocp4-prep-mce-site1-a", "ocp4-prod-mce-site1-a"]
+    assert mces == [
+        "ocp4-mce-workflow-test",
+        "ocp4-prep-mce-site1-a",
+        "ocp4-prod-mce-site1-a",
+        "ocp4-prod-mce-site1-b",
+        "ocp4-prod-mce-site1-c",
+    ]
 
     clusters = (await client.get("/api/day1/clusters", headers=headers)).json()
     by_name = {c["name"]: c for c in clusters}

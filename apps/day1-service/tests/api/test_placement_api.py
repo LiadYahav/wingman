@@ -41,8 +41,14 @@ def workers(*names: str, pods: int = 250) -> tuple[NodeObservation, ...]:
 
 
 def spare(name: str, mce: str, **changes: Any) -> ServerRow:
-    row = ServerRow(id=f"srv_{name}", name=name, state="INSTALLED_TO_INVENTORY",
-                    health="HEALTHY", site="site1", mce=mce)  # fmt: skip
+    row = ServerRow(
+        id=f"srv_{name}",
+        name=name,
+        state="INSTALLED_TO_INVENTORY",
+        health="HEALTHY",
+        site="site1",
+        mce=mce,
+    )
     return replace(row, **changes)
 
 
@@ -100,8 +106,9 @@ async def placed(placed_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 async def get_placement(
     client: httpx.AsyncClient, headers: dict[str, str], **query: str
 ) -> dict[str, Any]:
-    response = await client.get(PLACEMENT, params={"site": "site1", "env": "prod", **query},
-                                headers=headers)  # fmt: skip
+    response = await client.get(
+        PLACEMENT, params={"site": "site1", "env": "prod", **query}, headers=headers
+    )
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -171,8 +178,14 @@ async def test_the_min_free_pods_is_a_setting(
     auth: Auth,
 ) -> None:
     await add_mces(support, gitlab)
-    app = support.build_app(gitlab=gitlab, hub=placement_hub(), identity=identity, day2=day2,
-                            clock=clock, placement_min_free_pods=30)  # fmt: skip
+    app = support.build_app(
+        gitlab=gitlab,
+        hub=placement_hub(),
+        identity=identity,
+        day2=day2,
+        clock=clock,
+        placement_min_free_pods=30,
+    )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
         body = await get_placement(client, auth(support.VIEWER), version="4.17.58")
@@ -212,11 +225,13 @@ async def test_without_the_mce_hubs_placement_is_not_available(
     app = support.build_app(gitlab=gitlab, hub=None, identity=identity, day2=day2, clock=clock)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as off:
-        response = await off.get(PLACEMENT, params={"site": "site1", "env": "prod"},
-                                 headers=auth(support.VIEWER))  # fmt: skip
+        response = await off.get(
+            PLACEMENT, params={"site": "site1", "env": "prod"}, headers=auth(support.VIEWER)
+        )
         assert (response.status_code, response.json()["code"]) == (501, "FEATURE_DISABLED")
-        created = await off.post("/api/day1/clusters", json=support.create_body(),
-                                 headers=auth(support.ALICE))  # fmt: skip
+        created = await off.post(
+            "/api/day1/clusters", json=support.create_body(), headers=auth(support.ALICE)
+        )
         assert created.status_code == 201, "with placement off, create checks nothing new"
 
 
@@ -260,8 +275,9 @@ async def descriptions(gitlab: InMemoryGitLab, support: Any) -> list[str]:
 async def test_creating_on_the_pick_records_it_in_the_merge_request(
     placed: httpx.AsyncClient, placed_app: FastAPI, auth: Auth, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    body = support.create_body(mce=B, name="ocp4-prod-falcon-site1",
-                               placement={"pick": B, "reason": None})  # fmt: skip
+    body = support.create_body(
+        mce=B, name="ocp4-prod-falcon-site1", placement={"pick": B, "reason": None}
+    )
     preview = await placed.post(
         "/api/day1/clusters/preview", json=body, headers=auth(support.ALICE)
     )
@@ -349,8 +365,14 @@ async def test_the_chosen_mce_goes_to_the_provision_workflow(
 ) -> None:
     await add_mces(support, gitlab)
     provision = FakeProvisionWorkflow(clock=clock)
-    app = support.build_app(gitlab=gitlab, hub=placement_hub(), identity=identity, day2=day2,
-                            clock=clock, provision=provision)  # fmt: skip
+    app = support.build_app(
+        gitlab=gitlab,
+        hub=placement_hub(),
+        identity=identity,
+        day2=day2,
+        clock=clock,
+        provision=provision,
+    )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     body = support.create_body(placement={"pick": B, "reason": "owner asked"})
     with caplog.at_level("INFO"):

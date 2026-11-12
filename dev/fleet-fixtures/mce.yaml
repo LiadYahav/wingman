@@ -21,6 +21,57 @@
 
 agent_namespace: inventory
 
+# Each MCE hub's own nodes, for MCE placement's free pods (ADR-0050). `pods` is
+# how many pods that are not Succeeded or Failed run on the node (each hub also
+# has one Pending pod bound to no node, which counts nowhere); `allocatable` is
+# its pod limit (250 when not given). A node is a worker unless `role:
+# control-plane`; `ready: false` and `cordoned: true` take it out of the count.
+# An MCE listed nowhere in this file cannot be read, so it is never picked.
+#
+# site1 prod has three candidates: -a (the six fixture clusters, 150 free
+# pods), -b (no cluster, 400 free, one worker cordoned) and -c (no cluster, 40
+# free, a worker not ready; it hosts 4.16 and 4.17 only). The form picks -b,
+# offers -a to an admin with a reason, and says why -c is not offered.
+hubs:
+  ocp4-prod-mce-site1-a:
+    - {name: master-0, role: control-plane, pods: 120}
+    - {name: master-1, role: control-plane, pods: 118}
+    - {name: master-2, role: control-plane, pods: 121}
+    - {name: worker-0, pods: 200}
+    - {name: worker-1, pods: 190}
+    - {name: worker-2, pods: 210}
+  ocp4-prod-mce-site1-b:
+    - {name: master-0, role: control-plane, pods: 95}
+    - {name: master-1, role: control-plane, pods: 97}
+    - {name: master-2, role: control-plane, pods: 96}
+    - {name: worker-0, pods: 60}
+    - {name: worker-1, pods: 40}
+    - {name: worker-2, pods: 12, cordoned: true}
+  ocp4-prod-mce-site1-c:
+    - {name: master-0, role: control-plane, pods: 101}
+    - {name: master-1, role: control-plane, pods: 99}
+    - {name: master-2, role: control-plane, pods: 100}
+    - {name: worker-0, pods: 210}
+    - {name: worker-1, pods: 0, ready: false}
+  ocp4-prep-mce-site1-a:
+    - {name: master-0, role: control-plane, pods: 110}
+    - {name: master-1, role: control-plane, pods: 108}
+    - {name: master-2, role: control-plane, pods: 109}
+    - {name: worker-0, pods: 150}
+    - {name: worker-1, pods: 160}
+  ocp4-prod-mce-site2-a:
+    - {name: master-0, role: control-plane, pods: 90}
+    - {name: master-1, role: control-plane, pods: 92}
+    - {name: master-2, role: control-plane, pods: 91}
+    - {name: worker-0, pods: 80}
+    - {name: worker-1, pods: 75}
+  ocp4-prep-mce-site2-a:
+    - {name: master-0, role: control-plane, pods: 105}
+    - {name: master-1, role: control-plane, pods: 104}
+    - {name: master-2, role: control-plane, pods: 106}
+    - {name: worker-0, pods: 170}
+    - {name: worker-1, pods: 160}
+
 clusters:
   # Git moved the cluster to 4.18.22: the control plane is there, and one
   # pool's workers are updating in place (one of three done, one rebooting).
