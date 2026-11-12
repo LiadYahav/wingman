@@ -199,6 +199,8 @@ export function NewAddonDialog({
       values: values ?? {},
       default_scope: scope,
       default_values: scope ? (defaultValues ?? {}) : {},
+      // With a scope, the review fills in the clusters the user confirms (ADR-0043).
+      ...(scope ? { confirm_changes: [] } : {}),
       message: null,
     };
   }

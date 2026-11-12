@@ -111,6 +111,7 @@ test.describe("A new add-on", () => {
       values: { replicaCount: 2 },
       default_scope: "hosted-clusters",
       default_values: {},
+      confirm_changes: [],
       message: null,
     };
     expect(dryRuns()[0].body).toEqual(expected);
