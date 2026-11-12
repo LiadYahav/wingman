@@ -514,6 +514,45 @@ async def test_closing_a_non_open_mr_is_not_mergeable() -> None:
     assert len(rec.requests) == 1
 
 
+NOTE = {"id": 41, "body": "Superseded by !4.", "noteable_iid": 3, "system": False}
+
+
+async def test_a_comment_is_one_note_on_the_merge_request() -> None:
+    rec = Recorder(reply(201, NOTE))
+    await rec.adapter().comment_on_merge_request(MergeRequestRef(7, 3), "Superseded by !4.")
+    [request] = rec.requests
+    assert (request.method, request.url.path) == ("POST", f"{MR_PATH}/notes")
+    assert json.loads(request.content) == {"body": "Superseded by !4."}
+
+
+@pytest.mark.parametrize(
+    ("handler", "error"),
+    [
+        (fail(httpx.ReadTimeout), AmbiguousWriteError),
+        (reply(500, {"message": "500 Internal Server Error"}), AmbiguousWriteError),
+        (reply(502), AmbiguousWriteError),
+        (fail(httpx.ConnectError), GitUnavailableError),
+        (reply(404, {"message": "404 Not found"}), NotFoundError),
+        (reply(403, {"message": "403 Forbidden"}), PermissionDeniedError),
+    ],
+)
+async def test_a_comment_is_sent_once_and_its_errors_map(
+    handler: Handler, error: type[Exception]
+) -> None:
+    rec = Recorder(handler, reply(201, NOTE))
+    with pytest.raises(error):
+        await rec.adapter().comment_on_merge_request(MergeRequestRef(7, 3), "x")
+    assert len(rec.requests) == 1
+    assert rec.sleeps == []
+
+
+async def test_a_blank_comment_is_refused_without_a_request() -> None:
+    rec = Recorder(reply(201, NOTE))
+    with pytest.raises(InvalidRequestError):
+        await rec.adapter().comment_on_merge_request(MergeRequestRef(7, 3), " \n")
+    assert rec.requests == []
+
+
 async def test_list_merge_requests_parameters() -> None:
     rec = Recorder(reply(200, [MR]))
     adapter = rec.adapter()

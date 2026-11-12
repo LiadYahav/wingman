@@ -1,7 +1,13 @@
 # ADR-0036: Day1 drift is the flavor's locked values the file does not hold, and its missing add-ons
 
 Date: 2026-11-08
-Status: Accepted (supersedes in part ADR-0016 and ADR-0025)
+Status: Accepted (supersedes in part ADR-0016 and ADR-0025); superseded in part by ADR-0044 (a cluster is compared with the flavor version it is on)
+
+Since ADR-0044 (2026-11-12) drift compares a linked cluster with the flavor
+as it was at the version its header names, read from the specs repo's
+history, and missing add-ons with that version's list: a newer version is
+an update, never drift. A header with no version, or one history does not
+have, is unknown. What is compared, and how, is unchanged.
 
 ## Context
 
@@ -21,7 +27,8 @@ add-on (ADR-0025's rule, unchanged). Version differences are still only
 reported.
 
 **Value drift** is each enforced lock of the flavor (`ClusterSpec.locks()`)
-whose value the cluster file does not hold at the lock's file key. Values
+whose value the cluster file does not hold at the lock's file key. *(Since
+ADR-0044: the flavor at the cluster's own version, not its newest.)* Values
 compare in the file's form:
 
 | Lock | File key | Compared |

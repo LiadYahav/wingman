@@ -106,7 +106,9 @@ the three numbers.
 2. **Import.** One day1 MR writes the flavor's link (the provenance comment
    Wingman already writes at create: `specName`, `specVersion`) into each
    picked cluster's file. Nothing else changes. After the merge, these
-   clusters show their differences as drift.
+   clusters show their differences as drift. (Since 2026-11-12, one MR per
+   cluster, and a new flavor version opens each cluster's sync MR
+   automatically: ADR-0044.)
 3. **Sync.** Per cluster:
    - One day1 MR writes every locked value the cluster differs on.
    - Day2 MRs install the missing add-ons.

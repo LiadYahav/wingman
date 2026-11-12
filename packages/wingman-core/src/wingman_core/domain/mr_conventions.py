@@ -7,11 +7,17 @@ breaks parsing of every MR already opened, so the parsers accept exactly
 what the builders produce, and a round-trip test pins it.
 
 Branch:       ``platform/{username}/{action}-{resource}-{YYYYmmddTHHMMSS}``
+Rollout:      ``platform/rollout/{flavor}/v{version}/{cluster}``: one branch per
+              flavor, version and cluster, with no timestamp, so a second run
+              or a second pod finds it instead of opening another MR (ADR-0044).
+              A user branch has three segments, a rollout branch five, so a
+              user named ``rollout`` never makes one.
 Title:        ``[Wingman/{repo}] {Verb} {resource_type} {resource_name}[ {extra}]``
 Description:  the human text, then a ``---`` line, then ``Author:``,
               ``Action:``, ``Resource: {type}/{name}`` and ``Repo:`` lines.
 Label:        ``wingman`` on every MR Wingman opens; approvals act only on MRs
-              that carry it, and the lists filter on it.
+              that carry it, and the lists filter on it. ``rollout`` also on
+              each MR a flavor rollout opens.
 """
 
 from __future__ import annotations
@@ -24,6 +30,11 @@ from typing import Final
 
 WINGMAN_LABEL: Final = "wingman"
 """The label every Wingman MR carries."""
+
+ROLLOUT_LABEL: Final = "rollout"
+"""The label of each MR a flavor rollout opens (ADR-0044)."""
+
+_ROLLOUT_PREFIX: Final = ("platform", "rollout")
 
 _UNSAFE_BRANCH_CHARS = re.compile(r"[^a-zA-Z0-9._-]")
 _DOTS = re.compile(r"\.{2,}")
@@ -89,6 +100,54 @@ def branch_name(*, username: str, action: str, resource: str, at: datetime) -> s
     return (
         f"platform/{_branch_safe(username)}/{_branch_safe(action)}-{_branch_safe(resource)}-{stamp}"
     )
+
+
+@dataclass(frozen=True, slots=True)
+class RolloutBranch:
+    """The parts of a rollout branch, in their branch-safe form."""
+
+    flavor: str
+    version: str
+    cluster: str
+
+
+def rollout_branch(*, flavor: str, version: str, cluster: str) -> str:
+    """``platform/rollout/<flavor>/v<version>/<cluster>``: one per flavor, version and cluster.
+
+    The same inputs always give the same branch (there is no timestamp), so
+    a run that finds the branch knows an earlier run, or another pod, got
+    there first. Each part goes through the branch-safe rewrite, so two
+    names that differ only in unsafe characters (``1.0+a``, ``1.0-a``) share
+    a branch: compare branches by building the expected one, not by parsing.
+
+    Returns:
+        For example ``platform/rollout/agent-baseline/v1.1.0/ocp4-prod-lark-site1``.
+    """
+    return "/".join(
+        (
+            *_ROLLOUT_PREFIX,
+            _branch_safe(flavor),
+            f"v{_branch_safe(version)}",
+            _branch_safe(cluster),
+        )
+    )
+
+
+def parse_rollout_branch(branch: str) -> RolloutBranch | None:
+    """The parts of a branch :func:`rollout_branch` built; ``None`` for any other branch.
+
+    Exactly five segments, ``platform/rollout/<flavor>/v<version>/<cluster>``,
+    each already branch-safe: anything :func:`rollout_branch` cannot produce
+    (a user branch, a version without its ``v``, an extra segment) is not one.
+    """
+    parts = branch.split("/")
+    if len(parts) != 5 or tuple(parts[:2]) != _ROLLOUT_PREFIX:
+        return None
+    flavor, tagged, cluster = parts[2:]
+    version = tagged.removeprefix("v")
+    if version == tagged or any(_branch_safe(p) != p for p in (flavor, version, cluster)):
+        return None
+    return RolloutBranch(flavor=flavor, version=version, cluster=cluster)
 
 
 def mr_title(

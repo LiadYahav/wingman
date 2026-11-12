@@ -337,7 +337,7 @@ export default function DocsPage() {
             <FeatureCard
               icon={RefreshCw}
               title="Drift Detection"
-              description="Checks that a cluster holds every value its flavor locks and has every add-on it lists, and syncs it back in one MR. A version that differs from the flavor is reported, never changed. When Wingman cannot tell, it says unknown, never in sync."
+              description="Checks that a cluster holds every value the version of its flavor it is on locks, and has every add-on it lists, and syncs it back in one MR. A new flavor version reaches each cluster through its own MR, which its customer merges when ready. An add-on at another version is reported, never changed. When Wingman cannot tell, it says unknown, never in sync."
             />
             <FeatureCard
               icon={GitPullRequest}
@@ -645,10 +645,12 @@ spec:
               show as drift once it has: the configs a sync would add and remove per nodepool, and the missing add-ons.
             </Step>
             <Step n={3} title="Import">
-              One Day1 MR writes only the flavor link (<InlineCode># specName</InlineCode>,{" "}
-              <InlineCode># specVersion</InlineCode>) into each file&apos;s header. Nothing changes on the clusters.
-              After it merges they show their differences as drift, and <strong>Sync to flavor</strong> on each
-              cluster&apos;s page fixes them (see Drift Detection).
+              One Day1 MR per cluster writes only the flavor link (<InlineCode># specName</InlineCode>,{" "}
+              <InlineCode># specVersion</InlineCode>) into its file&apos;s header, so each cluster is approved, merged
+              or rejected on its own. Every pick is checked first: if one can&apos;t be imported, none opens. Nothing
+              changes on the clusters. The last step lists each MR, and each cluster whose MR did not open and why.
+              Once a cluster&apos;s MR merges it shows its differences as drift, and <strong>Sync to flavor</strong> on
+              its page fixes them (see Drift Detection).
             </Step>
           </div>
 
@@ -664,11 +666,13 @@ spec:
                 </CodeBlock>
               </div>
             </Callout>
-            <Callout type="warning" title="Editing a flavor does not rewrite existing clusters">
-              Changing a flavor does not touch clusters that already exist: nothing re-renders their files. Drift,
-              though, always compares a cluster with the flavor as it is now: lock a new value or add an add-on, and
-              every cluster of the flavor shows <strong>Drifted</strong> until it is synced or the add-on installed.
-              A flavor that clusters follow cannot be deleted; delete or move them first.
+            <Callout type="warning" title="An edit is a new version, and reaches each cluster through its own MR">
+              Saving an edit needs a new version: a version, once saved, never changes, because each cluster is
+              compared with the version it is on. Merging the flavor&apos;s MR rewrites no cluster file. Instead Wingman
+              opens one Day1 MR per cluster that follows the flavor on an older version, and each customer merges
+              theirs when ready (see Rolling out a new version, under Drift Detection). Until then the cluster shows{" "}
+              <strong>Update MR open</strong>, not drift. A flavor that clusters follow cannot be deleted; delete or
+              move them first.
             </Callout>
           </div>
         </section>
@@ -1099,18 +1103,23 @@ cluster               …/{cluster}/{chart}/values.yaml
         <section>
           <SectionHeader id="drift" icon={RefreshCw} title="Drift Detection" subtitle="Know when a cluster differs from its flavor, and sync it back" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            A cluster that follows a flavor is <strong>drifted</strong> when its file does not hold a value the
-            flavor <strong>locks</strong> (someone edited it by hand, or the cluster was written before it joined
-            the flavor), or when an add-on the flavor lists is not installed on it, as Day2 reports. Presets never
-            drift: changing them is allowed. An add-on installed at another version than the flavor names is not
-            drift either: Wingman lists it as information and never changes it. Every cluster has one of four states:
+            A cluster&apos;s header names its flavor and the version it is on, and drift compares the cluster with{" "}
+            <strong>that version</strong>. It is <strong>drifted</strong> when its file does not hold a value the
+            version <strong>locks</strong> (someone edited it by hand, or the cluster was written before it joined
+            the flavor), or when an add-on the version lists is not installed on it, as Day2 reports. Presets never
+            drift: changing them is allowed. A newer version of the flavor is an <strong>update</strong>, never drift.
+            An add-on installed at another version than the flavor names is not drift either: Wingman lists it as
+            information and never changes it. The cluster list, the flavor&apos;s pages and the cluster&apos;s page show,
+            in this order:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             {[
-              { title: "In sync", desc: "The file holds every value the flavor locks now (its current version, not necessarily the one the cluster was created from), and every add-on it lists is installed." },
-              { title: "Drifted", desc: "A locked value differs, or an add-on is missing. The Drift tab lists each one: Sync to flavor fixes the values, Install the add-ons." },
-              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, the cluster file does not parse, or the flavor is gone or does not parse. It is never shown as in sync." },
-              { title: "Not linked", desc: "The cluster follows no flavor. It can join one from that flavor's page (Add existing clusters)." },
+              { title: "Drifted", desc: "A value its version locks differs, or an add-on is missing. The Drift tab lists each one: Sync to flavor fixes the values, Install the add-ons." },
+              { title: "Unknown", desc: "Drift could not be determined: Day2 did not answer, the cluster file does not parse, the flavor is gone or does not parse, or the header names no version (or one the specs repo never had). It is never shown as in sync." },
+              { title: "Update MR open (v1.0.0 → v1.1.0)", desc: "In sync with its version, and the merge request that moves it to the newest is open. The badge opens its review page; its customer merges it when ready." },
+              { title: "Update available (v1.0.0 → v1.1.0)", desc: "In sync with its version, and no open merge request moves it to the newest: the flavor's rollout says why (pending, needs a decision, or declined)." },
+              { title: "In sync · v1.0.0", desc: "The file holds every value its version locks, every add-on it lists is installed, and it is the flavor's newest." },
+              { title: "No flavor", desc: "The cluster follows no flavor. It can join one from that flavor's page (Add existing clusters)." },
             ].map(({ title, desc }) => (
               <div key={title} className="rounded-xl border bg-card p-4">
                 <p className="text-sm font-semibold mb-1">{title}</p>
@@ -1122,9 +1131,9 @@ cluster               …/{cluster}/{chart}/values.yaml
           <h3 className="text-base font-semibold mb-3">Viewing and resolving drift</h3>
           <div className="space-y-3 mb-5">
             <Step n={1} title="Find drifted clusters">
-              The <strong>Clusters</strong> list shows each cluster&apos;s drift state and filters by it;
-              the dashboard counts drifted and unknown clusters separately. A flavor&apos;s <strong>Drift</strong> tab
-              lists every cluster that follows it.
+              The <strong>Clusters</strong> list shows each cluster&apos;s state and filters by it; the dashboard counts
+              drifted clusters, and beside them the unknown ones and those with an update. A flavor&apos;s{" "}
+              <strong>Drift</strong> tab lists every cluster that follows it.
             </Step>
             <Step n={2} title="Review what differs">
               Open the cluster → <strong>Drift</strong> tab. <strong>Locked values that differ</strong> shows each one
@@ -1134,8 +1143,10 @@ cluster               …/{cluster}/{chart}/values.yaml
               version.
             </Step>
             <Step n={3} title="Sync to flavor">
-              <strong>Sync to flavor</strong> (admins) previews one Day1 MR that sets every locked value the file does
-              not hold, and moves the header to the flavor&apos;s current version. It shows the change line by line,
+              <strong>Sync to flavor</strong> (admins) previews one Day1 MR that sets every value the flavor&apos;s
+              newest version locks that the file does not hold, and moves the header to that version. While the
+              update MR to it is open, the Drift tab links that MR (<strong>Review the update MR !N</strong>) instead:
+              it is the sync, and a second one is refused. The preview shows the change line by line,
               asks for the network hardware where a nodepool needs it, and lists every machine config it would
               remove: confirm each one before the sync can be opened. It never touches <InlineCode>vlanId</InlineCode>,{" "}
               <InlineCode>dhcp_values</InlineCode>, <InlineCode>mcFiles</InlineCode>, <InlineCode>mcConfigMap</InlineCode>,
@@ -1147,6 +1158,32 @@ cluster               …/{cluster}/{chart}/values.yaml
               values requested when the cluster was created.
             </Step>
           </div>
+          <h3 className="text-base font-semibold mb-3">Rolling out a new version</h3>
+          <div className="space-y-3 mb-5">
+            <Step n={1} title="Review the flavor's MR">
+              The approve page of an MR that gives a flavor a new version says what merging it opens:{" "}
+              <strong>Merging opens 12 cluster merge requests</strong>, out of the clusters that follow the flavor; the
+              clusters whose nodes roll and how (replaced, or drained and rebooted in place); the ones that lose machine
+              configs; the ones that need a decision, and why; and the add-ons the version adds. Merging it is the one
+              confirmation.
+            </Step>
+            <Step n={2} title="One MR per cluster">
+              Wingman then opens, for each cluster on an older version, one Day1 MR that syncs it to the new version,
+              as Sync to flavor would. Its description repeats what it does to that cluster; where the version adds an
+              add-on the cluster lacks, Day2&apos;s install MRs open first and are linked. An open MR to an older version
+              is closed as superseded. Nothing changes on a cluster until its own MR merges, and each customer merges
+              theirs when ready.
+            </Step>
+            <Step n={3} title="Follow it">
+              The flavor&apos;s <strong>Clusters</strong> tab shows the rollout: a count per state, then the clusters,
+              those that need a person first. <strong>Needs a decision</strong> (no MR opens; sync it by hand from its
+              page), <strong>Failed</strong> (the next run tries again), <strong>Declined</strong> (its customer closed
+              the MR: no new one opens for that version, though a person can still sync it by hand),{" "}
+              <strong>Pending</strong>, <strong>MR open</strong> and <strong>On the version</strong>.{" "}
+              <strong>Reconcile now</strong> (admins) opens what is due at once.
+            </Step>
+          </div>
+
           <Callout type="warning" title="Merging a sync that changes machine configs rolls nodes">
             OpenShift applies a nodepool&apos;s new machine configs to every node of it. With the chart&apos;s default
             (<InlineCode>upgradeType: InPlace</InlineCode>) each node is drained and rebooted, one at a time unless

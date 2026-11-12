@@ -1,12 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { ArrowLeft, Loader2, RotateCcw } from "lucide-react";
 import { api, isApiError } from "@/lib/api-client";
-import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -17,18 +15,31 @@ import {
   PickStep,
   type PickFilters,
 } from "@/components/specs/import-clusters/pick-step";
+import { ResultStep } from "@/components/specs/import-clusters/result-step";
 import { ReviewSkeleton, ReviewStep, isImported } from "@/components/specs/import-clusters/review-step";
 import { cn } from "@/lib/utils";
-import type { ClusterPick, ClusterStatus, ImportPreview, ImportPreviewRequest, ImportRequest, MRDetail } from "@/types";
+import type {
+  ClusterPick,
+  ClusterStatus,
+  ImportPreview,
+  ImportPreviewRequest,
+  ImportRequest,
+  ImportResult,
+} from "@/types";
 
-type Step = "pick" | "review";
+type Step = "pick" | "review" | "result";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "pick", label: "Pick clusters" },
   { id: "review", label: "Review and import" },
+  { id: "result", label: "Merge requests" },
 ];
 
-/** A 409 REVISION_CONFLICT on import: a picked file, or the flavor, moved since the preview. */
+/**
+ * A 409 REVISION_CONFLICT on import: a picked file, or the flavor, moved
+ * since the preview (checked before any MR opens), or every MR's file moved
+ * before its commit. Either way no MR opened.
+ */
 const STALE_PREVIEW =
   "A cluster file or the flavor changed since this preview, so nothing was imported. Preview again to compare the current files.";
 
@@ -58,8 +69,7 @@ function Steps({ step }: { step: Step }) {
 }
 
 /** The flow inside the sheet; it mounts when the sheet opens, so each opening starts fresh. */
-function ImportFlow({ flavor, onDone }: { flavor: string; onDone: () => void }) {
-  const router = useRouter();
+function ImportFlow({ flavor }: { flavor: string }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("pick");
   const [filters, setFilters] = useState<PickFilters>(NO_FILTERS);
@@ -72,13 +82,12 @@ function ImportFlow({ flavor, onDone }: { flavor: string; onDone: () => void }) 
       api.post<ImportPreview>(`${base}/preview`, { clusters } satisfies ImportPreviewRequest),
   });
 
+  // One MR per cluster (ADR-0044): the result step lists each, and each that did not open.
+  // When none opened the answer is a problem; an unconfirmed write may still have opened one.
   const importer = useMutation({
-    mutationFn: (body: ImportRequest) => api.post<MRDetail>(base, body),
-    onSuccess: (mr) => {
-      toastMrOpened(mr, router.push, "Import MR");
-      queryClient.invalidateQueries({ queryKey: ["approvals"] });
-      onDone();
-    },
+    mutationFn: (body: ImportRequest) => api.post<ImportResult>(base, body),
+    onSuccess: () => setStep("result"),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["approvals"] }),
   });
 
   const runPreview = () => {
@@ -114,14 +123,17 @@ function ImportFlow({ flavor, onDone }: { flavor: string; onDone: () => void }) 
           <SheetPrimitive.Title className="font-heading text-base font-semibold">Add existing clusters</SheetPrimitive.Title>
           <SheetPrimitive.Description className="text-sm text-muted-foreground">
             Link clusters Wingman did not create to <span className="font-medium text-foreground">{flavor}</span>. One
-            import takes up to {MAX_IMPORT} clusters and changes only each file&apos;s header.
+            import takes up to {MAX_IMPORT} clusters and opens a merge request for each, changing only its file&apos;s
+            header.
           </SheetPrimitive.Description>
         </div>
         <Steps step={step} />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {step === "pick" ? (
+        {step === "result" && importer.data ? (
+          <ResultStep flavor={flavor} result={importer.data} />
+        ) : step === "pick" ? (
           <PickStep
             flavor={flavor}
             filters={filters}
@@ -192,6 +204,15 @@ function ImportFlow({ flavor, onDone }: { flavor: string; onDone: () => void }) 
               </button>
             </div>
           </>
+        ) : step === "result" ? (
+          <>
+            <p className="text-xs text-muted-foreground" data-testid="import-summary">
+              {importer.data && importer.data.failed.length > 0
+                ? `${importer.data.merge_requests.length} opened · ${importer.data.failed.length} not opened`
+                : `${importer.data?.merge_requests.length ?? 0} opened`}
+            </p>
+            <SheetPrimitive.Close className={buttonVariants()}>Done</SheetPrimitive.Close>
+          </>
         ) : (
           <>
             <p className="text-xs text-muted-foreground" data-testid="import-summary">
@@ -215,7 +236,10 @@ function ImportFlow({ flavor, onDone }: { flavor: string; onDone: () => void }) 
                 className={buttonVariants()}
               >
                 {importer.isPending ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" />Opening the MR…</>
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Opening {imported.length} merge request{imported.length !== 1 ? "s" : ""}…
+                  </>
                 ) : (
                   `Import ${imported.length} cluster${imported.length !== 1 ? "s" : ""}`
                 )}
@@ -230,8 +254,10 @@ function ImportFlow({ flavor, onDone }: { flavor: string; onDone: () => void }) 
 
 /**
  * "Add existing clusters" (ADR-0037, admins only): pick clusters Wingman did
- * not create, preview each against the flavor, and open one day1 MR that
- * links them. The MR writes only the flavor link into each file's header.
+ * not create, preview each against the flavor, and open one day1 MR per
+ * cluster that links it (ADR-0044); the last step lists each MR and each
+ * cluster whose MR did not open. An MR writes only the flavor link into its
+ * file's header.
  */
 export function ImportClustersSheet({
   flavor,
@@ -245,7 +271,7 @@ export function ImportClustersSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full gap-0 p-0 data-[side=right]:sm:max-w-3xl" data-testid="import-sheet">
-        {open && <ImportFlow flavor={flavor} onDone={() => onOpenChange(false)} />}
+        {open && <ImportFlow flavor={flavor} />}
       </SheetContent>
     </Sheet>
   );

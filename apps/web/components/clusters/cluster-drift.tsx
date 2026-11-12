@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, CircleHelp, Info, RefreshCcw, Unlink, Wrench } from "lucide-react";
+import {
+  AlertTriangle, ArrowRight, ArrowUpCircle, CheckCircle2, CircleHelp, ExternalLink, GitPullRequest, Info, RefreshCcw, Unlink, Wrench,
+} from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
 import { ValueDriftList } from "@/components/clusters/value-drift";
-import type { AddonDrift, ClusterDrift, ValueDrift, VersionDifference } from "@/types";
+import { approvalHref } from "@/lib/approvals";
+import type { AddonDrift, ClusterDrift, FlavorUpdate, ValueDrift, VersionDifference } from "@/types";
 
 function Notice({ icon: Icon, tone, children }: { icon: typeof CheckCircle2; tone: string; children: React.ReactNode }) {
   return (
@@ -79,19 +82,92 @@ export function valueDriftOf(drift: ClusterDrift): ValueDrift[] {
   return drift.value_drift ?? [];
 }
 
-/** The file's header names an older version of its flavor than the flavor's current one. */
+/** The file's header names another version of its flavor than the flavor's newest. */
 function olderHeader(drift: ClusterDrift): boolean {
   return Boolean(drift.current_spec_version && drift.spec_version && drift.current_spec_version !== drift.spec_version);
 }
 
 /**
+ * The cluster's update (ADR-0044): a newer version of its flavor, and the
+ * open MR that moves the cluster to it. A day1 that predates `update` sends
+ * none: an older header is then an update whose MR is not known.
+ */
+export function updateOf(drift: ClusterDrift): FlavorUpdate | null {
+  if (drift.update !== undefined) return drift.update;
+  return olderHeader(drift) ? { version: drift.current_spec_version!, merge_request: null } : null;
+}
+
+/**
  * Whether "Sync to flavor" has something to do: the cluster follows a flavor
- * and holds a locked value it should not, or its header names an older
- * version (the sync moves `specVersion`).
+ * and holds a locked value it should not, or a newer version is out (the sync
+ * moves `specVersion` to it). Not while an update MR is open: that MR is the
+ * sync, and the panel links it instead (a second one is refused, 409).
  */
 export function syncOffered(drift: ClusterDrift | undefined): boolean {
   if (!drift || drift.state === "not_linked" || !drift.spec_name) return false;
-  return valueDriftOf(drift).length > 0 || olderHeader(drift);
+  const update = updateOf(drift);
+  if (update?.merge_request) return false;
+  return valueDriftOf(drift).length > 0 || update !== null;
+}
+
+/**
+ * A newer version of the flavor: its open update MR, or (none open) a sync.
+ * A new version opens one MR per cluster on its own; one that is not open
+ * waits for the next run, needs a person, or was declined (the flavor's page
+ * says which).
+ */
+function UpdateNotice({ flavor, update, syncButton }: { flavor: string; update: FlavorUpdate; syncButton: React.ReactNode }) {
+  const mr = update.merge_request;
+  return (
+    <div
+      data-testid="flavor-update"
+      data-state={mr ? "merge_request_open" : "available"}
+      className="flex items-start justify-between gap-3 flex-wrap rounded-lg border border-status-provisioning/30 bg-status-provisioning/5 p-4"
+    >
+      <div className="flex items-start gap-2 text-sm min-w-0">
+        {mr ? (
+          <GitPullRequest className="h-4 w-4 shrink-0 mt-0.5 text-status-provisioning-fg" aria-hidden />
+        ) : (
+          <ArrowUpCircle className="h-4 w-4 shrink-0 mt-0.5 text-status-provisioning-fg" aria-hidden />
+        )}
+        <div className="min-w-0 space-y-1">
+          <p>
+            <strong>{flavor} v{update.version}</strong> is out.
+            {mr ? (
+              <> Merge request !{mr.iid} moves this cluster to it, and nothing changes on the cluster until it merges.</>
+            ) : (
+              <> No merge request moves this cluster to it yet.</>
+            )}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {mr
+              ? "Its customer merges it when ready. It sets every value the new version locks, and moves the header to it."
+              : "A new version opens one merge request per cluster on its own; none is open for this one (the flavor's page says why). Sync to flavor opens it now."}
+          </p>
+        </div>
+      </div>
+      {mr ? (
+        <div className="flex items-center gap-3 text-xs font-medium shrink-0">
+          <Link href={approvalHref(mr)} className={buttonVariants({ size: "sm" })}>
+            Review the update MR !{mr.iid}
+            <ArrowRight className="h-3.5 w-3.5 ml-1" aria-hidden />
+          </Link>
+          <a
+            href={mr.web_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground"
+            aria-label={`Open !${mr.iid} in GitLab`}
+          >
+            GitLab
+            <ExternalLink className="h-3 w-3" aria-hidden />
+          </a>
+        </div>
+      ) : (
+        syncButton
+      )}
+    </div>
+  );
 }
 
 function MissingAddons({
@@ -133,9 +209,11 @@ function MissingAddons({
 /**
  * Drift is two things (ADR-0036): the flavor's locked values the cluster file
  * does not hold (compared with the file itself, never a re-render), and the
- * flavor's day2 add-ons the cluster does not have. A sync to the flavor fixes
- * the first in one day1 MR; day2 installs the second. Another add-on version
- * is listed as information, never drift.
+ * flavor's day2 add-ons the cluster does not have, both against the version
+ * of the flavor the cluster's header names (ADR-0044). A newer version is an
+ * update, never drift: its MR opens on its own and is linked here, or a sync
+ * moves the cluster to it. A sync fixes the values in one day1 MR; day2
+ * installs the add-ons. Another add-on version is information, never drift.
  */
 export function ClusterDriftPanel({
   drift,
@@ -163,19 +241,20 @@ export function ClusterDriftPanel({
 
   const values = valueDriftOf(drift);
   const addons = drift.addon_drift ?? [];
-  // The version compared against: the flavor's current one, else (it is gone) the one the header names
-  const comparedVersion = drift.current_spec_version ?? drift.spec_version;
+  const update = updateOf(drift);
+  // Drift compares with the version the header names (ADR-0044), never the newest
   const flavorLabel = (
     <>
-      <strong>{drift.spec_name}</strong>{comparedVersion && <> v{comparedVersion}</>}
+      <strong>{drift.spec_name}</strong>{drift.spec_version && <> v{drift.spec_version}</>}
     </>
   );
-  const newerFlavor = olderHeader(drift) ? (
-    <p className="text-xs text-muted-foreground mt-1">
-      The file&apos;s header names v{drift.spec_version}; drift compares against the flavor as it is now,
-      v{drift.current_spec_version}. A sync moves the header to v{drift.current_spec_version}.
+  const newest = !update && drift.current_spec_version === drift.spec_version;
+  const comparedWith = drift.spec_version && (
+    <p className="text-xs text-muted-foreground mt-1" data-testid="drift-compared-with">
+      Compared with {drift.spec_name} v{drift.spec_version}, the version this cluster is on
+      {newest ? " and the flavor's newest" : ""}.
     </p>
-  ) : null;
+  );
 
   const syncButton = isAdmin && onSync && syncOffered(drift) && (
     <button onClick={onSync} className={buttonVariants({ size: "sm" })}>
@@ -183,6 +262,11 @@ export function ClusterDriftPanel({
       Sync to flavor
     </button>
   );
+  // With an update, the sync is offered beside it: it moves the cluster to that version
+  const updateNotice = update && drift.spec_name && (
+    <UpdateNotice flavor={drift.spec_name} update={update} syncButton={syncButton} />
+  );
+  const stateSync = update ? null : syncButton;
   const fixAllButton = isAdmin && addons.length > 1 && (
     <button
       onClick={onFixAll}
@@ -198,7 +282,10 @@ export function ClusterDriftPanel({
     <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4 space-y-1" data-testid="value-drift">
       <p className="text-xs font-semibold text-status-warning-fg uppercase tracking-wide">Locked values that differ</p>
       <p className="text-xs text-muted-foreground">
-        The flavor fixes these values, and the cluster file holds others. Sync to flavor sets them in one day1 MR.
+        The version of the flavor it is on fixes these values, and the cluster file holds others.{" "}
+        {update?.merge_request
+          ? `Its update MR !${update.merge_request.iid} sets the values v${update.version} locks.`
+          : "Sync to flavor sets them in one day1 MR."}
       </p>
       <ValueDriftList items={values} />
     </div>
@@ -222,6 +309,7 @@ export function ClusterDriftPanel({
             <p>Drift against {flavorLabel} could not be determined.</p>
             {drift.error && <p className="text-xs text-muted-foreground mt-1 break-words">{drift.error}</p>}
           </Notice>
+          {updateNotice}
           {lockedValues}
         </div>
       );
@@ -231,10 +319,11 @@ export function ClusterDriftPanel({
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <Notice icon={CheckCircle2} tone="text-status-ready-fg">
               <p>The cluster holds every value {flavorLabel} locks and has every add-on it lists.</p>
-              {newerFlavor}
+              {comparedWith}
             </Notice>
-            {syncButton}
+            {stateSync}
           </div>
+          {updateNotice}
           <VersionDifferences differences={drift.version_differences ?? []} />
         </div>
       );
@@ -254,15 +343,16 @@ export function ClusterDriftPanel({
                   {parts.length > 0 && <>: {parts.join(", and ")}</>}.
                 </p>
                 {drift.error && <p className="text-xs text-muted-foreground mt-1 break-words">{drift.error}</p>}
-                {newerFlavor}
+                {comparedWith}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {syncButton}
+              {stateSync}
               {fixAllButton}
             </div>
           </div>
 
+          {updateNotice}
           {lockedValues}
           {addons.length > 0 && <MissingAddons entries={addons} isAdmin={isAdmin} onFix={onFix} />}
           <VersionDifferences differences={drift.version_differences ?? []} />

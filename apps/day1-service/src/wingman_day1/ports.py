@@ -12,11 +12,16 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from wingman_core.domain.git import Commit, FileContent, FileDiff, Project, RepoPath, TreeEntry
-from wingman_core.domain.merge_request import MergeRequest, MRState
+from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef, MRState
 from wingman_core.domain.users import User
-from wingman_day1.domain.addons import InstalledAddon
+from wingman_day1.domain.addons import (
+    Day2InstallRequest,
+    Day2InstallResult,
+    InstalledAddon,
+    RequestedAddon,
+)
 from wingman_day1.domain.auth import Identity
-from wingman_day1.domain.changes import ClusterChange, ImportChange, ProvisionResult, SpecChange
+from wingman_day1.domain.changes import ClusterChange, ProvisionResult, SpecChange
 from wingman_day1.domain.machines import (
     AgentMachineObservation,
     AgentObservation,
@@ -26,6 +31,7 @@ from wingman_day1.domain.machines import (
 from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.quick_links import ArgoCdReading, LinkReading
+from wingman_day1.domain.rollout import RolloutOutcome, RolloutTrigger
 from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 from wingman_day1.domain.workflows import ProvisionRun, WorkflowRun
@@ -99,14 +105,52 @@ class RepoReads(Protocol):
 
 
 class ClusterProvisioner(Protocol):
-    """Applies a cluster change. Today: a commit and a merge request (ADR-0017)."""
+    """Applies a cluster change. Today: a commit and a merge request (ADR-0017).
+
+    One change is one cluster file, so each cluster's change is reviewed,
+    merged or rejected on its own; importing several clusters into a flavor
+    is one change each (ADR-0044).
+    """
 
     async def apply(self, change: ClusterChange) -> ProvisionResult:
         """Propose ``change``; raises Git errors as they come (never retried)."""
         ...
 
-    async def link(self, change: ImportChange) -> ProvisionResult:
-        """Propose linking several cluster files to a flavor in one commit (ADR-0037)."""
+
+class RolloutMergeRequests(Protocol):
+    """Day1 MRs that move a cluster to a flavor version, on a branch that names them (ADR-0044).
+
+    The branch is ``mr_conventions.rollout_branch(flavor, version, cluster)``:
+    a second run, or a second replica, finds the branch or its MR instead of
+    opening another. Nothing is retried (ADR-0006).
+    """
+
+    async def branch_exists(self, branch: str) -> bool:
+        """Whether ``branch`` exists in the day1 project."""
+        ...
+
+    async def open(self, change: ClusterChange, *, branch: str) -> MergeRequest:
+        """Commit ``change`` on the new branch ``branch`` and open its MR (labelled ``rollout``)."""
+        ...
+
+    async def open_for_branch(self, change: ClusterChange, *, branch: str) -> MergeRequest:
+        """Open the MR of ``branch``, which an earlier run committed to; no new commit."""
+        ...
+
+    async def supersede(self, old: MergeRequestRef, *, note: str) -> None:
+        """Comment ``note`` on the open MR ``old``, then close it."""
+        ...
+
+
+class RolloutEvents(Protocol):
+    """Counts what flavor rollouts do (``wingman_rollout_*``, docs/ops/metrics.md)."""
+
+    def run(self, trigger: RolloutTrigger) -> None:
+        """A run started."""
+        ...
+
+    def merge_request(self, outcome: RolloutOutcome) -> None:
+        """A run did ``outcome`` with one cluster's MR."""
         ...
 
 
@@ -201,6 +245,27 @@ class Day2Addons(Protocol):
 
     async def installed(self, cluster: ClusterRef) -> list[InstalledAddon]:
         """Addons installed on ``cluster``."""
+        ...
+
+
+class Day2Installs(Protocol):
+    """Day2 opening add-on install MRs for a flavor's rollout (ADR-0044).
+
+    Day1 never writes a day2 repo itself: it asks the day2 service, which
+    opens its MRs as for any request (one per team). Raises
+    ``Day2UnavailableError`` when day2 does not answer, or answers with a
+    server error; a request day2 may have acted on is never resent (the next
+    rollout run reads ``open_installs`` first).
+    """
+
+    async def open_installs(self, cluster: ClusterRef) -> list[Day2InstallRequest]:
+        """Day2's open Wingman MRs that install add-ons on ``cluster``."""
+        ...
+
+    async def install(
+        self, cluster: ClusterRef, addons: Sequence[RequestedAddon], *, message: str
+    ) -> Day2InstallResult:
+        """Ask day2 to install ``addons`` on ``cluster``: an MR per team; refusals in ``failed``."""
         ...
 
 

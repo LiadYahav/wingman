@@ -448,6 +448,7 @@ test.describe("Flavor editor: editing a flavor", () => {
 
     await warnings.getByRole("button", { name: "Remove the lock on nodepools[0].infra_env" }).click();
     await page.getByLabel("Mador", { exact: true }).fill("7");
+    await page.getByTestId("spec-version-input").fill("1.1.0"); // an edit needs a new version (ADR-0044)
     await reviewAndConfirm(page, /review & update/i);
 
     await expect(page.getByText("Update MR !22 opened")).toBeVisible();
@@ -478,11 +479,56 @@ test.describe("Flavor editor: editing a flavor", () => {
     await expect(lockControl(page, "Replicas").getByRole("radio", { name: "Locked" })).toHaveAttribute("aria-checked", "true");
     await expect(lockControl(page, "Machine configs").getByRole("radio", { name: "Preset" })).toHaveAttribute("aria-checked", "true");
     await lockControl(page, "Replicas").getByRole("radio", { name: "Preset" }).click();
+    await page.getByTestId("spec-version-input").fill("1.1.0");
     await reviewAndConfirm(page, /review & update/i);
     await expect(page.getByText("Update MR !23 opened")).toBeVisible();
     const day1 = writes[0].body.spec.day1 as ClusterSpec["spec"]["day1"] & { immutable_paths?: unknown };
     expect(day1.locked_paths).toEqual([]);
     expect(day1).not.toHaveProperty("immutable_paths");
+  });
+
+  test("an edit that keeps the saved version is refused here, at the version, and nothing is sent", async ({ page }) => {
+    const writes: Write[] = [];
+    await open(page, "/specs/agent-dell/edit", async (p) => {
+      await p.route(/\/api\/day1\/specs\/agent-dell(\?.*)?$/, (r) => {
+        if (r.request().method() !== "PUT") return json(r, AGENT_DELL);
+        writes.push({ body: r.request().postDataJSON(), url: new URL(r.request().url()) });
+        return json(r, mockMR({ repo: "specs", iid: 24 }));
+      });
+    });
+    const version = field(page, "metadata.version");
+    const sameVersion = "1.0.0 is the current version; an edit needs a new one, which reaches each cluster through its own merge request";
+
+    await page.getByLabel("Merkaz", { exact: true }).fill("4321");
+    await page.getByRole("button", { name: /review & update/i }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(version).toContainText(sameVersion);
+    await expect(alertWith(page, "before saving")).toContainText(`Version: ${sameVersion}`);
+    expect(writes).toHaveLength(0);
+
+    // A new version clears it, and the edit is saved with it
+    await page.getByTestId("spec-version-input").fill("1.1.0");
+    await expect(version).not.toContainText("is the current version");
+    await reviewAndConfirm(page, /review & update/i);
+    await expect(page.getByText("Update MR !24 opened")).toBeVisible();
+    expect(writes).toHaveLength(1);
+    expect(writes[0].body.metadata.version).toBe("1.1.0");
+  });
+
+  test("day1's refusal of a version used before is shown at the version field", async ({ page }) => {
+    const used = "metadata.version: 0.9.0 was used before; a version never changes once saved";
+    await open(page, "/specs/agent-dell/edit", async (p) => {
+      await p.route(/\/api\/day1\/specs\/agent-dell(\?.*)?$/, (r) =>
+        r.request().method() !== "PUT"
+          ? json(r, AGENT_DELL)
+          : json(r, problem(422, "VALIDATION_ERROR", "spec 'agent-dell' cannot be saved", { problems: [used] }), 422)
+      );
+    });
+
+    await page.getByTestId("spec-version-input").fill("0.9.0");
+    await reviewAndConfirm(page, /review & update/i);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(field(page, "metadata.version")).toContainText("0.9.0 was used before; a version never changes once saved");
   });
 
   test("the review previews the cluster file day1 renders, live, with saved locks shown as saved", async ({ page }) => {

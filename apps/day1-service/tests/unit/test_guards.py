@@ -22,7 +22,7 @@ from wingman_core.domain.git import FileChange
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.domain.mr_conventions import ResourceType, Verb
 from wingman_core.domain.users import Role, User
-from wingman_day1.domain.changes import ClusterAction, ClusterChange, FileUpdate, ImportChange
+from wingman_day1.domain.changes import ClusterAction, ClusterChange
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.infrastructure.merge_requests import GitClusterProvisioner, MergeRequestWriter
 
@@ -109,6 +109,19 @@ class _Recorded(Exception):
             ClusterAction.MODIFY, REF, ALICE, "s", content="a: 1\n", last_commit_id="a" * 8
         ),
         ClusterChange(ClusterAction.DELETE, REF, ALICE, "s", last_commit_id="a" * 8),
+        ClusterChange(
+            ClusterAction.SYNC, REF, ALICE, "s", content="a: 1\n", last_commit_id="a" * 8
+        ),
+        ClusterChange(
+            ClusterAction.IMPORT,
+            REF,
+            ALICE,
+            "s",
+            content="a: 1\n",
+            last_commit_id="a" * 8,
+            spec_name="agent-baseline",
+            spec_version="1.0.0",
+        ),
     ],
     ids=lambda c: str(c.action),
 )
@@ -121,19 +134,3 @@ async def test_every_provisioned_change_touches_exactly_the_cluster_file(
     assert [str(c.path) for c in writer.changes] == [str(REF.path)]
     assert REF.path.parent.name == "hostedClusters"
     assert REF.path.name == f"{REF.name}.yaml"
-
-
-async def test_an_import_touches_exactly_the_picked_cluster_files() -> None:
-    other = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-lark-site1")
-    writer = RecordingWriter()
-    change = ImportChange(
-        "agent-baseline",
-        "1.0.0",
-        (FileUpdate(REF, "a: 1\n", "a" * 8), FileUpdate(other, "b: 1\n", "b" * 8)),
-        ALICE,
-        "s",
-    )
-    with pytest.raises(_Recorded):
-        await GitClusterProvisioner(writer).link(change)
-    assert [str(c.path) for c in writer.changes] == [str(REF.path), str(other.path)]
-    assert all(c.path.parent.name == "hostedClusters" for c in writer.changes)

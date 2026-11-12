@@ -11,18 +11,30 @@ from wingman_core.domain.mr_conventions import (
     ParsedTitle,
     Repo,
     ResourceType,
+    RolloutBranch,
     Verb,
     branch_name,
     mr_description,
     mr_title,
     parse_mr_description,
     parse_mr_title,
+    parse_rollout_branch,
+    rollout_branch,
 )
 
 _words = st.text(
     alphabet=st.characters(min_codepoint=33, max_codepoint=126, exclude_characters="]/"),
     min_size=1,
     max_size=30,
+)
+_dns_labels = st.from_regex(r"\A[a-z0-9]([-a-z0-9]{0,30}[a-z0-9])?\Z")
+_numbers = st.integers(min_value=0, max_value=9999).map(str)
+_versions = st.builds(
+    lambda major, minor, patch, pre: f"{major}.{minor}.{patch}{pre}",
+    _numbers,
+    _numbers,
+    _numbers,
+    st.sampled_from(["", "-rc.1", "-alpha", "-beta.2", "_1"]),
 )
 
 
@@ -45,6 +57,93 @@ def test_branch_name_is_always_a_valid_ref(username: str, resource: str) -> None
     assert " " not in name
     assert not name.endswith((".", "/", ".lock"))
     assert all(part for part in name.split("/"))
+
+
+@pytest.mark.parametrize(
+    ("flavor", "version", "cluster", "branch"),
+    [
+        (
+            "agent-baseline",
+            "1.1.0",
+            "ocp4-prod-lark-site1",
+            "platform/rollout/agent-baseline/v1.1.0/ocp4-prod-lark-site1",
+        ),
+        (
+            "gpu",
+            "2026.11.1",
+            "ocp4-dev-x-site-a-2",
+            "platform/rollout/gpu/v2026.11.1/ocp4-dev-x-site-a-2",
+        ),
+        ("gpu", "1.0.0-rc.1", "c", "platform/rollout/gpu/v1.0.0-rc.1/c"),
+        # Unsafe characters are rewritten as in every branch.
+        ("my flavor", "1.0+build", "c..d", "platform/rollout/my-flavor/v1.0-build/c.d"),
+    ],
+)
+def test_rollout_branch_format(flavor: str, version: str, cluster: str, branch: str) -> None:
+    assert rollout_branch(flavor=flavor, version=version, cluster=cluster) == branch
+
+
+def test_rollout_branch_is_the_same_for_the_same_inputs() -> None:
+    # No timestamp: a second run, or a second pod, must find this branch, not make another.
+    parts = {"flavor": "agent-baseline", "version": "1.1.0", "cluster": "ocp4-prod-lark-site1"}
+    assert rollout_branch(**parts) == rollout_branch(**parts)
+    assert rollout_branch(**parts) != rollout_branch(**{**parts, "version": "1.2.0"})
+    assert rollout_branch(**parts) != rollout_branch(**{**parts, "cluster": "ocp4-prod-wren-site1"})
+
+
+@given(_dns_labels, _versions, _dns_labels)
+def test_rollout_branch_round_trips(flavor: str, version: str, cluster: str) -> None:
+    branch = rollout_branch(flavor=flavor, version=version, cluster=cluster)
+    assert parse_rollout_branch(branch) == RolloutBranch(flavor, version, cluster)
+    assert ".." not in branch
+    assert not branch.endswith((".", "/", ".lock"))
+
+
+@given(st.text(max_size=40), st.text(max_size=20), st.text(max_size=40))
+def test_any_rollout_branch_parses_and_is_a_valid_ref(
+    flavor: str, version: str, cluster: str
+) -> None:
+    branch = rollout_branch(flavor=flavor, version=version, cluster=cluster)
+    assert parse_rollout_branch(branch) is not None
+    assert len(branch.split("/")) == 5
+    assert all(branch.split("/"))
+    assert ".." not in branch
+    assert " " not in branch
+
+
+@given(st.text(max_size=40), st.text(max_size=20), st.text(max_size=40))
+def test_a_user_branch_is_never_a_rollout_branch(username: str, action: str, resource: str) -> None:
+    name = branch_name(username=username, action=action, resource=resource, at=datetime.now(UTC))
+    assert parse_rollout_branch(name) is None
+
+
+def test_a_user_named_rollout_does_not_make_a_rollout_branch() -> None:
+    at = datetime(2026, 11, 12, 10, 0, 0, tzinfo=UTC)
+    name = branch_name(username="rollout", action="sync-cluster", resource="v1.0.0", at=at)
+    assert name.startswith("platform/rollout/")
+    assert parse_rollout_branch(name) is None
+
+
+@pytest.mark.parametrize(
+    "branch",
+    [
+        "",
+        "main",
+        "platform/rollout/f/1.0.0/c",  # no "v"
+        "platform/rollout/f/v/c",  # no version after the "v"
+        "platform/rollout/f/v1.0.0",  # no cluster
+        "platform/rollout/f/v1.0.0/c/extra",
+        "platform/rollout/f-v1.0.0/c",  # four segments
+        "platform/jane/f/v1.0.0/c",
+        "other/rollout/f/v1.0.0/c",
+        "platform/rollout//v1.0.0/c",
+        "platform/rollout/f/v1..0/c",  # rollout_branch never writes ".."
+        "platform/rollout/-f/v1.0.0/c",
+        "platform/rollout/f/v1.0.0/c+d",
+    ],
+)
+def test_other_branches_are_not_rollout_branches(branch: str) -> None:
+    assert parse_rollout_branch(branch) is None
 
 
 def test_title_matches_the_existing_format() -> None:

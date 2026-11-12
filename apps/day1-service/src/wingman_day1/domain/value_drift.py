@@ -43,6 +43,7 @@ from wingman_day1.domain.machine_configs import MachineConfigCatalog, network_co
 
 _KUBEVIRT: Final = "kubevirt"
 _AGENT: Final = "agent"
+_SHOWN: Final = 80
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +104,21 @@ def config_names(configs: object) -> list[str]:
     if not isinstance(configs, list):
         return []
     return [entry_key(item) for item in cast("Sequence[object]", configs)]
+
+
+def show_value(value: object) -> str:
+    """A drifted value as an MR description shows it: configs by name, cut at 80 characters."""
+    if value is MISSING:
+        return "(absent)"
+    if isinstance(value, list):
+        names = [
+            str(cast("Mapping[str, object]", e).get("name")) if isinstance(e, Mapping) else str(e)
+            for e in cast("Sequence[object]", value)
+        ]
+        text = ", ".join(names) or "none"
+    else:
+        text = repr(value) if isinstance(value, str) else str(value)
+    return text if len(text) <= _SHOWN else f"{text[: _SHOWN - 3]}..."
 
 
 def compare_names(expected: Sequence[str], have: Sequence[str]) -> tuple[list[str], list[str]]:

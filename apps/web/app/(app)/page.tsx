@@ -96,8 +96,14 @@ export default function DashboardPage() {
   };
   const statusOff = liveStatuses === null;
 
+  // Against the version each cluster is on (ADR-0044): a newer flavor version is an update, never drift
   const drifted = driftSummary?.filter((d) => d.state === "drifted").length ?? 0;
   const driftUnknown = driftSummary?.filter((d) => d.state === "unknown").length ?? 0;
+  const withUpdate = driftSummary?.filter((d) => d.state === "in_sync" && d.update).length ?? 0;
+  const driftHint = [
+    driftUnknown > 0 && `${driftUnknown} unknown`,
+    withUpdate > 0 && `${withUpdate} with an update`,
+  ].filter(Boolean).join(" · ");
 
   const allApprovals = [...(approvalsDay1 ?? []), ...(approvalsDay2 ?? [])];
   const recentApprovals = [...allApprovals]
@@ -147,7 +153,7 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Drifted" value={driftSummary ? drifted : undefined}
-          hint={driftFailed ? "Could not be loaded" : driftUnknown > 0 ? `${driftUnknown} unknown` : undefined}
+          hint={driftFailed ? "Could not be loaded" : driftHint || undefined}
           icon={AlertTriangle} href="/clusters" loading={driftLoading}
           color={drifted > 0 ? "red" : "blue"}
         />
