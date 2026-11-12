@@ -1147,7 +1147,7 @@ class AuthoringChangeOut(MRDetailOut, _AuthoringFields):
         )
 
 
-# ── Operators (ADR-0053) ────────────────────────────────────────────────────
+# ── Add-ons with their defaults (ADR-0053) ────────────────────────────────────────────────────
 
 
 class FileOut(BaseModel):
@@ -1174,7 +1174,7 @@ class FileOut(BaseModel):
 
 
 class OcpVersionOut(BaseModel):
-    """An ``ocp-versions/<v>/`` pin of an operator."""
+    """An ``ocp-versions/<v>/`` pin of an add-on."""
 
     version: str
     target_revision: str | None
@@ -1193,7 +1193,7 @@ class OcpVersionOut(BaseModel):
 
 
 class ExclusionsOut(BaseModel):
-    """A scope's ``exclusions.yaml``, as it concerns one operator."""
+    """A scope's ``exclusions.yaml``, as it concerns one add-on."""
 
     path: str
     exists: bool
@@ -1219,7 +1219,7 @@ class ExclusionsOut(BaseModel):
 
 
 class ScopeDestinationOut(BaseModel):
-    """One destination of a scope and how the operator's default stands there."""
+    """One destination of a scope and how the add-on's default stands there."""
 
     id: str
     name: str
@@ -1278,7 +1278,7 @@ class EnvFileOut(BaseModel):
 
 
 class ScopePanelOut(BaseModel):
-    """One scope of an operator: its default there, if any, and every destination."""
+    """One scope of an add-on: its default there, if any, and every destination."""
 
     scope: str
     label: str
@@ -1320,7 +1320,7 @@ class ScopePanelOut(BaseModel):
 
 
 class OperatorOut(BaseModel):
-    """One operator of a team: its files, its OCP-version pins, one panel per scope."""
+    """One add-on of a team: its files, its OCP-version pins, one panel per scope."""
 
     team: str
     name: str
@@ -1353,7 +1353,7 @@ class OperatorOut(BaseModel):
 
 
 class OperatorDefaultOut(BaseModel):
-    """A scope an operator is a default on, and its reach there."""
+    """A scope an add-on is a default on, and its reach there."""
 
     scope: str
     label: str
@@ -1362,7 +1362,7 @@ class OperatorDefaultOut(BaseModel):
 
 
 class OperatorSummaryOut(BaseModel):
-    """One line of a team's operators list."""
+    """One line of a team's add-ons list."""
 
     team: str
     name: str

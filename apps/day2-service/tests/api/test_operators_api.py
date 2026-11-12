@@ -1,4 +1,4 @@
-"""The Operators pages' API through HTTP (``docs/notes/2026-11-12-operators-page-api.md``)."""
+"""The add-on detail API through HTTP (``docs/notes/2026-11-12-operators-page-api.md``)."""
 
 from __future__ import annotations
 
@@ -169,3 +169,14 @@ async def test_the_new_writes_are_admin_only_and_refused_for_a_read_only_team(
         403,
         "TEAM_READ_ONLY",
     )
+
+
+async def test_the_addons_paths_and_the_3_12_operators_aliases_answer_the_same(
+    vic: httpx.AsyncClient,
+) -> None:
+    listed = ok(await vic.get("/api/day2/teams/redbull/addons"))
+    assert listed == ok(await vic.get("/api/day2/teams/redbull/operators"))
+    detail = ok(await vic.get("/api/day2/teams/redbull/addons/dhcp-api-token"))
+    assert detail == ok(await vic.get("/api/day2/teams/redbull/operators/dhcp-api-token"))
+    assert detail["name"] == "dhcp-api-token"
+    problem(await vic.get("/api/day2/teams/redbull/addons/ghost"), 404, "NOT_FOUND")

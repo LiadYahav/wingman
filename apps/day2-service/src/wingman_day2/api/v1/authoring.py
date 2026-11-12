@@ -1,4 +1,4 @@
-"""Operator authoring: a new one, its team default, fleet defaults and their destinations.
+"""Add-on authoring: a new one, its team default, fleet defaults and their destinations.
 
 ADR-0043 and ADR-0053. Every write takes ``?dry_run=true``: it runs every
 check, opens nothing, and answers 200 with the plan (its ``impact`` and
