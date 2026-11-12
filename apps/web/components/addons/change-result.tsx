@@ -6,10 +6,13 @@ import { FindingsList } from "@/components/addons/findings";
 import { cn } from "@/lib/utils";
 import type { BulkResult, ChangeResult } from "@/types/day2";
 
+/** What the panel shows of an opened MR: an install's, or an add-on authoring write's. */
+export type OpenedMergeRequest = Pick<ChangeResult, "team" | "iid" | "web_url" | "title" | "files" | "warnings" | "notes">;
+
 /** What the last write on the page opened: one MR, or one per team for a bulk install. */
 export interface OpenedChanges {
-  verb: "Install" | "Update" | "Remove";
-  results: ChangeResult[];
+  verb: "Install" | "Update" | "Remove" | "Create" | "Promote";
+  results: OpenedMergeRequest[];
   failed: BulkResult["failed"];
 }
 

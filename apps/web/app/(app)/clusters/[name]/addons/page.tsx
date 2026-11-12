@@ -14,6 +14,7 @@ import {
   isDestinationId,
   keyFromParam,
   problemOf,
+  teamAccess,
 } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
@@ -27,6 +28,7 @@ import { InstalledChartCard, type DestinationRef } from "@/components/addons/ins
 import { AvailableChartCard, type InstallChoice } from "@/components/addons/available-chart-card";
 import { BulkInstallBar, BulkInstallDialog, chartKey } from "@/components/addons/bulk-install";
 import { ChangeResultPanel, type OpenedChanges } from "@/components/addons/change-result";
+import { ReadOnlyNote, useTeams } from "@/components/addons/team-access";
 import type { CatalogEntry, Destination, DestinationCharts, GitLabInfo } from "@/types/day2";
 
 /** Don't retry what the service refused (404 unknown, 422 ambiguous); retry the rest once. */
@@ -82,12 +84,16 @@ function ChartsSkeleton() {
   );
 }
 
-function TeamHeading({ team, count }: { team: string; count: number }) {
+function TeamHeading({ team, count, readOnlyReason }: { team: string; count: number; readOnlyReason?: string | null }) {
   return (
-    <div className="flex items-center gap-2">
-      <Users className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{team}</span>
-      <span className="text-xs tabular-nums text-muted-foreground">({count})</span>
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{team}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">({count})</span>
+      </div>
+      {/* The team has not given Wingman write access (ADR-0043): its charts here are read-only. */}
+      {readOnlyReason && <ReadOnlyNote reason={readOnlyReason} className="ml-5" />}
     </div>
   );
 }
@@ -145,6 +151,8 @@ function ClusterCharts() {
     queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
     staleTime: 120_000,
   });
+  const teams = useTeams();
+  const accessOf = (team: string) => teamAccess(teams.data, team);
   const gitlabInfo = useQuery<GitLabInfo>({
     queryKey: day2Keys.gitlabInfo,
     queryFn: () => api.get<GitLabInfo>(day2Api.gitlabInfo),
@@ -168,6 +176,7 @@ function ClusterCharts() {
   const writable = Boolean(data) && (data?.kind === "hub" || Boolean(data?.env));
   const canWrite = isAdmin && writable;
   const ref: DestinationRef | null = data ? { id: data.id, name: data.cluster, kind: data.kind } : null;
+  const selectable = available.filter((e) => accessOf(e.team).writable);
   const selectedEntries = available.filter((e) => selected.has(chartKey(e)));
   const isFetching = charts.isFetching || catalog.isFetching;
 
@@ -237,7 +246,7 @@ function ClusterCharts() {
             <div className="space-y-6">
               {groupByTeam(installed).map(([team, items]) => (
                 <div key={team} className="space-y-2">
-                  <TeamHeading team={team} count={items.length} />
+                  <TeamHeading team={team} count={items.length} readOnlyReason={canWrite ? accessOf(team).reason : null} />
                   <div className="space-y-2 pl-5">
                     {[...items]
                       .sort((a, b) => Number(a.source === "fleet-default") - Number(b.source === "fleet-default") || a.name.localeCompare(b.name))
@@ -247,7 +256,7 @@ function ClusterCharts() {
                           chart={chart}
                           destination={ref}
                           catalog={catalog.data?.find((e) => chartKey(e) === chartKey(chart))}
-                          isAdmin={canWrite}
+                          isAdmin={canWrite && accessOf(team).writable}
                           lastOfTeam={items.filter((c) => c.source === "cluster").length === 1}
                           onOpened={showOpened}
                           reloadChart={async () =>
@@ -314,24 +323,24 @@ function ClusterCharts() {
         ) : (
           <section className="space-y-4" aria-label="Available">
             <SectionHeading title="Available" count={available.length}>
-              {canWrite && (
+              {canWrite && selectable.length > 0 && (
                 <button
                   type="button"
                   onClick={() =>
-                    selected.size === available.length
+                    selected.size === selectable.length
                       ? clearSelection()
-                      : setSelected(new Set(available.map(chartKey)))
+                      : setSelected(new Set(selectable.map(chartKey)))
                   }
                   className="text-xs text-muted-foreground transition-colors hover:text-primary"
                 >
-                  {selected.size === available.length ? "Deselect all" : "Select all"}
+                  {selected.size === selectable.length ? "Deselect all" : "Select all"}
                 </button>
               )}
             </SectionHeading>
             <div className="space-y-6">
               {groupByTeam(available).map(([team, items]) => (
                 <div key={team} className="space-y-2">
-                  <TeamHeading team={team} count={items.length} />
+                  <TeamHeading team={team} count={items.length} readOnlyReason={canWrite ? accessOf(team).reason : null} />
                   <div className="space-y-2 pl-5">
                     {items.map((entry) => (
                       <AvailableChartCard
@@ -339,6 +348,7 @@ function ClusterCharts() {
                         entry={entry}
                         destination={ref}
                         isAdmin={canWrite}
+                        readOnlyReason={accessOf(team).reason}
                         excludedHere={excludedKeys.has(chartKey(entry))}
                         selected={selected.has(chartKey(entry))}
                         onSelectChange={(on) => toggle(entry, on)}
