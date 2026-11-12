@@ -12,6 +12,7 @@ stop and report instead of improvising, and how to go back.
 | 3.2 | 3.3: flavors v2 (enforced locks, checked machine configs, import and sync) | [3.2-to-3.3.md](3.2-to-3.3.md) |
 | 3.3.0 | 3.3.1: network templates are read by the CI's name, `nm-conf-template-<hw>.bu` (3.3.0 refused every network config) | The image tag only; nothing else changes |
 | 3.3 | 3.4: a cluster's nodes by NodePool, from its MCE (new read-only MCE grants; optional server-scan and the workflows orchestrator) | [3.3-to-3.4.md](3.3-to-3.4.md) |
+| 3.4 | 3.5: the cluster's EPG from segments-manager, checked against the file's VLAN and segment (optional `segmentsManager.url`; no new grants) | [3.4-to-3.5.md](3.4-to-3.5.md) |
 
 Releases are named by version: from 3.0.1 on, every merge to main is a
 release whose version comes from its commits (ADR-0031), and you deploy that

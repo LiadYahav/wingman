@@ -77,7 +77,13 @@ data:
   WORKFLOWS_TIMEOUT_SECONDS: {{ .Values.workflows.timeoutSeconds | default 10 | quote }}
   {{- end }}
 
-  # ── A link to segments-manager on the cluster page (day1 never calls it) ─────
+  # ── segments-manager: the cluster's EPG (read only) and the links ────────────
+  # Values reused from 3.4 have only segmentsManager.uiUrl: every other key has a default.
+  {{- if and .Values.segmentsManager .Values.segmentsManager.url }}
+  SEGMENTS_MANAGER_URL: {{ .Values.segmentsManager.url | quote }}
+  SEGMENTS_MANAGER_SSL_VERIFY: {{ .Values.segmentsManager.sslVerify | default "true" | quote }}
+  SEGMENTS_MANAGER_TIMEOUT_SECONDS: {{ .Values.segmentsManager.timeoutSeconds | default 5 | quote }}
+  {{- end }}
   {{- if and .Values.segmentsManager .Values.segmentsManager.uiUrl }}
   SEGMENTS_MANAGER_UI_URL: {{ .Values.segmentsManager.uiUrl | quote }}
   {{- end }}

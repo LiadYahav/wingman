@@ -23,6 +23,7 @@ from wingman_day1.domain.machines import (
     MachineObservation,
     MachineSetObservation,
 )
+from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
@@ -241,4 +242,16 @@ class UninstallWorkflow(Protocol):
         ``WorkflowsUnavailableError`` when nothing was started, and
         ``AmbiguousStartError`` when it was sent but the answer was lost.
         """
+        ...
+
+
+class SegmentLedger(Protocol):
+    """segments-manager: the platform's ledger of VLAN segments (read only, ADR-0039).
+
+    Raises ``SegmentsManagerUnavailableError`` when segments-manager cannot
+    answer: the EPG is then unknown, never "none". Nothing is ever written to it.
+    """
+
+    async def segment(self, cidr: str) -> SegmentRecord | None:
+        """The segment ``cidr`` (``a.b.c.0/24``); ``None`` when segments-manager has no such one."""
         ...

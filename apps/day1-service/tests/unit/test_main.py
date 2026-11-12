@@ -19,8 +19,10 @@ from wingman_core.testing.fixtures import default_fixture_root, load_fixture_pro
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory, FakeUninstallWorkflow
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
+from wingman_day1.infrastructure.fake_segments import FakeSegmentLedger
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
+from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.main import Adapters, build_adapters, create_app
@@ -60,7 +62,7 @@ async def test_the_fake_backend_is_seeded_with_every_fixture_project() -> None:
             assert project.default_branch == "main"
         assert adapters.hub is None
         assert adapters.identity is None
-        assert (adapters.inventory, adapters.uninstall) == (None, None)
+        assert (adapters.inventory, adapters.uninstall, adapters.ledger) == (None, None, None)
         assert len(adapters.closers) == 1, "only the day2 client holds a connection"
     finally:
         await close(adapters)
@@ -119,6 +121,22 @@ async def test_server_scan_and_the_orchestrator_get_real_adapters_when_configure
         await close(adapters)
 
 
+async def test_segments_manager_gets_a_real_adapter_when_configured() -> None:
+    configured = settings(segments_manager_url="http://segments-manager.segments.svc:8000")
+    adapters = build_adapters(configured, FAKE, metrics=metrics(), service_token=lambda: "t")
+    try:
+        assert isinstance(adapters.ledger, HttpSegmentLedger)
+        assert len(adapters.closers) == 2
+    finally:
+        await close(adapters)
+    link_only = settings(segments_manager_ui_url="https://segments-manager.example")
+    adapters = build_adapters(link_only, FAKE, metrics=metrics(), service_token=lambda: "t")
+    try:
+        assert adapters.ledger is None, "the UI's URL is only a link"
+    finally:
+        await close(adapters)
+
+
 async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -> None:
     adapters = build_adapters(
         settings(
@@ -140,6 +158,10 @@ async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -
             "ocp4-prod-mce-site1-a", namespace="hcp-prod-lark-site1", name="ocp4-prod-lark-site1"
         )
         assert lark.agent_namespace == "inventory"
+        assert isinstance(adapters.ledger, FakeSegmentLedger)
+        herzi = await adapters.ledger.segment("10.20.44.0/24")
+        assert herzi is not None
+        assert herzi.cluster_name == "ocp4-prod-herzi-site1"
         assert len(adapters.closers) == 1, "the fakes hold no connection"
     finally:
         await close(adapters)
@@ -204,6 +226,7 @@ def test_the_app_serves_the_legacy_paths_and_no_site_or_mce_creation(app: FastAP
         ("/api/day1/clusters/{name}/sync", "POST"),
         ("/api/day1/clusters/{name}/delete-workflow", "GET"),
         ("/api/day1/clusters/{name}/delete-workflow", "POST"),
+        ("/api/day1/clusters/{name}/network", "GET"),
         ("/api/day1/clusters/{name}/nodes", "GET"),
         ("/api/day1/clusters/{name}/nodes/{server_id}/uninstall", "POST"),
         ("/api/day1/sites", "GET"),

@@ -47,6 +47,7 @@ class Dependency(StrEnum):
     DAY2 = "day2"
     SERVER_SCAN = "server_scan"
     WORKFLOWS = "workflows"
+    SEGMENTS_MANAGER = "segments_manager"
 
 
 class Outcome(StrEnum):

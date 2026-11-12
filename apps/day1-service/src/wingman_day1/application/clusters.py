@@ -184,6 +184,13 @@ class ClusterService:
         """
         return (await self._load(ref, with_commit=False)).hosted_cluster
 
+    async def values(self, ref: ClusterRef) -> ClusterValues | None:
+        """The file's values; ``None`` when it does not parse. Reads the file only, not its history.
+
+        A missing file is ``NotFoundError``.
+        """
+        return (await self._load(ref, with_commit=False)).values
+
     async def history(self, ref: ClusterRef) -> list[Commit]:
         """Commits that changed the cluster's file, newest first."""
         return await self._day1.history(ref.path)

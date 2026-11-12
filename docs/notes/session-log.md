@@ -4,6 +4,32 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-11 — 3.3.1 template fix; nodes by NodePool and node uninstall (ADR-0038).**
+PR #23 (3.3.1): network templates are `nm-conf-template-<hw>.bu`, the CI's
+name; 3.3.0 wanted `-hw-` and refused every network config (ADR-0027's
+correction). Then, on `roiblum/feat-cluster-nodes` (a backend and a web agent
+against `docs/notes/2026-11-11-cluster-nodes-api.md`, redesigned once by the
+user):
+- the cluster page's Nodes tab shows each NodePool from the MCE: its nodes
+  (Machine → AgentMachine → Agent → BareMetalHost = server-scan's server),
+  each missing piece and why, and which node an update is working on; servers
+  server-scan lists that no Machine has sit apart. Nothing on the cluster list.
+- Uninstall beside a node starts the platform's `uninstall-server-from-hc`
+  and shows its run. Wingman only triggers and shows: the procedure and its
+  checks are the workflow's.
+- In-place updates: the MCE shows progress, the rebooting node and a failed
+  one, never the drain before a reboot (`docs/ecosystem/notes/hypershift-node-state.md`).
+  The guest Nodes would need each cluster's admin kubeconfig: not done.
+- The MCE token needs more reads (the API note's §4, `docs/upgrade/3.3-to-3.4.md`).
+  `DAY1_FAKE_FLEET=true` (development) fakes server-scan, the orchestrator and
+  the MCE for demos.
+
+**Next:**
+- merge PR #23 (3.3.1), then the nodes PR (3.4.0); deploy with the 3.3→3.4 guide;
+- check the workflow class name `UninstallServerFromHcWorkflow` (the runs list
+  answers `[]` for any unknown type) and the MCE reads against a real hub;
+- flavors v2's "Left for later"; the architect's answers.
+
 **2026-11-08 — flavors v2, all stages, on `roiblum/feat-flavors-v2`.**
 Main merged in (the branch's ADRs 0033/0034 became 0036/0037; the import asks
 `changed_since`, ADR-0035). Day1: sync (`POST /clusters/{name}/sync[/preview]`,

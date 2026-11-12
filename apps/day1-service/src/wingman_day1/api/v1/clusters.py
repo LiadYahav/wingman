@@ -22,6 +22,7 @@ from wingman_day1.api.v1.schemas import (
     ClusterDetailOut,
     ClusterDriftOut,
     ClusterLiveStatusOut,
+    ClusterNetworkOut,
     ClusterNodesOut,
     ClusterStatusOut,
     CommitOut,
@@ -288,6 +289,20 @@ async def start_delete_workflow(
     """Start the delete-cluster workflow (501 until it exists, ADR-0033)."""
     ref = await _ref(context, name, site, mce)
     return WorkflowRunOut.of(await workflow.start(ref, requested_by=user))
+
+
+@router.get("/{name}/network")
+async def cluster_network(
+    name: str, context: Context, user: CurrentUser, site: Site = None, mce: Mce = None
+) -> ClusterNetworkOut:
+    """The cluster's VLAN and segment from its file, with the EPG from segments-manager.
+
+    What segments-manager says that disagrees with the file is in ``problems``
+    (ADR-0039). segments-manager off: ``ledger`` is ``null``; failing: also
+    ``ledger_error``. Neither fails the read, and the MCE is never asked.
+    """
+    ref = await _ref(context, name, site, mce)
+    return ClusterNetworkOut.of(await context.network.network(ref))
 
 
 @router.get("/{name}/nodes")

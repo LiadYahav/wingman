@@ -27,7 +27,7 @@ fails when this table and the code disagree.
 | `wingman_build_info` | gauge | `component`, `version`, `commit` | Always 1; which build is running. `component` is `day1` or `day2` (not `service`: Prometheus adds that as a target label). Version skew shows here. |
 | `wingman_http_requests_total` | counter | `method`, `route`, `status_class` | HTTP requests served. `status_class` is `2xx`..`5xx`. |
 | `wingman_http_request_duration_seconds` | histogram | `method`, `route` | Time to serve a request. |
-| `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth`, `day2`, `server_scan` or `workflows` (the workflows orchestrator); `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
+| `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth`, `day2`, `server_scan`, `workflows` (the workflows orchestrator) or `segments_manager`; `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
 | `wingman_dependency_request_duration_seconds` | histogram | `dependency`, `operation` | Time spent in a call, retries included. |
 
 Operations of the other dependencies (day1):
@@ -39,6 +39,7 @@ Operations of the other dependencies (day1):
 | `day2` | `list_installed_addons` |
 | `server_scan` | `list_server_rows`, `get_server` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall` |
+| `segments_manager` | `get_segment` |
 
 ## Reading the GitLab outcomes
 
@@ -51,7 +52,7 @@ Operations of the other dependencies (day1):
   5xx after sending). Writes are never retried (ADR-0006). Someone must check
   whether the commit or merge happened before trying again.
 
-## Reading the server-scan and workflows outcomes
+## Reading the server-scan, workflows and segments-manager outcomes
 
 - `server_scan` `denied` means server-scan refused **Wingman's viewer token**
   (`SERVER_SCAN_TOKEN`); `unavailable` means it could not be reached or
@@ -61,3 +62,8 @@ Operations of the other dependencies (day1):
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the
   orchestrator's "already uninstalling"; `rejected` is a body it refused.
+- `segments_manager` `get_segment` is one cluster's segment, read for its
+  EPG (ADR-0039). A segment segments-manager does not have is `ok`: that is
+  an answer, shown as a warning. `unavailable` means it could not be reached
+  or answered with an error; the cluster's VLAN and segment are still shown
+  (they are the file's), and the answer's `ledger_error` says why.

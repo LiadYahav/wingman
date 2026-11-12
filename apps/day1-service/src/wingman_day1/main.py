@@ -9,8 +9,8 @@ the tests build the whole service on the in-memory GitLab and the fakes.
 ``WINGMAN_GIT_BACKEND=fake`` runs on an in-memory GitLab seeded from
 ``dev/gitlab-fixtures`` (local development and E2E); settings refuse it in
 production (ADR-0009). ``DAY1_FAKE_FLEET=true`` does the same for the MCE
-hubs, server-scan and the workflows orchestrator, from ``dev/fleet-fixtures``,
-in development only (ADR-0038).
+hubs, server-scan, the workflows orchestrator and segments-manager, from
+``dev/fleet-fixtures``, in development only (ADR-0038, ADR-0039).
 """
 
 from __future__ import annotations
@@ -61,6 +61,7 @@ from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
 from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
+from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
@@ -69,6 +70,7 @@ from wingman_day1.application.sync import SyncService
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
+from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons
@@ -80,6 +82,7 @@ from wingman_day1.infrastructure.merge_requests import (
 )
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.repositories import CachedRepository
+from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.ports import (
@@ -87,6 +90,7 @@ from wingman_day1.ports import (
     Day2Addons,
     HubApi,
     IdentityProvider,
+    SegmentLedger,
     ServerInventory,
     UninstallWorkflow,
 )
@@ -102,6 +106,8 @@ HUB_TTL_SECONDS: Final = 10.0
 """The longest the nodes view caches an MCE read (live status reads the hub directly)."""
 FAKE_SERVER_SCAN_UI: Final = "http://server-scan.example"
 """Where the fake fleet's node links point when ``SERVER_SCAN_UI_URL`` is empty."""
+FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
+"""Where the fake fleet's segments-manager links point when no segments-manager URL is set."""
 ROUTERS: Final = (
     auth_api.router,
     clusters_api.router,
@@ -133,6 +139,8 @@ class Adapters:
     """server-scan; ``None`` when ``SERVER_SCAN_URL`` is empty (ADR-0038)."""
     uninstall: UninstallWorkflow | None = None
     """The orchestrator's uninstall workflow; ``None`` when ``WORKFLOWS_API_URL`` is empty."""
+    ledger: SegmentLedger | None = None
+    """segments-manager; ``None`` when ``SEGMENTS_MANAGER_URL`` is empty (ADR-0039)."""
     closers: tuple[Close, ...] = field(default=())
 
 
@@ -206,8 +214,33 @@ def build_adapters(
         identity=identity,
         inventory=inventory,
         uninstall=uninstall,
+        ledger=_segment_ledger(settings, metrics=metrics, closers=closers),
         closers=tuple(closers),
     )
+
+
+def _segment_ledger(
+    settings: Day1Settings, *, metrics: WingmanMetrics, closers: list[Close]
+) -> SegmentLedger | None:
+    """segments-manager, real or none; or, with the fake fleet, its fake (ADR-0039)."""
+    if settings.day1_fake_fleet:
+        from wingman_day1.infrastructure.fake_segments import (
+            FakeSegmentLedger,
+            default_segments_file,
+            load_segments,
+        )
+
+        return FakeSegmentLedger(load_segments(default_segments_file()))
+    if not settings.segments_manager_url:
+        return None
+    ledger = HttpSegmentLedger(
+        base_url=settings.segments_manager_url,
+        verify=settings.segments_manager_tls_verify,
+        timeout_seconds=settings.segments_manager_timeout_seconds,
+        metrics=metrics,
+    )
+    closers.append(ledger.aclose)
+    return ledger
 
 
 def _fleet_adapters(
@@ -331,6 +364,13 @@ def build_context(
             ),
             infraenv_namespace=settings.mce_infraenv_namespace or None,
         )
+    network = NetworkService(
+        cluster_service,
+        CachedSegmentLedger(adapters.ledger, cache, ttl=ttl)
+        if adapters.ledger is not None
+        else None,
+    )
+    fake_ui = FAKE_SEGMENTS_MANAGER_UI if settings.day1_fake_fleet else ""
     dev_secret = settings.dev_auth_secret.get_secret_value() if settings.dev_auth_enabled else None
     return Day1Context(
         clusters=cluster_service,
@@ -350,6 +390,7 @@ def build_context(
         ),
         repos=repos,
         machine_configs=machine_configs,
+        network=network,
         delete_workflow=adapters.delete_workflow,
         nodes=nodes,
         status=(
@@ -367,7 +408,7 @@ def build_context(
         ),
         webhook_secret=settings.gitlab_webhook_secret.get_secret_value() or None,
         status_poll_seconds=settings.day1_status_poll_seconds,
-        segments_manager_ui_url=settings.segments_manager_ui_url or None,
+        segments_manager_ui_url=settings.segments_manager_ui_base or fake_ui or None,
     )
 
 

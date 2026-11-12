@@ -101,9 +101,15 @@ class Day1Settings(BaseSettings):
     workflows_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     day1_fake_fleet: bool = False
 
-    # ── A link to segments-manager's UI on the cluster page (off by default) ──
-    # Day1 never calls it; the cluster detail carries the links. Empty: no link.
+    # ── segments-manager: a cluster's EPG, checked against Git (ADR-0039) ────
+    # Off by default. SEGMENTS_MANAGER_URL is its API (reads need no token);
+    # day1 only reads one segment, never writes. SEGMENTS_MANAGER_UI_URL is
+    # where the cluster page's links point (default: the API's URL). Empty
+    # both: no EPG and no link. DAY1_FAKE_FLEET replaces it with a fake.
+    segments_manager_url: str = ""
     segments_manager_ui_url: str = ""
+    segments_manager_ssl_verify: str = "true"
+    segments_manager_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
 
     @field_validator("specs_root_path")
     @classmethod
@@ -119,7 +125,11 @@ class Day1Settings(BaseSettings):
         return value
 
     @field_validator(
-        "server_scan_url", "server_scan_ui_url", "workflows_api_url", "segments_manager_ui_url"
+        "server_scan_url",
+        "server_scan_ui_url",
+        "workflows_api_url",
+        "segments_manager_url",
+        "segments_manager_ui_url",
     )
     @classmethod
     def _empty_or_an_http_url(cls, value: str) -> str:
@@ -191,16 +201,27 @@ class Day1Settings(BaseSettings):
         return tls_verify(self.workflows_ssl_verify)
 
     @property
+    def segments_manager_tls_verify(self) -> bool | str:
+        """``SEGMENTS_MANAGER_SSL_VERIFY`` parsed."""
+        return tls_verify(self.segments_manager_ssl_verify)
+
+    @property
     def server_scan_ui_base(self) -> str:
         """Where node links point: ``SERVER_SCAN_UI_URL``, else ``SERVER_SCAN_URL``."""
         return self.server_scan_ui_url or self.server_scan_url
+
+    @property
+    def segments_manager_ui_base(self) -> str:
+        """Where the cluster page's links point: ``SEGMENTS_MANAGER_UI_URL``, else the API's URL."""
+        return self.segments_manager_ui_url or self.segments_manager_url
 
 
 def check_runtime(settings: Day1Settings, runtime: RuntimeSettings) -> None:
     """Refuse to start with ``DAY1_FAKE_FLEET=true`` outside development (ADR-0009).
 
-    The fake fleet invents servers and pretends to uninstall them; anywhere
-    but a developer's machine that would show nodes that do not exist.
+    The fake fleet invents servers, segments and EPGs, and pretends to
+    uninstall servers; anywhere but a developer's machine that would show
+    nodes and networks that do not exist.
     """
     if settings.day1_fake_fleet and runtime.environment is not Environment.DEVELOPMENT:
         raise ValueError(

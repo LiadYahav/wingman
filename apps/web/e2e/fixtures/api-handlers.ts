@@ -1,7 +1,7 @@
 import { Page, Route } from "@playwright/test";
 import { mockAddons, mockSpecs } from "./addons";
 import type {
-  ClusterNodes, MRDetail, MachineConfigs, Mce, NodePoolNodes, PoolNode, Problem, ErrorCode, ServerRecord, WorkflowRun,
+  ClusterNetworkRead, ClusterNodes, MRDetail, MachineConfigs, Mce, NodePoolNodes, PoolNode, Problem, ErrorCode, ServerRecord, WorkflowRun,
 } from "../../types";
 
 // Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/schemas.py,
@@ -436,6 +436,10 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/name-suggestion**", (route: Route) =>
     json(route, { name: null, env: null, short_name: "", sequence: null, problems: [] })
   );
+  // segments-manager is off unless a test says otherwise (mockClusterNetwork): the card shows the file, EPG "—"
+  await page.route("**/api/day1/clusters/*/network**", (route: Route) =>
+    json(route, { vlan_id: null, segment: null, epg: null, ledger: null, problems: [], ledger_error: null })
+  );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));
@@ -518,4 +522,12 @@ export async function mockAllApis(page: Page) {
   await mockDashboardApis(page);
   await mockDay1Api(page);
   await mockDay2Api(page);
+}
+
+/**
+ * Route `GET /api/day1/clusters/<cluster>/network?...` to `body`
+ * (docs/notes/2026-11-11-cluster-network-api.md §2).
+ */
+export async function mockClusterNetwork(page: Page, cluster: string, body: ClusterNetworkRead) {
+  await page.route(new RegExp(`/api/day1/clusters/${escapeRegExp(cluster)}/network(\\?.*)?$`), (route: Route) => json(route, body));
 }

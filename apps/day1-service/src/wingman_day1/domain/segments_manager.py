@@ -1,7 +1,8 @@
 """Links from a cluster to segments-manager, the platform's VLAN segment ledger.
 
-Wingman never calls segments-manager: the cluster page only links to it
-(docs/ecosystem/notes/segments-manager.md). Its UI reads no URL parameters,
+The links need no call to segments-manager (the EPG day1 reads from it is
+``wingman_day1.domain.network``, ADR-0039; docs/ecosystem/notes/segments-manager.md).
+Its UI reads no URL parameters,
 so no link opens one cluster's segment: the page opens the UI and names the
 cluster to search for. Its API's open ``GET /api/segments/search?q=`` answers
 the matching segments as JSON, which is the second link.
