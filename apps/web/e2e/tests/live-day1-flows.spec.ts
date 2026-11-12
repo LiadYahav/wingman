@@ -108,11 +108,29 @@ test("the dashboard counts the clusters and specs; the sidebar and the docs are 
 test("create a cluster from a spec opens an MR its requester cannot approve", async () => {
   await alice.goto("/clusters/new");
   await alice.getByTestId(`spec-card-${SPEC}`).click();
+  // The name gives the site (and prod); placement answers 501 where the stack does not read the MCEs
+  const probe = alice.waitForResponse((r) => r.url().includes("/api/day1/placement?"));
   await alice.getByTestId("cluster-name-input").fill(NAME);
-  await expect(alice.getByTestId("naming-hint")).toContainText("Follows the naming convention");
+  const placementOn = (await probe).ok();
+  const mceSelect = alice.getByTestId("mce-select");
+  if (!placementOn && !(await mceSelect.textContent())?.includes(MCE)) {
+    // More than one prod MCE on the site: the name alone does not choose it
+    await mceSelect.click();
+    await alice.getByRole("option", { name: new RegExp(`^${MCE}`) }).click();
+  }
   // The fixture prod MCE offers the ladder's 4.16-4.18 rungs, not its 4.16.27 default (ADR-0034)
   await alice.getByTestId("ocp-version-select").click();
   await alice.getByRole("option", { name: "4.18.56" }).click();
+  if (placementOn) {
+    // Wingman picks the MCE (ADR-0050); this flow's later steps read MCE, so choose it with a reason if needed
+    const radio = alice.getByRole("radio", { name: MCE, exact: true });
+    await expect(radio).toBeVisible();
+    if (!(await radio.isChecked())) {
+      await radio.check();
+      await alice.getByTestId("placement-reason").fill("The live flow reads its cluster on this MCE");
+    }
+  }
+  await expect(alice.getByTestId("naming-hint")).toContainText("Follows the naming convention");
   await alice.getByPlaceholder("e.g. 1234").fill("1234");
   await alice.getByPlaceholder("e.g. 56").fill("56");
   await alice.getByPlaceholder("e.g. 7").fill("7");
