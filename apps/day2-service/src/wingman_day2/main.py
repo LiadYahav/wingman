@@ -10,6 +10,7 @@ refuse it in production (ADR-0009).
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -24,6 +25,7 @@ from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
 from wingman_core.infrastructure.session_tokens import SessionTokens
 from wingman_core.infrastructure.snapshots import RepoSnapshots
+from wingman_core.infrastructure.warm_up import start_warm_up
 from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
@@ -90,9 +92,16 @@ def create_app(
     )
     charts = GitLabChartRepository(port, cache, base_url=config.gitlab_url, ttl=ttl)
 
+    async def warm_up() -> None:
+        # What every day2 page reads: each team repo and the day1 index, once per commit
+        teams = await sigs.teams()
+        await asyncio.gather(day1.index(), *(sigs.tree(team) for team in teams))
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        warm = start_warm_up("day2", warm_up)
         yield
+        warm.cancel()
         if client is not None:
             await client.aclose()
 

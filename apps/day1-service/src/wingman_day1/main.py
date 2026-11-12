@@ -15,6 +15,7 @@ in development only (ADR-0038).
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
 from wingman_core.infrastructure.session_tokens import SessionTokens
 from wingman_core.infrastructure.snapshots import RepoSnapshots
+from wingman_core.infrastructure.warm_up import start_warm_up
 from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
@@ -408,7 +410,9 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        warm = start_warm_up("day1", lambda: warm_up(context))
         yield
+        warm.cancel()
         for close in adapters.closers:
             await close()
 
@@ -437,6 +441,11 @@ def create_app(
     for router in ROUTERS:
         app.include_router(router)
     return app
+
+
+async def warm_up(context: Day1Context) -> None:
+    """What a new replica's first page reads: the cluster list, every last change, the flavors."""
+    await asyncio.gather(context.clusters.clusters(), context.specs.entries())
 
 
 _app: FastAPI | None = None
