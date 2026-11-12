@@ -6,6 +6,7 @@ import type {
   Adoption,
   AuthoringChange,
   AuthoringPlan,
+  DestinationImpact,
   FleetDefault,
   FleetScope,
   PlannedFileChange,
@@ -162,7 +163,16 @@ function file(action: PlannedFileChange["action"], path: string, content: string
 function planFor(method: string, url: URL, body: Record<string, unknown>): AuthoringPlan {
   const parts = url.pathname.split("/").map(decodeURIComponent);
   const [teamName, chart, , scope] = [parts[4], parts[5], parts[6], parts[7]];
-  const base = { team: teamName, warnings: [], notes: [AUTHORING_NOTE], adopted: [] as Adoption[], needs_confirmation: [] as string[] };
+  const base = {
+    team: teamName,
+    warnings: [],
+    notes: [AUTHORING_NOTE],
+    adopted: [] as Adoption[],
+    needs_confirmation: [] as string[],
+    impact: [] as DestinationImpact[],
+    excluded: [] as string[],
+    digest: `digest-${method}-${url.pathname}`,
+  };
   if (method === "POST" && parts.length === 5) {
     const name = String(body.name);
     const defaultScope = (body.default_scope as FleetScope | null) ?? null;

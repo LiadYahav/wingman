@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { day2Api, day2Keys, teamAccess } from "@/lib/day2";
+import { day2Api, day2Keys, teamAccess, type TeamAccess } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import type { Team } from "@/types/day2";
 
@@ -19,9 +19,14 @@ export function useTeams() {
   });
 }
 
-/** `team`'s write access, from the teams list (writable while it is unknown). */
-export function useTeamAccess(team: string): { writable: boolean; reason: string | null } {
-  return teamAccess(useTeams().data, team);
+/**
+ * `team`'s write access, from the teams list: not writable until the list
+ * says so (fail closed). `pending` is true while the list is loading, when a
+ * page holds the reason back rather than flash it.
+ */
+export function useTeamAccess(team: string): TeamAccess & { pending: boolean } {
+  const teams = useTeams();
+  return { ...teamAccess(teams.data, team), pending: teams.isPending };
 }
 
 /**

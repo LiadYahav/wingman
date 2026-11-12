@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, Network, ShieldAlert } from "lucide-react";
+import { Boxes } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OPERATOR_PAGES } from "@/lib/day2";
 
 const navGroups = [
   {
@@ -14,6 +16,7 @@ const navGroups = [
       { label: "Destinations", href: "/destinations", icon: Network },
       { label: "Flavors", href: "/specs", icon: Layers },
       { label: "Addons", href: "/addons", icon: Package },
+      { label: "Operators", href: "/operators", icon: Boxes },
     ],
   },
   {
@@ -45,7 +48,9 @@ export function SidebarNav() {
           {group.items.map((item) => {
             const isActive = item.exact
               ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(item.href + "/");
+              : pathname === item.href || pathname.startsWith(item.href + "/") ||
+                // A team's operators live under /teams/<team>/ (ADR-0053).
+                (item.href === "/operators" && OPERATOR_PAGES.test(pathname));
             return (
               <Link
                 key={item.href}

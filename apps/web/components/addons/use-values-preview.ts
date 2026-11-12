@@ -7,7 +7,7 @@ import { day2Api, day2Keys } from "@/lib/day2";
 import { sameValues, stableStringify, type Values } from "@/lib/values";
 import type { MergePreviewBody, ValuesPreview } from "@/types/day2";
 
-function useDebounced<T>(value: T, ms: number): T {
+export function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(value), ms);

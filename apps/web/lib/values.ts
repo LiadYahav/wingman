@@ -131,3 +131,24 @@ export function inlineYaml(value: unknown): string {
   if (typeof value !== "object") return String(value);
   return jsYaml.dump(value, { flowLevel: 0, lineWidth: -1, noRefs: true }).trim();
 }
+
+export type ParsedIgnoreDifferences = { ok: true; value: unknown[] | null } | { ok: false; error: string };
+
+/** ArgoCD's `ignoreDifferences` as typed: a list of mappings, or nothing (`null`, no key). */
+export function parseIgnoreDifferences(text: string): ParsedIgnoreDifferences {
+  let doc: unknown;
+  try {
+    doc = jsYaml.load(text);
+  } catch (e) {
+    const reason = e instanceof jsYaml.YAMLException ? e.reason : String(e);
+    return { ok: false, error: `Invalid YAML: ${reason}` };
+  }
+  if (doc === undefined || doc === null) return { ok: true, value: null };
+  if (!Array.isArray(doc) || !doc.every(isMapping)) return { ok: false, error: "ignoreDifferences is a list of objects (- group: …)" };
+  return { ok: true, value: doc.length > 0 ? doc : null };
+}
+
+/** `ignoreDifferences` as the field shows it: empty for none. */
+export function ignoreDifferencesText(value: unknown[] | null | undefined): string {
+  return value && value.length > 0 ? jsYaml.dump(value, { indent: 2, lineWidth: -1, noRefs: true }) : "";
+}
