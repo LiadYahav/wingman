@@ -4,6 +4,27 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-12 — the cluster's EPG from segments-manager (ADR-0039), 3.5.0.**
+On `roiblum/feat-cluster-segment`. The cluster page's "HostedCluster &
+network" card shows VLAN and Segment from the cluster file (`vlanId`,
+`dhcp_values.network` as its /24: Git is the source of truth) and the EPG
+segments-manager records for that segment (`GET /clusters/{name}/network`,
+`docs/notes/2026-11-11-cluster-network-api.md`). Where segments-manager
+disagrees with the file (VLAN, holder, status, no such segment), the card
+warns; it never changes what is shown. `SEGMENTS_MANAGER_URL` (chart
+`segmentsManager.url`) turns it on; `DAY1_FAKE_FLEET` fakes it from
+`dev/fleet-fixtures/segments.yaml`. Upgrade: `docs/upgrade/3.4-to-3.5.md`.
+3.4.0 and 3.3.1 are released; PR #25 (3.4.1, the flavor editor's add-on
+catalog beside a long selection) is open.
+
+**Next:**
+- merge PR #25, then this one; two forks are working on their own branches
+  and report for review: `roiblum/feat-create-from-flavor` (nodepool ratio
+  in a flavor, InfraEnvs from the MCE, auto name with a letter seq) and
+  `roiblum/perf-shared-cache` (why loading is slow; caches per replica);
+- after deploying, check the Nodes tab and the EPG on a real cluster;
+- flavors v2's "Left for later"; the architect's answers.
+
 **2026-11-11 — 3.3.1 template fix; nodes by NodePool and node uninstall (ADR-0038).**
 PR #23 (3.3.1): network templates are `nm-conf-template-<hw>.bu`, the CI's
 name; 3.3.0 wanted `-hw-` and refused every network config (ADR-0027's
