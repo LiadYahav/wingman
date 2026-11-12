@@ -1,7 +1,7 @@
 # ADR-0053: A team's operators get their own pages; Wingman edits `exclusions.yaml` in place, overrides one destination's values or deploy config, and every authoring write is confirmed against its preview
 
 Date: 2026-11-12
-Status: Accepted
+Status: Accepted; amended 2026-11-12 (the Operators pages are folded into Addons: one place, called add-ons)
 
 ## Context
 
@@ -209,6 +209,37 @@ New MR verbs (ADR-0007): `Exclude`, `Include`, `Override`; actions
 
 ## Amendments
 
+**2026-11-12, 3.12.2: the Operators page is folded into Addons; one place,
+called add-ons.** The user, on seeing 3.12.0: "operators IS addons", and "we
+already had it: Addons can control defaults, it just can't control
+overrides". The separate Operators section split one thing in two and named
+it twice. So:
+
+- There is no Operators entry, page or label. A day2 add-on is an *add-on*
+  everywhere in the UI; `operators/` appears only as the folder name in a
+  team's repo, where a file path is shown.
+- The **Addons** page has its authoring back, as 3.8.0 had it: *New add-on*
+  on each team (the form is `/addons/new?team=<team>`: a query, so an add-on
+  may be named `new`), and *Edit team default* on each add-on.
+- What 3.12.0 added is on the add-on's own page, reached from the Addons page
+  (*Defaults & overrides*, `/addons/<team>/<chart>`): per scope, make it a
+  default and edit that default, *which destinations* (the checkboxes that
+  edit `exclusions.yaml`, with the orphaning confirmation), and per
+  destination its values (`values-<name>.yaml`) and its own deploy config.
+  The page is the one 3.12.0 built, moved and renamed.
+- 3.12.0's routes redirect, so links keep working (`next.config.ts`, 307):
+  `/operators` to `/addons`, `/teams/<team>/operators` to
+  `/addons?team=<team>`, `/teams/<team>/operators/<chart>` to
+  `/addons/<team>/<chart>`, `/teams/<team>/new-operator` to
+  `/addons/new?team=<team>`.
+- The reads are `GET /teams/{team}/addons` and
+  `GET /teams/{team}/addons/{addon}`; 3.12.0's `/teams/{team}/operators[...]`
+  stay as deprecated aliases with the same answers. Every write, MR,
+  confirmation, digest and review fix of 3.12.0 is unchanged. The service's
+  refusal to remove a fleet default from a cluster points at the add-on's
+  page (`details.addon`), keeping `details.operator`.
+- One cluster's add-ons, on its own page, are unchanged.
+
 The review's access and sync-settings findings, fixed in the same change:
 
 - **6. Access is read per team.** A team whose access GitLab does not answer
@@ -247,6 +278,13 @@ The review's access and sync-settings findings, fixed in the same change:
   over a refused one).
 
 ## Verification
+
+The 2026-11-12 fold: `apps/web/e2e/tests/addon-defaults.spec.ts` (an
+add-on's page reached from Addons, no Operators entry, 3.12.0's routes
+redirecting) and `addon-authoring.spec.ts` (New add-on and Edit team default
+on the Addons page); `tests/api/test_operators_api.py` (the
+`/teams/{team}/addons` paths and their 3.12.0 aliases answer the same).
+
 
 - `tests/unit/domain/test_exclusions_text.py`: the fixture's 40 comment
   lines kept on add, remove, a new chart, the last name gone; flow lists;
