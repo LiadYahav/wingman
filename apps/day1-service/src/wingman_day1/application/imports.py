@@ -408,5 +408,5 @@ def _summary(flavor: str, version: str, cluster: ClusterFile, drift: ClusterDrif
             )
     lines += [f"- add-on `{a.team}/{a.name}`: missing; day2 installs it" for a in drift.addon_drift]
     if drift.error is not None:
-        lines.append(f"- add-ons: unknown ({drift.error})")
+        lines.append(f"- add-ons: {drift.error}")
     return "\n".join(lines)

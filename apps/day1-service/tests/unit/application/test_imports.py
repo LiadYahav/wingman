@@ -25,6 +25,7 @@ from wingman_day1.domain.changes import ClusterChange, ProvisionResult
 from wingman_day1.domain.cluster_file import read_provenance
 from wingman_day1.domain.errors import InvalidInputError, ResourceNotFoundError, StaleError
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.merge_requests import GitClusterProvisioner, MergeRequestWriter
 from wingman_day1.infrastructure.repositories import CachedRepository
 from wingman_day1.ports import ClusterProvisioner
@@ -179,6 +180,69 @@ async def test_an_import_opens_one_mr_per_cluster_each_adding_only_its_header(
         heron
     )
     assert "ocp4-prod-lark-site1" not in heron
+
+
+async def test_an_import_mr_lists_each_drifted_value_and_says_when_add_ons_are_unknown(
+    context: Day1Context, support: Any, day2: FakeDay2Addons
+) -> None:
+    day2.unavailable = True
+    result = await context.imports.import_clusters(
+        "agent-baseline", await picks(context, LARK), spec_version="1.0.0", user=support.ALICE
+    )
+    lines = result.opened[0].merge_request.description.split("\n---\n")[0].splitlines()
+    assert lines[
+        lines.index("Once linked: 2 locked values differ, missing add-ons unknown.") :
+    ] == [
+        "Once linked: 2 locked values differ, missing add-ons unknown.",
+        "- `nodepool[0].configs` (nodepool `prod-lark-site1-dell-r660-site1-128c-1024gb-5tb`): "
+        "a sync removes `worker-kubeletconfig-reserved`",
+        "- `nodepool[1].configs` (nodepool `prod-lark-site1-dell-r760-site1-64c-512gb-20tb`): "
+        "a sync adds `nic-ring-buffer`; removes `restored-example-config`",
+        "- add-ons: day2 did not answer, so missing add-ons are unknown: day2 unreachable listing "
+        "addons of ocp4-prod-lark-site1 (fake)",
+    ]
+
+
+OWNED = """apiVersion: wingman.io/v1
+kind: ClusterSpec
+metadata:
+  name: agent-owned
+  description: "One team's clusters: its owner number and the first nodepool's size are fixed"
+  version: "1.0.0"
+spec:
+  day1:
+    structure:
+      nodepools:
+        - {}
+    locked_paths:
+      - owner_anaf
+      - nodepools[0].replicas
+    values:
+      owner_anaf: "99"
+      nodepools:
+        - replicas: 4
+  day2:
+    addons: []
+"""
+
+
+async def test_an_import_mr_shows_a_locked_value_as_the_file_has_it_and_the_flavor_locks_it(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    await support.push(
+        gitlab, support.SPECS, branch="main", file="specs/agent-owned.yaml", content=OWNED
+    )
+    context.repos[RepoKey.SPECS].forget_files()
+    result = await context.imports.import_clusters(
+        "agent-owned", await picks(context, LARK), spec_version="1.0.0", user=support.ALICE
+    )
+    description = result.opened[0].merge_request.description
+    assert "Once linked: 2 locked values differ, 0 add-ons missing." in description
+    assert "- `owner.anaf`: the file has '56', the flavor locks '99'" in description
+    assert (
+        "- `nodepool[0].replicas` (nodepool `prod-lark-site1-dell-r660-site1-128c-1024gb-5tb`): "
+        "the file has 3, the flavor locks 4"
+    ) in description
 
 
 async def test_each_imported_cluster_follows_the_flavor_once_its_own_mr_merges(
