@@ -114,6 +114,7 @@ wingman/
 | **Aggregated approvals** | Approvals page aggregates open MRs from the day1, specs and every Day2 team repo in one view. |
 | **Reserved template inputs** | `cluster_name`, `site`, `mce` and `openshift_release_version` are set by the create form itself — they are not part of the dynamic variable form and always override spec presets in Jinja2 rendering. |
 | **Cluster nodes by NodePool** | The cluster page's Nodes tab shows each NodePool's nodes from the cluster's MCE: what is there, what a short pool is missing and why (no free Agent, and why each matching one is not free), and which node an update is working on, traced Machine → AgentMachine → Agent → server. server-scan adds each server's health and link, and the servers it places in the cluster that no Machine leads to. An admin can start the platform's `uninstall-server-from-hc` workflow on one node and follow its run; the workflow owns the procedure and its checks (ADR-0038). Needs `CLUSTER_STATUS_ENABLED`; `SERVER_SCAN_URL` and `WORKFLOWS_API_URL` add the rest. |
+| **A cluster's network from Git** | The cluster page's **HostedCluster & network** card shows the VLAN and the /24 segment from the cluster file, which the allocate-segment workflow writes (Git is the source of truth). With `SEGMENTS_MANAGER_URL`, segments-manager adds the segment's EPG and is checked against the file: a VLAN, cluster or status that disagrees is a warning, and segments-manager down never hides the file's values (ADR-0039). Nothing is written to segments-manager. |
 | **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
 
 ## Deployment
@@ -160,6 +161,7 @@ Changes since the legacy services:
 | `DELETE` | `/api/day1/clusters/{name}` | Delete the cluster (opens the MR that removes its file) |
 | `GET` | `/api/day1/clusters/{name}/delete-workflow` | The newest delete-cluster workflow run (501 until the workflow exists, ADR-0033) |
 | `POST` | `/api/day1/clusters/{name}/delete-workflow` | Start the delete-cluster workflow, with `{"confirm": true}` (admin; 501 until it exists) |
+| `GET` | `/api/day1/clusters/{name}/network` | The cluster's VLAN and segment from its file, the EPG segments-manager records for that segment, and where segments-manager disagrees with the file (`ledger` is `null` when segments-manager is off; `ledger_error` when it failed, never a failed read; ADR-0039) |
 | `GET` | `/api/day1/clusters/{name}/nodes` | The cluster's NodePools and their nodes from its MCE, joined to server-scan's servers and their newest uninstall runs, plus the servers no Machine leads to (501 when `CLUSTER_STATUS_ENABLED` is off; ADR-0038) |
 | `POST` | `/api/day1/clusters/{name}/nodes/{server_id}/uninstall` | Start the platform's `uninstall-server-from-hc` workflow on one node, with `{"server_name": "<its name>"}` (admin; 501 without `SERVER_SCAN_URL` and `WORKFLOWS_API_URL`; never retried, so a lost answer is `504 AMBIGUOUS_WRITE`) |
 | `GET` | `/api/day1/clusters/{name}/current-yaml` | The file's text on the default branch |
@@ -354,10 +356,13 @@ SERVER_SCAN_TIMEOUT_SECONDS=10
 WORKFLOWS_API_URL=                        # e.g. http://workflows-orchestrator-api.<ns>.svc:8080; needs SERVER_SCAN_URL
 WORKFLOWS_SSL_VERIFY=true                 # true, false, or a CA bundle path
 WORKFLOWS_TIMEOUT_SECONDS=10
-DAY1_FAKE_FLEET=false                     # development only: an MCE, server-scan and the orchestrator in memory, from dev/fleet-fixtures
+DAY1_FAKE_FLEET=false                     # development only: an MCE, server-scan, the orchestrator and segments-manager in memory, from dev/fleet-fixtures
 
-# A link to segments-manager on the cluster page (off by default; day1 never calls it)
-SEGMENTS_MANAGER_UI_URL=                  # its UI, e.g. https://segments-manager.example; empty: no link
+# segments-manager: the cluster's EPG, checked against the file (ADR-0039; off by default; read only)
+SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG
+SEGMENTS_MANAGER_UI_URL=                  # where the cluster page's links point (its UI); default SEGMENTS_MANAGER_URL; both empty: no link
+SEGMENTS_MANAGER_SSL_VERIFY=true          # true, false, or a CA bundle path
+SEGMENTS_MANAGER_TIMEOUT_SECONDS=5
 ```
 
 ### Day2 Service

@@ -1,3 +1,5 @@
+vlanId: 1411
+
 dhcp_values:
   # Minimal cluster file: a subnet, everything else derives or inherits
   # from sites/configValues.yaml.

@@ -38,7 +38,10 @@ ENV = (
     "WORKFLOWS_SSL_VERIFY",
     "WORKFLOWS_TIMEOUT_SECONDS",
     "DAY1_FAKE_FLEET",
+    "SEGMENTS_MANAGER_URL",
     "SEGMENTS_MANAGER_UI_URL",
+    "SEGMENTS_MANAGER_SSL_VERIFY",
+    "SEGMENTS_MANAGER_TIMEOUT_SECONDS",
 )
 OAUTH = {
     "openshift_api_host": "api.hub.example.invalid:6443",
@@ -209,6 +212,7 @@ URL_SETTINGS = [
     "server_scan_url",
     "server_scan_ui_url",
     "workflows_api_url",
+    "segments_manager_url",
     "segments_manager_ui_url",
 ]
 
@@ -294,8 +298,40 @@ def test_the_nodes_settings_come_from_the_environment(monkeypatch: pytest.Monkey
 SEGMENTS_MANAGER = "https://segments-manager.example"
 
 
-def test_the_segments_manager_link_is_off_by_default() -> None:
-    assert dev().segments_manager_ui_url == ""
+def test_segments_manager_is_off_by_default() -> None:
+    loaded = dev()
+    assert (loaded.segments_manager_url, loaded.segments_manager_ui_url) == ("", "")
+    assert loaded.segments_manager_ui_base == ""
+    assert loaded.segments_manager_tls_verify is True
+    assert loaded.segments_manager_timeout_seconds == 5.0
+
+
+def test_the_segments_manager_links_point_at_the_api_unless_the_ui_has_its_own_url() -> None:
+    api = "http://segments-manager.segments.svc:8000"
+    assert dev(segments_manager_url=api + "/").segments_manager_ui_base == api
+    ui = dev(segments_manager_url=api, segments_manager_ui_url=SEGMENTS_MANAGER + "/")
+    assert ui.segments_manager_ui_base == SEGMENTS_MANAGER
+    assert dev(segments_manager_ui_url=SEGMENTS_MANAGER).segments_manager_ui_base == (
+        SEGMENTS_MANAGER
+    ), "a link alone, as in 3.4"
+
+
+def test_segments_manager_reads_its_tls_and_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name, value in {
+        "DAY1_GITLAB_PROJECT_ID": "42",
+        "SPECS_GITLAB_PROJECT_ID": "43",
+        "DEV_AUTH_ENABLED": "true",
+        "DEV_AUTH_SECRET": "e" * 40,
+        "SEGMENTS_MANAGER_URL": SEGMENTS_MANAGER,
+        "SEGMENTS_MANAGER_SSL_VERIFY": "/ca.pem",
+        "SEGMENTS_MANAGER_TIMEOUT_SECONDS": "3",
+    }.items():
+        monkeypatch.setenv(name, value)
+    loaded = Day1Settings()
+    assert loaded.segments_manager_tls_verify == "/ca.pem"
+    assert loaded.segments_manager_timeout_seconds == 3.0
+    with pytest.raises(ValidationError):
+        dev(segments_manager_timeout_seconds=61)
 
 
 def test_the_segments_manager_url_loses_its_trailing_slash() -> None:

@@ -238,6 +238,30 @@ export interface NodePoolValues {
 export interface ClusterNetwork {
   vlan_id: unknown;
   dhcp_network: string | null;
+  /** `dhcp_values.network` as its /24; `null` until it is written, or when it is not a /24's network address. */
+  segment: string | null;
+}
+
+/** segments-manager's record of the cluster's segment. */
+export interface SegmentLedgerRecord {
+  vlan_id: number | null;
+  /** A list for a shared `UPI` segment; `null` while it is Available. */
+  cluster_name: string | string[] | null;
+  status: string | null;
+  type: string | null;
+  site: string | null;
+}
+
+/** `GET /clusters/{name}/network`: the file's network, the EPG from segments-manager, and what disagrees. */
+export interface ClusterNetworkRead {
+  vlan_id: number | null;
+  segment: string | null;
+  /** `null` when segments-manager is off, failed, or has no such segment. */
+  epg: string | null;
+  ledger: SegmentLedgerRecord | null;
+  problems: string[];
+  /** Why segments-manager could not be read; the file's values stand regardless. */
+  ledger_error: string | null;
 }
 
 /** What the cluster file sets. */

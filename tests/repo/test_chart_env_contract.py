@@ -50,6 +50,7 @@ ALL_ON = [
         "serverScan.uiUrl=https://server-scan.example",
         "serverScan.tokenSecret.name=server-scan-viewer",
         "workflows.url=http://workflows-orchestrator-api.wingman.svc:8080",
+        "segmentsManager.url=http://segments-manager.wingman.svc:8000",
         "segmentsManager.uiUrl=https://segments-manager.example",
     )
     for arg in ("--set", value)
@@ -153,3 +154,21 @@ def test_the_segments_manager_link_is_off_by_default_and_set_for_day1() -> None:
     assert "SEGMENTS_MANAGER_UI_URL" not in chart_variables()
     config = render(*ALL_ON)["wingman-config"]["data"]
     assert config["SEGMENTS_MANAGER_UI_URL"] == "https://segments-manager.example"
+
+
+def test_values_kept_from_3_4_still_render_segments_manager() -> None:
+    """3.4's ``segmentsManager`` map has only ``uiUrl``: the link keeps working, the new
+    keys take their defaults, and day1 calls nothing until ``url`` is set."""
+    link = ["--set", "segmentsManager.uiUrl=https://segments-manager.example"]
+    config = render(*link)["wingman-config"]["data"]
+    assert {v for v in config if v.startswith("SEGMENTS_MANAGER_")} == {"SEGMENTS_MANAGER_UI_URL"}
+    reused = [
+        *link,
+        *("--set", "segmentsManager.url=http://segments-manager.wingman.svc:8000"),
+        *("--set", "segmentsManager.sslVerify=null"),
+        *("--set", "segmentsManager.timeoutSeconds=null"),
+    ]
+    config = render(*reused)["wingman-config"]["data"]
+    assert config["SEGMENTS_MANAGER_URL"] == "http://segments-manager.wingman.svc:8000"
+    assert config["SEGMENTS_MANAGER_SSL_VERIFY"] == "true"
+    assert config["SEGMENTS_MANAGER_TIMEOUT_SECONDS"] == "5"

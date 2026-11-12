@@ -38,7 +38,7 @@ const DETAIL: ClusterDetail = {
   values: {
     owner: { merkaz: "1", anaf: "2", mador: "3" }, mastertag: "4.18.22-x86_64", platform: "agent",
     nodepools: [{ name: null, infra_env_name: "dell-r660-site1", replicas: 3, allow_deletion: false, configs: [], node_labels: {}, tuning_config: null }],
-    network: { vlan_id: null, dhcp_network: null }, cluster_name: null, automation_keys: [],
+    network: { vlan_id: null, dhcp_network: null, segment: null }, cluster_name: null, automation_keys: [],
   },
   hosted_cluster: { cluster_name: "prod-lark-site1", name: "openshift-prod-lark-site1", namespace: "hcp-prod-lark-site1" },
   naming: { follows_convention: true, env: "prod", short_name: "lark", sequence: null, problems: [] },

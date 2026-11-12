@@ -1,0 +1,133 @@
+# A made-up segments-manager ledger for DAY1_FAKE_FLEET=true (development only, ADR-0039).
+#
+# `items` has the exact shape of segments-manager's
+# `GET /api/segments/by-segment?segment=<cidr>` answer, and day1 reads it with
+# the same parser as the real answer
+# (wingman_day1.infrastructure.segments_manager.segment_record). Nothing here is
+# real: the ids, VLANs and EPG names are invented.
+#
+# Every segment is a /24, and an allocated one's `cluster_name` is the cluster
+# file's stem (what allocate-segment gives segments-manager). The clusters in
+# dev/gitlab-fixtures that have `vlanId` and `dhcp_values.network` hold the
+# segments below, and the two files agree, except on purpose for one:
+#
+# - ocp4-prod-herzi-site1: segments-manager has VLAN 1418 for 10.20.44.0/24,
+#   the file has 1410. The cluster page shows the file's VLAN and a warning.
+#
+# Two segments are Available (the free pool): nothing holds them.
+
+items:
+  # ── site1 ──────────────────────────────────────────────────────────────────
+  - _id: 6720f0000000000000000142
+    type: HC
+    site: site1
+    vlan_id: 1408
+    epg_name: EPG_site1_HC_1408
+    segment: 10.20.42.0/24
+    dhcp: true
+    cluster_name: ocp4-prep-eyal-site1
+    allocated_at: "2026-10-02T09:12:40+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000143
+    type: HC
+    site: site1
+    vlan_id: 1409
+    epg_name: EPG_site1_HC_1409
+    segment: 10.20.43.0/24
+    dhcp: true
+    cluster_name: ocp4-prep-itay-site1
+    allocated_at: "2026-10-02T09:30:05+00:00"
+    status: Allocated
+  # The deliberate mismatch: the file says vlanId 1410.
+  - _id: 6720f0000000000000000144
+    type: HC
+    site: site1
+    vlan_id: 1418
+    epg_name: EPG_site1_HC_1418
+    segment: 10.20.44.0/24
+    dhcp: true
+    cluster_name: ocp4-prod-herzi-site1
+    allocated_at: "2026-10-05T14:01:22+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000145
+    type: HC
+    site: site1
+    vlan_id: 1411
+    epg_name: EPG_site1_HC_1411
+    segment: 10.20.45.0/24
+    dhcp: true
+    cluster_name: ocp4-prod-karniol-site1
+    allocated_at: "2026-10-06T08:45:00+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000146
+    type: HC
+    site: site1
+    vlan_id: 1412
+    epg_name: EPG_site1_HC_1412
+    segment: 10.20.46.0/24
+    dhcp: true
+    cluster_name: ocp4-prod-lark-site1
+    allocated_at: "2026-09-21T11:20:13+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000147
+    type: HC
+    site: site1
+    vlan_id: 1413
+    epg_name: EPG_site1_HC_1413
+    segment: 10.20.47.0/24
+    dhcp: true
+    cluster_name: ocp4-prod-heron-site1
+    allocated_at: "2026-09-22T16:02:48+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000148
+    type: null
+    site: site1
+    vlan_id: 1414
+    epg_name: EPG_site1_HC_1414
+    segment: 10.20.48.0/24
+    dhcp: true
+    cluster_name: null
+    allocated_at: null
+    status: Available
+
+  # ── site2 ──────────────────────────────────────────────────────────────────
+  - _id: 6720f0000000000000000250
+    type: HC
+    site: site2
+    vlan_id: 2450
+    epg_name: EPG_site2_HC_2450
+    segment: 10.20.50.0/24
+    dhcp: true
+    cluster_name: ocp4-prep-ilay-site2-a
+    allocated_at: "2026-10-11T10:10:10+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000251
+    type: HC
+    site: site2
+    vlan_id: 2451
+    epg_name: EPG_site2_HC_2451
+    segment: 10.20.51.0/24
+    dhcp: true
+    cluster_name: ocp4-prod-didush-site2-a
+    allocated_at: "2026-10-11T10:40:51+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000252
+    type: null
+    site: site2
+    vlan_id: 2452
+    epg_name: EPG_site2_HC_2452
+    segment: 10.20.52.0/24
+    dhcp: true
+    cluster_name: null
+    allocated_at: "2026-09-30T07:00:00+00:00"
+    status: Available
+  - _id: 6720f0000000000000000290
+    type: HC
+    site: site2
+    vlan_id: 2490
+    epg_name: EPG_site2_HC_2490
+    segment: 10.20.90.0/24
+    dhcp: true
+    cluster_name: ocp4-prep-amit-site2-a
+    allocated_at: "2026-10-12T12:00:00+00:00"
+    status: Allocated
