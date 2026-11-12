@@ -7,9 +7,15 @@ from collections.abc import Mapping
 
 import pytest
 
-from wingman_core.domain.git import Project
+from wingman_core.domain.git import AccessLevel, Project
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
-from wingman_core.testing.gitlab_contract import GitLabContract, NewProject, RenameProject
+from wingman_core.ports.gitlab import GitLabPort
+from wingman_core.testing.gitlab_contract import (
+    GitLabContract,
+    NewMember,
+    NewProject,
+    RenameProject,
+)
 
 
 class TestInMemoryGitLabContract(GitLabContract):
@@ -33,3 +39,23 @@ class TestInMemoryGitLabContract(GitLabContract):
             gitlab.rename_project(project.id, f"{namespace}/{name}")
 
         return rename
+
+    @pytest.fixture
+    def new_member(self, gitlab: InMemoryGitLab) -> NewMember:
+        counter = itertools.count(1)
+
+        async def make(
+            project: Project,
+            *,
+            project_level: AccessLevel | None = None,
+            group_level: AccessLevel | None = None,
+        ) -> GitLabPort:
+            name = f"member-{next(counter)}"
+            if group_level is not None:
+                group = project.path_with_namespace.rsplit("/", 1)[0]
+                gitlab.add_group_member(group, group_level, username=name)
+            if project_level is not None:
+                gitlab.set_access_level(project.id, project_level, username=name)
+            return gitlab.as_account(name)
+
+        return make
