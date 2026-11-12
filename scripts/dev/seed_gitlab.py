@@ -10,6 +10,12 @@ left alone unless ``--reset`` deletes and recreates them.
 
 Defaults come from GITLAB_URL / GITLAB_TOKEN. Meant for the local GitLab
 (scripts/dev/gitlab-up.sh); it refuses any other host unless --any-host.
+
+``access.yaml`` (Wingman's account's role per project, e.g. ``sigs/orca:
+reporter``) is not applied: the seed runs as root, which owns everything it
+creates, and Wingman runs on the same token. The script names those projects
+instead; to see a read-only team against this GitLab, run Wingman on the token
+of an account that is a Reporter of that project.
 """
 
 from __future__ import annotations
@@ -151,6 +157,11 @@ async def main() -> int:
         for fixture in projects:
             outcome = await _seed_project(client, fixture, reset=args.reset)
             print(f"{outcome:>8}  {fixture.path_with_namespace}")
+            if fixture.access_level is not None:
+                print(
+                    f"{'':>8}  access.yaml gives Wingman {fixture.access_level.role} here; not "
+                    "applied: this token's account owns the project"
+                )
     print(f"seeded {len(projects)} projects in {time.monotonic() - started:.1f}s")
     return 0
 
