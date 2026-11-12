@@ -204,6 +204,72 @@ async def test_access_level_of_a_project_the_account_cannot_see_is_not_found() -
         await rec.adapter().access_level(7)
 
 
+def _shared(permissions: object, *shares: tuple[int, int]) -> dict[str, object]:
+    return {
+        **_with_permissions(permissions),
+        "shared_with_groups": [
+            {"group_id": gid, "group_full_path": f"g{gid}", "group_access_level": level}
+            for gid, level in shares
+        ],
+    }
+
+
+NO_MEMBERSHIP = {"project_access": None, "group_access": None}
+
+
+async def test_access_through_a_group_share_is_capped_by_the_share() -> None:
+    # As GitLab 19.5.3 answers it: a share leaves permissions null on both sides.
+    rec = Recorder(
+        reply(200, _shared(NO_MEMBERSHIP, (9, 30))),
+        reply(200, {"id": 5, "username": "wingman-bot"}),
+        reply(200, {"id": 5, "access_level": 40}),
+    )
+    assert await rec.adapter().access_level(7) is AccessLevel.DEVELOPER
+    assert [r.url.raw_path for r in rec.requests] == [
+        b"/api/v4/projects/7",
+        b"/api/v4/user",
+        b"/api/v4/groups/9/members/all/5",
+    ]
+
+
+async def test_access_through_a_share_is_the_role_in_the_group_when_that_is_lower() -> None:
+    rec = Recorder(
+        reply(200, _shared(NO_MEMBERSHIP, (9, 40))),
+        reply(200, {"id": 5}),
+        reply(200, {"id": 5, "access_level": 20}),
+    )
+    assert await rec.adapter().access_level(7) is AccessLevel.REPORTER
+
+
+async def test_a_share_with_a_group_the_account_is_not_in_gives_nothing() -> None:
+    rec = Recorder(
+        reply(200, _shared({"project_access": {"access_level": 10}}, (9, 40))),
+        reply(200, {"id": 5}),
+        reply(404, {"message": "404 Not found"}),
+    )
+    assert await rec.adapter().access_level(7) is AccessLevel.GUEST
+
+
+async def test_shares_that_cannot_raise_the_level_are_not_read() -> None:
+    project = _shared({"group_access": {"access_level": 30}}, (8, 20), (9, 30), (10, 50))
+    rec = Recorder(
+        reply(200, project),
+        reply(200, {"id": 5}),
+        reply(200, {"id": 5, "access_level": 50}),
+    )
+    adapter = rec.adapter()
+    assert await adapter.access_level(7) is AccessLevel.OWNER
+    # The highest share first; the ones at or below what the account has are skipped.
+    assert [r.url.raw_path for r in rec.requests][2:] == [b"/api/v4/groups/10/members/all/5"]
+    rec.handlers = [reply(200, project), reply(200, {"id": 5, "access_level": 30})]
+    assert await adapter.access_level(7) is AccessLevel.DEVELOPER
+    # The token's user is read once.
+    assert [r.url.raw_path for r in rec.requests][3:] == [
+        b"/api/v4/projects/7",
+        b"/api/v4/groups/10/members/all/5",
+    ]
+
+
 async def test_non_utf8_file_is_rejected() -> None:
     rec = Recorder(
         reply(200, {"content": base64.b64encode(b"\xff\xfe").decode(), "last_commit_id": "c"})

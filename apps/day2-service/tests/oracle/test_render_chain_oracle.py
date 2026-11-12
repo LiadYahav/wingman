@@ -25,6 +25,7 @@ import os
 import shutil
 import sys
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
@@ -476,3 +477,215 @@ async def test_a_created_addon_and_its_default_render_as_wingman_says(tmp_path: 
         assert leaf["identity"]["destination"] == {"name": "in-cluster", "namespace": "podinfo"}
         assert workload(after_files, "redbull", leaf) == {"replicas": 2, "fleet": True}
     await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+# ── Operators (ADR-0053): exclusions and per-destination overrides render as said ──
+
+ADMIN = User("jane", Role.ADMIN)
+PROD_MCE = "mce:site1:prod:ocp4-prod-mce-site1-a"
+PREP_MCE = "mce:site1:prep:ocp4-prep-mce-site1-a"
+HERZI = "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1"
+
+
+def confirming(
+    write: Callable[..., Awaitable[AuthoringResult]],
+) -> Callable[[Day2Services], Awaitable[AuthoringResult]]:
+    """An ``authored`` act: preview the write, then open it confirming what the preview showed."""
+
+    async def act(day2: Day2Services) -> AuthoringResult:
+        del day2
+        preview = await write(dry_run=True)
+        return await write(
+            confirm_changes=preview.plan.needs_confirmation, expected_digest=preview.plan.digest
+        )
+
+    return act
+
+
+async def authored_with(
+    files: Files, make: Callable[[Day2Services], Callable[..., Awaitable[AuthoringResult]]]
+) -> tuple[Files, AuthoringResult]:
+    """``files`` after the confirmed MR of ``make(day2)``, and its result."""
+    seen: list[AuthoringResult] = []
+
+    async def act(day2: Day2Services) -> AuthoringResult:
+        result = await confirming(make(day2))(day2)
+        seen.append(result)
+        return result
+
+    after = await authored(files, act)
+    return after, seen[0]
+
+
+async def test_an_excluded_mce_loses_its_app_and_nothing_else_moves(tmp_path: Path) -> None:
+    files = fixture_files()
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    after_files, result = await authored_with(
+        files,
+        lambda day2: lambda **kw: day2.fleet_targets.set_exclusions(
+            "redbull", "dhcp-api-token", DefaultsScope.MCES, [PREP_MCE, PROD_MCE], ADMIN, **kw
+        ),
+    )
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    gone = "ocp4-prod-mce-site1-a:redbull-in-cluster-dhcp-api-token-deploy"
+    assert sorted(set(before) - set(after)) == [gone] and set(after) <= set(before)
+    # Wingman said exactly that: one app removed, its workload orphaned.
+    assert [(i.ref.id, i.app_name, i.orphaned) for i in result.plan.impact] == [
+        (PROD_MCE, "redbull-in-cluster-dhcp-api-token-deploy", True)
+    ]
+    for uid, leaf in after.items():
+        assert leaf["identity"] == before[uid]["identity"], uid
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+async def test_an_included_mce_gets_its_app_back(tmp_path: Path) -> None:
+    files = fixture_files()
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    after_files, result = await authored_with(
+        files,
+        lambda day2: lambda **kw: day2.fleet_targets.set_exclusions(
+            "redbull", "dhcp-api-token", DefaultsScope.MCES, [], ADMIN, **kw
+        ),
+    )
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    back = "ocp4-prep-mce-site1-a:redbull-in-cluster-dhcp-api-token-deploy"
+    assert sorted(set(after) - set(before)) == [back] and set(before) <= set(after)
+    assert [(i.ref.id, str(i.effect)) for i in result.plan.impact] == [(PREP_MCE, "added")]
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+async def test_a_value_override_changes_that_destinations_values_only(tmp_path: Path) -> None:
+    files = fixture_files()
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    after_files, _ = await authored_with(
+        files,
+        lambda day2: lambda **kw: day2.fleet_targets.set_destination_values(
+            "redbull", "example-chart", DefaultsScope.MCES, PROD_MCE, {"replicas": 7}, ADMIN, **kw
+        ),
+    )
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    assert sorted(after) == sorted(before)
+    target = "ocp4-prod-mce-site1-a:redbull-in-cluster-example-chart-deploy"
+    for uid, leaf in after.items():
+        assert leaf["identity"] == before[uid]["identity"], uid
+        mine, theirs = (
+            workload(after_files, "redbull", leaf),
+            workload(files, "redbull", before[uid]),
+        )
+        if uid == target:
+            assert mine == {**theirs, "replicas": 7}
+        else:
+            assert mine == theirs, uid
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+async def test_an_own_deploy_config_keeps_the_app_and_pins_that_destination_only(
+    tmp_path: Path,
+) -> None:
+    files = fixture_files()
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    after_files, _ = await authored_with(
+        files,
+        lambda day2: lambda **kw: day2.fleet_targets.set_destination_deploy(
+            "redbull",
+            "example-chart",
+            DefaultsScope.MCES,
+            PROD_MCE,
+            {"targetRevision": "HEAD"},
+            ADMIN,
+            **kw,
+        ),
+    )
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    # The platform's carve-out: the exclusion and the own folder together are no duplicate.
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    assert sorted(after) == sorted(before)
+    target = "ocp4-prod-mce-site1-a:redbull-in-cluster-example-chart-deploy"
+    for uid, leaf in after.items():
+        expected = dict(before[uid]["identity"])
+        if uid == target:
+            expected["source_targetRevision"] = "HEAD"
+        assert leaf["identity"] == expected, uid
+        assert workload(after_files, "redbull", leaf) == workload(files, "redbull", before[uid])
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+async def test_a_stale_exclusion_does_not_delete_an_adopted_clusters_app(tmp_path: Path) -> None:
+    # Review of 3.8.0: with the entry left in place, herzi's app vanished after the move.
+    files = fixture_files()
+    files[RB]["defaults/hosted-clusters/exclusions.yaml"] = (
+        "exclusions:\n  cluster-roles:\n    - ocp4-prod-herzi-site1\n"
+    )
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    after_files, result = await authored_with(
+        files,
+        lambda day2: lambda **kw: day2.authoring.make_default(
+            "redbull", "cluster-roles", DefaultsScope.HOSTED_CLUSTERS, ADMIN, values={}, **kw
+        ),
+    )
+    assert result.plan.needs_confirmation == [HERZI]
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    assert sorted(after) == sorted(before)
+    for uid, leaf in after.items():
+        assert leaf["identity"] == before[uid]["identity"], uid
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+async def test_a_create_changes_existing_folders_exactly_as_wingman_lists(tmp_path: Path) -> None:
+    # Review of 3.8.0: a new team layer under a cluster's own podinfo/ changes what it deploys.
+    files = fixture_files()
+    folder = "sites/site1/prod/mces/ocp4-prod-mce-site1-a/ocp4-prod-herzi-site1/podinfo"
+    files[RB][f"{folder}/podinfo.yaml"] = f"repourl: {URL}/helm-charts/example-chart.git\n"
+    files[RB][f"{folder}/values.yaml"] = "replicas: 1\n"
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    spec = NewAddon(
+        team="redbull",
+        chart="podinfo",
+        repourl=f"{URL}/helm-charts/example-chart.git",
+        sync=SyncSettings(True, True, True, ("CreateNamespace=true",)),
+        project_namespace="other-ns",
+        values={"resources": {"limits": {"cpu": "1"}}},
+    )
+
+    def make(day2: Day2Services) -> Callable[..., Awaitable[AuthoringResult]]:
+        async def write(**kw: Any) -> AuthoringResult:
+            confirm = tuple(kw.pop("confirm_changes", ()))
+            return await day2.authoring.create(replace(spec, confirm_changes=confirm), ADMIN, **kw)
+
+        return write
+
+    after_files, result = await authored_with(files, make)
+    (impact,) = result.plan.impact
+    assert impact.ref.id == HERZI
+    uid = "ocp4-prod-mce-site1-a:redbull-ocp4-prod-herzi-site1-podinfo-deploy"
+    after = _leaves(oracle(after_files, tmp_path / "after", "redbull")["apps"])
+    # What the render changes for herzi is what Wingman listed: namespace, sync, values.
+    assert before[uid]["identity"]["destination"] == {"name": "ocp4-prod-herzi-site1"}
+    assert after[uid]["identity"]["destination"] == {
+        "name": "ocp4-prod-herzi-site1",
+        "namespace": "other-ns",
+    }
+    assert after[uid]["identity"]["syncPolicy"] == {
+        "automated": {"prune": True, "selfHeal": True},
+        "syncOptions": ["CreateNamespace=true"],
+    }
+    assert workload(after_files, "redbull", after[uid]) == {
+        "replicas": 1,
+        "resources": {"limits": {"cpu": "1"}},
+    }
+    assert {c.key for c in impact.changes} == {
+        "projectNamespace",
+        "syncPolicy.automated.prune",
+        "syncPolicy.automated.selfHeal",
+        "syncPolicy.syncOptions",
+        "resources.limits.cpu",
+    }

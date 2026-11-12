@@ -1,9 +1,13 @@
-"""Add-on authoring: a new add-on, its team default, fleet defaults (ADR-0043).
+"""Operator authoring: a new one, its team default, fleet defaults and their destinations.
 
-Every write takes ``?dry_run=true``: it runs every check, opens nothing, and
-answers 200 with the plan; without it, 201 (create, make default) or 200
-(edits) with the opened MR. A team that has not given Wingman write access to
-its project gets 403 ``TEAM_READ_ONLY`` before anything else is checked.
+ADR-0043 and ADR-0053. Every write takes ``?dry_run=true``: it runs every
+check, opens nothing, and answers 200 with the plan (its ``impact`` and
+``digest``); without it, 201 (create, make default) or 200 (edits) with the
+opened MR. What the plan deletes or changes must be confirmed by id in
+``confirm_changes`` with the preview's ``digest`` as ``expected_digest``; a
+repo that moved since the preview answers 409 ``plan-changed``. A team that
+has not given Wingman write access to its project gets 403
+``TEAM_READ_ONLY`` before anything else is checked.
 """
 
 from __future__ import annotations
@@ -17,6 +21,9 @@ from wingman_day2.api.v1.schemas import (
     AuthoringChangeOut,
     AuthoringPlanOut,
     CreateAddonBody,
+    DestinationDeployBody,
+    DestinationValuesBody,
+    ExclusionsBody,
     FleetDefaultOut,
     MakeDefaultBody,
     UpdateFleetDefaultBody,
@@ -65,7 +72,11 @@ async def create_addon(
 ) -> AuthoringPlanOut | AuthoringChangeOut:
     """Open an MR adding ``operators/<name>/`` (and, with ``default_scope``, a fleet default)."""
     result = await day2.authoring.create(
-        body.spec(team), user, dry_run=dry_run, message=body.message
+        body.spec(team),
+        user,
+        dry_run=dry_run,
+        message=body.message,
+        expected_digest=body.expected_digest,
     )
     return _answer(result, response, created=True)
 
@@ -82,7 +93,14 @@ async def update_team_default(
 ) -> AuthoringPlanOut | AuthoringChangeOut:
     """Open an MR editing the add-on's team default (deploy config edited in place, values)."""
     result = await day2.authoring.update_team_default(
-        team, addon, body.edit(), user, dry_run=dry_run, message=body.message
+        team,
+        addon,
+        body.edit(),
+        user,
+        dry_run=dry_run,
+        message=body.message,
+        confirm_changes=body.confirm_changes,
+        expected_digest=body.expected_digest,
     )
     return _answer(result, response, created=False)
 
@@ -109,6 +127,7 @@ async def make_default(
         confirm_changes=body.confirm_changes,
         dry_run=dry_run,
         message=body.message,
+        expected_digest=body.expected_digest,
     )
     return _answer(result, response, created=True)
 
@@ -137,6 +156,93 @@ async def update_fleet_default(
         values=body.values,
         sync=sync,
         last_commit_id=body.last_commit_id,
+        dry_run=dry_run,
+        message=body.message,
+        confirm_changes=body.confirm_changes,
+        expected_digest=body.expected_digest,
+    )
+    return _answer(result, response, created=False)
+
+
+@router.put("/addons/{team}/{addon}/defaults/{scope}/exclusions")
+async def set_exclusions(
+    team: str,
+    addon: str,
+    scope: DefaultsScope,
+    body: ExclusionsBody,
+    user: AdminUser,
+    day2: Services,
+    response: Response,
+    dry_run: bool = DryRun,
+) -> AuthoringPlanOut | AuthoringChangeOut:
+    """Open an MR making the fleet default skip exactly ``excluded`` (``exclusions.yaml``)."""
+    result = await day2.fleet_targets.set_exclusions(
+        team,
+        addon,
+        scope,
+        body.excluded,
+        user,
+        last_commit_id=body.last_commit_id,
+        confirm_changes=body.confirm_changes,
+        expected_digest=body.expected_digest,
+        dry_run=dry_run,
+        message=body.message,
+    )
+    return _answer(result, response, created=False)
+
+
+@router.put("/addons/{team}/{addon}/defaults/{scope}/destinations/{cluster}/values")
+async def set_destination_values(
+    team: str,
+    addon: str,
+    scope: DefaultsScope,
+    cluster: str,
+    body: DestinationValuesBody,
+    user: AdminUser,
+    day2: Services,
+    response: Response,
+    dry_run: bool = DryRun,
+) -> AuthoringPlanOut | AuthoringChangeOut:
+    """Open an MR setting one destination's ``values-<name>.yaml`` (null or {} deletes it)."""
+    result = await day2.fleet_targets.set_destination_values(
+        team,
+        addon,
+        scope,
+        cluster,
+        body.values,
+        user,
+        last_commit_id=body.last_commit_id,
+        confirm_changes=body.confirm_changes,
+        expected_digest=body.expected_digest,
+        dry_run=dry_run,
+        message=body.message,
+    )
+    return _answer(result, response, created=False)
+
+
+@router.put("/addons/{team}/{addon}/defaults/{scope}/destinations/{cluster}/deploy")
+async def set_destination_deploy(
+    team: str,
+    addon: str,
+    scope: DefaultsScope,
+    cluster: str,
+    body: DestinationDeployBody,
+    user: AdminUser,
+    day2: Services,
+    response: Response,
+    dry_run: bool = DryRun,
+) -> AuthoringPlanOut | AuthoringChangeOut:
+    """Open an MR giving one destination its own deploy config (null takes it back)."""
+    result = await day2.fleet_targets.set_destination_deploy(
+        team,
+        addon,
+        scope,
+        cluster,
+        body.deploy.keys() if body.deploy is not None else None,
+        user,
+        last_commit_id=body.last_commit_id,
+        confirm_changes=body.confirm_changes,
+        expected_digest=body.expected_digest,
         dry_run=dry_run,
         message=body.message,
     )

@@ -118,7 +118,9 @@ wingman/
 | **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. day1 keeps each hub's list for `MCE_INFRAENV_CACHE_SECONDS` (10 minutes). Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
 | **A suggested cluster name** | Creating from a flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>`: the MCE's env and the first letter no cluster or open create MR has. The name stays editable. A new cluster's sequence is one letter, `a` to `z`, never a number (ADR-0040). |
 | **Nodepools sized by a ratio** | A flavor may give its nodepools a ratio (`nodepool_ratio: [1, 2, 1]`): the create form asks for one size and sets each nodepool's replicas to its ratio times that size; create refuses replicas off the ratio (ADR-0040). |
+| **Operators** | A team's page lists its operators (`operators/<op>/`) and opens each: its deploy config and values, its OCP-version pins, and per fleet scope (hosted clusters, MCEs, the hub, UPI) whether it is a default there, which destinations it reaches (a checkbox each, written to `exclusions.yaml` in place), a destination's own values and its own deploy config. Every change is previewed, lists what it does to each destination, and is confirmed against that preview (ADR-0053). A cluster's own installs stay its **Add-ons**. |
 | **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. |
+| **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. day1 checks every link (up, down or unknown, with the reason) and an ArgoCD with a read-only token shows its applications' sync and health counts; the browser never pings anything, and icons ship with Wingman (ADR-0052). |
 
 ## Deployment
 
@@ -223,6 +225,13 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 | `GET` | `/api/day1/audit/commits/{repo}/{sha}/diff` | What one commit changed |
 | `POST` | `/api/webhooks/gitlab` | Clear what a push or MR event in the day1 or specs project made stale (`X-Gitlab-Token`; 404 unless `GITLAB_WEBHOOK_SECRET` is set) |
 
+#### Quick Links (admins only, ADR-0052)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/day1/quick-links` | The launcher's sections and cards: the hub and every MCE's ArgoCD and console, by site, then the links file's sections, with the links file's problems ([API note](docs/notes/2026-11-12-quick-links-api.md)) |
+| `GET` | `/api/day1/quick-links/status` | Each link's check (`up`, `down` or `unknown`, with the reason) and each ArgoCD's applications by sync and health; cached `QUICK_LINKS_STATUS_TTL_SECONDS`, shared by every viewer |
+
 ### Day2 Service (Port 8002)
 
 `{cluster}` is a cluster id (`hub`, `mce:<site>:<env>:<mce>`,
@@ -243,11 +252,20 @@ name that names one destination (`?mce=` when it names more than one).
 | `GET` | `/api/day2/addons/{team}/{addon}/values` | The chart's own `values.yaml` at `?version=` |
 | `GET` | `/api/day2/lints` | Every check on the team repos (`?team=`): render_chain.py's rules plus Wingman's own |
 
-#### Authoring add-ons and fleet defaults
+#### Operators: authoring add-ons and fleet defaults
 
-A team is written to only if it gave Wingman's GitLab account Developer on its
-own project (otherwise `403 TEAM_READ_ONLY`, ADR-0043). Every write takes
-`?dry_run=true` (the plan, nothing opened).
+An *operator* is a chart in a team's catalog (`operators/<op>/`) and the fleet
+defaults built from it; the API keeps calling it an add-on. A team is written
+to only if it gave Wingman's GitLab account Developer on its own project: as a
+member, from a group above the project, or through a group the project is
+shared with (otherwise `403 TEAM_READ_ONLY`, ADR-0043). A team whose access
+GitLab does not answer is read-only until it does. Every write takes
+`?dry_run=true` (the plan, nothing opened): its `impact` lists every
+destination whose app goes, comes or changes, and what goes or changes is
+confirmed by id (`confirm_changes`) with the preview's `digest`
+(`expected_digest`); a repo that moved since the preview is `409`
+`plan-changed` (ADR-0053). The web-visible shapes:
+`docs/notes/2026-11-12-operators-page-api.md`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -257,6 +275,11 @@ own project (otherwise `403 TEAM_READ_ONLY`, ADR-0043). Every write takes
 | `GET` | `/api/day2/fleet-defaults` | Every `defaults/<scope>/<chart>/` (`?team=`), with its reach and sync options |
 | `POST` | `/api/day2/addons/{team}/{addon}/defaults/{scope}` | Make it a fleet default; clusters that have it in their own folder move into it (opens an MR) |
 | `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}` | Edit a fleet default's values and sync options (opens an MR) |
+| `GET` | `/api/day2/teams/{team}/operators` | The team's operators: its catalog, plus fleet defaults of charts not in it |
+| `GET` | `/api/day2/teams/{team}/operators/{operator}` | One operator: its files, OCP-version pins, and per scope every destination and how the default stands there |
+| `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}/exclusions` | Which destinations the default skips (`exclusions.yaml`, edited in place; excluding orphans the workload) (opens an MR) |
+| `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}/destinations/{cluster}/values` | One destination's `values-<name>.yaml` (opens an MR) |
+| `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}/destinations/{cluster}/deploy` | One destination's own deploy config: excluded and deployed from its own folder, the Application kept (opens an MR) |
 
 #### Destinations and their charts
 
@@ -387,6 +410,20 @@ SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manage
 SEGMENTS_MANAGER_UI_URL=                  # where the cluster page's links point (its UI); default SEGMENTS_MANAGER_URL; both empty: no link
 SEGMENTS_MANAGER_SSL_VERIFY=true          # true, false, or a CA bundle path
 SEGMENTS_MANAGER_TIMEOUT_SECONDS=5
+
+# Quick Links: the launcher page (ADR-0052; admins only)
+QUICK_LINKS_FILE=/etc/wingman/quick-links/links.yaml   # the team's links (the chart's ConfigMap); re-read on every page load; missing: none
+QUICK_LINKS_HUB_NAME=                     # the hub Wingman runs on, as in apps.<name>.<domain>; empty: no hub card
+QUICK_LINKS_HUB_DOMAIN=                   # the hub's domain; default QUICK_LINKS_DOMAIN
+QUICK_LINKS_DOMAIN=                       # the MCEs' domain; default MCE_API_DOMAIN
+QUICK_LINKS_ARGOCD_URL_TEMPLATE=https://openshift-gitops-server-openshift-gitops.apps.{cluster}.{domain}
+QUICK_LINKS_CONSOLE_URL_TEMPLATE=https://console-openshift-console.apps.{cluster}.{domain}
+QUICK_LINKS_STATUS_ENABLED=true           # false: no status dots, and day1 calls none of the links
+QUICK_LINKS_STATUS_TTL_SECONDS=60         # how long a check is kept (10 to 600), answered as long again while it refreshes
+QUICK_LINKS_TIMEOUT_SECONDS=3             # per check and per ArgoCD read, at most 30
+QUICK_LINKS_CONCURRENCY=8                 # checks at once, 1 to 64
+QUICK_LINKS_SSL_VERIFY=true               # true, false, or a CA bundle path
+QUICK_LINKS_ARGOCD_TOKENS_FILE=/etc/wingman/argocd-tokens/tokens   # YAML map of ArgoCD instance to read-only token; missing: no counts
 ```
 
 ### Day2 Service

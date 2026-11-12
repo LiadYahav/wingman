@@ -22,6 +22,7 @@ from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
+from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
@@ -58,6 +59,8 @@ class Day1Context:
     segments_manager_ui_url: str | None = None
     """``None`` when neither ``SEGMENTS_MANAGER_UI_URL`` nor ``SEGMENTS_MANAGER_URL`` is set:
     a cluster carries no link to segments-manager."""
+    quick_links: QuickLinksService | None = None
+    """The Quick Links page (ADR-0052); ``main`` always builds it."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -102,7 +105,17 @@ def node_service(context: Annotated[Day1Context, Depends(day1_context)]) -> Node
     return context.nodes
 
 
+def quick_links_service(
+    context: Annotated[Day1Context, Depends(day1_context)],
+) -> QuickLinksService:
+    """The Quick Links use case (a context built without one has none: 501)."""
+    if context.quick_links is None:
+        raise FeatureDisabled("Quick Links is not set up in this deployment.")
+    return context.quick_links
+
+
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
 Nodes = Annotated[NodeService, Depends(node_service)]
+QuickLinks = Annotated[QuickLinksService, Depends(quick_links_service)]
 Status = Annotated[StatusService, Depends(status_service)]

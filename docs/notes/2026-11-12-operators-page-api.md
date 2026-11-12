@@ -1,4 +1,4 @@
-# Operators page: the API the web uses (3.9, ADR-0053)
+# Operators page: the API the web uses (3.10, ADR-0053)
 
 What the web needs from day2 for the Operators pages, and what changed for
 the add-on authoring endpoints of 3.8 (ADR-0043,
@@ -143,7 +143,7 @@ Every write takes `?dry_run=true` (200, the plan; nothing is opened) and
 otherwise answers 201 (create, make default) or 200 (edits) with the opened
 MR. Both carry the 3.8 fields (`action`, `chart`, `scope`, `reach`,
 `adopted`, `needs_confirmation`, `warnings`, `notes`; the plan `title` and
-`files`, the MR its `MRDetail` and `files`) and, new in 3.9:
+`files`, the MR its `MRDetail` and `files`) and, new in 3.10:
 
 ```jsonc
 {
@@ -162,9 +162,12 @@ MR. Both carry the 3.8 fields (`action`, `chart`, `scope`, `reach`,
 ```
 
 - `changes` compare the effective deploy config and workload values
-  **before and after, chart defaults aside**, key by key. A `values` change
-  whose `after` is `null` is a Helm `null`: it deletes the chart's own
-  default for that key (the web says so).
+  **before and after, chart defaults aside**, key by key. Each change is
+  `{stack, key, before, after, after_null}`: `after_null: true` is a Helm
+  `null`, which deletes the chart's own default for that key (the web says
+  so); a key no layer sets any more has `after: null` and
+  `after_null: false`. The same shape is in `adopted[].changes`, and an
+  adopted item has `exclusion_removed`.
 - `needs_confirmation` lists every `removed` destination and every `changed`
   one, plus (as in 3.8) adopted clusters whose move changes something.
 - **Confirming**: the request repeats `needs_confirmation` in
@@ -196,8 +199,10 @@ created when absent).
   (`added`); the new Application adopts what is still running.
 - Names in the entry that are no destination of the team are kept as written
   (and stay a lint error, `exclusions-unknown-target`).
-- 422 `rule`: `exclusions-hub` (the hub has none), `exclusion-target` (an id
-  that is not a registered destination of that scope), `own-deploy`
+- 422 `rule`: `hub-override` (the hub has none), `destination-unknown` (an id
+  that is not a registered destination of that scope), `exclusion-shared`
+  (two destinations of the scope share the name: they are excluded together
+  or not at all, `details.clusters`), `own-deploy`
   (including a destination that has its own deploy config: remove that
   instead), `exclusions-layout` (the file cannot be edited exactly; the
   detail says why), `no-change`. 404 when the operator is not a default
@@ -255,7 +260,7 @@ destination is excluded from the default and gets its own
   removing: `... deploy config on <name>: back to the fleet default (...)`.
   Action `override-deploy`.
 
-## 4. Changed in 3.9 (review of 3.8)
+## 4. Changed in 3.10 (review of 3.8)
 
 - `POST /addons/{team}` (create), `PUT /addons/{team}/{addon}` (team
   default), `POST|PUT /addons/{team}/{addon}/defaults/{scope}` (make and
@@ -270,6 +275,9 @@ destination is excluded from the default and gets its own
   `needs_confirmation` and its `adopted[]` item has `exclusion_removed: true`.
 - Fleet-default values with `null` show as changes (`after: null`).
 - A values file deleted after the read is a 409, not silently created again.
+- `DELETE /clusters/{cluster}/addons/{team}/{addon}` of a fleet default
+  (422 `fleet-default-remove`) points at the operator's page:
+  `details.operator = "/teams/<team>/operators/<op>"`.
 - `ignore_differences: []` removes the key.
 - Teams: a team whose access could not be read is read-only with
   `access_role: "unknown"` and a reason; the others are unaffected (one

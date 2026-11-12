@@ -8,6 +8,7 @@ from wingman_core.web.errors import (
     AlreadyExists,
     AppError,
     NotFound,
+    RevisionConflict,
     TeamReadOnly,
     ValidationFailed,
 )
@@ -19,6 +20,7 @@ from wingman_day2.domain.errors import (
     ChartNotInstalledError,
     Day2Error,
     InvalidClusterIdError,
+    PlanChangedError,
     TeamReadOnlyError,
     UnknownChartError,
     UnknownClusterError,
@@ -27,6 +29,7 @@ from wingman_day2.domain.errors import (
 
 _MAPPING: tuple[tuple[type[Day2Error], type[AppError]], ...] = (
     (TeamReadOnlyError, TeamReadOnly),
+    (PlanChangedError, RevisionConflict),
     (UnknownTeamError, NotFound),
     (UnknownClusterError, NotFound),
     (UnknownChartError, NotFound),

@@ -23,6 +23,7 @@ from wingman_day2.domain.clusters import (
 )
 from wingman_day2.domain.day1 import Day1Index
 from wingman_day2.domain.deploy_config import (
+    SYNC_POLICY,
     TARGET_REVISION,
     LeafApplication,
     miscased_repourl_keys,
@@ -31,6 +32,7 @@ from wingman_day2.domain.exclusions import EXCLUSIONS_KEY
 from wingman_day2.domain.findings import Finding, Rule, error, info, warning
 from wingman_day2.domain.platform import PlannedApp, TeamPlan
 from wingman_day2.domain.stacks import Layer, LayerRole
+from wingman_day2.domain.sync_policy import automated_problem
 from wingman_day2.domain.teams import TeamRepo
 from wingman_day2.domain.tree import RepoTree
 from wingman_day2.domain.versions import VersionFile, read_version_file
@@ -323,7 +325,7 @@ def lint_leaf(
     leaf: LeafApplication,
     tree: RepoTree,
 ) -> list[Finding]:
-    """Wingman's checks on one app's deploy config: ``repourl`` casing, pins, YAML.
+    """Wingman's checks on one app's deploy config: ``repourl`` casing, pins, YAML, syncPolicy.
 
     ``docs`` are the app's existing deploy-config files, parsed (``None`` when absent).
     """
@@ -384,6 +386,16 @@ def lint_leaf(
                 **where,
             )
         )
+    sync_problem = automated_problem(leaf.sync_policy)
+    if sync_problem is not None:
+        found.append(
+            error(
+                Rule.SYNC_POLICY_INVALID,
+                f"{leaf.name}: {sync_problem}",
+                path=_sync_policy_source(docs) or str(app.folder),
+                **where,
+            )
+        )
     if pins and app.ocp_version and app.ocp_version not in pins:
         found.append(
             warning(
@@ -396,6 +408,16 @@ def lint_leaf(
             )
         )
     return found
+
+
+def _sync_policy_source(
+    docs: Sequence[tuple[Layer, Mapping[str, object] | None, YamlProblem | None]],
+) -> str | None:
+    """The highest layer whose own ``syncPolicy`` ArgoCD could not take; ``None`` if none."""
+    for layer, doc, _ in reversed(docs):
+        if doc is not None and automated_problem(doc.get(SYNC_POLICY)) is not None:
+            return str(layer.path)
+    return None
 
 
 def upgrade_check(
