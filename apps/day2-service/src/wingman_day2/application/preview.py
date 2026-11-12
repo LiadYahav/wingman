@@ -19,7 +19,7 @@ from wingman_day2.application.installed import override_layer
 from wingman_day2.application.topology import ClusterSummary, TeamState, TopologyService
 from wingman_day2.domain import layout
 from wingman_day2.domain.clusters import ClusterKind
-from wingman_day2.domain.errors import UnknownChartError
+from wingman_day2.domain.errors import ChangeRefusedError, UnknownChartError
 from wingman_day2.domain.findings import Finding, Rule, error
 from wingman_day2.domain.merge import MergeResult, merge_values
 from wingman_day2.domain.platform import AppSource, PlannedApp
@@ -92,11 +92,14 @@ class PreviewService:
         mce: str | None = None,
         version: str | None = None,
         override_values: Mapping[str, object] | None = None,
+        override_path: str | None = None,
     ) -> ValuesPreview:
         """The merged values of ``team``'s ``chart`` on cluster ``key``.
 
         ``version`` previews another chart revision; ``override_values``
-        previews an edit of the cluster's own values file.
+        previews an edit of the cluster's own values file, or with
+        ``override_path`` of another layer of its stack (a fleet default's
+        ``values-<env>.yaml``, ADR-0053).
         """
         topology = await self._topology.load()
         summary = topology.resolve(key, mce=mce)
@@ -121,6 +124,15 @@ class PreviewService:
         )
         layers = await load_layers(self._sigs, state.team, tree, app.workload_layers)
         edited = override_layer(app).path
+        if override_path is not None:
+            paths = {str(x.path): x.path for x in app.workload_layers}
+            if override_path not in paths:
+                raise ChangeRefusedError(
+                    f"{override_path} is not a values layer of {chart} on {summary.ref.name} "
+                    f"(have: {', '.join(paths)})",
+                    details={"rule": "override-path", "path": override_path},
+                )
+            edited = paths[override_path]
         inputs = []
         for loaded in layers:
             if override_values is not None and loaded.layer.path == edited:

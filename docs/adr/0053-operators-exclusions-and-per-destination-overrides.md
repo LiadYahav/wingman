@@ -1,7 +1,7 @@
 # ADR-0053: A team's operators get their own pages; Wingman edits `exclusions.yaml` in place, overrides one destination's values or deploy config, and every authoring write is confirmed against its preview
 
 Date: 2026-11-12
-Status: Accepted
+Status: Accepted; amended 2026-11-12 (the Operators pages are folded into Addons: one place, called add-ons) and 2026-11-13 (no exclusions in Wingman; a subset of MCEs is per-MCE installs; hosted-cluster specifics belong to flavors and create)
 
 ## Context
 
@@ -209,6 +209,93 @@ New MR verbs (ADR-0007): `Exclude`, `Include`, `Override`; actions
 
 ## Amendments
 
+**2026-11-13, 3.13.0: no exclusions in Wingman; a subset of MCEs is
+per-MCE installs; hosted-cluster specifics belong to flavors and create.**
+The user, on reviewing the fold (PR #38): "There is no exclude option inside the defaults —
+there is only the option to override values for specific MCEs. If we want
+something only on specific MCEs, it means creating a file inside their
+folders. About the HCs: the default add-on for everyone is there, but the
+specific ones are for the flavor and the create-cluster form, not ours." So,
+superseding the exclusion and carve-out parts of the decision above:
+
+- **Wingman writes no `exclusions.yaml`.** The destination checkboxes, the
+  orphaning-by-exclusion flow and `PUT /addons/{team}/{addon}/defaults/{scope}/exclusions`
+  are gone. The file is still read wherever the platform reads it (the
+  simulation, the lints, the page's states: a repo that has one renders and
+  shows as it is), and 3.12.0's adoption fix stays: making an add-on a
+  default still drops a stale entry that would delete an adopted cluster's
+  app. `domain.exclusions.set_excluded` stays for that.
+- **The per-destination deploy-config carve-out is gone** (`PUT .../destinations/{cluster}/deploy`):
+  it was built on exclusion.
+- **Values per env and per destination, on the MCE, hosted-cluster and
+  UPI defaults alike.** The user, the same day: "There are also HC defaults,
+  and they work the same idea as the MCE"; the platform's own READMEs agree
+  (`defaults/hosted-clusters/` is "the hosted-cluster mirror of
+  defaults/mces/", and `defaults/upi/` the same). Each of the three layers,
+  lowest first, the default's `values.yaml`, `values-<env>.yaml` (prod, prep
+  or test: `PUT .../defaults/{scope}/envs/{env}/values`) and
+  `values-<name>.yaml` (one MCE, hosted cluster or UPI cluster:
+  `PUT .../defaults/{scope}/destinations/{cluster}/values`), below the
+  destination's MCE-wide or UPI-wide and cluster-wide files: env before
+  cluster, and the cluster wins (`domain.stacks`, checked by the oracle;
+  an env override is rendered by it too). The effective values before and
+  after come from `/merge-preview`, which takes an `override_path` for an env
+  file, previewed on a destination of that env. The hub is one destination,
+  its default's own values (`override-scope` refuses it).
+- **Deploy on specific MCEs** is new, on the MCE panel of an add-on's page
+  (`POST /addons/{team}/{addon}/mce-installs`). An add-on wanted on some MCEs
+  only is not a default: it is installed in each chosen MCE hub's own
+  `sites/<site>/<env>/mces/<mce>/in-cluster/<chart>/`, by ADR-0022's install
+  (`values.yaml`, and `<chart>.yaml` only when a key is needed), one MR per
+  MCE, as the per-cluster principle of ADR-0044 asks. They are opened four at
+  a time; each MCE is planned, refused (installed already, not rendered, or an
+  MCE default of the add-on: the XOR rule, with the reason) or failed on its
+  own; nothing is retried, and once GitLab does not answer no more are
+  started. A dry run plans each. Where it is installed is listed per MCE with
+  the usual remove and its orphaning warning. An MCE the team's repo does not
+  register yet can be chosen: installing registers it, so the team's MCE
+  defaults reach it too, and the plan says so.
+- **The hosted-clusters panel** works like the MCE one (the default, its
+  values per env and per cluster) without deploying on specific hosted
+  clusters: which add-ons a hosted cluster has of its own comes from its
+  flavor and the create form (a link to Flavors). A cluster's own page is
+  unchanged.
+- Messages that suggested excluding (the XOR refusal of an install, the
+  refusal to pin or remove a fleet default on one cluster) say what to do
+  instead. Core keeps `Verb.EXCLUDE` and `Verb.INCLUDE`, so the titles of MRs
+  3.12 opened still parse (ADR-0007).
+
+**2026-11-12, released in 3.13.0: the Operators page is folded into Addons; one place,
+called add-ons.** The user, on seeing 3.12.0: "operators IS addons", and "we
+already had it: Addons can control defaults, it just can't control
+overrides". The separate Operators section split one thing in two and named
+it twice. So:
+
+- There is no Operators entry, page or label. A day2 add-on is an *add-on*
+  everywhere in the UI; `operators/` appears only as the folder name in a
+  team's repo, where a file path is shown.
+- The **Addons** page has its authoring back, as 3.8.0 had it: *New add-on*
+  on each team (the form is `/addons/new?team=<team>`: a query, so an add-on
+  may be named `new`), and *Edit team default* on each add-on.
+- What 3.12.0 added is on the add-on's own page, reached from the Addons page
+  (*Defaults & overrides*, `/addons/<team>/<chart>`): per scope, make it a
+  default and edit that default, *which destinations* (the checkboxes that
+  edit `exclusions.yaml`, with the orphaning confirmation), and per
+  destination its values (`values-<name>.yaml`) and its own deploy config.
+  The page is the one 3.12.0 built, moved and renamed.
+- 3.12.0's routes redirect, so links keep working (`next.config.ts`, 307):
+  `/operators` to `/addons`, `/teams/<team>/operators` to
+  `/addons?team=<team>`, `/teams/<team>/operators/<chart>` to
+  `/addons/<team>/<chart>`, `/teams/<team>/new-operator` to
+  `/addons/new?team=<team>`.
+- The reads are `GET /teams/{team}/addons` and
+  `GET /teams/{team}/addons/{addon}`; 3.12.0's `/teams/{team}/operators[...]`
+  stay as deprecated aliases with the same answers. Every write, MR,
+  confirmation, digest and review fix of 3.12.0 is unchanged. The service's
+  refusal to remove a fleet default from a cluster points at the add-on's
+  page (`details.addon`), keeping `details.operator`.
+- One cluster's add-ons, on its own page, are unchanged.
+
 The review's access and sync-settings findings, fixed in the same change:
 
 - **6. Access is read per team.** A team whose access GitLab does not answer
@@ -247,6 +334,13 @@ The review's access and sync-settings findings, fixed in the same change:
   over a refused one).
 
 ## Verification
+
+The 2026-11-12 fold: `apps/web/e2e/tests/addon-defaults.spec.ts` (an
+add-on's page reached from Addons, no Operators entry, 3.12.0's routes
+redirecting) and `addon-authoring.spec.ts` (New add-on and Edit team default
+on the Addons page); `tests/api/test_operators_api.py` (the
+`/teams/{team}/addons` paths and their 3.12.0 aliases answer the same).
+
 
 - `tests/unit/domain/test_exclusions_text.py`: the fixture's 40 comment
   lines kept on add, remove, a new chart, the last name gone; flow lists;

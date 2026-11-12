@@ -32,7 +32,7 @@ from wingman_day2.application.authoring import (
     TeamDefaultEdit,
 )
 from wingman_day2.application.catalog import CatalogEntry, ChartValues
-from wingman_day2.application.changes import ChangeResult
+from wingman_day2.application.changes import ChangeResult, MceInstall, MceInstalls
 from wingman_day2.application.installed import ClusterCharts, InstalledChart
 from wingman_day2.application.operators import (
     DestinationView,
@@ -122,6 +122,10 @@ class MergePreviewBody(_Input):
     mce: str | None = None
     version: str | None = None
     override_values: dict[str, Any] | None = None
+    override_path: str | None = Field(
+        default=None,
+        description="The stack layer override_values replaces; the cluster's own file when absent.",
+    )
 
 
 class SyncIn(_Input):
@@ -237,40 +241,18 @@ class _Confirmed(_Input):
     message: str | None = None
 
 
-class ExclusionsBody(_Confirmed):
-    """The destinations of a scope a fleet default skips: the full set, by cluster id."""
-
-    excluded: list[str]
-
-
 class DestinationValuesBody(_Confirmed):
     """A destination's ``values-<name>.yaml`` of a fleet default; null or {} deletes it."""
 
     values: dict[str, Any] | None
 
 
-class DeployOverrideIn(_Input):
-    """The keys a destination's own deploy config sets (null: not set)."""
+class MceInstallsBody(_Input):
+    """Deploy an add-on on specific MCEs: one MR per MCE, in each one's own folder."""
 
-    target_revision: str | None = None
-    repourl: str | None = None
-    path: str | None = None
-    project_namespace: str | None = None
-
-    def keys(self) -> dict[str, object | None]:
-        """As deploy-config keys."""
-        return {
-            TARGET_REVISION: self.target_revision,
-            REPOURL: self.repourl,
-            PATH: self.path,
-            PROJECT_NAMESPACE: self.project_namespace,
-        }
-
-
-class DestinationDeployBody(_Confirmed):
-    """A destination's own deploy config (the carve-out); null takes it back into the default."""
-
-    deploy: DeployOverrideIn | None
+    clusters: list[str] = Field(min_length=1, description="MCE ids, mce:<site>:<env>:<mce>.")
+    values: dict[str, Any] = Field(default_factory=dict, description="Each MCE's values.yaml.")
+    message: str | None = None
 
 
 class ApproveBody(_Input):
@@ -1147,7 +1129,7 @@ class AuthoringChangeOut(MRDetailOut, _AuthoringFields):
         )
 
 
-# ── Operators (ADR-0053) ────────────────────────────────────────────────────
+# ── Add-ons with their defaults (ADR-0053) ────────────────────────────────────────────────────
 
 
 class FileOut(BaseModel):
@@ -1174,7 +1156,7 @@ class FileOut(BaseModel):
 
 
 class OcpVersionOut(BaseModel):
-    """An ``ocp-versions/<v>/`` pin of an operator."""
+    """An ``ocp-versions/<v>/`` pin of an add-on."""
 
     version: str
     target_revision: str | None
@@ -1193,14 +1175,12 @@ class OcpVersionOut(BaseModel):
 
 
 class ExclusionsOut(BaseModel):
-    """A scope's ``exclusions.yaml``, as it concerns one operator."""
+    """A scope's ``exclusions.yaml`` for one add-on, read-only: Wingman never writes it."""
 
     path: str
     exists: bool
     names: list[str]
     unknown_names: list[str]
-    editable: bool
-    problem: str | None
     last_commit_id: str | None
 
     @classmethod
@@ -1212,14 +1192,12 @@ class ExclusionsOut(BaseModel):
             exists=view.file.exists,
             names=list(view.names),
             unknown_names=list(view.unknown_names),
-            editable=view.editable,
-            problem=view.problem,
             last_commit_id=file.last_commit_id if file else None,
         )
 
 
 class ScopeDestinationOut(BaseModel):
-    """One destination of a scope and how the operator's default stands there."""
+    """One destination of a scope and how the add-on's default stands there."""
 
     id: str
     name: str
@@ -1278,7 +1256,7 @@ class EnvFileOut(BaseModel):
 
 
 class ScopePanelOut(BaseModel):
-    """One scope of an operator: its default there, if any, and every destination."""
+    """One scope of an add-on: its default there, if any, and every destination."""
 
     scope: str
     label: str
@@ -1320,7 +1298,7 @@ class ScopePanelOut(BaseModel):
 
 
 class OperatorOut(BaseModel):
-    """One operator of a team: its files, its OCP-version pins, one panel per scope."""
+    """One add-on of a team: its files, its OCP-version pins, one panel per scope."""
 
     team: str
     name: str
@@ -1353,7 +1331,7 @@ class OperatorOut(BaseModel):
 
 
 class OperatorDefaultOut(BaseModel):
-    """A scope an operator is a default on, and its reach there."""
+    """A scope an add-on is a default on, and its reach there."""
 
     scope: str
     label: str
@@ -1362,7 +1340,7 @@ class OperatorDefaultOut(BaseModel):
 
 
 class OperatorSummaryOut(BaseModel):
-    """One line of a team's operators list."""
+    """One line of a team's add-ons list."""
 
     team: str
     name: str
@@ -1403,4 +1381,53 @@ class OperatorSummaryOut(BaseModel):
             warnings=summary.warnings,
             writable=summary.access.writable,
             read_only_reason=summary.access.reason,
+        )
+
+
+class MceInstallOut(BaseModel):
+    """One chosen MCE of a deploy on specific MCEs."""
+
+    cluster: str
+    name: str
+    status: str = Field(description="planned (a dry run), opened, refused or failed.")
+    files: list[FileChangeOut]
+    notes: list[str]
+    warnings: list[FindingOut]
+    merge_request: MRDetailOut | None
+    detail: str | None = Field(description="Why it was refused or failed.")
+    rule: str | None
+
+    @classmethod
+    def of(cls, team: str, install: MceInstall) -> MceInstallOut:
+        """From the application value."""
+        error = install.refused or install.failed
+        rule = install.refused.details.get("rule") if install.refused is not None else None
+        result = install.result
+        return cls(
+            cluster=install.cluster.id,
+            name=install.cluster.name,
+            status=install.status,
+            files=[FileChangeOut.of(c) for c in install.changes],
+            notes=list(result.notes if result else install.notes),
+            warnings=findings(install.findings),
+            merge_request=MRDetailOut.of(team, result.merge_request) if result else None,
+            detail=(getattr(error, "detail", None) or str(error)) if error is not None else None,
+            rule=str(rule) if rule is not None else None,
+        )
+
+
+class MceInstallsOut(BaseModel):
+    """A deploy on specific MCEs: each chosen MCE, in the order asked."""
+
+    team: str
+    chart: str
+    installs: list[MceInstallOut]
+
+    @classmethod
+    def of(cls, result: MceInstalls) -> MceInstallsOut:
+        """From the application value."""
+        return cls(
+            team=result.team,
+            chart=result.chart,
+            installs=[MceInstallOut.of(result.team, i) for i in result.installs],
         )

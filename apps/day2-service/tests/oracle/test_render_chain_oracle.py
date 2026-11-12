@@ -479,7 +479,7 @@ async def test_a_created_addon_and_its_default_render_as_wingman_says(tmp_path: 
     await assert_same_apps(after_files, tmp_path / "again", "redbull")
 
 
-# ── Operators (ADR-0053): exclusions and per-destination overrides render as said ──
+# ── Add-ons (ADR-0053): per-MCE values and per-MCE installs render as said ──
 
 ADMIN = User("jane", Role.ADMIN)
 PROD_MCE = "mce:site1:prod:ocp4-prod-mce-site1-a"
@@ -517,47 +517,6 @@ async def authored_with(
     return after, seen[0]
 
 
-async def test_an_excluded_mce_loses_its_app_and_nothing_else_moves(tmp_path: Path) -> None:
-    files = fixture_files()
-    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
-    after_files, result = await authored_with(
-        files,
-        lambda day2: lambda **kw: day2.fleet_targets.set_exclusions(
-            "redbull", "dhcp-api-token", DefaultsScope.MCES, [PREP_MCE, PROD_MCE], ADMIN, **kw
-        ),
-    )
-    snapshot = oracle(after_files, tmp_path / "after", "redbull")
-    assert snapshot["check_failures"] == []
-    after = _leaves(snapshot["apps"])
-    gone = "ocp4-prod-mce-site1-a:redbull-in-cluster-dhcp-api-token-deploy"
-    assert sorted(set(before) - set(after)) == [gone] and set(after) <= set(before)
-    # Wingman said exactly that: one app removed, its workload orphaned.
-    assert [(i.ref.id, i.app_name, i.orphaned) for i in result.plan.impact] == [
-        (PROD_MCE, "redbull-in-cluster-dhcp-api-token-deploy", True)
-    ]
-    for uid, leaf in after.items():
-        assert leaf["identity"] == before[uid]["identity"], uid
-    await assert_same_apps(after_files, tmp_path / "again", "redbull")
-
-
-async def test_an_included_mce_gets_its_app_back(tmp_path: Path) -> None:
-    files = fixture_files()
-    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
-    after_files, result = await authored_with(
-        files,
-        lambda day2: lambda **kw: day2.fleet_targets.set_exclusions(
-            "redbull", "dhcp-api-token", DefaultsScope.MCES, [], ADMIN, **kw
-        ),
-    )
-    snapshot = oracle(after_files, tmp_path / "after", "redbull")
-    assert snapshot["check_failures"] == []
-    after = _leaves(snapshot["apps"])
-    back = "ocp4-prep-mce-site1-a:redbull-in-cluster-dhcp-api-token-deploy"
-    assert sorted(set(after) - set(before)) == [back] and set(before) <= set(after)
-    assert [(i.ref.id, str(i.effect)) for i in result.plan.impact] == [(PREP_MCE, "added")]
-    await assert_same_apps(after_files, tmp_path / "again", "redbull")
-
-
 async def test_a_value_override_changes_that_destinations_values_only(tmp_path: Path) -> None:
     files = fixture_files()
     before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
@@ -582,38 +541,6 @@ async def test_a_value_override_changes_that_destinations_values_only(tmp_path: 
             assert mine == {**theirs, "replicas": 7}
         else:
             assert mine == theirs, uid
-    await assert_same_apps(after_files, tmp_path / "again", "redbull")
-
-
-async def test_an_own_deploy_config_keeps_the_app_and_pins_that_destination_only(
-    tmp_path: Path,
-) -> None:
-    files = fixture_files()
-    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
-    after_files, _ = await authored_with(
-        files,
-        lambda day2: lambda **kw: day2.fleet_targets.set_destination_deploy(
-            "redbull",
-            "example-chart",
-            DefaultsScope.MCES,
-            PROD_MCE,
-            {"targetRevision": "HEAD"},
-            ADMIN,
-            **kw,
-        ),
-    )
-    snapshot = oracle(after_files, tmp_path / "after", "redbull")
-    # The platform's carve-out: the exclusion and the own folder together are no duplicate.
-    assert snapshot["check_failures"] == []
-    after = _leaves(snapshot["apps"])
-    assert sorted(after) == sorted(before)
-    target = "ocp4-prod-mce-site1-a:redbull-in-cluster-example-chart-deploy"
-    for uid, leaf in after.items():
-        expected = dict(before[uid]["identity"])
-        if uid == target:
-            expected["source_targetRevision"] = "HEAD"
-        assert leaf["identity"] == expected, uid
-        assert workload(after_files, "redbull", leaf) == workload(files, "redbull", before[uid])
     await assert_same_apps(after_files, tmp_path / "again", "redbull")
 
 
@@ -689,3 +616,67 @@ async def test_a_create_changes_existing_folders_exactly_as_wingman_lists(tmp_pa
         "syncPolicy.syncOptions",
         "resources.limits.cpu",
     }
+
+
+async def test_deploy_on_specific_mces_adds_the_app_on_those_mces_only(tmp_path: Path) -> None:
+    """One MCE's install MR, merged: its app appears there, and nowhere else changes."""
+    files = fixture_files()
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    gitlab = InMemoryGitLab(base_url=URL)
+    for project, tree in files.items():
+        gitlab.create_project(project, tree)
+    cache = TtlCache()
+    snapshots = RepoSnapshots(gitlab, cache, ttl=60)
+    day2 = Day2Services.build(
+        gitlab=gitlab,
+        sigs=GitLabSigsRepository(gitlab, cache, snapshots, group="sigs", branch="main", ttl=60),
+        day1=GitLabDay1Repository(gitlab, cache, snapshots, project=DAY1, branch="main", ttl=60),
+        charts=GitLabChartRepository(gitlab, cache, base_url=URL, ttl=60),
+        clock=lambda: datetime(2026, 11, 12, tzinfo=UTC),
+        gitlab_url=URL,
+    )
+    result = await day2.changes.install_on_mces("redbull", "cluster-roles", [PROD_MCE], ADMIN)
+    (install,) = result.installs
+    assert install.result is not None
+    project = await gitlab.get_project(RB)
+    after_files = {name: dict(tree) for name, tree in files.items()}
+    after_files[RB] = gitlab.snapshot(project.id, install.result.merge_request.source_branch)
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    added = "ocp4-prod-mce-site1-a:redbull-in-cluster-cluster-roles-deploy"
+    assert sorted(set(after) - set(before)) == [added] and set(before) <= set(after)
+    for uid, leaf in before.items():
+        assert after[uid]["identity"] == leaf["identity"], uid
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+async def test_an_env_override_changes_that_envs_values_only(tmp_path: Path) -> None:
+    files = fixture_files()
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    after_files, _ = await authored_with(
+        files,
+        lambda day2: lambda **kw: day2.fleet_targets.set_env_values(
+            "redbull", "example-chart", DefaultsScope.MCES, "prep", {"replicas": 9}, ADMIN, **kw
+        ),
+    )
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    assert sorted(after) == sorted(before)
+    prep = "ocp4-prep-mce-site1-a:redbull-in-cluster-example-chart-deploy"
+    for uid, leaf in after.items():
+        assert leaf["identity"] == before[uid]["identity"], uid
+        mine, theirs = (
+            workload(after_files, "redbull", leaf),
+            workload(files, "redbull", before[uid]),
+        )
+        if uid == prep:
+            # The env file sits below the MCE's own values-<mce>.yaml: the cluster wins on its keys.
+            own = yaml.safe_load(
+                files[RB]["defaults/mces/example-chart/values-ocp4-prep-mce-site1-a.yaml"]
+            )
+            assert mine == {**theirs, **{"replicas": 9}, **(own or {})}
+        else:
+            assert mine == theirs, uid
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")

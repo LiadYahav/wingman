@@ -10,8 +10,9 @@ import type {
   DestinationState,
   FleetScope,
   MergePreviewBody,
-  OperatorDetail,
-  OperatorSummary,
+  AddonDetail,
+  AddonSummary,
+  MceInstalls,
   PlannedFileChange,
   RepoFile,
   ScopeDestination,
@@ -22,12 +23,12 @@ import type {
 } from "../../types/day2";
 
 /**
- * The Operators pages' world (ADR-0053), shaped like the service's answers
+ * The world of an add-on's page (ADR-0053), shaped like the service's answers
  * (docs/notes/2026-11-12-operators-page-api.md), on top of fixtures/day2.ts
  * (the catalog, the destinations) and fixtures/authoring.ts (the teams, the
  * fleet defaults). platform/cert-manager is the rich one: a default on every
  * MCE with each destination state, an override, an own deploy config and an
- * exclusions file; every other operator is generated from the catalog and
+ * exclusions file; every other add-on is generated from the catalog and
  * the fleet defaults.
  *
  * Writes follow the 3.10 contract: a dry run answers the plan with its
@@ -122,8 +123,6 @@ function panel(
             exists: false,
             names: [],
             unknown_names: [],
-            editable: true,
-            problem: null,
             last_commit_id: commitOf(team),
           },
     destinations,
@@ -164,8 +163,6 @@ function certManagerMces(): ScopePanel {
         exists: true,
         names: [MCE_EXCLUDED_NAME, MCE_OWN_NAME, "ocp4-old-mce"],
         unknown_names: ["ocp4-old-mce"],
-        editable: true,
-        problem: null,
         last_commit_id: "platform-exclusions-1",
       },
       unregistered: [{ id: MCE_UNREGISTERED, name: "ocp4-prod-mce-site9-z", site: "site9", env: "prod", mce: "ocp4-prod-mce-site9-z" }],
@@ -175,7 +172,47 @@ function certManagerMces(): ScopePanel {
 
 const RICH = (team: string, chart: string) => team === "platform" && chart === "cert-manager";
 
-/** The destinations of a scope, and their state, for a generated operator. */
+/** platform/external-secrets on the MCEs: no default; installed on one MCE, others to deploy on. */
+function externalSecretsMces(): ScopePanel {
+  const t = "platform";
+  const c = "external-secrets";
+  const d = (id: string, state: DestinationState, extra: Partial<ScopeDestination> = {}) => destination(t, c, "mces", id, state, extra);
+  return panel(
+    t,
+    c,
+    "mces",
+    false,
+    [
+      d(MCE_A, "none"),
+      d(MCE_EXCLUDED, "own-folder", {
+        own_folder: `sites/site1/prod/mces/${MCE_EXCLUDED_NAME}/in-cluster/${c}`,
+        app_name: `${t}-in-cluster-${c}-deploy`,
+      }),
+      d(MCE_UNRENDERED, "not-rendered"),
+    ],
+    { unregistered: [{ id: MCE_UNREGISTERED, name: "ocp4-prod-mce-site9-z", site: "site9", env: "prod", mce: "ocp4-prod-mce-site9-z" }] },
+  );
+}
+
+/** platform/external-secrets on every hosted cluster: one cluster with its own values, and a prod env file. */
+function externalSecretsHosted(catalog: CatalogEntry | null): ScopePanel {
+  const base = generatedPanel("platform", "external-secrets", "hosted-clusters", catalog);
+  const folder = base.folder;
+  return {
+    ...base,
+    env_files: [{ env: "prod", file: repoFile("platform", `${folder}/values-prod.yaml`, "# prod clusters poll less\nrefreshInterval: 5m\n", { refreshInterval: "5m" }) }],
+    destinations: base.destinations.map((d) =>
+      d.id === HOSTED_ID
+        ? { ...d, override: repoFile("platform", `${folder}/values-${d.name}.yaml`, "# a noisy cluster\nreplicaCount: 3\n", { replicaCount: 3 }) }
+        : d,
+    ),
+  };
+}
+
+const MCE_PANEL = (team: string, chart: string) =>
+  RICH(team, chart) ? certManagerMces() : team === "platform" && chart === "external-secrets" ? externalSecretsMces() : null;
+
+/** The destinations of a scope, and their state, for a generated add-on. */
 function generatedPanel(team: string, chart: string, scope: FleetScope, catalog: CatalogEntry | null): ScopePanel {
   const fd = FLEET_DEFAULTS.find((f) => f.team === team && f.chart === chart && f.scope === scope);
   const isDefault = Boolean(fd) || Boolean(catalog?.fleet_defaults.includes(scope));
@@ -203,21 +240,24 @@ function generatedPanel(team: string, chart: string, scope: FleetScope, catalog:
             exists: Boolean(fd?.excluded.length),
             names: fd?.excluded.map((id) => parts(id).name) ?? [],
             unknown_names: [],
-            editable: true,
-            problem: null,
             last_commit_id: commitOf(team),
           },
   });
 }
 
-/** `GET /teams/{team}/operators/{op}`, or `null` (a 404). */
-export function operatorDetail(team: string, chart: string): OperatorDetail | null {
+/** `GET /teams/{team}/addons/{addon}`, or `null` (a 404). */
+export function addonDetailOf(team: string, chart: string): AddonDetail | null {
   const catalog = day2Catalog.find((e) => e.team === team && e.name === chart) ?? null;
   const fleet = FLEET_DEFAULTS.filter((f) => f.team === team && f.chart === chart);
   if (!catalog && fleet.length === 0) return null;
   const access = TEAMS.find((t) => t.name === team);
   const writable = access?.writable ?? true;
-  const scopes = SCOPES.map((scope) => (RICH(team, chart) && scope === "mces" ? certManagerMces() : generatedPanel(team, chart, scope, catalog)));
+  const scopes = SCOPES.map(
+    (scope) =>
+      (scope === "mces" && MCE_PANEL(team, chart)) ||
+      (scope === "hosted-clusters" && team === "platform" && chart === "external-secrets" && externalSecretsHosted(catalog)) ||
+      generatedPanel(team, chart, scope, catalog),
+  );
   const op = `operators/${chart}`;
   return {
     team,
@@ -241,14 +281,14 @@ export function operatorDetail(team: string, chart: string): OperatorDetail | nu
   };
 }
 
-/** `GET /teams/{team}/operators`: one per catalog entry, plus each fleet default without one. */
-export function operatorsOf(team: string): OperatorSummary[] {
+/** `GET /teams/{team}/addons`: one per catalog entry, plus each fleet default without one. */
+export function teamAddonsOf(team: string): AddonSummary[] {
   const names = new Set([
     ...day2Catalog.filter((e) => e.team === team).map((e) => e.name),
     ...FLEET_DEFAULTS.filter((f) => f.team === team).map((f) => f.chart),
   ]);
   return [...names].sort().map((name) => {
-    const d = operatorDetail(team, name) as OperatorDetail;
+    const d = addonDetailOf(team, name) as AddonDetail;
     return {
       team,
       name,
@@ -298,21 +338,26 @@ function roles(values: Values, role: string): Values {
 }
 
 /** `POST /merge-preview` of a fleet default's destination: team, fleet, then its `values-<name>.yaml`. */
-export function operatorPreview(body: MergePreviewBody): ValuesPreview {
-  const detail = operatorDetail(body.team, body.addon) as OperatorDetail;
+export function addonPreview(body: MergePreviewBody): ValuesPreview {
+  const detail = addonDetailOf(body.team, body.addon) as AddonDetail;
   const scope = detail.scopes.find((s) => s.destinations.some((d) => d.id === body.cluster)) ?? detail.scopes[1];
   const dest = scope.destinations.find((d) => d.id === body.cluster);
   const team = detail.catalog?.default_values ?? {};
   const fleet = scope.values_file.values;
-  const own = body.override_values ?? dest?.override?.values ?? {};
+  const envPath = `${scope.folder}/values-${dest?.env}.yaml`;
+  const editsEnv = body.override_path === envPath;
+  const envFile = scope.env_files.find((e) => e.env === dest?.env)?.file;
+  const envValues = editsEnv ? (body.override_values ?? {}) : (envFile?.values ?? {});
+  const own = (editsEnv ? undefined : body.override_values) ?? dest?.override?.values ?? {};
   const layer = (role: string, path: string, values: Values, exists = true): ValueLayer => ({ role, path, exists, values, last_commit_id: exists ? commitOf(body.team) : null, problem: null });
   const layers = [
     layer("team", `operators/${body.addon}/values.yaml`, team),
     layer("fleet", scope.values_file.path, fleet),
+    layer("fleet-env", envPath, envValues, Object.keys(envValues).length > 0),
     layer("fleet-target", dest?.override?.path ?? `${scope.folder}/values-${dest?.name}.yaml`, own, Object.keys(own).length > 0),
   ];
-  const merged = merge(merge(team, fleet), own);
-  const provenance = merge(merge(roles(team, "team"), roles(fleet, "fleet")), roles(own, "fleet-target"));
+  const merged = merge(merge(merge(team, fleet), envValues), own);
+  const provenance = merge(merge(merge(roles(team, "team"), roles(fleet, "fleet")), roles(envValues, "fleet-env")), roles(own, "fleet-target"));
   return {
     merged,
     provenance: provenance as ValuesPreview["provenance"],
@@ -349,13 +394,12 @@ export function operatorPreview(body: MergePreviewBody): ValuesPreview {
 
 // ── Writes ───────────────────────────────────────────────────────────────────
 
-const NOTE_ORPHAN = "ArgoCD orphans the workload where the Application goes: it keeps running, unmanaged.";
 
 function file(action: PlannedFileChange["action"], path: string, content: string | null, previous: string | null): PlannedFileChange {
   return { action, path, content, previous };
 }
 
-function impact(detail: OperatorDetail, id: string, effect: DestinationImpact["effect"], changes: AdoptionChange[] = []): DestinationImpact {
+function impact(detail: AddonDetail, id: string, effect: DestinationImpact["effect"], changes: AdoptionChange[] = []): DestinationImpact {
   const d = detail.scopes.flatMap((s) => s.destinations).find((x) => x.id === id);
   const name = d?.name ?? parts(id).name;
   return {
@@ -370,50 +414,56 @@ function impact(detail: OperatorDetail, id: string, effect: DestinationImpact["e
 }
 
 /** The plan of a write at `url` with `body`, at repo `version` (a plan-changed bumps it). */
-function operatorPlan(method: string, url: URL, body: Values, version: number): AuthoringPlan {
+function addonPlan(method: string, url: URL, body: Values, version: number): AuthoringPlan {
   const p = url.pathname.split("/").map(decodeURIComponent);
   const [team, chart, scope] = [p[4], p[5], p[7] as FleetScope | undefined];
-  const detail = team && chart ? operatorDetail(team, chart) : null;
+  const detail = team && chart ? addonDetailOf(team, chart) : null;
   const confirmOf = (i: DestinationImpact[]) => i.filter((x) => x.effect !== "added").map((x) => x.cluster);
   const finish = (plan: Omit<AuthoringPlan, "digest">): AuthoringPlan => ({ ...plan, digest:`digest-v${version}-${plan.action}-${chart ?? ""}-${scope ?? ""}` });
 
-  if (detail && scope && p[8] === "exclusions") {
-    const panelOf = detail.scopes.find((s) => s.scope === scope) as ScopePanel;
-    const before = new Set(panelOf.destinations.filter((d) => d.state === "excluded" || d.state === "own-deploy").map((d) => d.id));
-    const after = new Set((body.excluded as string[]) ?? []);
-    const imp = [
-      ...[...after].filter((id) => !before.has(id)).map((id) => impact(detail, id, "removed")),
-      ...[...before].filter((id) => !after.has(id)).map((id) => impact(detail, id, "added")),
-    ];
-    const names = (e: string) => imp.filter((i) => i.effect === e).map((i) => i.name).join(", ");
-    const title = imp.every((i) => i.effect === "removed")
-      ? `[Wingman/Day2] Exclude addon ${team}/${chart} from ${names("removed")} (fleet default on ${LABEL[scope]})`
-      : imp.every((i) => i.effect === "added")
-        ? `[Wingman/Day2] Include addon ${team}/${chart} on ${names("added")} (fleet default on ${LABEL[scope]})`
-        : `[Wingman/Day2] Update addon ${team}/${chart} exclusions (fleet default on ${LABEL[scope]})`;
+  if (detail && scope && p[8] === "envs") {
+    const env = p[9];
+    const values = body.values as Values | null;
+    const panelOf = detail.scopes.find((x) => x.scope === scope) as ScopePanel;
+    const current = panelOf.env_files.find((e) => e.env === env)?.file;
+    const path = current?.path ?? `${panelOf.folder}/values-${env}.yaml`;
+    const changes: AdoptionChange[] = Object.entries(values ?? current?.values ?? {}).map(([key, v]) => ({
+      stack: "values",
+      key,
+      before: values ? (current?.values[key] ?? null) : v,
+      after: values ? v : null,
+    }));
+    const reached = panelOf.destinations.filter((d) => d.env === env && d.state === "default");
+    const imp = reached.map((d) => impact(detail, d.id, "changed", changes));
     return finish({
       team,
-      action: "set-exclusions",
+      action: "override-values",
       chart,
       scope,
-      title,
-      files: [file("update", `defaults/${scope}/exclusions.yaml`, `# kept off by hand\n${chart}:\n${[...after].map((id) => `- ${parts(id).name}`).join("\n")}\n`, `# kept off by hand\n${chart}:\n- ${MCE_EXCLUDED_NAME}\n`)],
-      reach: panelOf.destinations.filter((d) => !after.has(d.id) && d.renders).map((d) => d.id),
+      title: values
+        ? `[Wingman/Day2] Override addon ${team}/${chart} values for ${env} (fleet default on ${LABEL[scope]})`
+        : `[Wingman/Day2] Override addon ${team}/${chart} values for ${env}: back to the fleet default (fleet default on ${LABEL[scope]})`,
+      files: [
+        values
+          ? file(current?.exists ? "update" : "create", path, Object.entries(values).map(([k, v]) => `${k}: ${String(v)}`).join("\n") + "\n", current?.text ?? null)
+          : file("delete", path, null, current?.text ?? ""),
+      ],
+      reach: reached.map((d) => d.id),
       adopted: [],
       needs_confirmation: confirmOf(imp),
       warnings: [],
-      notes: imp.some((i) => i.effect === "removed") ? [NOTE_ORPHAN] : [],
+      notes: [],
       impact: imp,
-      excluded: [...after],
+      excluded: [],
     });
   }
 
   if (detail && scope && p[8] === "destinations") {
     const cluster = p[9];
-    const kind = p[10];
     const dest = detail.scopes.flatMap((s) => s.destinations).find((d) => d.id === cluster);
     const name = dest?.name ?? parts(cluster).name;
-    if (kind === "values") {
+    // Values of one destination: the only per-destination write (no exclusions, no own deploy config).
+    {
       const values = body.values as Values | null;
       const team_values = detail.catalog?.default_values ?? {};
       const changes: AdoptionChange[] = Object.entries(values ?? dest?.override?.values ?? {}).map(([key, v]) => ({
@@ -446,36 +496,6 @@ function operatorPlan(method: string, url: URL, body: Values, version: number): 
         excluded: [],
       });
     }
-    const deploy = body.deploy as Values | null;
-    const keyOf: Record<string, string> = { target_revision: "targetRevision", repourl: "repourl", path: "path", project_namespace: "projectNamespace" };
-    const changes: AdoptionChange[] = deploy
-      ? Object.entries(deploy)
-          .filter(([, v]) => v !== null)
-          .map(([k, v]) => ({ stack: "deploy", key: keyOf[k] ?? k, before: null, after: v }))
-      : Object.entries(dest?.own_deploy?.values ?? {}).map(([k, v]) => ({ stack: "deploy", key: k, before: v, after: null }));
-    const own = dest?.own_folder ?? `sites/${dest?.site}/${dest?.env}/mces/${name}/in-cluster/${chart}`;
-    return finish({
-      team,
-      action: "override-deploy",
-      chart,
-      scope,
-      title: deploy
-        ? `[Wingman/Day2] Override addon ${team}/${chart} deploy config on ${name} (fleet default on ${LABEL[scope]})`
-        : `[Wingman/Day2] Override addon ${team}/${chart} deploy config on ${name}: back to the fleet default (fleet default on ${LABEL[scope]})`,
-      files: deploy
-        ? [
-            file("create", `${own}/${chart}.yaml`, changes.map((c) => `${c.key}: ${String(c.after)}`).join("\n") + "\n", null),
-            file("update", `defaults/${scope}/exclusions.yaml`, `${chart}:\n- ${name}\n`, `${chart}: []\n`),
-          ]
-        : [file("delete", `${own}/${chart}.yaml`, null, dest?.own_deploy?.text ?? "")],
-      reach: [cluster],
-      adopted: [],
-      needs_confirmation: [cluster],
-      warnings: [],
-      notes: ["The Application keeps its name: both folders generate the same one, so ArgoCD keeps it."],
-      impact: [impact(detail, cluster, "changed", changes)],
-      excluded: [],
-    });
   }
 
   // The 3.8 writes (create, team default, make default, fleet default), with 3.10's impact.
@@ -498,7 +518,7 @@ function operatorPlan(method: string, url: URL, body: Values, version: number): 
 }
 
 /** What the page sent. */
-export interface OperatorRequests {
+export interface AddonRequests {
   writes: { method: string; path: string; dryRun: boolean; body: Values }[];
   previews: MergePreviewBody[];
 }
@@ -506,32 +526,41 @@ export interface OperatorRequests {
 const sorted = (ids: unknown) => (Array.isArray(ids) ? [...ids].map(String).sort() : []);
 
 /**
- * Route the Operators reads (the list, one operator, merge-preview) and every
+ * Route the add-on reads (the list, one add-on, merge-preview) and every
  * authoring write. Register after mockDay2World and mockAuthoring (route mocks
  * match last registered first). `planChangedOnce`: the repo moves before the
  * first real write, which answers 409 plan-changed.
  */
-export async function mockOperators(
+export async function mockAddonDetail(
   page: Page,
-  { teams, planChangedOnce = false }: { teams?: Team[]; planChangedOnce?: boolean } = {},
-): Promise<OperatorRequests> {
-  const seen: OperatorRequests = { writes: [], previews: [] };
+  {
+    teams,
+    planChangedOnce = false,
+    failMce = null,
+  }: {
+    teams?: Team[];
+    planChangedOnce?: boolean;
+    /** An MCE whose install MR GitLab refuses (the others open). */
+    failMce?: string | null;
+  } = {},
+): Promise<AddonRequests> {
+  const seen: AddonRequests = { writes: [], previews: [] };
   let version = 1;
   let moved = false;
   if (teams) await page.route("**/api/day2/teams", (r) => json(r, teams));
-  await page.route(/\/api\/day2\/teams\/[^/?]+\/operators(\?.*)?$/, (r) =>
-    json(r, operatorsOf(decodeURIComponent(new URL(r.request().url()).pathname.split("/")[4]))),
+  await page.route(/\/api\/day2\/teams\/[^/?]+\/addons(\?.*)?$/, (r) =>
+    json(r, teamAddonsOf(decodeURIComponent(new URL(r.request().url()).pathname.split("/")[4]))),
   );
-  await page.route(/\/api\/day2\/teams\/[^/?]+\/operators\/[^/?]+(\?.*)?$/, (r) => {
+  await page.route(/\/api\/day2\/teams\/[^/?]+\/addons\/[^/?]+(\?.*)?$/, (r) => {
     const p = new URL(r.request().url()).pathname.split("/").map(decodeURIComponent);
-    const detail = operatorDetail(p[4], p[6]);
-    if (!detail) return r.fulfill(problem(404, "NOT_FOUND", `${p[4]} has no operator ${p[6]}`));
+    const detail = addonDetailOf(p[4], p[6]);
+    if (!detail) return r.fulfill(problem(404, "NOT_FOUND", `${p[4]} has no add-on ${p[6]}`));
     return json(r, detail);
   });
   await page.route("**/api/day2/merge-preview", (r) => {
     const body = r.request().postDataJSON() as MergePreviewBody;
     seen.previews.push(body);
-    return json(r, operatorPreview(body));
+    return json(r, addonPreview(body));
   });
 
   const write = async (r: Route) => {
@@ -546,7 +575,7 @@ export async function mockOperators(
       moved = true;
       version += 1;
     }
-    const plan = operatorPlan(method, url, body, version);
+    const plan = addonPlan(method, url, body, version);
     if (dryRun) return json(r, plan);
     if (plan.needs_confirmation.length > 0 && !body.expected_digest)
       return r.fulfill(problem(422, "VALIDATION_ERROR", "confirm against a preview: send its digest", { rule: "confirm-against-preview" }));
@@ -564,7 +593,63 @@ export async function mockOperators(
   await page.route(/\/api\/day2\/addons\/[^/?]+(\?.*)?$/, write);
   await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+(\?.*)?$/, write);
   await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+(\?.*)?$/, write);
-  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/exclusions(\?.*)?$/, write);
-  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/destinations\/[^/?]+\/(values|deploy)(\?.*)?$/, write);
+  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/destinations\/[^/?]+\/values(\?.*)?$/, write);
+  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/envs\/[^/?]+\/values(\?.*)?$/, write);
+  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/mce-installs(\?.*)?$/, (r) => {
+    const url = new URL(r.request().url());
+    const dryRun = url.searchParams.get("dry_run") === "true";
+    const body = (r.request().postDataJSON() ?? {}) as Values;
+    seen.writes.push({ method: "POST", path: url.pathname, dryRun, body });
+    const [team, chart] = url.pathname.split("/").map(decodeURIComponent).slice(4, 6);
+    const result = mceInstalls(team, chart, (body.clusters as string[]) ?? [], dryRun, failMce);
+    return json(r, result, !dryRun && result.installs.some((i: MceInstalls["installs"][number]) => i.status === "opened") ? 201 : 200);
+  });
   return seen;
 }
+
+let installIid = 40;
+
+/** `POST /addons/{team}/{addon}/mce-installs`: one install per MCE; a site3 one renders nothing. */
+export function mceInstalls(team: string, chart: string, clusters: string[], dryRun: boolean, failMce: string | null = null): MceInstalls {
+  return {
+    team,
+    chart,
+    installs: clusters.map((id) => {
+      const { name, site, env } = parts(id);
+      const path = `sites/${site}/${env}/mces/${name}/in-cluster/${chart}/values.yaml`;
+      const base = {
+        cluster: id,
+        name,
+        files: [{ action: "create", path }],
+        notes: [`After the merge, ArgoCD on ${name} generates ${team}-in-cluster-${chart}-deploy, which is manual-sync.`],
+        warnings: [],
+        merge_request: null,
+        detail: null,
+        rule: null,
+      };
+      if (site === "site3")
+        return { ...base, files: [], notes: [], status: "refused" as const, detail: `day1 has no mastertag for ${name}`, rule: "day1-version-missing" };
+      if (dryRun) return { ...base, status: "planned" as const };
+      if (id === failMce) return { ...base, status: "failed" as const, detail: "GitLab refused the branch" };
+      installIid += 1;
+      const mr = changeOf({
+        team,
+        action: "create-addon",
+        chart,
+        scope: null,
+        title: `[Wingman/Day2] Install addon ${team}/${chart} on ${name}`,
+        files: [],
+        reach: [],
+        adopted: [],
+        needs_confirmation: [],
+        warnings: [],
+        notes: [],
+        impact: [],
+        excluded: [],
+        digest: "",
+      });
+      return { ...base, status: "opened" as const, merge_request: { ...mr, iid: installIid, web_url: `https://gitlab.example.com/sigs/${team}/-/merge_requests/${installIid}` } };
+    }),
+  };
+}
+

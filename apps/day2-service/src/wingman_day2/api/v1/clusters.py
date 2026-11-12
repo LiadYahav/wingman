@@ -100,6 +100,7 @@ async def merge_preview(
         mce=body.mce,
         version=body.version,
         override_values=body.override_values,
+        override_path=body.override_path,
     )
     return ValuesPreviewOut.of(preview)
 

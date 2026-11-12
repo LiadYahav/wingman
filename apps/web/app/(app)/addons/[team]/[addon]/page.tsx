@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Boxes, GitBranch, Layers, Pencil, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { FLEET_SCOPES, day2Api, day2Keys, keyFromParam, problemOf, syncSummary, teamOperatorsHref } from "@/lib/day2";
+import { FLEET_SCOPES, day2Api, day2Keys, keyFromParam, problemOf, syncSummary, teamAddonsHref } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { ignoreDifferencesText } from "@/lib/values";
 import { buttonVariants } from "@/components/ui/button";
@@ -17,10 +17,10 @@ import { ChangeResultPanel, type OpenedChanges } from "@/components/addons/chang
 import { EditTeamDefaultDialog } from "@/components/addons/default-dialogs";
 import { FindingsList } from "@/components/addons/findings";
 import { ReadOnlyBadge, ReadOnlyNote } from "@/components/addons/team-access";
-import { Breadcrumbs, PageTitle, useOperatorAccess } from "@/components/operators/page-header";
-import { RepoFileView } from "@/components/operators/repo-file";
-import { ScopePanelCard, type OperatorWrites } from "@/components/operators/scope-panel";
-import type { AuthoringChange, CatalogEntry, OperatorDetail, ScopePanel } from "@/types/day2";
+import { Breadcrumbs, PageTitle, useAddonAccess } from "@/components/addons/page-header";
+import { RepoFileView } from "@/components/addons/repo-file";
+import { ScopePanelCard, type AddonWrites } from "@/components/addons/scope-panel";
+import type { AuthoringChange, CatalogEntry, AddonDetail, ScopePanel } from "@/types/day2";
 
 const VERB: Record<string, OpenedChanges["verb"]> = { "create-addon": "Create", "make-default": "Promote" };
 
@@ -58,7 +58,7 @@ function revisionLabel(entry: CatalogEntry): string {
   return entry.current_version === "HEAD" && head ? `HEAD (${head})` : entry.current_version;
 }
 
-function TeamDefault({ detail, writes }: { detail: OperatorDetail; writes: OperatorWrites }) {
+function TeamDefault({ detail, writes }: { detail: AddonDetail; writes: AddonWrites }) {
   const [editing, setEditing] = useState(false);
   const entry = detail.catalog;
   const meta = entry?.argocd_metadata;
@@ -149,7 +149,7 @@ function TeamDefault({ detail, writes }: { detail: OperatorDetail; writes: Opera
   );
 }
 
-function OcpVersions({ detail }: { detail: OperatorDetail }) {
+function OcpVersions({ detail }: { detail: AddonDetail }) {
   return (
     <Card title="OCP-version pins" icon={GitBranch} label="OCP-version pins">
       {detail.ocp_versions.length === 0 ? (
@@ -192,7 +192,7 @@ function sortedScopes(scopes: ScopePanel[]): ScopePanel[] {
 
 function PageSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" data-testid="operator-loading">
+    <div className="space-y-4" aria-busy="true" data-testid="addon-loading">
       <Skeleton className="h-48 rounded-xl" />
       <Skeleton className="h-24 rounded-xl" />
       <Skeleton className="h-40 rounded-xl" />
@@ -201,28 +201,31 @@ function PageSkeleton() {
 }
 
 /**
- * One operator of a team (ADR-0053): its team default (`operators/<op>/`),
- * its OCP-version pins, and one panel per fleet scope: whether it is a default
- * there, which destinations get it, and each destination's overrides. Every
- * write is previewed first and confirmed against the previewed plan.
+ * One add-on of a team, reached from the Addons page (ADR-0053): its team
+ * default (`operators/<chart>/` in the team repo), its OCP-version pins, and
+ * one panel per fleet scope: whether it is a default there, which destinations
+ * get it, and each destination's overrides. Every write is previewed first and
+ * confirmed against the previewed plan. One cluster's add-ons stay on that
+ * cluster's page.
  */
-export default function OperatorPage() {
-  const params = useParams<{ team: string; operator: string }>();
+export default function AddonPage() {
+  const params = useParams<{ team: string; addon: string }>();
   const team = keyFromParam(params.team);
-  const name = keyFromParam(params.operator);
+  const name = keyFromParam(params.addon);
   const [opened, setOpened] = useState<OpenedChanges | null>(null);
-  const query = useQuery<OperatorDetail>({
-    queryKey: day2Keys.operator(team, name),
-    queryFn: () => api.get<OperatorDetail>(day2Api.operator(team, name)),
+  const query = useQuery<AddonDetail>({
+    queryKey: day2Keys.addonDetail(team, name),
+    queryFn: () => api.get<AddonDetail>(day2Api.addonDetail(team, name)),
     staleTime: 30_000,
   });
   const detail = query.data;
-  const access = useOperatorAccess(team, detail);
+  const access = useAddonAccess(team, detail);
 
-  const writes: OperatorWrites = {
+  const writes: AddonWrites = {
     isAdmin: access.isAdmin,
     readOnlyReason: access.readOnlyReason,
     onOpened: (change: AuthoringChange) => setOpened({ verb: VERB[change.action] ?? "Update", results: [change], failed: [] }),
+    onChanges: setOpened,
   };
 
   const notFound = query.error && problemOf(query.error).status === 404;
@@ -230,7 +233,7 @@ export default function OperatorPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6 lg:p-8">
       <div className="space-y-2">
-        <Breadcrumbs items={[{ label: "Operators", href: "/operators" }, { label: team, href: teamOperatorsHref(team) }, { label: name }]} />
+        <Breadcrumbs items={[{ label: "Addons", href: "/addons" }, { label: team, href: teamAddonsHref(team) }, { label: name }]} />
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -241,8 +244,8 @@ export default function OperatorPage() {
               {access.showReason && <ReadOnlyBadge />}
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              An operator of <strong>{team}</strong>: its team default and the fleet defaults built from it. On one cluster it is an
-              add-on, managed from that cluster&apos;s page.
+              An add-on of <strong>{team}</strong>: its team default, the fleet defaults built from it, which destinations they
+              reach and each one&apos;s overrides. Its install on one cluster is on that cluster&apos;s page.
             </p>
           </div>
           <button
@@ -263,10 +266,10 @@ export default function OperatorPage() {
       {notFound ? (
         <EmptyState
           bordered
-          title={`${team} has no operator ${name}`}
+          title={`${team} has no add-on ${name}`}
           description={`Neither operators/${name}/ nor a fleet default of that name is in sigs/${team}.`}
-          action={<EmptyStateLink href={teamOperatorsHref(team)}>Back to {team}&apos;s operators</EmptyStateLink>}
-          data-testid="operator-not-found"
+          action={<EmptyStateLink href={teamAddonsHref(team)}>Back to {team}&apos;s add-ons</EmptyStateLink>}
+          data-testid="addon-not-found"
         />
       ) : query.error ? (
         <ProblemList error={query.error} title={`${team}/${name} could not be loaded`} />
@@ -286,8 +289,8 @@ export default function OperatorPage() {
                 Defaults
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                A fleet default deploys {name} to every destination of one kind that {team}&apos;s repo registers. Choose which
-                ones, override values for one, or give one its own deploy config.
+                A fleet default deploys {name} to every destination of one kind that {team}&apos;s repo registers. An MCE or a UPI
+                cluster can get values of its own; to have {name} on some MCEs only, deploy it on those MCEs.
               </p>
             </div>
             {sortedScopes(detail.scopes).map((panel) => (

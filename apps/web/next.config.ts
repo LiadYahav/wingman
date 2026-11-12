@@ -36,12 +36,27 @@ function devApiRewrites() {
  */
 const WINGMAN_WEB_BUILD = new Date().toISOString();
 
+/**
+ * 3.12.0's Operators pages are folded into Addons, one place called add-ons
+ * (ADR-0053's amendment of 2026-11-12): their links keep working. Temporary
+ * (307), so no browser caches them for good.
+ */
+async function redirects() {
+  return [
+    { source: "/operators", destination: "/addons", permanent: false },
+    { source: "/teams/:team/operators", destination: "/addons?team=:team", permanent: false },
+    { source: "/teams/:team/operators/:addon", destination: "/addons/:team/:addon", permanent: false },
+    { source: "/teams/:team/new-operator", destination: "/addons/new?team=:team", permanent: false },
+  ];
+}
+
 export default function config(phase: string): NextConfig {
   const nextConfig: NextConfig = {
     output: "standalone",
     outputFileTracingRoot: workspaceRoot,
     turbopack: { root: workspaceRoot },
     env: { WINGMAN_WEB_BUILD },
+    redirects,
   };
   if (phase !== PHASE_DEVELOPMENT_SERVER) return nextConfig;
   const rewrites = devApiRewrites();

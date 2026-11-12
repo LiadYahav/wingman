@@ -96,9 +96,7 @@ class Action(StrEnum):
     CREATE = "create-addon"
     UPDATE_DEFAULT = "update-default"
     MAKE_DEFAULT = "make-default"
-    SET_EXCLUSIONS = "set-exclusions"
     OVERRIDE_VALUES = "override-values"
-    OVERRIDE_DEPLOY = "override-deploy"
 
 
 class Effect(StrEnum):

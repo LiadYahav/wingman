@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ExternalLink, Layers, MoreVertical, Package, Pin, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
-import { day2Api, isRevisionConflict, operatorHref, problemOf } from "@/lib/day2";
+import { day2Api, isRevisionConflict, addonHref, problemOf } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { sameValues, toYaml, type Values } from "@/lib/values";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -27,11 +27,6 @@ export interface DestinationRef {
   id: string;
   name: string;
   kind: string;
-}
-
-/** `defaults/<scope>/exclusions.yaml` for a fleet default's folder `defaults/<scope>/<chart>`. */
-function exclusionsFile(folder: string): string {
-  return `${folder.split("/").slice(0, -1).join("/")}/exclusions.yaml`;
 }
 
 /** The Layers tab while the preview loads: rows shaped like `ValueLayers`'. */
@@ -287,12 +282,12 @@ export function InstalledChartCard({
                     <p className="flex gap-2 px-3 py-2 text-xs text-muted-foreground">
                       <Unplug className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>
-                        A fleet default is not removed per cluster: keep it off {destination.name} from{" "}
-                        <Link href={operatorHref(chart.team, chart.name)} className="font-medium text-primary hover:underline">
-                          its operator&apos;s page
-                        </Link>{" "}
-                        (Defaults: untick {destination.name}), which edits{" "}
-                        <code className="break-all">{exclusionsFile(chart.path)}</code>.
+                        A fleet default is not removed per cluster: it is on every destination of its kind. Its values
+                        here are edited above; the default itself is on{" "}
+                        <Link href={addonHref(chart.team, chart.name)} className="font-medium text-primary hover:underline">
+                          its add-on page
+                        </Link>
+                        .
                       </span>
                     </p>
                   ) : (

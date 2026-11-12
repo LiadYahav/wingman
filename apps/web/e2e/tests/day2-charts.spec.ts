@@ -137,11 +137,13 @@ test.describe("A destination's charts", () => {
     expect(new URL(write!.url).searchParams.get("last_commit_id")).toBe("c0ffee1");
   });
 
-  test("a fleet default points at its operator's page instead of a remove", async ({ page }) => {
+  test("a fleet default points at its add-on page instead of a remove", async ({ page }) => {
     await go(page, HOSTED_PAGE);
     await installedCard(page, "platform", "external-secrets").getByRole("button", { name: "Actions for external-secrets" }).click();
-    await expect(page.getByText("defaults/hosted-clusters/exclusions.yaml")).toBeVisible();
-    await expect(page.getByRole("link", { name: "its operator's page" })).toHaveAttribute("href", "/teams/platform/operators/external-secrets");
+    const note = page.getByText("A fleet default is not removed per cluster");
+    await expect(note).toBeVisible();
+    await expect(note).not.toContainText(/untick|exclusions/);
+    await expect(page.getByRole("link", { name: "its add-on page" })).toHaveAttribute("href", "/addons/platform/external-secrets");
     await expect(page.getByRole("button", { name: /Remove from/ })).toHaveCount(0);
   });
 

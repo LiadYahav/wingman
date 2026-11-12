@@ -1,22 +1,27 @@
-# Operators page: the API the web uses (3.12, ADR-0053)
+# An add-on's defaults and overrides: the API the web uses (3.12, ADR-0053)
 
-What the web needs from day2 for the Operators pages, and what changed for
+What the web needs from day2 for an add-on's page on Addons (its defaults
+and overrides), and what changed for
 the add-on authoring endpoints of 3.8 (ADR-0043,
 `docs/notes/2026-11-12-day2-addon-authoring-api.md`). Everything is under
 `/api/day2`. Reads take a viewer, writes an admin; every write is refused
 first with `403 TEAM_READ_ONLY` for a team that has not given Wingman write
 access.
 
-Words: an **operator** is a chart in a team's catalog, `operators/<op>/`,
-and the fleet defaults built from it (`defaults/<scope>/<op>/`). An
-**add-on** is that chart on one cluster, managed from the cluster's page
-(unchanged). The API keeps `addon` in its paths.
+Words: an **add-on** is a chart in a team's catalog (`operators/<chart>/`,
+the folder's name in the team repo) and the fleet defaults built from it
+(`defaults/<scope>/<chart>/`); its install on one cluster is managed from the
+cluster's page. 3.12.0 called the catalog side an *operator* and gave it its
+own pages; 3.13.0 folds them into Addons (§5), and the reads below moved
+from `/teams/{team}/operators[...]`, which stay as deprecated aliases.
 
 ## 1. Reads
 
-### `GET /teams/{team}/operators`
+### `GET /teams/{team}/addons`
 
-The team's operators, one per `operators/<op>/` folder plus one per fleet
+(3.12.0: `GET /teams/{team}/operators`, kept as a deprecated alias.)
+
+The team's add-ons, one per `operators/<chart>/` folder plus one per fleet
 default whose chart is not in the catalog (`in_catalog: false`), by name.
 
 ```jsonc
@@ -40,10 +45,13 @@ default whose chart is not in the catalog (`in_catalog: false`), by name.
 ]
 ```
 
-### `GET /teams/{team}/operators/{operator}`
+### `GET /teams/{team}/addons/{addon}`
 
-One operator: its files, its OCP-version pins, and one panel per scope.
-404 when the team has neither `operators/<op>/` nor any `defaults/*/<op>/`.
+(3.12.0: `GET /teams/{team}/operators/{operator}`, kept as a deprecated
+alias.)
+
+One add-on: its files, its OCP-version pins, and one panel per scope.
+404 when the team has neither `operators/<chart>/` nor any `defaults/*/<chart>/`.
 
 ```jsonc
 {
@@ -53,8 +61,8 @@ One operator: its files, its OCP-version pins, and one panel per scope.
   "writable": true,
   "read_only_reason": null,
   "catalog": { /* CatalogEntryOut, as GET /addons/{team}/{addon}; null when !in_catalog */ },
-  "deploy_config": File,                         // operators/<op>/<op>.yaml
-  "values_file": File,                           // operators/<op>/values.yaml
+  "deploy_config": File,                         // operators/<chart>/<chart>.yaml
+  "values_file": File,                           // operators/<chart>/values.yaml
   "ocp_versions": [
     { "version": "4.16.27", "target_revision": "release-4.16",
       "deploy_config": File, "values_file": File }
@@ -89,7 +97,7 @@ at, send it back on an edit of that file):
   "exclusions": {                      // null for the hub (there are none)
     "path": "defaults/mces/exclusions.yaml",
     "exists": true,
-    "names": ["ocp4-prep-mce-site1-a"],       // this operator's entry, as written
+    "names": ["ocp4-prep-mce-site1-a"],       // this add-on's entry, as written
     "unknown_names": [],                     // names in it that are no destination of the team
     "editable": true,                        // false: Wingman cannot edit it in place
     "problem": null,                         // why not editable (or the YAML error)
@@ -113,7 +121,7 @@ at, send it back on an edit of that file):
   "ocp_version": "4.16.27",
   "renders": true,                     // false: day1 has no version for it, the platform renders nothing
   "state": "default",                  // see below
-  "deployed": true,                    // an app of this operator exists there
+  "deployed": true,                    // an app of this add-on exists there
   "app_name": "redbull-in-cluster-kyverno-deploy",       // null when not deployed
   "override": File,                    // defaults/<scope>/<op>/values-<name>.yaml; null for the hub
   "override_shared_with": [],          // other destinations whose name is the same, so the same file
@@ -147,7 +155,7 @@ MR. Both carry the 3.8 fields (`action`, `chart`, `scope`, `reach`,
 
 ```jsonc
 {
-  "impact": [                    // every destination whose app of this operator changes, goes, or comes
+  "impact": [                    // every destination whose app of this add-on changes, goes, or comes
     { "cluster": "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1",
       "name": "ocp4-prod-herzi-site1", "kind": "hosted",
       "effect": "changed",       // "changed" | "removed" | "added"
@@ -205,7 +213,7 @@ created when absent).
   or not at all, `details.clusters`), `own-deploy`
   (including a destination that has its own deploy config: remove that
   instead), `exclusions-layout` (the file cannot be edited exactly; the
-  detail says why), `no-change`. 404 when the operator is not a default
+  detail says why), `no-change`. 404 when the add-on is not a default
   there.
 - Title: `[Wingman/Day2] Exclude addon <team>/<op> from <names> (fleet default on every MCE)`,
   `Include addon <team>/<op> on <names> (...)`, or with both,
@@ -276,10 +284,75 @@ destination is excluded from the default and gets its own
 - Fleet-default values with `null` show as changes (`after: null`).
 - A values file deleted after the read is a 409, not silently created again.
 - `DELETE /clusters/{cluster}/addons/{team}/{addon}` of a fleet default
-  (422 `fleet-default-remove`) points at the operator's page:
-  `details.operator = "/teams/<team>/operators/<op>"`.
+  (422 `fleet-default-remove`) points at the add-on's page:
+  `details.addon = "/addons/<team>/<chart>"` (3.13.0; 3.12.0's
+  `details.operator = "/teams/<team>/operators/<chart>"` stays, and that
+  page redirects).
 - `ignore_differences: []` removes the key.
 - Teams: a team whose access could not be read is read-only with
   `access_role: "unknown"` and a reason; the others are unaffected (one
   failing project no longer fails `/teams`, `/addons`, `/fleet-defaults`).
   Access through a group share of the project counts.
+
+## 5. 3.13.0: one place, called add-ons
+
+The web has no Operators pages any more (ADR-0053's amendment of
+2026-11-12). The Addons page creates an add-on (`/addons/new?team=<team>`)
+and edits its team default; an add-on's page, `/addons/<team>/<chart>`
+(*Defaults & overrides*), reads `GET /teams/{team}/addons/{addon}` and holds
+every scope panel described here. 3.12.0's pages redirect: `/operators` →
+`/addons`, `/teams/<team>/operators` → `/addons?team=<team>`,
+`/teams/<team>/operators/<chart>` → `/addons/<team>/<chart>`,
+`/teams/<team>/new-operator` → `/addons/new?team=<team>`. No write, body,
+answer or rule changed.
+
+## 6. 3.13.0: no exclusions; deploy on specific MCEs
+
+ADR-0053's amendment of 2026-11-13. §3's exclusions write and the
+per-destination deploy write are **gone** (their paths answer 404/405), and
+`ScopePanel.exclusions` lost `editable` and `problem`: the file is read and
+shown, never written. `PUT .../destinations/{cluster}/values` takes an MCE,
+a hosted cluster or a UPI cluster, and answers 422 `override-scope` for the
+hub.
+
+### `PUT /addons/{team}/{addon}/defaults/{scope}/envs/{env}/values`
+
+One env's `values-<env>.yaml` of an MCE, hosted-cluster or UPI default (env:
+`prod`, `prep` or `test`; 422 `env-unknown` otherwise, `override-scope` for
+the hub). The body and the answer are those of the destination values write
+(`values: null` or `{}` deletes the file); the plan's `impact` lists every
+destination of that env it changes. The layer sits above the default's
+`values.yaml` and below each destination's `values-<name>.yaml`.
+
+`POST /merge-preview` takes `override_path`: the layer of the destination's
+stack that `override_values` replaces (422 `override-path` when it is none of
+them). The web previews an env file on a destination of that env with it.
+
+### `POST /addons/{team}/{addon}/mce-installs`
+
+Deploy the add-on on specific MCEs: one install MR per MCE, in each one's own
+`in-cluster/<chart>/` (ADR-0022's install). `?dry_run=true` plans each.
+
+```jsonc
+// request
+{ "clusters": ["mce:site1:prod:ocp4-prod-mce-site1-a"], "values": {}, "message": null }
+// answer: 200 (a dry run, or nothing opened) or 201 (at least one MR opened)
+{ "team": "redbull", "chart": "cluster-roles",
+  "installs": [
+    { "cluster": "mce:site1:prod:ocp4-prod-mce-site1-a", "name": "ocp4-prod-mce-site1-a",
+      "status": "opened",            // "planned" (dry run), "opened", "refused", "failed"
+      "files": [{ "action": "create", "path": "sites/site1/prod/mces/ocp4-prod-mce-site1-a/in-cluster/cluster-roles/values.yaml" }],
+      "notes": ["..."], "warnings": [],
+      "merge_request": { /* MRDetail */ },
+      "detail": null,                // why it was refused or failed
+      "rule": null }                 // a refusal's rule: installed, xor, day1-version-missing, ...
+  ] }
+```
+
+- 422 for the whole request: `not-an-mce` (an id that is no MCE hub), `no-mce`
+  (none chosen); 404 when the team has no `operators/<chart>/`; 403
+  `TEAM_READ_ONLY`, admin only.
+- Each MR is the usual install MR (`[Wingman/Day2] Install addon <team>/<chart> on <mce>`,
+  label `install`); where it is installed shows on the MCE panel as state
+  `own-folder`, removed with `DELETE /clusters/{cluster}/addons/{team}/{addon}`.
+

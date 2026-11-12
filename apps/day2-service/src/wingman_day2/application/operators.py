@@ -25,17 +25,13 @@ from wingman_day2.application.topology import TeamState, Topology, TopologyServi
 from wingman_day2.domain import layout
 from wingman_day2.domain.clusters import ALLOWED_ENVS, ClusterKind, ClusterRef, DefaultsScope
 from wingman_day2.domain.deploy_config import TARGET_REVISION, truthy
-from wingman_day2.domain.errors import ChangeRefusedError, UnknownChartError
-from wingman_day2.domain.exclusions import set_excluded
+from wingman_day2.domain.errors import UnknownChartError
 from wingman_day2.domain.findings import Finding
 from wingman_day2.domain.platform import AppSource, scope_exclusions
 from wingman_day2.domain.stacks import Layer, LayerRole
 from wingman_day2.domain.sync_policy import SyncSettings
 from wingman_day2.domain.teams import TeamAccess
 from wingman_day2.ports import SigsRepository
-
-_PROBE = "wingman-probe"
-"""A name tried into an exclusions file to learn whether Wingman can edit it."""
 
 
 class DestinationState(StrEnum):
@@ -67,17 +63,15 @@ class OcpVersionPin:
 
 @dataclass(frozen=True, slots=True)
 class ExclusionsView:
-    """The scope's ``exclusions.yaml`` as it concerns one chart."""
+    """The scope's ``exclusions.yaml`` as it concerns one chart, read as the platform reads it.
+
+    Wingman never writes it (ADR-0053's amendment); a repo that has one still
+    renders and shows as it is.
+    """
 
     file: LoadedLayer
     names: tuple[str, ...]
     unknown_names: tuple[str, ...]
-    problem: str | None
-
-    @property
-    def editable(self) -> bool:
-        """Whether Wingman can edit the file in place."""
-        return self.problem is None
 
 
 @dataclass(frozen=True, slots=True)
@@ -436,22 +430,8 @@ class OperatorService:
         keys = {
             d.ref.exclusion_key for d in state.plan.destinations if d.ref.defaults_scope is scope
         }
-        problem: str | None = None
-        if current is None:
-            problem = f"{path} does not read as exclusions: the platform fails every app of it"
-        else:
-            try:
-                set_excluded(
-                    file.file.content if file.file else None,
-                    chart,
-                    [*names, _PROBE],
-                    path=str(path),
-                )
-            except ChangeRefusedError as exc:
-                problem = str(exc.details.get("reason") or exc.detail)
         return ExclusionsView(
             file=file,
             names=tuple(names),
             unknown_names=tuple(n for n in names if n not in keys),
-            problem=problem,
         )

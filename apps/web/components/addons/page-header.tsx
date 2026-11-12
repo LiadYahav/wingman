@@ -5,7 +5,7 @@ import { ChevronRight } from "lucide-react";
 import { useIsAdmin } from "@/stores/auth-store";
 import { useTeamAccess } from "@/components/addons/team-access";
 
-/** Where an Operators page sits: Operators › team › operator. */
+/** Where an add-on page sits: Addons › team › add-on. */
 export function Breadcrumbs({ items }: { items: { label: string; href?: string }[] }) {
   return (
     <nav aria-label="Breadcrumb" className="text-xs text-muted-foreground">
@@ -38,11 +38,11 @@ export function PageTitle({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Whether the viewer may write to `team`'s operators, and why not (ADR-0043,
+ * Whether the viewer may write to `team`'s add-ons, and why not (ADR-0043,
  * ADR-0053). Fails closed: the teams list must say the team is writable, and
  * so must the read itself when it says (`also`). Writes are admin-only.
  */
-export function useOperatorAccess(team: string, also?: { writable: boolean; read_only_reason: string | null }) {
+export function useAddonAccess(team: string, also?: { writable: boolean; read_only_reason: string | null }) {
   const isAdmin = useIsAdmin();
   const access = useTeamAccess(team);
   const reason = !access.writable

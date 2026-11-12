@@ -15,21 +15,25 @@ import { RoleChip } from "@/components/addons/role-chip";
 import { useDebounced } from "@/components/addons/use-values-preview";
 import { ValueLayers } from "@/components/addons/value-layers";
 import { ValuesEditor } from "@/components/addons/values-editor";
-import type { AuthoringChange, DestinationValuesBody, MergePreviewBody, ScopeDestination, ScopePanel, ValuesPreview } from "@/types/day2";
+import type { AuthoringChange, DestinationValuesBody, MergePreviewBody, RepoFile, ScopeDestination, ScopePanel, ValuesPreview } from "@/types/day2";
 
 /**
- * The service's merge of the operator on one destination (`POST /merge-preview`):
- * with `override` as its `values-<name>.yaml`, or as it is today when
- * `override` is `undefined`. The merge is the service's (Helm's), never redone here.
+ * The service's merge of the add-on on one destination (`POST /merge-preview`):
+ * with `override` as one of its value files (`path`: a `values-<env>.yaml`;
+ * absent: its `values-<name>.yaml`), or as it is today when `override` is
+ * `undefined`. The merge is the service's (Helm's), never redone here.
  */
-function useMergePreview(team: string, chart: string, cluster: string, override: Values | undefined, enabled: boolean) {
+function useMergePreview(team: string, chart: string, cluster: string, override: Values | undefined, enabled: boolean, path?: string) {
   return useQuery<ValuesPreview>({
-    queryKey: day2Keys.mergePreview(cluster, team, chart, override === undefined ? null : stableStringify(override)),
+    queryKey: day2Keys.mergePreview(cluster, team, chart, override === undefined ? null : stableStringify(override), path ?? ""),
     queryFn: () => {
-      const body: MergePreviewBody = override === undefined ? { team, addon: chart, cluster } : { team, addon: chart, cluster, override_values: override };
+      const body: MergePreviewBody =
+        override === undefined
+          ? { team, addon: chart, cluster }
+          : { team, addon: chart, cluster, override_values: override, ...(path ? { override_path: path } : {}) };
       return api.post<ValuesPreview>(day2Api.mergePreview, body);
     },
-    enabled,
+    enabled: enabled && Boolean(cluster),
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
@@ -262,3 +266,159 @@ export function DestinationValuesDialog({
     </AuthoringDialogs>
   );
 }
+
+/**
+ * One env's values of a fleet default (ADR-0053): `values-<env>.yaml` in the
+ * default's folder, read by every destination of the scope in that env,
+ * above the default's `values.yaml` and below each destination's own
+ * `values-<name>.yaml`. The effective values before and after are shown on
+ * one destination of that env (a choice when there are several).
+ */
+export function EnvValuesDialog({
+  team,
+  chart,
+  panel,
+  env,
+  file,
+  destinations,
+  open,
+  onOpenChange,
+  readOnlyReason,
+  onOpened,
+}: {
+  team: string;
+  chart: string;
+  panel: ScopePanel;
+  env: string;
+  /** The env file as read, or `null` when absent. */
+  file: RepoFile | null;
+  /** The scope's destinations in `env` the default deploys to: where the preview is shown. */
+  destinations: ScopeDestination[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  readOnlyReason: string | null;
+  onOpened: (change: AuthoringChange) => void;
+}) {
+  const path = file?.path ?? `${panel.folder}/values-${env}.yaml`;
+  const exists = Boolean(file?.exists);
+  const baseline = exists && file ? file.values : {};
+  const [draft, setDraft] = useState<Values>(baseline);
+  const [removing, setRemoving] = useState(false);
+  const [shownOn, setShownOn] = useState(destinations[0]?.id ?? "");
+  const debounced = useDebounced(removing ? {} : draft, 300);
+  const where = destinations.find((d) => d.id === shownOn);
+
+  const before = useMergePreview(team, chart, shownOn, undefined, open);
+  const after = useMergePreview(team, chart, shownOn, debounced, open, path);
+  const stale = after.isPlaceholderData || !sameValues(removing ? {} : draft, debounced);
+
+  const edited = removing || !sameValues(draft, baseline);
+  const blocker = !edited ? "No changes yet" : !removing && !exists && leaves(draft).length === 0 ? "Set at least one value" : null;
+
+  function body(): DestinationValuesBody {
+    return {
+      values: removing || leaves(draft).length === 0 ? null : draft,
+      last_commit_id: file?.last_commit_id ?? null,
+      confirm_changes: [],
+      expected_digest: null,
+      message: null,
+    };
+  }
+
+  return (
+    <AuthoringDialogs
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`${chart} values for ${env}`}
+      description={`${exists ? "Edits" : "Adds"} ${path}: the fleet default's values for every ${panel.noun} in ${env} (${destinations.length} today), above the default's values.yaml and below each one's own values-<name>.yaml. One merge request; the preview lists every destination it changes.`}
+      blocker={blocker}
+      readOnlyReason={readOnlyReason}
+      body={body}
+      method="put"
+      url={(dryRun) => day2Api.envValues(team, chart, panel.scope, env, dryRun)}
+      wide
+      onOpened={onOpened}
+    >
+      {exists && (
+        <div role="radiogroup" aria-label="Env values" className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+          <label className="flex items-center gap-2">
+            <input type="radio" name="env-mode" checked={!removing} onChange={() => setRemoving(false)} />
+            Edit <code>values-{env}.yaml</code>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="env-mode" checked={removing} onChange={() => setRemoving(true)} />
+            Delete it: back to the fleet default&apos;s values
+          </label>
+        </div>
+      )}
+      {destinations.length > 1 && (
+        <label className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Effective values shown on</span>
+          <select
+            value={shownOn}
+            onChange={(e) => setShownOn(e.target.value)}
+            className="rounded-md border bg-background px-2 py-1 text-xs"
+            aria-label="Effective values shown on"
+          >
+            {destinations.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="min-w-0">
+          {removing ? (
+            <p className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
+              <code className="break-all">{path}</code> is deleted: the {env} {panel.noun} get the fleet default&apos;s values again.
+            </p>
+          ) : (
+            <ValuesEditor
+              preview={after.data}
+              loading={after.isLoading}
+              stale={stale}
+              file={{ role: "fleet-env", path }}
+              draft={draft}
+              baseline={baseline}
+              onDraftChange={setDraft}
+            />
+          )}
+          {after.error && <ProblemList error={after.error} title="The values after the edit could not be previewed" />}
+        </div>
+        <div className="min-w-0 space-y-3">
+          {!where ? (
+            <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">
+              No {panel.noun} of the default is in {env} yet: the file applies once one is.
+            </p>
+          ) : before.error ? (
+            <ProblemList error={before.error} title={`The values on ${where.name} today could not be read`} />
+          ) : before.data && after.data ? (
+            <BeforeAfter before={before.data} after={after.data} stale={stale} />
+          ) : (
+            <div className="space-y-1.5" aria-busy="true">
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          )}
+          {where && before.data && after.data && (
+            <Tabs defaultValue="after">
+              <TabsList>
+                <TabsTrigger value="after">Layers after</TabsTrigger>
+                <TabsTrigger value="before">Layers today</TabsTrigger>
+              </TabsList>
+              <TabsContent value="after" className="pt-2">
+                <ValueLayers preview={after.data} editedPath={path} />
+              </TabsContent>
+              <TabsContent value="before" className="pt-2">
+                <ValueLayers preview={before.data} editedPath="" />
+              </TabsContent>
+            </Tabs>
+          )}
+        </div>
+      </div>
+    </AuthoringDialogs>
+  );
+}
+
