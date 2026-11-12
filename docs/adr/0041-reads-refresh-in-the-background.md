@@ -37,8 +37,10 @@ that parse queues requests behind each other. The JSON went out uncompressed:
     answered. `stale_for(ttl)` is that minute less the TTL.
   - A refresh that fails keeps the old value until its time is over; then a
     read fetches inline and reports the error itself (ADR-0004).
-  - A write's invalidation removes the value: nothing a write made stale is
-    answered.
+  - A write's invalidation removes the value and lets go of any fetch of it
+    already running: nothing a write made stale is answered, and a read
+    after the write never joins a fetch that started before it (one did,
+    while a background refresh ran; found in review).
   - It is used for each repository's branch head (`RepoSnapshots.head`, so
     day1 and day2), day1's projects, and day2's team list and day1 project.
     MR lists, approvals and the hub keep plain TTLs.
@@ -115,8 +117,9 @@ that parse queues requests behind each other. The JSON went out uncompressed:
 - `packages/wingman-core/tests/unit/infrastructure/test_cache.py`: a stale
   value is answered while one fetch refreshes it; past its time it is fetched
   inline; a failed refresh keeps it until then; an invalidated value is
-  never answered stale; a refresh across an invalidation is not kept; the
-  minute's bound.
+  never answered stale; a refresh across an invalidation is not kept; a read
+  after an invalidation never joins a fetch from before it; the minute's
+  bound.
 - `test_snapshots.py`: past the TTL the known head answers while one check
   runs; a head older than a minute is checked first.
 - `test_warm_up.py` (core, day1, day2): it runs in the background, logs a

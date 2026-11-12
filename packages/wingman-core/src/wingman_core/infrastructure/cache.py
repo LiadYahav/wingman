@@ -141,8 +141,13 @@ class TtlCache:
         task.add_done_callback(self._refreshing.discard)
 
     def invalidate(self, key: str) -> None:
-        """Forget ``key``."""
+        """Forget ``key``, and any fetch of it already running.
+
+        A fetch that started before a write may answer what the write
+        replaced, so a later read never joins it: it starts its own.
+        """
         self._entries.pop(key, None)
+        self._inflight.pop(key, None)
         self._generation[key] = self._generation.get(key, 0) + 1
 
     def invalidate_prefix(self, prefix: str) -> int:

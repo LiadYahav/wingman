@@ -214,6 +214,33 @@ async def test_a_refresh_across_an_invalidation_is_not_kept() -> None:
     assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 3
 
 
+async def test_a_read_after_an_invalidation_never_joins_a_fetch_from_before_it() -> None:
+    """A write's own next read must see it, even while a pre-write refresh still runs."""
+    clock = Clock()
+    cache = TtlCache(clock=clock)
+    calls = 0
+    release = asyncio.Event()
+
+    async def fetch() -> int:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            await release.wait()  # refresh 2 read GitLab before the write
+        return calls
+
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 1
+    clock.now = 15.0
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 1  # starts refresh 2
+    await asyncio.sleep(0)
+    cache.invalidate("k")  # the write lands while refresh 2 still runs
+    # Its own fetch, not refresh 2 (which would wait on `release` and time out)
+    assert await asyncio.wait_for(cache.get_or_fetch("k", fetch, ttl=10, stale=20), 1) == 3
+    release.set()
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 3
+
+
 def test_stale_time_keeps_every_answer_within_a_minute() -> None:
     assert stale_for(30) == 30
     assert stale_for(15) == 45
