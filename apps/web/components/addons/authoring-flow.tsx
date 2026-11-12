@@ -46,9 +46,9 @@ function shown(value: unknown): string {
 }
 
 /**
- * Each key a change moves, before and after, chart defaults aside. A
- * `values` key whose `after` is `null` is a Helm null: it deletes the
- * chart's own default for that key, which the table says.
+ * Each key a change moves, before and after, chart defaults aside. A key
+ * set to a Helm null (`after_null`) deletes the chart's own default for that
+ * key, which the table says; one that is simply no longer set shows "—".
  */
 export function ChangesTable({ changes }: { changes: AdoptionChange[] }) {
   return (
@@ -63,7 +63,7 @@ export function ChangesTable({ changes }: { changes: AdoptionChange[] }) {
       </thead>
       <tbody>
         {changes.map((c) => {
-          const helmNull = c.stack === "values" && c.after === null;
+          const helmNull = c.after_null === true;
           return (
             <tr key={`${c.stack}|${c.key}`} className="border-t border-border/50 font-mono text-[11px]">
               <td className="py-0.5 pr-2 font-sans">{c.stack === "deploy" ? "deploy config" : c.stack}</td>
@@ -299,15 +299,20 @@ function Confirmations({
 }) {
   const ack = acknowledgementsOf(plan);
   if (ack.removed.length === 0 && ack.changed.length === 0) return null;
-  const names = (ids: string[]) => ids.map((id) => nameIn(plan, id)).join(", ");
+  // A name two destinations share is given as their ids, so the user sees which is which.
+  const names = (ids: string[]) => {
+    const given = ids.map((id) => nameIn(plan, id));
+    return ids.map((id, i) => (given.indexOf(given[i]) !== given.lastIndexOf(given[i]) ? id : given[i])).join(", ");
+  };
   return (
     <div className="space-y-2" data-testid="plan-confirmations">
       {ack.removed.length > 0 && (
         <label className="flex items-start gap-2 rounded-lg border border-status-error/40 bg-status-error/5 p-3 text-xs font-medium">
           <Checkbox checked={orphans} onCheckedChange={onOrphansChange} className="mt-px" />
           <span>
-            Delete the Application on {names(ack.removed)} and leave{" "}
-            {ack.removed.length === 1 ? "its workload" : "their workloads"} running, unmanaged
+            {ack.removed.length === 1
+              ? `Delete the Application on ${names(ack.removed)} and leave its workload running, unmanaged`
+              : `Delete the Applications on ${names(ack.removed)} and leave their workloads running, unmanaged`}
           </span>
         </label>
       )}

@@ -132,8 +132,11 @@ function DestinationRow({
           </p>
         )}
         {locked && checkbox && <p className="text-muted-foreground">{locked}</p>}
-        {d.override_shared_with.length > 0 && overrideExists && (
-          <p className="text-muted-foreground">Its values file also applies to {d.override_shared_with.join(", ")}.</p>
+        {d.override_shared_with.length > 0 && (
+          <p className="text-muted-foreground" data-testid="shared-name">
+            Same name as {d.override_shared_with.join(", ")}: {checkbox ? "excluded or included together, and " : ""}one values file for
+            all of them.
+          </p>
         )}
       </div>
       {overrides && (
@@ -190,11 +193,19 @@ function DestinationsEditor({ detail, panel, writes }: { detail: OperatorDetail;
   const dirty = newlyExcluded.length > 0 || newlyIncluded.length > 0;
   const showBoxes = panel.is_default && exclusions !== null;
 
-  function toggle(id: string, on: boolean) {
+  /**
+   * `exclusions.yaml` names destinations by name, so two of the scope with the
+   * same name are excluded together or not at all (the service's rule
+   * `exclusion-shared`): a checkbox moves its namesakes too.
+   */
+  function toggle(d: ScopeDestination, on: boolean) {
+    const ids = [d.id, ...d.override_shared_with.filter((id) => panel.destinations.some((x) => x.id === id))];
     setExcluded((prev) => {
       const next = new Set(prev);
-      if (on) next.delete(id);
-      else next.add(id);
+      for (const id of ids) {
+        if (on) next.delete(id);
+        else next.add(id);
+      }
       return next;
     });
   }
@@ -244,7 +255,7 @@ function DestinationsEditor({ detail, panel, writes }: { detail: OperatorDetail;
                     ? {
                         checked: !excluded.has(d.id),
                         disabledBy: locked ?? (editable ? null : writes.readOnlyReason ?? exclusions?.problem ?? (writes.isAdmin ? "Wingman cannot edit the exclusions file in place" : "Only admins edit exclusions")),
-                        onChange: (on: boolean) => toggle(d.id, on),
+                        onChange: (on: boolean) => toggle(d, on),
                         changed: initial.has(d.id) !== excluded.has(d.id),
                       }
                     : null;

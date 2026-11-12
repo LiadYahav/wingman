@@ -515,8 +515,12 @@ export interface AdoptionChange {
   stack: "deploy" | "values" | (string & {});
   /** A dotted leaf path, e.g. `syncPolicy.automated.prune`. */
   key: string;
+  /** `null` when absent. */
   before: unknown;
+  /** `null` when no longer set, or when set to a Helm null: `after_null` tells them apart. */
   after: unknown;
+  /** The key is set to a Helm `null`: it deletes the chart's own default (ADR-0053). */
+  after_null?: boolean;
 }
 
 /** A cluster whose own folder of the chart moves into the fleet default. */
