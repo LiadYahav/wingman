@@ -8,7 +8,7 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis, placementAnswer } from "../fixtures/api-handlers";
 import type { ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts, Mce, SpecEntry, TemplateField } from "../../types";
 
 const SITE = "site1";
@@ -222,9 +222,6 @@ async function mockCreateForm(page: Page) {
   await mockDashboardApis(page);
   await page.route("**/api/day1/specs", (r) => json(r, [SPEC]));
   await page.route("**/api/day1/specs/template/schema", (r) => json(r, SCHEMA));
-  await page.route("**/api/day1/mces/*/openshift-versions", (r) =>
-    json(r, { mce: MCE, versions: ["4.16.27"], problems: [] })
-  );
   await page.route("**/api/day2/addons", (r) => json(r, []));
   await page.route("**/api/day1/sites", (r) => json(r, [SITE]));
   await page.route(/\/api\/day1\/mces(\?.*)?$/, (r) => json(r, MCES));
@@ -250,13 +247,15 @@ test.describe("Cluster create form", () => {
     await expect(empty.getByRole("link", { name: "New spec" })).toHaveAttribute("href", "/specs/new");
   });
 
-  test("the site, MCE and version controls are named by their visible labels", async ({ page }) => {
+  test("the site, environment and version controls are named by their visible labels; there is no MCE select", async ({ page }) => {
     await mockCreateForm(page);
     await openForm(page);
 
     await expect(page.getByRole("combobox", { name: /^site\b/i })).toHaveAttribute("data-testid", "site-select");
-    await expect(page.getByRole("combobox", { name: /^mce\b/i })).toHaveAttribute("data-testid", "mce-select");
+    await expect(page.getByRole("radiogroup", { name: /^environment\b/i })).toHaveAttribute("data-testid", "env-select");
     await expect(page.getByRole("combobox", { name: /^openshift version\b/i })).toHaveAttribute("data-testid", "ocp-version-select");
+    await expect(page.getByTestId("mce-select")).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: /^mce\b/i })).toHaveCount(0);
   });
 
   test("a failed sites read shows the problem, not \"No sites in the day1 repo\"", async ({ page }) => {
@@ -271,7 +270,7 @@ test.describe("Cluster create form", () => {
     await expect(page.getByText("No sites in the day1 repo")).toHaveCount(0);
   });
 
-  test("a failed MCE read says so, and the version waits for an MCE", async ({ page }) => {
+  test("a failed MCE read says so, and Wingman still picks the MCE", async ({ page }) => {
     await mockCreateForm(page);
     await page.route(/\/api\/day1\/mces(\?.*)?$/, (r) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));
     await openForm(page);
@@ -280,26 +279,40 @@ test.describe("Cluster create form", () => {
 
     const mceProblem = page.getByRole("alert").filter({ hasText: `The MCEs of ${SITE} could not be loaded` });
     await expect(mceProblem).toContainText("GitLab could not be reached", { timeout: 10_000 });
-    await expect(page.getByTestId("mce-select")).toContainText("MCEs could not be loaded");
-    await expect(page.getByText("No MCEs on this site")).toHaveCount(0);
     await expect(page.getByTestId("ocp-version-select")).toBeDisabled();
-    await expect(page.getByTestId("ocp-version-select")).toContainText("Choose an MCE first");
+    await expect(page.getByTestId("ocp-version-select")).toContainText("Choose prod or prep first");
+    // The pick comes from placement, not from the MCE folders this read lists
+    await page.getByTestId("env-select").locator("label", { hasText: "Prod" }).click();
+    await page.getByTestId("ocp-version-select").click();
+    await page.getByRole("option", { name: "4.16.27" }).click();
+    await expect(page.getByTestId("placement-pick-name")).toHaveText(MCE);
   });
 
-  test("a failed version read says so; the version is then typed", async ({ page }) => {
+  test("a failed versions read says so, with a retry, and offers no MCE select", async ({ page }) => {
     await mockCreateForm(page);
-    await page.route("**/api/day1/mces/*/openshift-versions", (r) =>
-      fulfillProblem(r, 503, "GIT_UNAVAILABLE", "The day1 repo could not be read")
+    let failing = true;
+    await page.route("**/api/day1/placement**", (r) =>
+      failing
+        ? fulfillProblem(r, 503, "GIT_UNAVAILABLE", "The day1 repo could not be read")
+        : json(r, placementAnswer(new URL(r.request().url()).searchParams))
     );
     await openForm(page);
     await page.getByTestId("site-select").click();
     await page.getByRole("option", { name: SITE }).click();
-    await page.getByTestId("mce-select").click();
-    await page.getByRole("option", { name: MCE }).click();
+    await page.getByTestId("env-select").locator("label", { hasText: "Prod" }).click();
 
-    const versionProblem = page.getByRole("alert").filter({ hasText: `The OpenShift versions of ${MCE} could not be listed` });
-    await expect(versionProblem).toContainText("The day1 repo could not be read", { timeout: 10_000 });
-    await expect(page.getByTestId("ocp-version-input")).toBeVisible();
+    const versionError = page.getByTestId("ocp-version-error");
+    await expect(versionError.getByRole("alert")).toContainText(`The versions of the prod MCEs on ${SITE} could not be listed`, {
+      timeout: 10_000,
+    });
+    await expect(versionError).toContainText("The day1 repo could not be read");
+    await expect(page.getByTestId("ocp-version-select")).toBeDisabled();
+    await expect(page.getByTestId("mce-select")).toHaveCount(0);
+
+    failing = false;
+    await versionError.getByRole("button", { name: "Try again" }).click();
+    await expect(page.getByTestId("ocp-version-error")).toHaveCount(0);
+    await expect(page.getByTestId("ocp-version-select")).toBeEnabled();
   });
 
   test("a failed template read is a problem, not \"takes no inputs\"", async ({ page }) => {
@@ -325,9 +338,11 @@ test.describe("Cluster create form", () => {
       return json(r, { path: DETAIL.path, yaml: DETAIL.yaml });
     });
     await openForm(page);
-    // Everything else is filled: the site, MCE and version follow from the name
+    // Everything else is filled: the site and env follow from the name, the MCE is Wingman's pick
     await page.getByTestId("cluster-name-input").fill(NAME);
-    await expect(page.getByTestId("mce-select")).toContainText(MCE);
+    await page.getByTestId("ocp-version-select").click();
+    await page.getByRole("option", { name: "4.16.27" }).click();
+    await expect(page.getByTestId("placement-pick-name")).toHaveText(MCE);
     await expect(page.getByRole("alert").filter({ hasText: "The cluster template's inputs could not be loaded" }))
       .toContainText("The specs project could not be read", { timeout: 10_000 });
 
@@ -345,7 +360,9 @@ test.describe("Cluster create form", () => {
     );
     await openForm(page);
     await page.getByTestId("cluster-name-input").fill(NAME);
-    await expect(page.getByTestId("mce-select")).toContainText(MCE);
+    await page.getByTestId("ocp-version-select").click();
+    await page.getByRole("option", { name: "4.16.27" }).click();
+    await expect(page.getByTestId("placement-pick-name")).toHaveText(MCE);
 
     const hint = page.getByTestId("infraenv-hint");
     await expect(hint.getByRole("alert")).toContainText(`InfraEnvs could not be listed from ${MCE}; type their names below`);

@@ -98,9 +98,6 @@ async function setup(page: Page): Promise<Calls> {
   await page.route("**/api/day1/specs/template/schema", (r) => json(r, SCHEMA));
   await page.route("**/api/day1/sites", (r) => json(r, ["site1"]));
   await page.route(/\/api\/day1\/mces(\?.*)?$/, (r) => json(r, MCES));
-  await page.route("**/api/day1/mces/*/openshift-versions", (r) =>
-    json(r, { mce: "ocp4-prod-mce-site1-a", versions: ["4.18.56", "4.16.27"], problems: [] })
-  );
   await page.route("**/api/day1/mces/*/infraenvs", (r) =>
     json(
       r,
@@ -144,15 +141,15 @@ async function fillOwners(form: ClusterNewPage) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 test.describe("Create from a flavor: the suggested name", () => {
-  test("day1's name fills in once site and MCE are chosen, and an edited name is the person's", async ({ page }) => {
+  test("day1's name fills in once Wingman picks the MCE, and an edited name is the person's", async ({ page }) => {
     const calls = await setup(page);
     const form = new ClusterNewPage(page);
     await form.goto();
     await form.chooseSpec("rcs");
     await expect(form.nameInput).toHaveValue("");
 
-    await form.selectSite("site1");
-    await form.selectMce("ocp4-prod-mce-site1-a");
+    await form.place({ site: "site1", env: "prod", version: "4.16.27" });
+    await expect(form.placementPickName).toHaveText("ocp4-prod-mce-site1-a");
     await expect(form.nameInput).toHaveValue("ocp4-prod-rcs-site1-b");
     await expect(page.getByTestId("name-suggested")).toContainText("Suggested from flavor rcs");
     await expect(form.namingHint).toContainText("Follows the naming convention");
@@ -192,8 +189,8 @@ test.describe("Create from a flavor: the nodepool ratio", () => {
     const form = new ClusterNewPage(page);
     await form.goto();
     await form.chooseSpec("zones");
-    await form.selectSite("site1");
-    await form.selectMce("ocp4-prod-mce-site1-a");
+    await form.place({ site: "site1", env: "prod", version: "4.16.27" });
+    await expect(form.placementPickName).toHaveText("ocp4-prod-mce-site1-a");
     await expect(form.nameInput).toHaveValue("ocp4-prod-zones-site1-a");
 
     const sizing = page.getByTestId("nodepool-size");
@@ -239,8 +236,8 @@ test.describe("Create from a flavor: InfraEnvs", () => {
     await form.goto();
     await form.chooseSpec("rcs");
     await expect(page.getByTestId("infraenv-off")).toHaveCount(0);
-    await form.selectSite("site1");
-    await form.selectMce("ocp4-prod-mce-site1-a");
+    await form.place({ site: "site1", env: "prod", version: "4.16.27" });
+    await expect(form.placementPickName).toHaveText("ocp4-prod-mce-site1-a");
     await expect(page.getByTestId("infraenv-off")).toContainText("live status is off");
     await expect(infraEnvs(page)).toBeEditable();
   });

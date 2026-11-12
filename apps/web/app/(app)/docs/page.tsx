@@ -695,34 +695,39 @@ spec:
             <Step n={2} title="Cluster details">
               <ul className="mt-2 space-y-1 list-none">
                 <li><InlineCode>Site</InlineCode> → <InlineCode>site1</InlineCode></li>
-                <li><InlineCode>MCE</InlineCode> → <InlineCode>ocp4-prod-mce-site1-a</InlineCode></li>
-                <li><InlineCode>Cluster Name</InlineCode> → <InlineCode>ocp4-prod-herzi-site1</InlineCode></li>
+                <li><InlineCode>Environment</InlineCode> → <InlineCode>prod</InlineCode></li>
                 <li><InlineCode>OpenShift Version</InlineCode> → <InlineCode>4.18.56</InlineCode></li>
+                <li><InlineCode>MCE</InlineCode> → Wingman&apos;s pick, here <InlineCode>ocp4-prod-mce-site1-a</InlineCode></li>
+                <li><InlineCode>Cluster Name</InlineCode> → <InlineCode>ocp4-prod-herzi-site1</InlineCode></li>
               </ul>
               <p className="mt-2">
-                Sites and MCEs are the day1 repo&apos;s folders and are read-only: Wingman never creates them. An MCE
-                whose name is off its convention is shown but disabled. New names must follow{" "}
-                <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, with the MCE&apos;s env and the site
-                you picked, and a sequence of one letter, <InlineCode>a</InlineCode> to <InlineCode>z</InlineCode>, never a
-                number. Once you pick the site and MCE, the form suggests{" "}
-                <InlineCode>{"ocp4-<env>-<flavor>-<site>-<letter>"}</InlineCode> with the first letter no cluster has;
-                type over it to use your own. The form lists every problem with a name as you type, and fills in site
-                and MCE when it can detect them from the name. The version list is the chosen MCE&apos;s: the releases in the day1
-                repo&apos;s upgrade ladder that the MCE can host, so the picker waits for an MCE. It defaults to the
-                flavor&apos;s preset, else the MCE&apos;s mastertag, but only when the MCE offers it. The release becomes
-                the file&apos;s <InlineCode>mastertag</InlineCode>.
+                You choose the site, <InlineCode>prod</InlineCode> or <InlineCode>prep</InlineCode>, and the version;
+                <strong> Wingman picks the MCE</strong>, which runs the cluster&apos;s control plane. The version list is
+                what the site&apos;s MCEs of that environment can host (the releases of the day1 repo&apos;s upgrade
+                ladder in each MCE&apos;s minors), so it offers only what some MCE there can run; it defaults to the
+                flavor&apos;s preset when one of them hosts it. The release becomes the file&apos;s{" "}
+                <InlineCode>mastertag</InlineCode>.
               </p>
               <p className="mt-2">
-                Where Wingman reads the MCEs, it <strong>picks the MCE</strong> instead: choose the site,{" "}
-                <InlineCode>prod</InlineCode> or <InlineCode>prep</InlineCode> and the version (the releases the
-                candidate MCEs host), and enter the owner&apos;s mador and the nodepools below. A candidate must host
-                the version, have enough free pods for a control plane on its workers, have enough healthy free
-                servers of each node type (InfraEnv) the nodepools use, and answer Wingman; among those, the pick has
-                the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers. The
-                pick can change once the nodepools have their InfraEnvs. The form shows the pick
-                and why, and every candidate&apos;s numbers; one that fails a check says why and cannot be chosen. An
-                admin may choose another MCE that passes, with a reason; the merge request records the numbers, the
-                pick and the reason. The name, the InfraEnvs and the request follow the chosen MCE.
+                The pick shows as soon as those three are chosen: the best MCE and why, and every candidate&apos;s
+                numbers. A candidate must host the version, have enough free pods for a control plane on its workers,
+                have enough healthy free servers of each node type (InfraEnv) the nodepools use, and answer Wingman;
+                among those, the pick has the fewest clusters of this owner, then the fewest clusters, then the most
+                usable spare servers. The owner&apos;s mador and the nodepools below refine the pick; they are not
+                needed to see one. Where this deployment does not read the MCEs live, free pods and servers are shown
+                as not checked, and the pick rests on the rest. An MCE that fails a check says why and cannot be
+                chosen. An admin may choose another MCE that passes, with a reason; the merge request records the
+                numbers, the pick and the reason.
+              </p>
+              <p className="mt-2">
+                Sites and MCEs are the day1 repo&apos;s folders and are read-only: Wingman never creates them, and an
+                MCE whose name is off its convention is never a candidate. New names must follow{" "}
+                <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, with the environment and the site you
+                chose, and a sequence of one letter, <InlineCode>a</InlineCode> to <InlineCode>z</InlineCode>, never a
+                number. Once Wingman picks the MCE, the form suggests{" "}
+                <InlineCode>{"ocp4-<env>-<flavor>-<site>-<letter>"}</InlineCode> with the first letter no cluster has;
+                type over it to use your own. The form lists every problem with a name as you type, and fills in the
+                site and the environment when it can read them from the name.
               </p>
             </Step>
             <Step n={3} title="Cluster configuration">
@@ -1432,12 +1437,14 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
 
             <FeaturePanel icon={Settings2} tint="bg-indigo-500/10 text-indigo-500" title="OpenShift versions come from the upgrade ladder, per MCE" where="New Cluster → OpenShift Version">
               <p>
-                Not every MCE can host every OpenShift release, so the list depends on the MCE you choose, and the
-                picker stays disabled until you choose one. It offers the releases in the day1 repo&apos;s{" "}
+                Not every MCE can host every OpenShift release, so the list depends on the site and the environment
+                you choose, and the picker stays disabled until you choose both. It offers every release some MCE of
+                that site and environment can host: the releases in the day1 repo&apos;s{" "}
                 <InlineCode>upgrade/ladder.yaml</InlineCode> whose minor is in the MCE&apos;s{" "}
-                <InlineCode>upgrade/mces/&lt;mce&gt;.yaml</InlineCode>, newest first. These are the same files the
-                cluster-upgrade workflow reads. The release goes into the cluster file&apos;s{" "}
-                <InlineCode>mastertag</InlineCode>, and the chart adds <InlineCode>-x86_64</InlineCode> to it.
+                <InlineCode>upgrade/mces/&lt;mce&gt;.yaml</InlineCode>, newest first. Wingman then picks an MCE that
+                hosts the one you chose. These are the same files the cluster-upgrade workflow reads. The release goes
+                into the cluster file&apos;s <InlineCode>mastertag</InlineCode>, and the chart adds{" "}
+                <InlineCode>-x86_64</InlineCode> to it.
               </p>
               <CodeBlock language="upgrade/mces/ocp4-prod-mce-site1-a.yaml">
 {`mce:
@@ -1446,9 +1453,10 @@ namespace:  cert-manager   ← chart      (the chart's own values.yaml)`}
 maxConcurrentControlPlanes: 1`}
               </CodeBlock>
               <p>
-                If an MCE has no file, or the ladder is missing or broken, the form offers no version and shows the
-                reason under the field. Wingman never falls back to every release. A flavor&apos;s preset version
-                prefills only when the MCE offers it. Create refuses a release the MCE can&apos;t host. To offer
+                An MCE with no file, or every MCE while the ladder is missing or broken, hosts no version: it is not
+                offered for any, and its version check says why. Wingman never falls back to every release. A
+                flavor&apos;s preset version prefills only when some MCE of the site and environment hosts it. Create
+                refuses a release the chosen MCE can&apos;t host. To offer
                 another release, add a rung to the ladder or a minor to the MCE&apos;s file, through a merge request
                 in the day1 repo.
               </p>

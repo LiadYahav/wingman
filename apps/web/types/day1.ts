@@ -220,7 +220,8 @@ export interface OpenShiftVersions {
 /** A placement check: the version, the free pods, the servers of each node type, whether Wingman could read the MCE. */
 export interface PlacementCheck {
   check: "version" | "free_pods" | "servers" | "readable";
-  status: "pass" | "fail" | "unknown";
+  /** `not_checked`: live MCE reads are off; it does not block the pick. */
+  status: "pass" | "fail" | "unknown" | "not_checked";
   /** One sentence in plain words. */
   detail: string;
 }
@@ -295,6 +296,8 @@ export interface Placement {
   owner: string | null;
   flavor: string | null;
   min_free_pods: number;
+  /** `false` when live MCE reads are off: free pods and servers were not checked, `pods` is null, `node_types` empty. */
+  live_reads: boolean;
   /** The summed needs the `servers` check used, by InfraEnv; empty when no nodepool names a node type yet. */
   needs: PlacementNeed[];
   /** Every version some candidate hosts, newest first. */

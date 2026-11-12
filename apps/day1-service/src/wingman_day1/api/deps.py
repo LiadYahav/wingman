@@ -64,7 +64,8 @@ class Day1Context:
     """``None`` when neither ``SEGMENTS_MANAGER_UI_URL`` nor ``SEGMENTS_MANAGER_URL`` is set:
     a cluster carries no link to segments-manager."""
     placement: PlacementService | None = None
-    """``None`` when the MCE hubs cannot be read (live status off): placement answers 501."""
+    """Always built by ``main`` (ADR-0050: placement runs with live reads off too); a
+    context built without one answers 501."""
     quick_links: QuickLinksService | None = None
     """The Quick Links page (ADR-0052); ``main`` always builds it."""
 
@@ -111,14 +112,11 @@ def node_service(context: Annotated[Day1Context, Depends(day1_context)]) -> Node
     return context.nodes
 
 
-PLACEMENT_NOT_AVAILABLE = (
-    "MCE placement is not available in this deployment: it reads each MCE's nodes and pods, "
-    "and live cluster status is off (CLUSTER_STATUS_ENABLED=false). Choose the MCE yourself."
-)
+PLACEMENT_NOT_AVAILABLE = "MCE placement is not set up in this deployment."
 
 
 def placement_service(context: Annotated[Day1Context, Depends(day1_context)]) -> PlacementService:
-    """The placement use case, or 501 when the MCE hubs cannot be read (ADR-0050)."""
+    """The placement use case (``main`` always builds it; a bare context has none: 501)."""
     if context.placement is None:
         raise FeatureDisabled(PLACEMENT_NOT_AVAILABLE)
     return context.placement

@@ -124,9 +124,6 @@ async function setup(page: Page, { preview }: { preview?: (route: Route) => Prom
   await page.route("**/api/day1/specs/template/schema", (r) => json(r, SCHEMA));
   await page.route("**/api/day1/sites", (r) => json(r, ["site1"]));
   await page.route(/\/api\/day1\/mces(\?.*)?$/, (r) => json(r, MCES));
-  await page.route("**/api/day1/mces/*/openshift-versions", (r) =>
-    json(r, { mce: "ocp4-prod-mce-site1-a", versions: ["4.18.56", "4.16.27"], problems: [] })
-  );
   await page.route("**/api/day1/mces/*/infraenvs", (r) =>
     json(r, { ...problem("Live cluster status is disabled", []), status: 501, code: "FEATURE_DISABLED" }, 501)
   );
@@ -158,13 +155,13 @@ async function pickHardware(page: Page, nodepool: number, entry: number, type: s
   await expect(page.getByRole("option")).toHaveCount(0);
 }
 
-/** Choose the flavor and the cluster's name, site, MCE and version (detected from the name). */
+/** Choose the flavor, the cluster's name (its site and env), and the version; Wingman picks the MCE. */
 async function start(form: ClusterNewPage, name: string) {
   await form.goto();
   await form.chooseSpec(name);
   await form.fillName(NAME);
-  await expect(form.mceSelect).toContainText("ocp4-prod-mce-site1-a");
-  await expect(form.versionSelect).toContainText("4.16.27");
+  await form.selectVersion("4.16.27");
+  await expect(form.placementPickName).toHaveText("ocp4-prod-mce-site1-a");
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

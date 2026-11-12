@@ -1,9 +1,132 @@
 import { Page, Route } from "@playwright/test";
 import { mockAddons, mockSpecs } from "./addons";
 import type {
-  ApprovalRollout, ClusterNetworkRead, ClusterNodes, MRDetail, MachineConfigs, Mce, MergeRequestLink, NodePoolNodes, PoolNode,
-  Problem, ErrorCode, RolloutCluster, RolloutStatus, ServerRecord, WorkflowRun,
+  ApprovalRollout, ClusterNetworkRead, ClusterNodes, MRDetail, MachineConfigs, Mce, MergeRequestLink, NodePoolNodes, Placement,
+  PlacementCandidate, PoolNode, Problem, ErrorCode, RolloutCluster, RolloutStatus, ServerRecord, WorkflowRun,
 } from "../../types";
+
+// ── MCE placement (docs/notes/2026-11-12-mce-placement-api.md) ────────────────
+
+/** Every release the default placement's MCEs host, newest first. */
+export const PLACEMENT_VERSIONS = ["4.21.40", "4.20.44", "4.18.56", "4.18.22", "4.17.58", "4.16.27"];
+
+/** What each MCE hosts, for `placementAnswer`: by default, one prod and one prep MCE per site, hosting everything. */
+export const PLACEMENT_OFFERED: Record<string, string[]> = Object.fromEntries(
+  ["site1", "site2"].flatMap((site) =>
+    ["prod", "prep"].map((env) => [`ocp4-${env}-mce-${site}-a`, PLACEMENT_VERSIONS])
+  )
+);
+
+/** Newest first, by each number (`4.18.56` before `4.18.22` before `4.9.1`). */
+function newestFirst(versions: Iterable<string>): string[] {
+  const parts = (v: string) => v.split(".").map(Number);
+  return [...new Set(versions)].sort((a, b) => {
+    const [x, y] = [parts(a), parts(b)];
+    for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (y[i] ?? 0) - (x[i] ?? 0);
+    return 0;
+  });
+}
+
+const LIVE_READS_OFF = "Not checked: live MCE reads are off (CLUSTER_STATUS_ENABLED=false).";
+
+/**
+ * `GET /api/day1/placement` as day1 answers it with live MCE reads off: the
+ * candidates are the MCEs of `offered` named `ocp4-<env>-mce-<site>-<letter>`;
+ * each passes the version check when it hosts the version; free pods, servers
+ * and readability are not checked. The first that hosts the version, by name,
+ * is the pick. Without a version there is no pick, only the versions.
+ */
+export function placementAnswer(query: URLSearchParams, offered: Record<string, string[]> = PLACEMENT_OFFERED): Placement {
+  const site = query.get("site") ?? "";
+  const env = query.get("env") ?? "";
+  const version = query.get("version");
+  const owner = query.get("owner");
+  const names = Object.keys(offered)
+    .filter((name) => name.startsWith(`ocp4-${env}-mce-${site}-`))
+    .sort();
+  const candidates: PlacementCandidate[] = names.map((mce) => {
+    const hosts = offered[mce];
+    const versionStatus = !version ? "unknown" : hosts.includes(version) ? "pass" : "fail";
+    return {
+      mce,
+      eligible: versionStatus === "pass",
+      picked: false,
+      rank: null,
+      behind_on: null,
+      checks: [
+        {
+          check: "version",
+          status: versionStatus,
+          detail: !version
+            ? "Choose an OpenShift version."
+            : versionStatus === "pass"
+            ? `Hosts OpenShift ${version}.`
+            : hosts.length > 0
+            ? `Does not host OpenShift ${version}; it hosts ${hosts.join(", ")}.`
+            : `${mce} has no upgrade/mces/${mce}.yaml in the day1 repo, so it hosts no version.`,
+        },
+        { check: "free_pods", status: "not_checked", detail: LIVE_READS_OFF },
+        { check: "servers", status: "not_checked", detail: LIVE_READS_OFF },
+        { check: "readable", status: "not_checked", detail: LIVE_READS_OFF },
+      ],
+      node_types: [],
+      versions: hosts,
+      clusters: 0,
+      open_creates: 0,
+      owner_clusters: owner ? 0 : null,
+      spare: null,
+      spare_detail: null,
+      pods: null,
+    };
+  });
+  const eligible = candidates.filter((c) => c.eligible);
+  eligible.forEach((c, i) => {
+    c.rank = i + 1;
+    c.picked = i === 0;
+    c.behind_on = i === 0 ? null : "name";
+  });
+  const pick = eligible[0]?.mce ?? null;
+  const problems = !version
+    ? ["Choose an OpenShift version."]
+    : candidates.length === 0
+    ? [`${site} has no ${env} MCE (ocp4-${env}-mce-${site}-<letter>).`]
+    : pick
+    ? []
+    : [`No ${env} MCE at ${site} passes every check.`];
+  return {
+    site,
+    env,
+    version,
+    owner,
+    flavor: query.get("flavor"),
+    min_free_pods: 70,
+    live_reads: false,
+    needs: [],
+    versions: newestFirst(candidates.flatMap((c) => c.versions)),
+    pick,
+    why: pick ? (eligible.length === 1 ? `${pick} is the only MCE that passes every check.` : `${pick} comes first by name.`) : null,
+    problems,
+    server_scan_error: "server-scan is not configured, so spare servers are unknown.",
+    candidates: [...eligible, ...candidates.filter((c) => !c.eligible)],
+  };
+}
+
+/**
+ * Route `GET /api/day1/placement?...` to `placementAnswer(query, offered)`;
+ * each request's query goes into `calls` when given. Registered after the
+ * dashboard mocks, it wins (Playwright matches LIFO).
+ */
+export async function mockPlacement(
+  page: Page,
+  offered: Record<string, string[]> = PLACEMENT_OFFERED,
+  calls?: URLSearchParams[]
+) {
+  await page.route("**/api/day1/placement**", (route: Route) => {
+    const query = new URL(route.request().url()).searchParams;
+    calls?.push(query);
+    return json(route, placementAnswer(query, offered));
+  });
+}
 import type { Team } from "../../types/day2";
 
 // Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/schemas.py,
@@ -460,10 +583,8 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/name-suggestion**", (route: Route) =>
     json(route, { name: null, env: null, short_name: "", sequence: null, problems: [] })
   );
-  // No MCE placement unless a test mocks it (ADR-0050): the create form keeps its MCE select
-  await page.route("**/api/day1/placement**", (route: Route) =>
-    fulfillProblem(route, 501, "FEATURE_DISABLED", "Live cluster status is disabled in this deployment (CLUSTER_STATUS_ENABLED=false).")
-  );
+  // Wingman picks the MCE (ADR-0050): ocp4-<env>-mce-<site>-a for every site and env, live reads off
+  await mockPlacement(page);
   // A create opens Wingman's merge request unless a test turns the provision-cluster workflow on (ADR-0042)
   await page.route("**/api/day1/clusters/provisioner", (route: Route) => json(route, { mode: "merge-request" }));
   // segments-manager is off unless a test says otherwise (mockClusterNetwork): the card shows the file, EPG "—"

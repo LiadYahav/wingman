@@ -4,13 +4,14 @@
  * OpenShift version and the owner, and says why. The rule is day1's; the form
  * only shows its answer and sends the choice back, which day1 checks again.
  *
- * Placement needs the MCE hubs. With them off, `GET /placement` answers 501
- * `FEATURE_DISABLED` and the form keeps its MCE select (`usePlacement` gives
- * `null`).
+ * Placement always answers. With the MCE hubs' live reads off (`live_reads`
+ * false), free pods and servers are `not_checked`, which does not block the
+ * pick. The form has no MCE select of its own: a read that fails is a problem
+ * with a retry.
  */
 
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, isApiError } from "@/lib/api-client";
 import type { Placement, PlacementCandidate, PlacementCheck } from "@/types";
 
@@ -82,19 +83,14 @@ export function placementPath(query: PlacementQuery): string {
 
 /**
  * The placement for `query`, read now (a few seconds' cache, never restored
- * from storage); `null` when this deployment has no placement (501).
+ * from storage). While another query loads, the last answer stays as
+ * placeholder data (`isPlaceholderData`), so the numbers do not flash away.
  */
 export function usePlacement(query: PlacementQuery | null) {
-  return useQuery<Placement | null>({
+  return useQuery<Placement>({
     queryKey: ["placement", query],
-    queryFn: async () => {
-      try {
-        return await api.get<Placement>(placementPath(query!));
-      } catch (error) {
-        if (isApiError(error, "FEATURE_DISABLED")) return null;
-        throw error;
-      }
-    },
+    queryFn: () => api.get<Placement>(placementPath(query!)),
+    placeholderData: keepPreviousData,
     enabled: query !== null,
     staleTime: 5_000,
     refetchOnWindowFocus: true,
@@ -121,8 +117,21 @@ export function changedPick(error: unknown): string | null {
 
 /** The checks a candidate does not pass, and those not known. */
 export function unmetChecks(candidate: PlacementCandidate): PlacementCheck[] {
-  return candidate.checks.filter((c) => c.status !== "pass");
+  return candidate.checks.filter((c) => c.status === "fail" || c.status === "unknown");
 }
+
+/** The checks Wingman did not make (live MCE reads are off); they do not block the pick. */
+export function notCheckedChecks(candidate: PlacementCandidate): PlacementCheck[] {
+  return candidate.checks.filter((c) => c.status === "not_checked");
+}
+
+/** What a check is called where a person reads it. */
+export const CHECK_NAMES: Record<PlacementCheck["check"], string> = {
+  version: "the version",
+  free_pods: "free pods",
+  servers: "servers",
+  readable: "the MCE's API",
+};
 
 /** What a ranking step is called where a person reads it. */
 export const BEHIND_ON: Record<NonNullable<PlacementCandidate["behind_on"]>, string> = {

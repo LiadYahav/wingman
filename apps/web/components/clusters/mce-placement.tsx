@@ -1,10 +1,10 @@
 "use client";
 
 import { useId } from "react";
-import { AlertTriangle, CircleCheck, CircleHelp, CircleX, Info, RotateCcw, Server, Sparkles } from "lucide-react";
+import { AlertTriangle, CircleCheck, CircleHelp, CircleMinus, CircleX, Info, RotateCcw, Server, Sparkles } from "lucide-react";
 import { ProblemList } from "@/components/common/problem-list";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BEHIND_ON, REASON_MAX, unmetChecks } from "@/lib/placement";
+import { BEHIND_ON, CHECK_NAMES, REASON_MAX, notCheckedChecks, unmetChecks } from "@/lib/placement";
 import { cn } from "@/lib/utils";
 import type { Placement, PlacementCandidate, PlacementNodeType, PlacementPods } from "@/types";
 
@@ -136,6 +136,7 @@ export function MCEPlacementPanel({
                 chosen={candidate.mce === chosen}
                 onChoose={onChoose}
                 hideSpareDetail={scanError !== null}
+                liveReads={placement.live_reads}
               />
             ))}
           </div>
@@ -194,7 +195,16 @@ export function MCEPlacementPanel({
             of this owner, then fewest clusters, then most usable spare servers.
           </span>
         </p>
-        {placement.needs.length > 0 ? (
+        {!placement.live_reads ? (
+          // One quiet note for every MCE: what was not checked, and why
+          <p data-testid="placement-live-reads-off" className="flex items-start gap-1.5">
+            <Info className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
+            <span>
+              Free pods and servers were not checked: this deployment does not read the MCEs live (live status is off).
+              The pick rests on the version, this owner&apos;s clusters, the clusters and the spare servers.
+            </span>
+          </p>
+        ) : placement.needs.length > 0 ? (
           <p data-testid="placement-needs" className="flex items-start gap-1.5">
             <Server className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
             <span className="min-w-0 [overflow-wrap:anywhere]">
@@ -232,20 +242,27 @@ function CandidateRow({
   chosen,
   onChoose,
   hideSpareDetail,
+  liveReads,
 }: {
   candidate: PlacementCandidate;
   chosen: boolean;
   onChoose: (mce: string) => void;
   /** server-scan's error already says why every MCE's spare servers are unknown. */
   hideSpareDetail: boolean;
+  /** `false`: the MCE was not read live; its free pods and servers are "not checked", not a problem. */
+  liveReads: boolean;
 }) {
   const detailId = useId();
   const unmet = unmetChecks(candidate);
+  // Readability is implied by the rest: name only the checks a person cares about
+  const notChecked = notCheckedChecks(candidate).filter((check) => check.check !== "readable");
   const pods = candidate.pods;
   const podsBreakdown = pods
     ? `${pods.allocatable} allocatable less ${pods.used} in use, on ${pods.nodes_counted} worker${pods.nodes_counted === 1 ? "" : "s"}; ` +
       leftOut(pods.nodes_excluded)
-    : "Unknown: Wingman could not read the MCE";
+    : liveReads
+    ? "Unknown: Wingman could not read the MCE"
+    : "Not checked: live MCE reads are off";
   return (
     <label
       data-testid={`placement-candidate-${candidate.mce}`}
@@ -283,7 +300,7 @@ function CandidateRow({
             <p className="flex items-start gap-1 text-status-ready-fg">
               <CircleCheck className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
               <span className="break-words">
-                Passes every check
+                {notChecked.length > 0 ? "Passes the checks made" : "Passes every check"}
                 {candidate.behind_on && (
                   <span className="text-muted-foreground"> · behind the pick: {BEHIND_ON[candidate.behind_on]}</span>
                 )}
@@ -308,6 +325,14 @@ function CandidateRow({
                 </span>
               </p>
             ))
+          )}
+          {notChecked.length > 0 && (
+            <p data-testid="placement-not-checked" className="flex items-start gap-1 text-muted-foreground">
+              <CircleMinus className="h-3 w-3 shrink-0 mt-0.5" aria-hidden />
+              <span className="break-words">
+                {notChecked.map((check) => CHECK_NAMES[check.check]).join(" and ")}: not checked
+              </span>
+            </p>
           )}
           {candidate.node_types.length > 0 && <NodeTypes types={candidate.node_types} />}
           {!candidate.spare && candidate.spare_detail && !hideSpareDetail && (
@@ -341,7 +366,11 @@ function CandidateRow({
           title={podsBreakdown}
           srNote={podsBreakdown}
         >
-          {pods ? pods.free : <span className="text-[11px] text-muted-foreground font-normal">unknown</span>}
+          {pods ? (
+            pods.free
+          ) : (
+            <span className="text-[11px] text-muted-foreground font-normal">{liveReads ? "unknown" : "not checked"}</span>
+          )}
         </Cell>
       </div>
     </label>
