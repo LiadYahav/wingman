@@ -242,7 +242,7 @@ class AuthoringPlan:
             "impact": [i.details() for i in self.impact],
             "adopted": [a.details() for a in self.adopted],
         }
-        text = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+        text = json.dumps(_canonical(payload), sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(text.encode()).hexdigest()
 
     def pending(self, path: RepoPath) -> FileChange | None:
@@ -260,6 +260,15 @@ class AuthoringResult:
 
     plan: AuthoringPlan
     merge_request: MergeRequest | None
+
+
+def _canonical(value: object) -> object:
+    """``value`` with every mapping key a string (YAML allows ``1:``; JSON sorting does not)."""
+    if isinstance(value, Mapping):
+        return {f"{type(k).__name__}:{k}": _canonical(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_canonical(v) for v in value]
+    return value
 
 
 def flatten(values: object, prefix: str = "") -> dict[str, object]:

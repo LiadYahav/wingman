@@ -24,13 +24,13 @@ from wingman_day2.application.plan_writer import SCOPE_ORDER, fleet_apps, tweak_
 from wingman_day2.application.topology import TeamState, Topology, TopologyService
 from wingman_day2.domain import layout
 from wingman_day2.domain.clusters import ALLOWED_ENVS, ClusterKind, ClusterRef, DefaultsScope
-from wingman_day2.domain.deploy_config import SYNC_POLICY, TARGET_REVISION, truthy
+from wingman_day2.domain.deploy_config import TARGET_REVISION, truthy
 from wingman_day2.domain.errors import ChangeRefusedError, UnknownChartError
 from wingman_day2.domain.exclusions import set_excluded
 from wingman_day2.domain.findings import Finding
 from wingman_day2.domain.platform import AppSource, scope_exclusions
 from wingman_day2.domain.stacks import Layer, LayerRole
-from wingman_day2.domain.sync_policy import SyncSettings, sync_settings
+from wingman_day2.domain.sync_policy import SyncSettings
 from wingman_day2.domain.teams import TeamAccess
 from wingman_day2.ports import SigsRepository
 
@@ -404,9 +404,8 @@ class OperatorService:
             folder=fleet,
             values=default.values,
             deploy=default.deploy,
-            sync=default.sync
-            if is_default
-            else sync_settings((default.deploy.values or {}).get(SYNC_POLICY)),
+            # Not a default: the team default's, which a new default starts from.
+            sync=default.sync,
             sync_overridden=default.sync_overridden,
             env_files=tuple(env_files),
             exclusions=exclusions,

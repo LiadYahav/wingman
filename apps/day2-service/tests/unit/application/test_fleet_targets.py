@@ -269,6 +269,22 @@ async def test_removing_a_destination_override_deletes_its_file_guarded(
     )
 
 
+async def test_the_digest_takes_values_yaml_allows_and_json_cannot_sort(
+    services: Day2Services, jane_user: User
+) -> None:
+    write = partial(
+        services.fleet_targets.set_destination_values,
+        "redbull",
+        "example-chart",
+        MCES,
+        PROD,
+        {"items": [{1: "one", "b": 2}]},
+        jane_user,
+    )
+    first, again = (await write(dry_run=True)).plan, (await write(dry_run=True)).plan
+    assert len(first.digest) == 64 and first.digest == again.digest
+
+
 async def test_destination_override_refusals(services: Day2Services, jane_user: User) -> None:
     targets = services.fleet_targets
     with pytest.raises(ChangeRefusedError) as raised:
