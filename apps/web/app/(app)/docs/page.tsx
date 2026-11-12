@@ -413,7 +413,7 @@ export default function DocsPage() {
               {
                 term: "Destination",
                 color: "bg-cyan-500/10 text-cyan-500",
-                description: "Anywhere Day2 deploys charts: the hub, an MCE, a hosted cluster or a UPI cluster. Each has an id that says where it is, and the Destinations page lists them all.",
+                description: "Anywhere Day2 deploys charts: the hub, an MCE, a hosted cluster or a UPI cluster. Each has an id that says where it is. A hosted cluster's charts are on its page (Addons); an add-on's page lists each destination its defaults reach.",
                 example: "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1 — a hosted cluster's id",
               },
               {
@@ -480,7 +480,7 @@ export default function DocsPage() {
               </div>
               <ul className="space-y-2">
                 {[
-                  "Browse clusters, flavors, destinations and charts",
+                  "Browse clusters, flavors and add-ons",
                   "See drift, lints and live status",
                   "Read pending approvals and their diffs",
                   "Read the audit log",
@@ -920,7 +920,7 @@ nodepool:
             whose GitLab project under the sigs group holds the chart&apos;s team default
             (<InlineCode>operators/{"{chart}"}/</InlineCode>) and a folder per destination that gets it. A
             folder existing is the registration: Wingman installs a chart by opening an MR that adds the folder.
-            There are four kinds of destination, listed on the <strong>Destinations</strong> page:
+            There are four kinds of destination:
           </p>
           <CodeBlock language="Where a chart's folder lives, per destination kind">
 {`hub      defaults/hub/{chart}/
@@ -929,10 +929,8 @@ hosted   sites/{site}/{env}/mces/{mce}/{cluster}/{chart}/
 upi      sites/{site}/{env}/upi/{cluster}/{chart}/`}
           </CodeBlock>
           <p className="text-sm text-muted-foreground leading-relaxed mt-3 mb-5">
-            The <strong>Destinations</strong> page lists every destination, including day1 clusters no team deploys
-            to yet, with its kind, site and env, MCE, OCP version, teams and findings; click one to open its charts.
             The <strong>Addons</strong> page (<strong>Addon Catalog</strong>) lists every team&apos;s add-ons with their
-            team values, deploy config, versions and fleet defaults.
+            team values, deploy config, versions and fleet defaults; a hosted cluster&apos;s charts are on its page.
           </p>
 
           <h3 className="text-base font-semibold mt-6 mb-3">A team&apos;s add-ons and their defaults</h3>
@@ -997,8 +995,9 @@ cluster               …/{cluster}/{chart}/values.yaml
           <h3 className="text-base font-semibold mt-6 mb-4">Installing a chart</h3>
           <div className="space-y-3 mb-5">
             <Step n={1} title="Open the destination's charts">
-              From a cluster&apos;s page (<strong>Addons</strong>), or any destination on the <strong>Destinations</strong>{" "}
-              page. The charts page lists what is <strong>Installed</strong> and what is <strong>Available</strong>.
+              From a cluster&apos;s page (<strong>Addons</strong>), or a destination a finding names on the{" "}
+              <strong>Lints</strong> page. The charts page lists what is <strong>Installed</strong> and what is{" "}
+              <strong>Available</strong>.
             </Step>
             <Step n={2} title="Pick a chart under Available">
               Click <strong>Install</strong>, or select several and use <strong>Install selected</strong>: one MR per
@@ -1101,7 +1100,7 @@ cluster               …/{cluster}/{chart}/values.yaml
                 refuses is an error on that chart alone; the rest of the catalog still loads.
               </p>
               <p>
-                Findings also appear on the destinations, charts and catalog. Before any Day2 MR opens, the team repo
+                Findings also appear on the charts pages and the catalog. Before any Day2 MR opens, the team repo
                 is checked as it would be after the change: a change that adds an error is refused, while existing
                 errors do not block unrelated changes. On every charts page but the hub&apos;s,{" "}
                 <strong>Upgrade check</strong> lists the charts a new OCP version would leave without an OCP-version pin.

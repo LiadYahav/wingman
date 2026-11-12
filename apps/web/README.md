@@ -14,7 +14,7 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Charts per Destination**: Install, edit and remove Day2 charts on the hub, MCEs, hosted and UPI clusters; every value shows the layer that set it; bulk install opens one MR per team; a version of its own is a confirmed emergency pin; a removal leaves the workload running (`argocd app delete --cascade` tears it down)
 - **Add-ons**: a team's catalog (`operators/<chart>/` in its repo) and the fleet defaults built from it, all on the Addons page (`/addons`, one team with `?team=`; ADR-0043, ADR-0053). A team admin adds an add-on (`/addons/new?team=`, pre-filled from the team's own files) and edits its team default (sync options and ignoreDifferences included); an add-on's page (`/addons/<team>/<chart>`, Defaults & overrides) shows its files as written, comments and all, and per scope (hosted clusters, MCEs, the hub, UPI clusters) makes it a default and edits that default. Each env (`values-<env>.yaml`) and each MCE, hosted cluster or UPI cluster (`values-<name>.yaml`) can get its own values (the effective values before and after, from `merge-preview`), and **Deploy on specific MCEs** installs it in chosen MCEs' own folders, one MR per MCE, with each install listed and removable. A hosted cluster's own add-ons come from its flavor and the create form. Wingman does not write `exclusions.yaml`. Every authoring write is one MR, previewed with the service's dry run first; the plan lists each destination that changes, those are confirmed, and the MR is opened only against the previewed plan's digest (a repo that moved shows the new plan). Installing it on one cluster is on that cluster's page. 3.12.0's `/operators`, `/teams/<team>/operators[/<chart>]` and `/teams/<team>/new-operator` redirect here (`next.config.ts`)
 - **Per-team write access**: a team that has not given Wingman's GitLab account Developer on `sigs/<team>` is read-only, and every write Wingman would offer it says why; the web fails closed, so a team whose access is not known yet (or could not be read) is read-only too
-- **Destinations and Lints**: Every place teams deploy to, and every check on the team repos
+- **Lints**: Every check on the team repos; a finding that names a destination links to its charts. There is no page that lists every destination: a hosted cluster's charts are on its page, an add-on's page lists each destination its defaults reach, and the old `/destinations` redirects to `/clusters` (`next.config.ts`)
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
 - **Sites and MCEs are read-only**: picked from the day1 repo's folders (Wingman never creates them); the MCE's mastertag is the default OpenShift version
 - **Naming convention**: new cluster names must follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing off-convention names are flagged, not hidden; a new `<seq>` is one letter, a to z, and creating from a flavor the form suggests the name with the next free letter (ADR-0040)
@@ -85,7 +85,7 @@ npx playwright test addon-configuration
 WINGMAN_DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
   npx playwright test live-day1-flows --project=live
 # The day2 pages against the same stack: the catalog, a hosted cluster's charts from its day1
-# page, install/update/remove/bulk, an MCE, a UPI fleet default, the hub, destinations, lints
+# page, install/update/remove/bulk, an MCE, a UPI fleet default, the hub, the /destinations redirect, lints
 DEV_AUTH_SECRET=<DEV_AUTH_SECRET> PLAYWRIGHT_BASE_URL=http://localhost:3000 \
   npx playwright test live-day2 --project=live
 # Flavors v2: a hand-written cluster joins a flavor (the flavor's page), a second admin merges
@@ -126,7 +126,6 @@ app/
 │   ├── clusters/       # Cluster management pages
 │   ├── specs/          # Spec pages (presets for the create form)
 │   ├── addons/         # The add-on catalog, a new add-on (new/), one add-on's defaults and overrides ([team]/[addon]/)
-│   ├── destinations/   # Day2 destinations (hub, MCEs, hosted, UPI)
 │   ├── lints/          # Day2 lint findings
 │   ├── approvals/      # MR approval workflow
 │   ├── audit/          # Audit trail
