@@ -145,7 +145,7 @@ source.
 ## Consequences
 
 - The MCE token needs `list` on `nodes` and `pods`, cluster-wide (the chart
-  README's ClusterRole; `docs/upgrade/3.8-to-3.9.md`). Until it has it, that
+  README's ClusterRole; `docs/upgrade/3.9-to-3.10.md`). Until it has it, that
   MCE is never picked; if no MCE of a site and env has it, nobody can create
   there. Grant first, then upgrade.
 - A hub whose nodes are all control-plane nodes (a compact hub) counts no

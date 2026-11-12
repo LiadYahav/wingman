@@ -254,7 +254,7 @@ every MCE that has a token. Without the grant, that MCE's `readable` check
 fails with "the MCE refused Wingman's token (403) on GET /api/v1/nodes": it
 is never picked, and no other MCE is affected. The chart README's
 [Live cluster status](../../deploy/helm/wingman/README.md#live-cluster-status-mce-hubs)
-has the ClusterRole; [3.8-to-3.9.md](../upgrade/3.8-to-3.9.md) has the steps.
+has the ClusterRole; [3.9-to-3.10.md](../upgrade/3.9-to-3.10.md) has the steps.
 
 Pods are listed in Kubernetes' Table form (`Accept:
 application/json;as=Table;v=v1;g=meta.k8s.io`, `includeObject=None`), only

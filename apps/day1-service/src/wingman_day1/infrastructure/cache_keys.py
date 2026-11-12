@@ -16,6 +16,8 @@ Families:
 - ``hub:<mce>:<kind>:<namespace>[:<name>]`` an MCE hub read for the nodes view
 - ``server-scan:rows``                     server-scan's whole fleet, as rows
 - ``segments-manager:segment:<cidr>``      segments-manager's answer for one segment
+- ``quick-links:check:<url>``              one Quick Links status check (ADR-0052)
+- ``quick-links:argocd:<instance>:<url>``  one ArgoCD's application counts (ADR-0052)
 - ``workflows:uninstall:...``              the orchestrator's uninstall runs: the list, one run
 """
 
@@ -75,6 +77,16 @@ def server_scan_rows() -> str:
 def segment(cidr: str) -> str:
     """segments-manager's answer for one segment (expires; it has no webhook to day1)."""
     return f"segments-manager:segment:{cidr}"
+
+
+def link_check(url: str) -> str:
+    """One Quick Links status check (expires; nothing announces a change)."""
+    return f"quick-links:check:{url}"
+
+
+def argocd_counts(instance: str, url: str) -> str:
+    """One ArgoCD's application counts, read with ``instance``'s token at ``url``."""
+    return f"quick-links:argocd:{instance}:{url}"
 
 
 def uninstall_runs_prefix() -> str:

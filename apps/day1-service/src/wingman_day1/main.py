@@ -9,8 +9,9 @@ the tests build the whole service on the in-memory GitLab and the fakes.
 ``WINGMAN_GIT_BACKEND=fake`` runs on an in-memory GitLab seeded from
 ``dev/gitlab-fixtures`` (local development and E2E); settings refuse it in
 production (ADR-0009). ``DAY1_FAKE_FLEET=true`` does the same for the MCE
-hubs, server-scan, the workflows orchestrator and segments-manager, from
-``dev/fleet-fixtures``, in development only (ADR-0038, ADR-0039).
+hubs, server-scan, the workflows orchestrator, segments-manager and Quick
+Links' checks and ArgoCD counts, from ``dev/fleet-fixtures``, in development
+only (ADR-0038, ADR-0039, ADR-0052).
 """
 
 from __future__ import annotations
@@ -54,6 +55,7 @@ from wingman_day1.api.v1 import auth as auth_api
 from wingman_day1.api.v1 import clusters as clusters_api
 from wingman_day1.api.v1 import machine_configs as machine_configs_api
 from wingman_day1.api.v1 import placement as placement_api
+from wingman_day1.api.v1 import quick_links as quick_links_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import webhooks as webhooks_api
@@ -67,18 +69,24 @@ from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.placement import PlacementService
+from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
 from wingman_day1.domain.names import HostedClusterNaming
+from wingman_day1.domain.quick_links import GeneratedLinks, UrlTemplates
+from wingman_day1.infrastructure.argocd_api import HttpArgoCd, load_argocd_tokens
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
+from wingman_day1.infrastructure.cached_quick_links import CachedArgoCd, CachedLinkProbe
 from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons
 from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_access
+from wingman_day1.infrastructure.link_probe import HttpLinkProbe
+from wingman_day1.infrastructure.links_file import FileLinksSource
 from wingman_day1.infrastructure.merge_requests import (
     GitClusterProvisioner,
     GitSpecChanges,
@@ -91,10 +99,12 @@ from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.ports import (
+    ArgoCdApi,
     ClusterDeleteWorkflow,
     Day2Addons,
     HubApi,
     IdentityProvider,
+    LinkProbe,
     ProvisionWorkflow,
     SegmentLedger,
     ServerInventory,
@@ -124,6 +134,7 @@ ROUTERS: Final = (
     specs_api.router,
     machine_configs_api.router,
     placement_api.router,
+    quick_links_api.router,
     approvals_api.router,
     audit_api.router,
     webhooks_api.router,
@@ -152,6 +163,10 @@ class Adapters:
     """segments-manager; ``None`` when ``SEGMENTS_MANAGER_URL`` is empty (ADR-0039)."""
     provision: ProvisionWorkflow | None = None
     """The provision-cluster workflow; ``None`` unless ``DAY1_PROVISIONER=workflow`` (ADR-0042)."""
+    link_probe: LinkProbe | None = None
+    """Quick Links' status checks; ``None`` with ``QUICK_LINKS_STATUS_ENABLED`` off (ADR-0052)."""
+    argocd: ArgoCdApi | None = None
+    """ArgoCD counts on Quick Links; ``None`` when no ArgoCD token is configured."""
     closers: tuple[Close, ...] = field(default=())
 
 
@@ -220,6 +235,9 @@ def build_adapters(
     fake_hub, inventory, uninstall = _fleet_adapters(
         settings, metrics=metrics, clock=clock, closers=closers
     )
+    link_probe, argocd = _quick_links_adapters(
+        settings, metrics=metrics, clock=clock, closers=closers
+    )
     return Adapters(
         gitlab=InstrumentedGitLab(inner, metrics),
         day2=day2,
@@ -229,8 +247,58 @@ def build_adapters(
         uninstall=uninstall,
         ledger=_segment_ledger(settings, metrics=metrics, closers=closers),
         provision=_provision_workflow(settings, metrics=metrics, clock=clock, closers=closers),
+        link_probe=link_probe,
+        argocd=argocd,
         closers=tuple(closers),
     )
+
+
+def _quick_links_adapters(
+    settings: Day1Settings, *, metrics: WingmanMetrics, clock: Clock, closers: list[Close]
+) -> tuple[LinkProbe | None, ArgoCdApi | None]:
+    """Quick Links' status checks and ArgoCD reads, real or none; or their fakes (ADR-0052)."""
+    if settings.day1_fake_fleet:
+        from wingman_day1.infrastructure.fake_quick_links import (
+            CHECKS_FILE,
+            fleet_fixture,
+            load_fake_quick_links,
+        )
+
+        probe, argocd = load_fake_quick_links(fleet_fixture(CHECKS_FILE), clock=clock)
+        return (probe if settings.quick_links_status_enabled else None), argocd
+    link_probe: LinkProbe | None = None
+    if settings.quick_links_status_enabled:
+        http_probe = HttpLinkProbe(
+            verify=settings.quick_links_tls_verify,
+            timeout_seconds=settings.quick_links_timeout_seconds,
+            concurrency=settings.quick_links_concurrency,
+            metrics=metrics,
+            clock=clock,
+        )
+        closers.append(http_probe.aclose)
+        link_probe = http_probe
+    tokens = load_argocd_tokens(settings.quick_links_argocd_tokens_file)
+    if not tokens:
+        return link_probe, None
+    argocd = HttpArgoCd(
+        tokens=tokens,
+        verify=settings.quick_links_tls_verify,
+        timeout_seconds=settings.quick_links_timeout_seconds,
+        concurrency=settings.quick_links_concurrency,
+        metrics=metrics,
+        clock=clock,
+    )
+    closers.append(argocd.aclose)
+    return link_probe, argocd
+
+
+def _links_file(settings: Day1Settings) -> FileLinksSource:
+    """The links file; with the fake fleet and no file there, the demo's (ADR-0052)."""
+    if settings.day1_fake_fleet and not settings.quick_links_file.exists():
+        from wingman_day1.infrastructure.fake_quick_links import DEMO_LINKS_FILE, fleet_fixture
+
+        return FileLinksSource(fleet_fixture(DEMO_LINKS_FILE))
+    return FileLinksSource(settings.quick_links_file)
 
 
 def _provision_workflow(
@@ -440,6 +508,30 @@ def build_context(
         else None,
     )
     fake_ui = FAKE_SEGMENTS_MANAGER_UI if settings.day1_fake_fleet else ""
+    status_ttl = settings.quick_links_status_ttl_seconds
+    quick_links = QuickLinksService(
+        site_catalog,
+        generated=GeneratedLinks(
+            hub=settings.quick_links_hub_name or None,
+            hub_domain=settings.quick_links_hub_base_domain,
+            domain=settings.quick_links_mce_domain,
+            templates=UrlTemplates(
+                argocd=settings.quick_links_argocd_url_template,
+                console=settings.quick_links_console_url_template,
+            ),
+        ),
+        links=_links_file(settings),
+        probe=(
+            CachedLinkProbe(adapters.link_probe, cache, ttl=status_ttl)
+            if adapters.link_probe is not None
+            else None
+        ),
+        argocd=(
+            CachedArgoCd(adapters.argocd, cache, ttl=status_ttl)
+            if adapters.argocd is not None
+            else None
+        ),
+    )
     dev_secret = settings.dev_auth_secret.get_secret_value() if settings.dev_auth_enabled else None
     return Day1Context(
         clusters=cluster_service,
@@ -477,6 +569,7 @@ def build_context(
         status_poll_seconds=settings.day1_status_poll_seconds,
         segments_manager_ui_url=settings.segments_manager_ui_base or fake_ui or None,
         placement=placement,
+        quick_links=quick_links,
     )
 
 
