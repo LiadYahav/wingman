@@ -47,6 +47,7 @@ Wingman becomes the platform team's one place to work from:
 | 17 | Fine-grained RBAC: groups with their own permissions, such as seeing every server or only your own | Identities and groups from **Keycloak, federating LDAP** (OIDC). There is no Keycloak in the air-gap: Wingman brings one (Red Hat build of Keycloak) |
 | 18 | Wingman may reuse whatever it needs from server-scan, segments-manager and cluster-navigator | Their repositories are public, as Wingman's is |
 | 19 | MCE placement is built first, after the day2 and import PRs | With the per-MCE API address it needs |
+| 20 | A **GitOps** page in the sidebar: a launcher in the style of the team's homepage dashboard | Every ArgoCD (the hub's, each MCE's at `openshift-gitops-server-openshift-gitops.apps.<cluster>.<domain>`), each cluster's console, and the team's other links, with their status |
 
 ## What this changes in Wingman's rules
 
@@ -90,6 +91,7 @@ tag exists.
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
 | 8 | RBAC with Keycloak: permissions per group, scoped visibility | 0051 | L | Its design before code; 2 for the areas it guards |
+| 9 | GitOps launcher page | 0052 | M | Nothing; built alongside 6 |
 
 ### 0a. Day2: teams author add-ons (ADR-0043, in progress)
 
@@ -402,6 +404,39 @@ Its design (the permission list, the scopes, how groups map, the Keycloak
 install) is written and agreed before any code, because every area depends
 on it.
 
+### 9. GitOps launcher (ADR-0052)
+
+Decision 20, modelled on the team's homepage dashboard (gethomepage): cards
+in sections, each with an icon, a description, a status dot and, where it
+has one, a live widget.
+
+- **Generated from what Wingman knows:**
+  - the hub Wingman runs on: its ArgoCD and console;
+  - every MCE in the day1 repo, grouped by site: its ArgoCD at
+    `https://openshift-gitops-server-openshift-gitops.apps.<mce>.<domain>` and
+    its console.
+
+  The URL patterns are settings, and an MCE whose address differs gets its
+  own, like the per-MCE API address of workstream 1.
+- **The team's own links**: further sections (GitLab, DevOps, internal
+  tools, DC systems, …) from a config file the chart renders, so operators
+  edit links without a release. Each link has a name, a URL, a description
+  and an icon.
+- **Icons ship with Wingman** (no CDN in the air gap). Brand icons come from
+  a permissive set, and the rest from the icon library Wingman already uses.
+- **Status**: Wingman's backend checks each URL on a timer with a short
+  timeout and caches the answer: up, down or unknown. The browser never pings
+  them, because of CORS and the many origins.
+- **Widgets**: where an ArgoCD instance has a read-only token configured
+  (a Secret map of instance to token), its card shows the applications'
+  sync and health counts (synced, out of sync, healthy, degraded). Without a
+  token the card is a link with a status dot.
+- **The page**: a search box that filters cards as you type; sections in a
+  grid with columns per section; the design pass of workstream 2 (light and
+  dark, not a copy of the dashboard's background image).
+- **Who sees it**: admins, like the other new areas (decision 13), until
+  RBAC.
+
 ### 7. Docs and upgrade guides
 
 For every release:
@@ -426,8 +461,9 @@ Also:
 1. **Now**: review and merge 0a and 0b. Workstream 1 is deployed
    (Wingman 3.7.0 and its GitLab on the sandbox); its per-MCE address is
    built with 6.
-2. **Next (decision 19)**: 6, MCE placement, with the per-MCE address. In
-   parallel, write the designs of 2 (the single pane) and 8 (RBAC).
+2. **Next (decision 19)**: 6, MCE placement, with the per-MCE address, and
+   9, the GitOps launcher, alongside it. In parallel, write the designs of 2
+   (the single pane) and 8 (RBAC).
 3. **Then**:
    - build 2;
    - build 3 (Segments): the smallest area, it proves the pattern;
