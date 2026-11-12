@@ -22,6 +22,7 @@ from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
+from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.rollouts import RolloutService
 from wingman_day1.application.sites import SiteCatalog
@@ -62,6 +63,8 @@ class Day1Context:
     segments_manager_ui_url: str | None = None
     """``None`` when neither ``SEGMENTS_MANAGER_UI_URL`` nor ``SEGMENTS_MANAGER_URL`` is set:
     a cluster carries no link to segments-manager."""
+    placement: PlacementService | None = None
+    """``None`` when the MCE hubs cannot be read (live status off): placement answers 501."""
     quick_links: QuickLinksService | None = None
     """The Quick Links page (ADR-0052); ``main`` always builds it."""
 
@@ -108,6 +111,19 @@ def node_service(context: Annotated[Day1Context, Depends(day1_context)]) -> Node
     return context.nodes
 
 
+PLACEMENT_NOT_AVAILABLE = (
+    "MCE placement is not available in this deployment: it reads each MCE's nodes and pods, "
+    "and live cluster status is off (CLUSTER_STATUS_ENABLED=false). Choose the MCE yourself."
+)
+
+
+def placement_service(context: Annotated[Day1Context, Depends(day1_context)]) -> PlacementService:
+    """The placement use case, or 501 when the MCE hubs cannot be read (ADR-0050)."""
+    if context.placement is None:
+        raise FeatureDisabled(PLACEMENT_NOT_AVAILABLE)
+    return context.placement
+
+
 def quick_links_service(
     context: Annotated[Day1Context, Depends(day1_context)],
 ) -> QuickLinksService:
@@ -120,5 +136,6 @@ def quick_links_service(
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
 Nodes = Annotated[NodeService, Depends(node_service)]
+Placements = Annotated[PlacementService, Depends(placement_service)]
 QuickLinks = Annotated[QuickLinksService, Depends(quick_links_service)]
 Status = Annotated[StatusService, Depends(status_service)]

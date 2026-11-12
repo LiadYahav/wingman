@@ -29,18 +29,21 @@ already have.
 | 3.7 | 3.8.0: a team creates add-ons, edits their team defaults and sync options, and makes them fleet defaults from Wingman (ADR-0043); day2 writes are per team: a team that does not give Wingman's GitLab account Developer on its project is read-only | [3.7-to-3.8.md](3.7-to-3.8.md) if any team should not, or does not, give Wingman write access; otherwise Generic |
 | 3.8 | 3.9.0: **Quick Links** for admins (ADR-0052): every cluster's ArgoCD and console, generated from the day1 repo, the team's links from the chart, status dots checked by day1, ArgoCD counts with read-only tokens | Generic: every MCE is listed when `clusterStatus.mceDomain` is set. To add the hub, the team's links and the counts: [3.8-to-3.9.md](3.8-to-3.9.md) |
 | 3.9 | 3.10.0: a flavor's changes reach each cluster through its own merge request (ADR-0044): drift is measured against the version a cluster is on, and a newer one is an update; a new flavor version opens one MR per cluster that follows it, with the day2 add-on MRs that version needs; an import opens one MR per cluster; a flavor edit needs a new version | Generic. After the upgrade, the first rollout trigger (opening a flavor's page, the specs webhook, Reconcile, or merging a flavor MR) opens an MR for every cluster that is behind its flavor's newest version: nothing changes on a cluster until its MR merges, and closing one declines that version. Day1 asks day2 for add-on MRs with an admin service session signed by the shared `JWT_SECRET_KEY` (no new setting); a team that gives Wingman no write access (ADR-0043) gets its add-ons listed in the day1 MR instead. Import MRs opened before 3.10 (`Import spec <flavor> into <n> clusters`) stay as they are |
-| 3.10 | 3.11.0: an Operators page per team: which destinations each fleet default reaches (`exclusions.yaml`, edited in place), a destination's own values and deploy config; every day2 authoring write lists what it does to each destination and is confirmed against its preview (ADR-0053); a team whose access cannot be read is read-only, the others unaffected | Generic: no new value, Secret, grant or variable. A script that called the 3.8 to 3.10 authoring API without a preview now gets 422 `confirm-changes`/`confirm-against-preview` when the write changes a destination: send the preview's `needs_confirmation` and `digest` |
+| 3.10 | 3.11.0: Wingman picks a new cluster's MCE from the site, prod or prep, the version and the owner, and shows every candidate's numbers; an admin may choose another with a reason (ADR-0050). An MCE's API address may be given beside its token (ADR-0045) | [3.10-to-3.11.md](3.10-to-3.11.md) when live status is on: grant each MCE token `list` on nodes and pods **before** upgrading, or that MCE is never picked. With live status off, Generic |
+| 3.11 | 3.12.0: an Operators page per team: which destinations each fleet default reaches (`exclusions.yaml`, edited in place), a destination's own values and deploy config; every day2 authoring write lists what it does to each destination and is confirmed against its preview (ADR-0053); a team whose access cannot be read is read-only, the others unaffected | Generic: no new value, Secret, grant or variable. A script that called the 3.8 to 3.11 authoring API without a preview now gets 422 `confirm-changes`/`confirm-against-preview` when the write changes a destination: send the preview's `needs_confirmation` and `digest` |
 
 ### Skipping versions
 
 Go straight to the newest release, and on the way do every guide whose
-row you pass, in order. For example, from 3.3.x to 3.9.0: do
-[3.3-to-3.4.md](3.3-to-3.4.md) (the MCE grants), then
+row you pass, in order. For example, from 3.3.x to 3.11.0: do
+[3.3-to-3.4.md](3.3-to-3.4.md) (the MCE grants, with the ClusterRole of
+[3.10-to-3.11.md](3.10-to-3.11.md) step 5 so one apply covers both), then
 [3.4-to-3.5.md](3.4-to-3.5.md) (`segmentsManager.url`, optional), each
 with the newest `<tag>` instead of its own, then 3.6.0's optional template,
 3.6-to-3.7.md only if the team turns the provision workflow on,
-3.7-to-3.8.md's discovery (which teams give Wingman write access), and
-3.8-to-3.9.md for Quick Links' hub, team links and ArgoCD tokens (optional).
+3.7-to-3.8.md's discovery (which teams give Wingman write access),
+3.8-to-3.9.md for Quick Links' hub, team links and ArgoCD tokens (optional),
+and 3.10-to-3.11.md's grant check.
 Rows marked Generic add nothing. A guide's checks still apply: run them
 before its upgrade step.
 

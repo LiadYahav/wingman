@@ -10,7 +10,7 @@ not given Wingman's GitLab account write access to its project is read-only
 in Wingman. Decisions and reasons: ADR-0043. Everything here is under
 `/api/day2`; request bodies refuse unknown fields (422).
 
-**Changed in 3.11 (ADR-0053):** every write here also answers `impact`,
+**Changed in 3.12 (ADR-0053):** every write here also answers `impact`,
 `excluded` and `digest`, and what it deletes or changes on any destination
 is confirmed in `confirm_changes` together with the preview's digest as
 `expected_digest` (409 `plan-changed` when the repo moved since the

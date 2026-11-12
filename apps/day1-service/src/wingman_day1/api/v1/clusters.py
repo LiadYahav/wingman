@@ -48,6 +48,7 @@ from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.clusters import CreateCluster
 from wingman_day1.domain.errors import Day1Error
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.placement import Choice
 from wingman_day1.domain.segments_manager import segments_manager_links
 
 router = APIRouter(prefix="/api/day1/clusters", tags=["clusters"])
@@ -81,6 +82,11 @@ def _create(body: CreateClusterIn) -> CreateCluster:
         spec_version=body.spec_version,
         variables=body.variables,
         addon_overrides=body.addon_overrides or {},
+        placement=(
+            Choice(pick=body.placement.pick, reason=body.placement.reason)
+            if body.placement is not None
+            else None
+        ),
     )
 
 

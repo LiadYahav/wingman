@@ -34,6 +34,8 @@ UPGRADE_DEGRADED_ANNOTATION: Final = "hypershift.openshift.io/nodePoolUpgradeInP
 BMH_LABEL: Final = "agent-install.openshift.io/bmh"
 """On an Agent: its BareMetalHost's name, which is the server's name in server-scan."""
 AGENT_MACHINE_REF_LABEL: Final = "agentMachineRef"
+INFRA_ENV_LABEL: Final = "infraenvs.agent-install.openshift.io"
+"""The InfraEnv (the node type) an Agent was discovered in."""
 """On an Agent: the AgentMachine that took it. A labelled Agent is not free."""
 PROVIDER_ID_PREFIX: Final = "agent://"
 
@@ -127,6 +129,11 @@ class AgentObservation:
     def bmh(self) -> str | None:
         """Its BareMetalHost's name, from the ``agent-install.openshift.io/bmh`` label."""
         return self.labels.get(BMH_LABEL) or None
+
+    @property
+    def infra_env(self) -> str | None:
+        """Its InfraEnv, the node type, from the ``infraenvs.agent-install.openshift.io`` label."""
+        return self.labels.get(INFRA_ENV_LABEL) or None
 
     @property
     def taken_by(self) -> str | None:

@@ -158,6 +158,169 @@ items:
     bmc_host: 192.0.2.106
     macs: ["02:00:00:00:01:0b", "02:00:00:00:01:0c"]
 
+  # ── ocp4-prod-mce-site1-a: free Agents for MCE placement's servers check ──────
+  # Registered to the MCE, in no cluster, each a free Agent in mce.yaml (hubs:):
+  # two Dell R650 and one HP Gen12, all healthy (types no fixture cluster uses).
+  - id: srv_00000000000000000000000000000701
+    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0701
+    vendor: dell
+    model: PowerEdge R650
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Compute
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0701
+    bmc_host: 192.0.2.71
+    macs: ["02:00:00:00:07:01", "02:00:00:00:07:02"]
+  - id: srv_00000000000000000000000000000702
+    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0702
+    vendor: dell
+    model: PowerEdge R650
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Compute
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0702
+    bmc_host: 192.0.2.72
+    macs: ["02:00:00:00:07:03", "02:00:00:00:07:04"]
+  - id: srv_00000000000000000000000000000703
+    name: ocp-hp-gen12-site1-64c-512gb-HPFAKE0703
+    vendor: hp
+    model: ProLiant DL360 Gen12
+    site_id: site1
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: null
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0703
+    bmc_host: 192.0.2.73
+    macs: ["02:00:00:00:07:05", "02:00:00:00:07:06"]
+
+  # ── ocp4-prod-mce-site1-b: spare servers, free Agents (MCE placement, ADR-0050)
+  # Registered to the MCE, in no cluster, each a free Agent in mce.yaml: two Dell
+  # R650, one in maintenance (so one usable), and two HP Gen12.
+  # ocp4-prod-mce-site1-c has no row at all: its spare count is unknown.
+  - id: srv_00000000000000000000000000000601
+    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0601
+    vendor: dell
+    model: PowerEdge R650
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-b
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Compute
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0601
+    bmc_host: 192.0.2.61
+    macs: ["02:00:00:00:06:01", "02:00:00:00:06:02"]
+  - id: srv_00000000000000000000000000000602
+    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0602
+    vendor: dell
+    model: PowerEdge R650
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: {enabled: true, reason: "PSU swap", created_by: ops}
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-b
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R660-Compute
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0602
+    bmc_host: 192.0.2.62
+    macs: ["02:00:00:00:06:03", "02:00:00:00:06:04"]
+  - id: srv_00000000000000000000000000000603
+    name: ocp-hp-gen12-site1-64c-512gb-HPFAKE0603
+    vendor: hp
+    model: ProLiant DL360 Gen12
+    site_id: site1
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-b
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: null
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0603
+    bmc_host: 192.0.2.63
+    macs: ["02:00:00:00:06:05", "02:00:00:00:06:06"]
+  - id: srv_00000000000000000000000000000604
+    name: ocp-hp-gen12-site1-64c-512gb-HPFAKE0604
+    vendor: hp
+    model: ProLiant DL360 Gen12
+    site_id: site1
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED_TO_INVENTORY
+    cluster_name: null
+    mce_name: ocp4-prod-mce-site1-b
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: null
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0604
+    bmc_host: 192.0.2.64
+    macs: ["02:00:00:00:06:07", "02:00:00:00:06:08"]
+
   # ── ocp4-prod-herzi-site1: a failed uninstall run, and a contested node ─────
   - id: srv_00000000000000000000000000000201
     name: ocp-hp-gen11-site1-64c-512gb-HPFAKE0201

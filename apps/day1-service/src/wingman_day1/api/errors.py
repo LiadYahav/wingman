@@ -43,6 +43,7 @@ from wingman_day1.domain.errors import (
     InvalidInputError,
     LoginRefusedError,
     NodeNotInClusterError,
+    PlacementChangedError,
     ResourceNotFoundError,
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
@@ -85,6 +86,8 @@ def to_app_error(error: Day1Error) -> AppError:
     details: dict[str, object] = {}
     if isinstance(error, InvalidInputError) and error.problems:
         details["problems"] = list(error.problems)
+    if isinstance(error, PlacementChangedError):
+        details["pick"] = error.pick
     for domain_type, app_type in _MAPPING:
         if isinstance(error, domain_type):
             return app_type(str(error), details=details)

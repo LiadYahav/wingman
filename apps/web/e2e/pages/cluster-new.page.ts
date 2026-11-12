@@ -17,6 +17,11 @@ export class ClusterNewPage {
   readonly formProblems: Locator;
   readonly reviewButton: Locator;
   readonly reviewDialog: Locator;
+  /** MCE placement (ADR-0050): the environment, the pick, the candidates and the override's reason. */
+  readonly envSelect: Locator;
+  readonly placement: Locator;
+  readonly placementPick: Locator;
+  readonly placementReason: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -34,6 +39,32 @@ export class ClusterNewPage {
     this.reviewButton = page.getByTestId("review-button");
     // By name: an open (or closing) combobox popup is a dialog too
     this.reviewDialog = page.getByRole("dialog", { name: /^Review/ });
+    this.envSelect = page.getByTestId("env-select");
+    this.placement = page.getByTestId("mce-placement");
+    this.placementPick = page.getByTestId("placement-pick");
+    this.placementReason = page.getByTestId("placement-reason");
+  }
+
+  /** prod or prep, with MCE placement on. */
+  async selectEnv(env: "prod" | "prep") {
+    // The radio is visually hidden inside its label, which is what a person clicks
+    const label = env === "prod" ? "Prod" : "Prep";
+    await this.envSelect.locator("label", { hasText: label }).click();
+  }
+
+  /** A candidate MCE's row in the placement. */
+  candidate(mce: string): Locator {
+    return this.page.getByTestId(`placement-candidate-${mce}`);
+  }
+
+  /** The radio that chooses a candidate MCE. */
+  candidateRadio(mce: string): Locator {
+    return this.page.getByRole("radio", { name: mce, exact: true });
+  }
+
+  async selectVersion(version: string) {
+    await this.versionSelect.click();
+    await this.option(version).click();
   }
 
   /** Land on "/" first so the persisted session hydrates, then open the form. */
