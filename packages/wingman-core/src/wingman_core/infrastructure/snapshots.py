@@ -2,8 +2,9 @@
 
 Reading file by file cost one GitLab call per file and one per 100 tree
 entries, and the TTL cache (ADR-0011) forgot it all every few seconds. Here a
-repository costs one call per TTL to see where its branch points, plus one
-archive download when the branch has moved. A commit's files never change, so
+repository costs one call per TTL to see where its branch points, made in
+the background while the known head is answered (ADR-0041), plus one archive
+download when the branch has moved. A commit's files never change, so
 they are kept until the branch moves on. Every page reads one commit per
 repository, never a mix of two.
 
@@ -25,7 +26,7 @@ from typing import Final, Protocol
 
 from wingman_core.domain.errors import GitError, InvalidRequestError, NotFoundError
 from wingman_core.domain.git import EntryKind, RepoArchive, RepoPath
-from wingman_core.infrastructure.cache import TtlCache
+from wingman_core.infrastructure.cache import TtlCache, stale_for
 from wingman_core.ports.gitlab import GitLabPort
 
 logger = logging.getLogger(__name__)
@@ -165,16 +166,22 @@ class RepoSnapshots:
         return f"snapshot-head:{project_id}:{branch}"
 
     async def head(self, project_id: int, branch: str) -> str | None:
-        """The commit ``branch`` points at, ``None`` if it does not exist (an empty repository)."""
+        """The commit ``branch`` points at, ``None`` if it does not exist (an empty repository).
+
+        Past the TTL the known head is answered while one read refreshes it
+        (ADR-0041), so a page does not wait on GitLab each time the TTL ends.
+        """
 
         async def fetch() -> str | None:
             try:
-                return (await self._gitlab.get_branch(project_id, branch)).commit_id
+                commit_id = (await self._gitlab.get_branch(project_id, branch)).commit_id
             except NotFoundError:
                 return None
+            self._prefetch(project_id, commit_id)
+            return commit_id
 
         return await self._cache.get_or_fetch(
-            self._head_key(project_id, branch), fetch, ttl=self._ttl
+            self._head_key(project_id, branch), fetch, ttl=self._ttl, stale=stale_for(self._ttl)
         )
 
     async def files(self, project_id: int, branch: str) -> RepoFiles | None:
@@ -195,6 +202,15 @@ class RepoSnapshots:
             self._loading[key] = task
             task.add_done_callback(lambda _: self._loading.pop(key, None))
         return await asyncio.shield(task)
+
+    def _prefetch(self, project_id: int, commit_id: str) -> None:
+        """Start reading a new head's files now, so the next page does not wait for the download."""
+        key = (project_id, commit_id)
+        if key in self._held or key in self._loading:
+            return
+        task = asyncio.ensure_future(self.at(project_id, commit_id))
+        # A failed download is not kept; the next reader tries again and sees the error
+        task.add_done_callback(lambda t: t.cancelled() or t.exception())
 
     def forget(self, project_id: int) -> None:
         """Look at the project's branches again on the next read (after Wingman wrote to it)."""

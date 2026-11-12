@@ -5,6 +5,7 @@ Files and trees at the default branch come from one archive per commit (ADR-0035
 
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
 from collections.abc import Sequence
 
@@ -151,6 +152,7 @@ async def test_after_the_ttl_only_the_head_is_checked_until_the_branch_moves(
     await repo.read(VALUES)
     clock.now += 31
     await repo.read(VALUES)
+    await asyncio.sleep(0)  # the head is checked in the background (ADR-0041)
     assert (counting.calls["get_branch"], counting.calls["read_archive"]) == (2, 1)
     project = await repo.project()
     await counting.commit(
@@ -159,7 +161,7 @@ async def test_after_the_ttl_only_the_head_is_checked_until_the_branch_moves(
         message="m",
         changes=[FileChange.update(VALUES, "changed: true\n", last_commit_id=None)],
     )
-    clock.now += 31
+    clock.now += 61  # older than a minute: checked before answering
     assert (await repo.read(VALUES)).content == "changed: true\n"
     assert (counting.calls["read_archive"], counting.calls["read_file"]) == (2, 0)
 

@@ -24,7 +24,7 @@ from wingman_core.domain.git import (
     tree_of,
 )
 from wingman_core.domain.merge_request import MergeRequest, MRState
-from wingman_core.infrastructure.cache import TtlCache
+from wingman_core.infrastructure.cache import TtlCache, stale_for
 from wingman_core.infrastructure.snapshots import RepoFiles, RepoSnapshots
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_day1.infrastructure import cache_keys as keys
@@ -65,7 +65,10 @@ class CachedRepository:
     async def project(self) -> Project:
         """See RepoReads.project."""
         project = await self._cache.get_or_fetch(
-            keys.project(self._key), lambda: self._gitlab.get_project(self._project), ttl=self._ttl
+            keys.project(self._key),
+            lambda: self._gitlab.get_project(self._project),
+            ttl=self._ttl,
+            stale=stale_for(self._ttl),
         )
         self._project_id = project.id
         return project

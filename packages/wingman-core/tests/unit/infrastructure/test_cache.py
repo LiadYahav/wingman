@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from wingman_core.infrastructure.cache import TtlCache
+from wingman_core.infrastructure.cache import TtlCache, stale_for
 
 
 class Clock:
@@ -111,3 +111,111 @@ async def test_size_is_bounded() -> None:
 
 async def _value(value: str) -> str:
     return value
+
+
+async def test_a_stale_value_is_answered_while_one_fetch_refreshes_it() -> None:
+    clock = Clock()
+    cache = TtlCache(clock=clock)
+    calls = 0
+    release = asyncio.Event()
+
+    async def fetch() -> int:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            await release.wait()
+        return calls
+
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 1
+    clock.now = 15.0
+    # Expired but within its stale time: answered at once, three times, one refresh
+    assert [await cache.get_or_fetch("k", fetch, ttl=10, stale=20) for _ in range(3)] == [1, 1, 1]
+    await asyncio.sleep(0)
+    assert calls == 2
+    release.set()
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 2
+
+
+async def test_past_its_stale_time_a_value_is_fetched_inline() -> None:
+    clock = Clock()
+    cache = TtlCache(clock=clock)
+    calls = 0
+
+    async def fetch() -> int:
+        nonlocal calls
+        calls += 1
+        return calls
+
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 1
+    clock.now = 30.0
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 2
+
+
+async def test_a_failed_refresh_keeps_the_stale_value_until_its_time_is_over() -> None:
+    clock = Clock()
+    cache = TtlCache(clock=clock)
+    fail = False
+
+    async def fetch() -> str:
+        if fail:
+            raise RuntimeError("GitLab down")
+        return "v"
+
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == "v"
+    fail = True
+    clock.now = 15.0
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == "v"
+    await asyncio.sleep(0)
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == "v"
+    clock.now = 30.0
+    with pytest.raises(RuntimeError, match="GitLab down"):
+        await cache.get_or_fetch("k", fetch, ttl=10, stale=20)
+
+
+async def test_an_invalidated_value_is_never_answered_stale() -> None:
+    clock = Clock()
+    cache = TtlCache(clock=clock)
+    calls = 0
+
+    async def fetch() -> int:
+        nonlocal calls
+        calls += 1
+        return calls
+
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 1
+    clock.now = 15.0
+    cache.invalidate("k")
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 2
+
+
+async def test_a_refresh_across_an_invalidation_is_not_kept() -> None:
+    clock = Clock()
+    cache = TtlCache(clock=clock)
+    calls = 0
+    release = asyncio.Event()
+
+    async def fetch() -> int:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            await release.wait()
+        return calls
+
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 1
+    clock.now = 15.0
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 1  # starts refresh 2
+    await asyncio.sleep(0)
+    cache.invalidate("k")  # a write lands while refresh 2 runs
+    release.set()
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    assert await cache.get_or_fetch("k", fetch, ttl=10, stale=20) == 3
+
+
+def test_stale_time_keeps_every_answer_within_a_minute() -> None:
+    assert stale_for(30) == 30
+    assert stale_for(15) == 45
+    assert stale_for(60) == 0
+    assert stale_for(90) == 0

@@ -19,7 +19,7 @@ from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, FileContent, Project, RepoPath
 from wingman_core.domain.merge_request import MergeRequest, MRState
 from wingman_core.domain.mr_conventions import WINGMAN_LABEL
-from wingman_core.infrastructure.cache import TtlCache
+from wingman_core.infrastructure.cache import TtlCache, stale_for
 from wingman_core.infrastructure.snapshots import RepoFiles, RepoSnapshots
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_day2.domain.day1 import Day1Index, build_day1_index, day1_version_files
@@ -90,7 +90,9 @@ class GitLabSigsRepository:
             projects = await self._gitlab.list_group_projects(self._group)
             return sorted((Team.of(p) for p in projects), key=lambda t: t.name)
 
-        return await self._cached(cache_keys.teams(), fetch)
+        return await self._cache.get_or_fetch(
+            cache_keys.teams(), fetch, ttl=self._ttl, stale=stale_for(self._ttl)
+        )
 
     async def tree(self, team: Team) -> RepoTree:
         """See SigsRepository.tree (an empty repository has an empty tree)."""
@@ -169,6 +171,7 @@ class GitLabDay1Repository:
             cache_keys.day1_project(self._project),
             lambda: self._gitlab.get_project(self._project),
             ttl=self._ttl,
+            stale=stale_for(self._ttl),
         )
         files = await self._snapshots.files(project.id, self._branch)
 

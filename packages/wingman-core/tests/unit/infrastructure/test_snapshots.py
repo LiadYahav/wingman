@@ -92,8 +92,37 @@ async def test_an_unchanged_branch_costs_one_head_check_per_ttl(
     await reader.files(project.id, "main")
     clock.now += 16
     again = await reader.files(project.id, "main")
+    await asyncio.sleep(0)  # the head check runs in the background (ADR-0041)
     assert again is files
     assert gitlab.calls == Counter(get_branch=2, read_archive=1)
+
+
+async def test_past_the_ttl_the_known_head_answers_while_one_check_runs(
+    gitlab: Counting, clock: Clock
+) -> None:
+    project = gitlab.create_project("g/p", FILES)
+    reader = snapshots(gitlab, clock)
+    before = await reader.files(project.id, "main")
+    await change(gitlab, project.id, "README.md", "# new\n")
+    clock.now += 16
+    stale = await asyncio.gather(*(reader.files(project.id, "main") for _ in range(5)))
+    assert all(s is before for s in stale)  # no reader waited on GitLab
+    await asyncio.sleep(0)
+    assert gitlab.calls["get_branch"] == 2  # one check for all five
+    after = await reader.files(project.id, "main")
+    assert after is not None and before is not None and after.commit_id != before.commit_id
+
+
+async def test_a_head_older_than_a_minute_is_checked_before_answering(
+    gitlab: Counting, clock: Clock
+) -> None:
+    project = gitlab.create_project("g/p", FILES)
+    reader = snapshots(gitlab, clock)
+    await reader.files(project.id, "main")
+    await change(gitlab, project.id, "README.md", "# new\n")
+    clock.now += 61
+    files = await reader.files(project.id, "main")
+    assert files is not None and await files.read(RepoPath("README.md")) == "# new\n"
 
 
 async def test_a_moved_branch_is_read_again_at_its_new_head(gitlab: Counting, clock: Clock) -> None:
@@ -102,6 +131,8 @@ async def test_a_moved_branch_is_read_again_at_its_new_head(gitlab: Counting, cl
     before = await reader.files(project.id, "main")
     await change(gitlab, project.id, "README.md", "# new\n")
     clock.now += 16
+    await reader.files(project.id, "main")  # answers the known head, checks it in the background
+    await asyncio.sleep(0)
     after = await reader.files(project.id, "main")
     assert before is not None and after is not None and before.commit_id != after.commit_id
     assert await after.read(RepoPath("README.md")) == "# new\n"
