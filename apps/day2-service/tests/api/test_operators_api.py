@@ -10,6 +10,7 @@ PROBLEM_KEYS = {"type", "title", "status", "detail", "instance", "code", "reques
 PREP = "mce:site1:prep:ocp4-prep-mce-site1-a"
 PROD = "mce:site1:prod:ocp4-prod-mce-site1-a"
 TOKEN = "/api/day2/addons/redbull/dhcp-api-token/defaults/mces"
+PREP_IN_CLUSTER = "sites/site1/prep/mces/ocp4-prep-mce-site1-a/in-cluster"
 EXAMPLE = "/api/day2/addons/redbull/example-chart/defaults/mces"
 
 
@@ -61,7 +62,8 @@ async def test_an_operator_page_shows_each_scope_and_each_destination(
     assert mces["is_default"] and mces["folder"] == "defaults/mces/dhcp-api-token"
     assert "# " in mces["deploy_config"]["text"] and mces["sync_overridden"]
     exclusions = mces["exclusions"]
-    assert exclusions["names"] == ["ocp4-prep-mce-site1-a"] and exclusions["editable"]
+    # Read as the platform reads it; Wingman never writes it (ADR-0053's amendment).
+    assert exclusions["names"] == ["ocp4-prep-mce-site1-a"] and "editable" not in exclusions
     assert exclusions["last_commit_id"] and exclusions["unknown_names"] == []
     states = {d["id"]: (d["state"], d["deployed"], d["app_name"]) for d in mces["destinations"]}
     assert states == {
@@ -85,27 +87,13 @@ async def test_an_operator_page_shows_each_scope_and_each_destination(
     problem(await vic.get("/api/day2/teams/redbull/operators/ghost"), 404, "NOT_FOUND")
 
 
-async def test_excluding_is_previewed_then_confirmed_against_the_digest(
+async def test_values_for_one_mce_are_previewed_then_confirmed_against_the_digest(
     jane: httpx.AsyncClient,
 ) -> None:
-    url = f"{TOKEN}/exclusions"
-    body = {"excluded": [PREP, PROD]}
+    url = f"{TOKEN}/destinations/{PROD}/values"
+    body = {"values": {"note": "x"}}
     plan = await preview(jane, url, body)
-    assert plan["action"] == "set-exclusions" and plan["needs_confirmation"] == [PROD]
-    assert plan["impact"] == [
-        {
-            "cluster": PROD,
-            "name": "ocp4-prod-mce-site1-a",
-            "kind": "mce",
-            "effect": "removed",
-            "app_name": "redbull-in-cluster-dhcp-api-token-deploy",
-            "changes": [],
-            "orphaned": True,
-        }
-    ]
-    assert plan["excluded"] == [PREP, PROD] and plan["reach"] == []
-    (file,) = plan["files"]
-    assert file["path"] == "defaults/mces/exclusions.yaml" and file["previous"] in file["content"]
+    assert plan["action"] == "override-values" and plan["needs_confirmation"] == [PROD]
     refused = problem(await jane.put(url, json=body), 422, "VALIDATION_ERROR")
     assert refused["details"]["rule"] == "confirm-changes"
     stale = problem(
@@ -120,8 +108,16 @@ async def test_excluding_is_previewed_then_confirmed_against_the_digest(
             url, json={**body, "confirm_changes": [PROD], "expected_digest": plan["digest"]}
         )
     )
-    assert change["title"].startswith("[Wingman/Day2] Exclude addon redbull/dhcp-api-token")
+    assert change["title"].startswith("[Wingman/Day2] Override addon redbull/dhcp-api-token values")
     assert change["iid"] == 1 and change["digest"] == plan["digest"]
+
+
+async def test_no_exclusion_or_own_deploy_write_is_served(jane: httpx.AsyncClient) -> None:
+    for url, body in [
+        (f"{TOKEN}/exclusions", {"excluded": [PREP]}),
+        (f"{EXAMPLE}/destinations/{PROD}/deploy", {"deploy": {"project_namespace": "x"}}),
+    ]:
+        assert (await jane.put(url, json=body)).status_code in (404, 405), url
 
 
 async def test_overrides_for_one_destination(jane: httpx.AsyncClient) -> None:
@@ -133,14 +129,6 @@ async def test_overrides_for_one_destination(jane: httpx.AsyncClient) -> None:
     assert values["impact"][0]["changes"] == [
         {"stack": "values", "key": "r", "before": None, "after": 3, "after_null": False}
     ]
-    deploy = await preview(
-        jane, f"{EXAMPLE}/destinations/{PROD}/deploy", {"deploy": {"project_namespace": "pinned"}}
-    )
-    assert deploy["action"] == "override-deploy"
-    assert [f["path"] for f in deploy["files"]] == [
-        "sites/site1/prod/mces/ocp4-prod-mce-site1-a/in-cluster/example-chart/example-chart.yaml",
-        "defaults/mces/exclusions.yaml",
-    ]
     hub = problem(
         await jane.put(
             "/api/day2/addons/redbull/example-chart/defaults/hub/destinations/hub/values",
@@ -149,7 +137,7 @@ async def test_overrides_for_one_destination(jane: httpx.AsyncClient) -> None:
         422,
         "VALIDATION_ERROR",
     )
-    assert hub["details"]["rule"] == "hub-override"
+    assert hub["details"]["rule"] == "override-scope"
     unknown = problem(
         await jane.put(f"{EXAMPLE}/destinations/hub/values", json={"values": {"a": 1}}),
         422,
@@ -158,14 +146,64 @@ async def test_overrides_for_one_destination(jane: httpx.AsyncClient) -> None:
     assert unknown["details"]["rule"] == "destination-unknown"
 
 
-async def test_the_new_writes_are_admin_only_and_refused_for_a_read_only_team(
+async def test_deploy_on_specific_mces_opens_one_mr_per_mce(jane: httpx.AsyncClient) -> None:
+    url = "/api/day2/addons/redbull/cluster-roles/mce-installs"
+    body = {"clusters": [PREP, PROD], "values": {"tier": "hub"}}
+    planned = ok(await jane.post(url, params={"dry_run": "true"}, json=body))
+    assert [(i["cluster"], i["status"]) for i in planned["installs"]] == [
+        (PREP, "planned"),
+        (PROD, "planned"),
+    ]
+    assert planned["installs"][0]["files"] == [
+        {
+            "action": "create",
+            "path": f"{PREP_IN_CLUSTER}/cluster-roles/values.yaml",
+        }
+    ]
+    assert ok(await jane.get("/api/day2/approvals")) == []
+    opened = ok(await jane.post(url, json=body), 201)
+    assert [i["status"] for i in opened["installs"]] == ["opened", "opened"]
+    titles = sorted(i["merge_request"]["title"] for i in opened["installs"])
+    assert titles == [
+        "[Wingman/Day2] Install addon redbull/cluster-roles on ocp4-prep-mce-site1-a",
+        "[Wingman/Day2] Install addon redbull/cluster-roles on ocp4-prod-mce-site1-a",
+    ]
+    again = ok(await jane.post(url, params={"dry_run": "true"}, json=body))
+    assert {i["status"] for i in again["installs"]} == {"planned"}
+    hosted = "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1"
+    bad = problem(await jane.post(url, json={"clusters": [hosted]}), 422, "VALIDATION_ERROR")
+    assert bad["details"]["rule"] == "not-an-mce"
+
+
+async def test_an_installed_mce_is_refused_on_its_own(jane: httpx.AsyncClient) -> None:
+    body = {"clusters": [PROD]}
+    result = ok(
+        await jane.post(
+            "/api/day2/addons/redbull/bmhgen/mce-installs", params={"dry_run": "true"}, json=body
+        )
+    )
+    (install,) = result["installs"]
+    assert (install["status"], install["rule"]) == ("refused", "installed")
+    assert install["merge_request"] is None and install["detail"]
+
+
+async def test_the_writes_are_admin_only_and_refused_for_a_read_only_team(
     jane: httpx.AsyncClient, vic: httpx.AsyncClient
 ) -> None:
-    problem(await vic.put(f"{TOKEN}/exclusions", json={"excluded": []}), 403, "FORBIDDEN")
     problem(
-        await jane.put(
-            "/api/day2/addons/orca/metrics/defaults/upi/exclusions", json={"excluded": []}
+        await vic.put(f"{EXAMPLE}/destinations/{PROD}/values", json={"values": {"a": 1}}),
+        403,
+        "FORBIDDEN",
+    )
+    problem(
+        await vic.post(
+            "/api/day2/addons/redbull/cluster-roles/mce-installs", json={"clusters": [PROD]}
         ),
+        403,
+        "FORBIDDEN",
+    )
+    problem(
+        await jane.post("/api/day2/addons/orca/metrics/mce-installs", json={"clusters": [PROD]}),
         403,
         "TEAM_READ_ONLY",
     )

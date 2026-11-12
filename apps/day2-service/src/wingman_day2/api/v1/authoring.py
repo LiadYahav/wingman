@@ -1,4 +1,4 @@
-"""Add-on authoring: a new one, its team default, fleet defaults and their destinations.
+"""Add-on authoring: a new one, its team default, fleet defaults, and installs on MCEs.
 
 ADR-0043 and ADR-0053. Every write takes ``?dry_run=true``: it runs every
 check, opens nothing, and answers 200 with the plan (its ``impact`` and
@@ -21,11 +21,11 @@ from wingman_day2.api.v1.schemas import (
     AuthoringChangeOut,
     AuthoringPlanOut,
     CreateAddonBody,
-    DestinationDeployBody,
     DestinationValuesBody,
-    ExclusionsBody,
     FleetDefaultOut,
     MakeDefaultBody,
+    MceInstallsBody,
+    MceInstallsOut,
     UpdateFleetDefaultBody,
     UpdateTeamDefaultBody,
 )
@@ -164,33 +164,6 @@ async def update_fleet_default(
     return _answer(result, response, created=False)
 
 
-@router.put("/addons/{team}/{addon}/defaults/{scope}/exclusions")
-async def set_exclusions(
-    team: str,
-    addon: str,
-    scope: DefaultsScope,
-    body: ExclusionsBody,
-    user: AdminUser,
-    day2: Services,
-    response: Response,
-    dry_run: bool = DryRun,
-) -> AuthoringPlanOut | AuthoringChangeOut:
-    """Open an MR making the fleet default skip exactly ``excluded`` (``exclusions.yaml``)."""
-    result = await day2.fleet_targets.set_exclusions(
-        team,
-        addon,
-        scope,
-        body.excluded,
-        user,
-        last_commit_id=body.last_commit_id,
-        confirm_changes=body.confirm_changes,
-        expected_digest=body.expected_digest,
-        dry_run=dry_run,
-        message=body.message,
-    )
-    return _answer(result, response, created=False)
-
-
 @router.put("/addons/{team}/{addon}/defaults/{scope}/destinations/{cluster}/values")
 async def set_destination_values(
     team: str,
@@ -220,30 +193,30 @@ async def set_destination_values(
     return _answer(result, response, created=False)
 
 
-@router.put("/addons/{team}/{addon}/defaults/{scope}/destinations/{cluster}/deploy")
-async def set_destination_deploy(
+@router.post("/addons/{team}/{addon}/mce-installs")
+async def install_on_mces(
     team: str,
     addon: str,
-    scope: DefaultsScope,
-    cluster: str,
-    body: DestinationDeployBody,
+    body: MceInstallsBody,
     user: AdminUser,
     day2: Services,
     response: Response,
     dry_run: bool = DryRun,
-) -> AuthoringPlanOut | AuthoringChangeOut:
-    """Open an MR giving one destination its own deploy config (null takes it back)."""
-    result = await day2.fleet_targets.set_destination_deploy(
+) -> MceInstallsOut:
+    """Deploy the add-on on specific MCEs: one MR per MCE, each in its own folder.
+
+    200 with each MCE planned or refused (dry run), or opened, refused or
+    failed; 201 when at least one MR opened.
+    """
+    result = await day2.changes.install_on_mces(
         team,
         addon,
-        scope,
-        cluster,
-        body.deploy.keys() if body.deploy is not None else None,
+        body.clusters,
         user,
-        last_commit_id=body.last_commit_id,
-        confirm_changes=body.confirm_changes,
-        expected_digest=body.expected_digest,
+        values=body.values,
         dry_run=dry_run,
         message=body.message,
     )
-    return _answer(result, response, created=False)
+    if any(i.result is not None for i in result.installs):
+        response.status_code = status.HTTP_201_CREATED
+    return MceInstallsOut.of(result)

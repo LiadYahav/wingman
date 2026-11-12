@@ -14,6 +14,10 @@ What Wingman writes:
   Application but orphans the workload: it keeps running. If the folder was
   the cluster's last, a ``.gitkeep`` keeps the cluster registered so the
   team's fleet defaults on it are not orphaned too.
+- **deploy on specific MCEs** (ADR-0053's amendment): the install above on
+  each chosen MCE hub's own ``in-cluster/<chart>/``, one MR per MCE, opened a
+  few at a time; each MCE is checked, refused or failed on its own, and
+  nothing is retried. An add-on that is an MCE default is refused (XOR).
 
 Before any MR, the team repo as it would be after the change is linted with
 the platform's rules; a change that adds an error is refused. Nothing is
@@ -24,11 +28,19 @@ access to its project (ADR-0043).
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Final
 
-from wingman_core.domain.errors import GitError, RevisionConflictError
+from wingman_core.domain.errors import (
+    AmbiguousWriteError,
+    GitError,
+    GitUnavailableError,
+    RevisionConflictError,
+)
 from wingman_core.domain.git import FileChange, FileContent, RepoPath, commit_author
 from wingman_core.domain.merge_request import MergeRequest, NewMergeRequest
 from wingman_core.domain.mr_conventions import (
@@ -79,6 +91,11 @@ from wingman_day2.domain.tree import RepoTree
 from wingman_day2.domain.yaml_values import dump_values, parse_values
 from wingman_day2.ports import SigsRepository
 
+logger = logging.getLogger(__name__)
+
+MAX_INSTALL_CONCURRENCY: Final = 4
+"""How many of a deploy-on-MCEs' merge requests are opened at once."""
+
 CHART_NAME = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 """A chart folder becomes part of Application names, so it must be a DNS label."""
 
@@ -117,6 +134,37 @@ class BulkResult:
 
     results: tuple[ChangeResult, ...]
     failed: tuple[tuple[str, GitError], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MceInstall:
+    """One chosen MCE of a deploy on specific MCEs: its plan, its MR, or why not."""
+
+    cluster: ClusterRef
+    changes: tuple[FileChange, ...] = ()
+    notes: tuple[str, ...] = ()
+    findings: tuple[Finding, ...] = ()
+    refused: Day2Error | None = None
+    result: ChangeResult | None = None
+    failed: GitError | None = None
+
+    @property
+    def status(self) -> str:
+        """``refused``, ``failed``, ``opened`` or (a dry run) ``planned``."""
+        if self.refused is not None:
+            return "refused"
+        if self.failed is not None:
+            return "failed"
+        return "opened" if self.result is not None else "planned"
+
+
+@dataclass(frozen=True, slots=True)
+class MceInstalls:
+    """A deploy on specific MCEs: one entry per chosen MCE, in the order asked."""
+
+    team: str
+    chart: str
+    installs: tuple[MceInstall, ...]
 
 
 @dataclass(slots=True)
@@ -290,8 +338,7 @@ class ChangeService:
         raise ChartAlreadyInstalledError(
             f"{chart} is a fleet default of {state.team.name} ({fleet}/), so it is deployed to "
             f"{ref.name} already; a chart folder for it would generate the same app twice (the "
-            f"XOR rule). Tweak it for this cluster in {tweak}, or exclude {ref.exclusion_key} in "
-            f"{layout.exclusions_file(ref.defaults_scope)} first.",
+            f"XOR rule). Its values for this cluster go in {tweak}.",
             details={
                 "rule": "xor",
                 "team": state.team.name,
@@ -418,6 +465,112 @@ class ChangeService:
             raise failed[0][1]
         return BulkResult(tuple(results), tuple(failed))
 
+    async def install_on_mces(
+        self,
+        team: str,
+        chart: str,
+        clusters: Sequence[str],
+        user: User,
+        *,
+        values: Mapping[str, object] | None = None,
+        dry_run: bool = False,
+        message: str | None = None,
+    ) -> MceInstalls:
+        """Install ``chart`` in each chosen MCE hub's own folder: one MR per MCE.
+
+        Each MCE is planned and checked on its own (an MCE default of the chart
+        is refused, the XOR rule; so is one with the chart in its folder
+        already, or one the platform renders nothing for). The rest are opened
+        a few at a time; a write that fails fails that MCE only, and once
+        GitLab does not answer, no more are started. Nothing is retried.
+        """
+        topology = await self._topology.load()
+        state = topology.team(team)
+        await self._access.require_write(state.team)
+        chart = check_chart_name(chart)
+        if not state.repo.tree.is_dir(layout.operators_dir(chart)):
+            raise UnknownChartError(
+                f"team {team} has no operators/{chart}/ to install",
+                details={"team": team, "chart": chart},
+            )
+        keys = list(dict.fromkeys(clusters))
+        if not keys:
+            raise ChangeRefusedError("choose at least one MCE", details={"rule": "no-mce"})
+        planned: list[tuple[MceInstall, _Plan | None]] = []
+        for key in keys:
+            try:
+                ref = ClusterRef.parse(key)
+            except Day2Error as exc:
+                raise ChangeRefusedError(
+                    f"{key!r} is not an MCE id (mce:<site>:<env>:<mce>)",
+                    details={"rule": "not-an-mce", "cluster": key},
+                ) from exc
+            if ref.kind is not ClusterKind.MCE:
+                raise ChangeRefusedError(
+                    f"{key} is not an MCE: deploy on specific MCEs installs on MCE hubs only",
+                    details={"rule": "not-an-mce", "cluster": key},
+                )
+            try:
+                summary = topology.cluster(ref)
+                require_writable(topology, summary)
+                plan = _Plan(state, summary)
+                await self._plan_install(plan, InstallSpec(team, chart, values=dict(values or {})))
+                self._validate(topology, plan)
+            except Day2Error as exc:
+                planned.append((MceInstall(ref, refused=exc), None))
+                continue
+            notes = (*plan.notes, *(_sync_note(leaf) for leaf in plan.leaves))
+            install = MceInstall(ref, tuple(plan.changes), notes, tuple(plan.findings))
+            planned.append((install, plan))
+        if dry_run:
+            return MceInstalls(team, chart, tuple(i for i, _ in planned))
+        limit = asyncio.Semaphore(MAX_INSTALL_CONCURRENCY)
+        unanswered: list[str] = []
+
+        async def one(install: MceInstall, plan: _Plan | None) -> MceInstall:
+            if plan is None:
+                return install
+            async with limit:
+                if unanswered:
+                    return MceInstall(
+                        install.cluster,
+                        install.changes,
+                        install.notes,
+                        install.findings,
+                        failed=GitUnavailableError(
+                            f"not sent: GitLab did not answer for {unanswered[0]}, so no more "
+                            "merge requests were started; deploy on this MCE again"
+                        ),
+                    )
+                try:
+                    result = await self._open(plan, user, Verb.INSTALL, message)
+                except GitError as exc:
+                    if isinstance(exc, GitUnavailableError | AmbiguousWriteError):
+                        unanswered.append(install.cluster.name)
+                    logger.warning(
+                        "install merge request not opened: user=%s team=%s chart=%s cluster=%s "
+                        "error=%s",
+                        user.username,
+                        team,
+                        chart,
+                        install.cluster.id,
+                        type(exc).__name__,
+                        extra={"event": "mce_install_not_opened"},
+                    )
+                    return MceInstall(
+                        install.cluster,
+                        install.changes,
+                        install.notes,
+                        install.findings,
+                        failed=exc,
+                    )
+            return MceInstall(
+                install.cluster, install.changes, install.notes, install.findings, result=result
+            )
+
+        done = await asyncio.gather(*(one(i, p) for i, p in planned))
+        return MceInstalls(team, chart, tuple(done))
+
     # ── update ──────────────────────────────────────────────────────────────
 
     async def update(
@@ -508,7 +661,8 @@ class ChangeService:
         if app.source is AppSource.FLEET_DEFAULT:
             raise ChangeRefusedError(
                 f"{app.chart} reaches {app.ref.name} as a fleet default, which cannot be pinned "
-                "for one cluster; exclude the cluster and install the chart into its folder",
+                "for one cluster: its revision is the default's, the team default's or an "
+                "OCP-version pin's",
                 details={"rule": "fleet-default-pin"},
             )
         own = layers[-1]
@@ -569,14 +723,14 @@ class ChangeService:
         if app.source is AppSource.FLEET_DEFAULT:
             scope = app.ref.defaults_scope
             raise ChangeRefusedError(
-                f"{chart} reaches {summary.ref.name} as a fleet default of {team} ({app.folder}/). "
-                f"To keep it off this cluster, uncheck it in the add-on's {scope} default on the "
-                f"Addons page ({team}/{chart}), which adds {app.ref.exclusion_key} under "
-                f"exclusions.{chart} in {layout.exclusions_file(scope)} (ADR-0053); that orphans "
-                "the workload too (runbook R10).",
+                f"{chart} reaches {summary.ref.name} as a fleet default of {team} ({app.folder}/): "
+                f"it is on every destination of {scope}, and is not removed from one. Its values "
+                "for this cluster are set here, or on the add-on's page on Addons "
+                f"({team}/{chart}). An add-on wanted on some MCEs only is not a default: it is "
+                "deployed on those MCEs (ADR-0053).",
                 details={
                     "rule": "fleet-default-remove",
-                    "path": str(layout.exclusions_file(scope)),
+                    "path": str(app.folder),
                     "addon": f"/addons/{team}/{chart}",
                     # 3.12.0's key; that page now redirects to the add-on's.
                     "operator": f"/teams/{team}/operators/{chart}",

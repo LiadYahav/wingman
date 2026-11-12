@@ -396,14 +396,14 @@ async def test_remove_of_one_of_several_charts_adds_no_gitkeep(
     assert [kind for kind, _ in changes(result)] == [ChangeKind.DELETE, ChangeKind.DELETE]
 
 
-async def test_remove_refuses_a_fleet_default_and_points_at_exclusions(
+async def test_remove_refuses_a_fleet_default_and_points_at_its_page(
     services: Day2Services, jane_user: User
 ) -> None:
     with pytest.raises(ChangeRefusedError) as refused:
         await services.changes.remove(PROD_MCE, "redbull", "dhcp-api-token", jane_user)
     assert refused.value.details == {
         "rule": "fleet-default-remove",
-        "path": "defaults/mces/exclusions.yaml",
+        "path": "defaults/mces/dhcp-api-token",
         "addon": "/addons/redbull/dhcp-api-token",
         "operator": "/teams/redbull/operators/dhcp-api-token",
     }
