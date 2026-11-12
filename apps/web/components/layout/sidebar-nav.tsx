@@ -2,10 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, Network, ShieldAlert } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, Network, ShieldAlert, Link2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIsAdmin } from "@/stores/auth-store";
 
-const navGroups = [
+interface NavItem {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  exact?: boolean;
+  /** Shown to Wingman's admins only: the page's API refuses everyone else (for now, until finer roles). */
+  adminOnly?: boolean;
+}
+
+const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Platform",
     items: [
@@ -14,6 +25,7 @@ const navGroups = [
       { label: "Destinations", href: "/destinations", icon: Network },
       { label: "Flavors", href: "/specs", icon: Layers },
       { label: "Addons", href: "/addons", icon: Package },
+      { label: "Quick Links", href: "/quick-links", icon: Link2, adminOnly: true },
     ],
   },
   {
@@ -33,8 +45,23 @@ const navGroups = [
   },
 ];
 
+const noSubscription = () => () => {};
+
+/**
+ * False during the server render and the hydration pass, true after. The
+ * signed-in user is only known in the browser (the persisted auth store), so
+ * admin-only entries appear once mounted, or the server's HTML and the
+ * client's first render would disagree.
+ */
+function useMounted(): boolean {
+  return useSyncExternalStore(noSubscription, () => true, () => false);
+}
+
 export function SidebarNav() {
   const pathname = usePathname();
+  const isAdmin = useIsAdmin();
+  const mounted = useMounted();
+  const showAdmin = isAdmin && mounted;
   return (
     <nav className="flex flex-col gap-5 px-3 py-3" aria-label="Main">
       {navGroups.map((group) => (
@@ -42,7 +69,7 @@ export function SidebarNav() {
           <p className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
             {group.label}
           </p>
-          {group.items.map((item) => {
+          {group.items.filter((item) => !item.adminOnly || showAdmin).map((item) => {
             const isActive = item.exact
               ? pathname === item.href
               : pathname === item.href || pathname.startsWith(item.href + "/");
