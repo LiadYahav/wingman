@@ -194,6 +194,21 @@ function externalSecretsMces(): ScopePanel {
   );
 }
 
+/** platform/external-secrets on every hosted cluster: one cluster with its own values, and a prod env file. */
+function externalSecretsHosted(catalog: CatalogEntry | null): ScopePanel {
+  const base = generatedPanel("platform", "external-secrets", "hosted-clusters", catalog);
+  const folder = base.folder;
+  return {
+    ...base,
+    env_files: [{ env: "prod", file: repoFile("platform", `${folder}/values-prod.yaml`, "# prod clusters poll less\nrefreshInterval: 5m\n", { refreshInterval: "5m" }) }],
+    destinations: base.destinations.map((d) =>
+      d.id === HOSTED_ID
+        ? { ...d, override: repoFile("platform", `${folder}/values-${d.name}.yaml`, "# a noisy cluster\nreplicaCount: 3\n", { replicaCount: 3 }) }
+        : d,
+    ),
+  };
+}
+
 const MCE_PANEL = (team: string, chart: string) =>
   RICH(team, chart) ? certManagerMces() : team === "platform" && chart === "external-secrets" ? externalSecretsMces() : null;
 
@@ -237,7 +252,12 @@ export function addonDetailOf(team: string, chart: string): AddonDetail | null {
   if (!catalog && fleet.length === 0) return null;
   const access = TEAMS.find((t) => t.name === team);
   const writable = access?.writable ?? true;
-  const scopes = SCOPES.map((scope) => (scope === "mces" && MCE_PANEL(team, chart)) || generatedPanel(team, chart, scope, catalog));
+  const scopes = SCOPES.map(
+    (scope) =>
+      (scope === "mces" && MCE_PANEL(team, chart)) ||
+      (scope === "hosted-clusters" && team === "platform" && chart === "external-secrets" && externalSecretsHosted(catalog)) ||
+      generatedPanel(team, chart, scope, catalog),
+  );
   const op = `operators/${chart}`;
   return {
     team,
@@ -324,15 +344,20 @@ export function addonPreview(body: MergePreviewBody): ValuesPreview {
   const dest = scope.destinations.find((d) => d.id === body.cluster);
   const team = detail.catalog?.default_values ?? {};
   const fleet = scope.values_file.values;
-  const own = body.override_values ?? dest?.override?.values ?? {};
+  const envPath = `${scope.folder}/values-${dest?.env}.yaml`;
+  const editsEnv = body.override_path === envPath;
+  const envFile = scope.env_files.find((e) => e.env === dest?.env)?.file;
+  const envValues = editsEnv ? (body.override_values ?? {}) : (envFile?.values ?? {});
+  const own = (editsEnv ? undefined : body.override_values) ?? dest?.override?.values ?? {};
   const layer = (role: string, path: string, values: Values, exists = true): ValueLayer => ({ role, path, exists, values, last_commit_id: exists ? commitOf(body.team) : null, problem: null });
   const layers = [
     layer("team", `operators/${body.addon}/values.yaml`, team),
     layer("fleet", scope.values_file.path, fleet),
+    layer("fleet-env", envPath, envValues, Object.keys(envValues).length > 0),
     layer("fleet-target", dest?.override?.path ?? `${scope.folder}/values-${dest?.name}.yaml`, own, Object.keys(own).length > 0),
   ];
-  const merged = merge(merge(team, fleet), own);
-  const provenance = merge(merge(roles(team, "team"), roles(fleet, "fleet")), roles(own, "fleet-target"));
+  const merged = merge(merge(merge(team, fleet), envValues), own);
+  const provenance = merge(merge(merge(roles(team, "team"), roles(fleet, "fleet")), roles(envValues, "fleet-env")), roles(own, "fleet-target"));
   return {
     merged,
     provenance: provenance as ValuesPreview["provenance"],
@@ -395,6 +420,43 @@ function addonPlan(method: string, url: URL, body: Values, version: number): Aut
   const detail = team && chart ? addonDetailOf(team, chart) : null;
   const confirmOf = (i: DestinationImpact[]) => i.filter((x) => x.effect !== "added").map((x) => x.cluster);
   const finish = (plan: Omit<AuthoringPlan, "digest">): AuthoringPlan => ({ ...plan, digest:`digest-v${version}-${plan.action}-${chart ?? ""}-${scope ?? ""}` });
+
+  if (detail && scope && p[8] === "envs") {
+    const env = p[9];
+    const values = body.values as Values | null;
+    const panelOf = detail.scopes.find((x) => x.scope === scope) as ScopePanel;
+    const current = panelOf.env_files.find((e) => e.env === env)?.file;
+    const path = current?.path ?? `${panelOf.folder}/values-${env}.yaml`;
+    const changes: AdoptionChange[] = Object.entries(values ?? current?.values ?? {}).map(([key, v]) => ({
+      stack: "values",
+      key,
+      before: values ? (current?.values[key] ?? null) : v,
+      after: values ? v : null,
+    }));
+    const reached = panelOf.destinations.filter((d) => d.env === env && d.state === "default");
+    const imp = reached.map((d) => impact(detail, d.id, "changed", changes));
+    return finish({
+      team,
+      action: "override-values",
+      chart,
+      scope,
+      title: values
+        ? `[Wingman/Day2] Override addon ${team}/${chart} values for ${env} (fleet default on ${LABEL[scope]})`
+        : `[Wingman/Day2] Override addon ${team}/${chart} values for ${env}: back to the fleet default (fleet default on ${LABEL[scope]})`,
+      files: [
+        values
+          ? file(current?.exists ? "update" : "create", path, Object.entries(values).map(([k, v]) => `${k}: ${String(v)}`).join("\n") + "\n", current?.text ?? null)
+          : file("delete", path, null, current?.text ?? ""),
+      ],
+      reach: reached.map((d) => d.id),
+      adopted: [],
+      needs_confirmation: confirmOf(imp),
+      warnings: [],
+      notes: [],
+      impact: imp,
+      excluded: [],
+    });
+  }
 
   if (detail && scope && p[8] === "destinations") {
     const cluster = p[9];
@@ -532,6 +594,7 @@ export async function mockAddonDetail(
   await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+(\?.*)?$/, write);
   await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+(\?.*)?$/, write);
   await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/destinations\/[^/?]+\/values(\?.*)?$/, write);
+  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+\/envs\/[^/?]+\/values(\?.*)?$/, write);
   await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/mce-installs(\?.*)?$/, (r) => {
     const url = new URL(r.request().url());
     const dryRun = url.searchParams.get("dry_run") === "true";

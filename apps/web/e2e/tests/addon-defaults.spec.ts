@@ -1,8 +1,9 @@
 /**
  * An add-on's page on Addons (ADR-0053), mocked: its team default and fleet
- * defaults, per-MCE values, deploying it on specific MCEs (one install MR per
- * MCE, with remove), the hosted-clusters panel (the default only), and a
- * destination's value override with the effective values before and after.
+ * defaults, values per env and per destination (MCEs, hosted clusters, UPI)
+ * with the effective values before and after, deploying it on specific MCEs
+ * (one install MR per MCE, with remove), and the hosted-clusters panel (no
+ * picks: a hosted cluster's own add-ons are its flavor's).
  * No exclusion is offered (ADR-0053's amendment). Every write is previewed, confirmed, and sent with the preview's
  * `needs_confirmation` and `digest`; a 409 plan-changed shows the new plan
  * (docs/notes/2026-11-12-operators-page-api.md).
@@ -10,7 +11,7 @@
 
 import { test, expect, type Page } from "@playwright/test";
 import { go, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
-import { mockDay2World } from "../fixtures/day2";
+import { HOSTED_ID, HOSTED_NAME, mockDay2World } from "../fixtures/day2";
 import { READ_ONLY_REASON, TEAMS, mockAuthoring } from "../fixtures/authoring";
 import {
   CERT_MANAGER_YAML,
@@ -110,11 +111,13 @@ test.describe("An add-on's page", () => {
     // An MCE default is not also installed per MCE (the XOR rule).
     await expect(mces(page).getByTestId("deploy-on-mces-blocked")).toContainText("the XOR rule");
 
-    // Hosted clusters: the default only; their own add-ons are their flavor's.
+    // Hosted clusters, not a default here: no rows; their own add-ons are their flavor's.
     const hosted = page.getByTestId("scope-hosted-clusters");
-    await expect(hosted.getByTestId("hosted-clusters-note")).toContainText("come from its flavor and the create form");
+    await expect(hosted.getByTestId("hosted-clusters-note")).toContainText("comes from its flavor and the create form");
     await expect(hosted.getByRole("link", { name: "Flavors" })).toHaveAttribute("href", "/specs");
     await expect(hosted.locator("[data-testid^=destination-]")).toHaveCount(0);
+    // Values per env on the MCE default.
+    await expect(mces(page).getByTestId("env-prep")).toContainText("the default's values");
   });
 
   test("an edit of the team default is confirmed and sent with the preview's digest", async ({ page }) => {
@@ -233,6 +236,62 @@ test.describe("A destination's overrides", () => {
     expect(realWrites()[0].body).toMatchObject({ values: null, last_commit_id: "platform-repo-1" });
   });
 
+});
+
+test.describe("A hosted-cluster default, like an MCE one", () => {
+  test.beforeEach(async ({ page }) => setUp(page));
+  const hosted = (page: Page) => page.getByTestId("scope-hosted-clusters");
+
+  test("has values per env and per cluster, and no deploying on specific clusters", async ({ page }) => {
+    await go(page, "/addons/platform/external-secrets");
+    await expect(hosted(page).getByTestId("env-prod")).toContainText("values-prod.yaml");
+    await expect(hosted(page).getByTestId(`destination-${HOSTED_NAME}`)).toContainText(`values-${HOSTED_NAME}.yaml`);
+    await expect(hosted(page).getByRole("button", { name: `Edit values override on ${HOSTED_NAME}` })).toBeEnabled();
+    await expect(hosted(page).getByTestId("deploy-on-mces")).toHaveCount(0);
+    await expect(hosted(page).getByTestId("hosted-clusters-note")).toContainText("no deploying it on specific hosted clusters here");
+  });
+
+  test("an env override shows the effective values before and after, and sends the env file", async ({ page }) => {
+    await go(page, "/addons/platform/external-secrets");
+    await hosted(page).getByRole("button", { name: "Edit values for prod" }).click();
+    const form = formDialog(page);
+    await expect(form.getByRole("heading", { name: "external-secrets values for prod" })).toBeVisible();
+    await form.getByRole("button", { name: "YAML", exact: true }).click();
+    await form.getByLabel("Contents of defaults/hosted-clusters/external-secrets/values-prod.yaml").fill("refreshInterval: 10m\n");
+    const refresh = form.getByTestId("effective-refreshInterval");
+    await expect(refresh).toContainText("5m");
+    await expect(refresh).toContainText("10m");
+    await expect(refresh).toContainText("fleet · env");
+    // The preview edits the env file on a destination of that env.
+    await expect
+      .poll(() => requests.previews.some((p) => p.override_path === "defaults/hosted-clusters/external-secrets/values-prod.yaml"))
+      .toBe(true);
+    await form.getByRole("button", { name: "Preview changes" }).click();
+    const plan = review(page);
+    await expect(plan.getByTestId("authoring-plan")).toBeVisible();
+    await plan.getByRole("checkbox", { name: /as listed/ }).first().click();
+    await plan.getByRole("button", { name: /Create MR/ }).click();
+    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("values for prod");
+    const real = realWrites()[0];
+    expect(real.method).toBe("PUT");
+    expect(real.path).toBe("/api/day2/addons/platform/external-secrets/defaults/hosted-clusters/envs/prod/values");
+    expect(real.body).toMatchObject({ values: { refreshInterval: "10m" }, expected_digest: expect.stringContaining("override-values") });
+  });
+
+  test("a hosted cluster's own values are written like an MCE's", async ({ page }) => {
+    await go(page, "/addons/platform/external-secrets");
+    await hosted(page).getByRole("button", { name: `Edit values override on ${HOSTED_NAME}` }).click();
+    const form = formDialog(page);
+    await expect(form.getByRole("heading", { name: `external-secrets values on ${HOSTED_NAME}` })).toBeVisible();
+    await form.getByRole("radio", { name: /Delete it/ }).check();
+    await form.getByRole("button", { name: "Preview changes" }).click();
+    const plan = review(page);
+    await plan.getByRole("checkbox", { name: /as listed/ }).first().click();
+    await plan.getByRole("button", { name: /Create MR/ }).click();
+    const real = realWrites()[0];
+    expect(decodeURIComponent(real.path)).toBe(`/api/day2/addons/platform/external-secrets/defaults/hosted-clusters/destinations/${HOSTED_ID}/values`);
+    expect(real.body).toMatchObject({ values: null });
+  });
 });
 
 test.describe("Deploy on specific MCEs", () => {
