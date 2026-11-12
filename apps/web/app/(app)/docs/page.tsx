@@ -944,8 +944,9 @@ upi      sites/{site}/{env}/upi/{cluster}/{chart}/`}
             </li>
             <li>
               Its <strong>Defaults &amp; overrides</strong> page has one panel per scope (hosted clusters, MCEs, the hub,
-              UPI clusters): make it a default there, edit that default, choose which destinations it deploys to, and
-              give one destination its own values or its own deploy config.
+              UPI clusters): make it a default there and edit that default; give one MCE or one UPI cluster its own
+              values; and <strong>Deploy on specific MCEs</strong>, for an add-on wanted on some MCEs only. A hosted
+              cluster&apos;s own add-ons come from its flavor and the create form.
             </li>
             <li>
               Installing it on one cluster, and configuring or removing it there, is on that cluster&apos;s page (its{" "}
@@ -1032,17 +1033,13 @@ cluster               …/{cluster}/{chart}/values.yaml
             of that kind the team&apos;s repo has a folder for. It appears as <strong>fleet default</strong>; editing it
             writes <InlineCode>defaults/{"{scope}"}/{"{chart}"}/values-{"{cluster}"}.yaml</InlineCode>. It cannot be
             removed or pinned for one cluster from the cluster&apos;s page, nor installed into a cluster folder as well
-            (that would generate the app twice). Do it from the add-on instead: on its <strong>Defaults &amp; overrides</strong>{" "}
-            page (from the Addons page), the scope&apos;s panel lists every destination with a{" "}
-            <strong>deployed by this default</strong> checkbox. Unticking one excludes it
-            (<InlineCode>defaults/{"{scope}"}/exclusions.yaml</InlineCode>, edited in place): its Application is
-            deleted and, with <InlineCode>prune: false</InlineCode>, the workload keeps running, unmanaged, so the
-            preview has you confirm exactly those destinations. From the same row, <strong>Override values</strong>{" "}
-            gives one destination its own values file (the effective values before and after are shown), and{" "}
-            <strong>Override deploy</strong> gives it its own deploy config (a revision, repourl, path or namespace):
-            it is excluded from the default and deployed from its own folder, and the Application keeps its name. An
-            excluded fleet default is listed as such on the cluster&apos;s page, and can then be installed into the
-            cluster&apos;s own folder.
+            (that would generate the app twice). On the add-on&apos;s <strong>Defaults &amp; overrides</strong> page (from
+            the Addons page), the MCE and UPI panels list every destination of the default with{" "}
+            <strong>Override values</strong>: that destination&apos;s own values file (the effective values before and
+            after are shown). Wingman does not exclude destinations from a default: an add-on wanted on some MCEs only
+            is not a default, it is deployed on those MCEs (<strong>Deploy on specific MCEs</strong>: one install merge
+            request per MCE, into its own <InlineCode>in-cluster/{"{chart}"}/</InlineCode>). A repo&apos;s existing{" "}
+            <InlineCode>exclusions.yaml</InlineCode> is read and shown as it is.
           </p>
 
           <h3 className="text-base font-semibold mb-3">The chart&apos;s ⋮ menu</h3>

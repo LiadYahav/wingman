@@ -29,11 +29,6 @@ export interface DestinationRef {
   kind: string;
 }
 
-/** `defaults/<scope>/exclusions.yaml` for a fleet default's folder `defaults/<scope>/<chart>`. */
-function exclusionsFile(folder: string): string {
-  return `${folder.split("/").slice(0, -1).join("/")}/exclusions.yaml`;
-}
-
 /** The Layers tab while the preview loads: rows shaped like `ValueLayers`'. */
 function LayersSkeleton() {
   return (
@@ -287,12 +282,12 @@ export function InstalledChartCard({
                     <p className="flex gap-2 px-3 py-2 text-xs text-muted-foreground">
                       <Unplug className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>
-                        A fleet default is not removed per cluster: keep it off {destination.name} from{" "}
+                        A fleet default is not removed per cluster: it is on every destination of its kind. Its values
+                        here are edited above; the default itself is on{" "}
                         <Link href={addonHref(chart.team, chart.name)} className="font-medium text-primary hover:underline">
                           its add-on page
-                        </Link>{" "}
-                        (Defaults: untick {destination.name}), which edits{" "}
-                        <code className="break-all">{exclusionsFile(chart.path)}</code>.
+                        </Link>
+                        .
                       </span>
                     </p>
                   ) : (

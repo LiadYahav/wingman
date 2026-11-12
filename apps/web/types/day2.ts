@@ -721,8 +721,6 @@ export interface ScopeExclusions {
   /** Names in it that are no destination of the team. */
   unknown_names: string[];
   /** False: Wingman cannot edit it in place (`problem` says why). */
-  editable: boolean;
-  problem: string | null;
   last_commit_id: string | null;
 }
 
@@ -771,15 +769,6 @@ export interface AddonDetail {
   warnings: Finding[];
 }
 
-/** `PUT /api/day2/addons/{team}/{addon}/defaults/{scope}/exclusions`: the full excluded set, by id. */
-export interface SetExclusionsBody {
-  excluded: string[];
-  /** `ScopePanel.exclusions.last_commit_id`. */
-  last_commit_id: string | null;
-  confirm_changes: string[];
-  expected_digest: string | null;
-  message: string | null;
-}
 
 /** `PUT .../defaults/{scope}/destinations/{cluster}/values`: `values-<name>.yaml`; `null` deletes it. */
 export interface DestinationValuesBody {
@@ -791,20 +780,31 @@ export interface DestinationValuesBody {
   message: string | null;
 }
 
-/** An own deploy config: only the keys that are set are written. */
-export interface DeployOverride {
-  /** A branch of the chart repo: an emergency pin. */
-  target_revision: string | null;
-  repourl: string | null;
-  path: string | null;
-  project_namespace: string | null;
-}
-
-/** `PUT .../defaults/{scope}/destinations/{cluster}/deploy`: `deploy: null` removes the own deploy config. */
-export interface DestinationDeployBody {
-  deploy: DeployOverride | null;
-  last_commit_id: string | null;
-  confirm_changes: string[];
-  expected_digest: string | null;
+/** `POST /api/day2/addons/{team}/{addon}/mce-installs`: deploy it on specific MCEs, one MR per MCE. */
+export interface MceInstallsBody {
+  /** MCE ids, `mce:<site>:<env>:<mce>`. */
+  clusters: string[];
+  /** Each MCE's `in-cluster/<chart>/values.yaml`. */
+  values: Record<string, unknown>;
   message: string | null;
 }
+
+/** One chosen MCE: planned (a dry run), opened, refused (with the rule) or failed. */
+export interface MceInstall {
+  cluster: string;
+  name: string;
+  status: "planned" | "opened" | "refused" | "failed";
+  files: FileChange[];
+  notes: string[];
+  warnings: Finding[];
+  merge_request: Day2MergeRequest | null;
+  detail: string | null;
+  rule: string | null;
+}
+
+export interface MceInstalls {
+  team: string;
+  chart: string;
+  installs: MceInstall[];
+}
+

@@ -82,15 +82,11 @@ export const day2Api = {
   /** One add-on: its files, OCP-version pins and one panel per fleet scope. */
   addonDetail: (team: string, chart: string) =>
     `/api/day2/teams/${encodeURIComponent(team)}/addons/${encodeURIComponent(chart)}`,
-  /** PUT: the full set of the scope's destinations the fleet default skips. */
-  exclusions: (team: string, chart: string, scope: FleetScope, dryRun = false) =>
-    `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/exclusions${dry(dryRun)}`,
   /** PUT: one destination's `values-<name>.yaml` of a fleet default. */
   destinationValues: (team: string, chart: string, scope: FleetScope, cluster: string, dryRun = false) =>
     `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/destinations/${encodeURIComponent(cluster)}/values${dry(dryRun)}`,
-  /** PUT: one destination's own deploy config (the platform's carve-out). */
-  destinationDeploy: (team: string, chart: string, scope: FleetScope, cluster: string, dryRun = false) =>
-    `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/destinations/${encodeURIComponent(cluster)}/deploy${dry(dryRun)}`,
+  /** POST: deploy the add-on on specific MCEs, one install MR per MCE (ADR-0053's amendment). */
+  mceInstalls: (team: string, chart: string, dryRun = false) => `${addon(team, chart)}/mce-installs${dry(dryRun)}`,
 };
 
 /**

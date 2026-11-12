@@ -225,6 +225,7 @@ export default function AddonPage() {
     isAdmin: access.isAdmin,
     readOnlyReason: access.readOnlyReason,
     onOpened: (change: AuthoringChange) => setOpened({ verb: VERB[change.action] ?? "Update", results: [change], failed: [] }),
+    onChanges: setOpened,
   };
 
   const notFound = query.error && problemOf(query.error).status === 404;
@@ -288,8 +289,8 @@ export default function AddonPage() {
                 Defaults
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                A fleet default deploys {name} to every destination of one kind that {team}&apos;s repo registers. Choose which
-                ones, override values for one, or give one its own deploy config.
+                A fleet default deploys {name} to every destination of one kind that {team}&apos;s repo registers. An MCE or a UPI
+                cluster can get values of its own; to have {name} on some MCEs only, deploy it on those MCEs.
               </p>
             </div>
             {sortedScopes(detail.scopes).map((panel) => (

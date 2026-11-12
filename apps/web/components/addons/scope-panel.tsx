@@ -1,25 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Cloud, Layers, Pencil, Plus, RotateCcw, Server, ServerCog, SlidersHorizontal, Unplug, Wrench } from "lucide-react";
-import { day2Api, syncSummary } from "@/lib/day2";
+import Link from "next/link";
+import { AlertTriangle, Cloud, Layers, Pencil, Plus, Server, ServerCog, SlidersHorizontal } from "lucide-react";
+import { syncSummary } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { AuthoringReview, useAuthoringWrite } from "@/components/addons/authoring-flow";
+import type { OpenedChanges } from "@/components/addons/change-result";
 import { EditFleetDefaultDialog, MakeDefaultDialog } from "@/components/addons/default-dialogs";
-import { WriteError } from "@/components/addons/file-preview";
-import { DestinationDeployDialog } from "@/components/addons/destination-deploy-dialog";
 import { DestinationValuesDialog } from "@/components/addons/destination-values-dialog";
-import { excludedIds, groupDestinations, lockedReason, nameOf, stateStyle } from "@/components/addons/destinations";
+import { groupDestinations, stateStyle } from "@/components/addons/destinations";
+import { DeployOnMces } from "@/components/addons/mce-installs";
 import { RepoFileView } from "@/components/addons/repo-file";
-import type { AuthoringChange, FleetScope, AddonDetail, ScopeDestination, ScopePanel, SetExclusionsBody } from "@/types/day2";
+import type { AuthoringChange, FleetScope, AddonDetail, ScopeDestination, ScopePanel } from "@/types/day2";
 
 /** Write actions on the add-on: offered to admins, disabled with the reason while the team is read-only. */
 export interface AddonWrites {
   isAdmin: boolean;
   readOnlyReason: string | null;
+  /** An authoring MR opened. */
   onOpened: (change: AuthoringChange) => void;
+  /** Install or removal MRs opened (and the MCEs that did not get one). */
+  onChanges: (changes: OpenedChanges) => void;
 }
 
 const SCOPE_ICON: Record<FleetScope, typeof Server> = {
@@ -35,6 +37,9 @@ const SCOPE_TITLE: Record<FleetScope, string> = {
   hub: "Hub",
   upi: "UPI clusters",
 };
+
+/** The scopes whose destinations get values of their own here (the hub is one; hosted clusters' are their flavor's). */
+const VALUES_SCOPES: readonly FleetScope[] = ["mces", "upi"];
 
 function WriteButton({
   writes,
@@ -66,43 +71,23 @@ function WriteButton({
   );
 }
 
-type RowDialog = { kind: "values" | "deploy"; destination: ScopeDestination } | null;
-
 function DestinationRow({
-  panel,
   destination: d,
-  checkbox,
   writes,
-  onDialog,
+  onValues,
 }: {
-  panel: ScopePanel;
   destination: ScopeDestination;
-  /** The "deployed by this default" checkbox, or `null` where there is none (the hub, not a default). */
-  checkbox: { checked: boolean; disabledBy: string | null; onChange: (on: boolean) => void; changed: boolean } | null;
   writes: AddonWrites;
-  onDialog: (dialog: RowDialog) => void;
+  onValues: (destination: ScopeDestination) => void;
 }) {
   const style = stateStyle(d.state);
-  const locked = lockedReason(d);
-  const overrides = panel.is_default && panel.scope !== "hub";
   const overrideExists = Boolean(d.override?.exists);
-  const canOverrideValues = overrideExists || ["default", "own-deploy", "duplicate"].includes(d.state);
-  const canOwnDeploy = d.renders && ["default", "excluded", "own-deploy", "duplicate"].includes(d.state);
+  const canOverride = overrideExists || ["default", "duplicate", "own-deploy"].includes(d.state);
   return (
     <li
-      className={cn(
-        "flex flex-wrap items-start gap-x-3 gap-y-1.5 px-3 py-2.5 text-xs",
-        d.state === "duplicate" && "bg-status-error/5",
-        checkbox?.changed && (checkbox.checked ? "bg-status-ready/5" : "bg-status-error/5"),
-      )}
+      className={cn("flex flex-wrap items-start gap-x-3 gap-y-1.5 px-3 py-2.5 text-xs", d.state === "duplicate" && "bg-status-error/5")}
       data-testid={`destination-${d.name}`}
     >
-      {checkbox && (
-        <label className="mt-0.5 flex items-center" title={checkbox.disabledBy ?? undefined}>
-          <Checkbox checked={checkbox.checked} onCheckedChange={checkbox.onChange} disabled={Boolean(checkbox.disabledBy)} />
-          <span className="sr-only">Deployed by this default on {d.name}</span>
-        </label>
-      )}
       <div className="min-w-0 flex-1 basis-56 space-y-0.5">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-semibold">{d.name}</span>
@@ -112,11 +97,6 @@ function DestinationRow({
           {overrideExists && (
             <span className="rounded-full bg-chart-5/12 px-2 py-px text-[10px] font-medium text-chart-5" title={d.override?.path}>
               values-{d.name}.yaml
-            </span>
-          )}
-          {checkbox?.changed && (
-            <span className={cn("text-[10px] font-semibold uppercase", checkbox.checked ? "text-status-ready-fg" : "text-status-error-fg")}>
-              {checkbox.checked ? "will be included" : "will be excluded"}
             </span>
           )}
         </p>
@@ -131,112 +111,42 @@ function DestinationRow({
             {style.description}
           </p>
         )}
-        {locked && checkbox && <p className="text-muted-foreground">{locked}</p>}
         {d.override_shared_with.length > 0 && (
           <p className="text-muted-foreground" data-testid="shared-name">
-            Same name as {d.override_shared_with.join(", ")}: {checkbox ? "excluded or included together, and " : ""}one values file for
-            all of them.
+            Same name as {d.override_shared_with.join(", ")}: one values file for all of them.
           </p>
         )}
       </div>
-      {overrides && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          <WriteButton
-            writes={writes}
-            onClick={() => onDialog({ kind: "values", destination: d })}
-            label={`${overrideExists ? "Edit" : "Add"} values override on ${d.name}`}
-            disabledBy={canOverrideValues ? null : "No app of the default here to override"}
-          >
-            <SlidersHorizontal className="h-3 w-3" />
-            {overrideExists ? "Values" : "Override values"}
-          </WriteButton>
-          <WriteButton
-            writes={writes}
-            onClick={() => onDialog({ kind: "deploy", destination: d })}
-            label={`${d.own_deploy?.exists ? "Edit own" : "Set an own"} deploy config on ${d.name}`}
-            disabledBy={canOwnDeploy ? null : "The platform renders nothing here"}
-          >
-            <Wrench className="h-3 w-3" />
-            {d.own_deploy?.exists ? "Own deploy" : "Override deploy"}
-          </WriteButton>
-        </div>
-      )}
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <WriteButton
+          writes={writes}
+          onClick={() => onValues(d)}
+          label={`${overrideExists ? "Edit" : "Add"} values override on ${d.name}`}
+          disabledBy={canOverride ? null : "No app of the default here to override"}
+        >
+          <SlidersHorizontal className="h-3 w-3" />
+          {overrideExists ? "Values" : "Override values"}
+        </WriteButton>
+      </div>
     </li>
   );
 }
 
 /**
- * Which destinations the default deploys to (ADR-0053): every destination of
- * the scope the team's repo registers, a checkbox each. Saving writes the
- * full excluded set to `defaults/<scope>/exclusions.yaml` in place. Excluding
- * deletes the Application and orphans the workload (`prune: false`): the
- * page says so beside the checkbox, and the plan has the user confirm
- * exactly those destinations.
+ * Where the default deploys, one row per destination of the scope the team's
+ * repo registers, and each destination's own values (`values-<name>.yaml`,
+ * ADR-0053). Wingman does not choose destinations by exclusion: a repo's
+ * existing `exclusions.yaml` is read and shown, never written.
  */
-function DestinationsEditor({ detail, panel, writes }: { detail: AddonDetail; panel: ScopePanel; writes: AddonWrites }) {
-  const initial = excludedIds(panel);
-  const [excluded, setExcluded] = useState<Set<string>>(initial);
-  const [dialog, setDialog] = useState<RowDialog>(null);
+function DefaultDestinations({ detail, panel, writes }: { detail: AddonDetail; panel: ScopePanel; writes: AddonWrites }) {
+  const [editing, setEditing] = useState<ScopeDestination | null>(null);
   const exclusions = panel.exclusions;
-  const editable = writes.isAdmin && !writes.readOnlyReason && Boolean(exclusions?.editable) && panel.is_default;
-  const write = useAuthoringWrite<SetExclusionsBody>({
-    method: "put",
-    url: (dryRun) => day2Api.exclusions(detail.team, detail.name, panel.scope, dryRun),
-    onOpened: (change) => {
-      writes.onOpened(change);
-      setExcluded(initial);
-    },
-  });
-
-  const newlyExcluded = [...excluded].filter((id) => !initial.has(id));
-  const newlyIncluded = [...initial].filter((id) => !excluded.has(id));
-  const dirty = newlyExcluded.length > 0 || newlyIncluded.length > 0;
-  const showBoxes = panel.is_default && exclusions !== null;
-
-  /**
-   * `exclusions.yaml` names destinations by name, so two of the scope with the
-   * same name are excluded together or not at all (the service's rule
-   * `exclusion-shared`): a checkbox moves its namesakes too.
-   */
-  function toggle(d: ScopeDestination, on: boolean) {
-    const ids = [d.id, ...d.override_shared_with.filter((id) => panel.destinations.some((x) => x.id === id))];
-    setExcluded((prev) => {
-      const next = new Set(prev);
-      for (const id of ids) {
-        if (on) next.delete(id);
-        else next.add(id);
-      }
-      return next;
-    });
-  }
-
-  function body(): SetExclusionsBody {
-    // The full set, in the panel's order: the others are included.
-    return {
-      excluded: panel.destinations.filter((d) => excluded.has(d.id)).map((d) => d.id),
-      last_commit_id: exclusions?.last_commit_id ?? panel.last_commit_id,
-      confirm_changes: [],
-      expected_digest: null,
-      message: null,
-    };
-  }
-
-  const groups = groupDestinations(panel.destinations);
   return (
-    <div className="space-y-3">
-      {exclusions && !exclusions.editable && (
-        <p className="flex items-start gap-1.5 rounded-lg border border-status-warning/30 bg-status-warning/8 px-3 py-2 text-xs text-status-warning-fg" role="note">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-          <span className="min-w-0 break-words">
-            Wingman cannot edit <code>{exclusions.path}</code> in place{exclusions.problem ? `: ${exclusions.problem}` : "."} Edit it by hand.
-          </span>
-        </p>
-      )}
-      {exclusions && exclusions.unknown_names.length > 0 && (
-        <p className="text-xs text-status-warning-fg">
-          <code>{exclusions.path}</code> also names {exclusions.unknown_names.join(", ")}, which{" "}
-          {exclusions.unknown_names.length === 1 ? "is" : "are"} no destination of {detail.team}: kept as written (lint{" "}
-          <code>exclusions-unknown-target</code>).
+    <div className="space-y-2">
+      {exclusions && exclusions.names.length > 0 && (
+        <p className="text-xs text-muted-foreground" data-testid="exclusions-note">
+          The repo&apos;s <code>{exclusions.path}</code> keeps it off {exclusions.names.join(", ")}: Wingman reads that file and does
+          not edit it.
         </p>
       )}
       {panel.destinations.length === 0 ? (
@@ -244,92 +154,25 @@ function DestinationsEditor({ detail, panel, writes }: { detail: AddonDetail; pa
           {detail.team}&apos;s repo registers no {panel.noun}: a default here reaches nothing yet.
         </p>
       ) : (
-        <div className="space-y-2">
-          {groups.map(([group, items]) => (
-            <div key={group} className="overflow-hidden rounded-lg border" role="group" aria-label={group}>
-              <p className="border-b bg-muted/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{group}</p>
-              <ul className="divide-y">
-                {items.map((d) => {
-                  const locked = lockedReason(d);
-                  const checkbox = showBoxes
-                    ? {
-                        // Nothing is deployed where the platform renders nothing, excluded or not.
-                        checked: !excluded.has(d.id) && d.state !== "not-rendered",
-                        disabledBy: locked ?? (editable ? null : writes.readOnlyReason ?? exclusions?.problem ?? (writes.isAdmin ? "Wingman cannot edit the exclusions file in place" : "Only admins edit exclusions")),
-                        onChange: (on: boolean) => toggle(d, on),
-                        changed: initial.has(d.id) !== excluded.has(d.id),
-                      }
-                    : null;
-                  return <DestinationRow key={d.id} panel={panel} destination={d} checkbox={checkbox} writes={writes} onDialog={setDialog} />;
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+        groupDestinations(panel.destinations).map(([group, items]) => (
+          <div key={group} className="overflow-hidden rounded-lg border" role="group" aria-label={group}>
+            <p className="border-b bg-muted/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{group}</p>
+            <ul className="divide-y">
+              {items.map((d) => (
+                <DestinationRow key={d.id} destination={d} writes={writes} onValues={setEditing} />
+              ))}
+            </ul>
+          </div>
+        ))
       )}
-
-      {newlyExcluded.length > 0 && (
-        <div className="space-y-1 rounded-lg border border-status-error/40 bg-status-error/8 p-3 text-xs" role="note" data-testid="exclude-warning">
-          <p className="flex items-start gap-2 font-semibold text-status-error-fg">
-            <Unplug className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-            Excluding deletes the Application on {newlyExcluded.map((id) => nameOf(panel, id)).join(", ")}: the workload keeps
-            running, unmanaged.
-          </p>
-          <p className="text-foreground/90">
-            Leaf apps have <code>prune: false</code>, so ArgoCD orphans what {detail.name} deployed there. The preview lists each
-            one, and you confirm them before the merge request opens.
-          </p>
-        </div>
-      )}
-      {newlyIncluded.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Including {newlyIncluded.map((id) => nameOf(panel, id)).join(", ")} generates the app there again; the new Application
-          adopts what is still running.
-        </p>
-      )}
-      {showBoxes && editable && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {dirty && (
-            <button type="button" onClick={() => setExcluded(initial)} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 gap-1.5")}>
-              <RotateCcw className="h-3 w-3" />
-              Reset
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => write.preview(body())}
-            disabled={!dirty || write.previewing}
-            title={dirty ? undefined : "Tick or untick a destination first"}
-            className={cn(buttonVariants({ size: "sm" }), "h-7")}
-          >
-            {write.previewing ? "Checking…" : "Preview exclusions"}
-          </button>
-        </div>
-      )}
-      <WriteError error={write.previewError} />
-      <AuthoringReview write={write} title={`Which ${panel.noun} get ${detail.team}/${detail.name}`} />
-
-      {dialog?.kind === "values" && (
+      {editing && (
         <DestinationValuesDialog
           team={detail.team}
           chart={detail.name}
           panel={panel}
-          destination={dialog.destination}
+          destination={editing}
           open
-          onOpenChange={(next) => !next && setDialog(null)}
-          readOnlyReason={writes.readOnlyReason}
-          onOpened={writes.onOpened}
-        />
-      )}
-      {dialog?.kind === "deploy" && (
-        <DestinationDeployDialog
-          team={detail.team}
-          chart={detail.name}
-          catalog={detail.catalog}
-          panel={panel}
-          destination={dialog.destination}
-          open
-          onOpenChange={(next) => !next && setDialog(null)}
+          onOpenChange={(next) => !next && setEditing(null)}
           readOnlyReason={writes.readOnlyReason}
           onOpened={writes.onOpened}
         />
@@ -338,16 +181,31 @@ function DestinationsEditor({ detail, panel, writes }: { detail: AddonDetail; pa
   );
 }
 
+function HostedClustersNote({ detail }: { detail: AddonDetail }) {
+  return (
+    <p className="rounded-lg border border-dashed px-3 py-2.5 text-xs text-muted-foreground" data-testid="hosted-clusters-note">
+      This is the default for every hosted cluster. A hosted cluster&apos;s own add-ons, and their values, come from its flavor and
+      the create form (
+      <Link href="/specs" className="font-medium text-primary hover:underline">
+        Flavors
+      </Link>
+      ), and are managed on each cluster&apos;s page; {detail.name} is not chosen per hosted cluster here.
+    </p>
+  );
+}
+
 /**
- * The add-on on one fleet scope (ADR-0053): whether it is a default there;
- * if not, making it one; if so, its values and sync override, which
- * destinations it deploys to, and each destination's overrides.
+ * The add-on on one fleet scope (ADR-0053): whether it is a default there,
+ * making it one or editing it. Below it, by scope: per MCE and per UPI
+ * cluster, its own values; on MCEs, deploying it on specific ones (an
+ * install per MCE); hosted clusters take the default only, their own add-ons
+ * being their flavor's.
  */
 export function ScopePanelCard({ detail, panel, writes }: { detail: AddonDetail; panel: ScopePanel; writes: AddonWrites }) {
   const [dialog, setDialog] = useState<"make" | "edit" | null>(null);
   const Icon = SCOPE_ICON[panel.scope] ?? Layers;
   const reach = panel.destinations.filter((d) => d.state === "default" || d.state === "duplicate").length;
-  const skipped = panel.destinations.filter((d) => d.state === "excluded" || d.state === "own-deploy").length;
+  const perDestination = VALUES_SCOPES.includes(panel.scope);
   return (
     <section
       className={cn("space-y-4 rounded-xl border bg-card p-4 shadow-sm sm:p-5", panel.is_default && "border-chart-5/30")}
@@ -373,7 +231,7 @@ export function ScopePanelCard({ detail, panel, writes }: { detail: AddonDetail;
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {panel.is_default
-              ? `Deployed to ${reach} of the ${panel.destinations.length} ${panel.noun} ${detail.team}'s repo registers${skipped ? ` · ${skipped} excluded` : ""} · ${syncSummary(panel.sync)}${panel.sync_overridden ? " (set by the default)" : ""}`
+              ? `Deployed to ${reach} of the ${panel.destinations.length} ${panel.noun} ${detail.team}'s repo registers · ${syncSummary(panel.sync)}${panel.sync_overridden ? " (set by the default)" : ""}`
               : `${detail.team}'s repo registers ${panel.destinations.length} ${panel.noun}: making it a default there deploys it to each one.`}
           </p>
         </div>
@@ -412,9 +270,11 @@ export function ScopePanelCard({ detail, panel, writes }: { detail: AddonDetail;
         </details>
       )}
 
-      <DestinationsEditor key={`${panel.last_commit_id}|${panel.exclusions?.last_commit_id ?? ""}`} detail={detail} panel={panel} writes={writes} />
+      {panel.scope === "hosted-clusters" && <HostedClustersNote detail={detail} />}
+      {perDestination && panel.is_default && <DefaultDestinations detail={detail} panel={panel} writes={writes} />}
+      {panel.scope === "mces" && <DeployOnMces detail={detail} panel={panel} writes={writes} />}
 
-      {panel.unregistered.length > 0 && (
+      {panel.scope === "upi" && panel.unregistered.length > 0 && (
         <div className="space-y-1 text-xs" data-testid={`unregistered-${panel.scope}`}>
           <p className="font-semibold uppercase tracking-wide text-muted-foreground">Other {panel.noun} Wingman knows</p>
           <ul className="space-y-0.5">
