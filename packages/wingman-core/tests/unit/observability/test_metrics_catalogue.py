@@ -16,12 +16,15 @@ from wingman_core.domain.errors import (
     PermissionDeniedError,
 )
 from wingman_core.domain.git import RepoPath
+from wingman_core.domain.merge_request import MergeRequestRef
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import (
     OTHER,
     Outcome,
     PlacementDecision,
+    RolloutOutcome,
+    RolloutTrigger,
     WingmanMetrics,
     method_label,
     outcome_of,
@@ -38,6 +41,8 @@ EXPECTED = {
     "wingman_dependency_requests": ("counter", {"dependency", "operation", "outcome"}),
     "wingman_dependency_request_duration_seconds": ("histogram", {"dependency", "operation"}),
     "wingman_placement_decisions": ("counter", {"decision"}),
+    "wingman_rollout_runs": ("counter", {"trigger"}),
+    "wingman_rollout_merge_requests": ("counter", {"outcome"}),
 }
 
 
@@ -92,6 +97,43 @@ def test_placement_decisions_are_a_fixed_set() -> None:
     assert sample(metrics, name, decision="override") == 1.0
     assert sample(metrics, name, decision="refused") == 1.0
     assert sample(metrics, name, decision=OTHER) == 1.0
+
+
+def test_every_rollout_series_exists_at_zero_and_counts() -> None:
+    metrics = make_metrics()
+    for trigger in RolloutTrigger:
+        assert sample(metrics, "wingman_rollout_runs_total", trigger=trigger) == 0.0
+    for outcome in RolloutOutcome:
+        assert sample(metrics, "wingman_rollout_merge_requests_total", outcome=outcome) == 0.0
+    metrics.observe_rollout_run(RolloutTrigger.WEBHOOK)
+    metrics.observe_rollout_merge_request(RolloutOutcome.OPENED)
+    metrics.observe_rollout_merge_request(RolloutOutcome.OPENED)
+    assert sample(metrics, "wingman_rollout_runs_total", trigger="webhook") == 1.0
+    assert sample(metrics, "wingman_rollout_merge_requests_total", outcome="opened") == 2.0
+    assert sample(metrics, "wingman_rollout_merge_requests_total", outcome="failed") == 0.0
+
+
+def test_the_docs_list_every_rollout_label_value() -> None:
+    text = DOCS.read_text(encoding="utf-8")
+    for name, values in (
+        ("wingman_rollout_runs_total", RolloutTrigger),
+        ("wingman_rollout_merge_requests_total", RolloutOutcome),
+    ):
+        [row] = [line for line in text.splitlines() if line.startswith(f"| `{name}` |")]
+        meaning = row.split(" | ")[-1]
+        assert {value.value for value in values} <= set(re.findall(r"`([a-z_]+)`", meaning)), name
+
+
+async def test_a_comment_is_counted_as_a_gitlab_operation() -> None:
+    metrics = make_metrics()
+    labels = {"dependency": "gitlab", "operation": "comment_on_merge_request"}
+    assert sample(metrics, "wingman_dependency_requests_total", **labels, outcome="ambiguous") == 0
+    fake = InMemoryGitLab()
+    project = fake.create_project("g/p", {"a.yaml": "a: 1\n"})
+    gitlab = InstrumentedGitLab(fake, metrics)
+    with pytest.raises(NotFoundError):
+        await gitlab.comment_on_merge_request(MergeRequestRef(project.id, 1), "x")
+    assert sample(metrics, "wingman_dependency_requests_total", **labels, outcome="not_found") == 1
 
 
 @pytest.mark.parametrize(

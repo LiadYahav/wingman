@@ -15,8 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState } from "@/components/common/empty-state";
-import { DriftBadge } from "@/components/clusters/drift-badge";
-import { ClusterDriftPanel } from "@/components/clusters/cluster-drift";
+import { FlavorStateBadge } from "@/components/clusters/drift-badge";
+import { ClusterDriftPanel, updateOf } from "@/components/clusters/cluster-drift";
 import { SyncDialog } from "@/components/clusters/sync-dialog";
 import { DeleteWorkflowPanel } from "@/components/clusters/delete-workflow-panel";
 import { ClusterNodes } from "@/components/clusters/cluster-nodes";
@@ -226,7 +226,11 @@ function ClusterDetailContent() {
     return () => controller.abort();
   }, [name, mce, path, statusOn, queryClient]);
 
-  const [activeTab, setActiveTab] = useState("overview");
+  // `?tab=drift` opens a tab (the flavor's rollout links a cluster that needs a decision to its drift)
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get("tab");
+    return tab && ["overview", "nodes", "yaml", "drift", "history"].includes(tab) ? tab : "overview";
+  });
   const [editYaml, setEditYaml] = useState("");
   const [editBase, setEditBase] = useState<{ yaml: string; lastCommitId: string } | null>(null);
   const isEditing = editBase !== null;
@@ -386,7 +390,7 @@ function ClusterDetailContent() {
           ) : (
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight break-all">{name}</h1>
-              {drift && drift.state !== "not_linked" && <DriftBadge state={drift.state} error={drift.error} />}
+              {drift && drift.state !== "not_linked" && <FlavorStateBadge row={{ ...drift, update: updateOf(drift) }} />}
             </div>
           )}
         </div>

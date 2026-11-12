@@ -208,7 +208,9 @@ Changes since the legacy services:
 | `GET` | `/api/day1/specs/{name}/clusters` | Clusters created from the spec, with their drift |
 | `GET` | `/api/day1/specs/{name}/drift` | Drift of every cluster created from the spec |
 | `POST` | `/api/day1/specs/{name}/import/preview` | Each picked existing cluster against the spec: whether it can join (`ready`, `relink`, `linked`, `refused`) and what will show as drift |
-| `POST` | `/api/day1/specs/{name}/import` | Link up to 50 existing clusters to the spec: one MR that writes only each file's flavor header |
+| `POST` | `/api/day1/specs/{name}/import` | Link up to 50 existing clusters to the spec: one MR per cluster that writes only its file's flavor header, all checked before any opens (ADR-0044) |
+| `GET` | `/api/day1/specs/{name}/rollout` | The rollout of the spec's newest version, one MR per cluster that follows it, from GitLab's state; reading it starts a run when work is pending (ADR-0044) |
+| `POST` | `/api/day1/specs/{name}/rollout` | Reconcile now: open the cluster MRs that are missing, failed ones included (admins; 202) |
 
 #### Approvals and audit
 
@@ -221,6 +223,7 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 | `PUT` | `/api/day1/approvals/{iid}` | Commit edited files on top of the MR's branch (never a force-push) |
 | `POST` | `/api/day1/approvals/{iid}/approve` | Approve and merge the reviewed commit (403 for the requester, 409 if the branch moved) |
 | `POST` | `/api/day1/approvals/{iid}/reject` | Close the MR without merging |
+| `GET` | `/api/day1/approvals/{iid}/rollout` | What merging a spec's MR will open: one MR per cluster, and the clusters that roll nodes, lose configs or need a decision (ADR-0044) |
 | `GET` | `/api/day1/audit/commits` | Newest commits on both default branches (`?per_page=&page=`) |
 | `GET` | `/api/day1/audit/merge-requests` | Newest Wingman MRs in both projects, any state |
 | `GET` | `/api/day1/audit/commits/{repo}/{sha}/diff` | What one commit changed |

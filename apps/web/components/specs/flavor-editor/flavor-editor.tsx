@@ -14,7 +14,7 @@ import { configProblems } from "@/components/machine-configs/config-list-editor"
 import { asNewFile, computeLineDiff } from "@/lib/diff";
 import { defaultConfigs, useMachineConfigs } from "@/lib/machine-configs";
 import { toastMrOpened } from "@/lib/mr-toast";
-import { specApiPath, specNameProblem, specVersionProblem } from "@/lib/specs";
+import { editVersionProblem, specApiPath, specNameProblem, specVersionProblem } from "@/lib/specs";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { cn } from "@/lib/utils";
 import type { ClusterSpec, MRDetail, SpecDetail, TemplateField } from "@/types";
@@ -161,9 +161,10 @@ export function FlavorEditor({
     () =>
       draftIssues(draft, catalog, {
         name: isNew ? specNameProblem : undefined,
-        version: specVersionProblem,
+        // An edit needs a new version: each cluster is measured against the one it is on (ADR-0044)
+        version: spec ? (v) => editVersionProblem(v, spec.metadata.version) : specVersionProblem,
       }),
-    [draft, catalog, isNew]
+    [draft, catalog, isNew, spec]
   );
 
   const save = useMutation({

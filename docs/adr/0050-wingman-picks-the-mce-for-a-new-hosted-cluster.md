@@ -180,7 +180,7 @@ source.
 ## Consequences
 
 - The MCE token needs `list` on `nodes` and `pods`, cluster-wide (the chart
-  README's ClusterRole; `docs/upgrade/3.9-to-3.10.md`). Until it has it, that
+  README's ClusterRole; `docs/upgrade/3.10-to-3.11.md`). Until it has it, that
   MCE is never picked; if no MCE of a site and env has it, nobody can create
   there. Grant first, then upgrade. The servers check lists `agents` across
   the hub, which the 3.4 ClusterRole already grants.

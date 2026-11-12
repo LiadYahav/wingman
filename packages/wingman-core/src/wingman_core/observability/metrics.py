@@ -118,6 +118,37 @@ class GitLabOperation(StrEnum):
     APPROVE_MERGE_REQUEST = "approve_merge_request"
     MERGE_MERGE_REQUEST = "merge_merge_request"
     CLOSE_MERGE_REQUEST = "close_merge_request"
+    COMMENT_ON_MERGE_REQUEST = "comment_on_merge_request"
+
+
+class RolloutTrigger(StrEnum):
+    """What started a flavor rollout run (day1, ADR-0044)."""
+
+    MERGE = "merge"
+    """Wingman merged the flavor's MR."""
+    WEBHOOK = "webhook"
+    """The specs project's webhook."""
+    RECONCILE = "reconcile"
+    """An admin pressed Reconcile."""
+    READ = "read"
+    """The rollout status was read with work pending."""
+
+
+class RolloutOutcome(StrEnum):
+    """What a flavor rollout did with one cluster's merge request (day1, ADR-0044)."""
+
+    OPENED = "opened"
+    """A cluster's rollout MR opened."""
+    RECOVERED = "recovered"
+    """An MR opened for a branch an earlier run left without one."""
+    SUPERSEDED = "superseded"
+    """An open MR to an older version was closed for the new one."""
+    FAILED = "failed"
+    """GitLab refused the write."""
+    UNCONFIRMED = "unconfirmed"
+    """GitLab did not confirm the write (ADR-0006); checked next run."""
+    NOT_SENT = "not_sent"
+    """Not started because GitLab stopped answering in this run."""
 
 
 def outcome_of(error: BaseException | None) -> Outcome:
@@ -191,6 +222,22 @@ class WingmanMetrics:
         for operation in GitLabOperation:
             for outcome in ALERTED_OUTCOMES:
                 self.dependency_requests.labels(Dependency.GITLAB, operation, outcome)
+        self.rollout_runs = Counter(
+            "wingman_rollout_runs_total",
+            "Flavor rollout runs, by what started them.",
+            ["trigger"],
+            registry=registry,
+        )
+        self.rollout_merge_requests = Counter(
+            "wingman_rollout_merge_requests_total",
+            "What flavor rollouts did with each cluster's merge request.",
+            ["outcome"],
+            registry=registry,
+        )
+        for trigger in RolloutTrigger:
+            self.rollout_runs.labels(trigger)
+        for rollout_outcome in RolloutOutcome:
+            self.rollout_merge_requests.labels(rollout_outcome)
 
     def observe_http(self, *, method: str, route: str, status: int, seconds: float) -> None:
         """Record one served request. ``route`` must be a template, never a raw path."""
@@ -209,3 +256,11 @@ class WingmanMetrics:
         """Record one call to an external system."""
         self.dependency_requests.labels(dependency, operation, outcome).inc()
         self.dependency_request_duration.labels(dependency, operation).observe(seconds)
+
+    def observe_rollout_run(self, trigger: RolloutTrigger) -> None:
+        """Record one flavor rollout run starting."""
+        self.rollout_runs.labels(trigger).inc()
+
+    def observe_rollout_merge_request(self, outcome: RolloutOutcome) -> None:
+        """Record what a rollout did with one cluster's merge request."""
+        self.rollout_merge_requests.labels(outcome).inc()

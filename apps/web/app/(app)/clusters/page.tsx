@@ -11,29 +11,37 @@ import { useIsAdmin } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
-import { DriftBadge } from "@/components/clusters/drift-badge";
+import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
 import { clusterHref } from "@/lib/clusters";
+import { flavorDisplayState, type FlavorDisplayState } from "@/lib/flavor-state";
 import { day2Api, day2Keys } from "@/lib/day2";
-import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftState, DriftSummaryItem } from "@/types";
+import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftSummaryItem } from "@/types";
 
 type SortField = "name" | "site" | "spec" | "mastertag" | "created_at";
 type SortDir = "asc" | "desc";
-type DriftFilter = "all" | DriftState;
+/** A display state (lib/flavor-state), with both update states under `update`. */
+type DriftFilter = "all" | "in_sync" | "update" | "drifted" | "unknown" | "not_linked";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 const DRIFT_FILTERS: { value: DriftFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "in_sync", label: "In sync" },
+  { value: "update", label: "Update" },
   { value: "drifted", label: "Drifted" },
   { value: "unknown", label: "Unknown" },
-  { value: "not_linked", label: "Not linked" },
+  { value: "not_linked", label: "No flavor" },
 ];
+
+/** The filter a display state counts under: an open update MR and an update both are an update. */
+function filterOf(state: FlavorDisplayState): Exclude<DriftFilter, "all"> {
+  return state === "update_available" || state === "update_mr_open" ? "update" : state;
+}
 
 /** The owner numbers a cluster file carries (§13 of the flavors v2 API note), in the file's order. */
 const OWNER_KEYS = ["merkaz", "anaf", "mador"] as const;
@@ -205,12 +213,10 @@ export default function ClustersPage() {
     (c: ClusterStatus): DriftSummaryItem | null => {
       const item = driftMap.get(c.name);
       if (item) return item;
-      if (!c.spec_name) return { name: c.name, site: c.site, mce: c.mce, state: "not_linked", is_drifted: false, error: null };
+      const row = { name: c.name, site: c.site, mce: c.mce, spec_name: c.spec_name, spec_version: c.spec_version, update: null };
+      if (!c.spec_name) return { ...row, state: "not_linked", is_drifted: false, error: null };
       if (driftSummary === undefined && !driftFailed) return null; // still loading
-      return {
-        name: c.name, site: c.site, mce: c.mce, state: "unknown", is_drifted: null,
-        error: driftFailed ? "The drift summary could not be loaded" : null,
-      };
+      return { ...row, state: "unknown", is_drifted: null, error: driftFailed ? "The drift summary could not be loaded" : null };
     },
     [driftMap, driftSummary, driftFailed]
   );
@@ -259,11 +265,11 @@ export default function ClustersPage() {
   }, [clusters]);
 
   const driftCounts = useMemo(() => {
-    const counts: Record<DriftFilter, number> = { all: 0, in_sync: 0, drifted: 0, unknown: 0, not_linked: 0 };
+    const counts: Record<DriftFilter, number> = { all: 0, in_sync: 0, update: 0, drifted: 0, unknown: 0, not_linked: 0 };
     for (const c of clusters ?? []) {
       counts.all += 1;
       const d = driftOf(c);
-      if (d) counts[d.state] += 1;
+      if (d) counts[filterOf(flavorDisplayState(d))] += 1;
     }
     return counts;
   }, [clusters, driftOf]);
@@ -300,7 +306,12 @@ export default function ClustersPage() {
       );
     }
     if (siteFilter !== "all") list = list.filter((c) => c.site === siteFilter);
-    if (driftFilter !== "all") list = list.filter((c) => driftOf(c)?.state === driftFilter);
+    if (driftFilter !== "all") {
+      list = list.filter((c) => {
+        const d = driftOf(c);
+        return d !== null && filterOf(flavorDisplayState(d)) === driftFilter;
+      });
+    }
     for (const key of OWNER_KEYS) {
       const wanted = ownerFilter[key];
       if (wanted !== null) list = list.filter((c) => ownerOf(c, key) === (wanted === NO_OWNER ? "" : wanted));
@@ -640,7 +651,7 @@ export default function ClustersPage() {
                               </div>
                             </td>
                             <td className="px-3 py-3">
-                              {drift ? <DriftBadge state={drift.state} error={drift.error} /> : <Skeleton className="h-5 w-16" />}
+                              {drift ? <FlavorStateBadge row={drift} /> : <Skeleton className="h-5 w-16" />}
                             </td>
                           </tr>
                         </Fragment>

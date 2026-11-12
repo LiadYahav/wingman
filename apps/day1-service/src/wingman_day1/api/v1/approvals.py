@@ -3,6 +3,10 @@
 An MR is ``(repo, iid)``. ``repo`` defaults to ``day1`` (this is the day1
 service), which is what the audit page's expand calls without one; the
 legacy route required it and answered 422.
+
+Merging a flavor's MR gives the flavor a new version: Wingman then opens one
+MR per cluster that follows it (ADR-0044), and before the merge the review
+page shows what that will open (``GET /{iid}/rollout``).
 """
 
 from __future__ import annotations
@@ -11,16 +15,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
+from wingman_core.domain.mr_conventions import ResourceType
 from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_day1.api.deps import Context
 from wingman_day1.api.v1.schemas import (
     ApprovalDetailOut,
+    ApprovalRolloutOut,
     ApproveIn,
     FileDiffOut,
     MRDetailOut,
     UpdateMRIn,
 )
-from wingman_day1.application.approvals import RepoKey
+from wingman_day1.application.approvals import Change, RepoKey
+from wingman_day1.application.rollouts import RolloutPreview
+from wingman_day1.domain.rollout import RolloutTrigger
 
 router = APIRouter(prefix="/api/day1/approvals", tags=["approvals"])
 
@@ -63,8 +71,44 @@ async def update_approval(
 async def approve(
     iid: Iid, body: ApproveIn, context: Context, user: AdminUser, repo: Repo = RepoKey.DAY1
 ) -> MRDetailOut:
-    """Approve and merge the reviewed commit. 403 for the requester; 409 if the branch moved."""
-    return MRDetailOut.of(await context.approvals.approve(repo, iid, sha=body.sha, approver=user))
+    """Approve and merge the reviewed commit. 403 for the requester; 409 if the branch moved.
+
+    A flavor's MR, merged, starts its rollout: one MR per cluster that follows it.
+    """
+    change = await context.approvals.approve(repo, iid, sha=body.sha, approver=user)
+    flavor = _flavor(change)
+    if flavor is not None:
+        context.rollouts.start(flavor, RolloutTrigger.MERGE)
+    return MRDetailOut.of(change)
+
+
+@router.get("/{iid}/rollout")
+async def approval_rollout(
+    iid: Iid, context: Context, user: CurrentUser, repo: Repo = RepoKey.DAY1
+) -> ApprovalRolloutOut:
+    """What merging this MR opens: one MR per cluster of the flavor it gives a new version."""
+    change, _ = await context.approvals.get(repo, iid)
+    flavor = _flavor(change)
+    metadata = change.pending.metadata
+    if flavor is None or metadata is None:
+        return ApprovalRolloutOut.of(
+            RolloutPreview(False, "this merge request does not change a flavor", "", None, None)
+        )
+    return ApprovalRolloutOut.of(
+        await context.rollouts.preview_merge_request(
+            flavor, action=metadata.action, sha=change.pending.merge_request.sha
+        )
+    )
+
+
+def _flavor(change: Change) -> str | None:
+    """The flavor a specs MR creates, updates or deletes; ``None`` for any other MR."""
+    metadata = change.pending.metadata
+    if change.repo is not RepoKey.SPECS or metadata is None:
+        return None
+    if metadata.resource_type is not ResourceType.SPEC or not metadata.resource_name:
+        return None
+    return metadata.resource_name
 
 
 @router.post("/{iid}/reject")

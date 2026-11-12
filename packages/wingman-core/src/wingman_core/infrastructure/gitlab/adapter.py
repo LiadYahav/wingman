@@ -362,6 +362,12 @@ class GitLabHttpAdapter:
             raise NotMergeableError(f"merge request {ref} is {current.state}")
         return _merge_request(await self._write("PUT", _mr_path(ref), {"state_event": "close"}))
 
+    async def comment_on_merge_request(self, ref: MergeRequestRef, body: str) -> None:
+        """See GitLabPort.comment_on_merge_request: ``POST .../merge_requests/{iid}/notes``."""
+        if not body.strip():
+            raise InvalidRequestError("a comment needs a body")
+        await self._write("POST", f"{_mr_path(ref)}/notes", {"body": body})
+
     # ── HTTP ────────────────────────────────────────────────────────────────
 
     async def _get(self, path: str, params: Mapping[str, str] | None = None) -> JSON:

@@ -1,7 +1,8 @@
 import { Page, Route } from "@playwright/test";
 import { mockAddons, mockSpecs } from "./addons";
 import type {
-  ClusterNetworkRead, ClusterNodes, MRDetail, MachineConfigs, Mce, NodePoolNodes, PoolNode, Problem, ErrorCode, ServerRecord, WorkflowRun,
+  ApprovalRollout, ClusterNetworkRead, ClusterNodes, MRDetail, MachineConfigs, Mce, MergeRequestLink, NodePoolNodes, PoolNode,
+  Problem, ErrorCode, RolloutCluster, RolloutStatus, ServerRecord, WorkflowRun,
 } from "../../types";
 
 // Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/schemas.py,
@@ -463,6 +464,75 @@ export async function mockDashboardApis(page: Page) {
   // No team list unless a test sets one (mockDay2World): every team counts as writable (ADR-0043)
   await page.route("**/api/day2/teams", (route: Route) => json(route, []));
   await page.route("**/api/day2/fleet-defaults**", (route: Route) => json(route, []));
+  // A flavor's rollout follows no cluster unless a test says otherwise (mockRollout, ADR-0044)
+  await page.route("**/api/day1/specs/*/rollout", (route: Route) => {
+    const spec = decodeURIComponent(new URL(route.request().url()).pathname.split("/").at(-2) ?? "");
+    return json(route, mockRollout({ spec_name: spec }), route.request().method() === "POST" ? 202 : 200);
+  });
+  // A flavor MR's merge opens nothing unless a test says otherwise (mockApprovalRollout)
+  await page.route("**/api/day1/approvals/*/rollout**", (route: Route) => json(route, mockApprovalRollout()));
+}
+
+// ── A flavor's rollout, one MR per cluster (docs/notes/2026-11-12-flavor-rollout-api.md §2) ──
+
+const NO_COUNTS: RolloutStatus["counts"] = {
+  on_version: 0, merge_request_open: 0, pending: 0, needs_decision: 0, declined: 0, failed: 0, unknown: 0,
+};
+
+/** `GET /api/day1/specs/{name}/rollout`: `counts` are counted from `clusters` unless given. */
+export function mockRollout(overrides: Partial<RolloutStatus> = {}): RolloutStatus {
+  const clusters = overrides.clusters ?? [];
+  const counts = { ...NO_COUNTS };
+  for (const c of clusters) counts[c.state] += 1;
+  return {
+    spec_name: "agent-baseline",
+    version: "1.0.0",
+    running: false,
+    last_run: null,
+    counts,
+    clusters,
+    ...overrides,
+  };
+}
+
+/** One cluster of a rollout, on site1's MCE, on v1.0.0, with an MR for `merge_request_open` and `declined`. */
+export function mockRolloutCluster(name: string, state: RolloutCluster["state"], overrides: Partial<RolloutCluster> = {}): RolloutCluster {
+  const mce = "ocp4-prod-mce-site1-a";
+  return {
+    name,
+    site: "site1",
+    mce,
+    path: `sites/site1/mces/${mce}/hostedClusters/${name}.yaml`,
+    from_version: "1.0.0",
+    state,
+    merge_request: null,
+    reasons: [],
+    ...overrides,
+  };
+}
+
+/** A day1 MR as a rollout or an update links it. */
+export function mockMergeRequestLink(iid: number, title: string): MergeRequestLink {
+  return { repo: "day1", iid, title, web_url: `https://gitlab.example.com/gitops-day1/platform-config/-/merge_requests/${iid}` };
+}
+
+/** `GET /api/day1/approvals/{iid}/rollout?repo=specs`: by default an MR that gives no flavor a new version. */
+export function mockApprovalRollout(overrides: Partial<ApprovalRollout> = {}): ApprovalRollout {
+  return {
+    applies: false,
+    reason: "the merge request gives no existing flavor a new version",
+    spec_name: "",
+    version: null,
+    current_version: null,
+    following: 0,
+    opens: 0,
+    already_on_version: 0,
+    needs_decision: [],
+    rolls_nodes: [],
+    removes_configs: [],
+    adds_addons: [],
+    ...overrides,
+  };
 }
 
 async function mockDay2Api(page: Page) {

@@ -166,17 +166,22 @@ async def test_a_deleted_spec_makes_drift_unknown(
     assert drift.error == "spec 'agent-standard' no longer exists"
 
 
-async def test_an_unreadable_spec_makes_drift_unknown(
+async def test_an_unreadable_newest_spec_still_measures_the_cluster_against_its_own_version(
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
+    # ADR-0044: the cluster is on v1.0.0, read from history; only a newer version is unknown.
     await create_merged(context, support)
     await support.push(
         gitlab, support.SPECS, branch="main", file="specs/agent-standard.yaml", content="x: [\n"
     )
     context.repos[RepoKey.SPECS].forget_files()
     drift = await context.drift.for_cluster(REF)
-    assert drift.state is DriftState.UNKNOWN
-    assert drift.error == "spec 'agent-standard' cannot be read"
+    assert drift.state is DriftState.DRIFTED  # v1.0.0 lists cluster-roles, which day2 lacks
+    assert [a.name for a in drift.addon_drift] == ["cluster-roles"]
+    assert (drift.spec_version, drift.current_spec_version, drift.update) == ("1.0.0", None, None)
+    assert drift.error == (
+        "flavor 'agent-standard''s newest file cannot be read, so a newer version is unknown"
+    )
 
 
 async def test_a_spec_without_addons_is_in_sync(context: Day1Context, support: Any) -> None:

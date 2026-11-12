@@ -403,9 +403,15 @@ async def flavor_flow(
         },
         headers=alice,
     )
-    check(imported.status_code == 201, f"import MR opened ({imported.status_code})")
-    print(f"   {imported.json()['title']}")
-    await approve(api, imported.json()["iid"], bob)
+    check(imported.status_code == 201, f"import MRs opened ({imported.status_code})")
+    result = imported.json()
+    check(
+        [m["name"] for m in result["merge_requests"]] == [LARK, HERON] and result["failed"] == [],
+        "one import MR per cluster (ADR-0044)",
+    )
+    for opened in result["merge_requests"]:
+        print(f"   {opened['merge_request']['title']}")
+        await approve(api, opened["merge_request"]["iid"], bob)
     await asyncio.sleep(1)
     header = f'# specName: "{FLAVOR}"\n# specVersion: "1.0.0"\n'
     check(

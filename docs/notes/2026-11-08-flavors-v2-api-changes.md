@@ -332,6 +332,10 @@ that sends none gets the rule's entries.
 
 ## 10. Changed: drift on locked values (ADR-0036)
 
+> **Changed 2026-11-12 (ADR-0044):** a cluster is compared with the flavor
+> version its header names, not the newest; a newer version is an `update`
+> (with its open MR), never drift: `docs/notes/2026-11-12-flavor-rollout-api.md` §1.
+
 `GET /clusters/{name}/drift` (and every drift inside the import preview)
 gains `value_drift`: each enforced lock whose value the cluster file does not
 hold. A cluster is `drifted` when it has value drift **or** a missing add-on;
@@ -412,6 +416,12 @@ cluster, or a `relink` one without `relink: true`, one problem per cluster;
 409 `REVISION_CONFLICT` when a file changed since the preview's
 `last_commit_id` or the flavor's version is no longer `spec_version`
 (preview again). Another file changing does not make the import stale.
+
+> **Changed 2026-11-12 (ADR-0044):** the import opens one day1 MR per
+> cluster, titled `[Wingman/Day1] Import cluster <name> into spec <flavor>
+> v<version>`, and answers with each MR and each cluster whose MR did not
+> open: `docs/notes/2026-11-12-import-mr-per-cluster.md`. The request, the
+> refusals above and the preview are unchanged.
 
 ## 12. New: sync a cluster to its flavor (ADR-0037), admins only
 

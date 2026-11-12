@@ -309,7 +309,7 @@ every MCE that has a token. Without the grant, that MCE's `readable` check
 fails with "the MCE refused Wingman's token (403) on GET /api/v1/nodes": it
 is never picked, and no other MCE is affected. The chart README's
 [Live cluster status](../../deploy/helm/wingman/README.md#live-cluster-status-mce-hubs)
-has the ClusterRole; [3.9-to-3.10.md](../upgrade/3.9-to-3.10.md) has the steps.
+has the ClusterRole; [3.10-to-3.11.md](../upgrade/3.10-to-3.11.md) has the steps.
 
 The `servers` check lists the hub's Agents of the needed InfraEnvs, across
 the hub or in `MCE_INFRAENV_NAMESPACE` when it is set. The 3.4 ClusterRole

@@ -28,20 +28,21 @@ already have.
 | 3.6 | 3.7.0: Create can start the platform's `provision-cluster` workflow instead of opening Wingman's merge request (ADR-0042), off by default | Generic while `day1.provisioner` stays `merge-request`. To turn the workflow on: [3.6-to-3.7.md](3.6-to-3.7.md) |
 | 3.7 | 3.8.0: a team creates add-ons, edits their team defaults and sync options, and makes them fleet defaults from Wingman (ADR-0043); day2 writes are per team: a team that does not give Wingman's GitLab account Developer on its project is read-only | [3.7-to-3.8.md](3.7-to-3.8.md) if any team should not, or does not, give Wingman write access; otherwise Generic |
 | 3.8 | 3.9.0: **Quick Links** for admins (ADR-0052): every cluster's ArgoCD and console, generated from the day1 repo, the team's links from the chart, status dots checked by day1, ArgoCD counts with read-only tokens | Generic: every MCE is listed when `clusterStatus.mceDomain` is set. To add the hub, the team's links and the counts: [3.8-to-3.9.md](3.8-to-3.9.md) |
-| 3.9 | 3.10.0: Wingman picks a new cluster's MCE from the site, prod or prep, the version and the owner, and shows every candidate's numbers; an admin may choose another with a reason (ADR-0050). An MCE's API address may be given beside its token (ADR-0045) | [3.9-to-3.10.md](3.9-to-3.10.md) when live status is on: grant each MCE token `list` on nodes and pods **before** upgrading, or that MCE is never picked. With live status off, Generic |
+| 3.9 | 3.10.0: a flavor's changes reach each cluster through its own merge request (ADR-0044): drift is measured against the version a cluster is on, and a newer one is an update; a new flavor version opens one MR per cluster that follows it, with the day2 add-on MRs that version needs; an import opens one MR per cluster; a flavor edit needs a new version | Generic. After the upgrade, the first rollout trigger (opening a flavor's page, the specs webhook, Reconcile, or merging a flavor MR) opens an MR for every cluster that is behind its flavor's newest version: nothing changes on a cluster until its MR merges, and closing one declines that version. Day1 asks day2 for add-on MRs with an admin service session signed by the shared `JWT_SECRET_KEY` (no new setting); a team that gives Wingman no write access (ADR-0043) gets its add-ons listed in the day1 MR instead. Import MRs opened before 3.10 (`Import spec <flavor> into <n> clusters`) stay as they are |
+| 3.10 | 3.11.0: Wingman picks a new cluster's MCE from the site, prod or prep, the version and the owner, and shows every candidate's numbers; an admin may choose another with a reason (ADR-0050). An MCE's API address may be given beside its token (ADR-0045) | [3.10-to-3.11.md](3.10-to-3.11.md) when live status is on: grant each MCE token `list` on nodes and pods **before** upgrading, or that MCE is never picked. With live status off, Generic |
 
 ### Skipping versions
 
 Go straight to the newest release, and on the way do every guide whose
-row you pass, in order. For example, from 3.3.x to 3.10.0: do
+row you pass, in order. For example, from 3.3.x to 3.11.0: do
 [3.3-to-3.4.md](3.3-to-3.4.md) (the MCE grants, with the ClusterRole of
-[3.9-to-3.10.md](3.9-to-3.10.md) step 5 so one apply covers both), then
+[3.10-to-3.11.md](3.10-to-3.11.md) step 5 so one apply covers both), then
 [3.4-to-3.5.md](3.4-to-3.5.md) (`segmentsManager.url`, optional), each
 with the newest `<tag>` instead of its own, then 3.6.0's optional template,
 3.6-to-3.7.md only if the team turns the provision workflow on,
 3.7-to-3.8.md's discovery (which teams give Wingman write access),
 3.8-to-3.9.md for Quick Links' hub, team links and ArgoCD tokens (optional),
-and 3.9-to-3.10.md's grant check.
+and 3.10-to-3.11.md's grant check.
 Rows marked Generic add nothing. A guide's checks still apply: run them
 before its upgrade step.
 

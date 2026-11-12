@@ -74,6 +74,8 @@ class _MergeRequestRecord:
     approvals: set[str] = field(default_factory=set)
     final_diff: list[FileDiff] | None = None
     """Frozen when the MR stops being open; its source branch may be deleted."""
+    notes: list[str] = field(default_factory=list)
+    """Comments, oldest first."""
 
 
 @dataclass(slots=True)
@@ -205,6 +207,10 @@ class InMemoryGitLab:
         """Every file at ``ref`` as ``{path: content}``; for assertions in tests."""
         record = self._project(project_id)
         return dict(self._resolve(record, ref).files)
+
+    def notes(self, ref: MergeRequestRef) -> list[str]:
+        """The comments on a merge request, oldest first; for assertions in tests."""
+        return list(self._mr(self._project(ref.project_id), ref.iid).notes)
 
     # ── Port: projects and files ────────────────────────────────────────────
 
@@ -473,6 +479,13 @@ class InMemoryGitLab:
         mr.final_diff = self._open_diff(record, mr)
         mr.state, mr.updated_at = MRState.CLOSED, self._clock()
         return self._mr_dto(record, mr)
+
+    async def comment_on_merge_request(self, ref: MergeRequestRef, body: str) -> None:
+        """See GitLabPort.comment_on_merge_request."""
+        mr = self._mr(self._project(ref.project_id), ref.iid)
+        if not body.strip():
+            raise InvalidRequestError("a comment needs a body")
+        mr.notes.append(body)
 
     # ── Internals ───────────────────────────────────────────────────────────
 

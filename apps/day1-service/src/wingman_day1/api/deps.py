@@ -24,6 +24,7 @@ from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.quick_links import QuickLinksService
+from wingman_day1.application.rollouts import RolloutService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
@@ -43,6 +44,8 @@ class Day1Context:
     drift: DriftService
     imports: ImportService
     sync: SyncService
+    rollouts: RolloutService
+    """A flavor's new version, one MR per cluster (ADR-0044)."""
     auth: AuthService
     repos: Mapping[RepoKey, RepoReads]
     machine_configs: MachineConfigService

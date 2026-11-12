@@ -503,6 +503,34 @@ class GitLabContract:
         with pytest.raises(NotFoundError):
             await gitlab.get_merge_request(MergeRequestRef(project.id, 9999))
 
+    async def test_a_merge_request_takes_comments_open_and_closed(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        # A rollout comments on a superseded MR and closes it (ADR-0044), in either order.
+        project = await new_project(FILES)
+        await _branch_with_change(gitlab, project, "b1", "README.md", "# old\n")
+        mr = await gitlab.create_merge_request(project.id, NewMergeRequest("b1", "main", "old"))
+        await gitlab.comment_on_merge_request(mr.ref, "Superseded by !2.")
+        await gitlab.close_merge_request(mr.ref)
+        await gitlab.comment_on_merge_request(mr.ref, "Closed: superseded.")
+        assert (await gitlab.get_merge_request(mr.ref)).state is MRState.CLOSED
+
+    async def test_a_comment_on_a_missing_merge_request_is_not_found(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        with pytest.raises(NotFoundError):
+            await gitlab.comment_on_merge_request(MergeRequestRef(project.id, 9999), "hello")
+
+    async def test_a_blank_comment_is_refused(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        await _branch_with_change(gitlab, project, "b1", "README.md", "# x\n")
+        mr = await gitlab.create_merge_request(project.id, NewMergeRequest("b1", "main", "blank"))
+        with pytest.raises(InvalidRequestError):
+            await gitlab.comment_on_merge_request(mr.ref, "  \n")
+
     # ── Projects ────────────────────────────────────────────────────────────
 
     async def test_get_project_by_id_and_by_path(

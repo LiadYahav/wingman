@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X, ChevronDown, ChevronRight,
@@ -20,6 +20,7 @@ import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
+import { ApprovalRolloutPanel, opensText, useApprovalRollout } from "@/components/specs/approval-rollout";
 import { computeLineDiff } from "@/lib/diff";
 import { writeErrorTitle } from "@/lib/write-errors";
 import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
@@ -247,6 +248,7 @@ function ActionError({ error, onReload }: { error: unknown; onReload: () => void
 function MRDetailContent() {
   const params = useParams();
   const id = params.id as string;
+  const router = useRouter();
   const isAdmin = useIsAdmin();
   const username = useAuthStore((s) => s.user?.username);
   const queryClient = useQueryClient();
@@ -275,6 +277,11 @@ function MRDetailContent() {
     refetchOnReconnect: false,
   });
 
+  // A flavor MR, still open: what merging it opens, one MR per cluster (ADR-0044)
+  const flavorMr = ref?.service === "day1" && ref.repo === "specs" && data?.mr.state === "opened";
+  const rollout = useApprovalRollout(id, ref?.iid ?? 0, data?.mr.sha, flavorMr);
+  const rolloutApplies = flavorMr && rollout.data?.applies === true;
+
   /** Refresh the lists; this page's own detail is set or refetched by the caller. */
   const afterChange = () => {
     queryClient.invalidateQueries({ queryKey: ["approvals"], predicate: (q) => q.queryKey[1] !== "detail" });
@@ -284,7 +291,16 @@ function MRDetailContent() {
   const approveMutation = useMutation({
     mutationFn: (sha: string) => api.post<MRDetail>(approvalApiPath(ref!, "approve"), { sha }),
     onSuccess: (mr) => {
-      toast.success(`!${mr.iid} approved and merged`);
+      const flavor = rolloutApplies ? rollout.data?.spec_name : null;
+      toast.success(
+        `!${mr.iid} approved and merged`,
+        flavor
+          ? {
+              description: "Each cluster's merge request opens now; the flavor's Clusters tab shows the rollout.",
+              action: { label: "Rollout", onClick: () => router.push(`/specs/${encodeURIComponent(flavor)}`) },
+            }
+          : undefined
+      );
       setApproveOpen(false);
       afterChange();
       // What the merge changed
@@ -495,6 +511,8 @@ function MRDetailContent() {
 
           {actionError !== null && <ActionError error={actionError} onReload={reload} />}
 
+          {flavorMr && <ApprovalRolloutPanel rollout={rollout.data} isLoading={rollout.isLoading} error={rollout.error} />}
+
           {editing && (
             <div className="bg-card rounded-xl border shadow-sm p-5">
               <EditMRPanel
@@ -559,6 +577,18 @@ function MRDetailContent() {
               <span className="text-muted-foreground w-28 shrink-0">Merging into</span>
               <span className="font-mono text-xs font-medium">{mr.target_branch}</span>
             </div>
+            {rolloutApplies && rollout.data && (
+              <div className="flex gap-3 pt-2 border-t" data-testid="approve-rollout-opens">
+                <span className="text-muted-foreground w-28 shrink-0">Then</span>
+                <span className="min-w-0">
+                  <span className="font-medium">{opensText(rollout.data)}</span>
+                  <span className="text-muted-foreground">
+                    , one per cluster, each merged by its customer when ready. Nothing changes on a cluster until its
+                    own merges.
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
         )}
       </ReviewDialog>

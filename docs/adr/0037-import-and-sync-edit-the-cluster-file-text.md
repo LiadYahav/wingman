@@ -1,7 +1,16 @@
 # ADR-0037: Existing clusters join a flavor by one MR that writes only the link, and sync to it by one MR each; Wingman edits a cluster file's text, never a YAML round trip
 
 Date: 2026-11-08
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0044 (an import opens one MR per cluster; a new flavor version opens each cluster's sync MR automatically)
+
+Since ADR-0044 (2026-11-12, the architect's decision, confirmed by the
+user) an import opens one day1 MR per picked cluster, each the link-only
+change for its file, after every pick is checked as below. The text edit,
+the statuses, relink, the stale check and sync still hold. The parts that
+changed are marked where they are. ADR-0044 also opens the sync below
+automatically, one MR per cluster, when a flavor gets a new version; the
+merge of the flavor's MR is then its confirmation, and a sync by hand is
+refused while an MR already takes the cluster to the newest version.
 
 ## Context
 
@@ -51,13 +60,18 @@ another flavor), `linked` (it follows this one: sync it instead) or
 `refused` (its file cannot be edited safely). `POST /specs/{name}/import`
 opens one day1 MR (`[Wingman/Day1] Import spec <flavor> into <n> clusters`,
 at most 50) whose one commit gives each file the header with `specName` and
-`specVersion` and changes nothing else. A cluster that follows another
+`specVersion` and changes nothing else. *(Superseded by ADR-0044: one MR
+per cluster, `[Wingman/Day1] Import cluster <name> into spec <flavor>
+v<version>`, each changing only its file's header.)* A cluster that follows another
 flavor is refused unless its pick says `relink: true`; then the old header
 is replaced, keeping the add-on values requested before for add-ons the new
 flavor also lists. Each file update carries the `last_commit_id` the preview
 showed: a file that moved since fails the whole import, before or at the
 commit (ADR-0006), and nothing is opened. The MR description lists each
-cluster with what will show as drift after the merge.
+cluster with what will show as drift after the merge. *(Superseded by
+ADR-0044: a file that moved before the check still opens nothing; one that
+moves between the check and its commit fails only its own MR, and each
+MR's description shows its own cluster's drift.)*
 
 **Sync.** `POST /clusters/{name}/sync/preview` shows what one day1 MR
 would change on a linked cluster: every locked value its file does not hold
@@ -92,7 +106,8 @@ day2). `POST /clusters/{name}/sync` opens the MR
 
 **The port.** Import and sync are cluster changes, so they go through
 `ClusterProvisioner` (ADR-0017): import as `link`, sync as `apply` with the
-`sync` action.
+`sync` action. *(Superseded by ADR-0044: import is `apply` with the
+`import` action too; `link` is gone.)*
 
 ## Alternatives rejected
 
@@ -102,7 +117,9 @@ day2). `POST /clusters/{name}/sync` opens the MR
 - **Write the link elsewhere** (a sidecar or a Wingman-owned file): every
   file under `hostedClusters/` becomes an Argo Application (ADR-0012).
 - **One MR per cluster**: the user's decision is one day1 MR; a reviewer
-  sees the whole import in one place.
+  sees the whole import in one place. *(Superseded: ADR-0044 chose it, the
+  architect's decision confirmed by the user on 2026-11-12, so that each
+  cluster's link is reviewed, merged or rejected on its own.)*
 - **Re-link silently**: moving a cluster from one flavor to another changes
   what its locks are; the request has to say so.
 
@@ -114,7 +131,8 @@ day2). `POST /clusters/{name}/sync` opens the MR
 - A sync that removes configs, or rolls nodes, says so three times: the
   preview, the confirmation the request must carry, and the MR description.
 - Imported clusters are linked when the MR merges, and show their
-  differences as drift; nothing on a cluster changes at import.
+  differences as drift; nothing on a cluster changes at import. (Since
+  ADR-0044, each when its own MR merges.)
 - Two imports of the same cluster can both be opened; once one merges the
   other conflicts in GitLab, which refuses to merge it.
 - A file whose layout the editor refuses must be fixed by hand before it
@@ -130,7 +148,8 @@ day2). `POST /clusters/{name}/sync` opens the MR
   statuses and drift, the byte-for-byte import, relink, a moved file or
   flavor, an unparsable file.
 - `apps/day1-service/tests/unit/infrastructure/test_merge_requests.py`: one
-  commit, the title, branch and footer, and a stale file committing nothing.
+  commit, the title, branch and footer, and a stale file committing nothing
+  (per cluster since ADR-0044).
 - `apps/day1-service/tests/unit/application/test_sync.py`: the exact
   synced text on both fixture styles, hardware choices, the removals to
   confirm, how a nodepool's nodes roll (`InPlace`, `maxUnavailable`,
