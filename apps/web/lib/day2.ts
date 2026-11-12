@@ -77,11 +77,11 @@ export const day2Api = {
   /** POST: make it a fleet default; PUT: edit that fleet default. */
   fleetDefault: (team: string, chart: string, scope: FleetScope, dryRun = false) =>
     `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}${dry(dryRun)}`,
-  /** A team's operators: its catalog and the fleet defaults built from it (ADR-0053). */
-  operators: (team: string) => `/api/day2/teams/${encodeURIComponent(team)}/operators`,
-  /** One operator: its files, OCP-version pins and one panel per fleet scope. */
-  operator: (team: string, operator: string) =>
-    `/api/day2/teams/${encodeURIComponent(team)}/operators/${encodeURIComponent(operator)}`,
+  /** A team's add-ons: its catalog and the fleet defaults built from it (ADR-0053). */
+  teamAddons: (team: string) => `/api/day2/teams/${encodeURIComponent(team)}/addons`,
+  /** One add-on: its files, OCP-version pins and one panel per fleet scope. */
+  addonDetail: (team: string, chart: string) =>
+    `/api/day2/teams/${encodeURIComponent(team)}/addons/${encodeURIComponent(chart)}`,
   /** PUT: the full set of the scope's destinations the fleet default skips. */
   exclusions: (team: string, chart: string, scope: FleetScope, dryRun = false) =>
     `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/exclusions${dry(dryRun)}`,
@@ -113,8 +113,8 @@ export const day2Keys = {
   teams: ["day2", "teams"] as const,
   addonTemplate: (team: string) => ["day2", "addon-template", team] as const,
   fleetDefaults: ["day2", "fleet-defaults"] as const,
-  operators: (team: string) => ["day2", "operators", team] as const,
-  operator: (team: string, operator: string) => ["day2", "operators", team, operator] as const,
+  teamAddons: (team: string) => ["day2", "team-addons", team] as const,
+  addonDetail: (team: string, chart: string) => ["day2", "team-addons", team, chart] as const,
   /** `merge-preview` of a destination with `override` (stable JSON) as its own file, or without one (`null`). */
   mergePreview: (id: string, team: string, chart: string, override: string | null) =>
     ["day2", "merge-preview", id, team, chart, override] as const,
@@ -125,22 +125,22 @@ export function chartsHref(key: string, mce?: string): string {
   return `/clusters/${encodeURIComponent(key)}/addons${query({ mce: narrow(key, mce) })}`;
 }
 
-/** The Operators pages: a team's operators, one operator, a new one (ADR-0053). */
-export function teamOperatorsHref(team: string): string {
-  return `/teams/${encodeURIComponent(team)}/operators`;
+/**
+ * The Addons pages (ADR-0053): the catalog, one team's part of it (`?team=`),
+ * one add-on with its defaults and overrides, and a new add-on's form
+ * (`/addons/new?team=`: a query, so an add-on may be named `new`).
+ */
+export function teamAddonsHref(team: string): string {
+  return `/addons${query({ team })}`;
 }
 
-export function operatorHref(team: string, operator: string): string {
-  return `${teamOperatorsHref(team)}/${encodeURIComponent(operator)}`;
+export function addonHref(team: string, chart: string): string {
+  return `/addons/${encodeURIComponent(team)}/${encodeURIComponent(chart)}`;
 }
 
-/** Beside `operators/`, not in it: an operator may be named `new`. */
-export function newOperatorHref(team: string): string {
-  return `/teams/${encodeURIComponent(team)}/new-operator`;
+export function newAddonHref(team: string): string {
+  return `/addons/new${query({ team })}`;
 }
-
-/** The pages the Operators nav entry is active on. */
-export const OPERATOR_PAGES = /^\/(operators|teams\/[^/]+\/(operators|new-operator))(\/|$)/;
 
 // ── Catalog ──────────────────────────────────────────────────────────────────
 

@@ -5,7 +5,7 @@ import { day2Api } from "@/lib/day2";
 import { AuthoringDialogs } from "@/components/addons/authoring-flow";
 import { REPO_URL, TextField } from "@/components/addons/authoring-fields";
 import { VersionField } from "@/components/addons/version-field";
-import { RepoFileView } from "@/components/operators/repo-file";
+import { RepoFileView } from "@/components/addons/repo-file";
 import type { AuthoringChange, CatalogEntry, DeployOverride, DestinationDeployBody, ScopeDestination, ScopePanel } from "@/types/day2";
 
 function text(values: Record<string, unknown>, key: string): string {

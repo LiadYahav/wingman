@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Layers } from "lucide-react";
-import { operatorHref, scopeLabel, syncSummary } from "@/lib/day2";
+import { addonHref, scopeLabel, syncSummary } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { leaves } from "@/lib/values";
 import { buttonVariants } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import type { FleetDefault } from "@/types/day2";
 
 /** Why there is no "stop being a default" yet: what it would do to running workloads. */
 export const NO_STOP_NOTE =
-  "Stopping being a default is not in Wingman yet: deleting the folder deletes the default's Applications on every destination it reaches, and with prune: false ArgoCD orphans the workloads, which keep running. Until then, keep it off a destination with its exclusions, from its Operators page, or remove it by hand.";
+  "Stopping being a default is not in Wingman yet: deleting the folder deletes the default's Applications on every destination it reaches, and with prune: false ArgoCD orphans the workloads, which keep running. Until then, keep it off a destination by unticking it in the add-on's default (its page, Defaults), or remove it by hand.";
 
 function FleetDefaultRow({ fd }: { fd: FleetDefault }) {
   const count = leaves(fd.values).length;
@@ -47,8 +47,8 @@ function FleetDefaultRow({ fd }: { fd: FleetDefault }) {
         )}
         <FindingsBadge findings={fd.warnings} />
         <Link
-          href={operatorHref(fd.team, fd.chart)}
-          aria-label={`Manage ${fd.chart} in Operators`}
+          href={addonHref(fd.team, fd.chart)}
+          aria-label={`Manage ${fd.chart}'s defaults`}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 gap-1.5")}
         >
           Manage
@@ -59,7 +59,7 @@ function FleetDefaultRow({ fd }: { fd: FleetDefault }) {
   );
 }
 
-/** A team's fleet defaults (`defaults/<scope>/<chart>/`), each managed on its operator's page (ADR-0053). */
+/** A team's fleet defaults (`defaults/<scope>/<chart>/`), each managed on its add-on's page (ADR-0053). */
 export function FleetDefaultsList({ team, items }: { team: string; items: FleetDefault[] }) {
   if (items.length === 0) return null;
   return (

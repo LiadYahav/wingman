@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, ChevronDown, ChevronsUpDown, Layers, Package, RefreshCw, Search, Tag } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronsUpDown, Layers, Package, Pencil, Plus, RefreshCw, Search, Tag } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { day2Api, day2Keys, operatorHref, syncSummary, teamAccess, teamOperatorsHref, uniqueFindings } from "@/lib/day2";
+import { day2Api, day2Keys, addonHref, newAddonHref, syncSummary, teamAccess, uniqueFindings } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { inlineYaml, leaves, pathLabel, toYaml } from "@/lib/values";
 import { buttonVariants } from "@/components/ui/button";
@@ -16,8 +17,11 @@ import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
 import { FleetDefaultsList } from "@/components/addons/fleet-defaults";
+import { ChangeResultPanel, type OpenedChanges } from "@/components/addons/change-result";
+import { EditTeamDefaultDialog } from "@/components/addons/default-dialogs";
+import { useAddonAccess } from "@/components/addons/page-header";
 import { ReadOnlyBadge, useTeams } from "@/components/addons/team-access";
-import type { CatalogEntry, FleetDefault } from "@/types/day2";
+import type { AuthoringChange, CatalogEntry, FleetDefault } from "@/types/day2";
 
 /** `HEAD` is the chart repo's default branch, listed first in `available_versions`. */
 function revisionLabel(entry: CatalogEntry): string {
@@ -25,19 +29,35 @@ function revisionLabel(entry: CatalogEntry): string {
   return entry.current_version === "HEAD" && head ? `HEAD (${head})` : entry.current_version;
 }
 
-/**
- * Where a chart's team default and fleet defaults are edited: its Operators
- * page (ADR-0053). This page browses; one cluster's install is on that
- * cluster's page.
- */
-function ManageLink({ team, name, className }: { team: string; name?: string; className?: string }) {
+/** Write actions on a team's add-ons: admins only, disabled with the reason while the team is read-only (ADR-0043). */
+interface TeamWrites {
+  isAdmin: boolean;
+  readOnlyReason: string | null;
+  onOpened: (change: AuthoringChange) => void;
+}
+
+/** An add-on's page: its fleet defaults, which destinations they reach and each one's overrides (ADR-0053). */
+function DefaultsLink({ team, name, className }: { team: string; name: string; className?: string }) {
   return (
-    <Link
-      href={name ? operatorHref(team, name) : teamOperatorsHref(team)}
-      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5", className)}
-    >
-      {name ? "Manage in Operators" : `${team}'s operators`}
+    <Link href={addonHref(team, name)} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5", className)}>
+      Defaults &amp; overrides
       <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+    </Link>
+  );
+}
+
+function NewAddonButton({ team, writes }: { team: string; writes: TeamWrites }) {
+  if (!writes.isAdmin) return null;
+  const className = cn(buttonVariants({ size: "sm" }), "ml-auto h-7 gap-1.5");
+  return writes.readOnlyReason ? (
+    <button type="button" disabled title={writes.readOnlyReason} className={className}>
+      <Plus className="h-3.5 w-3.5" aria-hidden />
+      New add-on
+    </button>
+  ) : (
+    <Link href={newAddonHref(team)} className={className} aria-label={`New add-on in ${team}`}>
+      <Plus className="h-3.5 w-3.5" aria-hidden />
+      New add-on
     </Link>
   );
 }
@@ -55,7 +75,19 @@ function DefinitionList({ items }: { items: [string, React.ReactNode][] }) {
   );
 }
 
-function ChartDialog({ entry, open, onOpenChange }: { entry: CatalogEntry; open: boolean; onOpenChange: (open: boolean) => void }) {
+function ChartDialog({
+  entry,
+  open,
+  onOpenChange,
+  writes,
+  onEdit,
+}: {
+  entry: CatalogEntry;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  writes: TeamWrites;
+  onEdit: () => void;
+}) {
   const [view, setView] = useState<"table" | "yaml">("table");
   const values = leaves(entry.default_values);
   const meta = entry.argocd_metadata;
@@ -170,19 +202,32 @@ function ChartDialog({ entry, open, onOpenChange }: { entry: CatalogEntry; open:
           </TabsContent>
         </Tabs>
         <p className="text-xs text-muted-foreground">
-          Its team default, its fleet defaults and which clusters they reach are edited on its Operators page; one
+          Its fleet defaults, which destinations they reach and each destination&apos;s overrides are on its page; one
           cluster&apos;s install is on that cluster&apos;s page.
         </p>
         <DialogFooter showCloseButton>
-          <ManageLink team={entry.team} name={entry.name} />
+          {writes.isAdmin && (
+            <button
+              type="button"
+              onClick={onEdit}
+              disabled={Boolean(writes.readOnlyReason)}
+              title={writes.readOnlyReason ?? undefined}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden />
+              Edit team default
+            </button>
+          )}
+          <DefaultsLink team={entry.team} name={entry.name} />
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function ChartCard({ entry }: { entry: CatalogEntry }) {
+function ChartCard({ entry, writes }: { entry: CatalogEntry; writes: TeamWrites }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const count = leaves(entry.default_values).length;
   const warned = uniqueFindings(entry.warnings).length > 0;
   return (
@@ -239,7 +284,25 @@ function ChartCard({ entry }: { entry: CatalogEntry }) {
           </span>
         </div>
       </button>
-      <ChartDialog entry={entry} open={open} onOpenChange={setOpen} />
+      <ChartDialog
+        entry={entry}
+        open={open}
+        onOpenChange={setOpen}
+        writes={writes}
+        onEdit={() => {
+          setOpen(false);
+          setEditing(true);
+        }}
+      />
+      {editing && (
+        <EditTeamDefaultDialog
+          entry={entry}
+          open
+          onOpenChange={setEditing}
+          readOnlyReason={writes.readOnlyReason}
+          onOpened={writes.onOpened}
+        />
+      )}
     </>
   );
 }
@@ -249,14 +312,18 @@ function TeamSection({
   entries,
   fleetDefaults,
   readOnly,
+  onOpened,
 }: {
   team: string;
   entries: CatalogEntry[];
   fleetDefaults: FleetDefault[];
   /** Wingman has no write access to the team's repo (ADR-0043). */
   readOnly: boolean;
+  onOpened: (change: AuthoringChange) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const access = useAddonAccess(team);
+  const writes: TeamWrites = { isAdmin: access.isAdmin, readOnlyReason: access.readOnlyReason, onOpened };
   return (
     <section className="space-y-3" aria-label={`Team ${team}`} data-testid={`team-${team}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -266,19 +333,19 @@ function TeamSection({
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{entries.length}</span>
         </button>
         {readOnly && <ReadOnlyBadge />}
-        <ManageLink team={team} className="ml-auto h-7" />
+        <NewAddonButton team={team} writes={writes} />
       </div>
       {expanded && (
         <div className="space-y-4 pl-6">
           {entries.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {entries.map((entry) => (
-                <ChartCard key={`${entry.team}/${entry.name}`} entry={entry} />
+                <ChartCard key={`${entry.team}/${entry.name}`} entry={entry} writes={writes} />
               ))}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              No chart in <code>operators/</code> yet: a new one is added from {team}&apos;s operators.
+              No add-on in <code>operators/</code> yet{writes.isAdmin ? ": add one with New add-on." : "."}
             </p>
           )}
           <FleetDefaultsList team={team} items={fleetDefaults} />
@@ -291,12 +358,25 @@ function TeamSection({
 type Sort = "name-asc" | "name-desc" | "team-asc";
 
 /**
- * The add-on catalog: what each team offers, to browse (ADR-0053). Installing
- * one on a cluster is on that cluster's page; a team's operators (the
- * catalog's team defaults and the fleet defaults built from them) are
- * authored on the Operators pages.
+ * The add-on catalog (ADR-0043, ADR-0053): what each team offers, and where a
+ * team admin adds an add-on and edits its team default. An add-on's page
+ * (Defaults & overrides) has its fleet defaults, which destinations they
+ * reach and each destination's overrides. Installing one on a cluster is on
+ * that cluster's page. `?team=` shows one team.
  */
 export default function AddonsPage() {
+  return (
+    <Suspense fallback={<Skeleton className="m-6 h-64 rounded-xl" />}>
+      <AddonsCatalog />
+    </Suspense>
+  );
+}
+
+function AddonsCatalog() {
+  const only = useSearchParams().get("team");
+  const [opened, setOpened] = useState<OpenedChanges | null>(null);
+  const onOpened = (change: AuthoringChange) =>
+    setOpened({ verb: change.action === "create-addon" ? "Create" : "Update", results: [change], failed: [] });
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("name-asc");
   const { data, isLoading, isFetching, error, refetch } = useQuery<CatalogEntry[]>({
@@ -319,6 +399,7 @@ export default function AddonsPage() {
 
   const needle = search.trim().toLowerCase();
   const filtered = (data ?? [])
+    .filter((e) => !only || e.team === only)
     .filter((e) => !needle || e.name.toLowerCase().includes(needle) || e.team.toLowerCase().includes(needle))
     .sort((a, b) =>
       sort === "name-desc"
@@ -330,7 +411,8 @@ export default function AddonsPage() {
   const byTeam = new Map<string, CatalogEntry[]>();
   for (const entry of filtered) byTeam.set(entry.team, [...(byTeam.get(entry.team) ?? []), entry]);
   // Without a search every team is listed, with or without charts.
-  if (!needle) for (const team of teamList.data ?? []) if (!byTeam.has(team.name)) byTeam.set(team.name, []);
+  if (!needle)
+    for (const team of teamList.data ?? []) if (!byTeam.has(team.name) && (!only || team.name === only)) byTeam.set(team.name, []);
   const fleetOf = (team: string) =>
     (fleet.data ?? []).filter(
       (fd) => fd.team === team && (!needle || fd.chart.toLowerCase().includes(needle) || team.toLowerCase().includes(needle)),
@@ -409,6 +491,17 @@ export default function AddonsPage() {
         </div>
       </div>
 
+      {only && (
+        <p className="text-xs text-muted-foreground" data-testid="team-filter">
+          Showing <strong>{only}</strong> only ·{" "}
+          <Link href="/addons" className="underline hover:text-foreground">
+            every team
+          </Link>
+        </p>
+      )}
+
+      {opened && <ChangeResultPanel changes={opened} onDismiss={() => setOpened(null)} />}
+
       {fleet.error && <ProblemList error={fleet.error} title="The fleet defaults could not be loaded" />}
 
       {error ? (
@@ -437,11 +530,8 @@ export default function AddonsPage() {
               title="No charts yet"
               description={
                 <>
-                  A team&apos;s charts appear here once its repo has <code>operators/&lt;chart&gt;/</code>: add one from{" "}
-                  <Link href="/operators" className="underline hover:text-foreground">
-                    Operators
-                  </Link>
-                  .
+                  A team&apos;s add-ons appear here once its repo has <code>operators/&lt;chart&gt;/</code>: an admin adds one
+                  with New add-on on the team.
                 </>
               }
               data-testid="catalog-empty"
@@ -450,7 +540,14 @@ export default function AddonsPage() {
           {[...byTeam.entries()]
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([team, entries]) => (
-              <TeamSection key={team} team={team} entries={entries} fleetDefaults={fleetOf(team)} readOnly={readOnlyOf(team)} />
+              <TeamSection
+                key={team}
+                team={team}
+                entries={entries}
+                fleetDefaults={fleetOf(team)}
+                readOnly={readOnlyOf(team)}
+                onOpened={onOpened}
+              />
             ))}
         </div>
       )}

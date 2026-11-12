@@ -10,8 +10,8 @@ import type {
   DestinationState,
   FleetScope,
   MergePreviewBody,
-  OperatorDetail,
-  OperatorSummary,
+  AddonDetail,
+  AddonSummary,
   PlannedFileChange,
   RepoFile,
   ScopeDestination,
@@ -211,7 +211,7 @@ function generatedPanel(team: string, chart: string, scope: FleetScope, catalog:
 }
 
 /** `GET /teams/{team}/operators/{op}`, or `null` (a 404). */
-export function operatorDetail(team: string, chart: string): OperatorDetail | null {
+export function operatorDetail(team: string, chart: string): AddonDetail | null {
   const catalog = day2Catalog.find((e) => e.team === team && e.name === chart) ?? null;
   const fleet = FLEET_DEFAULTS.filter((f) => f.team === team && f.chart === chart);
   if (!catalog && fleet.length === 0) return null;
@@ -242,13 +242,13 @@ export function operatorDetail(team: string, chart: string): OperatorDetail | nu
 }
 
 /** `GET /teams/{team}/operators`: one per catalog entry, plus each fleet default without one. */
-export function operatorsOf(team: string): OperatorSummary[] {
+export function operatorsOf(team: string): AddonSummary[] {
   const names = new Set([
     ...day2Catalog.filter((e) => e.team === team).map((e) => e.name),
     ...FLEET_DEFAULTS.filter((f) => f.team === team).map((f) => f.chart),
   ]);
   return [...names].sort().map((name) => {
-    const d = operatorDetail(team, name) as OperatorDetail;
+    const d = operatorDetail(team, name) as AddonDetail;
     return {
       team,
       name,
@@ -299,7 +299,7 @@ function roles(values: Values, role: string): Values {
 
 /** `POST /merge-preview` of a fleet default's destination: team, fleet, then its `values-<name>.yaml`. */
 export function operatorPreview(body: MergePreviewBody): ValuesPreview {
-  const detail = operatorDetail(body.team, body.addon) as OperatorDetail;
+  const detail = operatorDetail(body.team, body.addon) as AddonDetail;
   const scope = detail.scopes.find((s) => s.destinations.some((d) => d.id === body.cluster)) ?? detail.scopes[1];
   const dest = scope.destinations.find((d) => d.id === body.cluster);
   const team = detail.catalog?.default_values ?? {};
@@ -355,7 +355,7 @@ function file(action: PlannedFileChange["action"], path: string, content: string
   return { action, path, content, previous };
 }
 
-function impact(detail: OperatorDetail, id: string, effect: DestinationImpact["effect"], changes: AdoptionChange[] = []): DestinationImpact {
+function impact(detail: AddonDetail, id: string, effect: DestinationImpact["effect"], changes: AdoptionChange[] = []): DestinationImpact {
   const d = detail.scopes.flatMap((s) => s.destinations).find((x) => x.id === id);
   const name = d?.name ?? parts(id).name;
   return {

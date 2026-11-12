@@ -4,9 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, Network, ShieldAlert, Link2, type LucideIcon } from "lucide-react";
-import { Boxes } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { OPERATOR_PAGES } from "@/lib/day2";
 import { useIsAdmin } from "@/stores/auth-store";
 
 interface NavItem {
@@ -27,7 +25,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { label: "Destinations", href: "/destinations", icon: Network },
       { label: "Flavors", href: "/specs", icon: Layers },
       { label: "Addons", href: "/addons", icon: Package },
-      { label: "Operators", href: "/operators", icon: Boxes },
       { label: "Quick Links", href: "/quick-links", icon: Link2, adminOnly: true },
     ],
   },
@@ -75,9 +72,7 @@ export function SidebarNav() {
           {group.items.filter((item) => !item.adminOnly || showAdmin).map((item) => {
             const isActive = item.exact
               ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(item.href + "/") ||
-                // A team's operators live under /teams/<team>/ (ADR-0053).
-                (item.href === "/operators" && OPERATOR_PAGES.test(pathname));
+              : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}

@@ -29,7 +29,7 @@ function pathText(entry: CatalogEntry): string {
 }
 
 /**
- * The operator's team default (ADR-0043): `operators/<chart>/<chart>.yaml`,
+ * The add-on's team default (ADR-0043): `operators/<chart>/<chart>.yaml`,
  * edited in place, and its `values.yaml`. Only the fields that change are
  * sent; a blank optional field removes its key. Guarded by the commit the
  * entry was read at (ADR-0006); the plan says which destinations change, and
@@ -169,7 +169,7 @@ function SyncInheritance({
 }
 
 /**
- * Make an operator a fleet default on one scope (ADR-0043):
+ * Make an add-on a fleet default on one scope (ADR-0043):
  * `defaults/<scope>/<chart>/` in one MR. Clusters that have the chart in their
  * own folder move into it in the same MR; the dry run lists them, and each one
  * whose app would change is confirmed (`confirm_changes`).

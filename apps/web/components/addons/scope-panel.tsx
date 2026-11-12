@@ -9,14 +9,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AuthoringReview, useAuthoringWrite } from "@/components/addons/authoring-flow";
 import { EditFleetDefaultDialog, MakeDefaultDialog } from "@/components/addons/default-dialogs";
 import { WriteError } from "@/components/addons/file-preview";
-import { DestinationDeployDialog } from "@/components/operators/destination-deploy-dialog";
-import { DestinationValuesDialog } from "@/components/operators/destination-values-dialog";
-import { excludedIds, groupDestinations, lockedReason, nameOf, stateStyle } from "@/components/operators/destinations";
-import { RepoFileView } from "@/components/operators/repo-file";
-import type { AuthoringChange, FleetScope, OperatorDetail, ScopeDestination, ScopePanel, SetExclusionsBody } from "@/types/day2";
+import { DestinationDeployDialog } from "@/components/addons/destination-deploy-dialog";
+import { DestinationValuesDialog } from "@/components/addons/destination-values-dialog";
+import { excludedIds, groupDestinations, lockedReason, nameOf, stateStyle } from "@/components/addons/destinations";
+import { RepoFileView } from "@/components/addons/repo-file";
+import type { AuthoringChange, FleetScope, AddonDetail, ScopeDestination, ScopePanel, SetExclusionsBody } from "@/types/day2";
 
-/** Write actions on the operator: offered to admins, disabled with the reason while the team is read-only. */
-export interface OperatorWrites {
+/** Write actions on the add-on: offered to admins, disabled with the reason while the team is read-only. */
+export interface AddonWrites {
   isAdmin: boolean;
   readOnlyReason: string | null;
   onOpened: (change: AuthoringChange) => void;
@@ -43,7 +43,7 @@ function WriteButton({
   label,
   disabledBy,
 }: {
-  writes: OperatorWrites;
+  writes: AddonWrites;
   onClick: () => void;
   children: React.ReactNode;
   label?: string;
@@ -79,7 +79,7 @@ function DestinationRow({
   destination: ScopeDestination;
   /** The "deployed by this default" checkbox, or `null` where there is none (the hub, not a default). */
   checkbox: { checked: boolean; disabledBy: string | null; onChange: (on: boolean) => void; changed: boolean } | null;
-  writes: OperatorWrites;
+  writes: AddonWrites;
   onDialog: (dialog: RowDialog) => void;
 }) {
   const style = stateStyle(d.state);
@@ -173,7 +173,7 @@ function DestinationRow({
  * page says so beside the checkbox, and the plan has the user confirm
  * exactly those destinations.
  */
-function DestinationsEditor({ detail, panel, writes }: { detail: OperatorDetail; panel: ScopePanel; writes: OperatorWrites }) {
+function DestinationsEditor({ detail, panel, writes }: { detail: AddonDetail; panel: ScopePanel; writes: AddonWrites }) {
   const initial = excludedIds(panel);
   const [excluded, setExcluded] = useState<Set<string>>(initial);
   const [dialog, setDialog] = useState<RowDialog>(null);
@@ -339,11 +339,11 @@ function DestinationsEditor({ detail, panel, writes }: { detail: OperatorDetail;
 }
 
 /**
- * The operator on one fleet scope (ADR-0053): whether it is a default there;
+ * The add-on on one fleet scope (ADR-0053): whether it is a default there;
  * if not, making it one; if so, its values and sync override, which
  * destinations it deploys to, and each destination's overrides.
  */
-export function ScopePanelCard({ detail, panel, writes }: { detail: OperatorDetail; panel: ScopePanel; writes: OperatorWrites }) {
+export function ScopePanelCard({ detail, panel, writes }: { detail: AddonDetail; panel: ScopePanel; writes: AddonWrites }) {
   const [dialog, setDialog] = useState<"make" | "edit" | null>(null);
   const Icon = SCOPE_ICON[panel.scope] ?? Layers;
   const reach = panel.destinations.filter((d) => d.state === "default" || d.state === "duplicate").length;

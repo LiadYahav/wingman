@@ -34,14 +34,14 @@ function Section({ title, description, children }: { title: string; description?
 }
 
 /**
- * A new operator in a team's catalog (ADR-0043, ADR-0053):
+ * A new add-on in a team's catalog (ADR-0043, ADR-0053):
  * `operators/<name>/<name>.yaml` and `values.yaml` in one MR, optionally a
  * fleet default in the same MR. It starts from the team's own files
  * (`GET /teams/{team}/addon-template`). The preview lists every cluster that
  * already has a chart of that name in its own folder and changes; they are
  * confirmed before the MR opens, against the previewed plan's digest.
  */
-export function NewOperatorForm({
+export function NewAddonForm({
   team,
   existing,
   readOnlyReason,
@@ -50,7 +50,7 @@ export function NewOperatorForm({
   onOpened,
 }: {
   team: string;
-  /** The team's operator names, which a new one cannot take. */
+  /** The team's add-on names, which a new one cannot take. */
   existing: readonly string[];
   /** Why the team's writes are off: the form cannot be previewed. */
   readOnlyReason: string | null;
@@ -91,7 +91,7 @@ export function NewOperatorForm({
     : !data
       ? "Loading the team's defaults"
       : !chart
-        ? "Give the operator a name"
+        ? "Give the add-on a name"
         : !CHART_NAME.test(chart)
           ? "The name must be lowercase letters, digits and '-' (it becomes part of Application names)"
           : existing.includes(chart)
@@ -123,12 +123,12 @@ export function NewOperatorForm({
   }
 
   if (template.error && !data) {
-    return <ProblemList error={template.error} title={`${team}'s defaults for a new operator could not be loaded`} />;
+    return <ProblemList error={template.error} title={`${team}'s defaults for a new add-on could not be loaded`} />;
   }
   if (!data) return <TemplateSkeleton />;
 
   return (
-    <div className="space-y-5" data-testid="new-operator-form">
+    <div className="space-y-5" data-testid="new-addon-form">
       {readOnlyReason && showReason && <ReadOnlyNote reason={readOnlyReason} />}
       <Section
         title="Deploy config"
@@ -186,7 +186,7 @@ export function NewOperatorForm({
 
       <Section
         title="Fleet default"
-        description="Also deploy it to every destination of one kind the team's repo has a folder for, in the same merge request. Manage it later from the operator's page."
+        description="Also deploy it to every destination of one kind the team's repo has a folder for, in the same merge request. Manage it later from the add-on's page."
       >
         <ScopeChoice scopes={data.scopes} value={scope} onChange={setScope} allowNone name="Also make it a default for" />
         {scope && (
@@ -215,7 +215,7 @@ export function NewOperatorForm({
           {write.previewing ? "Checking…" : "Preview changes"}
         </button>
       </div>
-      <AuthoringReview write={write} title={`New operator ${chart} in ${team}`} />
+      <AuthoringReview write={write} title={`New add-on ${chart} in ${team}`} />
     </div>
   );
 }

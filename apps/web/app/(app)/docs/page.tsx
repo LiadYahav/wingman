@@ -926,31 +926,34 @@ upi      sites/{site}/{env}/upi/{cluster}/{chart}/`}
           <p className="text-sm text-muted-foreground leading-relaxed mt-3 mb-5">
             The <strong>Destinations</strong> page lists every destination, including day1 clusters no team deploys
             to yet, with its kind, site and env, MCE, OCP version, teams and findings; click one to open its charts.
-            The <strong>Addons</strong> page (<strong>Addon Catalog</strong>) lists every team&apos;s charts with their
-            team values, deploy config and versions; it is read-only, and each chart links to its Operators page.
+            The <strong>Addons</strong> page (<strong>Addon Catalog</strong>) lists every team&apos;s add-ons with their
+            team values, deploy config, versions and fleet defaults.
           </p>
 
-          <h3 className="text-base font-semibold mt-6 mb-3">Operators and add-ons</h3>
+          <h3 className="text-base font-semibold mt-6 mb-3">A team&apos;s add-ons and their defaults</h3>
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-            The same chart is called two things, by where it is managed:
+            An add-on is a chart in a team&apos;s catalog: <InlineCode>operators/{"{chart}"}/</InlineCode> in the team&apos;s
+            repo, with its deploy config and team values, and the fleet defaults built from it
+            (<InlineCode>defaults/{"{scope}"}/{"{chart}"}/</InlineCode>). Everything about it is on the{" "}
+            <strong>Addons</strong> page:
           </p>
           <ul className="text-sm text-muted-foreground leading-relaxed mb-3 list-disc space-y-1 pl-5">
             <li>
-              An <strong>operator</strong> is a chart in a team&apos;s catalog (<InlineCode>operators/{"{chart}"}/</InlineCode>:
-              its deploy config and team values) and the fleet defaults built from it
-              (<InlineCode>defaults/{"{scope}"}/{"{chart}"}/</InlineCode>). The <strong>Operators</strong> page lists the
-              teams; a team&apos;s page lists its operators and adds a new one; an operator&apos;s page edits its team default
-              and, under <strong>Defaults</strong>, one panel per scope (hosted clusters, MCEs, the hub, UPI clusters):
-              make it a default there, edit that default, choose which destinations it deploys to, and give one
-              destination its own values or its own deploy config.
+              <strong>New add-on</strong>, on a team, adds one to the team&apos;s catalog; an add-on&apos;s{" "}
+              <strong>Edit team default</strong> changes its deploy config, sync options and team values.
             </li>
             <li>
-              An <strong>add-on</strong> is that chart on one cluster: installed, configured or removed from the
-              cluster&apos;s page (its <strong>Addons</strong> tab), as described below.
+              Its <strong>Defaults &amp; overrides</strong> page has one panel per scope (hosted clusters, MCEs, the hub,
+              UPI clusters): make it a default there, edit that default, choose which destinations it deploys to, and
+              give one destination its own values or its own deploy config.
+            </li>
+            <li>
+              Installing it on one cluster, and configuring or removing it there, is on that cluster&apos;s page (its{" "}
+              <strong>Addons</strong> tab), as described below.
             </li>
           </ul>
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-            Every operator change is one merge request on the team&apos;s repo, previewed first. The preview lists each
+            Every change to an add-on is one merge request on the team&apos;s repo, previewed first. The preview lists each
             destination whose app changes, goes or comes, key by key; the ones that change or go must be confirmed, and
             the merge request is opened only for the plan you saw: if the repo changed in between, Wingman shows the new
             plan instead. A team that has not given Wingman write access is read-only.
@@ -1029,8 +1032,8 @@ cluster               …/{cluster}/{chart}/values.yaml
             of that kind the team&apos;s repo has a folder for. It appears as <strong>fleet default</strong>; editing it
             writes <InlineCode>defaults/{"{scope}"}/{"{chart}"}/values-{"{cluster}"}.yaml</InlineCode>. It cannot be
             removed or pinned for one cluster from the cluster&apos;s page, nor installed into a cluster folder as well
-            (that would generate the app twice). Do it from the chart&apos;s operator instead: on its Operators page,
-            under <strong>Defaults</strong>, the scope&apos;s panel lists every destination with a{" "}
+            (that would generate the app twice). Do it from the add-on instead: on its <strong>Defaults &amp; overrides</strong>{" "}
+            page (from the Addons page), the scope&apos;s panel lists every destination with a{" "}
             <strong>deployed by this default</strong> checkbox. Unticking one excludes it
             (<InlineCode>defaults/{"{scope}"}/exclusions.yaml</InlineCode>, edited in place): its Application is
             deleted and, with <InlineCode>prune: false</InlineCode>, the workload keeps running, unmanaged, so the

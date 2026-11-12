@@ -115,7 +115,7 @@ export function ScopeChoice({
   );
 }
 
-/** What a team's New operator form starts from, read from its own files (`GET /teams/{team}/addon-template`). */
+/** What a team's New add-on form starts from, read from its own files (`GET /teams/{team}/addon-template`). */
 export function useAddonTemplate(team: string, enabled = true) {
   return useQuery<AddonTemplate>({
     queryKey: day2Keys.addonTemplate(team),

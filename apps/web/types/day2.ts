@@ -541,7 +541,7 @@ export interface Adoption {
 export type ImpactEffect = "changed" | "removed" | "added" | (string & {});
 
 /**
- * One destination whose app of the operator changes, goes, or comes.
+ * One destination whose app of the add-on changes, goes, or comes.
  * `changes` compare the effective deploy config and workload values before
  * and after, chart defaults aside; a `values` change with `after: null` is a
  * Helm null: it deletes the chart's own default for that key.
@@ -576,7 +576,7 @@ export interface AuthoringPlan {
   needs_confirmation: string[];
   warnings: Finding[];
   notes: string[];
-  /** Every destination whose app of this operator changes, goes, or comes (ADR-0053). */
+  /** Every destination whose app of this add-on changes, goes, or comes (ADR-0053). */
   impact: DestinationImpact[];
   /** The scope's destinations the default skips, after the change. */
   excluded: string[];
@@ -600,10 +600,9 @@ export interface AuthoringChange extends Day2MergeRequest {
   digest?: string;
 }
 
-// ── Operators (ADR-0053) ─────────────────────────────────────────────────────
-// An operator is a chart in a team's catalog (`operators/<op>/`) and the fleet
-// defaults built from it (`defaults/<scope>/<op>/`); an add-on is that chart on
-// one cluster. The API keeps `addon` in its write paths.
+// ── An add-on's defaults and overrides (ADR-0053) ────────────────────────────
+// An add-on is a chart in a team's catalog (`operators/<chart>/` in the team
+// repo) and the fleet defaults built from it (`defaults/<scope>/<chart>/`).
 // docs/notes/2026-11-12-operators-page-api.md.
 
 /** A file of the team repo, as read. Send `last_commit_id` back on an edit of it. */
@@ -620,8 +619,8 @@ export interface RepoFile {
   problem: string | null;
 }
 
-/** A scope the operator is a default on, in the operators list. */
-export interface OperatorDefaultSummary {
+/** A scope the add-on is a default on, in the add-ons list. */
+export interface AddonDefaultSummary {
   scope: FleetScope;
   label: string;
   /** How many destinations it deploys to. */
@@ -630,8 +629,8 @@ export interface OperatorDefaultSummary {
   excluded: number;
 }
 
-/** `GET /api/day2/teams/{team}/operators`: one per `operators/<op>/`, plus each fleet default without one. */
-export interface OperatorSummary {
+/** `GET /api/day2/teams/{team}/addons`: one per `operators/<chart>/`, plus each fleet default without one. */
+export interface AddonSummary {
   team: string;
   name: string;
   in_catalog: boolean;
@@ -642,7 +641,7 @@ export interface OperatorSummary {
   /** The `ocp-versions/<v>/` folders. */
   ocp_versions: string[];
   /** Only the scopes it is a default on. */
-  defaults: OperatorDefaultSummary[];
+  defaults: AddonDefaultSummary[];
   /** Apps from clusters' own folders. */
   installed_on: number;
   /** How many findings. */
@@ -651,8 +650,8 @@ export interface OperatorSummary {
   read_only_reason: string | null;
 }
 
-/** An `operators/<op>/ocp-versions/<version>/` pin. */
-export interface OperatorOcpVersion {
+/** An `operators/<chart>/ocp-versions/<version>/` pin. */
+export interface AddonOcpVersion {
   version: string;
   target_revision: string | null;
   deploy_config: RepoFile;
@@ -660,7 +659,7 @@ export interface OperatorOcpVersion {
 }
 
 /**
- * Where a scope's destination stands with the operator:
+ * Where a scope's destination stands with the add-on:
  * - `default`: the default deploys it here;
  * - `excluded`: `exclusions.yaml` keeps the default off it, no app;
  * - `own-deploy`: excluded, and deployed from its own folder with its own deploy config (the platform's carve-out);
@@ -691,7 +690,7 @@ export interface ScopeDestination {
   /** False: day1 has no version for it, the platform renders nothing. */
   renders: boolean;
   state: DestinationState;
-  /** An app of this operator exists there. */
+  /** An app of this add-on exists there. */
   deployed: boolean;
   app_name: string | null;
   /** `defaults/<scope>/<op>/values-<name>.yaml`; `null` for the hub. */
@@ -700,7 +699,7 @@ export interface ScopeDestination {
   override_shared_with: string[];
   /** Its own `<op>/` folder, when it has one. */
   own_folder: string | null;
-  /** `<own_folder>/<op>.yaml`, when it has an own folder. */
+  /** `<own_folder>/<chart>.yaml`, when it has an own folder. */
   own_deploy: RepoFile | null;
 }
 
@@ -713,11 +712,11 @@ export interface UnregisteredDestination {
   mce: string;
 }
 
-/** A scope's `defaults/<scope>/exclusions.yaml`, as the operator's entry reads. */
+/** A scope's `defaults/<scope>/exclusions.yaml`, as the add-on's entry reads. */
 export interface ScopeExclusions {
   path: string;
   exists: boolean;
-  /** This operator's entry, as written. */
+  /** This add-on's entry, as written. */
   names: string[];
   /** Names in it that are no destination of the team. */
   unknown_names: string[];
@@ -727,7 +726,7 @@ export interface ScopeExclusions {
   last_commit_id: string | null;
 }
 
-/** The operator on one fleet scope: a default there or not, and every destination of that kind. */
+/** The add-on on one fleet scope: a default there or not, and every destination of that kind. */
 export interface ScopePanel {
   scope: FleetScope;
   /** "every MCE". */
@@ -738,7 +737,7 @@ export interface ScopePanel {
   /** `defaults/<scope>/<op>`. */
   folder: string;
   values_file: RepoFile;
-  /** `defaults/<scope>/<op>/<op>.yaml`: the sync override. */
+  /** `defaults/<scope>/<op>/<chart>.yaml`: the sync override. */
   deploy_config: RepoFile;
   /** Effective, over the team default. */
   sync: SyncSettings;
@@ -753,8 +752,8 @@ export interface ScopePanel {
   last_commit_id: string | null;
 }
 
-/** `GET /api/day2/teams/{team}/operators/{operator}`. */
-export interface OperatorDetail {
+/** `GET /api/day2/teams/{team}/addons/{addon}`. */
+export interface AddonDetail {
   team: string;
   name: string;
   in_catalog: boolean;
@@ -762,11 +761,11 @@ export interface OperatorDetail {
   read_only_reason: string | null;
   /** As `GET /addons/{team}/{addon}`; `null` when not in the catalog. */
   catalog: CatalogEntry | null;
-  /** `operators/<op>/<op>.yaml`. */
+  /** `operators/<chart>/<chart>.yaml`. */
   deploy_config: RepoFile;
-  /** `operators/<op>/values.yaml`. */
+  /** `operators/<chart>/values.yaml`. */
   values_file: RepoFile;
-  ocp_versions: OperatorOcpVersion[];
+  ocp_versions: AddonOcpVersion[];
   /** hosted-clusters, mces, hub, upi. */
   scopes: ScopePanel[];
   warnings: Finding[];

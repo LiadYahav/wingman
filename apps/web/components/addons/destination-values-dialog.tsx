@@ -18,7 +18,7 @@ import { ValuesEditor } from "@/components/addons/values-editor";
 import type { AuthoringChange, DestinationValuesBody, MergePreviewBody, ScopeDestination, ScopePanel, ValuesPreview } from "@/types/day2";
 
 /**
- * The service's merge of the operator on one destination (`POST /merge-preview`):
+ * The service's merge of the add-on on one destination (`POST /merge-preview`):
  * with `override` as its `values-<name>.yaml`, or as it is today when
  * `override` is `undefined`. The merge is the service's (Helm's), never redone here.
  */
