@@ -237,12 +237,28 @@ name that names one destination (`?mce=` when it names more than one).
 |--------|----------|-------------|
 | `GET` | `/api/day2/build` | The `version` and `commit` the service runs |
 | `GET` | `/api/day2/gitlab-info` | Where the sigs group lives, for links |
-| `GET` | `/api/day2/teams` | Every team: each project directly in the sigs group |
+| `GET` | `/api/day2/teams` | Every team: each project directly in the sigs group, and whether Wingman may write there |
+| `GET` | `/api/day2/teams/{team}` | One team, and whether Wingman may write there |
 | `GET` | `/api/day2/addons` | Every catalog entry (`operators/<chart>/`), or one team's (`?team=`) |
 | `GET` | `/api/day2/addons/{team}/{addon}` | One catalog entry |
 | `GET` | `/api/day2/addons/{team}/{addon}/versions` | The chart repo's branches, default branch first |
 | `GET` | `/api/day2/addons/{team}/{addon}/values` | The chart's own `values.yaml` at `?version=` |
 | `GET` | `/api/day2/lints` | Every check on the team repos (`?team=`): render_chain.py's rules plus Wingman's own |
+
+#### Authoring add-ons and fleet defaults
+
+A team is written to only if it gave Wingman's GitLab account Developer on its
+own project (otherwise `403 TEAM_READ_ONLY`, ADR-0043). Every write takes
+`?dry_run=true` (the plan, nothing opened).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/day2/teams/{team}/addon-template` | What a new add-on starts from: the team's usual sync options and chart repos, and each fleet scope's reach |
+| `POST` | `/api/day2/addons/{team}` | Add an add-on to the team's catalog, optionally as a fleet default (opens an MR) |
+| `PUT` | `/api/day2/addons/{team}/{addon}` | Edit its team default: deploy config (edited in place), sync options, values (opens an MR) |
+| `GET` | `/api/day2/fleet-defaults` | Every `defaults/<scope>/<chart>/` (`?team=`), with its reach and sync options |
+| `POST` | `/api/day2/addons/{team}/{addon}/defaults/{scope}` | Make it a fleet default; clusters that have it in their own folder move into it (opens an MR) |
+| `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}` | Edit a fleet default's values and sync options (opens an MR) |
 
 #### Destinations and their charts
 

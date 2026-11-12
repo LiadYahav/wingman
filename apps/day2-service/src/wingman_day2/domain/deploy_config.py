@@ -89,8 +89,13 @@ class LeafApplication:
 
     @property
     def auto_sync(self) -> bool:
-        """Whether the leaf syncs by itself; leaves are manual-sync unless the config opts in."""
-        return isinstance(self.sync_policy, Mapping) and truthy(self.sync_policy.get("automated"))
+        """Whether the leaf syncs by itself; leaves are manual-sync unless the config opts in.
+
+        ArgoCD turns auto-sync on for any ``automated`` map, ``{}`` included.
+        """
+        return isinstance(self.sync_policy, Mapping) and isinstance(
+            self.sync_policy.get("automated"), Mapping
+        )
 
 
 def leaf_application(

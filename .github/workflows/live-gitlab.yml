@@ -103,7 +103,7 @@ jobs:
           printf '%s' "$token" > "$RUNNER_TEMP/gitlab-token"
           echo "token works against $GITLAB_URL/api/v4/user"
 
-      # 27: the contract's size when ADR-0005 recorded it; raise it as the
+      # 41: the contract's size (36 + the access tests of ADR-0043); raise it as the
       # contract grows, so a test that drops out of the run is noticed.
       - name: Live contract suite (must run, never skip)
         env:
@@ -111,7 +111,7 @@ jobs:
         run: |
           WINGMAN_TEST_GITLAB_TOKEN="$(cat "$RUNNER_TEMP/gitlab-token")" \
             uv run pytest -m live_gitlab -v -rA --junitxml="$RUNNER_TEMP/live-gitlab.xml"
-          python3 scripts/assert-junit.py "$RUNNER_TEMP/live-gitlab.xml" --min-tests 27
+          python3 scripts/assert-junit.py "$RUNNER_TEMP/live-gitlab.xml" --min-tests 41
 
       - name: GitLab logs
         if: failure()

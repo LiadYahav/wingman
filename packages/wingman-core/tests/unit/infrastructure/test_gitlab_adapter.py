@@ -20,7 +20,7 @@ from wingman_core.domain.errors import (
     PermissionDeniedError,
     RevisionConflictError,
 )
-from wingman_core.domain.git import CommitAuthor, FileChange, RepoPath
+from wingman_core.domain.git import AccessLevel, CommitAuthor, FileChange, RepoPath
 from wingman_core.domain.merge_request import MergeRequestRef, MRState, NewMergeRequest
 from wingman_core.infrastructure.gitlab import GitLabHttpAdapter
 from wingman_core.infrastructure.gitlab.http import build_client
@@ -161,6 +161,47 @@ async def test_only_get_project_follows_a_redirect() -> None:
     with pytest.raises(InvalidRequestError, match=r"301 to .*/projects/314/repository/branches"):
         await rec.adapter().list_group_projects("helm-charts")
     assert len(rec.requests) == 1
+
+
+def _with_permissions(permissions: object) -> dict[str, object]:
+    return {**MOVED, "id": 7, "permissions": permissions}
+
+
+@pytest.mark.parametrize(
+    ("permissions", "level"),
+    [
+        ({"project_access": {"access_level": 20, "notification_level": 3}}, AccessLevel.REPORTER),
+        ({"project_access": None, "group_access": {"access_level": 30}}, AccessLevel.DEVELOPER),
+        (
+            {"project_access": {"access_level": 40}, "group_access": {"access_level": 30}},
+            AccessLevel.MAINTAINER,
+        ),
+        (
+            {"project_access": {"access_level": 20}, "group_access": {"access_level": 50}},
+            AccessLevel.OWNER,
+        ),
+        ({"project_access": None, "group_access": None}, AccessLevel.NONE),
+        (None, AccessLevel.NONE),
+        ({"project_access": {"access_level": 25}}, AccessLevel.REPORTER),
+    ],
+)
+async def test_access_level_is_the_higher_of_project_and_group_membership(
+    permissions: object, level: AccessLevel
+) -> None:
+    rec = Recorder(reply(200, _with_permissions(permissions)))
+    assert await rec.adapter().access_level(7) is level
+    assert rec.requests[0].url.raw_path == b"/api/v4/projects/7"
+
+
+async def test_access_level_without_a_permissions_member_is_none() -> None:
+    rec = Recorder(reply(200, {**MOVED, "id": 7}))
+    assert await rec.adapter().access_level(7) is AccessLevel.NONE
+
+
+async def test_access_level_of_a_project_the_account_cannot_see_is_not_found() -> None:
+    rec = Recorder(reply(404, {"message": "404 Project Not Found"}))
+    with pytest.raises(NotFoundError):
+        await rec.adapter().access_level(7)
 
 
 async def test_non_utf8_file_is_rejected() -> None:

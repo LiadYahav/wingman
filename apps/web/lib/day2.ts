@@ -9,7 +9,7 @@
  */
 
 import { AMBIGUOUS_WRITE_HINT, isAmbiguousWrite } from "@/lib/write-errors";
-import type { CatalogEntry, DestinationKind, Finding, LayerRole } from "@/types/day2";
+import type { CatalogEntry, DestinationKind, Finding, FleetScope, LayerRole, SyncSettings, Team } from "@/types/day2";
 
 // ── Addressing ───────────────────────────────────────────────────────────────
 
@@ -40,6 +40,10 @@ function narrow(key: string, mce?: string): string | undefined {
 }
 
 const cluster = (key: string) => `/api/day2/clusters/${encodeURIComponent(key)}`;
+const addon = (team: string, chart: string) =>
+  `/api/day2/addons/${encodeURIComponent(team)}/${encodeURIComponent(chart)}`;
+/** `?dry_run=true`: every check, nothing opened, the plan back (ADR-0043). */
+const dry = (dryRun: boolean) => query({ dry_run: dryRun ? "true" : undefined });
 
 export const day2Api = {
   catalog: "/api/day2/addons",
@@ -61,6 +65,18 @@ export const day2Api = {
   bulk: (id: string) => `${cluster(id)}/addons/bulk`,
   history: (key: string, mce?: string) => `${cluster(key)}/history${query({ mce: narrow(key, mce) })}`,
   upgradeCheck: (id: string, to: string) => `${cluster(id)}/upgrade-check${query({ to })}`,
+  teams: "/api/day2/teams",
+  team: (team: string) => `/api/day2/teams/${encodeURIComponent(team)}`,
+  /** What the New add-on form of a team starts from. */
+  addonTemplate: (team: string) => `/api/day2/teams/${encodeURIComponent(team)}/addon-template`,
+  fleetDefaults: (team?: string) => `/api/day2/fleet-defaults${query({ team })}`,
+  /** POST: a new add-on in the team's catalog. */
+  createAddon: (team: string, dryRun = false) => `/api/day2/addons/${encodeURIComponent(team)}${dry(dryRun)}`,
+  /** PUT: the add-on's team default. */
+  teamDefault: (team: string, chart: string, dryRun = false) => `${addon(team, chart)}${dry(dryRun)}`,
+  /** POST: make it a fleet default; PUT: edit that fleet default. */
+  fleetDefault: (team: string, chart: string, scope: FleetScope, dryRun = false) =>
+    `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}${dry(dryRun)}`,
 };
 
 /**
@@ -80,6 +96,9 @@ export const day2Keys = {
   preview: (id: string, team: string, chart: string, version: string, draft: string | null) =>
     ["day2", "preview", id, team, chart, version, draft] as const,
   upgradeCheck: (id: string, to: string) => ["day2", "upgrade-check", id, to] as const,
+  teams: ["day2", "teams"] as const,
+  addonTemplate: (team: string) => ["day2", "addon-template", team] as const,
+  fleetDefaults: ["day2", "fleet-defaults"] as const,
 };
 
 /** The web page of a destination's charts. */
@@ -274,4 +293,61 @@ export function bulkProblemsOf(problem: ProblemSummary): BulkProblem[] {
 /** The sentence to show for a refused write; an unconfirmed one says it may have happened. */
 export function writeErrorMessage(problem: ProblemSummary): string {
   return isAmbiguousWrite(problem) ? `${AMBIGUOUS_WRITE_HINT} ${problem.detail}` : problem.detail;
+}
+
+/** A team's write access refused the request (ADR-0043): its detail is the reason to show. */
+export function isTeamReadOnly(problem: ProblemSummary): boolean {
+  return problem.code === "TEAM_READ_ONLY";
+}
+
+// ── Teams and write access (ADR-0043) ────────────────────────────────────────
+
+/**
+ * Whether the web may offer writes to `team`, and why not. A team the list
+ * does not have (it failed to load, or an older service) counts as writable:
+ * the service still refuses a read-only team's write, and says why.
+ */
+export function teamAccess(teams: readonly Team[] | undefined, team: string): { writable: boolean; reason: string | null } {
+  const found = teams?.find((t) => t.name === team);
+  if (!found) return { writable: true, reason: null };
+  return { writable: found.writable, reason: found.writable ? null : found.read_only_reason ?? `${team} is read-only in Wingman.` };
+}
+
+// ── Fleet scopes and sync options (ADR-0043) ─────────────────────────────────
+
+export const FLEET_SCOPES: readonly FleetScope[] = ["hosted-clusters", "mces", "hub", "upi"];
+
+/** How a scope reads in a sentence ("a default on every hosted cluster"). */
+export const SCOPE_LABEL: Record<FleetScope, string> = {
+  "hosted-clusters": "every hosted cluster",
+  mces: "every MCE",
+  hub: "the hub",
+  upi: "every UPI cluster",
+};
+
+export function scopeLabel(scope: string): string {
+  return SCOPE_LABEL[scope as FleetScope] ?? scope;
+}
+
+/** A sync option is `Name=value` (the service refuses anything else, rule `sync-option-invalid`). */
+export const SYNC_OPTION_PATTERN = /^[A-Za-z][A-Za-z0-9]*=[A-Za-z0-9._-]+$/;
+
+/** The platform's default for a leaf app: manual sync, the namespace created. */
+export const DEFAULT_SYNC: SyncSettings = { auto_sync: false, prune: false, self_heal: false, sync_options: ["CreateNamespace=true"] };
+
+export function sameSync(a: SyncSettings, b: SyncSettings): boolean {
+  return (
+    a.auto_sync === b.auto_sync &&
+    a.prune === b.prune &&
+    a.self_heal === b.self_heal &&
+    a.sync_options.length === b.sync_options.length &&
+    a.sync_options.every((o, i) => o === b.sync_options[i])
+  );
+}
+
+/** One line: "manual sync · CreateNamespace=true" or "auto-sync (prune, self-heal) · none". */
+export function syncSummary(sync: SyncSettings): string {
+  const flags = [sync.prune && "prune", sync.self_heal && "self-heal"].filter(Boolean).join(", ");
+  const mode = sync.auto_sync ? `auto-sync${flags ? ` (${flags})` : ""}` : "manual sync";
+  return `${mode} · ${sync.sync_options.length > 0 ? sync.sync_options.join(", ") : "no sync options"}`;
 }

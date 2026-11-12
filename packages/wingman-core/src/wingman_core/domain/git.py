@@ -10,7 +10,7 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from typing import Final
 
 from wingman_core.domain.errors import InvalidRepoPathError
@@ -105,6 +105,35 @@ class Project:
     path_with_namespace: str
     default_branch: str
     web_url: str
+
+
+class AccessLevel(IntEnum):
+    """An account's role on a GitLab project, as GitLab numbers it (``access_level``).
+
+    Ordered, so ``level >= AccessLevel.DEVELOPER`` reads as "can push a branch
+    and open a merge request". ``NONE`` is no membership at all.
+    """
+
+    NONE = 0
+    MINIMAL = 5
+    GUEST = 10
+    PLANNER = 15
+    REPORTER = 20
+    DEVELOPER = 30
+    MAINTAINER = 40
+    OWNER = 50
+
+    @classmethod
+    def of(cls, value: int | None) -> AccessLevel:
+        """The level GitLab's number means: the highest known level at or below it."""
+        if value is None:
+            return cls.NONE
+        return max((level for level in cls if level <= value), default=cls.NONE)
+
+    @property
+    def role(self) -> str:
+        """The role's name, lowercase (``developer``)."""
+        return self.name.lower()
 
 
 class EntryKind(StrEnum):

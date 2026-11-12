@@ -166,10 +166,24 @@ the right to create that cluster-scoped resource. Set:
 
 ### GitLab token
 
-One token, `gitlab.accessToken`, with the `api` scope. Its account must be a member of the day1
-project, the specs project and every team project in the sigs group, with at least the Developer
-role (it pushes branches and opens merge requests) and the right to merge into the branches the
-MRs target. `docs/ops/runbook.md` (WingmanGitLabTokenRejected) says how to replace it.
+One token, `gitlab.accessToken`, with the `api` scope, of an account that is a member (not an
+instance admin without membership: Wingman reads its role from its memberships). It needs:
+
+- the day1 project and the specs project: at least Developer (it pushes branches and opens merge
+  requests) and the right to merge into the branches the MRs target;
+- each team project in the sigs group (`sigs/<team>`): **per team, the team's choice** (ADR-0043).
+  A team that gives the account Developer or higher on its own project is writable in Wingman (new
+  add-ons, team and fleet defaults, install, update, remove, approvals); a team that gives it less
+  is read-only there, with the reason shown, and every day2 write for it is refused. Reporter is
+  enough for its pages to load; with no membership at all, a private project is not seen.
+
+Group membership is inherited: Developer on the sigs group (or a group above it) makes **every**
+team writable. For per-team opt-in, give the account Reporter on the sigs group (so every team can
+be read) and Developer on each opting-in project, never Developer on the group. Wingman notices a
+changed membership within `DAY2_CACHE_TTL_SECONDS`. A team turns its writes on by having a
+maintainer of `sigs/<team>` add the account to the project as a Developer, and off by lowering or
+removing that membership. `docs/ops/runbook.md` (WingmanGitLabTokenRejected) says how to replace the
+token.
 
 ### Live cluster status (MCE hubs)
 

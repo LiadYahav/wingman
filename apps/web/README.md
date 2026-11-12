@@ -11,6 +11,8 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Two-Phase Cluster Form**: Specs (flavors) set the starting nodepools, presets and locked values; clusters fill the rest. Locked values are read-only, presets editable, owners digits only; nodepool configs come from the machine-config picker (the defaults fill every nodepool the flavor leaves open, including ones added at create); under the configs rule each nodepool keeps the names and picks its hardware; day1's 422 problems show at their fields
 - **Marketplace Addon Picker**: Browse and select Day2 addons on spec creation/edit pages
 - **Charts per Destination**: Install, edit and remove Day2 charts on the hub, MCEs, hosted and UPI clusters; every value shows the layer that set it; bulk install opens one MR per team; a version of its own is a confirmed emergency pin; a removal leaves the workload running (`argocd app delete --cascade` tears it down)
+- **Add-on authoring**: from the catalog, a team adds a new add-on (`operators/<chart>/`, pre-filled from its own files), edits an add-on's team default (sync options included: auto-sync, prune, self-heal, syncOptions) or a fleet default, and makes an add-on a default on every hosted cluster, every MCE, the hub or every UPI cluster; each is one MR, previewed with the service's dry run first, and clusters that already have the chart in their own folder move into the default in the same MR, each one whose app would change confirmed (ADR-0043)
+- **Per-team write access**: a team that has not given Wingman's GitLab account Developer on `sigs/<team>` is read-only, and every write Wingman would offer it says why
 - **Destinations and Lints**: Every place teams deploy to, and every check on the team repos
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
 - **Sites and MCEs are read-only**: picked from the day1 repo's folders (Wingman never creates them); the MCE's mastertag is the default OpenShift version
@@ -137,7 +139,7 @@ components/
 ├── common/             # Shared components (empty states, problems, diffs, review dialog)
 ├── layout/             # The app shell, sidebar, user menu, providers
 ├── clusters/           # Cluster facts, drift, live status, the template-driven form
-├── addons/             # A destination's charts: values editor, cards, bulk install
+├── addons/             # A destination's charts (values editor, cards, bulk install) and add-on authoring (sync options, dry-run plans)
 └── specs/              # Spec-specific components
 
 hooks/

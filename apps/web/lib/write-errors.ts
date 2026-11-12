@@ -24,5 +24,15 @@ export function isAmbiguousWrite(error: unknown): boolean {
  * there), or what an unconfirmed write means.
  */
 export function writeErrorTitle(error: unknown, refused = "The change was refused"): string {
-  return isAmbiguousWrite(error) ? AMBIGUOUS_WRITE_HINT : refused;
+  if (isAmbiguousWrite(error)) return AMBIGUOUS_WRITE_HINT;
+  return isTeamReadOnlyError(error) ? "This team is read-only in Wingman" : refused;
+}
+
+/**
+ * A day2 team that has not given Wingman's GitLab account write access to its
+ * project (`TEAM_READ_ONLY`, ADR-0043): nothing was written, and retrying
+ * will not help until the team opts in. The problem's detail says how.
+ */
+export function isTeamReadOnlyError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "TEAM_READ_ONLY";
 }

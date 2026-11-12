@@ -20,6 +20,11 @@ project, laid out exactly as production lays them out:
 - `upgrade/mces/` has a file for every MCE, not only the sandbox's `ocp4-mce-workflow-test`. They are written for Wingman, so that clusters can be created on each MCE: the production MCEs host 4.16 to 4.18 and `ocp4-prep-mce-site1-a` hosts 4.17 to 4.21, so the offered versions differ per MCE (ADR-0034).
 - `sites/site1/mces/ocp4-prod-mce-site1-b` and `-c` are written for MCE placement (ADR-0050): two prod MCEs with no cluster yet, so site1 has three prod candidates. `-c` hosts 4.16 and 4.17 only. With `DAY1_FAKE_FLEET`, `dev/fleet-fixtures/mce.yaml` (`hubs:`) gives every MCE its nodes and pods: `-b` has room, `-a` less, `-c` too little.
 - Chart repo URLs point at the local GitLab: every `repourl` is `{{GITLAB_URL}}/helm-charts/<chart>.git`, and the seed substitutes `{{GITLAB_URL}}`. Upstream had sanitized placeholders (`...helm-charts...`) or the sim's GitHub URL.
+- `access.yaml` (not a project) gives Wingman's account a role below owner on some projects:
+  `sigs/orca` is `reporter`, so the fake backend and the tests have one team that has not opted in
+  to day2 writes (ADR-0043): its pages load and every write to it is refused with `TEAM_READ_ONLY`.
+  The fake applies it; `scripts/dev/seed_gitlab.py` cannot (it seeds as root, who owns what it
+  creates) and lists the projects it would apply to.
 - `sigs/redbull/operators/kyverno/kyverno.yaml` keeps the **`repoUrl`** spelling on purpose. Production has several files with this known bug (ArgoCD reads only lowercase `repourl`, so the app renders an empty `repoURL`), and Wingman must flag it.
 
 ## The day1 template
