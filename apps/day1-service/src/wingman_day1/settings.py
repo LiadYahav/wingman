@@ -9,6 +9,7 @@ configuration that would let anyone in, or let nobody in, refuses to start.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Final, Literal, Self
 from urllib.parse import urlsplit
@@ -18,8 +19,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from wingman_core.domain.git import RepoPath
 from wingman_core.settings import Environment, RuntimeSettings
+from wingman_day1.domain.quick_links import (
+    DEFAULT_ARGOCD_TEMPLATE,
+    DEFAULT_CONSOLE_TEMPLATE,
+    template_problems,
+)
 
 MIN_DEV_AUTH_SECRET_LENGTH: Final = 32
+_DNS_LABEL: Final = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+_DOMAIN: Final = re.compile(
+    r"^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$"
+)
 
 
 def tls_verify(value: str) -> bool | str:
@@ -117,6 +127,28 @@ class Day1Settings(BaseSettings):
     segments_manager_ssl_verify: str = "true"
     segments_manager_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
 
+    # ── Quick Links: the launcher page (ADR-0052; admins only) ───────────────
+    # A card per cluster opens its ArgoCD, with its console beside it: the hub
+    # Wingman runs on (QUICK_LINKS_HUB_NAME; empty: none) and every MCE of the
+    # day1 repo, at the URL templates in their domain (QUICK_LINKS_DOMAIN, else
+    # MCE_API_DOMAIN; the hub's: QUICK_LINKS_HUB_DOMAIN, else that). The team's
+    # links, and the addresses of a cluster that does not follow the templates,
+    # are the links file (a ConfigMap; re-read on every page load). day1 checks
+    # each link (no credential sent) and caches the answer; an ArgoCD with a
+    # read-only token in the tokens file also shows its applications' counts.
+    quick_links_file: Path = Path("/etc/wingman/quick-links/links.yaml")
+    quick_links_hub_name: str = ""
+    quick_links_hub_domain: str = ""
+    quick_links_domain: str = ""
+    quick_links_argocd_url_template: str = DEFAULT_ARGOCD_TEMPLATE
+    quick_links_console_url_template: str = DEFAULT_CONSOLE_TEMPLATE
+    quick_links_status_enabled: bool = True
+    quick_links_status_ttl_seconds: float = Field(default=60.0, ge=10, le=600)
+    quick_links_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    quick_links_concurrency: int = Field(default=8, ge=1, le=64)
+    quick_links_ssl_verify: str = "true"
+    quick_links_argocd_tokens_file: Path = Path("/etc/wingman/argocd-tokens/tokens")
+
     @field_validator("specs_root_path")
     @classmethod
     def _specs_root_is_a_repo_path(cls, value: str) -> str:
@@ -143,6 +175,30 @@ class Day1Settings(BaseSettings):
         parts = urlsplit(value)
         if value and (parts.scheme not in ("http", "https") or not parts.netloc):
             raise ValueError(f"{value!r} must be empty or an http(s):// URL")
+        return value
+
+    @field_validator("quick_links_hub_name")
+    @classmethod
+    def _hub_is_a_cluster_name(cls, value: str) -> str:
+        value = value.strip()
+        if value and not _DNS_LABEL.match(value):
+            raise ValueError("QUICK_LINKS_HUB_NAME must be empty or a cluster name (a DNS label)")
+        return value
+
+    @field_validator("quick_links_hub_domain", "quick_links_domain")
+    @classmethod
+    def _empty_or_a_domain(cls, value: str) -> str:
+        value = value.strip().strip(".")
+        if value and not _DOMAIN.match(value):
+            raise ValueError(f"{value!r} must be empty or a domain such as example.internal")
+        return value
+
+    @field_validator("quick_links_argocd_url_template", "quick_links_console_url_template")
+    @classmethod
+    def _a_url_template(cls, value: str) -> str:
+        value = value.strip()
+        if problems := template_problems(value):
+            raise ValueError("; ".join(problems))
         return value
 
     @model_validator(mode="after")
@@ -234,6 +290,21 @@ class Day1Settings(BaseSettings):
     def segments_manager_ui_base(self) -> str:
         """Where the cluster page's links point: ``SEGMENTS_MANAGER_UI_URL``, else the API's URL."""
         return self.segments_manager_ui_url or self.segments_manager_url
+
+    @property
+    def quick_links_tls_verify(self) -> bool | str:
+        """``QUICK_LINKS_SSL_VERIFY`` parsed."""
+        return tls_verify(self.quick_links_ssl_verify)
+
+    @property
+    def quick_links_mce_domain(self) -> str:
+        """The MCEs' domain on Quick Links: ``QUICK_LINKS_DOMAIN``, else ``MCE_API_DOMAIN``."""
+        return self.quick_links_domain or self.mce_api_domain.strip().strip(".")
+
+    @property
+    def quick_links_hub_base_domain(self) -> str:
+        """The hub's domain on Quick Links: ``QUICK_LINKS_HUB_DOMAIN``, else the MCEs'."""
+        return self.quick_links_hub_domain or self.quick_links_mce_domain
 
 
 def check_runtime(settings: Day1Settings, runtime: RuntimeSettings) -> None:

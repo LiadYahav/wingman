@@ -119,6 +119,7 @@ wingman/
 | **A suggested cluster name** | Creating from a flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>`: the MCE's env and the first letter no cluster or open create MR has. The name stays editable. A new cluster's sequence is one letter, `a` to `z`, never a number (ADR-0040). |
 | **Nodepools sized by a ratio** | A flavor may give its nodepools a ratio (`nodepool_ratio: [1, 2, 1]`): the create form asks for one size and sets each nodepool's replicas to its ratio times that size; create refuses replicas off the ratio (ADR-0040). |
 | **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. |
+| **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. day1 checks every link (up, down or unknown, with the reason) and an ArgoCD with a read-only token shows its applications' sync and health counts; the browser never pings anything, and icons ship with Wingman (ADR-0052). |
 
 ## Deployment
 
@@ -225,6 +226,13 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 | `GET` | `/api/day1/audit/merge-requests` | Newest Wingman MRs in both projects, any state |
 | `GET` | `/api/day1/audit/commits/{repo}/{sha}/diff` | What one commit changed |
 | `POST` | `/api/webhooks/gitlab` | Clear what a push or MR event in the day1 or specs project made stale (`X-Gitlab-Token`; 404 unless `GITLAB_WEBHOOK_SECRET` is set) |
+
+#### Quick Links (admins only, ADR-0052)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/day1/quick-links` | The launcher's sections and cards: the hub and every MCE's ArgoCD and console, by site, then the links file's sections, with the links file's problems ([API note](docs/notes/2026-11-12-quick-links-api.md)) |
+| `GET` | `/api/day1/quick-links/status` | Each link's check (`up`, `down` or `unknown`, with the reason) and each ArgoCD's applications by sync and health; cached `QUICK_LINKS_STATUS_TTL_SECONDS`, shared by every viewer |
 
 ### Day2 Service (Port 8002)
 
@@ -390,6 +398,20 @@ SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manage
 SEGMENTS_MANAGER_UI_URL=                  # where the cluster page's links point (its UI); default SEGMENTS_MANAGER_URL; both empty: no link
 SEGMENTS_MANAGER_SSL_VERIFY=true          # true, false, or a CA bundle path
 SEGMENTS_MANAGER_TIMEOUT_SECONDS=5
+
+# Quick Links: the launcher page (ADR-0052; admins only)
+QUICK_LINKS_FILE=/etc/wingman/quick-links/links.yaml   # the team's links (the chart's ConfigMap); re-read on every page load; missing: none
+QUICK_LINKS_HUB_NAME=                     # the hub Wingman runs on, as in apps.<name>.<domain>; empty: no hub card
+QUICK_LINKS_HUB_DOMAIN=                   # the hub's domain; default QUICK_LINKS_DOMAIN
+QUICK_LINKS_DOMAIN=                       # the MCEs' domain; default MCE_API_DOMAIN
+QUICK_LINKS_ARGOCD_URL_TEMPLATE=https://openshift-gitops-server-openshift-gitops.apps.{cluster}.{domain}
+QUICK_LINKS_CONSOLE_URL_TEMPLATE=https://console-openshift-console.apps.{cluster}.{domain}
+QUICK_LINKS_STATUS_ENABLED=true           # false: no status dots, and day1 calls none of the links
+QUICK_LINKS_STATUS_TTL_SECONDS=60         # how long a check is kept (10 to 600), answered as long again while it refreshes
+QUICK_LINKS_TIMEOUT_SECONDS=3             # per check and per ArgoCD read, at most 30
+QUICK_LINKS_CONCURRENCY=8                 # checks at once, 1 to 64
+QUICK_LINKS_SSL_VERIFY=true               # true, false, or a CA bundle path
+QUICK_LINKS_ARGOCD_TOKENS_FILE=/etc/wingman/argocd-tokens/tokens   # YAML map of ArgoCD instance to read-only token; missing: no counts
 ```
 
 ### Day2 Service
