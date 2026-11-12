@@ -163,6 +163,7 @@ def hub() -> FakeHubApi:
         # MCE a test creates on is placement's pick (ADR-0050)
         nodes=dict.fromkeys(FIXTURE_MCES, ROOMY),
         pods={mce: {"master-0": 120, "worker-0": 100, "worker-1": 90} for mce in FIXTURE_MCES},
+        free_of_any_type=dict.fromkeys(FIXTURE_MCES, 8),
     )
 
 

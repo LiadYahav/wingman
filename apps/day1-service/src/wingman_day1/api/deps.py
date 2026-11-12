@@ -119,6 +119,8 @@ def placement_service(context: Annotated[Day1Context, Depends(day1_context)]) ->
     if context.placement is None:
         raise FeatureDisabled(PLACEMENT_NOT_AVAILABLE)
     return context.placement
+
+
 def quick_links_service(
     context: Annotated[Day1Context, Depends(day1_context)],
 ) -> QuickLinksService:

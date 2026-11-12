@@ -7,7 +7,12 @@ from dataclasses import replace
 import pytest
 
 from wingman_day1.domain.errors import InvalidInputError, PlacementChangedError
-from wingman_day1.domain.mce_capacity import ExcludedNodes, FreePods, SpareServers
+from wingman_day1.domain.mce_capacity import (
+    ExcludedNodes,
+    FreePods,
+    NodeTypeSupply,
+    SpareServers,
+)
 from wingman_day1.domain.names import Env
 from wingman_day1.domain.openshift_versions import OpenShiftVersions
 from wingman_day1.domain.placement import (
@@ -105,9 +110,10 @@ def test_an_mce_wingman_cannot_read_is_unknown_and_never_picked() -> None:
     assert statuses(candidate) == {
         Check.VERSION: Status.PASS,
         Check.FREE_PODS: Status.UNKNOWN,
+        Check.SERVERS: Status.PASS,
         Check.READABLE: Status.FAIL,
     }
-    assert "403" in candidate.checks[2].detail
+    assert "403" in candidate.checks[3].detail
     assert placement.pick == B
     assert candidate.failures == (
         "free_pods: Unknown: Wingman could not read the MCE.",
@@ -279,6 +285,101 @@ def test_reasons_are_folded_and_cut() -> None:
     assert len(long.reason) == MAX_REASON
 
 
+# ── Servers of each node type ────────────────────────────────────────────────
+
+DELL, HP = "dell-r650", "hp-gen11"
+NEEDS = replace(INPUTS, needs=((DELL, 6), (HP, 2)))
+
+
+def supply(
+    infra_env: str, needed: int, free: int | None, healthy: int | None, **more: object
+) -> NodeTypeSupply:
+    return NodeTypeSupply(infra_env, needed, free, healthy, **more)  # ty: ignore[invalid-argument-type]
+
+
+def servers(candidate: Candidate) -> tuple[Status, str]:
+    check = next(c for c in candidate.checks if c.check is Check.SERVERS)
+    return check.status, check.detail
+
+
+def test_enough_healthy_free_servers_of_every_type_passes() -> None:
+    enough = (supply(DELL, 6, 7, 6), supply(HP, 2, 2, 2))
+    (candidate,) = place(NEEDS, [picture(A, node_types=enough)]).candidates
+    assert servers(candidate) == (
+        Status.PASS,
+        "dell-r650: 6 healthy free of 6 needed; hp-gen11: 2 healthy free of 2 needed.",
+    )
+    assert candidate.picked
+
+
+def test_one_type_short_fails_the_mce_in_plain_words() -> None:
+    short = (supply(DELL, 6, 6, 2), supply(HP, 2, 2, 2))
+    placement = place(
+        NEEDS,
+        [
+            picture(A, node_types=short),
+            picture(B, clusters=9, node_types=(supply(DELL, 6, 8, 8), supply(HP, 2, 3, 3))),
+        ],
+    )
+    candidate = placement.candidate(A)
+    assert candidate is not None
+    status, detail = servers(candidate)
+    assert status is Status.FAIL
+    assert detail.startswith("dell-r650: 2 healthy free of 6 needed;")
+    assert placement.pick == B, "the servers check is required, not a ranking step"
+
+
+def test_too_few_free_agents_fails_even_when_health_is_unknown() -> None:
+    (candidate,) = place(NEEDS, [picture(A, node_types=(supply(DELL, 6, 3, None),))]).candidates
+    assert servers(candidate)[0] is Status.FAIL
+
+
+@pytest.mark.parametrize(
+    ("node_type", "words"),
+    [
+        (supply(DELL, 6, None, None), "the MCE's Agents could not be read"),
+        (supply(DELL, 6, 8, None), "their health unknown without server-scan"),
+        (supply(DELL, 6, 8, 4, not_in_server_scan=2), "2 more free, not in server-scan"),
+    ],
+)
+def test_an_unknown_type_is_unknown_and_never_picked(node_type: NodeTypeSupply, words: str) -> None:
+    placement = place(NEEDS, [picture(A, node_types=(node_type, supply(HP, 2, 2, 2)))])
+    (candidate,) = placement.candidates
+    status, detail = servers(candidate)
+    assert (status, placement.pick) == (Status.UNKNOWN, None)
+    assert words in detail
+
+
+def test_a_short_type_beats_an_unknown_one() -> None:
+    mixed = (supply(DELL, 6, None, None), supply(HP, 2, 2, 1))
+    (candidate,) = place(NEEDS, [picture(A, node_types=mixed)]).candidates
+    assert servers(candidate)[0] is Status.FAIL
+
+
+def test_without_server_scan_free_agents_count_as_they_are() -> None:
+    unchecked = (supply(DELL, 6, 6, None, health_checked=False),)
+    (candidate,) = place(NEEDS, [picture(A, node_types=unchecked)]).candidates
+    assert servers(candidate) == (
+        Status.PASS,
+        "dell-r650: 6 free of 6 needed, their health not checked (server-scan is not configured).",
+    )
+
+
+def test_no_node_type_named_yet_has_nothing_to_check() -> None:
+    (candidate,) = place(INPUTS, [picture(A)]).candidates
+    assert servers(candidate) == (Status.PASS, "No nodepool names a node type yet.")
+
+
+def test_the_agents_read_error_is_said_when_it_makes_the_check_unknown() -> None:
+    unread = picture(
+        A,
+        node_types=(supply(DELL, 6, None, None),),
+        agents_error="Its token may not list Agents (403).",
+    )
+    (candidate,) = place(NEEDS, [unread]).candidates
+    assert servers(candidate)[1].endswith("Its token may not list Agents (403).")
+
+
 # ── The merge request's record ───────────────────────────────────────────────
 
 
@@ -298,9 +399,28 @@ def test_the_description_records_the_pick_the_inputs_and_every_number() -> None:
         f"Wingman picked `{B}`: {B} has the fewest clusters of owner 7: 0, against 2 on {A}.",
     ]
     assert "Site `site1`, prod, OpenShift 4.18.22, owner 7, flavor `rcs`" in text
-    assert f"| `{B}` (pick, chosen) | 0 | 1 | unknown | 200 | pass |" in text
-    assert f"| `{A}` | 2 | 5 | 2 (4) | 200 | pass |" in text
-    assert f"| `{C}` | 1 | 3 | 2 (4) | unknown | not offered: Unknown: Wingman could not" in text
+    assert f"| `{B}` (pick, chosen) | 0 | 1 | unknown | 200 | — | pass |" in text
+    assert f"| `{A}` | 2 | 5 | 2 (4) | 200 | — | pass |" in text
+    assert f"| `{C}` | 1 | 3 | 2 (4) | unknown | — | not offered: Unknown: Wingman could" in text
+
+
+def test_the_description_records_the_servers_of_each_type() -> None:
+    placement = place(
+        NEEDS,
+        [
+            picture(A, node_types=(supply(DELL, 6, 7, 6), supply(HP, 2, 2, 2))),
+            picture(B, node_types=(supply(DELL, 6, 6, 2), supply(HP, 2, None, None))),
+        ],
+    )
+    text = describe_placement(Admission(placement, A))
+    assert "a new cluster needs 70 free pods and 6 `dell-r650`, 2 `hp-gen11` servers." in text
+    assert (
+        f"| `{A}` (pick, chosen) | 1 | 3 | 2 (4) | 200 | dell-r650 6/6, hp-gen11 2/2 | pass |"
+        in text
+    )
+    assert (
+        f"| `{B}` | 1 | 3 | 2 (4) | 200 | dell-r650 2/6, hp-gen11 unknown/2 | not offered:" in text
+    )
 
 
 def test_the_description_records_an_override_and_quotes_its_reason_harmlessly() -> None:

@@ -86,7 +86,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `day1.clusterNameStripPrefix` | `DAY1_CLUSTER_NAME_STRIP_PREFIX` | `ocp4-` | ADR-0015: `""` for the GitHub sandbox |
 | `day1.cacheTtlSeconds` | `DAY1_CACHE_TTL_SECONDS` | `30` | Per replica, at most 60 (ADR-0011) |
 | `day1.provisioner` | `DAY1_PROVISIONER` | `merge-request` | How a create is proposed (ADR-0042): `merge-request` (Wingman opens the MR) or `workflow` (Wingman starts the platform's `provision-cluster` workflow, which opens it). `workflow` needs `workflows.url` |
-| `day1.placementMinFreePods` | `PLACEMENT_MIN_FREE_PODS` | `70` | MCE placement (ADR-0050), on with `clusterStatus.enabled`: an MCE is offered for a new cluster only with at least this many free pods on its Ready, schedulable, non-control-plane nodes ([Live cluster status](#live-cluster-status-mce-hubs)) |
+| `day1.placementMinFreePods` | `PLACEMENT_MIN_FREE_PODS` | `70` | MCE placement (ADR-0050), on with `clusterStatus.enabled`: the cost of one hosted control plane. An MCE is offered for a new cluster only with at least this many free pods (allocatable less in use) on its workers: masters, infra nodes and tainted, cordoned or NotReady nodes are left out ([Live cluster status](#live-cluster-status-mce-hubs)) |
 | `day2.cacheTtlSeconds` | `DAY2_CACHE_TTL_SECONDS` | `15` | Per replica, at most 60 (ADR-0011) |
 | `auth.openshiftOAuthHost` | `OPENSHIFT_OAUTH_HOST` | | The OAuth server's host ([Login](#login-openshift-oauth)) |
 | `auth.openshiftApiHost` | `OPENSHIFT_API_HOST` | | The API server, `host:port` |
@@ -236,7 +236,9 @@ The service account behind each token needs `get` and `list` on:
 | nodes, pods (`list` only) | core (`""`) | the whole hub: placement's free pods |
 
 Placement lists the pods as Table rows (name, status, node), only those not `Succeeded` or
-`Failed`, never their objects, logs or Secrets.
+`Failed`, never their objects, logs or Secrets. Its servers check lists the Agents of the needed
+InfraEnvs across the hub (or in `MCE_INFRAENV_NAMESPACE`): the `agents` rule above already allows
+it, because the binding is cluster-wide.
 
 A control-plane namespace is created per cluster, so the grant is a ClusterRole with a
 ClusterRoleBinding. Apply it on every hub that has a token, binding the service account whose token

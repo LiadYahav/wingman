@@ -15,7 +15,7 @@ MachineSet creates a replacement Machine that waits for a free Agent.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 
 from wingman_day1.domain.errors import (
     HubDeniedError,
@@ -24,6 +24,7 @@ from wingman_day1.domain.errors import (
     HubUnavailableError,
 )
 from wingman_day1.domain.machines import (
+    INFRA_ENV_LABEL,
     AgentMachineObservation,
     AgentObservation,
     MachineObservation,
@@ -35,6 +36,12 @@ from wingman_day1.domain.status import Condition, HostedClusterObservation, Node
 Key = tuple[str, str]
 """``(mce, namespace)``."""
 NO_SUITABLE_AGENTS = Condition("AgentReserved", "False", "NoSuitableAgents", "")
+FREE_AGENT = (
+    Condition("Bound", "False", "Unbound", ""),
+    Condition("Connected", "True", "AgentIsConnected", ""),
+    Condition("Validated", "True", "ValidationsPassing", ""),
+)
+"""An Agent the provider would take: approved, connected, validated, bound to nothing."""
 
 
 class FakeHubApi:
@@ -55,6 +62,7 @@ class FakeHubApi:
         mces: Iterable[str] = (),
         unavailable: Iterable[str] = (),
         denied: Iterable[str] = (),
+        free_of_any_type: Mapping[str, int] | None = None,
     ) -> None:
         """Seed the hubs.
 
@@ -71,6 +79,8 @@ class FakeHubApi:
             mces: Extra MCEs that are configured but empty.
             unavailable: MCEs whose hub cannot be reached.
             denied: MCEs whose hub refuses Wingman's token (403).
+            free_of_any_type: Per MCE, how many free Agents it has of any InfraEnv
+                asked for (a hub with room for every node type, for tests).
         """
         self._hosted_clusters = {
             (mce, hc.namespace, hc.name): hc
@@ -99,6 +109,8 @@ class FakeHubApi:
         )
         self._unavailable = set(unavailable)
         self._denied = set(denied)
+        self._free_of_any_type = dict(free_of_any_type or {})
+        self._configured |= set(self._free_of_any_type)
         self._configured |= self._unavailable | self._denied
         self._backfills = itertools.count(1)
 
@@ -163,6 +175,31 @@ class FakeHubApi:
         """See HubApi.nodes."""
         self._check(mce)
         return sorted(self._nodes.get(mce, []), key=lambda node: node.name)
+
+    async def infra_env_agents(
+        self, mce: str, *, infra_envs: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """See HubApi.infra_env_agents."""
+        self._check(mce)
+        wanted = set(infra_envs)
+        seeded = [
+            agent
+            for (agent_mce, agent_ns), agents in self._agents.items()
+            if agent_mce == mce and (namespace is None or agent_ns == namespace)
+            for agent in agents
+            if agent.infra_env in wanted
+        ]
+        roomy = [
+            AgentObservation(
+                name=f"{infra_env}-free-{i}",
+                labels={INFRA_ENV_LABEL: infra_env},
+                approved=True,
+                conditions=FREE_AGENT,
+            )
+            for infra_env in sorted(wanted)
+            for i in range(self._free_of_any_type.get(mce, 0))
+        ]
+        return sorted([*seeded, *roomy], key=lambda agent: agent.name)
 
     async def pods_per_node(self, mce: str) -> dict[str, int]:
         """See HubApi.pods_per_node."""

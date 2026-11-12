@@ -189,6 +189,12 @@ class HubApi(Protocol):
         """The hub cluster's own nodes, sorted by name."""
         ...
 
+    async def infra_env_agents(
+        self, mce: str, *, infra_envs: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """The Agents of these InfraEnvs, in ``namespace`` or the whole hub, sorted by name."""
+        ...
+
     async def pods_per_node(self, mce: str) -> dict[str, int]:
         """How many pods that are not ``Succeeded`` or ``Failed`` each node runs.
 

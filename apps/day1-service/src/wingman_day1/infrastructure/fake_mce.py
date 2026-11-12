@@ -30,6 +30,7 @@ from wingman_day1.domain.machines import (
     AGENT_MACHINE_REF_LABEL,
     BMH_LABEL,
     DEPLOYMENT_NAME_LABEL,
+    INFRA_ENV_LABEL,
     NODE_POOL_ANNOTATION,
     PROVIDER_ID_PREFIX,
     REVISION_ANNOTATION,
@@ -58,7 +59,6 @@ from wingman_day1.infrastructure.hub_api import (
 
 JSON = dict[str, Any]
 MCE_FILE: Final = Path("dev/fleet-fixtures/mce.yaml")
-INFRA_ENV_LABEL: Final = "infraenvs.agent-install.openshift.io"
 DELETING_SINCE: Final = "2026-11-11T07:55:00Z"
 SCENARIOS: Final = frozenset({"ready", "rebooting", "waiting", "installing", "deleting"})
 _NOT_READY_REASON: Final = {
@@ -107,12 +107,15 @@ def _node_object(raw: Mapping[str, Any]) -> JSON:
     role = str(raw.get("role", "worker"))
     roles = ("master", "control-plane") if role == "control-plane" else (role,)
     ready = bool(raw.get("ready", True))
+    spec: JSON = {"unschedulable": True} if raw.get("cordoned") else {}
+    if raw.get("tainted") or role == "infra":
+        spec["taints"] = [{"key": "node-role.kubernetes.io/infra", "effect": "NoSchedule"}]
     return {
         "metadata": {
             "name": str(raw["name"]),
             "labels": {f"node-role.kubernetes.io/{r}": "" for r in roles},
         },
-        "spec": {"unschedulable": True} if raw.get("cordoned") else {},
+        "spec": spec,
         "status": {
             "allocatable": {"pods": str(raw.get("allocatable", 250))},
             "conditions": [
@@ -180,10 +183,16 @@ class _Builder:
         self._nodes: dict[str, list[NodeObservation]] = {}
         self._pods: dict[str, dict[str, int]] = {}
 
-    def hub_nodes(self, mce: str, nodes: Sequence[Mapping[str, Any]]) -> None:
-        """An MCE's own nodes and their pods, as a Node list and a pod Table the adapter reads."""
+    def hub_nodes(self, mce: str, raw: Mapping[str, Any]) -> None:
+        """An MCE's own nodes, their pods and its free Agents, in the shapes the adapter reads."""
+        nodes: Sequence[Mapping[str, Any]] = raw.get("nodes") or []
         self._nodes[mce] = [node_from(_node_object(node)) for node in nodes]
         self._pods[mce] = pods_per_node_from(_pod_table(nodes))
+        for free in raw.get("free_agents") or []:
+            server, infra_env = str(free["server"]), str(free["infra_env"])
+            self._infra_envs[mce].add(infra_env)
+            agent = self._agent(server, infra_env, scenario="free", taken_by=None, hostname=None)
+            self._agents[(mce, self._agent_ns)].append(agent_from(agent))
 
     def hub(self) -> FakeHubApi:
         return FakeHubApi(
@@ -369,6 +378,7 @@ class _Builder:
             "installing": ("installing-in-progress", "Writing image to disk"),
             "bound": ("unbinding-pending-user-action", None),
             "unapproved": ("known-unbound", None),
+            "free": ("known-unbound", None),
         }.get(scenario, ("added-to-existing-cluster", "Done"))
         return {
             "metadata": {"name": self._agent_name(server), "labels": labels},
@@ -384,7 +394,7 @@ class _Builder:
                 "conditions": [
                     _condition("Connected", True, "AgentIsConnected"),
                     _condition("Validated", True, "ValidationsPassing"),
-                    _condition("Bound", scenario != "unapproved", "Bound"),
+                    _condition("Bound", scenario not in {"unapproved", "free"}, "Bound"),
                     _condition(
                         "Installed",
                         installed,

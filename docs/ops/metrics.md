@@ -61,6 +61,8 @@ Operations of the other dependencies (day1):
   hub's own nodes and pods (ADR-0050), one per page of 500. `denied` means
   the MCE token may not list them: that MCE is never picked until the grant
   in the chart README is applied (the upgrade guide has the steps).
+  `list_agents` also counts the servers check's reads of the needed
+  InfraEnvs' Agents, one per page.
 - `wingman_placement_decisions_total`: a rising `override` is admins
   disagreeing with the rule; a rising `refused` is people choosing MCEs that
   fail a check, or forms left open while the counts moved.

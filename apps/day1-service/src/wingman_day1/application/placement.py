@@ -9,6 +9,10 @@ needs:
   says where, and its file says the owner);
 - each candidate's free pods, from its own nodes and pods, read when asked
   (a cache of seconds, shared; never the minutes another source would be);
+- each candidate's healthy free servers of every node type the new cluster
+  needs: its free Agents in those InfraEnvs, joined to server-scan's servers.
+  The needs come from the form (each nodepool's InfraEnv and replicas), else
+  from the flavor's presets, and at create from the rendered file;
 - each candidate's spare servers, from server-scan's fleet rows (cached as
   for the nodes view).
 
@@ -38,6 +42,7 @@ from wingman_core.domain.mr_conventions import (
     parse_mr_title,
 )
 from wingman_day1.application.sites import SiteCatalog
+from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import Day1Tree, read_tree
 from wingman_day1.domain.cluster_file import load_values, read_values
 from wingman_day1.domain.errors import (
@@ -48,8 +53,15 @@ from wingman_day1.domain.errors import (
     InvalidInputError,
     ServerScanUnavailableError,
 )
-from wingman_day1.domain.mce_capacity import FreePods, free_pods, spare_servers
-from wingman_day1.domain.names import Env, describe_mce
+from wingman_day1.domain.machines import AgentObservation
+from wingman_day1.domain.mce_capacity import (
+    FreePods,
+    free_pods,
+    node_type_supply,
+    spare_servers,
+    summed_needs,
+)
+from wingman_day1.domain.names import Env, describe_mce, dns_label_problems
 from wingman_day1.domain.openshift_versions import bare_release, is_release
 from wingman_day1.domain.owners import MAX_OWNER_DIGITS
 from wingman_day1.domain.paths import ClusterRef, parse_hosted_clusters_path
@@ -72,7 +84,13 @@ SERVER_SCAN_OFF: Final = (
     "server-scan is not configured (SERVER_SCAN_URL), so spare servers are unknown."
 )
 
+MAX_REPLICAS: Final = 1000
+"""The most replicas one need may ask for; more is a typing slip, not a cluster."""
+TEMPLATE_REPLICAS: Final = 2
+"""What the cluster template writes for a nodepool without replicas (``| default(2)``)."""
+
 Record = Callable[[Decision], None]
+Need = tuple[str, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +123,51 @@ def mador_of(content: str) -> str | None:
     return str(mador).strip() or None
 
 
+def need_problems(needs: Sequence[Need]) -> list[str]:
+    """Why a need is not a node type (a DNS label) with 1 to ``MAX_REPLICAS`` replicas."""
+    problems: list[str] = []
+    for infra_env, replicas in needs:
+        problems += [f"need: {p}" for p in dns_label_problems(infra_env, what="InfraEnv")]
+        if not 1 <= replicas <= MAX_REPLICAS:
+            problems.append(
+                f"need: {infra_env} asks for {replicas} replicas; give 1 to {MAX_REPLICAS}"
+            )
+    return problems
+
+
+def file_needs(content: str) -> list[Need]:
+    """A cluster file's needs: each ``nodepool[]`` entry's ``infraEnvName`` and ``replicas``."""
+    try:
+        pools = read_values(load_values(content)).nodepools
+    except InvalidClusterFileError:
+        return []
+    return [
+        (pool.infra_env_name, pool.replicas)
+        for pool in pools
+        if pool.infra_env_name and pool.replicas is not None
+    ]
+
+
+def preset_needs(nodepools: object, ratio: Sequence[int]) -> list[Need]:
+    """A flavor's needs: its preset nodepools that name an InfraEnv, with their replicas.
+
+    A nodepool without preset replicas gets its ratio's part (at size 1), else
+    what the template writes.
+    """
+    if not isinstance(nodepools, list):
+        return []
+    needs: list[Need] = []
+    for index, pool in enumerate(nodepools):
+        infra_env = pool.get("infra_env") if isinstance(pool, dict) else None
+        if not isinstance(infra_env, str) or not infra_env.strip():
+            continue
+        replicas = pool.get("replicas")
+        if isinstance(replicas, bool) or not isinstance(replicas, int) or replicas < 1:
+            replicas = ratio[index] if index < len(ratio) else TEMPLATE_REPLICAS
+        needs.append((infra_env.strip(), replicas))
+    return needs
+
+
 def owner_problems_of(owner: str | None) -> list[str]:
     """Why ``owner`` is not a mador number (ADR-0028); empty when it is, or is absent."""
     if owner is None or (owner.isascii() and owner.isdigit() and len(owner) <= MAX_OWNER_DIGITS):
@@ -123,20 +186,27 @@ class PlacementService:
         *,
         inventory: ServerInventory | None,
         min_free_pods: int,
+        specs: SpecCatalog | None = None,
+        infraenv_namespace: str | None = None,
         scan_names: Mapping[str, str] | None = None,
         record: Record | None = None,
     ) -> None:
         """``hub`` should be cached for seconds only; ``inventory`` is server-scan, if configured.
 
-        ``scan_names`` maps a day1 MCE folder to the name server-scan gives
-        it, where they differ (none do yet: they are matched exactly).
-        ``record`` counts each create's decision (the metric).
+        ``specs`` gives a flavor's preset nodepools when the form sends no
+        needs. ``infraenv_namespace`` (``MCE_INFRAENV_NAMESPACE``) is where the
+        Agents are listed; ``None`` lists them across the hub. ``scan_names``
+        maps a day1 MCE folder to the name server-scan gives it, where they
+        differ (none do yet: they are matched exactly). ``record`` counts each
+        create's decision (the metric).
         """
         self._day1 = day1
         self._sites = sites
         self._hub = hub
         self._inventory = inventory
         self._min_free_pods = min_free_pods
+        self._specs = specs
+        self._infraenv_namespace = infraenv_namespace or None
         self._scan_names = dict(scan_names or {})
         self._record = record
         self._owners: OrderedDict[bytes, str | None] = OrderedDict()
@@ -154,17 +224,24 @@ class PlacementService:
         version: str | None = None,
         owner: str | None = None,
         flavor: str | None = None,
+        needs: Sequence[Need] | None = None,
     ) -> Placement:
         """Every candidate at ``site`` for ``env``, checked and ranked, and the pick.
 
-        An unknown site is ``ResourceNotFoundError``; a version that is not a
-        release, or an owner that is not a mador number, is ``InvalidInputError``.
+        ``needs`` are the nodepools' ``(InfraEnv, replicas)``; ``None`` takes
+        the flavor's presets. An unknown site or flavor is
+        ``ResourceNotFoundError``; a version that is not a release, an owner
+        that is not a mador number, or a need that is not a node type with 1
+        to 1000 replicas, is ``InvalidInputError``.
         """
         problems = owner_problems_of(owner)
         if version is not None and not is_release(version):
             problems.append(f"version: {version!r} is not an OpenShift release like 4.18.22")
+        problems += need_problems(needs or [])
         if problems:
             raise InvalidInputError("the placement's inputs are not acceptable", problems)
+        if needs is None:
+            needs = await self._flavor_needs(flavor)
         names = await self._sites.mce_names(site)
         candidates = [m for m in names if describe_mce(m, site=site).env is env]
         inputs = PlacementInputs(
@@ -174,6 +251,7 @@ class PlacementService:
             owner=owner,
             flavor=flavor,
             min_free_pods=self._min_free_pods,
+            needs=summed_needs(needs),
         )
         tree, (opens, open_problems), (rows, scan_error) = await asyncio.gather(
             read_tree(self._day1), self._open_creates(), self._fleet()
@@ -209,6 +287,7 @@ class PlacementService:
             version=version if version and is_release(version) else None,
             owner=mador_of(content),
             flavor=flavor,
+            needs=[n for n in file_needs(content) if not need_problems([n])],
         )
         return admit(placement, ref.mce, choice)
 
@@ -231,10 +310,11 @@ class PlacementService:
     ) -> McePicture:
         files = [ref for ref in tree.clusters if (ref.site, ref.mce) == (inputs.site, mce)]
         here = [o for o in opens if (o.ref.site, o.ref.mce) == (inputs.site, mce)]
-        versions, owners, (pods, hub_error) = await asyncio.gather(
+        versions, owners, (pods, hub_error), (agents, agents_error) = await asyncio.gather(
             self._sites.openshift_versions(mce),
             asyncio.gather(*(self._owner_of(ref) for ref in files)),
             self._free_pods(mce),
+            self._agents(mce, inputs.needs),
         )
         owner_clusters = None
         if inputs.owner is not None:
@@ -257,7 +337,39 @@ class PlacementService:
             spare_detail=spare_detail,
             pods=pods,
             hub_error=hub_error,
+            node_types=node_type_supply(
+                inputs.needs, agents, rows, server_scan=self._inventory is not None
+            ),
+            agents_error=agents_error,
         )
+
+    async def _flavor_needs(self, flavor: str | None) -> list[Need]:
+        """The flavor's preset nodepools that name an InfraEnv; none without a flavor."""
+        if flavor is None or self._specs is None:
+            return []
+        spec = await self._specs.get(flavor)
+        needs = preset_needs(spec.presets().get("nodepools"), spec.sizing_ratio())
+        return [n for n in needs if not need_problems([n])]
+
+    async def _agents(
+        self, mce: str, needs: Sequence[Need]
+    ) -> tuple[list[AgentObservation] | None, str | None]:
+        """The MCE's Agents of the needed InfraEnvs, or why they could not be read."""
+        if not needs:
+            return [], None
+        try:
+            agents = await self._hub.infra_env_agents(
+                mce,
+                infra_envs=[infra_env for infra_env, _ in needs],
+                namespace=self._infraenv_namespace,
+            )
+        except HubNotConfiguredError:
+            return None, f"Wingman has no token for {mce} (MCE_TOKENS_FILE)."
+        except HubDeniedError as exc:
+            return None, f"Its token may not list Agents ({exc})."
+        except HubError as exc:
+            return None, f"Its Agents could not be read: {exc}."
+        return agents, None
 
     async def _free_pods(self, mce: str) -> tuple[FreePods | None, str | None]:
         """The MCE's free pods, or why its nodes and pods could not be read."""

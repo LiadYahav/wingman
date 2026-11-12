@@ -1,8 +1,11 @@
 """MCE placement over HTTP (ADR-0050): the read, and create checking the chosen MCE.
 
-site1 gets two more prod MCEs for these tests: ``-b`` (empty, roomy) and
-``-c`` (empty, 40 free pods, hosting only 4.16 and 4.17). ``-a`` is the
-fixtures' own, with six cluster files, one of them owner 7's.
+site1 has three prod MCEs: ``-a`` (the fixtures' six cluster files, one of
+them owner 7's), ``-b`` (empty, roomy) and ``-c`` (empty, 40 free pods,
+hosting only 4.16 and 4.17). The create body's nodepools need two servers of
+each of two node types: ``-a`` and ``-b`` have them free and healthy (one of
+``-a``'s Dell servers is in maintenance, one Dell Agent is in no server-scan
+row); ``-c`` has none.
 """
 
 from __future__ import annotations
@@ -19,12 +22,15 @@ from wingman_core.domain.git import FileDiff, RepoPath
 from wingman_core.domain.merge_request import MRState, NewMergeRequest
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
-from wingman_day1.application.placement import added_text, mador_of
+from wingman_day1.api.v1.placement import parse_needs
+from wingman_day1.application.placement import added_text, file_needs, mador_of, preset_needs
+from wingman_day1.domain.errors import HubDeniedError
+from wingman_day1.domain.machines import BMH_LABEL, INFRA_ENV_LABEL, AgentObservation
 from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
-from wingman_day1.infrastructure.fake_hub import FakeHubApi
+from wingman_day1.infrastructure.fake_hub import FREE_AGENT, FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
 from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 
@@ -34,6 +40,12 @@ A, B, C = (f"ocp4-prod-mce-site1-{x}" for x in "abc")
 PLACEMENT = "/api/day1/placement"
 VERSION = "4.18.56"
 MASTER = NodeObservation("master-0", True, False, True, 250)
+DELL, HP = "dell-r660-site1-128c-1024gb-5tb", "hp-gen11-site1-64c"
+AGENTS = {
+    A: [("s1", DELL), ("s2", DELL), ("s5", DELL), ("ghost", DELL), ("s6", HP), ("s7", HP)],
+    B: [("s3", DELL), ("s4", DELL), ("s8", HP), ("s9", HP)],
+}
+"""Each MCE's free Agents: the server they are, and their InfraEnv."""
 
 
 def workers(*names: str, pods: int = 250) -> tuple[NodeObservation, ...]:
@@ -52,7 +64,16 @@ def spare(name: str, mce: str, **changes: Any) -> ServerRow:
     return replace(row, **changes)
 
 
-def placement_hub() -> FakeHubApi:
+def free_agent(server: str, infra_env: str) -> AgentObservation:
+    return AgentObservation(
+        name=f"agent-{server}",
+        labels={INFRA_ENV_LABEL: infra_env, BMH_LABEL: server},
+        approved=True,
+        conditions=FREE_AGENT,
+    )
+
+
+def placement_hub(**more: Any) -> FakeHubApi:
     return FakeHubApi(
         nodes={A: workers("a-0", "a-1"), B: workers("b-0", "b-1"), C: workers("c-0")},
         pods={
@@ -60,8 +81,23 @@ def placement_hub() -> FakeHubApi:
             B: {"b-0": 20, "b-1": 30},
             C: {"c-0": 210},
         },
-        infra_envs={A: {"inventory": ["dell-r660-site1-128c-1024gb-5tb"]}},
+        infra_envs={A: {"inventory": [DELL]}},
+        agents={
+            (mce, "inventory"): [free_agent(server, infra_env) for server, infra_env in agents]
+            for mce, agents in AGENTS.items()
+        },
+        **more,
     )
+
+
+def fleet() -> list[ServerRow]:
+    """server-scan's rows for the free Agents (but ``ghost``): spare servers of their MCE."""
+    return [
+        spare(server, mce, maintenance=server == "s2")
+        for mce, agents in AGENTS.items()
+        for server, _ in agents
+        if server != "ghost"
+    ]
 
 
 async def add_mces(support: Any, gitlab: InMemoryGitLab) -> None:
@@ -83,9 +119,7 @@ async def placed_app(
     clock: Any,
 ) -> FastAPI:
     await add_mces(support, gitlab)
-    inventory = FakeServerInventory(
-        [spare("s1", A), spare("s2", A, maintenance=True), spare("s3", B), spare("s4", B)]
-    )
+    inventory = FakeServerInventory(fleet())
     return support.build_app(
         gitlab=gitlab,
         hub=placement_hub(),
@@ -104,7 +138,7 @@ async def placed(placed_app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 
 
 async def get_placement(
-    client: httpx.AsyncClient, headers: dict[str, str], **query: str
+    client: httpx.AsyncClient, headers: dict[str, str], **query: str | list[str]
 ) -> dict[str, Any]:
     response = await client.get(
         PLACEMENT, params={"site": "site1", "env": "prod", **query}, headers=headers
@@ -136,9 +170,14 @@ async def test_the_pick_its_numbers_and_why(
     placed: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     body = await get_placement(
-        placed, auth(support.VIEWER), version=f"{VERSION}-x86_64", owner="7", flavor="rcs"
+        placed,
+        auth(support.VIEWER),
+        version=f"{VERSION}-x86_64",
+        owner="7",
+        flavor="agent-standard",
     )
-    assert (body["version"], body["owner"], body["flavor"]) == (VERSION, "7", "rcs")
+    assert (body["version"], body["owner"], body["flavor"]) == (VERSION, "7", "agent-standard")
+    assert body["needs"] == [], "the flavor names no InfraEnv, and the form sent no need"
     assert body["pick"] == B
     assert body["why"] == f"{B} has the fewest clusters of owner 7: 0, against 1 on {A}."
     assert [(c["mce"], c["rank"]) for c in body["candidates"]] == [(B, 1), (A, 2), (C, None)]
@@ -146,8 +185,8 @@ async def test_the_pick_its_numbers_and_why(
     assert found[A]["clusters"] == 6
     assert (found[A]["owner_clusters"], found[B]["owner_clusters"]) == (1, 0)
     assert found[A]["behind_on"] == "owner_clusters"
-    assert found[A]["spare"] == {"total": 2, "usable": 1}
-    assert found[B]["spare"] == {"total": 2, "usable": 2}
+    assert found[A]["spare"] == {"total": 5, "usable": 4}
+    assert found[B]["spare"] == {"total": 4, "usable": 4}
     assert found[C]["spare"] is None
     assert found[C]["spare_detail"] == (
         f"server-scan names no server for {C}, so its spare servers are unknown."
@@ -157,12 +196,19 @@ async def test_the_pick_its_numbers_and_why(
         "allocatable": 500,
         "used": 50,
         "nodes_counted": 2,
-        "nodes_excluded": {"control_plane": 1, "not_ready": 0, "unschedulable": 0},
+        "nodes_excluded": {
+            "control_plane": 1,
+            "infra": 0,
+            "not_ready": 0,
+            "unschedulable": 0,
+            "tainted": 0,
+        },
     }
     assert found[C]["eligible"] is False
     assert [(c["check"], c["status"]) for c in found[C]["checks"]] == [
         ("version", "fail"),
         ("free_pods", "fail"),
+        ("servers", "pass"),
         ("readable", "pass"),
     ]
     assert found[C]["checks"][1]["detail"] == "40 free pods; a new cluster needs 70."
@@ -252,9 +298,9 @@ async def test_an_mce_whose_token_may_not_list_pods_is_unreadable_and_never_pick
     found = by_mce(body)
     assert body["pick"] == A
     assert found[B]["pods"] is None
-    assert found[B]["checks"][2]["status"] == "fail"
-    assert "may not list nodes and pods" in found[B]["checks"][2]["detail"]
-    assert "unreachable" in found[C]["checks"][2]["detail"]
+    assert found[B]["checks"][3]["status"] == "fail"
+    assert "may not list nodes and pods" in found[B]["checks"][3]["detail"]
+    assert "unreachable" in found[C]["checks"][3]["detail"]
 
 
 # ── Create ───────────────────────────────────────────────────────────────────
@@ -288,8 +334,9 @@ async def test_creating_on_the_pick_records_it_in_the_merge_request(
     (text,) = await descriptions(gitlab, support)
     assert "### MCE placement" in text
     assert f"Wingman picked `{B}`: {B} has the fewest clusters of owner 7" in text
-    assert f"| `{B}` (pick, chosen) | 0 | 0 | 2 (2) | 450 | pass |" in text
-    assert f"| `{C}` | 0 | 0 | unknown | 40 | not offered:" in text
+    servers = f"{DELL} 2/2, {HP} 2/2"
+    assert f"| `{B}` (pick, chosen) | 0 | 0 | 4 (4) | 450 | {servers} | pass |" in text
+    assert f"| `{C}` | 0 | 0 | unknown | 40 | {DELL} 0/2, {HP} 0/2 | not offered:" in text
     assert text.index("### MCE placement") < text.index("\n---\n"), "above the footer"
     assert sample(placed_app, "picked") == 1
 
@@ -326,7 +373,8 @@ async def test_an_mce_that_fails_a_check_is_refused_with_its_reasons(
     assert (refused.status_code, refused.json()["code"]) == (422, "VALIDATION_ERROR")
     assert refused.json()["detail"] == f"MCE {C} cannot take this cluster"
     assert refused.json()["details"]["problems"] == [
-        "free_pods: 40 free pods; a new cluster needs 70."
+        "free_pods: 40 free pods; a new cluster needs 70.",
+        f"servers: {DELL}: 0 healthy free of 2 needed; {HP}: 0 healthy free of 2 needed.",
     ]
 
 
@@ -462,3 +510,197 @@ def test_a_new_files_text_comes_from_its_added_lines() -> None:
 )
 def test_a_files_mador(content: str, mador: str | None) -> None:
     assert mador_of(content) == mador
+
+
+# ── Servers of each node type ────────────────────────────────────────────────
+
+
+def servers_check(candidate: dict[str, Any]) -> tuple[str, str]:
+    check = next(c for c in candidate["checks"] if c["check"] == "servers")
+    return check["status"], check["detail"]
+
+
+async def test_the_needs_the_form_sends_are_checked_per_type(
+    placed: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    body = await get_placement(
+        placed,
+        auth(support.VIEWER),
+        version=VERSION,
+        need=[f"{DELL}:1", f"{DELL}:1", f"{HP}:2"],
+    )
+    assert body["needs"] == [
+        {"infra_env": DELL, "replicas": 2},
+        {"infra_env": HP, "replicas": 2},
+    ]
+    found = by_mce(body)
+    assert found[A]["node_types"][0] == {
+        "infra_env": DELL,
+        "needed": 2,
+        "free_agents": 4,
+        "healthy": 2,
+        "not_in_server_scan": 1,
+        "health_checked": True,
+        "status": "pass",
+        "detail": f"{DELL}: 2 healthy free of 2 needed (1 more free, not in server-scan)",
+    }
+    assert servers_check(found[B])[0] == "pass"
+    assert servers_check(found[C]) == (
+        "fail",
+        f"{DELL}: 0 healthy free of 2 needed; {HP}: 0 healthy free of 2 needed.",
+    )
+
+
+async def test_a_type_short_on_one_mce_and_unknown_on_another_leaves_no_pick(
+    placed: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    """A: 2 healthy Dell, one free Agent not in server-scan; B: 2 Dell in all."""
+    body = await get_placement(placed, auth(support.VIEWER), version=VERSION, need=f"{DELL}:3")
+    found = by_mce(body)
+    assert servers_check(found[A]) == (
+        "unknown",
+        f"{DELL}: 2 healthy free of 3 needed (1 more free, not in server-scan).",
+    )
+    assert servers_check(found[B]) == ("fail", f"{DELL}: 2 healthy free of 3 needed.")
+    assert body["pick"] is None
+    assert body["problems"] == ["No prod MCE at site1 passes every check."]
+
+
+async def test_a_type_short_on_the_pick_takes_it_out(
+    placed: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    """Without needs B is the pick (owner 7 has none there); B has no third HP server."""
+    plain = await get_placement(placed, auth(support.VIEWER), version=VERSION, owner="7")
+    assert plain["pick"] == B
+    short = await get_placement(
+        placed, auth(support.VIEWER), version=VERSION, owner="7", need=f"{HP}:3"
+    )
+    assert servers_check(by_mce(short)[B]) == ("fail", f"{HP}: 2 healthy free of 3 needed.")
+    assert servers_check(by_mce(short)[A])[0] == "fail"
+
+
+async def test_create_checks_the_servers_its_own_nodepools_need(
+    placed: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    variables = {**support.create_body()["variables"]}
+    variables["nodepools"] = support.nodepools(DELL, HP, replicas=3)
+    body = support.create_body(mce=B, variables=variables, placement={"pick": B})
+    refused = await placed.post(
+        "/api/day1/clusters/preview", json=body, headers=auth(support.ALICE)
+    )
+    assert (refused.status_code, refused.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert refused.json()["detail"] == "No prod MCE at site1 can take this cluster"
+    assert (
+        f"{B}: servers: {DELL}: 2 healthy free of 3 needed; {HP}: 2 healthy free of 3 needed."
+        in (refused.json()["details"]["problems"])
+    )
+
+
+@pytest.mark.parametrize(
+    "need",
+    [f"{DELL}", f"{DELL}:x", f"{DELL}:0", f"{DELL}:1001", "Not_A_Label:2", ":2"],
+)
+async def test_a_need_that_is_not_a_type_and_replicas_is_a_problem(
+    placed: httpx.AsyncClient, auth: Auth, support: Any, need: str
+) -> None:
+    response = await placed.get(
+        PLACEMENT,
+        params={"site": "site1", "env": "prod", "need": need},
+        headers=auth(support.VIEWER),
+    )
+    assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+
+
+async def test_an_unknown_flavor_is_not_found(
+    placed: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    response = await placed.get(
+        PLACEMENT,
+        params={"site": "site1", "env": "prod", "flavor": "rcs"},
+        headers=auth(support.VIEWER),
+    )
+    assert response.status_code == 404
+
+
+async def test_agents_the_token_may_not_list_make_the_servers_unknown(
+    support: Any,
+    gitlab: InMemoryGitLab,
+    identity: FakeIdentityProvider,
+    day2: FakeDay2Addons,
+    clock: Any,
+    auth: Auth,
+) -> None:
+    class NoAgents(FakeHubApi):
+        async def infra_env_agents(self, mce: str, **_: Any) -> list[AgentObservation]:
+            raise HubDeniedError(f"MCE {mce!r} hub API denied Wingman's token (403) on GET agents")
+
+    hub = NoAgents(nodes={A: workers("a-0"), B: workers("b-0")})
+    app = support.build_app(
+        gitlab=gitlab,
+        hub=hub,
+        identity=identity,
+        day2=day2,
+        clock=clock,
+        inventory=FakeServerInventory(fleet()),
+    )
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
+        body = await get_placement(client, auth(support.VIEWER), version=VERSION, need=f"{DELL}:1")
+    status, detail = servers_check(by_mce(body)[A])
+    assert status == "unknown"
+    assert "Its token may not list Agents" in detail
+    assert body["pick"] is None
+
+
+async def test_without_server_scan_free_agents_count_as_they_are(
+    support: Any,
+    gitlab: InMemoryGitLab,
+    identity: FakeIdentityProvider,
+    day2: FakeDay2Addons,
+    clock: Any,
+    auth: Auth,
+) -> None:
+    app = support.build_app(
+        gitlab=gitlab, hub=placement_hub(), identity=identity, day2=day2, clock=clock
+    )
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
+        body = await get_placement(client, auth(support.VIEWER), version=VERSION, need=f"{DELL}:4")
+    found = by_mce(body)
+    assert found[A]["node_types"][0]["health_checked"] is False
+    assert servers_check(found[A]) == (
+        "pass",
+        f"{DELL}: 4 free of 4 needed, their health not checked (server-scan is not configured).",
+    )
+    assert body["pick"] == A
+
+
+async def test_an_empty_need_says_no_needs_and_skips_the_flavor(
+    placed: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    body = await get_placement(placed, auth(support.VIEWER), version=VERSION, need="")
+    assert body["needs"] == []
+    assert {servers_check(c)[1] for c in body["candidates"]} == {
+        "No nodepool names a node type yet."
+    }
+
+
+def test_needs_from_the_query_the_flavor_and_the_file() -> None:
+    assert parse_needs(["", f"{DELL}:2", f"{HP}:1"]) == [(DELL, 2), (HP, 1)]
+    assert parse_needs([""]) == []
+    presets = [
+        {"infra_env": DELL, "replicas": 3},
+        {"infra_env": HP},
+        {"replicas": 2},
+        {"infra_env": " ", "replicas": 1},
+        "not a nodepool",
+    ]
+    assert preset_needs(presets, ratio=()) == [(DELL, 3), (HP, 2)], "2: the template's default"
+    assert preset_needs(presets, ratio=(1, 4)) == [(DELL, 3), (HP, 4)], "the ratio's part"
+    assert preset_needs(None, ratio=()) == []
+    content = (
+        f"nodepool:\n  - infraEnvName: {DELL}\n    replicas: 3\n"
+        f"  - infraEnvName: {HP}\n    replicas: 2\n  - infraEnvName: {HP}\n"
+    )
+    assert file_needs(content) == [(DELL, 3), (HP, 2)]
+    assert file_needs("nodepool: [\n") == []

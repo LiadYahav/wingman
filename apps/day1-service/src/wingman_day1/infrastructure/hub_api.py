@@ -28,7 +28,7 @@ from __future__ import annotations
 import re
 import ssl
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final, Protocol
@@ -46,6 +46,7 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.machines import (
     DEPLOYMENT_NAME_LABEL,
+    INFRA_ENV_LABEL,
     NODE_POOL_ANNOTATION,
     REVISION_ANNOTATION,
     SET_NAME_LABEL,
@@ -56,7 +57,12 @@ from wingman_day1.domain.machines import (
     MachineObservation,
     MachineSetObservation,
 )
-from wingman_day1.domain.mce_capacity import CONTROL_PLANE_ROLES, NodeObservation
+from wingman_day1.domain.mce_capacity import (
+    BLOCKING_TAINTS,
+    CONTROL_PLANE_ROLES,
+    INFRA_ROLE,
+    NodeObservation,
+)
 from wingman_day1.domain.names import dns_label_problems
 from wingman_day1.domain.selectors import LabelRequirement, LabelSelector, Operator
 from wingman_day1.domain.status import (
@@ -275,6 +281,32 @@ class HttpHubApi:
             mce, f"{_CORE}/nodes", HubOperation.LIST_NODES, params={}, accept=None, parse=_nodes
         )
         return sorted((node for page in pages for node in page), key=lambda node: node.name)
+
+    async def infra_env_agents(
+        self, mce: str, *, infra_envs: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """See HubApi.infra_env_agents: the Agents whose InfraEnv label is one of these, paged."""
+        for infra_env in infra_envs:
+            _object_name("InfraEnv", infra_env)
+        if namespace:
+            _object_name("namespace", namespace)
+        if not infra_envs:
+            return []
+        path = (
+            f"{_AGENT_INSTALL}/namespaces/{namespace}/agents"
+            if namespace
+            else (f"{_AGENT_INSTALL}/agents")
+        )
+        selector = f"{INFRA_ENV_LABEL} in ({','.join(sorted(set(infra_envs)))})"
+        pages = await self._paged(
+            mce,
+            path,
+            HubOperation.LIST_AGENTS,
+            params={"labelSelector": selector},
+            accept=None,
+            parse=_agents,
+        )
+        return sorted((agent for page in pages for agent in page), key=lambda a: a.name)
 
     async def pods_per_node(self, mce: str) -> dict[str, int]:
         """See HubApi.pods_per_node: Table rows of the non-terminal pods, a page at a time."""
@@ -712,21 +744,30 @@ def pod_quantity(value: JSON) -> int:
 
 
 def node_from(raw: JSON) -> NodeObservation:
-    """A Node (``v1``): Ready, cordoned, a control-plane role, its allocatable pods."""
+    """A Node (``v1``): Ready, cordoned, its roles and blocking taints, its allocatable pods."""
     _, labels, _ = _metadata(raw)
     spec = _mapping(_mapping(raw).get("spec"))
     status = _mapping(_mapping(raw).get("status"))
+    taints = spec.get("taints") or []
+    if not isinstance(taints, list):
+        raise TypeError("spec.taints is not a list")
     return NodeObservation(
         name=_metadata_name(raw),
         ready=any(c.type == "Ready" and c.status == "True" for c in _conditions(status)),
         unschedulable=spec.get("unschedulable") is True,
         control_plane=any(role in labels for role in CONTROL_PLANE_ROLES),
         allocatable_pods=pod_quantity(_mapping(status.get("allocatable")).get("pods")),
+        infra=INFRA_ROLE in labels,
+        tainted=any(_mapping(taint).get("effect") in BLOCKING_TAINTS for taint in taints),
     )
 
 
 def _nodes(raw: JSON) -> list[NodeObservation]:
     return [node_from(item) for item in _items(raw)]
+
+
+def _agents(raw: JSON) -> list[AgentObservation]:
+    return [agent_from(item) for item in _items(raw)]
 
 
 def pods_per_node_from(raw: JSON) -> dict[str, int]:

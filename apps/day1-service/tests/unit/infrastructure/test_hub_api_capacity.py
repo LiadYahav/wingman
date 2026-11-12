@@ -14,7 +14,8 @@ import pytest
 from prometheus_client import CollectorRegistry
 
 from wingman_core.observability.metrics import WingmanMetrics
-from wingman_day1.domain.errors import HubDeniedError, HubUnavailableError
+from wingman_day1.domain.errors import HubDeniedError, HubObjectNotFoundError, HubUnavailableError
+from wingman_day1.domain.machines import BMH_LABEL, INFRA_ENV_LABEL
 from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.infrastructure.hub_api import (
     MAX_PAGES,
@@ -269,3 +270,81 @@ def test_parsers_on_their_own() -> None:
     assert node_from(node("w", ready="False")).ready is False
     assert pods_per_node_from(pod_table()) == {}
     assert pods_per_node_from({**pod_table(), "rows": None}) == {}
+
+
+@pytest.mark.parametrize(
+    ("effects", "tainted"),
+    [
+        (["NoSchedule"], True),
+        (["NoExecute"], True),
+        (["PreferNoSchedule"], False),
+        (["PreferNoSchedule", "NoSchedule"], True),
+        ([], False),
+    ],
+)
+def test_a_node_is_tainted_by_a_no_schedule_or_no_execute_taint(
+    effects: list[str], tainted: bool
+) -> None:
+    raw = node("infra-0", roles=("infra",))
+    spec = raw["spec"]
+    assert isinstance(spec, dict)
+    spec["taints"] = [{"key": f"k{i}", "effect": e} for i, e in enumerate(effects)]
+    parsed = node_from(raw)
+    assert (parsed.infra, parsed.tainted, parsed.control_plane) == (True, tainted, False)
+
+
+def test_taints_that_are_not_a_list_are_malformed() -> None:
+    raw = node("w")
+    spec = raw["spec"]
+    assert isinstance(spec, dict)
+    spec["taints"] = "NoSchedule"
+    with pytest.raises(TypeError):
+        node_from(raw)
+
+
+def agent_object(name: str, infra_env: str) -> dict[str, object]:
+    return {
+        "metadata": {
+            "name": name,
+            "namespace": "inventory",
+            "labels": {INFRA_ENV_LABEL: infra_env, BMH_LABEL: name},
+        },
+        "spec": {"approved": True},
+        "status": {"conditions": [{"type": "Bound", "status": "False"}]},
+    }
+
+
+async def test_agents_of_the_needed_infra_envs_are_listed_by_label_across_the_hub() -> None:
+    api, recorder = make(
+        pages(
+            {"items": [agent_object("b-1", "hp")], "metadata": {"continue": "2"}},
+            {"items": [agent_object("a-1", "dell")], "metadata": {"continue": ""}},
+        )
+    )
+    agents = await api.infra_env_agents(MCE, infra_envs=["hp", "dell", "hp"], namespace=None)
+    assert [(a.name, a.infra_env, a.approved) for a in agents] == [
+        ("a-1", "dell", True),
+        ("b-1", "hp", True),
+    ]
+    first, second = recorder.requests
+    assert first.url.path == "/apis/agent-install.openshift.io/v1beta1/agents"
+    assert first.url.params["labelSelector"] == f"{INFRA_ENV_LABEL} in (dell,hp)"
+    assert first.url.params["limit"] == str(PAGE_SIZE)
+    assert second.url.params["continue"] == "2"
+
+
+async def test_agents_are_listed_in_the_infraenv_namespace_when_it_is_set() -> None:
+    api, recorder = make(pages({"items": []}))
+    assert await api.infra_env_agents(MCE, infra_envs=["dell"], namespace="inventory") == []
+    (request,) = recorder.requests
+    assert (
+        request.url.path == "/apis/agent-install.openshift.io/v1beta1/namespaces/inventory/agents"
+    )
+
+
+async def test_no_needed_type_reads_nothing_and_a_bad_name_never_reaches_the_hub() -> None:
+    api, recorder = make(pages())
+    assert await api.infra_env_agents(MCE, infra_envs=[], namespace=None) == []
+    with pytest.raises(HubObjectNotFoundError):
+        await api.infra_env_agents(MCE, infra_envs=["dell) or (x"], namespace=None)
+    assert recorder.requests == []

@@ -9,6 +9,8 @@ seconds (ADR-0050). A failure is not cached; concurrent misses share one read.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.domain.machines import (
     AgentMachineObservation,
@@ -93,6 +95,17 @@ class CachedHubApi:
         """See HubApi.nodes."""
         return await self._cache.get_or_fetch(
             keys.hub(mce, "nodes", "*"), lambda: self._inner.nodes(mce), ttl=self._ttl
+        )
+
+    async def infra_env_agents(
+        self, mce: str, *, infra_envs: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """See HubApi.infra_env_agents."""
+        types = ",".join(sorted(set(infra_envs)))
+        return await self._cache.get_or_fetch(
+            keys.hub(mce, "infraenv-agents", namespace or "*", types),
+            lambda: self._inner.infra_env_agents(mce, infra_envs=infra_envs, namespace=namespace),
+            ttl=self._ttl,
         )
 
     async def pods_per_node(self, mce: str) -> dict[str, int]:

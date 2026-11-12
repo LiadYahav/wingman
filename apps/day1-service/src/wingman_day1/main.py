@@ -452,6 +452,8 @@ def build_context(
             CachedHubApi(adapters.hub, cache, ttl=PLACEMENT_TTL_SECONDS),
             inventory=inventory,
             min_free_pods=settings.placement_min_free_pods,
+            specs=spec_catalog,
+            infraenv_namespace=settings.mce_infraenv_namespace or None,
             record=metrics.observe_placement if metrics is not None else None,
         )
         if adapters.hub is not None
