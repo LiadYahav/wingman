@@ -3,7 +3,8 @@
 A cluster's nodes are six reads of its MCE (ADR-0038), and live status two
 per cluster on every open cluster list (ADR-0041). Both are polled, by every
 person with a page open, so the reads are cached for a short TTL (ADR-0011)
-and shared. A failure is not cached.
+and shared. Placement's nodes and pods use their own instance, with a TTL of
+seconds (ADR-0050). A failure is not cached; concurrent misses share one read.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from wingman_day1.domain.machines import (
     MachineObservation,
     MachineSetObservation,
 )
+from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 from wingman_day1.infrastructure import cache_keys as keys
 from wingman_day1.ports import HubApi
@@ -85,4 +87,20 @@ class CachedHubApi:
             keys.hub(mce, "agents", namespace),
             lambda: self._inner.agents(mce, namespace=namespace),
             ttl=self._ttl,
+        )
+
+    async def nodes(self, mce: str) -> list[NodeObservation]:
+        """See HubApi.nodes."""
+        return await self._cache.get_or_fetch(
+            keys.hub(mce, "nodes", "*"), lambda: self._inner.nodes(mce), ttl=self._ttl
+        )
+
+    async def pods_per_node(self, mce: str) -> dict[str, int]:
+        """See HubApi.pods_per_node."""
+        return dict(
+            await self._cache.get_or_fetch(
+                keys.hub(mce, "pods-per-node", "*"),
+                lambda: self._inner.pods_per_node(mce),
+                ttl=self._ttl,
+            )
         )

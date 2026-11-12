@@ -1,9 +1,15 @@
 """HttpHubApi: the MCE hub Kubernetes APIs over httpx, read only.
 
-HostedClusters, NodePools and InfraEnvs (live status), and each cluster's
+HostedClusters, NodePools and InfraEnvs (live status), each cluster's
 Machines, MachineSets, AgentMachines and Agents (its nodes by NodePool,
-ADR-0038). CAPI is always asked for ``cluster.x-k8s.io/v1beta1``: every MCE
+ADR-0038), and the hub's own nodes and pods (placement's free pods,
+ADR-0050). CAPI is always asked for ``cluster.x-k8s.io/v1beta1``: every MCE
 from 4.16 serves it, and 4.16 to 4.18 serve nothing newer.
+
+An MCE runs thousands of pods, and a pod object is kilobytes. Placement
+needs only each pod's node, so pods are listed in Kubernetes' Table form
+(one short row per pod, no object), only those that are not ``Succeeded`` or
+``Failed``, a page at a time (ADR-0050 has the sizes).
 
 Each MCE hub has its own API server and its own service-account token,
 mounted as a YAML file (``MCE_TOKENS_FILE``): the legacy ``{<mce>: <token>}``,
@@ -19,6 +25,7 @@ line: messages name the MCE and the resource path only.
 
 from __future__ import annotations
 
+import re
 import ssl
 import time
 from collections.abc import Callable, Mapping
@@ -49,6 +56,7 @@ from wingman_day1.domain.machines import (
     MachineObservation,
     MachineSetObservation,
 )
+from wingman_day1.domain.mce_capacity import CONTROL_PLANE_ROLES, NodeObservation
 from wingman_day1.domain.names import dns_label_problems
 from wingman_day1.domain.selectors import LabelRequirement, LabelSelector, Operator
 from wingman_day1.domain.status import (
@@ -63,7 +71,20 @@ _HYPERSHIFT: Final = "/apis/hypershift.openshift.io/v1beta1"
 _AGENT_INSTALL: Final = "/apis/agent-install.openshift.io/v1beta1"
 _CAPI: Final = "/apis/cluster.x-k8s.io/v1beta1"
 _CAPI_AGENT: Final = "/apis/capi-provider.agent-install.openshift.io/v1beta1"
+_CORE: Final = "/api/v1"
 _API_PORT: Final = 6443
+PAGE_SIZE: Final = 500
+"""Objects per list page (``limit``); the API server pages the rest with ``continue``."""
+MAX_PAGES: Final = 400
+"""A list that is still paging after this many pages is refused as unavailable."""
+TABLE: Final = "application/json;as=Table;v=v1;g=meta.k8s.io"
+"""The Accept header for a list as Table rows, without the objects (``includeObject=None``)."""
+NON_TERMINAL_PODS: Final = "status.phase!=Succeeded,status.phase!=Failed"
+"""The field selector for pods that still take a slot on their node."""
+NO_NODE: Final = "<none>"
+"""The Table's Node cell of a pod not bound to a node yet."""
+_QUANTITY = re.compile(r"^([0-9]+)(k|M)?$")
+_QUANTITY_SCALE: Final = {None: 1, "k": 1000, "M": 1_000_000}
 
 JSON = Any
 """A decoded Kubernetes JSON value; narrowed by the parsers below."""
@@ -248,6 +269,29 @@ class HttpHubApi:
             HubOperation.LIST_AGENTS, self._list(mce, namespace, path, agent_from)
         )
 
+    async def nodes(self, mce: str) -> list[NodeObservation]:
+        """See HubApi.nodes: the full Node objects, a page at a time."""
+        pages = await self._paged(
+            mce, f"{_CORE}/nodes", HubOperation.LIST_NODES, params={}, accept=None, parse=_nodes
+        )
+        return sorted((node for page in pages for node in page), key=lambda node: node.name)
+
+    async def pods_per_node(self, mce: str) -> dict[str, int]:
+        """See HubApi.pods_per_node: Table rows of the non-terminal pods, a page at a time."""
+        pages = await self._paged(
+            mce,
+            f"{_CORE}/pods",
+            HubOperation.LIST_PODS,
+            params={"fieldSelector": NON_TERMINAL_PODS, "includeObject": "None"},
+            accept=TABLE,
+            parse=pods_per_node_from,
+        )
+        counts: dict[str, int] = {}
+        for page in pages:
+            for node, count in page.items():
+                counts[node] = counts.get(node, 0) + count
+        return counts
+
     # ── Calls ───────────────────────────────────────────────────────────────
 
     async def _hosted_cluster(
@@ -309,6 +353,56 @@ class HttpHubApi:
             ) from exc
         return sorted(parsed, key=lambda item: item.name)
 
+    async def _paged[T](
+        self,
+        mce: str,
+        path: str,
+        operation: HubOperation,
+        *,
+        params: Mapping[str, str],
+        accept: str | None,
+        parse: Callable[[JSON], T],
+    ) -> list[T]:
+        """Every page of a cluster-wide list, each parsed; each page is one observed call.
+
+        A 404 means the hub does not serve the list at all, which is the
+        hub's fault. A list still paging after ``MAX_PAGES`` is refused.
+        """
+        pages: list[T] = []
+        token: str | None = None
+        for _ in range(MAX_PAGES):
+            query = {**params, "limit": str(PAGE_SIZE)}
+            if token:
+                query["continue"] = token
+            page, token = await self._observer.call(
+                operation, self._page(mce, path, query, accept, parse)
+            )
+            pages.append(page)
+            if not token:
+                return pages
+        raise HubUnavailableError(
+            f"MCE {mce!r} was still paging GET {path} after {MAX_PAGES} pages of {PAGE_SIZE}"
+        )
+
+    async def _page[T](
+        self,
+        mce: str,
+        path: str,
+        query: Mapping[str, str],
+        accept: str | None,
+        parse: Callable[[JSON], T],
+    ) -> tuple[T, str | None]:
+        try:
+            raw = await self._get(mce, path, params=query, accept=accept)
+        except HubObjectNotFoundError as exc:
+            raise HubUnavailableError(f"MCE {mce!r} does not serve GET {path} (404)") from exc
+        try:
+            return parse(raw), _continue(raw)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HubUnavailableError(
+                f"MCE {mce!r} returned a malformed page on GET {path}: {exc}"
+            ) from exc
+
     # ── HTTP ────────────────────────────────────────────────────────────────
 
     def _client(self, mce: str) -> httpx.AsyncClient:
@@ -342,10 +436,19 @@ class HttpHubApi:
         host = f"api.{mce}.{self._domain}" if self._domain else f"api.{mce}"
         return f"https://{host}:{_API_PORT}"
 
-    async def _get(self, mce: str, path: str) -> JSON:
+    async def _get(
+        self,
+        mce: str,
+        path: str,
+        *,
+        params: Mapping[str, str] | None = None,
+        accept: str | None = None,
+    ) -> JSON:
         client = self._client(mce)
         try:
-            response = await client.get(path)
+            response = await client.get(
+                path, params=params, headers={"Accept": accept} if accept else None
+            )
         except httpx.TransportError as exc:
             raise HubUnavailableError(
                 f"MCE {mce!r} hub API unreachable on GET {path}: {type(exc).__name__}"
@@ -584,3 +687,73 @@ def agent_from(raw: JSON) -> AgentObservation:
         macs=tuple(mac.lower() for mac in macs if mac),
         conditions=_conditions(status),
     )
+
+
+def _continue(raw: JSON) -> str | None:
+    """A list's ``metadata.continue``: the next page's token, ``None`` on the last page."""
+    token = _mapping(_mapping(raw).get("metadata")).get("continue")
+    if token is not None and not isinstance(token, str):
+        raise TypeError("metadata.continue is not a string")
+    return token or None
+
+
+def pod_quantity(value: JSON) -> int:
+    """``status.allocatable.pods``: a whole number, as a Kubernetes quantity (``250``, ``1k``)."""
+    if value is None:
+        return 0
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    if not isinstance(value, str):
+        raise TypeError(f"allocatable pods {value!r} is not a quantity")
+    match = _QUANTITY.match(value.strip())
+    if match is None:
+        raise ValueError(f"allocatable pods {value!r} is not a whole number")
+    return int(match[1]) * _QUANTITY_SCALE[match[2]]
+
+
+def node_from(raw: JSON) -> NodeObservation:
+    """A Node (``v1``): Ready, cordoned, a control-plane role, its allocatable pods."""
+    _, labels, _ = _metadata(raw)
+    spec = _mapping(_mapping(raw).get("spec"))
+    status = _mapping(_mapping(raw).get("status"))
+    return NodeObservation(
+        name=_metadata_name(raw),
+        ready=any(c.type == "Ready" and c.status == "True" for c in _conditions(status)),
+        unschedulable=spec.get("unschedulable") is True,
+        control_plane=any(role in labels for role in CONTROL_PLANE_ROLES),
+        allocatable_pods=pod_quantity(_mapping(status.get("allocatable")).get("pods")),
+    )
+
+
+def _nodes(raw: JSON) -> list[NodeObservation]:
+    return [node_from(item) for item in _items(raw)]
+
+
+def pods_per_node_from(raw: JSON) -> dict[str, int]:
+    """One page of a pod list as a ``meta.k8s.io/v1`` Table: how many rows name each node.
+
+    The node is the cell of the column named ``Node``; ``<none>`` (not bound
+    yet) counts for no node. Anything but a Table with that column is malformed.
+    """
+    table = _mapping(raw)
+    if table.get("kind") != "Table":
+        raise ValueError(f"expected a Table, got {table.get('kind')!r}")
+    columns = table.get("columnDefinitions") or []
+    if not isinstance(columns, list):
+        raise TypeError("columnDefinitions is not a list")
+    names = [_mapping(column).get("name") for column in columns]
+    if "Node" not in names:
+        raise ValueError("the pod Table has no Node column")
+    index = names.index("Node")
+    rows = table.get("rows") or []
+    if not isinstance(rows, list):
+        raise TypeError("rows is not a list")
+    counts: dict[str, int] = {}
+    for row in rows:
+        cells = _mapping(row).get("cells")
+        if not isinstance(cells, list) or len(cells) <= index:
+            raise ValueError("a pod row has no Node cell")
+        node = cells[index]
+        if isinstance(node, str) and node and node != NO_NODE:
+            counts[node] = counts.get(node, 0) + 1
+    return counts

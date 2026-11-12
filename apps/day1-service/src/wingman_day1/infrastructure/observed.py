@@ -48,6 +48,10 @@ class HubOperation(StrEnum):
     LIST_MACHINE_SETS = "list_machine_sets"
     LIST_AGENT_MACHINES = "list_agent_machines"
     LIST_AGENTS = "list_agents"
+    LIST_NODES = "list_nodes"
+    """One page of the hub's nodes (placement's free pods, ADR-0050)."""
+    LIST_PODS = "list_pods"
+    """One page of the hub's non-terminal pods, as Table rows (ADR-0050)."""
 
 
 class OAuthOperation(StrEnum):

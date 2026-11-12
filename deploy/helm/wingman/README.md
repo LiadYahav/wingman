@@ -175,8 +175,9 @@ MRs target. `docs/ops/runbook.md` (WingmanGitLabTokenRejected) says how to repla
 With `clusterStatus.enabled`, day1 reads each MCE hub at `https://api.<mce>.<domain>:6443`
 (`clusterStatus.mceDomain`) with that MCE's service-account token, from the Secret
 `clusterStatus.tokensSecretName` (key `tokens`, a YAML map of MCE name to token). It reads the
-HostedCluster and NodePools for live status, the InfraEnvs for the create form, and, for a cluster's
-nodes (`GET /api/day1/clusters/{name}/nodes`), each NodePool's Machines and Agents.
+HostedCluster and NodePools for live status, the InfraEnvs for the create form, for a cluster's
+nodes (`GET /api/day1/clusters/{name}/nodes`) each NodePool's Machines and Agents, and, for MCE
+placement (`GET /api/day1/placement`, ADR-0050), the hub's own nodes and pods.
 
 A hub whose API is not at that address gets its own beside its token (ADR-0045); the plain form
 keeps working for the others:
@@ -204,6 +205,10 @@ The service account behind each token needs `get` and `list` on:
 | machines, machinesets | `cluster.x-k8s.io` | the control plane's, `hcp-<clusterName>-ocp4-<clusterName>` |
 | agentmachines | `capi-provider.agent-install.openshift.io` | the control plane's |
 | agents, infraenvs | `agent-install.openshift.io` | the HostedCluster's `spec.platform.agent.agentNamespace` |
+| nodes, pods (`list` only) | core (`""`) | the whole hub: placement's free pods |
+
+Placement lists the pods as Table rows (name, status, node), only those not `Succeeded` or
+`Failed`, never their objects, logs or Secrets.
 
 A control-plane namespace is created per cluster, so the grant is a ClusterRole with a
 ClusterRoleBinding. Apply it on every hub that has a token, binding the service account whose token
@@ -227,6 +232,9 @@ rules:
   - apiGroups: [agent-install.openshift.io]
     resources: [agents, infraenvs]
     verbs: [get, list]
+  - apiGroups: [""]
+    resources: [nodes, pods]
+    verbs: [list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -246,12 +254,15 @@ subjects:
 oc apply -f wingman-mce-reader.yaml      # logged in to the hub
 oc auth can-i list machines.cluster.x-k8s.io -n hcp-<clusterName>-ocp4-<clusterName> \
   --as=system:serviceaccount:<its namespace>:<service account>   # yes
+oc auth can-i list pods --all-namespaces \
+  --as=system:serviceaccount:<its namespace>:<service account>   # yes
 ```
 
 No Secrets: Wingman never reads a hosted cluster's own API, so the drain before an in-place
 reboot, and which node goes next, are not shown (`docs/ecosystem/notes/hypershift-node-state.md`).
 Without the grant the nodes read answers `502 DEPENDENCY_UNAVAILABLE`, naming the path the hub
-denied; with live status off, `501 FEATURE_DISABLED`. A running Wingman's steps are in
+denied; with live status off, `501 FEATURE_DISABLED`. Without `list` on nodes and pods, placement
+marks that MCE unreadable and never picks it; the other MCEs are not affected. A running Wingman's steps are in
 `docs/upgrade/3.3-to-3.4.md`.
 
 ### Cluster nodes (server-scan and the workflows orchestrator)

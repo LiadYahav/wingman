@@ -23,6 +23,7 @@ from wingman_day1.domain.machines import (
     MachineObservation,
     MachineSetObservation,
 )
+from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
@@ -137,8 +138,9 @@ class SpecChanges(Protocol):
 class HubApi(Protocol):
     """An MCE hub's Kubernetes API, read only.
 
-    HostedClusters, NodePools and InfraEnvs, and each cluster's Machines,
-    MachineSets, AgentMachines and Agents (ADR-0038).
+    HostedClusters, NodePools and InfraEnvs, each cluster's Machines,
+    MachineSets, AgentMachines and Agents (ADR-0038), and the hub's own nodes
+    and how many pods each runs, for placement's free pods (ADR-0050).
 
     Raises ``HubNotConfiguredError``, ``HubObjectNotFoundError``,
     ``HubDeniedError`` or ``HubUnavailableError`` (``wingman_day1.domain.errors``).
@@ -172,6 +174,17 @@ class HubApi(Protocol):
 
     async def agents(self, mce: str, *, namespace: str) -> list[AgentObservation]:
         """Agents in a HostedCluster's agent namespace, sorted by name."""
+        ...
+
+    async def nodes(self, mce: str) -> list[NodeObservation]:
+        """The hub cluster's own nodes, sorted by name."""
+        ...
+
+    async def pods_per_node(self, mce: str) -> dict[str, int]:
+        """How many pods that are not ``Succeeded`` or ``Failed`` each node runs.
+
+        Across every namespace; a pod not bound to a node yet counts for none.
+        """
         ...
 
 

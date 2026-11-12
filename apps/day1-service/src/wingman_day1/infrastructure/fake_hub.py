@@ -2,8 +2,10 @@
 
 It raises the same domain errors as ``HttpHubApi``: an MCE it does not know
 is not configured, one marked unavailable fails as an unreachable hub would,
-and an object that was not seeded is not found (a list that was not seeded
-is empty, as a namespace without objects lists on a real hub).
+one marked denied refuses the token, and an object that was not seeded is
+not found (a list that was not seeded is empty, as a namespace without
+objects lists on a real hub). Each hub's own nodes and its pods per node are
+seeded per MCE (placement's free pods, ADR-0050).
 
 ``remove_server`` is what a completed uninstall leaves on a real MCE: the
 server's Agent, AgentMachine and Machine are gone, and the NodePool's
@@ -16,6 +18,7 @@ import itertools
 from collections.abc import Iterable, Mapping
 
 from wingman_day1.domain.errors import (
+    HubDeniedError,
     HubNotConfiguredError,
     HubObjectNotFoundError,
     HubUnavailableError,
@@ -26,6 +29,7 @@ from wingman_day1.domain.machines import (
     MachineObservation,
     MachineSetObservation,
 )
+from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.status import Condition, HostedClusterObservation, NodePoolObservation
 
 Key = tuple[str, str]
@@ -46,8 +50,11 @@ class FakeHubApi:
         machine_sets: Mapping[Key, Iterable[MachineSetObservation]] | None = None,
         agent_machines: Mapping[Key, Iterable[AgentMachineObservation]] | None = None,
         agents: Mapping[Key, Iterable[AgentObservation]] | None = None,
+        nodes: Mapping[str, Iterable[NodeObservation]] | None = None,
+        pods: Mapping[str, Mapping[str, int]] | None = None,
         mces: Iterable[str] = (),
         unavailable: Iterable[str] = (),
+        denied: Iterable[str] = (),
     ) -> None:
         """Seed the hubs.
 
@@ -59,8 +66,11 @@ class FakeHubApi:
             machine_sets: Per ``(mce, control-plane namespace)``, the MachineSets.
             agent_machines: Per ``(mce, control-plane namespace)``, the AgentMachines.
             agents: Per ``(mce, agent namespace)``, the Agents.
+            nodes: Per MCE, the hub's own nodes.
+            pods: Per MCE, the non-terminal pods on each of its nodes.
             mces: Extra MCEs that are configured but empty.
             unavailable: MCEs whose hub cannot be reached.
+            denied: MCEs whose hub refuses Wingman's token (403).
         """
         self._hosted_clusters = {
             (mce, hc.namespace, hc.name): hc
@@ -76,15 +86,20 @@ class FakeHubApi:
         self._machine_sets = _lists(machine_sets)
         self._agent_machines = _lists(agent_machines)
         self._agents = _lists(agents)
+        self._nodes = {mce: list(found) for mce, found in (nodes or {}).items()}
+        self._pods = {mce: dict(counts) for mce, counts in (pods or {}).items()}
         keyed = (self._node_pools, self._machines, self._machine_sets, self._agent_machines)
         self._configured = (
             set(mces)
             | {mce for mce, _, _ in self._hosted_clusters}
             | {mce for table in (*keyed, self._agents) for mce, _ in table}
             | set(self._infra_envs)
+            | set(self._nodes)
+            | set(self._pods)
         )
         self._unavailable = set(unavailable)
-        self._configured |= self._unavailable
+        self._denied = set(denied)
+        self._configured |= self._unavailable | self._denied
         self._backfills = itertools.count(1)
 
     def _check(self, mce: str) -> None:
@@ -96,6 +111,8 @@ class FakeHubApi:
             )
         if mce in self._unavailable:
             raise HubUnavailableError(f"MCE {mce!r} hub API unreachable (fake)")
+        if mce in self._denied:
+            raise HubDeniedError(f"MCE {mce!r} hub API denied Wingman's token (403) (fake)")
 
     async def hosted_cluster(
         self, mce: str, *, namespace: str, name: str
@@ -141,6 +158,16 @@ class FakeHubApi:
         """See HubApi.agents."""
         self._check(mce)
         return sorted(self._agents.get((mce, namespace), []), key=lambda a: a.name)
+
+    async def nodes(self, mce: str) -> list[NodeObservation]:
+        """See HubApi.nodes."""
+        self._check(mce)
+        return sorted(self._nodes.get(mce, []), key=lambda node: node.name)
+
+    async def pods_per_node(self, mce: str) -> dict[str, int]:
+        """See HubApi.pods_per_node."""
+        self._check(mce)
+        return dict(self._pods.get(mce, {}))
 
     def remove_server(self, server_name: str) -> bool:
         """Remove the Agent, AgentMachine and Machine of a server, and backfill its Machine.

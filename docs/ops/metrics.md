@@ -34,7 +34,7 @@ Operations of the other dependencies (day1):
 
 | `dependency` | `operation` |
 |---|---|
-| `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents` |
+| `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons` |
 | `server_scan` | `list_server_rows`, `get_server` |
