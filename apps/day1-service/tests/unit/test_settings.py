@@ -232,6 +232,18 @@ def test_the_orchestrator_without_server_scan_is_refused() -> None:
     assert dev(workflows_api_url=WORKFLOWS, day1_fake_fleet=True).day1_fake_fleet
 
 
+def test_creates_start_the_workflow_only_with_an_orchestrator() -> None:
+    """ADR-0042: merge requests by default; ``workflow`` needs WORKFLOWS_API_URL."""
+    assert dev().day1_provisioner == "merge-request"
+    with pytest.raises(ValidationError, match="DAY1_PROVISIONER=workflow needs WORKFLOWS_API_URL"):
+        dev(day1_provisioner="workflow")
+    on = dev(day1_provisioner="workflow", workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN)
+    assert on.day1_provisioner == "workflow"
+    assert dev(day1_provisioner="workflow", day1_fake_fleet=True).day1_provisioner == "workflow"
+    with pytest.raises(ValidationError):
+        dev(day1_provisioner="temporal")
+
+
 def test_the_server_scan_token_is_a_secret() -> None:
     loaded = dev(server_scan_url=SERVER_SCAN, server_scan_token=SecretStr("viewer-token-0001"))
     assert "viewer-token-0001" not in repr(loaded)

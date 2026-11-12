@@ -27,7 +27,7 @@ from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
-from wingman_day1.domain.workflows import WorkflowRun
+from wingman_day1.domain.workflows import ProvisionRun, WorkflowRun
 
 
 class RepoReads(Protocol):
@@ -242,6 +242,30 @@ class UninstallWorkflow(Protocol):
         ``WorkflowsUnavailableError`` when nothing was started, and
         ``AmbiguousStartError`` when it was sent but the answer was lost.
         """
+        ...
+
+
+class ProvisionWorkflow(Protocol):
+    """The orchestrator's ``provision-cluster`` workflow (ADR-0042).
+
+    It takes the cluster file, reserves the segment, pushes the file on its
+    own branch, opens the merge request, waits for the merge and registers
+    the cluster in day2. Wingman starts a run and reads how it is going.
+    """
+
+    async def start(self, *, cluster: str, mce: str, content: str) -> ProvisionRun:
+        """Start provisioning ``cluster`` (no ``ocp4-``) in MCE folder ``mce`` from ``content``.
+
+        Never retried (ADR-0006). Raises ``ProvisionAlreadyRunningError``
+        while a run for the cluster is going, ``ProvisionRefusedError`` for a
+        name or file the orchestrator refuses, ``WorkflowsUnavailableError``
+        when nothing was started, and ``AmbiguousStartError`` when it was
+        sent but the answer was lost.
+        """
+        ...
+
+    async def run(self, workflow_id: str) -> ProvisionRun | None:
+        """One run's status, phase, merge request and error; ``None`` when there is none."""
         ...
 
 

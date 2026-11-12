@@ -172,3 +172,22 @@ def test_values_kept_from_3_4_still_render_segments_manager() -> None:
     assert config["SEGMENTS_MANAGER_URL"] == "http://segments-manager.wingman.svc:8000"
     assert config["SEGMENTS_MANAGER_SSL_VERIFY"] == "true"
     assert config["SEGMENTS_MANAGER_TIMEOUT_SECONDS"] == "5"
+
+
+def test_creates_open_merge_requests_unless_the_workflow_is_chosen() -> None:
+    """ADR-0042: ``day1.provisioner`` defaults to merge-request, also for values kept from
+    3.6 that have no such key; ``workflow`` needs ``workflows.url``."""
+    assert render()["wingman-config"]["data"]["DAY1_PROVISIONER"] == "merge-request"
+    kept = render("--set", "day1.provisioner=null")["wingman-config"]["data"]
+    assert kept["DAY1_PROVISIONER"] == "merge-request"
+    on = render(*ALL_ON, "--set", "day1.provisioner=workflow")["wingman-config"]["data"]
+    assert on["DAY1_PROVISIONER"] == "workflow"
+    assert HELM is not None
+    refused = subprocess.run(  # noqa: S603 - a fixed argv, no shell
+        [HELM, "template", "wingman", str(CHART), "--set", "day1.provisioner=workflow"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode != 0
+    assert "day1.provisioner workflow needs workflows.url" in refused.stderr

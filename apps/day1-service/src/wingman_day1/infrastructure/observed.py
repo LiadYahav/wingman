@@ -24,6 +24,8 @@ from wingman_day1.domain.errors import (
     HubUnavailableError,
     IdentityError,
     IdentityUnavailableError,
+    ProvisionAlreadyRunningError,
+    ProvisionRefusedError,
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanDeniedError,
@@ -81,6 +83,7 @@ class WorkflowsOperation(StrEnum):
     LIST_RUNS = "list_runs"
     GET_RUN = "get_run"
     START_UNINSTALL = "start_uninstall"
+    START_PROVISION = "start_provision"
 
 
 _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
@@ -95,6 +98,8 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (ServerScanDeniedError, Outcome.DENIED),
     (ServerScanUnavailableError, Outcome.UNAVAILABLE),
     (UninstallAlreadyRunningError, Outcome.CONFLICT),
+    (ProvisionAlreadyRunningError, Outcome.CONFLICT),
+    (ProvisionRefusedError, Outcome.REJECTED),
     (AmbiguousStartError, Outcome.AMBIGUOUS),
     (WorkflowRefusedError, Outcome.REJECTED),
     (WorkflowsUnavailableError, Outcome.UNAVAILABLE),

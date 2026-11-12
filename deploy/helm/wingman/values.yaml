@@ -80,6 +80,10 @@ day1:
   # (ADR-0015): "ocp4-" as production's ApplicationSet does, "" for the sandbox.
   clusterNameStripPrefix: "ocp4-"
   cacheTtlSeconds: 30     # GitLab reads, per replica (ADR-0011; at most 60)
+  # How a create is proposed (ADR-0042): "merge-request" (Wingman opens the MR)
+  # or "workflow" (Wingman starts the platform's provision-cluster workflow,
+  # which opens it; needs workflows.url, which needs serverScan.url).
+  provisioner: merge-request
 day2:
   cacheTtlSeconds: 15     # GitLab reads, per replica (ADR-0011; at most 60)
 

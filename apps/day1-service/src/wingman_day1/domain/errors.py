@@ -152,6 +152,14 @@ class AmbiguousStartError(WorkflowsError):
     """A start was sent but its outcome is unknown: the run may exist. Never retried (ADR-0006)."""
 
 
+class ProvisionAlreadyRunningError(AlreadyInUseError):
+    """The orchestrator already runs a provision of this cluster (its 409, ADR-0042)."""
+
+
+class ProvisionRefusedError(InvalidInputError):
+    """The orchestrator refused the name or the file of a provision (its 422); nothing started."""
+
+
 # ── segments-manager (a cluster's EPG, checked against Git; ADR-0039) ────────
 
 

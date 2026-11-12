@@ -118,6 +118,7 @@ wingman/
 | **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. day1 keeps each hub's list for `MCE_INFRAENV_CACHE_SECONDS` (10 minutes). Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
 | **A suggested cluster name** | Creating from a flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>`: the MCE's env and the first letter no cluster or open create MR has. The name stays editable. A new cluster's sequence is one letter, `a` to `z`, never a number (ADR-0040). |
 | **Nodepools sized by a ratio** | A flavor may give its nodepools a ratio (`nodepool_ratio: [1, 2, 1]`): the create form asks for one size and sets each nodepool's replicas to its ratio times that size; create refuses replicas off the ratio (ADR-0040). |
+| **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. |
 
 ## Deployment
 
@@ -154,7 +155,9 @@ Changes since the legacy services:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/day1/clusters` | Every cluster file; off-convention and unparsable ones are flagged, not hidden |
-| `POST` | `/api/day1/clusters` | Create a cluster from a spec (opens the MR that adds its file) |
+| `POST` | `/api/day1/clusters` | Create a cluster from a spec: opens the MR that adds its file (`201`), or with `DAY1_PROVISIONER=workflow` starts the platform's `provision-cluster` workflow and answers its run (`202`, ADR-0042) |
+| `GET` | `/api/day1/clusters/provisioner` | What Create does here: `{"mode": "merge-request" \| "workflow"}` |
+| `GET` | `/api/day1/clusters/{name}/provision-run` | The new cluster's provision-cluster run: the workflow's status, phase, merge request and error (404 none; 501 in merge-request mode) |
 | `POST` | `/api/day1/clusters/preview` | Exactly the file a create would commit, after every check a create runs |
 | `GET` | `/api/day1/clusters/drift-summary` | Drift of every cluster |
 | `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040) |
@@ -361,6 +364,7 @@ WORKFLOWS_API_URL=                        # e.g. http://workflows-orchestrator-a
 WORKFLOWS_SSL_VERIFY=true                 # true, false, or a CA bundle path
 WORKFLOWS_TIMEOUT_SECONDS=10
 DAY1_FAKE_FLEET=false                     # development only: an MCE, server-scan, the orchestrator and segments-manager in memory, from dev/fleet-fixtures
+DAY1_PROVISIONER=merge-request            # how a create is proposed (ADR-0042): merge-request, or workflow (start provision-cluster; needs WORKFLOWS_API_URL)
 
 # segments-manager: the cluster's EPG, checked against the file (ADR-0039; off by default; read only)
 SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG

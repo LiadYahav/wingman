@@ -11,7 +11,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Response
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from wingman_core.domain.errors import GitError
@@ -33,6 +33,8 @@ from wingman_day1.api.v1.schemas import (
     MRDetailOut,
     NameSuggestionOut,
     PreviewOut,
+    ProvisionerOut,
+    ProvisionRunOut,
     StartDeleteWorkflowIn,
     SyncIn,
     SyncPreviewIn,
@@ -55,6 +57,15 @@ Mce = Annotated[str | None, Query(max_length=63, description="MCE folder")]
 RequiredMce = Annotated[str, Query(min_length=1, max_length=63, description="MCE folder")]
 RequiredSite = Annotated[str, Query(min_length=1, max_length=63, description="Site folder")]
 Flavor = Annotated[str, Query(min_length=1, max_length=63, description="Flavor (spec) name")]
+NewClusterName = Annotated[
+    str,
+    Path(
+        min_length=1,
+        max_length=63,
+        pattern=r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+        description="The new cluster file's stem",
+    ),
+]
 ServerId = Annotated[
     str,
     Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.-]+$", description="server-scan id"),
@@ -123,10 +134,28 @@ async def preview_cluster(body: CreateClusterIn, context: Context, user: AdminUs
 
 
 @router.post("", status_code=201)
-async def create_cluster(body: CreateClusterIn, context: Context, user: AdminUser) -> MRDetailOut:
-    """Open the MR that adds the cluster's file."""
+async def create_cluster(
+    body: CreateClusterIn, context: Context, user: AdminUser, response: Response
+) -> MRDetailOut | ProvisionRunOut:
+    """Open the MR that adds the cluster's file, or start the provision-cluster workflow.
+
+    ``DAY1_PROVISIONER=workflow`` (ADR-0042): 202 with the started run; the
+    workflow opens the merge request. Otherwise 201 with Wingman's MR.
+    """
+    if context.clusters.creates_by_workflow:
+        run = await context.clusters.provision(_create(body), user=user)
+        response.status_code = 202
+        return ProvisionRunOut.of(run)
     result = await context.clusters.create(_create(body), user=user)
     return change_out(RepoKey.DAY1, result.merge_request)
+
+
+@router.get("/provisioner")
+async def provisioner(context: Context, user: CurrentUser) -> ProvisionerOut:
+    """What Create does here: open a merge request, or start the provision-cluster workflow."""
+    return ProvisionerOut(
+        mode="workflow" if context.clusters.creates_by_workflow else "merge-request"
+    )
 
 
 # ── One cluster ──────────────────────────────────────────────────────────────
@@ -259,6 +288,19 @@ async def modify_cluster(
         last_commit_id=body.last_commit_id,
     )
     return change_out(RepoKey.DAY1, result.merge_request)
+
+
+@router.get("/{name}/provision-run")
+async def provision_run(
+    name: NewClusterName, context: Context, user: CurrentUser
+) -> ProvisionRunOut:
+    """The cluster's provision-cluster run (ADR-0042), read by its id.
+
+    The cluster has no file on main until the workflow's merge request is
+    merged, so ``name`` is the new file's stem, not a cluster day1 can read.
+    404 when the orchestrator has no run; 501 when creates open merge requests.
+    """
+    return ProvisionRunOut.of(await context.clusters.provision_run(name))
 
 
 @router.get("/{name}/delete-workflow")

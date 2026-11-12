@@ -16,6 +16,7 @@ error, never dropped from the list (ADR-0004).
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
@@ -50,6 +51,7 @@ from wingman_day1.domain.errors import (
     RenderError,
     ResourceNotFoundError,
     StaleError,
+    WorkflowsNotConfiguredError,
 )
 from wingman_day1.domain.locks import apply_locks, lock_conflicts
 from wingman_day1.domain.machine_configs import (
@@ -58,6 +60,7 @@ from wingman_day1.domain.machine_configs import (
     expand_network_configs,
 )
 from wingman_day1.domain.names import (
+    HOSTED_CLUSTER_PREFIX,
     ClusterNaming,
     HostedClusterNaming,
     HostedClusterRef,
@@ -72,7 +75,10 @@ from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.sizing import sizing_problems
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
-from wingman_day1.ports import ClusterProvisioner, RepoReads
+from wingman_day1.domain.workflows import ProvisionRun, provision_workflow_id
+from wingman_day1.ports import ClusterProvisioner, ProvisionWorkflow, RepoReads
+
+logger = logging.getLogger(__name__)
 
 MAX_LIST_CONCURRENCY = 16
 
@@ -129,14 +135,21 @@ class ClusterService:
         machine_configs: MachineConfigService,
         *,
         naming: HostedClusterNaming,
+        provision: ProvisionWorkflow | None = None,
     ) -> None:
-        """Read through ``day1`` (cached), write through ``provisioner``."""
+        """Read through ``day1`` (cached), write through ``provisioner``.
+
+        With ``provision``, a create starts the provision-cluster workflow
+        instead of opening a merge request (``DAY1_PROVISIONER=workflow``,
+        ADR-0042); every other change still goes through ``provisioner``.
+        """
         self._day1 = day1
         self._sites = sites
         self._specs = specs
         self._provisioner = provisioner
         self._machine_configs = machine_configs
         self._naming = naming
+        self._provision = provision
 
     # ── Reads ───────────────────────────────────────────────────────────────
 
@@ -273,6 +286,44 @@ class ClusterService:
                 spec_version=rendered.spec.metadata.version,
             )
         )
+
+    @property
+    def creates_by_workflow(self) -> bool:
+        """Whether a create starts the provision-cluster workflow (ADR-0042)."""
+        return self._provision is not None
+
+    async def provision(self, request: CreateCluster, *, user: User) -> ProvisionRun:
+        """Start the provision-cluster workflow for a new cluster (ADR-0042).
+
+        The file is rendered and checked exactly as for a merge request; the
+        workflow then judges it, reserves the segment, opens the merge request
+        and waits for it. Never retried (ADR-0006).
+        """
+        if self._provision is None:
+            raise WorkflowsNotConfiguredError("this deployment creates clusters by merge request")
+        rendered = await self.preview(request)
+        ref = rendered.ref
+        logger.info(
+            "%s starts provision-cluster for %s in MCE %s (site %s)",
+            user.username,
+            ref.name,
+            ref.mce,
+            ref.site,
+        )
+        return await self._provision.start(
+            cluster=ref.name.removeprefix(HOSTED_CLUSTER_PREFIX),
+            mce=ref.mce,
+            content=rendered.content,
+        )
+
+    async def provision_run(self, name: str) -> ProvisionRun:
+        """The provision run of the cluster file ``<name>.yaml``; 404 when there is none."""
+        if self._provision is None:
+            raise WorkflowsNotConfiguredError("this deployment creates clusters by merge request")
+        run = await self._provision.run(provision_workflow_id(name))
+        if run is None:
+            raise ResourceNotFoundError(f"no provision run for cluster {name!r}")
+        return run
 
     # ── Modify and delete ───────────────────────────────────────────────────
 

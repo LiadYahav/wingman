@@ -81,6 +81,7 @@ from wingman_day1.infrastructure.merge_requests import (
     MergeRequestWriter,
 )
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
+from wingman_day1.infrastructure.provision_workflow import HttpProvisionWorkflow
 from wingman_day1.infrastructure.repositories import CachedRepository
 from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
@@ -90,6 +91,7 @@ from wingman_day1.ports import (
     Day2Addons,
     HubApi,
     IdentityProvider,
+    ProvisionWorkflow,
     SegmentLedger,
     ServerInventory,
     UninstallWorkflow,
@@ -141,6 +143,8 @@ class Adapters:
     """The orchestrator's uninstall workflow; ``None`` when ``WORKFLOWS_API_URL`` is empty."""
     ledger: SegmentLedger | None = None
     """segments-manager; ``None`` when ``SEGMENTS_MANAGER_URL`` is empty (ADR-0039)."""
+    provision: ProvisionWorkflow | None = None
+    """The provision-cluster workflow; ``None`` unless ``DAY1_PROVISIONER=workflow`` (ADR-0042)."""
     closers: tuple[Close, ...] = field(default=())
 
 
@@ -215,8 +219,29 @@ def build_adapters(
         inventory=inventory,
         uninstall=uninstall,
         ledger=_segment_ledger(settings, metrics=metrics, closers=closers),
+        provision=_provision_workflow(settings, metrics=metrics, clock=clock, closers=closers),
         closers=tuple(closers),
     )
+
+
+def _provision_workflow(
+    settings: Day1Settings, *, metrics: WingmanMetrics, clock: Clock, closers: list[Close]
+) -> ProvisionWorkflow | None:
+    """The provision-cluster workflow when creates start it; or, with the fake fleet, its fake."""
+    if settings.day1_provisioner != "workflow":
+        return None
+    if settings.day1_fake_fleet:
+        from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
+
+        return FakeProvisionWorkflow(clock=clock)
+    workflow = HttpProvisionWorkflow(
+        base_url=settings.workflows_api_url,
+        verify=settings.workflows_tls_verify,
+        timeout_seconds=settings.workflows_timeout_seconds,
+        metrics=metrics,
+    )
+    closers.append(workflow.aclose)
+    return workflow
 
 
 def _segment_ledger(
@@ -336,7 +361,13 @@ def build_context(
         MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
     )
     cluster_service = ClusterService(
-        day1, site_catalog, spec_catalog, provisioner, machine_configs, naming=naming
+        day1,
+        site_catalog,
+        spec_catalog,
+        provisioner,
+        machine_configs,
+        naming=naming,
+        provision=adapters.provision,
     )
     drift = DriftService(
         cluster_service,
