@@ -34,6 +34,14 @@ service account as the author. One code path (`bulk_install`) wrote
   project-scoped iids.
 - **Changing the formats.** Every historical MR would stop parsing.
 
+## Note (2026-11-12, ADR-0044)
+
+A flavor's rollout MR has a branch without a timestamp, so a rerun finds
+it instead of opening another: `platform/rollout/<flavor>/v<version>/<cluster>`
+(`rollout_branch`, `parse_rollout_branch`, pinned by a round-trip property
+test). Its title is a sync's, `Sync cluster <name> to spec <flavor>
+v<version>`, and it carries the `rollout` label.
+
 ## Consequences
 
 - API routes for approvals carry the project (or a key that maps to exactly

@@ -1,13 +1,16 @@
 # ADR-0037: Existing clusters join a flavor by one MR that writes only the link, and sync to it by one MR each; Wingman edits a cluster file's text, never a YAML round trip
 
 Date: 2026-11-08
-Status: Accepted; superseded in part by ADR-0044 (an import opens one MR per cluster)
+Status: Accepted; superseded in part by ADR-0044 (an import opens one MR per cluster; a new flavor version opens each cluster's sync MR automatically)
 
 Since ADR-0044 (2026-11-12, the architect's decision, confirmed by the
 user) an import opens one day1 MR per picked cluster, each the link-only
 change for its file, after every pick is checked as below. The text edit,
 the statuses, relink, the stale check and sync still hold. The parts that
-changed are marked where they are.
+changed are marked where they are. ADR-0044 also opens the sync below
+automatically, one MR per cluster, when a flavor gets a new version; the
+merge of the flavor's MR is then its confirmation, and a sync by hand is
+refused while an MR already takes the cluster to the newest version.
 
 ## Context
 

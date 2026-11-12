@@ -332,6 +332,10 @@ that sends none gets the rule's entries.
 
 ## 10. Changed: drift on locked values (ADR-0036)
 
+> **Changed 2026-11-12 (ADR-0044):** a cluster is compared with the flavor
+> version its header names, not the newest; a newer version is an `update`
+> (with its open MR), never drift: `docs/notes/2026-11-12-flavor-rollout-api.md` §1.
+
 `GET /clusters/{name}/drift` (and every drift inside the import preview)
 gains `value_drift`: each enforced lock whose value the cluster file does not
 hold. A cluster is `drifted` when it has value drift **or** a missing add-on;
