@@ -16,6 +16,10 @@ needs:
 - each candidate's spare servers, from server-scan's fleet rows (cached as
   for the nodes view).
 
+Without live MCE reads (no hub: ``CLUSTER_STATUS_ENABLED`` off) placement
+still runs, on the day1 repo and server-scan: the free pods, the servers of
+each node type and the hub read are ``not_checked`` and do not block a pick.
+
 A source that cannot be read makes its numbers unknown, never zero: an MCE
 whose nodes or pods cannot be read fails the ``readable`` check; server-scan
 not answering makes every spare count unknown. The day1 repo itself must be
@@ -182,7 +186,7 @@ class PlacementService:
         self,
         day1: RepoReads,
         sites: SiteCatalog,
-        hub: HubApi,
+        hub: HubApi | None,
         *,
         inventory: ServerInventory | None,
         min_free_pods: int,
@@ -192,6 +196,9 @@ class PlacementService:
         record: Record | None = None,
     ) -> None:
         """``hub`` should be cached for seconds only; ``inventory`` is server-scan, if configured.
+
+        ``hub`` is ``None`` when live MCE reads are off: placement then decides
+        on the day1 repo and server-scan, and says what it did not check.
 
         ``specs`` gives a flavor's preset nodepools when the form sends no
         needs. ``infraenv_namespace`` (``MCE_INFRAENV_NAMESPACE``) is where the
@@ -262,7 +269,13 @@ class PlacementService:
                 for mce in candidates
             )
         )
-        return place(inputs, pictures, problems=open_problems, server_scan_error=scan_error)
+        return place(
+            inputs,
+            pictures,
+            problems=open_problems,
+            server_scan_error=scan_error,
+            live_reads=self._hub is not None,
+        )
 
     async def admit(
         self, ref: ClusterRef, content: str, choice: Choice | None, *, flavor: str
@@ -337,10 +350,15 @@ class PlacementService:
             spare_detail=spare_detail,
             pods=pods,
             hub_error=hub_error,
-            node_types=node_type_supply(
-                inputs.needs, agents, rows, server_scan=self._inventory is not None
+            node_types=(
+                node_type_supply(
+                    inputs.needs, agents, rows, server_scan=self._inventory is not None
+                )
+                if self._hub is not None
+                else ()
             ),
             agents_error=agents_error,
+            live=self._hub is not None,
         )
 
     async def _flavor_needs(self, flavor: str | None) -> list[Need]:
@@ -355,7 +373,7 @@ class PlacementService:
         self, mce: str, needs: Sequence[Need]
     ) -> tuple[list[AgentObservation] | None, str | None]:
         """The MCE's Agents of the needed InfraEnvs, or why they could not be read."""
-        if not needs:
+        if not needs or self._hub is None:
             return [], None
         try:
             agents = await self._hub.infra_env_agents(
@@ -373,6 +391,8 @@ class PlacementService:
 
     async def _free_pods(self, mce: str) -> tuple[FreePods | None, str | None]:
         """The MCE's free pods, or why its nodes and pods could not be read."""
+        if self._hub is None:
+            return None, None
         try:
             nodes, pods = await asyncio.gather(self._hub.nodes(mce), self._hub.pods_per_node(mce))
         except HubNotConfiguredError:

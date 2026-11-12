@@ -463,20 +463,21 @@ def build_context(
         if adapters.inventory is not None
         else None
     )
-    # An MCE's nodes and pods are read when a create asks, kept for seconds (ADR-0050)
-    placement = (
-        PlacementService(
-            day1,
-            site_catalog,
-            CachedHubApi(adapters.hub, cache, ttl=PLACEMENT_TTL_SECONDS),
-            inventory=inventory,
-            min_free_pods=settings.placement_min_free_pods,
-            specs=spec_catalog,
-            infraenv_namespace=settings.mce_infraenv_namespace or None,
-            record=metrics.observe_placement if metrics is not None else None,
-        )
-        if adapters.hub is not None
-        else None
+    # Placement always runs (ADR-0050). An MCE's nodes, pods and Agents are read when a
+    # create asks, kept for seconds; without live reads it decides on Git and server-scan.
+    placement = PlacementService(
+        day1,
+        site_catalog,
+        (
+            CachedHubApi(adapters.hub, cache, ttl=PLACEMENT_TTL_SECONDS)
+            if adapters.hub is not None
+            else None
+        ),
+        inventory=inventory,
+        min_free_pods=settings.placement_min_free_pods,
+        specs=spec_catalog,
+        infraenv_namespace=settings.mce_infraenv_namespace or None,
+        record=metrics.observe_placement if metrics is not None else None,
     )
     cluster_service = ClusterService(
         day1,

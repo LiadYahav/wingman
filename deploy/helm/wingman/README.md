@@ -86,7 +86,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `day1.clusterNameStripPrefix` | `DAY1_CLUSTER_NAME_STRIP_PREFIX` | `ocp4-` | ADR-0015: `""` for the GitHub sandbox |
 | `day1.cacheTtlSeconds` | `DAY1_CACHE_TTL_SECONDS` | `30` | Per replica, at most 60 (ADR-0011) |
 | `day1.provisioner` | `DAY1_PROVISIONER` | `merge-request` | How a create is proposed (ADR-0042): `merge-request` (Wingman opens the MR) or `workflow` (Wingman starts the platform's `provision-cluster` workflow, which opens it). `workflow` needs `workflows.url` |
-| `day1.placementMinFreePods` | `PLACEMENT_MIN_FREE_PODS` | `70` | MCE placement (ADR-0050), on with `clusterStatus.enabled`: the cost of one hosted control plane. An MCE is offered for a new cluster only with at least this many free pods (allocatable less in use) on its workers: masters, infra nodes and tainted, cordoned or NotReady nodes are left out ([Live cluster status](#live-cluster-status-mce-hubs)) |
+| `day1.placementMinFreePods` | `PLACEMENT_MIN_FREE_PODS` | `70` | MCE placement (ADR-0050), checked with `clusterStatus.enabled` (without it, not checked): the cost of one hosted control plane. An MCE is offered for a new cluster only with at least this many free pods (allocatable less in use) on its workers: masters, infra nodes and tainted, cordoned or NotReady nodes are left out ([Live cluster status](#live-cluster-status-mce-hubs)) |
 | `day2.cacheTtlSeconds` | `DAY2_CACHE_TTL_SECONDS` | `15` | Per replica, at most 60 (ADR-0011) |
 | `auth.openshiftOAuthHost` | `OPENSHIFT_OAUTH_HOST` | | The OAuth server's host ([Login](#login-openshift-oauth)) |
 | `auth.openshiftApiHost` | `OPENSHIFT_API_HOST` | | The API server, `host:port` |

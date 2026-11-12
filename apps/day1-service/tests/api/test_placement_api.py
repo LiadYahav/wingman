@@ -259,26 +259,102 @@ async def test_bad_inputs_are_problems(
     assert response.headers["content-type"].startswith("application/problem+json")
 
 
-async def test_without_the_mce_hubs_placement_is_not_available(
-    client: httpx.AsyncClient,
-    auth: Auth,
+@pytest.fixture
+async def live_off(
     support: Any,
     gitlab: InMemoryGitLab,
     identity: FakeIdentityProvider,
     day2: FakeDay2Addons,
     clock: Any,
-) -> None:
-    app = support.build_app(gitlab=gitlab, hub=None, identity=identity, day2=day2, clock=clock)
+) -> AsyncIterator[tuple[httpx.AsyncClient, FastAPI]]:
+    """Live status off (no hub, as on the sandbox), server-scan on."""
+    await add_mces(support, gitlab)
+    app = support.build_app(
+        gitlab=gitlab,
+        hub=None,
+        identity=identity,
+        day2=day2,
+        clock=clock,
+        inventory=FakeServerInventory(fleet()),
+    )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as off:
-        response = await off.get(
-            PLACEMENT, params={"site": "site1", "env": "prod"}, headers=auth(support.VIEWER)
+    async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
+        yield client, app
+
+
+NOT_CHECKED = "Not checked: live MCE reads are off (CLUSTER_STATUS_ENABLED=false)."
+
+
+async def test_without_live_reads_placement_decides_on_git_and_server_scan(
+    live_off: tuple[httpx.AsyncClient, FastAPI], auth: Auth, support: Any
+) -> None:
+    """ADR-0050's amendment: placement always runs, and says what it did not check."""
+    client, _ = live_off
+    body = await get_placement(
+        client, auth(support.VIEWER), version=VERSION, owner="7", need=f"{DELL}:9"
+    )
+    assert body["live_reads"] is False
+    assert body["pick"] == B
+    assert body["why"] == f"{B} has the fewest clusters of owner 7: 0, against 1 on {A}."
+    found = by_mce(body)
+    for mce in (A, B):
+        assert [(c["check"], c["status"]) for c in found[mce]["checks"]] == [
+            ("version", "pass"),
+            ("free_pods", "not_checked"),
+            ("servers", "not_checked"),
+            ("readable", "not_checked"),
+        ]
+        assert {c["detail"] for c in found[mce]["checks"][1:]} == {NOT_CHECKED}
+        assert (found[mce]["pods"], found[mce]["node_types"], found[mce]["eligible"]) == (
+            None,
+            [],
+            True,
         )
-        assert (response.status_code, response.json()["code"]) == (501, "FEATURE_DISABLED")
-        created = await off.post(
-            "/api/day1/clusters", json=support.create_body(), headers=auth(support.ALICE)
-        )
-        assert created.status_code == 201, "with placement off, create checks nothing new"
+    assert found[A]["spare"] == {"total": 5, "usable": 4}, "server-scan still counts"
+    assert found[C]["eligible"] is False, "the version is still checked"
+    assert found[C]["checks"][0]["status"] == "fail"
+
+
+async def test_without_live_reads_no_version_still_means_no_pick(
+    live_off: tuple[httpx.AsyncClient, FastAPI], auth: Auth, support: Any
+) -> None:
+    client, _ = live_off
+    body = await get_placement(client, auth(support.VIEWER))
+    assert (body["pick"], body["problems"]) == (None, ["Choose an OpenShift version."])
+
+
+async def test_without_live_reads_create_follows_the_same_rule_and_the_mr_says_so(
+    live_off: tuple[httpx.AsyncClient, FastAPI], auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    client, app = live_off
+    refused = await client.post(
+        "/api/day1/clusters", json=support.create_body(), headers=auth(support.ALICE)
+    )
+    assert refused.json()["detail"] == f"Choosing {A} over Wingman's pick {B} needs a reason"
+    created = await client.post(
+        "/api/day1/clusters",
+        json=support.create_body(mce=B, placement={"pick": B}),
+        headers=auth(support.ALICE),
+    )
+    assert created.status_code == 201, created.text
+    (text,) = await descriptions(gitlab, support)
+    assert "Free pods and servers were **not checked**: live MCE reads are off" in text
+    assert (
+        f"| `{B}` (pick, chosen) | 0 | 0 | 4 (4) | not checked | not checked | "
+        "pass (free pods, servers, readable not checked) |"
+    ) in text
+    assert sample(app, "picked") == 1
+    failing = await client.post(
+        "/api/day1/clusters/preview",
+        json=support.create_body(
+            "ocp4-prod-raven-site1",
+            mce=C,
+            placement={"pick": B, "reason": "quieter"},
+        ),
+        headers=auth(support.ALICE),
+    )
+    assert failing.status_code == 422, "the version is checked with live reads off too"
+    assert f"is not offered on MCE {C}" in failing.json()["detail"]
 
 
 async def test_an_mce_whose_token_may_not_list_pods_is_unreadable_and_never_picked(

@@ -11,10 +11,13 @@ contract between day1 and the create form. Two things change:
    against the same rule, and take an optional `placement` object: the pick
    the form showed, and the reason when an admin chose another MCE.
 
-Placement needs the MCE hubs (`CLUSTER_STATUS_ENABLED`, as live status and
-the nodes view do). With them off, `GET /placement` answers 501
-`FEATURE_DISABLED`, the form keeps its MCE select as before, and create checks
-nothing new.
+Placement always runs (amended 2026-11-12, ADR-0050). The form never asks
+for the MCE: it asks for the site, then prod or prep, then the version, and
+shows the pick as soon as the three are chosen. With the MCE hubs on
+(`CLUSTER_STATUS_ENABLED`) every check is made. With them off, `GET
+/placement` still answers, from the day1 repo and server-scan: `live_reads` is
+`false`, and `free_pods`, `servers` and `readable` are `not_checked` (they do
+not block the pick; section 9).
 
 ## 1. The rule
 
@@ -42,6 +45,9 @@ whose check is unknown is never picked either):
 | `free_pods` | at least `PLACEMENT_MIN_FREE_PODS` (default 70) free pods on its workers | the MCE could not be read |
 | `servers` | for every node type the nodepools use, the MCE has at least as many healthy free servers of that type as the new cluster needs | the MCE's Agents or server-scan could not be read, or a free Agent server-scan has no server for is needed to reach the count |
 | `readable` | Wingman read the MCE's nodes and pods | never: it passes or fails |
+
+With live MCE reads off, `free_pods`, `servers` and `readable` are
+`not_checked` instead (section 9).
 
 **Which nodes are workers.** A production MCE has three masters, three
 infra nodes (HAProxy, tainted so nothing is scheduled there) and its
@@ -367,3 +373,42 @@ How the rule's inputs are read; none of this changes the rule.
   paged.
 - Every hub read is cached for 5 seconds and shared; server-scan's rows are
   the nodes view's cache.
+
+## 9. Without live MCE reads (amended 2026-11-12)
+
+With `CLUSTER_STATUS_ENABLED` off (no hub, as on the sandbox), placement
+still answers, from what Wingman has: the version each MCE hosts, clusters
+per MCE with open create MRs, this owner's clusters, and spare servers from
+server-scan when it is configured.
+
+```json
+{
+  "live_reads": false,
+  "pick": "ocp4-prod-mce-site1-b",
+  "candidates": [
+    {
+      "mce": "ocp4-prod-mce-site1-b",
+      "eligible": true,
+      "checks": [
+        {"check": "version", "status": "pass", "detail": "Hosts OpenShift 4.18.56."},
+        {"check": "free_pods", "status": "not_checked", "detail": "Not checked: live MCE reads are off (CLUSTER_STATUS_ENABLED=false)."},
+        {"check": "servers", "status": "not_checked", "detail": "Not checked: live MCE reads are off (CLUSTER_STATUS_ENABLED=false)."},
+        {"check": "readable", "status": "not_checked", "detail": "Not checked: live MCE reads are off (CLUSTER_STATUS_ENABLED=false)."}
+      ],
+      "node_types": [],
+      "pods": null
+    }
+  ]
+}
+```
+
+- `not_checked` is not `unknown`: it does not block. `eligible` is "every
+  check passes or is `not_checked`", so the version alone can take an MCE out.
+- `pods` is `null` and `node_types` is empty; the top-level `needs` still
+  echo what was asked.
+- The form shows the pick and says the free pods and servers were not
+  checked because live MCE reads are off. The MR description says so too, and
+  its free pods and servers columns read "not checked".
+- Create validates the same way: the version, an override's reason, a stale
+  pick (409). With live reads on nothing changes: an MCE Wingman cannot read
+  is `unknown` and never picked.

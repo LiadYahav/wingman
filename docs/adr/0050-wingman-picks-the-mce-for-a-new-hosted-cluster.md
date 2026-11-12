@@ -1,7 +1,7 @@
 # ADR-0050: Wingman picks the MCE for a new hosted cluster, and shows why
 
 Date: 2026-11-12
-Status: Accepted; amends rule 2 of `docs/ideas/architecture-fit.md` (Wingman checks the free pods a control plane needs and the servers a cluster needs, ranks MCEs, and still reserves nothing)
+Status: Accepted; amends rule 2 of `docs/ideas/architecture-fit.md` (Wingman checks the free pods a control plane needs and the servers a cluster needs, ranks MCEs, and still reserves nothing); amended 2026-11-12: placement always runs (see the amendment)
 
 **The free pods rule** (the user, 2026-11-12): free = allocatable pods − pods
 in use, on the worker nodes only, and it must be at least the cost of one
@@ -265,3 +265,55 @@ rule above.
   servers per type, a failing and an unknown type, the needs sent from the
   nodepools, an override needing a reason, the pick changing, the fallback
   with the hubs off).
+
+## Amendment (2026-11-12): placement always runs
+
+**Placement always runs; without live reads it decides on Git and
+server-scan and says what it did not check.**
+
+The user, after 3.11.0: "The selection of a new cluster is wrong. I should
+select version + site + prod/prep, and then this should give me the best
+MCE, with an option to override." The sandbox runs with live status off
+(its fixture MCEs have no hub), so decision 12 answered 501 and the form
+fell back to the old site and MCE dropdown: the person picked the MCE after
+all.
+
+- **The form never asks for the MCE.** It asks for the site, then prod or
+  prep, then the version: the version list is what that site's candidates
+  host, so it only offers versions some MCE can run. As soon as the three are
+  chosen it shows the pick, why, and every candidate's numbers. The owner and
+  the flavor's nodepools refine the pick (the owner's spread, the servers per
+  type) but are not needed to see one. The override is unchanged.
+- **Without live MCE reads** (no hub: `CLUSTER_STATUS_ENABLED` off),
+  `GET /api/day1/placement` answers instead of 501, from what Wingman has:
+  - the version each MCE hosts (`upgrade/mces/`);
+  - clusters per MCE, with open create MRs;
+  - this owner's clusters;
+  - spare servers from server-scan, when it is configured.
+
+  The checks that need the MCE's own API, `free_pods`, `servers` and
+  `readable`, are `not_checked` ("Not checked: live MCE reads are off
+  (CLUSTER_STATUS_ENABLED=false)."), a state of its own: unlike `unknown`,
+  it does not block the pick. The answer's `live_reads` is `false`, the form
+  says the free pods and servers were not checked, and so does the MR
+  description ("Free pods and servers were **not checked**…", and "not
+  checked" in their columns).
+- **With live reads on, nothing changes**: an MCE Wingman cannot read is
+  `unknown` and never picked.
+- **Create validates the same way**: the version is checked, an override
+  needs a reason, a stale pick is a 409; the MCE checks are not made.
+- Decision 12 ("On with the hubs") is replaced by this.
+
+### Verification of the amendment
+
+- `apps/day1-service/tests/unit/domain/test_placement.py`: without live
+  reads the three MCE checks are `not_checked`, do not block and are not
+  failures; the version still decides; an `unknown` still blocks; the MR
+  section says what was not checked.
+- `apps/day1-service/tests/api/test_placement_api.py`: with no hub, the read
+  answers with `live_reads: false`, the pick from Git and server-scan, and the
+  version still failing an MCE; no version still means no pick; create on
+  another MCE needs a reason, create on the pick records "not checked".
+- `apps/web/e2e/tests/mce-placement.spec.ts`: the form without live reads
+  (the pick, the "not checked" note), the field order site → prod/prep →
+  version, no MCE dropdown, and a failed read shown with a retry.

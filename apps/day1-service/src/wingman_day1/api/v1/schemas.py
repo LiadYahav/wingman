@@ -351,7 +351,8 @@ class PlacementCheckOut(BaseModel):
     """One required check of a candidate MCE."""
 
     check: Literal["version", "free_pods", "servers", "readable"]
-    status: Literal["pass", "fail", "unknown"]
+    status: Literal["pass", "fail", "unknown", "not_checked"]
+    """``not_checked``: live MCE reads are off; it does not block the pick."""
     detail: str
 
 
@@ -491,6 +492,8 @@ class PlacementOut(BaseModel):
     owner: str | None
     flavor: str | None
     min_free_pods: int
+    live_reads: bool
+    """``False`` when live MCE reads are off: free pods and servers were not checked."""
     needs: list[NeedOut]
     """The servers the new cluster needs, per node type, summed; empty when none is named."""
     versions: list[str]
@@ -512,6 +515,7 @@ class PlacementOut(BaseModel):
             owner=inputs.owner,
             flavor=inputs.flavor,
             min_free_pods=inputs.min_free_pods,
+            live_reads=placement.live_reads,
             needs=[NeedOut(infra_env=t, replicas=n) for t, n in inputs.needs],
             versions=list(placement.versions),
             pick=placement.pick,

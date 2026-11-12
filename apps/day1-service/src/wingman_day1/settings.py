@@ -117,10 +117,11 @@ class Day1Settings(BaseSettings):
     # request itself; needs WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development).
     day1_provisioner: Literal["merge-request", "workflow"] = "merge-request"
 
-    # ── MCE placement (ADR-0050): on with the hubs (CLUSTER_STATUS_ENABLED) ──
-    # The cost of one hosted control plane: an MCE is offered for a new cluster
-    # only with at least this many free pods (allocatable less in use) on its
-    # workers (masters, infra nodes, tainted, cordoned or NotReady nodes left out).
+    # ── MCE placement (ADR-0050): always on; this needs the hubs ─────────────
+    # The cost of one hosted control plane: with CLUSTER_STATUS_ENABLED, an MCE
+    # is offered for a new cluster only with at least this many free pods
+    # (allocatable less in use) on its workers (masters, infra nodes, tainted,
+    # cordoned or NotReady nodes left out). Without it, not checked.
     placement_min_free_pods: int = Field(default=70, ge=0, le=100_000)
 
     # ── segments-manager: a cluster's EPG, checked against Git (ADR-0039) ────
