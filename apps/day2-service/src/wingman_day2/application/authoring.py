@@ -1,6 +1,8 @@
-"""Authoring add-ons: a new add-on, its team default, and fleet defaults; one MR each (ADR-0043).
+"""Authoring operators: a new one, its team default, and fleet defaults; one MR each (ADR-0043).
 
-What Wingman writes, on the team's own repo only:
+An *operator* is a chart in a team's catalog (``operators/<chart>/``) and the
+fleet defaults built from it; the API keeps calling it an add-on. What
+Wingman writes, on the team's own repo only:
 
 - **create**: ``operators/<chart>/<chart>.yaml`` (the deploy config: lowercase
   ``repourl``, and ``targetRevision``, ``path``, ``projectNamespace``,
@@ -13,14 +15,17 @@ What Wingman writes, on the team's own repo only:
   override. A cluster that already has the chart in its own folder would get
   the same app twice (the XOR rule); its folder moves into the default in the
   same commit. Both folders generate the same Application names, so ArgoCD
-  keeps those Applications: nothing is deleted, re-created or orphaned. The
-  move is automatic when the cluster's effective deploy config and values do
-  not change, and must be confirmed per cluster when they do.
+  keeps those Applications: nothing is deleted, re-created or orphaned. An
+  old entry of the scope's ``exclusions.yaml`` naming such a cluster would
+  delete its app once the default exists: it goes in the same commit
+  (ADR-0053).
 - **update a fleet default**: its values file and its sync override.
 
 Every change is refused first for a team that has not given Wingman write
-access (``AccessService``), then checked as the platform would render it
-(``refuse_new_errors``). A dry run plans everything and opens nothing.
+access (``AccessService``), then checked as the platform would render it, and
+measured on every app of the chart (``PlanWriter.validate``): whatever it
+deletes or changes must be confirmed against the preview's digest. A dry run
+plans everything and opens nothing.
 """
 
 from __future__ import annotations
@@ -28,36 +33,31 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from enum import Enum, StrEnum
+from dataclasses import dataclass, field, replace
+from enum import Enum
 from typing import Final, Literal
-from urllib.parse import urlsplit
 
-from wingman_core.domain.git import ChangeKind, FileChange, FileContent, RepoPath, commit_author
-from wingman_core.domain.merge_request import MergeRequest, NewMergeRequest
-from wingman_core.domain.mr_conventions import (
-    WINGMAN_LABEL,
-    MRMetadata,
-    Repo,
-    ResourceType,
-    Verb,
-    branch_name,
-    mr_description,
-    mr_title,
-)
+from wingman_core.domain.git import FileChange, RepoPath
+from wingman_core.domain.mr_conventions import Repo, ResourceType, Verb, mr_title
 from wingman_core.domain.users import User
-from wingman_core.ports.clock import Clock
-from wingman_core.ports.gitlab import GitLabPort
-from wingman_day2.application.access import AccessService
 from wingman_day2.application.apps import LoadedLayer, load_layers
-from wingman_day2.application.catalog import (
-    chart_repo_findings,
-    chart_values,
-    check_chart_repo,
-    version_order,
+from wingman_day2.application.changes import check_chart_name
+from wingman_day2.application.plan_writer import (
+    SCOPE_LABELS,
+    SCOPE_NOUNS,
+    SCOPE_ORDER,
+    Action,
+    Adoption,
+    AuthoringPlan,
+    AuthoringResult,
+    DestinationImpact,
+    Effect,
+    KeyChange,
+    PlanWriter,
+    fleet_apps,
+    scope_destinations,
 )
-from wingman_day2.application.changes import check_chart_name, refuse_new_errors
-from wingman_day2.application.topology import TeamState, TopologyService
+from wingman_day2.application.topology import TeamState
 from wingman_day2.domain import layout
 from wingman_day2.domain.clusters import ClusterKind, ClusterRef, DefaultsScope
 from wingman_day2.domain.deploy_config import (
@@ -79,9 +79,10 @@ from wingman_day2.domain.errors import (
     ChartNotInstalledError,
     UnknownChartError,
 )
+from wingman_day2.domain.exclusions import set_excluded
 from wingman_day2.domain.findings import Finding, Rule, warning
 from wingman_day2.domain.merge import merge_values
-from wingman_day2.domain.platform import AppSource, Destination, PlannedApp, TeamPlan
+from wingman_day2.domain.platform import TeamPlan, scope_exclusions
 from wingman_day2.domain.stacks import Layer, LayerRole
 from wingman_day2.domain.sync_policy import (
     AUTOMATED,
@@ -94,39 +95,36 @@ from wingman_day2.domain.sync_policy import (
     sync_settings,
 )
 from wingman_day2.domain.teams import TeamAccess
-from wingman_day2.domain.tree import RepoTree
 from wingman_day2.domain.yaml_text import dump_yaml, edit_mapping_text, same_value
 from wingman_day2.domain.yaml_values import dump_values, parse_values
-from wingman_day2.ports import ChartRepository, SigsRepository
 
-SCOPE_LABELS: Final = {
-    DefaultsScope.HUB: "the hub",
-    DefaultsScope.MCES: "every MCE",
-    DefaultsScope.HOSTED_CLUSTERS: "every hosted cluster",
-    DefaultsScope.UPI: "every UPI cluster",
-}
-"""How a fleet scope is named to people: in titles, notes and the web."""
-
-SCOPE_NOUNS: Final = {
-    DefaultsScope.HUB: "hub",
-    DefaultsScope.MCES: "MCE(s)",
-    DefaultsScope.HOSTED_CLUSTERS: "hosted cluster(s)",
-    DefaultsScope.UPI: "UPI cluster(s)",
-}
+__all__ = [
+    "SCOPE_LABELS",
+    "SCOPE_NOUNS",
+    "UNSET",
+    "Action",
+    "AddonTemplate",
+    "Adoption",
+    "AuthoringPlan",
+    "AuthoringResult",
+    "AuthoringService",
+    "DestinationImpact",
+    "Effect",
+    "FleetDefault",
+    "KeyChange",
+    "NewAddon",
+    "ScopeReach",
+    "TeamDefaultEdit",
+    "Unset",
+    "fleet_apps",
+    "new_deploy_config",
+]
 
 NAMESPACE: Final = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
 """A Kubernetes namespace name (a DNS label)."""
 
 EDITABLE_KEYS: Final = (REPOURL, TARGET_REVISION, PATH, PROJECT_NAMESPACE, IGNORE_DIFFERENCES)
 """The team-default deploy-config keys an edit may set (sync options go separately)."""
-
-
-class Action(StrEnum):
-    """What an authoring MR does: its branch action, label and footer ``Action``."""
-
-    CREATE = "create-addon"
-    UPDATE_DEFAULT = "update-default"
-    MAKE_DEFAULT = "make-default"
 
 
 class _Unset(Enum):
@@ -165,82 +163,6 @@ class TeamDefaultEdit:
     sync: SyncSettings | None = None
     values: Mapping[str, object] | None = None
     last_commit_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class KeyChange:
-    """One leaf of a cluster's effective deploy config or values that a move changes."""
-
-    stack: str
-    key: str
-    before: object
-    after: object
-
-
-@dataclass(frozen=True, slots=True)
-class Adoption:
-    """A cluster whose own chart folder moves into the new fleet default."""
-
-    ref: ClusterRef
-    moved: tuple[tuple[RepoPath, RepoPath], ...]
-    deleted: tuple[RepoPath, ...]
-    gitkeep: RepoPath | None
-    changes: tuple[KeyChange, ...]
-
-    def details(self) -> dict[str, object]:
-        """The adoption as plain data, for a problem's ``details``."""
-        return {
-            "cluster": self.ref.id,
-            "name": self.ref.name,
-            "changes": [
-                {"stack": c.stack, "key": c.key, "before": c.before, "after": c.after}
-                for c in self.changes
-            ],
-        }
-
-
-@dataclass(slots=True)
-class AuthoringPlan:
-    """Everything one authoring MR writes and what it does."""
-
-    state: TeamState
-    action: Action
-    chart: str
-    scope: DefaultsScope | None
-    title: str = ""
-    changes: list[FileChange] = field(default_factory=list)
-    previous: dict[str, str] = field(default_factory=dict)
-    reach: list[ClusterRef] = field(default_factory=list)
-    adopted: list[Adoption] = field(default_factory=list)
-    findings: list[Finding] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
-
-    @property
-    def team(self) -> str:
-        """The team's name."""
-        return self.state.team.name
-
-    @property
-    def tree(self) -> RepoTree:
-        """The team repo as it would be after the MR."""
-        return self.state.repo.tree.with_changes(self.changes)
-
-    @property
-    def needs_confirmation(self) -> list[str]:
-        """The ids of the adopted clusters whose effective config the move changes."""
-        return [a.ref.id for a in self.adopted if a.changes]
-
-    def pending(self, path: RepoPath) -> FileChange | None:
-        """The last change this plan makes to ``path``."""
-        return next((c for c in reversed(self.changes) if c.path == path), None)
-
-
-@dataclass(frozen=True, slots=True)
-class AuthoringResult:
-    """A plan, and the MR it opened (``None`` for a dry run)."""
-
-    plan: AuthoringPlan
-    merge_request: MergeRequest | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,43 +216,6 @@ class FleetDefault:
         return file.last_commit_id if file else None
 
 
-def _flatten(values: object, prefix: str = "") -> dict[str, object]:
-    if isinstance(values, dict) and values:
-        out: dict[str, object] = {}
-        for key, sub in values.items():
-            out |= _flatten(sub, f"{prefix}.{key}" if prefix else str(key))
-        return out
-    return {prefix: values} if prefix else {}
-
-
-def _key_changes(
-    stack: str, before: dict[str, object], after: dict[str, object]
-) -> list[KeyChange]:
-    old, new = _flatten(before), _flatten(after)
-    return [
-        KeyChange(stack, key, old.get(key), new.get(key))
-        for key in sorted({*old, *new})
-        if key not in old or key not in new or not same_value(old[key], new[key])
-    ]
-
-
-def fleet_apps(plan: TeamPlan, chart: str, scope: DefaultsScope) -> list[PlannedApp]:
-    """The apps a fleet default of ``chart`` generates (on the hub, the hub's own folder)."""
-    if scope is DefaultsScope.HUB:
-        return [a for a in plan.apps if a.ref.kind is ClusterKind.HUB and a.chart == chart]
-    return [
-        a
-        for a in plan.apps
-        if a.chart == chart
-        and a.source is AppSource.FLEET_DEFAULT
-        and a.ref.defaults_scope is scope
-    ]
-
-
-def _scope_destinations(plan: TeamPlan, scope: DefaultsScope) -> tuple[ClusterRef, ...]:
-    return tuple(d.ref for d in plan.destinations if d.ref.defaults_scope is scope and d.renders)
-
-
 def new_deploy_config(spec: NewAddon) -> dict[str, object]:
     """The ``<chart>.yaml`` of a new add-on: only the keys that are set, lowercase ``repourl``."""
     doc: dict[str, object] = {REPOURL: spec.repourl.strip()}
@@ -348,7 +233,8 @@ def new_deploy_config(spec: NewAddon) -> dict[str, object]:
     return doc
 
 
-def _check_namespace(namespace: object) -> None:
+def check_namespace(namespace: object) -> None:
+    """Refuse a value that is no Kubernetes namespace name."""
     if namespace is not None and not NAMESPACE.match(str(namespace)):
         raise ChangeRefusedError(
             f"{namespace!r} is not a Kubernetes namespace name (lowercase letters, digits, '-')",
@@ -366,25 +252,33 @@ def _check_ignore_differences(value: object) -> None:
         )
 
 
-class AuthoringService:
-    """Plan and open the MRs that create add-ons and edit team and fleet defaults."""
+def _sync_words(sync: SyncSettings) -> str:
+    mode = (
+        "auto-sync"
+        + (" with prune" if sync.prune else "")
+        + (" and self-heal" if sync.self_heal else "")
+        if sync.auto_sync
+        else "manual sync"
+    )
+    options = ", ".join(sync.sync_options) if sync.sync_options else "no sync options"
+    return f"{mode} and {options}"
 
-    def __init__(
-        self,
-        gitlab: GitLabPort,
-        topology: TopologyService,
-        sigs: SigsRepository,
-        charts: ChartRepository,
-        access: AccessService,
-        clock: Clock,
-    ) -> None:
-        """Write through ``gitlab``; read through the rest; ask ``access`` before any write."""
-        self._gitlab = gitlab
-        self._topology = topology
-        self._sigs = sigs
-        self._charts = charts
-        self._access = access
-        self._clock = clock
+
+def _existing_note(plan: AuthoringPlan) -> str | None:
+    """The note on destinations that had the chart before and whose deploy config changes."""
+    changed = [i for i in plan.impact if i.effect is Effect.CHANGED]
+    if not changed:
+        return None
+    return (
+        f"{len(changed)} destination(s) already deploy {plan.chart} "
+        f"({', '.join(i.ref.name for i in changed)}), and this change moves what they deploy: "
+        "listed below key by key, each to be confirmed. A manual-sync leaf deploys it when "
+        "someone syncs it; an auto-sync one at once."
+    )
+
+
+class AuthoringService(PlanWriter):
+    """Plan and open the MRs that create add-ons and edit team and fleet defaults."""
 
     # ── reads ───────────────────────────────────────────────────────────────
 
@@ -401,8 +295,9 @@ class AuthoringService:
         settings = Counter(sync_settings(x.values.get(SYNC_POLICY)) for x in loaded)
         project = state.team.project.path_with_namespace
         if settings:
-            (sync, count), *rest = settings.most_common()
-            if rest and rest[0][1] == count and PLATFORM_DEFAULT in dict(settings.most_common()):
+            (sync, count), *_ = settings.most_common()
+            # A tie among the leaders goes to the platform's default, when it is one of them.
+            if settings[PLATFORM_DEFAULT] == count:
                 sync = PLATFORM_DEFAULT
             source = (
                 f"the sync options most of {project}'s add-ons use "
@@ -423,13 +318,7 @@ class AuthoringService:
             sync_source=source,
             repourl_prefix=prefixes.most_common(1)[0][0] if prefixes else None,
             scopes=tuple(
-                ScopeReach(scope, _scope_destinations(state.plan, scope))
-                for scope in (
-                    DefaultsScope.HOSTED_CLUSTERS,
-                    DefaultsScope.MCES,
-                    DefaultsScope.HUB,
-                    DefaultsScope.UPI,
-                )
+                ScopeReach(scope, scope_destinations(state.plan, scope)) for scope in SCOPE_ORDER
             ),
         )
 
@@ -439,15 +328,16 @@ class AuthoringService:
         states = [topology.team(team)] if team else list(topology.teams)
         access = await self._access.of_all([s.team for s in states])
         return [
-            await self._fleet_default(state, scope, chart, access[state.team.name])
+            await self.fleet_default(state, scope, chart, access[state.team.name])
             for state in states
             for scope in DefaultsScope
             for chart in state.repo.tree.subdirs(layout.defaults_dir(scope))
         ]
 
-    async def _fleet_default(
+    async def fleet_default(
         self, state: TeamState, scope: DefaultsScope, chart: str, access: TeamAccess
     ) -> FleetDefault:
+        """One fleet default of ``state``'s team, read."""
         tree = state.repo.tree
         folder = layout.defaults_dir(scope).child(chart)
         name = layout.deploy_config_name(chart)
@@ -502,9 +392,20 @@ class AuthoringService:
     # ── create ──────────────────────────────────────────────────────────────
 
     async def create(
-        self, spec: NewAddon, user: User, *, dry_run: bool = False, message: str | None = None
+        self,
+        spec: NewAddon,
+        user: User,
+        *,
+        dry_run: bool = False,
+        message: str | None = None,
+        expected_digest: str | None = None,
     ) -> AuthoringResult:
-        """Plan, and unless ``dry_run`` open, the MR adding ``spec`` to the team's catalog."""
+        """Plan, and unless ``dry_run`` open, the MR adding ``spec`` to the team's catalog.
+
+        Clusters that have the chart in their own folder already get the new
+        team layer under it, so what they deploy may change: each such change
+        is listed and must be confirmed (review of 3.8.0).
+        """
         topology = await self._topology.load()
         state = topology.team(spec.team)
         await self._access.require_write(state.team)
@@ -516,11 +417,11 @@ class AuthoringService:
                 details={"rule": "addon-exists", "team": state.team.name, "path": str(folder)},
             )
         sync = spec.sync.checked()
-        _check_namespace(spec.project_namespace)
+        check_namespace(spec.project_namespace)
         _check_ignore_differences(spec.ignore_differences)
         plan = AuthoringPlan(state, Action.CREATE, chart, spec.default_scope)
         deploy_path = folder.child(layout.deploy_config_name(chart))
-        plan.findings += await self._check_chart_repo(
+        plan.findings += await self.check_chart_repo(
             spec.repourl,
             spec.target_revision,
             spec.path,
@@ -534,18 +435,19 @@ class AuthoringService:
         label = SCOPE_LABELS[spec.default_scope] if spec.default_scope else ""
         if spec.default_scope is not None:
             await self._plan_default(
-                plan,
-                spec.default_scope,
-                values=spec.default_values,
-                sync=None,
-                confirm=spec.confirm_changes,
-                dry_run=dry_run,
+                plan, spec.default_scope, values=spec.default_values, sync=None
             )
-        after = refuse_new_errors(topology, state, plan.tree)
+        after = await self.validate(topology, plan)
+        existing = _existing_note(plan)
         plan.notes.append(
             f"After the merge, {chart} is in {state.team.project.path_with_namespace}'s catalog "
-            f"(operators/{chart}/), with {_sync_words(sync)}. Nothing is deployed by the catalog "
-            "itself: install it on a cluster from Wingman, or make it a fleet default."
+            f"(operators/{chart}/), with {_sync_words(sync)}. "
+            + (
+                existing
+                if existing
+                else "Nothing is deployed by the catalog itself: install it on a cluster from "
+                "Wingman, or make it a fleet default."
+            )
         )
         if spec.default_scope is not None:
             await self._reach(plan, after, spec.default_scope)
@@ -556,64 +458,8 @@ class AuthoringService:
             f"{state.team.name}/{chart}",
             "in the team catalog" + (f" and as a fleet default on {label}" if label else ""),
         )
-        return await self._finish(plan, user, message, dry_run=dry_run)
-
-    async def _check_chart_repo(
-        self,
-        repourl: str,
-        revision: object,
-        chart_path: object,
-        *,
-        file: str,
-        where: Mapping[str, str],
-    ) -> list[Finding]:
-        """Refuse a chart repo URL that cannot work; warn about one Wingman cannot check.
-
-        ``file`` is the deploy config that sets it, for the findings.
-        """
-        url = urlsplit(repourl.strip())
-        if url.scheme not in ("http", "https") or not url.netloc or not url.path.strip("/"):
-            raise ChangeRefusedError(
-                f"{repourl!r} is not a chart repo URL (https://<gitlab>/<group>/<chart>.git)",
-                details={"rule": "repourl-invalid", "repourl": repourl},
-            )
-        if not self._charts.on_this_gitlab(repourl):
-            return [
-                warning(
-                    Rule.CHART_REPO_ELSEWHERE,
-                    f"{repourl} is not on this GitLab: Wingman cannot list its versions or show "
-                    "its default values (ArgoCD reads it as written)",
-                    path=file,
-                    **where,
-                )
-            ]
-        check = await check_chart_repo(self._charts, repourl)
-        project = check.project
-        if project is None:
-            raise ChangeRefusedError(
-                check.problem or f"{repourl} names no project on this GitLab that Wingman can read",
-                details={"rule": "chart-repo-missing", "repourl": repourl},
-            )
-        found = chart_repo_findings(check, path=file, **where)
-        wanted = str(revision) if truthy(revision) else DEFAULT_REVISION
-        if wanted != DEFAULT_REVISION:
-            branches = await self._charts.branches(project)
-            if wanted not in branches:
-                raise ChangeRefusedError(
-                    f"{project.path_with_namespace} has no branch {wanted!r}; a chart version is "
-                    "one of its branches (or HEAD, its default branch)",
-                    details={
-                        "rule": "revision-unknown",
-                        "revision": wanted,
-                        "versions": version_order(project.default_branch, branches),
-                    },
-                )
-        chart = await chart_values(
-            self._charts, repourl, wanted, str(chart_path) if truthy(chart_path) else DEFAULT_PATH
-        )
-        if chart.problem is not None:
-            found.append(warning(Rule.CHART_VALUES_MISSING, chart.problem, path=file, **where))
-        return found
+        self.confirm(plan, spec.confirm_changes, expected_digest, dry_run=dry_run)
+        return await self.finish(plan, user, message, dry_run=dry_run)
 
     # ── team default ────────────────────────────────────────────────────────
 
@@ -626,6 +472,8 @@ class AuthoringService:
         *,
         dry_run: bool = False,
         message: str | None = None,
+        confirm_changes: Sequence[str] = (),
+        expected_digest: str | None = None,
     ) -> AuthoringResult:
         """Plan, and unless ``dry_run`` open, the MR editing ``operators/<chart>/``."""
         topology = await self._topology.load()
@@ -640,6 +488,8 @@ class AuthoringService:
         plan = AuthoringPlan(state, Action.UPDATE_DEFAULT, chart, None)
         deploy_path = folder.child(layout.deploy_config_name(chart))
         file = await self._sigs.read(state.team, deploy_path) if tree.is_file(deploy_path) else None
+        if file is None:
+            await self.refuse_if_deleted(plan, deploy_path, edit.last_commit_id)
         old_text = file.content if file else ""
         doc, problem = parse_values(old_text, path=str(deploy_path))
         if problem is not None:
@@ -650,7 +500,7 @@ class AuthoringService:
         new, renames = self._edited_deploy(doc, edit)
         repo_keys = {REPOURL, TARGET_REVISION, PATH}
         if repo_keys & set(edit.keys) and truthy(new.get(REPOURL)):
-            plan.findings += await self._check_chart_repo(
+            plan.findings += await self.check_chart_repo(
                 str(new[REPOURL]),
                 new.get(TARGET_REVISION),
                 new.get(PATH),
@@ -663,9 +513,9 @@ class AuthoringService:
                 if file
                 else dump_yaml(new)
             )
-            self._write(plan, deploy_path, text, file, edit.last_commit_id)
+            self.write(plan, deploy_path, text, file, edit.last_commit_id)
         if edit.values is not None:
-            await self._plan_values(
+            await self.plan_values(
                 plan, folder.child(layout.VALUES_FILE), edit.values, edit.last_commit_id
             )
         if not plan.changes:
@@ -673,13 +523,15 @@ class AuthoringService:
                 f"nothing to change: operators/{chart}/ already holds this",
                 details={"rule": "no-change"},
             )
-        after = refuse_new_errors(topology, state, plan.tree)
+        after = await self.validate(topology, plan)
         apps = [a for a in after.apps if a.chart == chart]
         plan.reach = sorted({a.ref for a in apps}, key=lambda r: r.id)
+        changed = sum(1 for i in plan.impact if i.effect is Effect.CHANGED)
         plan.notes.append(
             f"Every destination that gets {chart} from {team} inherits this team default unless "
             "an OCP-version pin, a fleet default or its own folder sets the same key: "
-            f"{len(plan.reach)} destination(s) get {chart} today. "
+            f"{len(plan.reach)} destination(s) get {chart} today, and what {changed} of them "
+            "deploy changes (listed key by key). "
             + (
                 f"targetRevision moves to {new.get(TARGET_REVISION) or DEFAULT_REVISION} on every "
                 "one that does not pin it. "
@@ -691,7 +543,8 @@ class AuthoringService:
         plan.title = mr_title(
             Repo.DAY2, Verb.UPDATE, ResourceType.ADDON, f"{team}/{chart}", "team default"
         )
-        return await self._finish(plan, user, message, dry_run=dry_run)
+        self.confirm(plan, confirm_changes, expected_digest, dry_run=dry_run)
+        return await self.finish(plan, user, message, dry_run=dry_run)
 
     @staticmethod
     def _edited_deploy(
@@ -721,14 +574,15 @@ class AuthoringService:
                     new.pop(stray, None)
                 value = str(value).strip()
             if key == PROJECT_NAMESPACE:
-                _check_namespace(value)
+                check_namespace(value)
             if key == IGNORE_DIFFERENCES:
                 _check_ignore_differences(value)
             if key == TARGET_REVISION and value == DEFAULT_REVISION:
                 value = None
             if key == PATH and value is not None and str(value).strip("/") in ("", DEFAULT_PATH):
                 value = None
-            if value is None or value == "":
+            # An empty value removes the key: ArgoCD reads `ignoreDifferences: []` as none too.
+            if value is None or value == "" or value == []:
                 new.pop(key, None)
             else:
                 new[key] = value
@@ -754,6 +608,7 @@ class AuthoringService:
         confirm_changes: Sequence[str] = (),
         dry_run: bool = False,
         message: str | None = None,
+        expected_digest: str | None = None,
     ) -> AuthoringResult:
         """Plan, and unless ``dry_run`` open, the MR making ``chart`` a fleet default."""
         topology = await self._topology.load()
@@ -764,10 +619,8 @@ class AuthoringService:
                 f"team {team} has no operators/{chart}/", details={"team": team, "chart": chart}
             )
         plan = AuthoringPlan(state, Action.MAKE_DEFAULT, chart, scope)
-        await self._plan_default(
-            plan, scope, values=values, sync=sync, confirm=confirm_changes, dry_run=dry_run
-        )
-        after = refuse_new_errors(topology, state, plan.tree)
+        await self._plan_default(plan, scope, values=values, sync=sync)
+        after = await self.validate(topology, plan)
         await self._reach(plan, after, scope)
         plan.title = mr_title(
             Repo.DAY2,
@@ -776,7 +629,8 @@ class AuthoringService:
             f"{team}/{chart}",
             f"to a fleet default on {SCOPE_LABELS[scope]}",
         )
-        return await self._finish(plan, user, message, dry_run=dry_run)
+        self.confirm(plan, confirm_changes, expected_digest, dry_run=dry_run)
+        return await self.finish(plan, user, message, dry_run=dry_run)
 
     async def _plan_default(
         self,
@@ -785,8 +639,6 @@ class AuthoringService:
         *,
         values: Mapping[str, object],
         sync: SyncSettings | None,
-        confirm: Sequence[str],
-        dry_run: bool,
     ) -> None:
         chart = plan.chart
         base = plan.state.repo.tree
@@ -800,98 +652,56 @@ class AuthoringService:
         name = layout.deploy_config_name(chart)
         fleet_doc: dict[str, object] = {}
         if sync is not None:
-            team_doc = await self._doc(plan, layout.operators_dir(chart).child(name), after=True)
+            team_doc = await self.doc(plan, layout.operators_dir(chart).child(name), after=True)
             override = policy_override([team_doc], sync.checked())
             if override:
                 fleet_doc[SYNC_POLICY] = override
         plan.changes.append(FileChange.create(fleet.child(layout.VALUES_FILE), dump_values(values)))
         if fleet_doc:
             plan.changes.append(FileChange.create(fleet.child(name), dump_yaml(fleet_doc)))
+        exclusions = (
+            scope_exclusions(plan.state.repo, scope) if scope is not DefaultsScope.HUB else None
+        )
+        listed = set(exclusions.names(chart)) if exclusions else set()
         for destination in plan.state.plan.destinations:
             ref = destination.ref
             if ref.kind is ClusterKind.HUB or ref.defaults_scope is not scope:
                 continue
             if base.is_dir(layout.chart_dir(ref, chart)):
-                plan.adopted.append(await self._adopt(plan, destination, fleet))
-        needs = plan.needs_confirmation
-        if not dry_run and sorted(set(confirm)) != sorted(needs):
-            changed = [a for a in plan.adopted if a.changes]
-            raise ChangeRefusedError(
-                (
-                    f"{len(changed)} cluster(s) already have {chart} in their own folder, and "
-                    "moving it into the default changes what they deploy: confirm each of them "
-                    f"in confirm_changes ({', '.join(needs)})"
-                )
-                if needs
-                else "confirm_changes names clusters whose move changes nothing; send it empty",
-                details={
-                    "rule": "confirm-changes",
-                    "needs_confirmation": needs,
-                    "adopted": [a.details() for a in changed],
-                },
-            )
+                adoption = await self.adopt(plan, destination, fleet)
+                if ref.exclusion_key in listed:
+                    adoption = replace(adoption, exclusion_removed=True)
+                plan.adopted.append(adoption)
+        await self._drop_stale_entries(plan, scope)
 
-    async def _adopt(
-        self, plan: AuthoringPlan, destination: Destination, fleet: RepoPath
-    ) -> Adoption:
-        """Move ``destination``'s own chart folder into the default; compare before and after."""
-        ref = destination.ref
-        chart = plan.chart
-        team = plan.state.team
-        base = plan.state.repo.tree
-        own = layout.chart_dir(ref, chart)
-        values_path = own.child(layout.VALUES_FILE)
-        deploy_path = own.child(layout.deploy_config_name(chart))
-        files = base.files_under(own)
-        others = [
-            p for p in files if p not in (values_path, deploy_path) and not p.name.startswith(".")
-        ]
-        if others:
-            raise ChangeRefusedError(
-                f"{own}/ holds {others[0]} besides its values and deploy config; move or delete it "
-                f"by hand, then make {chart} a default",
-                details={
-                    "rule": "adoption-blocked",
-                    "cluster": ref.id,
-                    "files": [str(p) for p in others],
-                },
-            )
-        app = PlannedApp(team.name, ref, chart, AppSource.CLUSTER, destination.ocp_version)
-        deploy_before = await self._merged(plan, app.deploy_config_layers, after=False)
-        values_before = await self._merged(plan, app.workload_layers, after=False)
-        moved: list[tuple[RepoPath, RepoPath]] = []
-        deleted: list[RepoPath] = []
-        tweak = fleet.child(f"values-{ref.exclusion_key}.yaml")
-        for path in files:
-            file = await self._sigs.read(team, path)
-            text = file.content if file else ""
-            if path == values_path and text.strip() not in ("", "{}"):
-                _, problem = parse_values(text, path=str(path))
-                if problem is not None:
-                    raise ChangeRefusedError(
-                        f"{problem.message} ({path}): fix it by hand, then make {chart} a default",
-                        details={"rule": "adoption-blocked", "cluster": ref.id, "path": str(path)},
-                    )
-                plan.changes.append(FileChange.create(tweak, text))
-                moved.append((path, tweak))
-            else:
-                deleted.append(path)
-            plan.previous[str(path)] = text
-            plan.changes.append(
-                FileChange.delete(path, last_commit_id=file.last_commit_id if file else None)
-            )
-        gitkeep = None
-        registration = layout.registration_dir(ref)
-        if registration is not None and not plan.tree.is_dir(registration):
-            gitkeep = registration.child(layout.GITKEEP)
-            plan.changes.append(FileChange.create(gitkeep, ""))
-        deploy_after = await self._merged(plan, app.deploy_config_layers, after=True)
-        values_after = await self._merged(plan, app.workload_layers, after=True)
-        changes = [
-            *_key_changes("deploy", deploy_before, deploy_after),
-            *_key_changes("values", values_before, values_after),
-        ]
-        return Adoption(ref, tuple(moved), tuple(deleted), gitkeep, tuple(changes))
+    async def _drop_stale_entries(self, plan: AuthoringPlan, scope: DefaultsScope) -> None:
+        """Remove the ``exclusions.yaml`` entries that would delete an adopted cluster's app.
+
+        Until the default exists, an entry for its chart is inert (and a lint
+        error: it names no chart folder). Once the folder is there it excludes
+        the cluster, and the cluster's own folder is gone with the move: its
+        app would be deleted and its workload orphaned. The cluster asked for
+        nothing of the kind, and the entry is stale, so it goes in the same
+        commit; the cluster is listed for confirmation (ADR-0053).
+        """
+        stale = {a.ref.exclusion_key or "" for a in plan.adopted if a.exclusion_removed}
+        if not stale:
+            return
+        path = layout.exclusions_file(scope)
+        file = await self._sigs.read(plan.state.team, path)
+        if file is None:
+            return
+        exclusions = scope_exclusions(plan.state.repo, scope)
+        names = [n for n in (exclusions.names(plan.chart) if exclusions else ()) if n not in stale]
+        text = set_excluded(file.content, plan.chart, names, path=str(path))
+        if text is not None and text != file.content:
+            self.write(plan, path, text, file, None)
+        plan.notes.append(
+            f"{path} names {', '.join(sorted(stale))} for {plan.chart}: an entry that does "
+            "nothing today (there is no default to exclude from) and that would delete the app "
+            "of each once the default exists, because its own folder moves into the default. "
+            "The entry goes in this MR, so each keeps its Application."
+        )
 
     async def update_fleet_default(
         self,
@@ -905,6 +715,8 @@ class AuthoringService:
         last_commit_id: str | None = None,
         dry_run: bool = False,
         message: str | None = None,
+        confirm_changes: Sequence[str] = (),
+        expected_digest: str | None = None,
     ) -> AuthoringResult:
         """Plan, and unless ``dry_run`` open, the MR editing ``defaults/<scope>/<chart>/``.
 
@@ -939,7 +751,7 @@ class AuthoringService:
                 policy.pop(AUTOMATED, None)
                 policy.pop(SYNC_OPTIONS, None)
             else:
-                team_doc = await self._doc(
+                team_doc = await self.doc(
                     plan, layout.operators_dir(chart).child(name), after=False
                 )
                 policy = policy_override([team_doc], sync.checked(), current)
@@ -948,14 +760,14 @@ class AuthoringService:
                 new = {**doc, SYNC_POLICY: policy}
             if not same_value(new, doc):
                 text = edit_mapping_text(old_text, new, path=str(path)) if file else dump_yaml(new)
-                self._write(plan, path, text, file, last_commit_id)
+                self.write(plan, path, text, file, last_commit_id)
         if values is not None:
-            await self._plan_values(plan, fleet.child(layout.VALUES_FILE), values, last_commit_id)
+            await self.plan_values(plan, fleet.child(layout.VALUES_FILE), values, last_commit_id)
         if not plan.changes:
             raise ChangeRefusedError(
                 f"nothing to change: {fleet}/ already holds this", details={"rule": "no-change"}
             )
-        after = refuse_new_errors(topology, state, plan.tree)
+        after = await self.validate(topology, plan)
         await self._reach(plan, after, scope, new_default=False)
         plan.title = mr_title(
             Repo.DAY2,
@@ -964,73 +776,10 @@ class AuthoringService:
             f"{team}/{chart}",
             f"fleet default on {SCOPE_LABELS[scope]}",
         )
-        return await self._finish(plan, user, message, dry_run=dry_run)
+        self.confirm(plan, confirm_changes, expected_digest, dry_run=dry_run)
+        return await self.finish(plan, user, message, dry_run=dry_run)
 
     # ── shared ──────────────────────────────────────────────────────────────
-
-    async def _text(self, plan: AuthoringPlan, path: RepoPath, *, after: bool) -> str | None:
-        if after:
-            change = plan.pending(path)
-            if change is not None:
-                return None if change.kind is ChangeKind.DELETE else change.content
-        if not plan.state.repo.tree.is_file(path):
-            return None
-        file = await self._sigs.read(plan.state.team, path)
-        return file.content if file else None
-
-    async def _doc(self, plan: AuthoringPlan, path: RepoPath, *, after: bool) -> dict[str, object]:
-        text = await self._text(plan, path, after=after)
-        if text is None:
-            return {}
-        values, problem = parse_values(text, path=str(path))
-        if problem is not None:
-            raise ChangeRefusedError(
-                f"{problem.message} ({path}): Wingman cannot tell what the change does; fix it "
-                "by hand first",
-                details={"rule": str(Rule.YAML_INVALID), "path": str(path)},
-            )
-        return values
-
-    async def _merged(
-        self, plan: AuthoringPlan, layers: Sequence[Layer], *, after: bool
-    ) -> dict[str, object]:
-        docs = [(str(x.path), await self._doc(plan, x.path, after=after)) for x in layers]
-        return merge_values({}, docs).values
-
-    @staticmethod
-    def _write(
-        plan: AuthoringPlan,
-        path: RepoPath,
-        text: str,
-        file: FileContent | None,
-        last_commit_id: str | None,
-    ) -> None:
-        """Update ``file`` (guarded by the caller's read, else this one) or create ``path``."""
-        if file is not None:
-            plan.previous[str(path)] = file.content
-            plan.changes.append(
-                FileChange.update(path, text, last_commit_id=last_commit_id or file.last_commit_id)
-            )
-        else:
-            plan.changes.append(FileChange.create(path, text))
-
-    async def _plan_values(
-        self,
-        plan: AuthoringPlan,
-        path: RepoPath,
-        values: Mapping[str, object],
-        last_commit_id: str | None,
-    ) -> None:
-        tree = plan.state.repo.tree
-        file = await self._sigs.read(plan.state.team, path) if tree.is_file(path) else None
-        if file is None:
-            if values or not tree.files_under(path.parent):
-                plan.changes.append(FileChange.create(path, dump_values(values)))
-            return
-        existing, problem = parse_values(file.content, path=str(path))
-        if problem is None and same_value(existing, dict(values)):
-            return
-        self._write(plan, path, dump_values(values), file, last_commit_id)
 
     async def _reach(
         self,
@@ -1053,7 +802,11 @@ class AuthoringService:
             return
         leaves = []
         for app in apps:
-            merged = await self._merged(plan, app.deploy_config_layers, after=True)
+            docs = [
+                (str(x.path), await self.doc(plan, x.path, after=True))
+                for x in app.deploy_config_layers
+            ]
+            merged = merge_values({}, docs).values
             leaves.append(leaf_application(merged, team=plan.team, chart=plan.chart, ref=app.ref))
         auto = sum(1 for leaf in leaves if leaf.auto_sync)
         verb = "generates" if new_default else "updates"
@@ -1076,12 +829,19 @@ class AuthoringService:
                 else f"{auto} of them sync by themselves; the others wait for a manual sync."
             )
         )
+        if plan.excluded:
+            plan.notes.append(
+                f"{layout.exclusions_file(scope)} keeps it off "
+                f"{', '.join(r.name for r in plan.excluded)}."
+            )
+        removed = [i for i in plan.impact if i.effect is Effect.REMOVED]
         if plan.adopted:
             plan.notes.append(
                 f"{len(plan.adopted)} of them had {plan.chart} in their own folder: those folders "
                 "move into the default in this MR (a non-empty values.yaml becomes "
                 f"defaults/{scope}/{plan.chart}/values-<cluster>.yaml), so their Applications keep "
-                "their names and ArgoCD neither deletes nor re-creates them. Nothing is orphaned."
+                "their names and ArgoCD neither deletes nor re-creates them."
+                + ("" if removed else " Nothing is orphaned.")
             )
         settings = {sync_settings(leaf.sync_policy) for leaf in leaves}
         if len(settings) > 1:
@@ -1094,87 +854,3 @@ class AuthoringService:
                     chart=plan.chart,
                 )
             )
-
-    async def _finish(
-        self, plan: AuthoringPlan, user: User, message: str | None, *, dry_run: bool
-    ) -> AuthoringResult:
-        if dry_run:
-            return AuthoringResult(plan, None)
-        team = plan.state.team
-        action = str(plan.action)
-        resource = f"{team.name}/{plan.chart}"
-        branch = branch_name(
-            username=user.username,
-            action=action,
-            resource=f"{plan.chart}-{plan.scope}" if plan.scope else plan.chart,
-            at=self._clock(),
-        )
-        metadata = MRMetadata(user.username, action, ResourceType.ADDON, resource, Repo.DAY2)
-        commit_message = (
-            f"{plan.title.removeprefix(f'[Wingman/{Repo.DAY2}] ')}\n\n"
-            f"Team: {team.name}\nRequested by {user.username} via Wingman"
-        )
-        try:
-            await self._gitlab.commit(
-                team.project.id,
-                branch=branch,
-                start_branch=self._sigs.branch,
-                message=commit_message,
-                changes=plan.changes,
-                author=commit_author(user),
-            )
-            merge_request = await self._gitlab.create_merge_request(
-                team.project.id,
-                NewMergeRequest(
-                    source_branch=branch,
-                    target_branch=self._sigs.branch,
-                    title=plan.title,
-                    description=mr_description(_description(plan, message), metadata),
-                    labels=(WINGMAN_LABEL, "day2", action),
-                ),
-            )
-        finally:
-            self._sigs.invalidate(team)
-        return AuthoringResult(plan, merge_request)
-
-
-def _sync_words(sync: SyncSettings) -> str:
-    mode = (
-        "auto-sync"
-        + (" with prune" if sync.prune else "")
-        + (" and self-heal" if sync.self_heal else "")
-        if sync.auto_sync
-        else "manual sync"
-    )
-    options = ", ".join(sync.sync_options) if sync.sync_options else "no sync options"
-    return f"{mode} and {options}"
-
-
-def _description(plan: AuthoringPlan, message: str | None) -> str:
-    lines = [
-        f"{plan.title.removeprefix(f'[Wingman/{Repo.DAY2}] ')} (team **{plan.team}**).",
-        "",
-        "Files:",
-        *(f"- {c.kind} `{c.path}`" for c in plan.changes),
-    ]
-    if plan.adopted:
-        lines += [
-            "",
-            "Clusters whose own folder moves into the default (same Application names: nothing "
-            "is deleted, re-created or orphaned):",
-        ]
-        for adoption in plan.adopted:
-            what = (
-                "nothing changes"
-                if not adoption.changes
-                else "; ".join(
-                    f"{c.stack} `{c.key}`: {c.before!r} → {c.after!r}" for c in adoption.changes
-                )
-            )
-            lines.append(f"- **{adoption.ref.name}** (`{adoption.ref.id}`): {what}")
-    if plan.findings:
-        lines += ["", "Warnings:", *(f"- {f.message}" for f in plan.findings)]
-    lines += ["", *plan.notes]
-    if message:
-        lines += ["", "Notes from the requester:", message]
-    return "\n".join(lines)

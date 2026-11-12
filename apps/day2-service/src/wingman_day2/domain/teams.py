@@ -2,15 +2,16 @@
 
 A team opts in to Wingman's writes by giving Wingman's GitLab account write
 access to its own project (Developer or higher: push a branch, open an MR).
-Without it, the team is read-only in Wingman (ADR-0043).
+Without it, the team is read-only in Wingman (ADR-0043); so is a team whose
+access Wingman could not read (:class:`UnknownAccess`), until it can.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from wingman_core.domain.git import AccessLevel, Project, RepoPath
+from wingman_core.domain.git import AccessLevel, ChangeKind, FileChange, Project, RepoPath
 from wingman_day2.domain import layout
 from wingman_day2.domain.clusters import DefaultsScope
 from wingman_day2.domain.tree import RepoTree
@@ -34,23 +35,49 @@ WRITE_LEVEL = AccessLevel.DEVELOPER
 
 
 @dataclass(frozen=True, slots=True)
+class UnknownAccess:
+    """Wingman could not read its access to a project, so it may not write there until it can.
+
+    It stands where an :class:`AccessLevel` would, so the API reports it in the
+    same fields: role ``unknown`` and level ``0``, as no role is confirmed.
+    """
+
+    cause: str
+    """What failed, in a few words (GitLab's answer or the transport error)."""
+
+    @property
+    def role(self) -> str:
+        """``unknown``, where a level would say ``developer``."""
+        return "unknown"
+
+    def __int__(self) -> int:
+        """``0``, GitLab's number for no access: none is confirmed."""
+        return int(AccessLevel.NONE)
+
+
+@dataclass(frozen=True, slots=True)
 class TeamAccess:
     """What Wingman's GitLab account may do in a team's project."""
 
     team: str
     project: str
-    level: AccessLevel
+    level: AccessLevel | UnknownAccess
 
     @property
     def writable(self) -> bool:
         """Whether Wingman may open merge requests for the team."""
-        return self.level >= WRITE_LEVEL
+        return isinstance(self.level, AccessLevel) and self.level >= WRITE_LEVEL
 
     @property
     def reason(self) -> str | None:
         """Why the team is read-only, in one sentence; ``None`` when it is writable."""
         if self.writable:
             return None
+        if isinstance(self.level, UnknownAccess):
+            return (
+                f"Wingman could not read its access to {self.project} ({self.level.cause}): "
+                f"{self.team} is read-only until it can."
+            )
         has = (
             "is not a member there"
             if self.level is AccessLevel.NONE
@@ -80,6 +107,25 @@ class TeamRepo:
     team: str
     tree: RepoTree
     files: Mapping[str, str] = field(default_factory=dict)
+
+    def with_changes(self, changes: Iterable[FileChange]) -> TeamRepo:
+        """The repo after ``changes``: its tree, and its control files' text as committed."""
+        changes = list(changes)
+        tree = self.tree.with_changes(changes)
+        files = dict(self.files)
+        for change in changes:
+            path = str(change.path)
+            if change.kind is ChangeKind.DELETE:
+                files.pop(path, None)
+                continue
+            moved = None
+            if change.previous_path is not None:
+                moved = files.pop(str(change.previous_path), None)
+            content = change.content if change.content is not None else moved
+            if content is not None:
+                files[path] = content
+        wanted = {str(p) for p in control_files(tree)}
+        return TeamRepo(self.team, tree, {k: v for k, v in files.items() if k in wanted})
 
 
 def control_files(tree: RepoTree) -> list[RepoPath]:

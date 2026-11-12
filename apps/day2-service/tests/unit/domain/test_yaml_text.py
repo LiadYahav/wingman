@@ -71,20 +71,40 @@ def test_a_list_is_rewritten_below_the_comments_at_its_head() -> None:
     assert out.index("# Nothing else") < out.index("- CreateNamespace=true")
 
 
-def test_a_removed_key_takes_its_lines_and_the_comment_above_it() -> None:
+def test_a_removed_key_takes_its_own_lines_and_never_a_comment() -> None:
     out = edit(TOKEN, repourl=None)
     assert changed_lines(TOKEN, out) == (
-        [
-            "# repourl, all lowercase.",
-            "repourl: https://gitlab.example/helm-charts/dhcp-scope-manager.git",
-        ],
+        ["repourl: https://gitlab.example/helm-charts/dhcp-scope-manager.git"],
         [],
     )
     policy = doc(TOKEN)["syncPolicy"]
     del policy["automated"]
     out = edit(TOKEN, syncPolicy=policy)
-    assert "selfHeal" not in out and "# prune: true so" not in out
-    assert "# Nothing else creates" in out
+    assert "selfHeal" not in out and "    prune: true" not in out
+    # The comment inside the removed block stays, for a person to delete in the MR.
+    assert "# prune: true so" in out and "# Nothing else creates" in out
+
+
+def test_a_file_header_and_the_last_comment_of_the_block_before_stay() -> None:
+    # Review of 3.8.0: resetting targetRevision, the first key, took the file's header with it,
+    # and removing a key took the indented last comment of the block above it.
+    text = (
+        "# The kyverno team default: why it prunes is in ARCHITECTURE.md.\n"
+        "targetRevision: 3.2.0\n"
+        "syncPolicy:\n"
+        "  automated:\n"
+        "    prune: true\n"
+        "  # selfHeal stays off: kyverno rewrites its own webhooks.\n"
+        "projectNamespace: kyverno\n"
+    )
+    out = edit(text, targetRevision=None, projectNamespace=None)
+    assert out == (
+        "# The kyverno team default: why it prunes is in ARCHITECTURE.md.\n"
+        "syncPolicy:\n"
+        "  automated:\n"
+        "    prune: true\n"
+        "  # selfHeal stays off: kyverno rewrites its own webhooks.\n"
+    )
 
 
 def test_new_keys_go_after_the_last_key_of_their_mapping_in_the_team_style() -> None:
@@ -119,8 +139,8 @@ def test_an_empty_file_gets_the_keys_and_keeps_its_comments() -> None:
     assert edit_mapping_text("", {"a": 1}, path="x") == "a: 1\n"
     assert edit_mapping_text("{}\n", {"a": [1]}, path="x") == "a:\n  - 1\n"
     assert edit_mapping_text("# why\n{}\n", {"a": 1}, path="x") == "# why\na: 1\n"
-    # The comment directly above a removed key goes with it; one set apart stays.
-    assert edit_mapping_text("# a's\na: 1\n", {}, path="x") == "{}\n"
+    # A removed key leaves every comment where it was.
+    assert edit_mapping_text("# a's\na: 1\n", {}, path="x") == "# a's\n{}\n"
     assert edit_mapping_text("# file\n\na: 1\n", {}, path="x") == "# file\n\n{}\n"
 
 

@@ -23,7 +23,11 @@ natural place to check before an MR, for every team at once.
 - Wingman's own rules: `repourl-miscased` and `repourl-missing`,
   `yaml-invalid`, `ocp-version-pin-missing` (a pinned chart with no folder for
   the cluster's version), `fleet-pin-overrides-ocp-versions`, `emergency-pin`
-  (info), `cluster-position-conflict`, `env-unknown`.
+  (info), `cluster-position-conflict`, `env-unknown`; and (2026-11-12)
+  `sync-policy-invalid`: a leaf's merged `syncPolicy`, `automated` or
+  `automated.enabled` is not of the type ArgoCD's Application CRD takes
+  (`automated: true`), so the leaf is refused; reported on the highest layer
+  that sets it.
 - Chart repos (2026-11-08): every file that sets a `repourl` (a catalog
   entry's team default, or any layer an app's `repourl` comes from) is
   checked against GitLab once per distinct URL. `repourl-moved` (warning): the

@@ -75,7 +75,6 @@ from wingman_day2.domain.platform import (
     scope_exclusions,
 )
 from wingman_day2.domain.stacks import Layer, LayerRole
-from wingman_day2.domain.teams import TeamRepo
 from wingman_day2.domain.tree import RepoTree
 from wingman_day2.domain.yaml_values import dump_values, parse_values
 from wingman_day2.ports import SigsRepository
@@ -177,13 +176,16 @@ def require_writable(topology: Topology, summary: ClusterSummary) -> None:
     )
 
 
-def refuse_new_errors(topology: Topology, state: TeamState, tree: RepoTree) -> TeamPlan:
-    """What ``tree`` makes the platform generate, or the refusal of the errors it adds (ADR-0023).
+def refuse_new_errors(
+    topology: Topology, state: TeamState, changes: Sequence[FileChange]
+) -> TeamPlan:
+    """What the repo after ``changes`` generates, or the refusal of the errors it adds (ADR-0023).
 
-    Errors the team repo already has do not block a change; only new ones do.
+    Errors the team repo already has do not block a change; only new ones do. The control
+    files (``exclusions.yaml``, UPI ``version.yaml``) are read as the change leaves them.
     """
     before = {(f.rule, f.path, f.message) for f in state.findings if f.severity is Severity.ERROR}
-    repo = TeamRepo(state.repo.team, tree, state.repo.files)
+    repo = state.repo.with_changes(changes)
     after_plan = plan_team(repo, topology.day1)
     added = [
         f
@@ -568,12 +570,14 @@ class ChangeService:
             scope = app.ref.defaults_scope
             raise ChangeRefusedError(
                 f"{chart} reaches {summary.ref.name} as a fleet default of {team} ({app.folder}/). "
-                f"To keep it off this cluster, add {app.ref.exclusion_key} under "
-                f"exclusions.{chart} in {layout.exclusions_file(scope)} (runbook R10); that "
-                "orphans the workload too.",
+                f"To keep it off this cluster, exclude it on the operator's page ({team}'s "
+                f"Operators, {chart}, its {scope} default), which adds {app.ref.exclusion_key} "
+                f"under exclusions.{chart} in {layout.exclusions_file(scope)} (ADR-0053); that "
+                "orphans the workload too (runbook R10).",
                 details={
                     "rule": "fleet-default-remove",
                     "path": str(layout.exclusions_file(scope)),
+                    "operator": f"/teams/{team}/operators/{chart}",
                 },
             )
         deploy = await load_deploy(self._sigs, state.team, state.repo.tree, app)
@@ -609,7 +613,7 @@ class ChangeService:
     def _validate(self, topology: Topology, plan: _Plan) -> None:
         """Refuse a change that adds a platform error; note the apps it adds besides its own."""
         state = plan.state
-        after_plan = refuse_new_errors(topology, state, plan.tree)
+        after_plan = refuse_new_errors(topology, state, plan.changes)
         old = {(a.ref, a.chart, a.source) for a in state.plan.apps}
         for app in after_plan.apps:
             if (app.ref, app.chart, app.source) not in old and app.chart not in plan.charts:

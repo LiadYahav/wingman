@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ExternalLink, Layers, MoreVertical, Package, Pin, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
-import { day2Api, isRevisionConflict, problemOf } from "@/lib/day2";
+import { day2Api, isRevisionConflict, operatorHref, problemOf } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { sameValues, toYaml, type Values } from "@/lib/values";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -286,8 +287,12 @@ export function InstalledChartCard({
                     <p className="flex gap-2 px-3 py-2 text-xs text-muted-foreground">
                       <Unplug className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>
-                        A fleet default is not removed per cluster: exclude {destination.name} in{" "}
-                        <code className="break-all">{exclusionsFile(chart.path)}</code> (runbook R10).
+                        A fleet default is not removed per cluster: keep it off {destination.name} from{" "}
+                        <Link href={operatorHref(chart.team, chart.name)} className="font-medium text-primary hover:underline">
+                          its operator&apos;s page
+                        </Link>{" "}
+                        (Defaults: untick {destination.name}), which edits{" "}
+                        <code className="break-all">{exclusionsFile(chart.path)}</code>.
                       </span>
                     </p>
                   ) : (

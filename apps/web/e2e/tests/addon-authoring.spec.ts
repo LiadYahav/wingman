@@ -1,47 +1,56 @@
 /**
- * Add-on authoring and per-team write access (ADR-0043), mocked: a new
- * add-on from the team's template, making an add-on a fleet default (the
- * clusters that move into it, each changed one confirmed), editing a team
- * default and a fleet default, and a team that has not given Wingman write
- * access. Every write is previewed with `?dry_run=true` first, and what was
- * previewed is what is sent (docs/notes/2026-11-12-day2-addon-authoring-api.md).
+ * Operator authoring and per-team write access (ADR-0043, ADR-0053), mocked:
+ * a new operator from the team's template, making an operator a fleet default
+ * (the clusters that move into it, the changed ones confirmed), editing a
+ * team default and a fleet default, and a team that has not given Wingman
+ * write access. The flows live on the Operators pages; the Addons page only
+ * browses and links there. Every write is previewed with `?dry_run=true`
+ * first, and what was previewed is what is sent, with the preview's
+ * `needs_confirmation` and `digest`
+ * (docs/notes/2026-11-12-day2-addon-authoring-api.md,
+ * docs/notes/2026-11-12-operators-page-api.md).
  */
 
 import { test, expect, type Page } from "@playwright/test";
 import { go, injectAdminAuth, mockDashboardApis } from "../fixtures/api-handlers";
 import { HOSTED_ID, HOSTED_NAME, mockDay2World, problem } from "../fixtures/day2";
-import { AUTHORING_NOTE, MANUAL, READ_ONLY_REASON, TEAMS, mockAuthoring, type AuthoringRequests } from "../fixtures/authoring";
+import { AUTHORING_NOTE, MANUAL, READ_ONLY_REASON, TEAMS, mockAuthoring } from "../fixtures/authoring";
+import { mockOperators, type OperatorRequests } from "../fixtures/operators";
 
-let requests: AuthoringRequests;
+let requests: OperatorRequests;
 
 test.beforeEach(async ({ page }) => {
   await injectAdminAuth(page);
   await mockDashboardApis(page);
   await mockDay2World(page);
-  requests = await mockAuthoring(page);
+  await mockAuthoring(page);
+  requests = await mockOperators(page);
 });
 
 const teamSection = (page: Page, team: string) => page.getByTestId(`team-${team}`);
 const realWrites = () => requests.writes.filter((w) => !w.dryRun);
 const dryRuns = () => requests.writes.filter((w) => w.dryRun);
+const scope = (page: Page, name: string) => page.getByTestId(`scope-${name}`);
 
 /** The authoring form: the dialog with Preview (another may still be closing). */
 const formDialog = (page: Page) => page.getByRole("dialog").filter({ has: page.getByRole("button", { name: "Preview changes" }) });
+const reviewDialog = (page: Page) => page.getByRole("dialog").filter({ has: page.getByTestId("authoring-plan") });
 
-/** Preview (the dry run): the review dialog with the plan. */
-async function preview(page: Page) {
-  await formDialog(page).getByRole("button", { name: "Preview changes" }).click();
-  const review = page.getByRole("dialog").filter({ has: page.getByTestId("authoring-plan") });
+/** Preview (the dry run) from `form`: the review dialog with the plan. */
+async function preview(page: Page, form = formDialog(page)) {
+  await form.getByRole("button", { name: "Preview changes" }).click();
+  const review = reviewDialog(page);
   await expect(review.getByTestId("authoring-plan")).toBeVisible();
   return review;
 }
 
-test.describe("A new add-on", () => {
+test.describe("A new operator", () => {
   test("starts from the team's files, keeps the sync rules, and sends what was previewed", async ({ page }) => {
-    await go(page, "/addons");
-    await teamSection(page, "platform").getByRole("button", { name: "New add-on" }).click();
-    const form = formDialog(page);
-    await expect(form.getByRole("heading", { name: "New add-on in platform" })).toBeVisible();
+    await go(page, "/teams/platform/operators");
+    await page.getByRole("link", { name: "New operator" }).click();
+    await expect(page).toHaveURL(/\/teams\/platform\/new-operator$/);
+    await expect(page.getByRole("heading", { name: "New operator in platform" })).toBeVisible();
+    const form = page.getByTestId("new-operator-form");
 
     await form.getByRole("textbox", { name: /^Name/ }).fill("podinfo");
     // Pre-filled from the template while untouched: the team's chart-repo folder and the name as namespace.
@@ -83,17 +92,23 @@ test.describe("A new add-on", () => {
     await other.press("Enter");
     await expect(form.getByRole("list", { name: "Other sync options" })).toContainText("SkipHooks=true");
 
+    // ignoreDifferences is a list of objects, or empty for none.
+    const ignore = form.getByRole("textbox", { name: "ignoreDifferences" });
+    await ignore.fill("group: apps\n");
+    await expect(form.getByRole("button", { name: "Preview changes" })).toHaveAttribute("title", "Fix the ignoreDifferences YAML");
+    await ignore.fill("- group: apps\n  kind: Deployment\n  jsonPointers:\n  - /spec/replicas\n");
+
     await form.getByLabel("Contents of operators/podinfo/values.yaml").fill("replicaCount: 2\n");
     await form.getByRole("radio", { name: /every hosted cluster/ }).check();
     await expect(form.getByText("3 destinations today")).toBeVisible();
 
-    const review = await preview(page);
+    const review = await preview(page, form);
     await expect(review).toContainText("operators/podinfo/podinfo.yaml");
     await expect(review).toContainText("defaults/hosted-clusters/podinfo/values.yaml");
     await expect(review).toContainText("Reaches 3 destinations");
     await expect(review).toContainText(AUTHORING_NOTE);
     expect(dryRuns()).toHaveLength(1);
-    expect(new URL(dryRuns()[0].url).pathname).toBe("/api/day2/addons/platform");
+    expect(dryRuns()[0].path).toBe("/api/day2/addons/platform");
     expect(realWrites()).toHaveLength(0);
 
     await review.getByRole("button", { name: /Create MR/ }).click();
@@ -107,7 +122,7 @@ test.describe("A new add-on", () => {
       path: null,
       project_namespace: "podinfo",
       sync: { auto_sync: true, prune: false, self_heal: true, sync_options: ["CreateNamespace=true", "ServerSideApply=true", "SkipHooks=true"] },
-      ignore_differences: null,
+      ignore_differences: [{ group: "apps", kind: "Deployment", jsonPointers: ["/spec/replicas"] }],
       values: { replicaCount: 2 },
       default_scope: "hosted-clusters",
       default_values: {},
@@ -116,19 +131,21 @@ test.describe("A new add-on", () => {
     };
     expect(dryRuns()[0].body).toEqual(expected);
     expect(realWrites()).toHaveLength(1);
-    expect(realWrites()[0].body).toEqual(expected);
+    expect(realWrites()[0].body).toEqual({ ...expected, expected_digest: "digest-v1-create-addon--" });
     expect(realWrites()[0].method).toBe("POST");
   });
 
   test("a name that is taken or not a DNS label cannot be previewed", async ({ page }) => {
-    await go(page, "/addons");
-    await teamSection(page, "platform").getByRole("button", { name: "New add-on" }).click();
-    const form = formDialog(page);
+    await go(page, "/teams/platform/new-operator");
+    const form = page.getByTestId("new-operator-form");
     const button = form.getByRole("button", { name: "Preview changes" });
     const name = form.getByRole("textbox", { name: /^Name/ });
     await name.fill("cert-manager");
     await expect(button).toBeDisabled();
-    await expect(button).toHaveAttribute("title", "platform has cert-manager in its catalog already");
+    await expect(button).toHaveAttribute("title", "platform has cert-manager already");
+    // A fleet default without a catalog entry takes its name too.
+    await name.fill("node-tuning");
+    await expect(button).toHaveAttribute("title", "platform has node-tuning already");
     await name.fill("Pod_Info");
     await expect(button).toHaveAttribute("title", /lowercase letters, digits and '-'/);
     await name.fill("podinfo");
@@ -137,13 +154,14 @@ test.describe("A new add-on", () => {
 });
 
 test.describe("Make default", () => {
-  test("lists the clusters that move into the default, and each changed one must be confirmed", async ({ page }) => {
-    await go(page, "/addons");
-    await page.getByRole("button", { name: /^cert-manager/ }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Make default" }).click();
+  test("lists the clusters that move into the default, and the changed one must be confirmed", async ({ page }) => {
+    await go(page, "/teams/platform/operators/cert-manager");
+    const hosted = scope(page, "hosted-clusters");
+    await expect(hosted.getByTestId(`destination-${HOSTED_NAME}`)).toContainText("own folder");
+    await hosted.getByRole("button", { name: "Make it a default on every hosted cluster" }).click();
     const form = formDialog(page);
-    await expect(form.getByRole("heading", { name: "Make platform/cert-manager a fleet default" })).toBeVisible();
-    await form.getByRole("radio", { name: /every hosted cluster/ }).check();
+    await expect(form.getByRole("heading", { name: "Make platform/cert-manager a default on every hosted cluster" })).toBeVisible();
+    await expect(form).toContainText(`${HOSTED_NAME}, twin have cert-manager in their own folder today`);
     await expect(form.getByRole("radio", { name: /Inherit the team default's/ })).toBeChecked();
 
     const review = await preview(page);
@@ -157,33 +175,45 @@ test.describe("Make default", () => {
 
     const confirm = review.getByRole("button", { name: /Create MR/ });
     await expect(confirm).toBeDisabled();
-    await changed.getByRole("checkbox", { name: `I understand ${HOSTED_NAME} changes as listed` }).click();
+    await review.getByRole("checkbox", { name: `I understand the app on ${HOSTED_NAME} changes as listed` }).click();
     await expect(confirm).toBeEnabled();
     await confirm.click();
 
     await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("Promote addon platform/cert-manager");
     expect(dryRuns()[0].body).toEqual({ values: {}, sync: null, confirm_changes: [], message: null });
     const real = realWrites()[0];
-    expect(new URL(real.url).pathname).toBe("/api/day2/addons/platform/cert-manager/defaults/hosted-clusters");
-    expect(real.body).toEqual({ values: {}, sync: null, confirm_changes: [HOSTED_ID], message: null });
+    expect(real.path).toBe("/api/day2/addons/platform/cert-manager/defaults/hosted-clusters");
+    expect(real.body).toEqual({
+      values: {},
+      sync: null,
+      confirm_changes: [HOSTED_ID],
+      expected_digest: "digest-v1-make-default-cert-manager-hosted-clusters",
+      message: null,
+    });
   });
 
-  test("a scope where it is a default already cannot be chosen", async ({ page }) => {
-    await go(page, "/addons");
-    await page.getByRole("button", { name: /^external-secrets/ }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Make default" }).click();
-    const form = formDialog(page);
-    await expect(form.getByRole("radio", { name: /every hosted cluster/ })).toBeDisabled();
-    await expect(form.getByText("a fleet default there already")).toBeVisible();
-    await expect(form.getByRole("radio", { name: /every MCE/ })).toBeEnabled();
+  test("a scope where it is a default already offers its edit instead", async ({ page }) => {
+    await go(page, "/teams/platform/operators/external-secrets");
+    const hosted = scope(page, "hosted-clusters");
+    await expect(hosted.getByTestId("scope-status")).toHaveText("a default");
+    await expect(hosted.getByRole("button", { name: /Make it a default/ })).toHaveCount(0);
+    await expect(hosted.getByRole("button", { name: "Edit the default on every hosted cluster" })).toBeEnabled();
+    await expect(scope(page, "mces").getByRole("button", { name: "Make it a default on every MCE" })).toBeEnabled();
+  });
+
+  test("an operator not in the catalog cannot be made a default elsewhere", async ({ page }) => {
+    await go(page, "/teams/platform/operators/node-tuning");
+    await expect(page.getByRole("region", { name: "Team default" })).toContainText("not in platform's catalog");
+    const make = scope(page, "mces").getByRole("button", { name: "Make it a default on every MCE" });
+    await expect(make).toBeDisabled();
+    await expect(make).toHaveAttribute("title", "node-tuning is not in platform's catalog (operators/node-tuning/)");
   });
 });
 
 test.describe("Team default", () => {
   test("an edit sends only what changed, with the commit the entry was read at", async ({ page }) => {
-    await go(page, "/addons");
-    await page.getByRole("button", { name: /^prometheus/ }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Edit team default" }).click();
+    await go(page, "/teams/observability/operators/prometheus");
+    await page.getByRole("button", { name: "Edit team default" }).click();
     const form = formDialog(page);
     await expect(form.getByRole("heading", { name: "Edit the team default of observability/prometheus" })).toBeVisible();
     const button = form.getByRole("button", { name: "Preview changes" });
@@ -199,26 +229,34 @@ test.describe("Team default", () => {
     await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("team default");
     const real = realWrites()[0];
     expect(real.method).toBe("PUT");
-    expect(new URL(real.url).pathname).toBe("/api/day2/addons/observability/prometheus");
+    expect(real.path).toBe("/api/day2/addons/observability/prometheus");
     expect(real.body).toEqual({
       last_commit_id: "observability-catalog-1",
       sync: { ...MANUAL, auto_sync: true, self_heal: true },
+      confirm_changes: [],
+      expected_digest: "digest-v1-update-team-default-prometheus-",
     });
   });
 
   test("a blank revision removes the key (HEAD)", async ({ page }) => {
-    await go(page, "/addons");
-    await page.getByRole("button", { name: /^prometheus/ }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Edit team default" }).click();
+    await go(page, "/teams/observability/operators/prometheus");
+    await page.getByRole("button", { name: "Edit team default" }).click();
     const form = formDialog(page);
     await form.getByRole("combobox", { name: /Revision/ }).fill("");
     await preview(page);
     expect(dryRuns()[0].body).toEqual({ last_commit_id: "observability-catalog-1", target_revision: null });
   });
+
+  test("its OCP-version pins are listed, read-only", async ({ page }) => {
+    await go(page, "/teams/observability/operators/prometheus");
+    const pins = page.getByRole("region", { name: "OCP-version pins" });
+    await expect(pins.getByTestId("ocp-pin-4.18.22")).toContainText("targetRevision 2.44.0");
+    await expect(pins.getByRole("button", { name: /Edit/ })).toHaveCount(0);
+  });
 });
 
 test.describe("Fleet defaults", () => {
-  test("are listed per team, and an edit can go back to the team default's sync options", async ({ page }) => {
+  test("are listed on the Addons page, and edited from the operator's page", async ({ page }) => {
     await go(page, "/addons");
     const row = page.getByTestId("fleet-default-platform-external-secrets-hosted-clusters");
     await expect(row).toContainText("every hosted cluster");
@@ -228,7 +266,9 @@ test.describe("Fleet defaults", () => {
     await expect(page.getByTestId("fleet-default-observability-grafana-hosted-clusters")).toContainText("1 excluded");
     await expect(teamSection(page, "platform").getByTestId("no-stop-default-note")).toContainText("orphans the workloads");
 
-    await row.getByRole("button", { name: "Edit fleet default" }).click();
+    await row.getByRole("link", { name: "Manage external-secrets in Operators" }).click();
+    await expect(page).toHaveURL(/\/teams\/platform\/operators\/external-secrets$/);
+    await scope(page, "hosted-clusters").getByRole("button", { name: "Edit the default on every hosted cluster" }).click();
     const form = formDialog(page);
     await expect(form.getByRole("radio", { name: /Set them for this fleet default/ })).toBeChecked();
     await form.getByRole("radio", { name: /Inherit the team default's/ }).check();
@@ -238,27 +278,43 @@ test.describe("Fleet defaults", () => {
     await expect(page.getByRole("region", { name: "Opened merge requests" })).toBeVisible();
     const real = realWrites()[0];
     expect(real.method).toBe("PUT");
-    expect(new URL(real.url).pathname).toBe("/api/day2/addons/platform/external-secrets/defaults/hosted-clusters");
-    expect(real.body).toEqual({ last_commit_id: "platform-fleet-1", sync: null });
+    expect(real.path).toBe("/api/day2/addons/platform/external-secrets/defaults/hosted-clusters");
+    expect(real.body).toEqual({
+      last_commit_id: "platform-fleet-1",
+      sync: null,
+      confirm_changes: [],
+      expected_digest: "digest-v1-update-fleet-default-external-secrets-hosted-clusters",
+    });
+  });
+});
+
+test.describe("The Addons page", () => {
+  test("browses the catalog and points to the Operators pages for authoring", async ({ page }) => {
+    await go(page, "/addons");
+    const platform = teamSection(page, "platform");
+    await expect(platform.getByRole("button", { name: "New add-on" })).toHaveCount(0);
+    await expect(platform.getByRole("link", { name: "platform's operators" })).toHaveAttribute("href", "/teams/platform/operators");
+
+    await page.getByRole("button", { name: /^cert-manager/ }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("button", { name: "Make default" })).toHaveCount(0);
+    await expect(dialog.getByRole("button", { name: "Edit team default" })).toHaveCount(0);
+    await dialog.getByRole("link", { name: "Manage in Operators" }).click();
+    await expect(page).toHaveURL(/\/teams\/platform\/operators\/cert-manager$/);
   });
 });
 
 test.describe("A read-only team", () => {
-  test("says why next to every write it does not offer", async ({ page }) => {
+  test("is marked on the Addons page, and its operators offer no write", async ({ page }) => {
     await go(page, "/addons");
     const security = teamSection(page, "security");
     await expect(security).toContainText("read-only");
-    await expect(security.getByRole("note")).toContainText(READ_ONLY_REASON);
-    await expect(security.getByRole("button", { name: "New add-on" })).toBeDisabled();
-    await expect(security.getByTestId("fleet-default-security-kyverno-mces").getByRole("button", { name: "Edit fleet default" })).toBeDisabled();
-    // A writable team offers them.
-    await expect(teamSection(page, "platform").getByRole("button", { name: "New add-on" })).toBeEnabled();
+    await expect(teamSection(page, "platform")).not.toContainText("read-only");
 
-    await security.getByRole("button", { name: /^kyverno/ }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("note")).toContainText(READ_ONLY_REASON);
-    await expect(dialog.getByRole("button", { name: "Make default" })).toBeDisabled();
-    await expect(dialog.getByRole("button", { name: "Edit team default" })).toBeDisabled();
+    await go(page, "/teams/security/operators/kyverno");
+    await expect(page.getByRole("note").first()).toContainText(READ_ONLY_REASON);
+    await expect(page.getByRole("button", { name: "Edit team default" })).toBeDisabled();
+    await expect(scope(page, "hosted-clusters").getByRole("button", { name: "Make it a default on every hosted cluster" })).toBeDisabled();
   });
 
   test("its charts on a cluster cannot be installed, and the page says why", async ({ page }) => {
@@ -278,9 +334,8 @@ test.describe("A read-only team", () => {
         ? r.fallback()
         : r.fulfill(problem(403, "TEAM_READ_ONLY", READ_ONLY_REASON, { team: "security", access_level: 20, required_level: 30 })),
     );
-    await go(page, "/addons");
-    await teamSection(page, "security").getByRole("button", { name: "New add-on" }).click();
-    const form = formDialog(page);
+    await go(page, "/teams/security/new-operator");
+    const form = page.getByTestId("new-operator-form");
     await form.getByRole("textbox", { name: /^Name/ }).fill("falco");
     await form.getByRole("button", { name: "Preview changes" }).click();
     const alert = form.getByRole("alert");

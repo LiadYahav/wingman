@@ -50,6 +50,7 @@ class Rule(StrEnum):
     CHART_REPO_ELSEWHERE = "chart-repo-elsewhere"
     CHART_VALUES_MISSING = "chart-values-missing"
     SYNC_DIFFERS = "sync-differs"
+    SYNC_POLICY_INVALID = "sync-policy-invalid"
 
 
 @dataclass(frozen=True, slots=True, order=True)

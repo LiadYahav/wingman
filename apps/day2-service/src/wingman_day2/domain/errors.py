@@ -49,3 +49,7 @@ class ChangeRefusedError(Day2Error):
 
 class TeamReadOnlyError(Day2Error):
     """The team has not given Wingman's GitLab account write access to its project."""
+
+
+class PlanChangedError(Day2Error):
+    """The repo moved since the preview the request confirmed: re-run the preview (ADR-0053)."""

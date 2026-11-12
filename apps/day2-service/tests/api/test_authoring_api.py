@@ -35,6 +35,15 @@ def ok(response: httpx.Response, status: int = 200) -> Any:
     return response.json()
 
 
+async def confirmed(
+    client: httpx.AsyncClient, method: str, url: str, body: dict[str, Any], status: int = 200
+) -> Any:
+    """Preview a write, then send the same body confirming what the preview showed."""
+    plan = ok(await client.request(method, url, params={"dry_run": "true"}, json=body))
+    confirm = {"confirm_changes": plan["needs_confirmation"], "expected_digest": plan["digest"]}
+    return ok(await client.request(method, url, json={**body, **confirm}), status)
+
+
 def problem(response: httpx.Response, status: int, code: str) -> dict[str, Any]:
     assert response.status_code == status, response.text
     body = response.json()
@@ -129,12 +138,11 @@ async def test_team_default_edit_sends_only_what_changed(jane: httpx.AsyncClient
     entry = ok(await jane.get("/api/day2/addons/redbull/bmhgen"))
     assert entry["sync"] == MANUAL and entry["deploy_config_exists"] is True
     assert entry["last_commit_id"] and entry["ignore_differences"] is None
-    change = ok(
-        await jane.put(
-            "/api/day2/addons/redbull/bmhgen",
-            json={"sync": AUTO, "last_commit_id": entry["last_commit_id"]},
-        )
-    )
+    url = "/api/day2/addons/redbull/bmhgen"
+    body = {"sync": AUTO, "last_commit_id": entry["last_commit_id"]}
+    refused = problem(await jane.put(url, json=body), 422, "VALIDATION_ERROR")
+    assert refused["details"]["rule"] == "confirm-changes"
+    change = await confirmed(jane, "PUT", url, body)
     assert change["action"] == "update-default" and change["files"] == [
         {"action": "update", "path": "operators/bmhgen/bmhgen.yaml"}
     ]
@@ -148,14 +156,30 @@ async def test_make_default_dry_run_shows_the_moves_and_the_confirmation(
     plan = ok(await jane.post(url, params={"dry_run": "true"}, json={"values": {"a": 1}}))
     assert len(plan["adopted"]) == 4 and len(plan["needs_confirmation"]) == 4
     herzi = next(a for a in plan["adopted"] if a["cluster"] == HERZI)
-    assert herzi["changes"] == [{"stack": "values", "key": "a", "before": None, "after": 1}]
+    assert herzi["changes"] == [
+        {"stack": "values", "key": "a", "before": None, "after": 1, "after_null": False}
+    ]
+    assert herzi["exclusion_removed"] is False
     assert herzi["gitkeep"].endswith("ocp4-prod-herzi-site1/.gitkeep") and herzi["moved"] == []
     refused = problem(await jane.post(url, json={"values": {"a": 1}}), 422, "VALIDATION_ERROR")
     assert refused["details"]["rule"] == "confirm-changes"
     assert sorted(refused["details"]["needs_confirmation"]) == sorted(plan["needs_confirmation"])
-    change = ok(
+    unseen = problem(
         await jane.post(
             url, json={"values": {"a": 1}, "confirm_changes": plan["needs_confirmation"]}
+        ),
+        422,
+        "VALIDATION_ERROR",
+    )
+    assert unseen["details"]["rule"] == "confirm-against-preview"
+    change = ok(
+        await jane.post(
+            url,
+            json={
+                "values": {"a": 1},
+                "confirm_changes": plan["needs_confirmation"],
+                "expected_digest": plan["digest"],
+            },
         ),
         201,
     )
@@ -182,8 +206,8 @@ async def test_fleet_defaults_list_and_edit(jane: httpx.AsyncClient) -> None:
     (file,) = plan["files"]
     assert file["action"] == "update" and "# prune: true so" in file["content"]
     assert file["previous"] != file["content"]
-    inherit = ok(
-        await jane.put("/api/day2/addons/redbull/example-chart/defaults/mces", json={"sync": None})
+    inherit = await confirmed(
+        jane, "PUT", "/api/day2/addons/redbull/example-chart/defaults/mces", {"sync": None}
     )
     assert inherit["title"] == (
         "[Wingman/Day2] Update addon redbull/example-chart fleet default on every MCE"

@@ -63,6 +63,12 @@ class Verb(StrEnum):
     """Set a cluster's drifted locked values to its flavor's (day1)."""
     PROMOTE = "Promote"
     """Make an add-on a fleet default (day2)."""
+    EXCLUDE = "Exclude"
+    """Keep a fleet default off named destinations, in ``exclusions.yaml`` (day2)."""
+    INCLUDE = "Include"
+    """Let a fleet default reach destinations ``exclusions.yaml`` kept it off (day2)."""
+    OVERRIDE = "Override"
+    """Give one destination of a fleet default its own values or deploy config (day2)."""
 
 
 class ResourceType(StrEnum):

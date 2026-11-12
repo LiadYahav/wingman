@@ -4,9 +4,22 @@ import type {
   ApprovalRollout, ClusterNetworkRead, ClusterNodes, MRDetail, MachineConfigs, Mce, MergeRequestLink, NodePoolNodes, PoolNode,
   Problem, ErrorCode, RolloutCluster, RolloutStatus, ServerRecord, WorkflowRun,
 } from "../../types";
+import type { Team } from "../../types/day2";
 
 // Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/schemas.py,
 // apps/day2-service/.../api/v1/schemas.py), typed so a shape change fails `tsc`.
+
+/** The fixtures' teams, each with Wingman's account a Developer on its project. */
+export const WRITABLE_TEAMS: Team[] = ["networking", "observability", "platform", "security"].map((name, i) => ({
+  name,
+  project_id: i + 2,
+  path_with_namespace: `sigs/${name}`,
+  web_url: `https://gitlab.example.com/sigs/${name}`,
+  writable: true,
+  access_level: 30,
+  access_role: "developer",
+  read_only_reason: null,
+}));
 
 /** A Wingman MR as the services return it (`MRDetail`). */
 export function mockMR(overrides: Partial<MRDetail> = {}): MRDetail {
@@ -461,8 +474,9 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));
   await page.route("**/api/day2/approvals", (route: Route) => json(route, []));
-  // No team list unless a test sets one (mockDay2World): every team counts as writable (ADR-0043)
-  await page.route("**/api/day2/teams", (route: Route) => json(route, []));
+  // Every team of the fixtures is writable unless a test sets its own list (mockAuthoring). The web
+  // fails closed (ADR-0053): a team the list does not have is read-only.
+  await page.route("**/api/day2/teams", (route: Route) => json(route, WRITABLE_TEAMS));
   await page.route("**/api/day2/fleet-defaults**", (route: Route) => json(route, []));
   // A flavor's rollout follows no cluster unless a test says otherwise (mockRollout, ADR-0044)
   await page.route("**/api/day1/specs/*/rollout", (route: Route) => {

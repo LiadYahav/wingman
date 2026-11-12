@@ -10,6 +10,12 @@ not given Wingman's GitLab account write access to its project is read-only
 in Wingman. Decisions and reasons: ADR-0043. Everything here is under
 `/api/day2`; request bodies refuse unknown fields (422).
 
+**Changed in 3.12 (ADR-0053):** every write here also answers `impact`,
+`excluded` and `digest`, and what it deletes or changes on any destination
+is confirmed in `confirm_changes` together with the preview's digest as
+`expected_digest` (409 `plan-changed` when the repo moved since the
+preview). See `docs/notes/2026-11-12-operators-page-api.md` §2 and §4.
+
 ## 1. Per-team write access
 
 Wingman uses one GitLab account (the chart's `gitlab.accessToken`). A team

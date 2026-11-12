@@ -12,8 +12,8 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Two-Phase Cluster Form**: Specs (flavors) set the starting nodepools, presets and locked values; clusters fill the rest. Locked values are read-only, presets editable, owners digits only; nodepool configs come from the machine-config picker (the defaults fill every nodepool the flavor leaves open, including ones added at create); under the configs rule each nodepool keeps the names and picks its hardware; day1's 422 problems show at their fields
 - **Marketplace Addon Picker**: Browse and select Day2 addons on spec creation/edit pages
 - **Charts per Destination**: Install, edit and remove Day2 charts on the hub, MCEs, hosted and UPI clusters; every value shows the layer that set it; bulk install opens one MR per team; a version of its own is a confirmed emergency pin; a removal leaves the workload running (`argocd app delete --cascade` tears it down)
-- **Add-on authoring**: from the catalog, a team adds a new add-on (`operators/<chart>/`, pre-filled from its own files), edits an add-on's team default (sync options included: auto-sync, prune, self-heal, syncOptions) or a fleet default, and makes an add-on a default on every hosted cluster, every MCE, the hub or every UPI cluster; each is one MR, previewed with the service's dry run first, and clusters that already have the chart in their own folder move into the default in the same MR, each one whose app would change confirmed (ADR-0043)
-- **Per-team write access**: a team that has not given Wingman's GitLab account Developer on `sigs/<team>` is read-only, and every write Wingman would offer it says why
+- **Operators**: a team's catalog (`operators/<chart>/`) and the fleet defaults built from it, on their own pages (`/operators`, `/teams/<team>/operators`, `/teams/<team>/operators/<chart>`, `/teams/<team>/new-operator`; ADR-0043, ADR-0053). A team adds a new operator (pre-filled from its own files), edits its team default (sync options and ignoreDifferences included; the files are shown as written, comments and all), and per scope (hosted clusters, MCEs, the hub, UPI clusters) makes it a default, edits that default, chooses which destinations it deploys to (an exclusion deletes the Application and orphans the workload, and must be confirmed), and gives one destination its own values (the effective values before and after, from `merge-preview`) or its own deploy config. Every write is one MR, previewed with the service's dry run first; the plan lists each destination that changes, goes or comes, those are confirmed, and the MR is opened only against the previewed plan's digest (a repo that moved shows the new plan). On one cluster the same chart is an add-on, managed from the cluster's page; the Addons page browses and links to the Operators pages
+- **Per-team write access**: a team that has not given Wingman's GitLab account Developer on `sigs/<team>` is read-only, and every write Wingman would offer it says why; the web fails closed, so a team whose access is not known yet (or could not be read) is read-only too
 - **Destinations and Lints**: Every place teams deploy to, and every check on the team repos
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
 - **Sites and MCEs are read-only**: picked from the day1 repo's folders (Wingman never creates them); the MCE's mastertag is the default OpenShift version
@@ -125,7 +125,9 @@ app/
 ├── (app)/              # Authenticated routes
 │   ├── clusters/       # Cluster management pages
 │   ├── specs/          # Spec pages (presets for the create form)
-│   ├── addons/         # Addon catalog
+│   ├── addons/         # Addon catalog (browse; links to the Operators pages)
+│   ├── operators/      # Operators: pick a team
+│   ├── teams/[team]/   # A team's operators, one operator, a new one
 │   ├── destinations/   # Day2 destinations (hub, MCEs, hosted, UPI)
 │   ├── lints/          # Day2 lint findings
 │   ├── approvals/      # MR approval workflow
@@ -140,7 +142,8 @@ components/
 ├── common/             # Shared components (empty states, problems, diffs, review dialog)
 ├── layout/             # The app shell, sidebar, user menu, providers
 ├── clusters/           # Cluster facts, drift, live status, the template-driven form
-├── addons/             # A destination's charts (values editor, cards, bulk install) and add-on authoring (sync options, dry-run plans)
+├── addons/             # A destination's charts (values editor, cards, bulk install) and the authoring flow (sync options, dry-run plans, confirmations)
+├── operators/          # The Operators pages: scope panels, destinations and exclusions, per-destination overrides
 └── specs/              # Spec-specific components
 
 hooks/

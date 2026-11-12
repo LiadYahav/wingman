@@ -66,6 +66,21 @@ def repourl_moved_to(repo_url: str, project: Project) -> str | None:
     return f"{project.web_url}.git" if repo_url.strip().endswith(".git") else project.web_url
 
 
+def auto_sync_enabled(automated: object) -> bool:
+    """Whether ArgoCD auto-syncs a leaf whose ``syncPolicy.automated`` is ``automated``.
+
+    ArgoCD's own rule (``SyncPolicy.IsAutomatedSyncEnabled``): ``automated`` is
+    a map, ``{}`` included, whose ``enabled`` is absent or true; ``enabled:
+    false`` switches auto-sync off and keeps the rest of the map. Absent or
+    null is manual sync. Any other value is not one the Application takes
+    (``automated: true``: the CRD wants a map; ``sync_policy.automated_problem``).
+    """
+    if not isinstance(automated, Mapping):
+        return False
+    enabled = automated.get("enabled")
+    return enabled is None or enabled is True
+
+
 def miscased_repourl_keys(doc: Mapping[str, object]) -> list[str]:
     """Keys that look like ``repourl`` but are not it (``repoUrl``, ``repoURL``, ...)."""
     return sorted(k for k in doc if k.lower() == REPOURL and k != REPOURL)
@@ -91,10 +106,11 @@ class LeafApplication:
     def auto_sync(self) -> bool:
         """Whether the leaf syncs by itself; leaves are manual-sync unless the config opts in.
 
-        ArgoCD turns auto-sync on for any ``automated`` map, ``{}`` included.
+        ArgoCD turns auto-sync on for any ``automated`` map, ``{}`` included,
+        unless it says ``enabled: false`` (:func:`auto_sync_enabled`).
         """
-        return isinstance(self.sync_policy, Mapping) and isinstance(
-            self.sync_policy.get("automated"), Mapping
+        return isinstance(self.sync_policy, Mapping) and auto_sync_enabled(
+            self.sync_policy.get("automated")
         )
 
 

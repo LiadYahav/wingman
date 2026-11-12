@@ -1,7 +1,7 @@
 # ADR-0043: Teams opt in to day2 writes per project; Wingman creates add-ons, edits team and fleet defaults, and a new fleet default takes over the clusters that already have the chart
 
 Date: 2026-11-12
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0053 (every write is confirmed against its preview's digest; a stale exclusion of an adopted cluster goes in the same commit; the review of 3.8.0)
 
 ## Context
 

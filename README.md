@@ -119,6 +119,7 @@ wingman/
 | **A suggested cluster name** | Creating from a flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>`: the MCE's env and the first letter no cluster or open create MR has. The name stays editable. A new cluster's sequence is one letter, `a` to `z`, never a number (ADR-0040). |
 | **Nodepools sized by a ratio** | A flavor may give its nodepools a ratio (`nodepool_ratio: [1, 2, 1]`): the create form asks for one size and sets each nodepool's replicas to its ratio times that size; create refuses replicas off the ratio (ADR-0040). |
 | **Wingman picks the MCE** | With live status on, the create form asks for the site, prod or prep, the OpenShift version and the owner, and Wingman picks the MCE: of the MCEs at the site whose name says the env, those that host the version, have at least `PLACEMENT_MIN_FREE_PODS` free pods on their workers (allocatable pods less pods in use; masters, infra and tainted nodes left out), have enough healthy free servers of each node type the nodepools need (free Agents in that InfraEnv, healthy in server-scan) and can be read, the one with the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers in server-scan. The form shows every candidate's numbers and why the pick won; an admin may choose another MCE that passes every check, with a reason, and the MR description records it all (ADR-0050). |
+| **Operators** | A team's page lists its operators (`operators/<op>/`) and opens each: its deploy config and values, its OCP-version pins, and per fleet scope (hosted clusters, MCEs, the hub, UPI) whether it is a default there, which destinations it reaches (a checkbox each, written to `exclusions.yaml` in place), a destination's own values and its own deploy config. Every change is previewed, lists what it does to each destination, and is confirmed against that preview (ADR-0053). A cluster's own installs stay its **Add-ons**. |
 | **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. |
 | **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. day1 checks every link (up, down or unknown, with the reason) and an ArgoCD with a read-only token shows its applications' sync and health counts; the browser never pings anything, and icons ship with Wingman (ADR-0052). |
 
@@ -256,11 +257,20 @@ name that names one destination (`?mce=` when it names more than one).
 | `GET` | `/api/day2/addons/{team}/{addon}/values` | The chart's own `values.yaml` at `?version=` |
 | `GET` | `/api/day2/lints` | Every check on the team repos (`?team=`): render_chain.py's rules plus Wingman's own |
 
-#### Authoring add-ons and fleet defaults
+#### Operators: authoring add-ons and fleet defaults
 
-A team is written to only if it gave Wingman's GitLab account Developer on its
-own project (otherwise `403 TEAM_READ_ONLY`, ADR-0043). Every write takes
-`?dry_run=true` (the plan, nothing opened).
+An *operator* is a chart in a team's catalog (`operators/<op>/`) and the fleet
+defaults built from it; the API keeps calling it an add-on. A team is written
+to only if it gave Wingman's GitLab account Developer on its own project: as a
+member, from a group above the project, or through a group the project is
+shared with (otherwise `403 TEAM_READ_ONLY`, ADR-0043). A team whose access
+GitLab does not answer is read-only until it does. Every write takes
+`?dry_run=true` (the plan, nothing opened): its `impact` lists every
+destination whose app goes, comes or changes, and what goes or changes is
+confirmed by id (`confirm_changes`) with the preview's `digest`
+(`expected_digest`); a repo that moved since the preview is `409`
+`plan-changed` (ADR-0053). The web-visible shapes:
+`docs/notes/2026-11-12-operators-page-api.md`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -270,6 +280,11 @@ own project (otherwise `403 TEAM_READ_ONLY`, ADR-0043). Every write takes
 | `GET` | `/api/day2/fleet-defaults` | Every `defaults/<scope>/<chart>/` (`?team=`), with its reach and sync options |
 | `POST` | `/api/day2/addons/{team}/{addon}/defaults/{scope}` | Make it a fleet default; clusters that have it in their own folder move into it (opens an MR) |
 | `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}` | Edit a fleet default's values and sync options (opens an MR) |
+| `GET` | `/api/day2/teams/{team}/operators` | The team's operators: its catalog, plus fleet defaults of charts not in it |
+| `GET` | `/api/day2/teams/{team}/operators/{operator}` | One operator: its files, OCP-version pins, and per scope every destination and how the default stands there |
+| `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}/exclusions` | Which destinations the default skips (`exclusions.yaml`, edited in place; excluding orphans the workload) (opens an MR) |
+| `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}/destinations/{cluster}/values` | One destination's `values-<name>.yaml` (opens an MR) |
+| `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}/destinations/{cluster}/deploy` | One destination's own deploy config: excluded and deployed from its own folder, the Application kept (opens an MR) |
 
 #### Destinations and their charts
 

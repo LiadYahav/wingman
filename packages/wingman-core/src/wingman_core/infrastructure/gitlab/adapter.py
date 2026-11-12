@@ -95,6 +95,7 @@ class GitLabHttpAdapter:
         self._read_attempts = read_attempts
         self._backoff = backoff_seconds
         self._merge_wait_attempts = merge_wait_attempts
+        self._account_id: int | None = None
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
@@ -123,19 +124,48 @@ class GitLabHttpAdapter:
         return sorted((_project(p) for p in raw), key=lambda p: p.path_with_namespace)
 
     async def access_level(self, project_id: int) -> AccessLevel:
-        """See GitLabPort.access_level: the ``permissions`` of ``GET /projects/:id``.
+        """See GitLabPort.access_level: ``GET /projects/:id``, plus its group shares.
 
-        ``project_access`` is a direct project membership; ``group_access`` is
-        the highest membership in the project's group or a group above it.
-        Either is ``null`` when the account has none.
+        ``permissions.project_access`` is a direct project membership;
+        ``permissions.group_access`` the highest membership in the project's
+        group or a group above it. Either is ``null`` when the account has
+        none, and neither counts a share. Each of ``shared_with_groups`` that
+        could raise the level is read as the account's own role in that group
+        (``GET /groups/:id/members/all/:user_id``, inherited roles included),
+        capped by the share's ``group_access_level``.
         """
         raw = await self._get(f"/projects/{project_id}")
         permissions = raw.get("permissions") or {}
-        levels = [
+        level = max(
             AccessLevel.of((permissions.get(key) or {}).get("access_level"))
             for key in ("project_access", "group_access")
-        ]
-        return max(levels)
+        )
+        shares = sorted(
+            (
+                (AccessLevel.of(share.get("group_access_level")), int(share["group_id"]))
+                for share in raw.get("shared_with_groups") or []
+            ),
+            reverse=True,
+        )
+        for cap, group_id in shares:
+            if cap <= level:
+                break
+            level = max(level, min(cap, await self._group_role(group_id)))
+        return level
+
+    async def _group_role(self, group_id: int) -> AccessLevel:
+        """This account's role in a group, inherited ones included; NONE without one."""
+        try:
+            raw = await self._get(f"/groups/{group_id}/members/all/{await self._user_id()}")
+        except NotFoundError:
+            return AccessLevel.NONE
+        return AccessLevel.of(raw.get("access_level"))
+
+    async def _user_id(self) -> int:
+        """The token's user (``GET /user``), read once: a token's user never changes."""
+        if self._account_id is None:
+            self._account_id = int((await self._get("/user"))["id"])
+        return self._account_id
 
     async def read_file(self, project_id: int, path: RepoPath, ref: str) -> FileContent:
         """See GitLabPort.read_file."""

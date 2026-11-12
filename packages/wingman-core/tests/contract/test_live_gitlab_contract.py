@@ -5,7 +5,8 @@ The token needs the ``api`` scope and the right to create projects in the
 group WINGMAN_TEST_GITLAB_GROUP (default ``wingman-contract``), which is
 created if missing. Every test gets a fresh project, deleted afterwards. The
 access tests also create throwaway users (with an impersonation token each)
-and hard-delete them afterwards, so the token must be an administrator's,
+and hard-delete them afterwards, and the share tests subgroups of that group,
+removed for good afterwards, so the token must be an administrator's,
 with ``admin_mode`` where Admin Mode is on (scripts/dev/gitlab-up.sh's and
 CI's are).
 
@@ -37,6 +38,7 @@ from wingman_core.testing.gitlab_contract import (
     NewMember,
     NewProject,
     RenameProject,
+    Share,
 )
 
 URL = os.environ.get("WINGMAN_TEST_GITLAB_URL", "")
@@ -59,6 +61,32 @@ async def _group_id(admin: httpx.AsyncClient) -> int:
         )
     response.raise_for_status()
     return int(response.json()["id"])
+
+
+async def _subgroup(admin: httpx.AsyncClient, name: str, *, parent: int | None = None) -> int:
+    """A private subgroup of ``parent`` (default: the contract group); its id."""
+    response = await admin.post(
+        "/groups",
+        json={
+            "name": name,
+            "path": name,
+            "parent_id": parent or await _group_id(admin),
+            "visibility": "private",
+        },
+    )
+    response.raise_for_status()
+    return int(response.json()["id"])
+
+
+async def _remove_group(admin: httpx.AsyncClient, group_id: int) -> None:
+    """Delete a subgroup now: GitLab first marks it for deletion, then removes it for good."""
+    await admin.delete(f"/groups/{group_id}")
+    marked = await admin.get(f"/groups/{group_id}")
+    if marked.status_code == 200:
+        await admin.delete(
+            f"/groups/{group_id}",
+            params={"permanently_remove": "true", "full_path": marked.json()["full_path"]},
+        )
 
 
 async def _until_visible(member: GitLabHttpAdapter, project: Project) -> None:
@@ -138,6 +166,7 @@ class TestLiveGitLabContract(GitLabContract):
     @pytest.fixture
     async def new_member(self, admin: httpx.AsyncClient) -> AsyncIterator[NewMember]:
         users: list[int] = []
+        groups: list[int] = []
         adapters: list[GitLabHttpAdapter] = []
 
         async def make(
@@ -145,6 +174,7 @@ class TestLiveGitLabContract(GitLabContract):
             *,
             project_level: AccessLevel | None = None,
             group_level: AccessLevel | None = None,
+            share: Share | None = None,
         ) -> GitLabPort:
             name = f"contract-member-{uuid.uuid4().hex[:10]}"
             created = await admin.post(
@@ -173,6 +203,23 @@ class TestLiveGitLabContract(GitLabContract):
                     json={"user_id": user_id, "access_level": int(project_level)},
                 )
                 member.raise_for_status()
+            if share is not None:
+                # Subgroups of the contract group: membership there reaches nothing above.
+                parent = await _subgroup(admin, f"share-{uuid.uuid4().hex[:10]}")
+                groups.append(parent)
+                shared = (
+                    await _subgroup(admin, "child", parent=parent) if share.inherited else parent
+                )
+                joined = await admin.post(
+                    f"/groups/{parent}/members",
+                    json={"user_id": user_id, "access_level": int(share.role)},
+                )
+                joined.raise_for_status()
+                linked = await admin.post(
+                    f"/projects/{project.id}/share",
+                    json={"group_id": shared, "group_access": int(share.level)},
+                )
+                linked.raise_for_status()
             token = await admin.post(
                 f"/users/{user_id}/impersonation_tokens",
                 json={
@@ -185,7 +232,8 @@ class TestLiveGitLabContract(GitLabContract):
             settings = GitLabSettings(url=AnyHttpUrl(URL), token=SecretStr(token.json()["token"]))
             adapter = GitLabHttpAdapter(build_client(settings))
             adapters.append(adapter)
-            await _until_visible(adapter, project)
+            if (project_level, group_level, share) != (None, None, None):
+                await _until_visible(adapter, project)
             return adapter
 
         yield make
@@ -193,3 +241,5 @@ class TestLiveGitLabContract(GitLabContract):
             await adapter.aclose()
         for user_id in users:
             await admin.delete(f"/users/{user_id}", params={"hard_delete": "true"})
+        for group_id in groups:
+            await _remove_group(admin, group_id)

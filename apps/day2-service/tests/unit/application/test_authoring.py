@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from functools import partial
+
 import pytest
 import yaml
 
@@ -59,6 +62,14 @@ async def merge(services: Day2Services, result: AuthoringResult, approver: User)
     mr = result.merge_request
     assert mr is not None
     await services.approvals.approve(result.plan.team, mr.ref.iid, sha=mr.sha, approver=approver)
+
+
+async def confirmed(write: Callable[..., Awaitable[AuthoringResult]]) -> AuthoringResult:
+    """Preview ``write``, then open it confirming exactly what the preview showed (ADR-0053)."""
+    preview = await write(dry_run=True)
+    return await write(
+        confirm_changes=preview.plan.needs_confirmation, expected_digest=preview.plan.digest
+    )
 
 
 def new_addon(**overrides: object) -> NewAddon:
@@ -261,15 +272,18 @@ async def test_editing_the_team_default_rewrites_only_what_changes(
 ) -> None:
     entry = await services.catalog.entry("redbull", "bmhgen")
     assert entry.deploy.file is not None
-    result = await services.authoring.update_team_default(
-        "redbull",
-        "bmhgen",
-        TeamDefaultEdit(
-            keys={"targetRevision": "1.1.0"},
-            sync=SyncSettings(True, False, True, ("CreateNamespace=true",)),
-            last_commit_id=entry.deploy.file.last_commit_id,
-        ),
-        jane_user,
+    result = await confirmed(
+        partial(
+            services.authoring.update_team_default,
+            "redbull",
+            "bmhgen",
+            TeamDefaultEdit(
+                keys={"targetRevision": "1.1.0"},
+                sync=SyncSettings(True, False, True, ("CreateNamespace=true",)),
+                last_commit_id=entry.deploy.file.last_commit_id,
+            ),
+            jane_user,
+        )
     )
     assert files(result) == [(ChangeKind.UPDATE, "operators/bmhgen/bmhgen.yaml")]
     text = (await branch_files(gitlab, result))["operators/bmhgen/bmhgen.yaml"]
@@ -294,8 +308,14 @@ async def test_setting_repourl_fixes_a_miscased_one_in_place(
     services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
 ) -> None:
     url = f"{FAKE_GITLAB_URL}/helm-charts/kyverno.git"
-    result = await services.authoring.update_team_default(
-        "redbull", "kyverno", TeamDefaultEdit(keys={"repourl": url}), jane_user
+    result = await confirmed(
+        partial(
+            services.authoring.update_team_default,
+            "redbull",
+            "kyverno",
+            TeamDefaultEdit(keys={"repourl": url}),
+            jane_user,
+        )
     )
     text = (await branch_files(gitlab, result))["operators/kyverno/kyverno.yaml"]
     assert text.splitlines()[1] == f"repourl: {url}" and "repoUrl" not in text
@@ -324,8 +344,14 @@ async def test_team_default_edits_that_cannot_be_written_are_refused(
 async def test_team_default_values_are_replaced_guarded(
     services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
 ) -> None:
-    result = await services.authoring.update_team_default(
-        "redbull", "bmhgen", TeamDefaultEdit(values={"replicas": 3}), jane_user
+    result = await confirmed(
+        partial(
+            services.authoring.update_team_default,
+            "redbull",
+            "bmhgen",
+            TeamDefaultEdit(values={"replicas": 3}),
+            jane_user,
+        )
     )
     assert files(result) == [(ChangeKind.UPDATE, "operators/bmhgen/values.yaml")]
     assert result.plan.changes[0].last_commit_id
@@ -425,6 +451,7 @@ async def test_a_move_that_changes_a_cluster_needs_its_confirmation(
         values={"replicas": 2},
         sync=AUTO_NS,
         confirm_changes=[herzi],
+        expected_digest=plan.digest,
     )
     branch = await branch_files(gitlab, result)
     # The cluster's values moved byte for byte, so it keeps replicas: 1 over the fleet's 2.
@@ -488,12 +515,15 @@ async def test_a_fleet_default_sync_edit_keeps_every_comment(
     path = "defaults/mces/dhcp-api-token/dhcp-api-token.yaml"
     redbull = await gitlab.get_project("sigs/redbull")
     old = gitlab.snapshot(redbull.id, "main")[path]
-    result = await services.authoring.update_fleet_default(
-        "redbull",
-        "dhcp-api-token",
-        MCES,
-        jane_user,
-        sync=SyncSettings(True, False, True, ("CreateNamespace=true",)),
+    result = await confirmed(
+        partial(
+            services.authoring.update_fleet_default,
+            "redbull",
+            "dhcp-api-token",
+            MCES,
+            jane_user,
+            sync=SyncSettings(True, False, True, ("CreateNamespace=true",)),
+        )
     )
     new = (await branch_files(gitlab, result))[path]
     assert [line for line in old.splitlines() if line not in new.splitlines()] == [
@@ -511,8 +541,16 @@ async def test_a_fleet_default_sync_edit_keeps_every_comment(
 async def test_a_fleet_default_goes_back_to_the_team_default_sync(
     services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
 ) -> None:
-    result = await services.authoring.update_fleet_default(
-        "redbull", "example-chart", MCES, jane_user, sync=None, values={"fleet": True}
+    result = await confirmed(
+        partial(
+            services.authoring.update_fleet_default,
+            "redbull",
+            "example-chart",
+            MCES,
+            jane_user,
+            sync=None,
+            values={"fleet": True},
+        )
     )
     branch = await branch_files(gitlab, result)
     assert yaml.safe_load(branch["defaults/mces/example-chart/example-chart.yaml"]) == {

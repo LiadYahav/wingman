@@ -4,15 +4,18 @@ Subclass :class:`GitLabContract` in a test module and provide two fixtures:
 
 - ``gitlab``: the GitLabPort under test;
 - ``new_project``: an async factory ``(files) -> Project`` that creates a
-  fresh project whose default branch ``main`` holds ``files``;
+  fresh private project whose default branch ``main`` holds ``files``;
 - ``rename_project``: an async ``(project, name) -> None`` that gives the
   project a new last path segment, as a GitLab rename does;
 - ``new_member``: an async ``(project, *, project_level=None,
-  group_level=None) -> GitLabPort`` that makes a fresh account a member of
-  the project and/or of the project's group at those levels (group first,
-  as GitLab refuses a project role below an inherited one), and returns the
+  group_level=None, share=None) -> GitLabPort`` that makes a fresh account a
+  member of the project and/or of the project's group at those levels (group
+  first, as GitLab refuses a project role below an inherited one), and/or
+  shares the project with a fresh group the account is a member of
+  (:class:`Share`; not a group above the project), and returns the
   port acting as that account once it can see the project (GitLab grants
-  that in a background job, seconds after the membership).
+  that in a background job, seconds after the membership). With no level,
+  the account is a member of nothing, and its port is returned at once.
 
 The suite runs against the in-memory fake on every test run and against a
 real GitLab when one is configured. A failure on the real one means the fake
@@ -22,6 +25,7 @@ has drifted from GitLab: fix the fake (and this suite) first.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from typing import Protocol
 
 import pytest
@@ -48,8 +52,21 @@ NewProject = Callable[[Mapping[str, str]], Awaitable[Project]]
 RenameProject = Callable[[Project, str], Awaitable[None]]
 
 
+@dataclass(frozen=True, slots=True)
+class Share:
+    """``project`` shared with a fresh group at ``level``; the account a member there at ``role``.
+
+    With ``inherited``, the project is shared with a subgroup of the group the
+    account is a member of, so the account's role there is inherited.
+    """
+
+    level: AccessLevel
+    role: AccessLevel
+    inherited: bool = False
+
+
 class NewMember(Protocol):
-    """Make a fresh account a member of ``project`` (and/or its group); its port."""
+    """Make a fresh account a member of ``project`` (its group, a group it is shared with)."""
 
     def __call__(
         self,
@@ -57,6 +74,7 @@ class NewMember(Protocol):
         *,
         project_level: AccessLevel | None = None,
         group_level: AccessLevel | None = None,
+        share: Share | None = None,
     ) -> Awaitable[GitLabPort]:
         """The port acting as the new member."""
         ...
@@ -651,3 +669,48 @@ class GitLabContract:
             project, project_level=AccessLevel.DEVELOPER, group_level=AccessLevel.REPORTER
         )
         assert await member.access_level(project.id) is AccessLevel.DEVELOPER
+
+    @pytest.mark.parametrize(
+        ("share", "level"),
+        [
+            (Share(AccessLevel.DEVELOPER, AccessLevel.MAINTAINER), AccessLevel.DEVELOPER),
+            (Share(AccessLevel.MAINTAINER, AccessLevel.REPORTER), AccessLevel.REPORTER),
+            (
+                Share(AccessLevel.MAINTAINER, AccessLevel.DEVELOPER, inherited=True),
+                AccessLevel.DEVELOPER,
+            ),
+        ],
+    )
+    async def test_a_group_share_gives_the_lower_of_its_role_and_the_role_in_the_group(
+        self, new_project: NewProject, new_member: NewMember, share: Share, level: AccessLevel
+    ) -> None:
+        # GitLab's permissions leave a share out (both null); the access is GitLab's own.
+        project = await new_project(FILES)
+        member = await new_member(project, share=share)
+        assert await member.access_level(project.id) is level
+
+    async def test_the_highest_of_membership_and_shares_counts(
+        self, new_project: NewProject, new_member: NewMember
+    ) -> None:
+        project = await new_project(FILES)
+        through_share = await new_member(
+            project,
+            project_level=AccessLevel.REPORTER,
+            share=Share(AccessLevel.DEVELOPER, AccessLevel.DEVELOPER),
+        )
+        assert await through_share.access_level(project.id) is AccessLevel.DEVELOPER
+        through_membership = await new_member(
+            project,
+            project_level=AccessLevel.MAINTAINER,
+            share=Share(AccessLevel.DEVELOPER, AccessLevel.OWNER),
+        )
+        assert await through_membership.access_level(project.id) is AccessLevel.MAINTAINER
+
+    async def test_a_private_project_the_account_has_no_access_to_is_not_found(
+        self, new_project: NewProject, new_member: NewMember
+    ) -> None:
+        # GitLab answers 404, not 403 or empty permissions, so as not to reveal the project.
+        project = await new_project(FILES)
+        outsider = await new_member(project)
+        with pytest.raises(NotFoundError):
+            await outsider.access_level(project.id)
