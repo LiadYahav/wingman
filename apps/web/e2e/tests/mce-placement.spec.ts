@@ -8,7 +8,7 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
+import { fulfillProblem, injectAdminAuth, json, mockDashboardApis, mockPlacement } from "../fixtures/api-handlers";
 import { ClusterNewPage } from "../pages/cluster-new.page";
 import type {
   ClusterPreview, CreateClusterRequest, Mce, NameSuggestion, Placement, PlacementCandidate, PlacementCheck, PlacementNeed,
@@ -143,6 +143,8 @@ function placement(query: URLSearchParams, overrides: Partial<Placement> = {}): 
     owner,
     flavor: query.get("flavor"),
     min_free_pods: 70,
+    // This spec's MCEs are read live: free pods and servers are checked
+    live_reads: true,
     needs,
     versions: VERSIONS,
     server_scan_error: null,
@@ -326,13 +328,10 @@ test.describe("MCE placement: Wingman's pick", () => {
     await form.goto();
     await form.chooseSpec("rcs");
 
-    await expect(form.mceSelect).toBeVisible();
     await form.selectSite("site1");
-    // Placement answered: prod or prep instead of an MCE select
-    await expect(form.envSelect).toBeVisible();
-    await expect(form.mceSelect).toHaveCount(0);
     await expect(form.versionSelect).toContainText("Choose prod or prep first");
-    await expect(page.getByTestId("placement-waiting")).toContainText("once the environment and the OpenShift version are chosen");
+    await expect(page.getByTestId("placement-waiting")).toContainText("once prod or prep and the OpenShift version are chosen");
+    expect(calls.placements).toEqual([]);
 
     await form.selectEnv("prod");
     await form.versionSelect.click();
@@ -596,23 +595,112 @@ test.describe("MCE placement: what day1 says on review", () => {
   });
 });
 
-test.describe("MCE placement: off", () => {
-  test("without placement (501) the form keeps its MCE select", async ({ page }) => {
+test.describe("MCE placement: always", () => {
+  test("the fields are site, then prod or prep, then version, and there is no MCE select anywhere", async ({ page }) => {
+    await setup(page);
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("rcs");
+
+    // In reading order, the three choices the pick is made from
+    const site = await form.siteSelect.boundingBox();
+    const env = await form.envSelect.boundingBox();
+    const version = await form.versionSelect.boundingBox();
+    expect(site && env && version).toBeTruthy();
+    // One row (within a few pixels), left to right
+    expect(Math.max(site!.y, env!.y, version!.y) - Math.min(site!.y, env!.y, version!.y)).toBeLessThan(8);
+    expect(site!.x).toBeLessThan(env!.x);
+    expect(env!.x).toBeLessThan(version!.x);
+    const labels = await page
+      .locator("[data-testid=site-select], [data-testid=env-select], [data-testid=ocp-version-select]")
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-testid")));
+    expect(labels).toEqual(["site-select", "env-select", "ocp-version-select"]);
+
+    await form.place({ site: "site1", env: "prod", version: "4.18.22" });
+    await expect(form.placementPickName).toHaveText(B);
+    await expect(form.mceSelect).toHaveCount(0);
+    await expect(page.getByRole("combobox", { name: /^mce\b/i })).toHaveCount(0);
+  });
+
+  test("with live MCE reads off, the pick is shown, free pods and servers read 'not checked', and an MCE is choosable", async ({ page }) => {
+    const calls = await setup(page);
+    await mockPlacement(
+      page,
+      { [A]: VERSIONS, [B]: VERSIONS, [C]: ["4.17.30", "4.16.27"] },
+      calls.placements
+    );
+    const form = new ClusterNewPage(page);
+    await fillForm(form);
+
+    await expect(form.placementPickName).toHaveText(A);
+    // One quiet note says what was not checked and why; no per-type lines, no "servers counted"
+    await expect(page.getByTestId("placement-live-reads-off")).toContainText(
+      "Free pods and servers were not checked: this deployment does not read the MCEs live"
+    );
+    await expect(page.getByTestId("placement-needs")).toHaveCount(0);
+    await expect(page.getByTestId("placement-node-types")).toHaveCount(0);
+
+    // Not checked is muted, never a problem: the MCE stays choosable
+    const picked = form.candidate(A);
+    await expect(picked).toContainText("Passes the checks made");
+    await expect(picked.getByTestId("placement-not-checked")).toHaveText("free pods and servers: not checked");
+    await expect(picked.getByTestId("placement-cell-pods")).toContainText("not checked");
+    await expect(picked.locator("[data-testid^='placement-check-']")).toHaveCount(0);
+
+    // C fails only the version: that is what it says, beside what was not checked
+    const failing = form.candidate(C);
+    await expect(failing.getByTestId("placement-check-version")).toContainText("Does not host OpenShift 4.18.22");
+    await expect(failing.getByTestId("placement-check-free_pods")).toHaveCount(0);
+    await expect(form.candidateRadio(C)).toBeDisabled();
+
+    // B passes what was checked: an admin may choose it, with a reason
+    await form.goWith(B, "Closer to this owner's storage");
+    await expect(form.candidateRadio(B)).toBeChecked();
+    await form.review();
+    await expect(form.reviewDialog).toBeVisible();
+    expect(calls.previews.at(-1)!.mce).toBe(B);
+    expect(calls.previews.at(-1)!.placement).toEqual({ pick: A, reason: "Closer to this owner's storage" });
+  });
+
+  test("a placement that fails shows the problem and a retry, never an MCE select", async ({ page }) => {
+    const calls = await setup(page);
+    let failing = true;
+    await page.route("**/api/day1/placement**", (r) => {
+      const query = new URL(r.request().url()).searchParams;
+      calls.placements.push(query);
+      if (failing && query.get("version")) return fulfillProblem(r, 502, "DEPENDENCY_UNAVAILABLE", "server-scan did not answer");
+      return json(r, placement(query));
+    });
+    const form = new ClusterNewPage(page);
+    await fillForm(form);
+
+    const error = page.getByTestId("placement-error");
+    await expect(error.getByRole("alert")).toContainText("Wingman could not pick the MCE");
+    await expect(error).toContainText("server-scan did not answer");
+    await expect(form.mceSelect).toHaveCount(0);
+    await form.review();
+    await expect(form.formProblems).toContainText("Wingman could not pick the MCE: try again, under MCE");
+
+    failing = false;
+    await error.getByRole("button", { name: "Try again" }).click();
+    await expect(form.placementPickName).toHaveText(B);
+    await expect(page.getByTestId("placement-error")).toHaveCount(0);
+  });
+
+  test("a 501 is a problem like any other, not a way back to an MCE select", async ({ page }) => {
     await setup(page);
     await page.route("**/api/day1/placement**", (r) =>
-      fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled in this deployment (CLUSTER_STATUS_ENABLED=false).")
+      fulfillProblem(r, 501, "FEATURE_DISABLED", "MCE placement is not available in this deployment.")
     );
-    await page.route("**/api/day1/mces/*/openshift-versions", (r) => json(r, { mce: A, versions: VERSIONS, problems: [] }));
     const form = new ClusterNewPage(page);
     await form.goto();
     await form.chooseSpec("rcs");
     await form.selectSite("site1");
-    await form.selectMce(A);
+    await form.selectEnv("prod");
 
-    await expect(form.mceSelect).toContainText(A);
-    await expect(form.envSelect).toHaveCount(0);
-    await expect(form.placement).toHaveCount(0);
-    await expect(form.versionSelect).toContainText("4.16.27");
-    await expect(form.versionSource).toContainText(`default of ${A}`);
+    await expect(form.versionError).toContainText("The versions of the prod MCEs on site1 could not be listed");
+    await expect(form.versionError).toContainText("MCE placement is not available in this deployment.");
+    await expect(form.versionError.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(form.mceSelect).toHaveCount(0);
   });
 });
