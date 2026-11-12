@@ -7,6 +7,12 @@ does. This file states how they divide the work between the systems, and
 what that means for each idea in this folder. Facts about the systems
 themselves are in `docs/ecosystem/README.md`.
 
+> **Changed 2026-11-12** by the architect's vision ([single-pane.md](single-pane.md)):
+> Wingman picks the MCE for a new cluster (question 1 below), ranks MCEs by
+> what they hold and have free (rule 2 below, amended), and shows
+> segments-manager's and server-scan's UIs. The rows and rules affected are
+> marked; the rest stands.
+
 ## How the architect thinks
 
 - **Git is the only truth; ArgoCD is the only thing that changes a cluster**
@@ -49,8 +55,8 @@ themselves are in `docs/ecosystem/README.md`.
 | ArgoCD | Applying what is merged | Never applies anything; shows status once it can read it |
 | Temporal workflows | Every operation with more than one step or system: create (03), scale (04), delete (05), upgrades (13-17), version band moves (18), adding and removing servers (01, 02). Validation, preflight and capacity admission live here | Starts the customer ones, passes totals, shows progress and errors in plain words, and links the run |
 | Inventory controller (herzi), one per hub | Supply: pools between their watermarks | Never touches supply; shows a pool's state when a cluster waits for workers |
-| server-scan | Every server's and VM's state, and the install lock | Read-only: the servers under a cluster, pool counts |
-| segments-manager, DHCP | Networks | Never called by Wingman; allocation and release happen inside workflows |
+| server-scan | Every server's and VM's state, and the install lock | Read-only: the servers under a cluster, pool counts; **since 2026-11-12** its whole UI, rebuilt in Wingman on its unchanged API (whether its two writes come along is open, single-pane.md) |
+| segments-manager, DHCP | Networks | Allocation and release happen inside workflows. ~~Never called by Wingman~~: Wingman reads a cluster's segment (ADR-0039) and, **since 2026-11-12**, shows segments-manager's read UI (single-pane.md) |
 | **Wingman** | **The self-service catalog**: flavors (the NodePool profiles), forms that hide placement, MR review and approval, status, audit | |
 
 ## Rules Wingman follows from this
@@ -59,7 +65,10 @@ themselves are in `docs/ecosystem/README.md`.
    workflow; Wingman starts it and shows it. The one exception, day1 create,
    edit and delete by MR, sits behind the `ClusterProvisioner` adapter until
    the workflows exist.
-2. **Wingman never checks or reserves capacity.** The create and scale
+2. **Amended 2026-11-12:** Wingman ranks MCEs for a new cluster by what
+   they hold and have free, and checks the free pods a control plane needs
+   (single-pane.md, workstream 6); it still never reserves capacity. As first
+   written: **Wingman never checks or reserves capacity.** The create and scale
    workflows will admit or refuse with a reason (their admission step is not
    built yet); Wingman shows the answer. While a cluster waits for workers,
    Wingman says why: the pool's spare count and the add-server runs filling
@@ -87,7 +96,8 @@ themselves are in `docs/ecosystem/README.md`.
 
 ## Questions for the architect
 
-1. **Who picks the hub** for a new cluster: the catalog (Wingman, from
+1. **Answered 2026-11-12: Wingman picks it** (single-pane.md, workstream 6).
+   **Who picks the hub** for a new cluster: the catalog (Wingman, from
    version band and site) or the create workflow? Procedure 03 leaves it
    open; Wingman asks the user for site and MCE today, which the
    architecture wants hidden.

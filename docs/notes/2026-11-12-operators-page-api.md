@@ -1,4 +1,4 @@
-# Operators page: the API the web uses (3.9, ADR-0053)
+# Operators page: the API the web uses (3.10, ADR-0053)
 
 What the web needs from day2 for the Operators pages, and what changed for
 the add-on authoring endpoints of 3.8 (ADR-0043,
@@ -143,7 +143,7 @@ Every write takes `?dry_run=true` (200, the plan; nothing is opened) and
 otherwise answers 201 (create, make default) or 200 (edits) with the opened
 MR. Both carry the 3.8 fields (`action`, `chart`, `scope`, `reach`,
 `adopted`, `needs_confirmation`, `warnings`, `notes`; the plan `title` and
-`files`, the MR its `MRDetail` and `files`) and, new in 3.9:
+`files`, the MR its `MRDetail` and `files`) and, new in 3.10:
 
 ```jsonc
 {
@@ -260,7 +260,7 @@ destination is excluded from the default and gets its own
   removing: `... deploy config on <name>: back to the fleet default (...)`.
   Action `override-deploy`.
 
-## 4. Changed in 3.9 (review of 3.8)
+## 4. Changed in 3.10 (review of 3.8)
 
 - `POST /addons/{team}` (create), `PUT /addons/{team}/{addon}` (team
   default), `POST|PUT /addons/{team}/{addon}/defaults/{scope}` (make and
