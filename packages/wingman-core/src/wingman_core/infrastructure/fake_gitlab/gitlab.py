@@ -117,6 +117,8 @@ class InMemoryGitLab:
         """Project membership: (project id, username) to role."""
         self._group_members: dict[tuple[str, str], AccessLevel] = {}
         """Group membership: (group path, username) to role; inherited by every project below."""
+        self._project_shares: dict[int, dict[str, AccessLevel]] = {}
+        """Project shares: project id to {group path: the most the share grants}."""
         self._ids = itertools.count(1)
         self._sequence = itertools.count(1)
 
@@ -206,6 +208,19 @@ class InMemoryGitLab:
         """Make ``username`` (default: this account) a member of ``group`` at ``level``."""
         self._group_members[(group.strip("/"), username or self._username)] = level
 
+    def share_project(self, project_id: int, group: str, level: AccessLevel) -> None:
+        """Share the project with ``group`` at ``level``, as GitLab's "Invite a group" does.
+
+        Each member of ``group`` (or of a group above it) gets the lower of
+        ``level`` and its own role there. ``AccessLevel.NONE`` removes the share.
+        """
+        self._project(project_id)
+        shares = self._project_shares.setdefault(project_id, {})
+        if level is AccessLevel.NONE:
+            shares.pop(group.strip("/"), None)
+        else:
+            shares[group.strip("/")] = level
+
     def as_account(self, username: str, *, email: str | None = None) -> InMemoryGitLab:
         """The same GitLab, acting as another account (for access tests)."""
         view = copy.copy(self)
@@ -245,14 +260,13 @@ class InMemoryGitLab:
     async def access_level(self, project_id: int) -> AccessLevel:
         """See GitLabPort.access_level; a private project without access is not found."""
         record = self._project(project_id)
-        path = record.project.path_with_namespace
-        parts = path.split("/")[:-1]
-        groups = ["/".join(parts[: i + 1]) for i in range(len(parts))]
-        levels = [
+        namespace = record.project.path_with_namespace.rpartition("/")[0]
+        shares = self._project_shares.get(project_id, {})
+        level = max(
             self._project_members.get((project_id, self._username), AccessLevel.NONE),
-            *(self._group_members.get((g, self._username), AccessLevel.NONE) for g in groups),
-        ]
-        level = max(levels)
+            self._group_role(namespace),
+            *(min(cap, self._group_role(group)) for group, cap in shares.items()),
+        )
         if level is AccessLevel.NONE and record.visibility == "private":
             raise NotFoundError(f"project {project_id} not found")
         return level
@@ -491,6 +505,19 @@ class InMemoryGitLab:
         return self._mr_dto(record, mr)
 
     # ── Internals ───────────────────────────────────────────────────────────
+
+    def _group_role(self, group: str) -> AccessLevel:
+        """This account's role in ``group``: the highest of it and every group above it."""
+        parts = group.split("/") if group else []
+        return max(
+            (
+                self._group_members.get(
+                    ("/".join(parts[: i + 1]), self._username), AccessLevel.NONE
+                )
+                for i in range(len(parts))
+            ),
+            default=AccessLevel.NONE,
+        )
 
     def _project(self, project_id: int) -> _ProjectRecord:
         if project_id not in self._projects:

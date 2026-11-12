@@ -77,6 +77,16 @@ async def test_a_failed_access_read_is_not_kept(
     assert (await services.access.of(lynx)).level is AccessLevel.OWNER
 
 
+async def test_a_team_that_shares_its_project_with_wingmans_group_is_writable(
+    services: Day2Services, gitlab: InMemoryGitLab
+) -> None:
+    orca = (await _teams(services))["orca"]
+    gitlab.add_group_member("bots", AccessLevel.MAINTAINER)
+    gitlab.share_project(orca.project.id, "bots", AccessLevel.DEVELOPER)
+    access = await services.access.of(orca)
+    assert (access.level, access.writable, access.reason) == (AccessLevel.DEVELOPER, True, None)
+
+
 async def test_a_project_the_account_cannot_see_is_no_access_not_unknown(
     services: Day2Services, gitlab: InMemoryGitLab, monkeypatch: pytest.MonkeyPatch
 ) -> None:

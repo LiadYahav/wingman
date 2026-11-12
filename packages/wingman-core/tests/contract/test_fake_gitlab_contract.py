@@ -15,6 +15,7 @@ from wingman_core.testing.gitlab_contract import (
     NewMember,
     NewProject,
     RenameProject,
+    Share,
 )
 
 
@@ -49,6 +50,7 @@ class TestInMemoryGitLabContract(GitLabContract):
             *,
             project_level: AccessLevel | None = None,
             group_level: AccessLevel | None = None,
+            share: Share | None = None,
         ) -> GitLabPort:
             name = f"member-{next(counter)}"
             if group_level is not None:
@@ -56,6 +58,11 @@ class TestInMemoryGitLabContract(GitLabContract):
                 gitlab.add_group_member(group, group_level, username=name)
             if project_level is not None:
                 gitlab.set_access_level(project.id, project_level, username=name)
+            if share is not None:
+                parent = f"shares/{name}"
+                gitlab.add_group_member(parent, share.role, username=name)
+                shared = f"{parent}/child" if share.inherited else parent
+                gitlab.share_project(project.id, shared, share.level)
             return gitlab.as_account(name)
 
         return make

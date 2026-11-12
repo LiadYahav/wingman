@@ -49,11 +49,14 @@ class GitLabPort(Protocol):
         ...
 
     async def access_level(self, project_id: int) -> AccessLevel:
-        """This account's access to a project: the higher of its project and group membership.
+        """This account's access to a project: the highest it has through any membership.
 
-        Group membership counts from the project's group and every group above
-        it, as GitLab inherits it. ``AccessLevel.NONE`` when the account is a
-        member of neither (it may still read a public or internal project).
+        Three ways count, as GitLab grants them: a project membership; a
+        membership of the project's group or any group above it; and a group
+        the project is shared with, where the account has the lower of the
+        share's role and its own role in that group (inherited from a group
+        above it too). ``AccessLevel.NONE`` when it has none of them (it may
+        still read a public or internal project).
         Raises ``NotFoundError`` for a project the account cannot see: GitLab
         answers 404 for a private project the account has no access to.
         """

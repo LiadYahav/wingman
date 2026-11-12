@@ -246,7 +246,9 @@ name that names one destination (`?mce=` when it names more than one).
 #### Authoring add-ons and fleet defaults
 
 A team is written to only if it gave Wingman's GitLab account Developer on its
-own project (otherwise `403 TEAM_READ_ONLY`, ADR-0043). Every write takes
+own project: as a member, from a group above the project, or through a group
+the project is shared with (otherwise `403 TEAM_READ_ONLY`, ADR-0043). A team
+whose access GitLab does not answer is read-only until it does. Every write takes
 `?dry_run=true` (the plan, nothing opened).
 
 | Method | Endpoint | Description |

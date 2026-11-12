@@ -80,3 +80,16 @@ async def test_an_unknown_project_is_not_found() -> None:
         await gitlab.access_level(99)
     with pytest.raises(NotFoundError):
         gitlab.set_access_level(99, AccessLevel.REPORTER)
+    with pytest.raises(NotFoundError):
+        gitlab.share_project(99, "bots", AccessLevel.DEVELOPER)
+
+
+async def test_a_share_counts_until_it_is_removed() -> None:
+    gitlab = InMemoryGitLab()
+    project = gitlab.create_project("sigs/team", {"a": "1"}, visibility="internal")
+    member = gitlab.as_account("member")
+    gitlab.add_group_member("bots", AccessLevel.MAINTAINER, username="member")
+    gitlab.share_project(project.id, "bots/wingman", AccessLevel.DEVELOPER)
+    assert await member.access_level(project.id) is AccessLevel.DEVELOPER
+    gitlab.share_project(project.id, "bots/wingman", AccessLevel.NONE)
+    assert await member.access_level(project.id) is AccessLevel.NONE
