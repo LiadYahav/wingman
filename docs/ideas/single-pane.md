@@ -47,7 +47,7 @@ Wingman becomes the platform team's one place to work from:
 | 17 | Fine-grained RBAC: groups with their own permissions, such as seeing every server or only your own | Identities and groups from **Keycloak, federating LDAP** (OIDC). There is no Keycloak in the air-gap: Wingman brings one (Red Hat build of Keycloak) |
 | 18 | Wingman may reuse whatever it needs from server-scan, segments-manager and cluster-navigator | Their repositories are public, as Wingman's is |
 | 19 | MCE placement is built first, after the day2 and import PRs | With the per-MCE API address it needs |
-| 20 | A **GitOps** page in the sidebar: a launcher in the style of the team's homepage dashboard | Every ArgoCD (the hub's, each MCE's at `openshift-gitops-server-openshift-gitops.apps.<cluster>.<domain>`), each cluster's console, and the team's other links, with their status |
+| 20 | A **Quick Links** page in the sidebar: a launcher in the style of the team's homepage dashboard | Every ArgoCD (the hub's, each MCE's at `openshift-gitops-server-openshift-gitops.apps.<cluster>.<domain>`), each cluster's console, and the team's other links, with their status |
 
 ## What this changes in Wingman's rules
 
@@ -91,7 +91,7 @@ tag exists.
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
 | 8 | RBAC with Keycloak: permissions per group, scoped visibility | 0051 | L | Its design before code; 2 for the areas it guards |
-| 9 | GitOps launcher page | 0052 | M | Nothing; built alongside 6 |
+| 9 | Quick Links page | 0052 | M | Nothing; built alongside 6 |
 
 ### 0a. Day2: teams author add-ons (ADR-0043, in progress)
 
@@ -404,7 +404,7 @@ Its design (the permission list, the scopes, how groups map, the Keycloak
 install) is written and agreed before any code, because every area depends
 on it.
 
-### 9. GitOps launcher (ADR-0052)
+### 9. Quick Links (ADR-0052)
 
 Decision 20, modelled on the team's homepage dashboard (gethomepage): cards
 in sections, each with an icon, a description, a status dot and, where it
@@ -462,7 +462,7 @@ Also:
    (Wingman 3.7.0 and its GitLab on the sandbox); its per-MCE address is
    built with 6.
 2. **Next (decision 19)**: 6, MCE placement, with the per-MCE address, and
-   9, the GitOps launcher, alongside it. In parallel, write the designs of 2
+   9, the Quick Links page, alongside it. In parallel, write the designs of 2
    (the single pane) and 8 (RBAC).
 3. **Then**:
    - build 2;
