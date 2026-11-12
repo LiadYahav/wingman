@@ -14,7 +14,8 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Destinations and Lints**: Every place teams deploy to, and every check on the team repos
 - **YAML Fields**: Dynamic form fields accept plain YAML scalars, maps, or lists — no JSON syntax
 - **Sites and MCEs are read-only**: picked from the day1 repo's folders (Wingman never creates them); the MCE's mastertag is the default OpenShift version
-- **Naming convention**: new cluster names must follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing off-convention names are flagged, not hidden
+- **Naming convention**: new cluster names must follow `ocp4-<env>-<name>-<site>[-<seq>]`; existing off-convention names are flagged, not hidden; a new `<seq>` is one letter, a to z, and creating from a flavor the form suggests the name with the next free letter (ADR-0040)
+- **Nodepool ratio**: a flavor may size its nodepools by a ratio (`1:2:1`); the create form asks for one size and fills in each sized nodepool's replicas
 - **Approval Workflow**: Aggregated view of open MRs from the day1, specs and team repos; an approval names the commit the reviewer saw, so a branch that moved since is refused, and nobody approves their own change
 - **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
 - **In-App Documentation**: Full platform guide at `/docs`

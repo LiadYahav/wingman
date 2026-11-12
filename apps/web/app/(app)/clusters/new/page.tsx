@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Code, Eye, FileText, Info, List, Plus, RotateCcw, Trash2,
+  AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Code, Eye, FileText, Info, List, Plus, RotateCcw, Sparkles, Trash2,
 } from "lucide-react";
 import jsYaml from "js-yaml";
 import { toast } from "sonner";
@@ -24,8 +24,8 @@ import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
 import type {
-  CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, OpenShiftVersions, OverrideableField, SpecEntry,
-  TemplateField,
+  CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, NameSuggestion, OpenShiftVersions, OverrideableField,
+  SpecEntry, TemplateField,
 } from "@/types";
 import {
   DynamicVariableForm, FlavorBadge, fieldInputClassName, type FieldInputContext, type FieldValue, type FormValues,
@@ -35,7 +35,7 @@ import { asEntries, NETWORK_CONFIG, useMachineConfigs } from "@/lib/machine-conf
 import {
   CONFIGS, NODEPOOLS, fieldPaths, flavorLocks, flavorProblems, formEntries, isConfigsPath, lookup, newNodepool,
   nodepoolConfigsPath, ownerProblems, OWNER_INPUTS, placeProblems, presetPaths, requestVariables, seedCreateForm,
-  type PlacedProblems,
+  sizedIndex, sizingRatio, startingSize, withSize, type PlacedProblems,
 } from "./flavor-form";
 
 const inputCls =
@@ -72,8 +72,11 @@ function nameProblems(name: string, site: string, mce: Mce | undefined, siteMces
   }
   if (!site) return problems;
   const match = clusterNamePattern(site).exec(name);
+  if (match?.[3] !== undefined && !/^[a-z]$/.test(match[3])) {
+    problems.push(`The sequence "${match[3]}" must be one letter, a to z (-a, -b, …): a number is not the convention`);
+  }
   if (!match) {
-    problems.push(`Does not follow ocp4-<env>-<name>-${site}[-<seq>]`);
+    problems.push(`Does not follow ocp4-<env>-<name>-${site}[-<letter>]`);
   } else if (mce) {
     if (mce.follows_convention && mce.env && match[1] !== mce.env) {
       problems.push(`Env "${match[1]}" does not match ${mce.name} (env "${mce.env}")`);
@@ -590,6 +593,10 @@ export default function NewClusterPage() {
   const [step, setStep] = useState<"spec" | "vars">("spec");
   const [selectedSpec, setSelectedSpec] = useState<SpecEntry | null>(null);
   const [clusterName, setClusterName] = useState("");
+  // Until the person types a name, the form shows day1's suggestion (ADR-0040)
+  const [nameEdited, setNameEdited] = useState(false);
+  // `null` = untouched: the flavor's preset size, else 1
+  const [sizeInput, setSizeInput] = useState<string | null>(null);
   // `null` = not chosen: the value is detected from the cluster name.
   const [siteChoice, setSiteChoice] = useState<string | null>(null);
   const [mceChoice, setMceChoice] = useState<string | null>(null);
@@ -635,7 +642,21 @@ export default function NewClusterPage() {
     enabled: step === "vars",
   });
 
-  const trimmedName = clusterName.trim();
+  // A free name from the flavor, the chosen site and the chosen MCE's env, with the next letter (ADR-0040)
+  const suggestFor = step === "vars" && selectedSpec && siteChoice && mceChoice
+    ? { site: siteChoice, mce: mceChoice, flavor: selectedSpec.metadata.name }
+    : null;
+  const { data: suggestion } = useQuery<NameSuggestion>({
+    queryKey: ["name-suggestion", suggestFor],
+    queryFn: () =>
+      api.get<NameSuggestion>(`/api/day1/clusters/name-suggestion?${new URLSearchParams(suggestFor ?? {}).toString()}`),
+    enabled: suggestFor !== null,
+    staleTime: 10_000,
+    retry: false,
+  });
+  const suggestedName = suggestFor && suggestion?.name ? suggestion.name : null;
+  const shownName = nameEdited ? clusterName : (suggestedName ?? clusterName);
+  const trimmedName = shownName.trim();
   const detectedSite = trimmedName ? siteFromName(trimmedName, sites) : null;
   const site = siteChoice ?? detectedSite ?? "";
 
@@ -712,7 +733,12 @@ export default function NewClusterPage() {
     () => (selectedSpec ? seedCreateForm(selectedSpec, schema, locks, catalog) : { values: {}, fixedNodepools: 0 }),
     [selectedSpec, schema, locks, catalog]
   );
-  const formValues = dynamicValues ?? seed.values;
+  // A flavor's nodepool ratio: one size sets the sized nodepools' replicas (ADR-0040)
+  const ratio = useMemo(() => sizingRatio(selectedSpec), [selectedSpec]);
+  const unsized = dynamicValues ?? seed.values;
+  const sizeText = sizeInput ?? String(ratio.length > 0 ? startingSize(seed.values, ratio) : 1);
+  const size = /^\d+$/.test(sizeText.trim()) && Number(sizeText) >= 1 ? Number(sizeText) : null;
+  const formValues = ratio.length > 0 && size !== null ? withSize(unsized, ratio, size) : unsized;
   const presets = useMemo(
     () => (selectedSpec ? presetPaths(selectedSpec, schema, locks) : new Set<string>()),
     [selectedSpec, schema, locks]
@@ -741,6 +767,15 @@ export default function NewClusterPage() {
   for (const [path, problem] of Object.entries(liveOwners)) (fieldProblems[path] ??= []).push(problem);
 
   const renderInput = ({ field, path, value, onChange, locked }: FieldInputContext) => {
+    const sized = sizedIndex(path, ratio);
+    if (sized !== null) {
+      return (
+        <p data-testid={`nodepool-${sized}-replicas-sized`} className="text-sm">
+          <span className="font-mono font-medium">{size !== null ? String(value) : "—"}</span>
+          <span className="ml-2 text-xs text-muted-foreground">ratio {ratio[sized]} × size {size ?? "?"}</span>
+        </p>
+      );
+    }
     if (OWNER_INPUTS.includes(path) && !locked) {
       return <OwnerInput field={field} value={value} onChange={onChange} invalid={path in liveOwners} />;
     }
@@ -767,7 +802,7 @@ export default function NewClusterPage() {
   const namingIssues = trimmedName
     ? nameProblems(trimmedName, site, selectedMce, site && !mcesLoading && !mcesError ? mces : undefined)
     : [];
-  const namePlaceholder = `ocp4-${selectedMce?.env ?? "<env>"}-<name>-${site || "<site>"}`;
+  const namePlaceholder = `ocp4-${selectedMce?.env ?? "<env>"}-<name>-${site || "<site>"}-<letter>`;
 
   const showError = (error: FormError) => {
     setFormError(error);
@@ -822,6 +857,7 @@ export default function NewClusterPage() {
     setSelectedSpec(spec);
     setOcpChoice(null);
     setDynamicValues(null);
+    setSizeInput(null);
     setFormError(null);
     submitted.current = null;
     const overrides: Record<string, Record<string, unknown>> = {};
@@ -868,6 +904,7 @@ export default function NewClusterPage() {
     if (!site) problems.push("Choose a site");
     if (!mce) problems.push("Choose an MCE");
     if (!trimmedName) problems.push("Enter a cluster name");
+    if (ratio.length > 0 && size === null) problems.push("Enter the nodepools' size: a whole number of at least 1");
     if (!ocpVersion.trim()) problems.push("Choose an OpenShift version");
     // Without the template's inputs the form can neither show nor check them: never send without them.
     if (schemaError) problems.push("The cluster template's inputs could not be loaded: reload the page to try again");
@@ -1142,17 +1179,46 @@ export default function NewClusterPage() {
                   data-testid="cluster-name-input"
                   className={cn(inputCls, "font-mono")}
                   placeholder={namePlaceholder}
-                  value={clusterName}
-                  onChange={(e) => setClusterName(e.target.value)}
+                  value={shownName}
+                  onChange={(e) => {
+                    setClusterName(e.target.value);
+                    setNameEdited(true);
+                  }}
                   autoComplete="off"
                   spellCheck={false}
                   aria-describedby="cluster-name-hint"
                   aria-invalid={namingIssues.length > 0}
                 />
+                {!nameEdited && suggestedName && (
+                  <p data-testid="name-suggested" className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Sparkles className="h-3 w-3 shrink-0" aria-hidden />
+                    Suggested from flavor {selectedSpec?.metadata.name}, {siteChoice} and the MCE&apos;s env, with the next free
+                    letter. Type to change it.
+                  </p>
+                )}
+                {nameEdited && suggestedName && trimmedName !== suggestedName && (
+                  <button
+                    type="button"
+                    data-testid="use-suggested-name"
+                    onClick={() => {
+                      setNameEdited(false);
+                      setClusterName("");
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                  >
+                    <RotateCcw className="h-3 w-3" aria-hidden />
+                    Use the suggested name <span className="font-mono">{suggestedName}</span>
+                  </button>
+                )}
+                {!nameEdited && suggestFor && suggestion && !suggestion.name && suggestion.problems.length > 0 && (
+                  <p data-testid="name-suggestion-problems" className="text-[11px] text-muted-foreground">
+                    No name to suggest: {suggestion.problems.join("; ")}
+                  </p>
+                )}
                 <div id="cluster-name-hint" data-testid="naming-hint" className="text-[11px] leading-relaxed">
                   {!trimmedName ? (
                     <p className="text-muted-foreground">
-                      Format <span className="font-mono">ocp4-&lt;env&gt;-&lt;name&gt;-&lt;site&gt;[-&lt;seq&gt;]</span>; the env must be the MCE&apos;s.
+                      Format <span className="font-mono">ocp4-&lt;env&gt;-&lt;name&gt;-&lt;site&gt;-&lt;letter&gt;</span>; the env must be the MCE&apos;s, the letter one of a to z.
                     </p>
                   ) : namingIssues.length > 0 ? (
                     <ul className="text-status-warning-fg space-y-0.5">
@@ -1295,6 +1361,48 @@ export default function NewClusterPage() {
                   <ul className="list-disc pl-5 space-y-0.5">
                     {selectedSpec.warnings.map((w, i) => <li key={i} className="break-words">{w}</li>)}
                   </ul>
+                </div>
+              )}
+              {mce && infraEnvs === null && (
+                <p data-testid="infraenv-off" className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-px" aria-hidden />
+                  Type each nodepool&apos;s InfraEnv: this deployment does not read the MCE (live status is off).
+                </p>
+              )}
+              {ratio.length > 0 && (
+                <div data-testid="nodepool-size" className="rounded-lg border bg-muted/30 px-3.5 py-3 space-y-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <label htmlFor="nodepool-size-input" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Size
+                    </label>
+                    <input
+                      id="nodepool-size-input"
+                      data-testid="nodepool-size-input"
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      className={cn(inputCls, "w-24 font-mono")}
+                      value={sizeText}
+                      onChange={(e) => setSizeInput(e.target.value)}
+                      aria-invalid={size === null}
+                      aria-describedby="nodepool-size-hint"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {selectedSpec.metadata.name} sizes its first {ratio.length} nodepools{" "}
+                      <span className="font-mono text-foreground">{ratio.join(":")}</span>
+                    </span>
+                  </div>
+                  <p id="nodepool-size-hint" data-testid="nodepool-size-replicas" className="text-xs">
+                    {size === null ? (
+                      <span className="text-status-warning-fg">Enter a whole number of at least 1</span>
+                    ) : (
+                      <>
+                        Replicas <span className="font-mono">{ratio.map((r) => r * size).join(" · ")}</span>
+                        <span className="text-muted-foreground"> = {ratio.reduce((sum, r) => sum + r * size, 0)} nodes</span>
+                      </>
+                    )}
+                  </p>
                 </div>
               )}
               {infraEnvsError && (

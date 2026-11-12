@@ -18,12 +18,21 @@ from collections.abc import Mapping
 from typing import Any, Final, Literal, cast
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from wingman_day1.domain.addons import AddonKey, RequestedAddon
 from wingman_day1.domain.errors import InvalidSpecError
 from wingman_day1.domain.locks import Lock, enforced_locks, lock_problems
 from wingman_day1.domain.owners import owner_problems
+from wingman_day1.domain.sizing import ratio_problems
 from wingman_day1.domain.template import check_inputs
 
 _NAME = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
@@ -96,6 +105,8 @@ class Day1Config(_Strict):
     template: str = ""
     values: dict[str, Any] = Field(default_factory=dict)
     """Inputs for the template: presets the user may change, and the locked values."""
+    nodepool_ratio: list[StrictInt] = Field(default_factory=list)
+    """One whole number per nodepool: they grow together (ADR-0040); empty: no ratio."""
 
     @model_validator(mode="before")
     @classmethod
@@ -174,6 +185,24 @@ class ClusterSpec(_Strict):
         """The locks a create enforces (a lock that breaks the save rules is not one)."""
         return enforced_locks(self.spec.day1.locked_paths, self.spec.day1.values)
 
+    def nodepool_count(self) -> int:
+        """How many nodepools the flavor has: its ``structure`` or its values, the longer."""
+        day1 = self.spec.day1
+        lengths = [
+            len(found)
+            for found in (day1.structure.get("nodepools"), day1.values.get("nodepools"))
+            if isinstance(found, list)
+        ]
+        return max(lengths, default=0)
+
+    def sizing_ratio(self) -> tuple[int, ...]:
+        """The ratio a create enforces; empty when there is none or it breaks the save rules."""
+        day1 = self.spec.day1
+        problems = ratio_problems(
+            day1.nodepool_ratio, nodepools=self.nodepool_count(), locked_paths=day1.locked_paths
+        )
+        return () if problems else tuple(day1.nodepool_ratio)
+
     def requested_addons(
         self, overrides: Mapping[str, Mapping[str, object]]
     ) -> list[RequestedAddon]:
@@ -228,7 +257,8 @@ def validate_spec(document: Mapping[str, object]) -> ClusterSpec:
 def rule_problems(spec: ClusterSpec) -> list[str]:
     """The flavor rules ``spec`` breaks that need no other file.
 
-    Safe values (ADR-0013), owner numbers (ADR-0028) and locks (ADR-0026).
+    Safe values (ADR-0013), owner numbers (ADR-0028), locks (ADR-0026) and
+    the nodepool ratio (ADR-0040).
     A save refuses them, together with configs that do not resolve
     (ADR-0027); a spec already in GitLab that breaks them still loads, and
     the API lists them as its ``warnings``.
@@ -238,6 +268,11 @@ def rule_problems(spec: ClusterSpec) -> list[str]:
         *check_inputs(values),
         *owner_problems(values),
         *lock_problems(spec.spec.day1.locked_paths, values),
+        *ratio_problems(
+            spec.spec.day1.nodepool_ratio,
+            nodepools=spec.nodepool_count(),
+            locked_paths=spec.spec.day1.locked_paths,
+        ),
     ]
 
 

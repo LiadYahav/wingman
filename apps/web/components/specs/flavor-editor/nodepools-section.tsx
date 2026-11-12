@@ -5,8 +5,9 @@ import { AlertTriangle, ChevronRight, Lock, Network, Plus, Trash2 } from "lucide
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
+import { Switch } from "@/components/ui/switch";
 import { ConfigListEditor } from "@/components/machine-configs/config-list-editor";
-import { NETWORK_CONFIG, isNetworkEntry } from "@/lib/machine-configs";
+import { NETWORK_CONFIG, defaultHardware, hardwareOptions, isNetworkEntry } from "@/lib/machine-configs";
 import { cn } from "@/lib/utils";
 import type { ConfigEntry, MachineConfigs, TemplateField } from "@/types";
 import { fieldId, inputCls, NotEnforced, ValueField } from "./controls";
@@ -22,12 +23,17 @@ import {
   nodepoolValues,
   otherPoolInputs,
   poolConfigs,
+  ratioLabel,
   removeNodepool,
   ruleEntries,
   setConfigsMode,
   setLocked,
   setNodepoolValue,
   setPoolHardware,
+  setPoolRatio,
+  setRatioOn,
+  setSizedReplicas,
+  ratioSize,
   setRuleEntries,
   type ConfigsMode,
   type FlavorDraft,
@@ -96,7 +102,13 @@ function ConfigsModeChoice({ mode, onChange }: { mode: ConfigsMode; onChange: (m
 
 /** What `nodepool-defaults.yaml` gives a new nodepool, or why it gives nothing. */
 function DefaultsNote({ catalog, rule, defaults }: { catalog: MachineConfigs | undefined; rule: boolean; defaults: ConfigEntry[] }) {
-  if (rule) return <>A new nodepool gets the rule&apos;s configs; choose its network hardware.</>;
+  if (rule) {
+    return defaultHardware(catalog) ? (
+      <>A new nodepool gets the rule&apos;s configs, its network hardware at generic (any hardware); change it if it needs its own.</>
+    ) : (
+      <>A new nodepool gets the rule&apos;s configs; choose its network hardware.</>
+    );
+  }
   const nd = catalog?.nodepool_defaults;
   if (!nd) return null;
   if (nd.error) return <>New nodepools start empty: {nd.path} cannot be used.</>;
@@ -165,7 +177,7 @@ export function NodepoolsSection({
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <ConfigsModeChoice mode={mode} onChange={(m) => update((d) => setConfigsMode(d, m, defaults))} />
+        <ConfigsModeChoice mode={mode} onChange={(m) => update((d) => setConfigsMode(d, m, defaults, defaultHardware(catalog)))} />
         <DefaultsProblems catalog={catalog} />
       </div>
 
@@ -213,6 +225,8 @@ export function NodepoolsSection({
         </div>
       )}
 
+      {count > 1 && <RatioChoice draft={draft} update={update} />}
+
       {count === 0 ? (
         <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
           No nodepools: each cluster adds its own.
@@ -239,13 +253,51 @@ export function NodepoolsSection({
       )}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button type="button" variant="outline" onClick={() => update((d) => addNodepool(d, defaults))}>
+        <Button type="button" variant="outline" onClick={() => update((d) => addNodepool(d, defaults, defaultHardware(catalog)))}>
           <Plus /> Add nodepool
         </Button>
         <p className="text-xs text-muted-foreground">
           <DefaultsNote catalog={catalog} rule={rule} defaults={defaults} />
         </p>
       </div>
+    </div>
+  );
+}
+
+/** Whether the nodepools grow together by a ratio; each card then has its part (ADR-0040). */
+function RatioChoice({ draft, update }: { draft: FlavorDraft; update: Update }) {
+  const on = draft.ratio.length > 0;
+  const size = on ? ratioSize(draft) : null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5" data-testid="nodepool-ratio">
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold">Sized by a ratio</h3>
+        <p className="text-xs text-muted-foreground">
+          {on ? (
+            <>
+              Nodepools grow together at <span className="font-mono text-foreground" data-testid="nodepool-ratio-label">{ratioLabel(draft)}</span>
+              {size !== null ? (
+                <>
+                  {" "}· replicas{" "}
+                  <span className="font-mono text-foreground" data-testid="nodepool-ratio-replicas">
+                    {draft.ratio.map((r) => Number(r) * size).join(" · ")}
+                  </span>{" "}
+                  = {draft.ratio.reduce((sum, r) => sum + Number(r) * size, 0)} nodes
+                </>
+              ) : (
+                ": set any nodepool's replicas and the others follow; each cluster can resize them together."
+              )}
+            </>
+          ) : (
+            "Off: each cluster sets every nodepool's replicas. Turn on to keep them in proportion, like zones at 1:2:1."
+          )}
+        </p>
+      </div>
+      <Switch
+        aria-label="Size the nodepools by a ratio"
+        checked={on}
+        onCheckedChange={(checked) => update((d) => setRatioOn(d, checked))}
+      />
     </div>
   );
 }
@@ -289,6 +341,8 @@ function NodepoolCard({
   const replicas = pool.replicas;
   const hardware = hardwareOf(entries);
   const configsLocked = isLocked(draft, configsPath);
+  const ratioPath = nodepoolPath(index, "ratio");
+  const ratioProblems = problems(ratioPath);
 
   return (
     <li className="rounded-xl border bg-card shadow-card" data-testid={`nodepool-${index}`} aria-label={title}>
@@ -329,11 +383,44 @@ function NodepoolCard({
               value={replicas === undefined ? "" : String(replicas)}
               onChange={(e) => {
                 const text = e.target.value.trim();
-                setValue("replicas", text === "" ? undefined : /^\d+$/.test(text) ? Number(text) : text);
+                const value = text === "" ? undefined : /^\d+$/.test(text) ? Number(text) : text;
+                // Under a ratio the nodepools move together: this one's replicas set the others'
+                if (draft.ratio.length > 0) update((d) => setSizedReplicas(d, index, value));
+                else setValue("replicas", value);
               }}
             />
           )}
         </ValueField>
+
+        {draft.ratio.length > 0 && (
+          <div id={fieldId(ratioPath)} className="scroll-mt-28 space-y-1.5" data-testid={`nodepool-${index}-ratio`}>
+            <label htmlFor={`${fieldId(ratioPath)}-input`} className="block text-sm font-medium">
+              Ratio
+            </label>
+            <input
+              id={`${fieldId(ratioPath)}-input`}
+              aria-invalid={ratioProblems.length > 0}
+              aria-describedby={`${fieldId(ratioPath)}-hint`}
+              className={cn(inputCls, "w-28 font-mono tabular")}
+              inputMode="numeric"
+              autoComplete="off"
+              value={draft.ratio[index] ?? ""}
+              onChange={(e) => update((d) => setPoolRatio(d, index, e.target.value))}
+            />
+            <p id={`${fieldId(ratioPath)}-hint`} className="text-xs text-muted-foreground">
+              This nodepool&apos;s part: change any nodepool&apos;s replicas and the others follow at{" "}
+              <span className="font-mono">{ratioLabel(draft)}</span>. A cluster starts at these replicas and can resize
+              them together.
+            </p>
+            {ratioProblems.length > 0 && (
+              <ul role="alert" className="space-y-0.5 text-xs text-destructive">
+                {ratioProblems.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {rule ? (
           <ValueField
@@ -350,7 +437,7 @@ function NodepoolCard({
                   <Network className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <Combobox
                     className="w-56"
-                    options={(catalog?.hardware_types ?? []).map((h) => ({ value: h.name, label: h.name, description: h.template }))}
+                    options={hardwareOptions(catalog)}
                     value={hardware}
                     onValueChange={(hw) => update((d) => setPoolHardware(d, index, hw))}
                     placeholder={catalogLoading ? "Loading hardware types…" : "Choose hardware…"}

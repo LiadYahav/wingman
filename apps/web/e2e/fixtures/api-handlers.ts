@@ -100,10 +100,11 @@ export const mockMachineConfigs: MachineConfigs = {
     { name: "workers-chrony-configuration", folder: "", path: "mc-files/workers-chrony-configuration.bu" },
     { name: "kubevirt-worker-tuning", folder: "kubevirt", path: "mc-files/kubevirt/kubevirt-worker-tuning.bu" },
   ],
+  // No generic template here: a specs repo without nm-conf-template.bu behaves as before it (ADR-0027)
   hardware_types: [
-    { name: "cisco", template: "mc-files/templates/nm-conf-template-cisco.bu" },
-    { name: "dell", template: "mc-files/templates/nm-conf-template-dell.bu" },
-    { name: "dell-data", template: "mc-files/templates/nm-conf-template-dell-data.bu" },
+    { name: "cisco", template: "mc-files/templates/nm-conf-template-cisco.bu", generic: false },
+    { name: "dell", template: "mc-files/templates/nm-conf-template-dell.bu", generic: false },
+    { name: "dell-data", template: "mc-files/templates/nm-conf-template-dell-data.bu", generic: false },
   ],
   nodepool_defaults: {
     path: "nodepool-defaults.yaml",
@@ -113,6 +114,15 @@ export const mockMachineConfigs: MachineConfigs = {
     problems: [],
   },
   problems: [],
+};
+
+/** The catalogue with the generic network template, `nm-conf-template.bu`: day1 lists it first. */
+export const mockMachineConfigsWithGeneric: MachineConfigs = {
+  ...mockMachineConfigs,
+  hardware_types: [
+    { name: "generic", template: "mc-files/templates/nm-conf-template.bu", generic: true },
+    ...mockMachineConfigs.hardware_types,
+  ],
 };
 
 /** Answer a route with a JSON body. */
@@ -431,6 +441,10 @@ export async function mockDashboardApis(page: Page) {
   // The MCE is not read unless a test sets the nodes up (mockClusterNodes): the Nodes tab says "off", quietly
   await page.route("**/api/day1/clusters/*/nodes**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Live cluster status is disabled in this deployment (CLUSTER_STATUS_ENABLED=false).")
+  );
+  // No name to suggest unless a test says otherwise (ADR-0040): the create form's name stays as typed
+  await page.route("**/api/day1/clusters/name-suggestion**", (route: Route) =>
+    json(route, { name: null, env: null, short_name: "", sequence: null, problems: [] })
   );
   // segments-manager is off unless a test says otherwise (mockClusterNetwork): the card shows the file, EPG "—"
   await page.route("**/api/day1/clusters/*/network**", (route: Route) =>

@@ -31,6 +31,7 @@ from wingman_day1.api.v1.schemas import (
     DriftSummaryItemOut,
     ModifyClusterIn,
     MRDetailOut,
+    NameSuggestionOut,
     PreviewOut,
     StartDeleteWorkflowIn,
     SyncIn,
@@ -52,6 +53,8 @@ router = APIRouter(prefix="/api/day1/clusters", tags=["clusters"])
 Site = Annotated[str | None, Query(max_length=63, description="Site folder")]
 Mce = Annotated[str | None, Query(max_length=63, description="MCE folder")]
 RequiredMce = Annotated[str, Query(min_length=1, max_length=63, description="MCE folder")]
+RequiredSite = Annotated[str, Query(min_length=1, max_length=63, description="Site folder")]
+Flavor = Annotated[str, Query(min_length=1, max_length=63, description="Flavor (spec) name")]
 ServerId = Annotated[
     str,
     Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.-]+$", description="server-scan id"),
@@ -87,6 +90,20 @@ async def list_clusters(context: Context, user: CurrentUser) -> list[ClusterStat
 async def drift_summary(context: Context, user: CurrentUser) -> list[DriftSummaryItemOut]:
     """Drift of every cluster; a cluster whose drift is unknown says so (``state``, ``error``)."""
     return [DriftSummaryItemOut.of(d) for d in await context.drift.summary()]
+
+
+@router.get("/name-suggestion")
+async def name_suggestion(
+    context: Context, user: CurrentUser, site: RequiredSite, mce: RequiredMce, flavor: Flavor
+) -> NameSuggestionOut:
+    """A free name for a new cluster from ``flavor``: ``ocp4-<env>-<flavor>-<site>-<letter>``.
+
+    The env is the MCE's, the letter the first no cluster or open create MR
+    has (ADR-0040). ``name`` is ``null``, with ``problems``, when there is none.
+    """
+    return NameSuggestionOut.of(
+        await context.clusters.suggest_name(site=site, mce=mce, flavor=flavor)
+    )
 
 
 @router.post("/bulk-status")

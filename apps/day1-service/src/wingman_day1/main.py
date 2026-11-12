@@ -399,6 +399,9 @@ def build_context(
                 cluster_service,
                 naming=naming,
                 infraenv_namespace=settings.mce_infraenv_namespace or None,
+                infra_envs=CachedHubApi(
+                    adapters.hub, cache, ttl=settings.mce_infraenv_cache_seconds
+                ),
             )
             if adapters.hub is not None
             else None

@@ -81,6 +81,8 @@ class Day1Settings(BaseSettings):
     mce_tokens_file: Path = Path("/etc/wingman/mce-tokens/tokens")
     mce_ssl_verify: str = "true"
     mce_infraenv_namespace: str = ""
+    mce_infraenv_cache_seconds: float = Field(default=600.0, ge=0, le=86400)
+    """How long a hub's InfraEnv list is kept (ADR-0040); they rarely change. 0: not kept."""
     mce_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
 
     # ── Live status stream ───────────────────────────────────────────────────

@@ -9,7 +9,16 @@
 
 import { seedFromStructure, type FieldValue, type FieldValueMap, type FormValues } from "@/components/clusters/dynamic-variable-form";
 import { configProblems } from "@/components/machine-configs/config-list-editor";
-import { asEntries, cleanEntry, defaultConfigs, entryProblems, isNetworkEntry, NETWORK_CONFIG } from "@/lib/machine-configs";
+import {
+  asEntries,
+  cleanEntry,
+  defaultConfigs,
+  defaultHardware,
+  entryProblems,
+  isNetworkEntry,
+  NETWORK_CONFIG,
+  withHardware,
+} from "@/lib/machine-configs";
 import type { ConfigEntry, MachineConfigs, SpecEntry, TemplateField } from "@/types";
 
 /** The template inputs day1's locks know by name (`wingman_day1.domain.locks.LOCKABLE`). */
@@ -153,7 +162,8 @@ export function formEntries(entries: ConfigEntry[]): FieldValueMap[] {
 
 /** The configs a nodepool without the flavor's starts with: the rule's names, else the nodepool defaults (§1). */
 function startingConfigs(locks: FlavorLocks, catalog: MachineConfigs | undefined): FieldValueMap[] {
-  return formEntries(locks.rule ?? defaultConfigs(catalog));
+  // The rule's nm-conf leaves the hardware to the nodepool: it starts at the default (generic, when there is one)
+  return formEntries(withHardware(locks.rule ?? defaultConfigs(catalog), defaultHardware(catalog)));
 }
 
 /** A nodepool added in the form: the template's defaults, with the starting configs. */
@@ -380,4 +390,41 @@ export function placeProblems(lines: string[], fields: ReadonlySet<string>): Pla
     (placed.byField[field] ??= []).push(line);
   }
   return placed;
+}
+
+// ── The nodepool ratio (ADR-0040) ─────────────────────────────────────────────
+
+/**
+ * The ratio day1 enforces on create: the flavor's `nodepool_ratio`, unless it
+ * breaks the save rules (then it is a warning and day1 does not enforce it).
+ */
+export function sizingRatio(spec: SpecEntry | null): number[] {
+  const ratio = spec?.spec.day1.nodepool_ratio ?? [];
+  if (ratio.length === 0) return [];
+  return (spec?.warnings ?? []).some((w) => w.startsWith("nodepool_ratio")) ? [] : ratio;
+}
+
+/** `nodepools[1].replicas` → 1 when the ratio sizes that nodepool; else `null`. */
+export function sizedIndex(path: string, ratio: number[]): number | null {
+  const match = /^nodepools\[(\d+)\]\.replicas$/.exec(path);
+  const index = match ? Number(match[1]) : -1;
+  return index >= 0 && index < ratio.length ? index : null;
+}
+
+/** The size the form starts at: the flavor's preset replicas, when they follow the ratio; else 1. */
+export function startingSize(values: FormValues, ratio: number[]): number {
+  const pools = Array.isArray(values[NODEPOOLS]) ? values[NODEPOOLS] : [];
+  const replicas = ratio.map((_, i) => Number(isMap(pools[i]) ? (pools[i] as FieldValueMap).replicas : NaN));
+  const size = replicas[0] / ratio[0];
+  return Number.isInteger(size) && size >= 1 && replicas.every((r, i) => r === ratio[i] * size) ? size : 1;
+}
+
+/** `values` with each sized nodepool's replicas set to its ratio times `size`. */
+export function withSize(values: FormValues, ratio: number[], size: number): FormValues {
+  const pools = values[NODEPOOLS];
+  if (!Array.isArray(pools)) return values;
+  return {
+    ...values,
+    [NODEPOOLS]: pools.map((pool, i) => (i < ratio.length && isMap(pool) ? { ...(pool as FieldValueMap), replicas: ratio[i] * size } : pool)),
+  };
 }
