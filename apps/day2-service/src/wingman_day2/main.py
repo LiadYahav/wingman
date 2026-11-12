@@ -31,7 +31,7 @@ from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_core.settings import GitBackend
-from wingman_core.web.app_factory import create_base_app
+from wingman_core.web.app_factory import create_base_app, ready_once
 from wingman_day2.api.v1 import router
 from wingman_day2.api.v1.errors import register_day2_errors
 from wingman_day2.application.services import Day2Services
@@ -110,6 +110,8 @@ def create_app(
             await client.aclose()
 
     async def gitlab_ready() -> None:
+        # The token reads the sigs group and the day1 project. Asked only until it
+        # passes once (ADR-0054): a later outage is the requests' to report.
         await port.list_group_projects(config.day2.day2_sigs_group_path)
         await port.get_project(config.day2.day1_project)
 
@@ -124,7 +126,7 @@ def create_app(
             ttl=timedelta(hours=config.auth.jwt_expiry_hours),
             clock=clock,
         ),
-        readiness={"gitlab": gitlab_ready},
+        readiness={"gitlab": ready_once(gitlab_ready)},
         lifespan=lifespan,
     )
     app.state.day2 = Day2Services.build(

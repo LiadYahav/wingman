@@ -46,7 +46,7 @@ from wingman_core.settings import (
     RuntimeSettings,
     project_ref,
 )
-from wingman_core.web.app_factory import create_base_app
+from wingman_core.web.app_factory import create_base_app, ready_once
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.api.errors import register_day1_error_handlers
 from wingman_day1.api.v1 import approvals as approvals_api
@@ -668,6 +668,8 @@ def create_app(
     async def gitlab_ready() -> None:
         # Both projects: a wrong SPECS_GITLAB_PROJECT_ID (or a token without
         # access, which GitLab answers 404) must not look like an empty specs list.
+        # Asked only until it passes once (ADR-0054): a later outage is the
+        # requests' to report, so it does not take every pod out of the Service.
         await gitlab.get_project(day1_project)
         await gitlab.get_project(specs_project)
 
@@ -678,7 +680,7 @@ def create_app(
         api_prefix="/api/day1",
         metrics=metrics,
         session_tokens=session_tokens,
-        readiness={"gitlab": gitlab_ready},
+        readiness={"gitlab": ready_once(gitlab_ready)},
         lifespan=lifespan,
     )
     app.state.day1 = context
