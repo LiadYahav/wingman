@@ -7,7 +7,8 @@ service looked for a HostedCluster named after the full stem, which the
 chart never creates.
 
 A hub that cannot be read gives a status with ``error`` set, never an empty
-healthy one.
+healthy one. The hub reads are cached for a few seconds and shared by every
+user (ADR-0041), so many open pages are not many reads of the MCE.
 """
 
 from __future__ import annotations

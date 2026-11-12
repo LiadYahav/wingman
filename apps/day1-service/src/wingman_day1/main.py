@@ -101,7 +101,7 @@ SERVICE_TOKEN_TTL: Final = timedelta(minutes=5)
 RUNS_TTL_SECONDS: Final = 10.0
 """The longest an uninstall run's status is cached: the web polls a running one."""
 HUB_TTL_SECONDS: Final = 10.0
-"""The longest the nodes view caches an MCE read (live status reads the hub directly)."""
+"""The longest live status and the nodes view cache an MCE read (ADR-0041)."""
 FAKE_SERVER_SCAN_UI: Final = "http://server-scan.example"
 """Where the fake fleet's node links point when ``SERVER_SCAN_UI_URL`` is empty."""
 ROUTERS: Final = (
@@ -314,11 +314,17 @@ def build_context(
         machine_configs,
     )
     repos = {RepoKey.DAY1: day1, RepoKey.SPECS: specs_repo}
+    # One cache of hub reads for live status and the nodes view, shared by every user (ADR-0041)
+    hub = (
+        CachedHubApi(adapters.hub, cache, ttl=min(ttl, HUB_TTL_SECONDS))
+        if adapters.hub is not None
+        else None
+    )
     nodes: NodeService | None = None
-    if adapters.hub is not None:
+    if hub is not None:
         runs_ttl = min(ttl, RUNS_TTL_SECONDS)
         nodes = NodeService(
-            CachedHubApi(adapters.hub, cache, ttl=min(ttl, HUB_TTL_SECONDS)),
+            hub,
             cluster_service,
             inventory=(
                 CachedServerInventory(adapters.inventory, cache, ttl=ttl)
@@ -356,12 +362,12 @@ def build_context(
         nodes=nodes,
         status=(
             StatusService(
-                adapters.hub,
+                hub,
                 cluster_service,
                 naming=naming,
                 infraenv_namespace=settings.mce_infraenv_namespace or None,
             )
-            if adapters.hub is not None
+            if hub is not None
             else None
         ),
         webhook_secret=settings.gitlab_webhook_secret.get_secret_value() or None,

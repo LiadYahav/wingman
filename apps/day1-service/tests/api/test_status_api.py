@@ -114,6 +114,28 @@ async def test_bulk_status_has_an_entry_for_every_cluster(
     assert statuses["ocp4-prod-hawk-site1"]["error"].startswith("HubObjectNotFound:")
 
 
+async def test_many_open_pages_share_one_read_of_the_hub(
+    client: httpx.AsyncClient, auth: Auth, support: Any, hub: FakeHubApi
+) -> None:
+    calls: list[str] = []
+    hosted_cluster = hub.hosted_cluster
+
+    async def counting(*args: Any, **kwargs: Any) -> Any:
+        calls.append("hosted_cluster")
+        return await hosted_cluster(*args, **kwargs)
+
+    hub.hosted_cluster = counting  # ty: ignore[invalid-assignment]
+    body = {"clusters": [{"name": HERZI, "mce": MCE}]}
+    pages = await asyncio.gather(
+        *(
+            client.post("/api/day1/clusters/bulk-status", json=body, headers=auth(support.VIEWER))
+            for _ in range(5)
+        )
+    )
+    assert all(p.json()[HERZI]["error"] is None for p in pages)
+    assert calls == ["hosted_cluster"], "five people, one read of the MCE (ADR-0041)"
+
+
 async def test_infraenvs_list_and_an_unconfigured_mce(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
