@@ -11,6 +11,7 @@ only state to seed.
 
 from __future__ import annotations
 
+import copy
 import difflib
 import hashlib
 import itertools
@@ -26,6 +27,7 @@ from wingman_core.domain.errors import (
     RevisionConflictError,
 )
 from wingman_core.domain.git import (
+    AccessLevel,
     Branch,
     ChangeKind,
     Commit,
@@ -103,6 +105,10 @@ class InMemoryGitLab:
         self._by_path: dict[str, int] = {}
         self._moved: dict[str, int] = {}
         """Old paths of renamed projects; GitLab keeps them as redirects."""
+        self._project_members: dict[tuple[int, str], AccessLevel] = {}
+        """Project membership: (project id, username) to role."""
+        self._group_members: dict[tuple[str, str], AccessLevel] = {}
+        """Group membership: (group path, username) to role; inherited by every project below."""
         self._ids = itertools.count(1)
         self._sequence = itertools.count(1)
 
@@ -129,6 +135,7 @@ class InMemoryGitLab:
         record = _ProjectRecord(project=project)
         self._projects[project_id] = record
         self._by_path[path_with_namespace] = project_id
+        self._project_members[(project_id, self._username)] = AccessLevel.OWNER
         tree = {str(RepoPath(path)): content for path, content in (files or {}).items()}
         root = self._new_commit(record, parents=(), files=tree, origins=(), message=message)
         record.branches[default_branch] = root.id
@@ -166,6 +173,34 @@ class InMemoryGitLab:
         )
         return record.project
 
+    def set_access_level(
+        self, project_id: int, level: AccessLevel, *, username: str | None = None
+    ) -> None:
+        """Make ``username`` (default: this account) a project member at ``level``.
+
+        This account owns every project it creates; ``AccessLevel.NONE``
+        removes the membership, as removing a member in GitLab does.
+        """
+        self._project(project_id)
+        key = (project_id, username or self._username)
+        if level is AccessLevel.NONE:
+            self._project_members.pop(key, None)
+        else:
+            self._project_members[key] = level
+
+    def add_group_member(
+        self, group: str, level: AccessLevel, *, username: str | None = None
+    ) -> None:
+        """Make ``username`` (default: this account) a member of ``group`` at ``level``."""
+        self._group_members[(group.strip("/"), username or self._username)] = level
+
+    def as_account(self, username: str, *, email: str | None = None) -> InMemoryGitLab:
+        """The same GitLab, acting as another account (for access tests)."""
+        view = copy.copy(self)
+        view._username = username
+        view._email = email or f"{username}@example.invalid"
+        return view
+
     def snapshot(self, project_id: int, ref: str) -> dict[str, str]:
         """Every file at ``ref`` as ``{path: content}``; for assertions in tests."""
         record = self._project(project_id)
@@ -194,6 +229,17 @@ class InMemoryGitLab:
         if not found and not any(path.startswith(prefix) for path in self._by_path):
             raise NotFoundError(f"group {group} not found")
         return sorted(found, key=lambda p: p.path_with_namespace)
+
+    async def access_level(self, project_id: int) -> AccessLevel:
+        """See GitLabPort.access_level."""
+        path = self._project(project_id).project.path_with_namespace
+        parts = path.split("/")[:-1]
+        groups = ["/".join(parts[: i + 1]) for i in range(len(parts))]
+        levels = [
+            self._project_members.get((project_id, self._username), AccessLevel.NONE),
+            *(self._group_members.get((g, self._username), AccessLevel.NONE) for g in groups),
+        ]
+        return max(levels)
 
     async def read_file(self, project_id: int, path: RepoPath, ref: str) -> FileContent:
         """See GitLabPort.read_file."""
