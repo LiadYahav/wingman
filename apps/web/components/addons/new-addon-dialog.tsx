@@ -214,6 +214,7 @@ export function NewAddonDialog({
       body={body}
       method="post"
       url={(dryRun) => day2Api.createAddon(team, dryRun)}
+      withConfirmations={scope !== null}
       onOpened={onOpened}
     >
       {template.error && !data ? (

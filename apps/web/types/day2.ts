@@ -443,6 +443,8 @@ export interface CreateAddonBody {
   /** Also make it a fleet default in the same MR. */
   default_scope: FleetScope | null;
   default_values: Record<string, unknown>;
+  /** With `default_scope`: the dry run's `needs_confirmation` the user confirmed. */
+  confirm_changes?: string[];
   message: string | null;
 }
 
