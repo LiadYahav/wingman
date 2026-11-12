@@ -4,6 +4,28 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-12 — create from a flavor: a sizing ratio, a suggested name, letter sequences (ADR-0040).**
+PR #27 on `roiblum/feat-create-from-flavor` (built by a fork, reviewed here;
+API: `docs/notes/2026-11-12-create-from-flavor-api.md`). A flavor may size
+its nodepools by `spec.day1.nodepool_ratio` (`[1, 2, 1]`): the create form
+asks for one size and the file gets plain `replicas`. Creating from a
+flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>` from
+`GET /clusters/name-suggestion` (the next letter no cluster file or open
+create MR has; editable). A new cluster's sequence is one letter a-z; a
+name without one is still accepted. The MCE's InfraEnv list is cached
+(`MCE_INFRAENV_CACHE_SECONDS`, 600). Before it: 3.4.1 (#25, the add-on
+catalog beside a long selection) and 3.5.0 (#26, the EPG from
+segments-manager, ADR-0039; upgrade `docs/upgrade/3.4-to-3.5.md`).
+
+**Next:**
+- merge PR #27 (3.6.0; no operator steps);
+- the speed fork (`roiblum/perf-shared-cache`) reports why loading is slow
+  in production and what it fixed: review it and open its PR;
+- left for later in ADR-0040: drift, import and sync of a ratio, resizing an
+  existing cluster; whether a new cluster must have a letter;
+- after deploying, check the Nodes tab and the EPG on a real cluster;
+  flavors v2's "Left for later"; the architect's answers.
+
 **2026-11-12 — the cluster's EPG from segments-manager (ADR-0039), 3.5.0.**
 On `roiblum/feat-cluster-segment`. The cluster page's "HostedCluster &
 network" card shows VLAN and Segment from the cluster file (`vlanId`,

@@ -25,8 +25,10 @@ import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog
 import { useIsAdmin } from "@/stores/auth-store";
 import type {
   CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, NameSuggestion, OpenShiftVersions, OverrideableField,
-  SpecEntry, TemplateField,
+  ProvisionRun, SpecEntry, TemplateField,
 } from "@/types";
+import { ProvisionRunPanel } from "@/components/clusters/provision-run";
+import { isProvisionRun, useProvisioner } from "@/lib/provision";
 import {
   DynamicVariableForm, FlavorBadge, fieldInputClassName, type FieldInputContext, type FieldValue, type FormValues,
 } from "@/components/clusters/dynamic-variable-form";
@@ -827,9 +829,23 @@ export default function NewClusterPage() {
     onError: (error) => showFailure(error, "preview"),
   });
 
+  // What Create does here: Wingman's merge request, or the provision-cluster workflow (ADR-0042)
+  const { data: provisioner } = useProvisioner();
+  const byWorkflow = provisioner?.mode === "workflow";
+  const [startedRun, setStartedRun] = useState<ProvisionRun | null>(null);
+
   const createMutation = useMutation({
-    mutationFn: (request: CreateClusterRequest) => api.post<MRDetail>("/api/day1/clusters", request),
-    onSuccess: (mr) => {
+    mutationFn: (request: CreateClusterRequest) => api.post<MRDetail | ProvisionRun>("/api/day1/clusters", request),
+    onSuccess: (result) => {
+      setReviewed(null);
+      if (isProvisionRun(result)) {
+        toast.success(`provision-cluster started for ${result.cluster}`, {
+          description: "The workflow reserves the segment and opens the merge request; follow it here.",
+        });
+        setStartedRun(result);
+        return;
+      }
+      const mr = result;
       toast.success(`MR !${mr.iid} opened: ${mr.title}`, {
         description: "CI and the allocate-segment workflow add their keys to its branch; another admin approves it after.",
       });
@@ -849,6 +865,25 @@ export default function NewClusterPage() {
         <p className="text-lg font-semibold">Insufficient permissions</p>
         <p className="text-sm text-muted-foreground">Your role (viewer) does not have access to create clusters.</p>
         <Link href="/clusters" className={buttonVariants({ variant: "outline", size: "sm" })}>Back to clusters</Link>
+      </div>
+    );
+  }
+
+  // Workflow mode: the cluster has no file until the workflow's merge request is merged, so its run is shown here
+  if (startedRun) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
+        <ProvisionRunPanel started={startedRun} />
+        <div className="flex flex-wrap gap-2">
+          <Link href="/clusters" className={buttonVariants({ variant: "outline", size: "sm" })}>Back to clusters</Link>
+          <button
+            type="button"
+            onClick={() => setStartedRun(null)}
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            Create another cluster
+          </button>
+        </div>
       </div>
     );
   }
@@ -1598,10 +1633,14 @@ export default function NewClusterPage() {
         open={reviewed !== null}
         onOpenChange={(open) => { if (!open) setReviewed(null); }}
         title="Review: Create Cluster"
-        description="This is the file the merge request adds. After it is pushed, CI and the allocate-segment workflow commit mcConfigMap, vlanId and dhcp_values to the branch; approve once they have."
+        description={
+          byWorkflow
+            ? "This is the file the provision-cluster workflow receives. It reserves the segment, adds vlanId and dhcp_values, pushes the file on its own branch and opens the merge request; a person merges it."
+            : "This is the file the merge request adds. After it is pushed, CI and the allocate-segment workflow commit mcConfigMap, vlanId and dhcp_values to the branch; approve once they have."
+        }
         onConfirm={() => reviewed && createMutation.mutate(reviewed.request)}
         isPending={createMutation.isPending}
-        confirmLabel="Confirm — Create Cluster MR"
+        confirmLabel={byWorkflow ? "Confirm — Start provision-cluster" : "Confirm — Create Cluster MR"}
       >
         {reviewed && (
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3 text-sm font-mono">

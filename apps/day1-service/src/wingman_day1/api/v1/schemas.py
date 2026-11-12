@@ -42,7 +42,7 @@ from wingman_day1.domain.servers import ServerRow
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata, rule_problems
 from wingman_day1.domain.status import LiveStatus
 from wingman_day1.domain.value_drift import ValueDrift
-from wingman_day1.domain.workflows import WorkflowRun
+from wingman_day1.domain.workflows import ProvisionRun, WorkflowRun
 
 MAX_FILE_BYTES = 256 * 1024
 
@@ -1268,6 +1268,40 @@ class WorkflowRunOut(BaseModel):
     def of(cls, run: WorkflowRun) -> WorkflowRunOut:
         """From a run."""
         return cls(workflow_id=run.workflow_id, status=run.status, phase=run.phase, error=run.error)
+
+
+class ProvisionRunOut(BaseModel):
+    """A provision-cluster run (ADR-0042): the workflow's own status, phase and merge request."""
+
+    workflow_id: str
+    cluster: str
+    """The cluster file's stem the run provisions."""
+    status: str
+    phase: str | None
+    """The workflow's own word (``awaiting-merge``); Wingman keeps no list of them."""
+    error: str | None
+    merge_request_url: str | None
+    """The merge request the workflow opened, once it has."""
+    merge_request_state: str | None
+
+    @classmethod
+    def of(cls, run: ProvisionRun) -> ProvisionRunOut:
+        """From a run."""
+        return cls(
+            workflow_id=run.workflow_id,
+            cluster=run.cluster,
+            status=run.status,
+            phase=run.phase,
+            error=run.error,
+            merge_request_url=run.merge_request_url,
+            merge_request_state=run.merge_request_state,
+        )
+
+
+class ProvisionerOut(BaseModel):
+    """``GET /clusters/provisioner``: what Create does in this deployment (ADR-0042)."""
+
+    mode: Literal["merge-request", "workflow"]
 
 
 class DeleteWorkflowOut(BaseModel):

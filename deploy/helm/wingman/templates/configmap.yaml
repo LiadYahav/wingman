@@ -27,6 +27,12 @@ data:
   # production's ApplicationSet strips "ocp4-"; the GitHub sandbox keeps it ("").
   DAY1_CLUSTER_NAME_STRIP_PREFIX: {{ .Values.day1.clusterNameStripPrefix | quote }}
   DAY1_CACHE_TTL_SECONDS: {{ .Values.day1.cacheTtlSeconds | quote }}
+  # How a create is proposed (ADR-0042): Wingman's merge request, or the
+  # platform's provision-cluster workflow (which needs workflows.url).
+  {{- if and (eq (.Values.day1.provisioner | default "merge-request") "workflow") (not (and .Values.workflows .Values.workflows.url)) }}
+  {{- fail "day1.provisioner workflow needs workflows.url: creates start the provision-cluster workflow there" }}
+  {{- end }}
+  DAY1_PROVISIONER: {{ .Values.day1.provisioner | default "merge-request" | quote }}
   DAY2_SERVICE_URL: "http://wingman-day2:8002"
 
   # ── day2 ─────────────────────────────────────────────────────────────────────

@@ -167,7 +167,7 @@ class HttpUninstallWorkflow:
                 f"a gateway timed out waiting for the orchestrator to start the uninstall of "
                 f"{server_name}: it may have started. {CHECK_FIRST}"
             )
-        detail = _detail(response)
+        detail = orchestrator_detail(response)
         if 400 <= status < 500:
             raise WorkflowRefusedError(
                 f"the orchestrator refused the uninstall of {server_name} ({status}){detail}"
@@ -222,7 +222,7 @@ def _run(raw: JSON) -> WorkflowRun:
     )
 
 
-def _detail(response: httpx.Response) -> str:
+def orchestrator_detail(response: httpx.Response) -> str:
     """The orchestrator's own ``detail``, when it is text, as ``": <detail>"``."""
     try:
         detail = response.json().get("detail")

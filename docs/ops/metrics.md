@@ -38,7 +38,7 @@ Operations of the other dependencies (day1):
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons` |
 | `server_scan` | `list_server_rows`, `get_server` |
-| `workflows` | `list_runs`, `get_run`, `start_uninstall` |
+| `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision` |
 | `segments_manager` | `get_segment` |
 
 ## Reading the GitLab outcomes
@@ -62,6 +62,11 @@ Operations of the other dependencies (day1):
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the
   orchestrator's "already uninstalling"; `rejected` is a body it refused.
+- `workflows` `start_provision` is a create that starts the provision-cluster
+  workflow (`DAY1_PROVISIONER=workflow`, ADR-0042). `ambiguous`: sent, answer
+  lost; look at the cluster's provision run before creating it again.
+  `conflict`: a run for the cluster is already going. `rejected`: the
+  orchestrator refused the name or the file (its 422).
 - `segments_manager` `get_segment` is one cluster's segment, read for its
   EPG (ADR-0039). A segment segments-manager does not have is `ok`: that is
   an answer, shown as a warning. `unavailable` means it could not be reached

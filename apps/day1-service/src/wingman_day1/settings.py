@@ -10,7 +10,7 @@ configuration that would let anyone in, or let nobody in, refuses to start.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final, Self
+from typing import Final, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, AnyHttpUrl, Field, SecretStr, field_validator, model_validator
@@ -101,6 +101,12 @@ class Day1Settings(BaseSettings):
     workflows_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     day1_fake_fleet: bool = False
 
+    # ── How a create is proposed (ADR-0042) ──────────────────────────────────
+    # merge-request (default): Wingman's own commit and merge request. workflow:
+    # start the platform's provision-cluster workflow, which opens the merge
+    # request itself; needs WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development).
+    day1_provisioner: Literal["merge-request", "workflow"] = "merge-request"
+
     # ── segments-manager: a cluster's EPG, checked against Git (ADR-0039) ────
     # Off by default. SEGMENTS_MANAGER_URL is its API (reads need no token);
     # day1 only reads one segment, never writes. SEGMENTS_MANAGER_UI_URL is
@@ -146,6 +152,20 @@ class Day1Settings(BaseSettings):
             raise ValueError(
                 "WORKFLOWS_API_URL needs SERVER_SCAN_URL: an uninstall checks the server "
                 "in server-scan before it starts"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _workflow_creates_have_an_orchestrator(self) -> Self:
+        """Starting provision-cluster needs the orchestrator; without it no create could run."""
+        if (
+            self.day1_provisioner == "workflow"
+            and not self.workflows_api_url
+            and not self.day1_fake_fleet
+        ):
+            raise ValueError(
+                "DAY1_PROVISIONER=workflow needs WORKFLOWS_API_URL: creates start the "
+                "provision-cluster workflow there"
             )
         return self
 
