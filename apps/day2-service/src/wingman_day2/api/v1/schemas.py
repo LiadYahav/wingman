@@ -17,19 +17,31 @@ from wingman_core.application.approvals import PendingChange, describe
 from wingman_core.domain.git import Commit, FileChange
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.web.schemas import FileDiffOut
+from wingman_day2.application.apps import LoadedLayer
 from wingman_day2.application.authoring import (
     SCOPE_LABELS,
+    SCOPE_NOUNS,
     AddonTemplate,
     Adoption,
     AuthoringPlan,
     AuthoringResult,
+    DestinationImpact,
     FleetDefault,
+    KeyChange,
     NewAddon,
     TeamDefaultEdit,
 )
 from wingman_day2.application.catalog import CatalogEntry, ChartValues
 from wingman_day2.application.changes import ChangeResult
 from wingman_day2.application.installed import ClusterCharts, InstalledChart
+from wingman_day2.application.operators import (
+    DestinationView,
+    ExclusionsView,
+    OcpVersionPin,
+    OperatorSummary,
+    OperatorView,
+    ScopeView,
+)
 from wingman_day2.application.preview import ValuesPreview
 from wingman_day2.application.topology import ClusterSummary
 from wingman_day2.domain.clusters import DefaultsScope
@@ -139,6 +151,7 @@ class CreateAddonBody(_Input):
     default_scope: DefaultsScope | None = None
     default_values: dict[str, Any] = Field(default_factory=dict)
     confirm_changes: list[str] = Field(default_factory=list)
+    expected_digest: str | None = Field(default=None, description="The preview's digest.")
     message: str | None = None
 
     def spec(self, team: str) -> NewAddon:
@@ -179,6 +192,8 @@ class UpdateTeamDefaultBody(_Input):
     ignore_differences: list[dict[str, Any]] | None = None
     values: dict[str, Any] | None = Field(default=None, description="Absent or null: unchanged.")
     last_commit_id: str | None = None
+    confirm_changes: list[str] = Field(default_factory=list)
+    expected_digest: str | None = Field(default=None, description="The preview's digest.")
     message: str | None = None
 
     def edit(self) -> TeamDefaultEdit:
@@ -200,6 +215,7 @@ class MakeDefaultBody(_Input):
     values: dict[str, Any] = Field(default_factory=dict)
     sync: SyncIn | None = Field(default=None, description="null: the team default's.")
     confirm_changes: list[str] = Field(default_factory=list)
+    expected_digest: str | None = Field(default=None, description="The preview's digest.")
     message: str | None = None
 
 
@@ -209,7 +225,52 @@ class UpdateFleetDefaultBody(_Input):
     values: dict[str, Any] | None = None
     sync: SyncIn | None = Field(default=None, description="null: back to the team default's.")
     last_commit_id: str | None = None
+    confirm_changes: list[str] = Field(default_factory=list)
+    expected_digest: str | None = Field(default=None, description="The preview's digest.")
     message: str | None = None
+
+
+class _Confirmed(_Input):
+    last_commit_id: str | None = Field(default=None, description="The file's, as read.")
+    confirm_changes: list[str] = Field(default_factory=list)
+    expected_digest: str | None = Field(default=None, description="The preview's digest.")
+    message: str | None = None
+
+
+class ExclusionsBody(_Confirmed):
+    """The destinations of a scope a fleet default skips: the full set, by cluster id."""
+
+    excluded: list[str]
+
+
+class DestinationValuesBody(_Confirmed):
+    """A destination's ``values-<name>.yaml`` of a fleet default; null or {} deletes it."""
+
+    values: dict[str, Any] | None
+
+
+class DeployOverrideIn(_Input):
+    """The keys a destination's own deploy config sets (null: not set)."""
+
+    target_revision: str | None = None
+    repourl: str | None = None
+    path: str | None = None
+    project_namespace: str | None = None
+
+    def keys(self) -> dict[str, object | None]:
+        """As deploy-config keys."""
+        return {
+            TARGET_REVISION: self.target_revision,
+            REPOURL: self.repourl,
+            PATH: self.path,
+            PROJECT_NAMESPACE: self.project_namespace,
+        }
+
+
+class DestinationDeployBody(_Confirmed):
+    """A destination's own deploy config (the carve-out); null takes it back into the default."""
+
+    deploy: DeployOverrideIn | None
 
 
 class ApproveBody(_Input):
@@ -929,12 +990,52 @@ class PlannedFileOut(BaseModel):
 
 
 class KeyChangeOut(BaseModel):
-    """One leaf of a cluster's effective deploy config or values that changes."""
+    """One leaf of a destination's effective deploy config or values that changes.
+
+    ``after_null``: a Helm ``null``, which deletes the key and the chart's own default.
+    """
 
     stack: str
     key: str
     before: Any
     after: Any
+    after_null: bool = False
+
+    @classmethod
+    def of(cls, change: KeyChange) -> KeyChangeOut:
+        """From the application value."""
+        return cls(
+            stack=change.stack,
+            key=change.key,
+            before=change.before,
+            after=change.after,
+            after_null=change.after_null,
+        )
+
+
+class ImpactOut(BaseModel):
+    """What an authoring MR does to one destination's app of the chart (ADR-0053)."""
+
+    cluster: str
+    name: str
+    kind: str
+    effect: str
+    app_name: str
+    changes: list[KeyChangeOut]
+    orphaned: bool
+
+    @classmethod
+    def of(cls, impact: DestinationImpact) -> ImpactOut:
+        """From the application value."""
+        return cls(
+            cluster=impact.ref.id,
+            name=impact.ref.name,
+            kind=str(impact.ref.kind),
+            effect=str(impact.effect),
+            app_name=impact.app_name,
+            changes=[KeyChangeOut.of(c) for c in impact.changes],
+            orphaned=impact.orphaned,
+        )
 
 
 class MovedOut(BaseModel):
@@ -955,6 +1056,7 @@ class AdoptionOut(BaseModel):
     deleted: list[str]
     gitkeep: str | None
     changes: list[KeyChangeOut]
+    exclusion_removed: bool
 
     @classmethod
     def of(cls, adoption: Adoption) -> AdoptionOut:
@@ -965,10 +1067,8 @@ class AdoptionOut(BaseModel):
             moved=[MovedOut(from_=str(a), to=str(b)) for a, b in adoption.moved],
             deleted=[str(p) for p in adoption.deleted],
             gitkeep=str(adoption.gitkeep) if adoption.gitkeep else None,
-            changes=[
-                KeyChangeOut(stack=c.stack, key=c.key, before=c.before, after=c.after)
-                for c in adoption.changes
-            ],
+            changes=[KeyChangeOut.of(c) for c in adoption.changes],
+            exclusion_removed=adoption.exclusion_removed,
         )
 
 
@@ -978,7 +1078,10 @@ class _AuthoringFields(BaseModel):
     scope: str | None
     reach: list[str]
     adopted: list[AdoptionOut]
+    impact: list[ImpactOut]
+    excluded: list[str]
     needs_confirmation: list[str]
+    digest: str
     warnings: list[FindingOut]
     notes: list[str]
 
@@ -990,7 +1093,10 @@ class _AuthoringFields(BaseModel):
             "scope": str(plan.scope) if plan.scope else None,
             "reach": [ref.id for ref in plan.reach],
             "adopted": [AdoptionOut.of(a) for a in plan.adopted],
+            "impact": [ImpactOut.of(i) for i in plan.impact],
+            "excluded": [ref.id for ref in plan.excluded],
             "needs_confirmation": plan.needs_confirmation,
+            "digest": plan.digest,
             "warnings": findings(plan.findings),
             "notes": list(plan.notes),
         }
@@ -1038,4 +1144,263 @@ class AuthoringChangeOut(MRDetailOut, _AuthoringFields):
             **base.model_dump(),
             files=[FileChangeOut.of(c) for c in plan.changes],
             **_AuthoringFields.fields_of(plan),
+        )
+
+
+# ── Operators (ADR-0053) ────────────────────────────────────────────────────
+
+
+class FileOut(BaseModel):
+    """A file of the team repo; ``last_commit_id`` is the commit it was read at (null: absent)."""
+
+    path: str
+    exists: bool
+    text: str | None
+    values: dict[str, Any]
+    last_commit_id: str | None
+    problem: str | None
+
+    @classmethod
+    def of(cls, loaded: LoadedLayer) -> FileOut:
+        """From a loaded file."""
+        return cls(
+            path=str(loaded.layer.path),
+            exists=loaded.exists,
+            text=loaded.file.content if loaded.file else None,
+            values=loaded.values,
+            last_commit_id=loaded.file.last_commit_id if loaded.file else None,
+            problem=loaded.problem.message if loaded.problem else None,
+        )
+
+
+class OcpVersionOut(BaseModel):
+    """An ``ocp-versions/<v>/`` pin of an operator."""
+
+    version: str
+    target_revision: str | None
+    deploy_config: FileOut
+    values_file: FileOut
+
+    @classmethod
+    def of(cls, pin: OcpVersionPin) -> OcpVersionOut:
+        """From the application value."""
+        return cls(
+            version=pin.version,
+            target_revision=pin.target_revision,
+            deploy_config=FileOut.of(pin.deploy),
+            values_file=FileOut.of(pin.values),
+        )
+
+
+class ExclusionsOut(BaseModel):
+    """A scope's ``exclusions.yaml``, as it concerns one operator."""
+
+    path: str
+    exists: bool
+    names: list[str]
+    unknown_names: list[str]
+    editable: bool
+    problem: str | None
+    last_commit_id: str | None
+
+    @classmethod
+    def of(cls, view: ExclusionsView) -> ExclusionsOut:
+        """From the application value."""
+        file = view.file.file
+        return cls(
+            path=str(view.file.layer.path),
+            exists=view.file.exists,
+            names=list(view.names),
+            unknown_names=list(view.unknown_names),
+            editable=view.editable,
+            problem=view.problem,
+            last_commit_id=file.last_commit_id if file else None,
+        )
+
+
+class ScopeDestinationOut(BaseModel):
+    """One destination of a scope and how the operator's default stands there."""
+
+    id: str
+    name: str
+    kind: str
+    site: str
+    env: str
+    mce: str
+    ocp_version: str | None
+    renders: bool
+    state: str
+    deployed: bool
+    app_name: str | None
+    override: FileOut | None
+    override_shared_with: list[str]
+    own_folder: str | None
+    own_deploy: FileOut | None
+
+    @classmethod
+    def of(cls, view: DestinationView) -> ScopeDestinationOut:
+        """From the application value."""
+        ref = view.ref
+        return cls(
+            id=ref.id,
+            name=ref.name,
+            kind=str(ref.kind),
+            site=ref.site,
+            env=ref.env,
+            mce=ref.mce,
+            ocp_version=view.ocp_version,
+            renders=view.renders,
+            state=str(view.state),
+            deployed=view.deployed,
+            app_name=view.app_name,
+            override=FileOut.of(view.override) if view.override else None,
+            override_shared_with=[r.id for r in view.shared_with],
+            own_folder=str(view.own_folder) if view.own_folder else None,
+            own_deploy=FileOut.of(view.own_deploy) if view.own_deploy else None,
+        )
+
+
+class UnregisteredOut(BaseModel):
+    """A destination of the scope that day1 or another team knows, and this team does not."""
+
+    id: str
+    name: str
+    site: str
+    env: str
+    mce: str
+
+
+class EnvFileOut(BaseModel):
+    """A fleet default's ``values-<env>.yaml``."""
+
+    env: str
+    file: FileOut
+
+
+class ScopePanelOut(BaseModel):
+    """One scope of an operator: its default there, if any, and every destination."""
+
+    scope: str
+    label: str
+    noun: str
+    is_default: bool
+    folder: str
+    values_file: FileOut
+    deploy_config: FileOut
+    sync: SyncOut
+    sync_overridden: bool
+    env_files: list[EnvFileOut]
+    exclusions: ExclusionsOut | None
+    destinations: list[ScopeDestinationOut]
+    unregistered: list[UnregisteredOut]
+    last_commit_id: str | None
+
+    @classmethod
+    def of(cls, view: ScopeView) -> ScopePanelOut:
+        """From the application value."""
+        return cls(
+            scope=str(view.scope),
+            label=SCOPE_LABELS[view.scope],
+            noun=SCOPE_NOUNS[view.scope],
+            is_default=view.is_default,
+            folder=str(view.folder),
+            values_file=FileOut.of(view.values),
+            deploy_config=FileOut.of(view.deploy),
+            sync=SyncOut.of(view.sync),
+            sync_overridden=view.sync_overridden,
+            env_files=[EnvFileOut(env=env, file=FileOut.of(f)) for env, f in view.env_files],
+            exclusions=ExclusionsOut.of(view.exclusions) if view.exclusions else None,
+            destinations=[ScopeDestinationOut.of(d) for d in view.destinations],
+            unregistered=[
+                UnregisteredOut(id=r.id, name=r.name, site=r.site, env=r.env, mce=r.mce)
+                for r in view.unregistered
+            ],
+            last_commit_id=view.last_commit_id,
+        )
+
+
+class OperatorOut(BaseModel):
+    """One operator of a team: its files, its OCP-version pins, one panel per scope."""
+
+    team: str
+    name: str
+    in_catalog: bool
+    writable: bool
+    read_only_reason: str | None
+    catalog: CatalogEntryOut | None
+    deploy_config: FileOut
+    values_file: FileOut
+    ocp_versions: list[OcpVersionOut]
+    scopes: list[ScopePanelOut]
+    warnings: list[FindingOut]
+
+    @classmethod
+    def of(cls, view: OperatorView) -> OperatorOut:
+        """From the application value."""
+        return cls(
+            team=view.team,
+            name=view.chart,
+            in_catalog=view.in_catalog,
+            writable=view.access.writable,
+            read_only_reason=view.access.reason,
+            catalog=CatalogEntryOut.of(view.catalog, view.access) if view.catalog else None,
+            deploy_config=FileOut.of(view.deploy),
+            values_file=FileOut.of(view.values),
+            ocp_versions=[OcpVersionOut.of(p) for p in view.ocp_versions],
+            scopes=[ScopePanelOut.of(s) for s in view.scopes],
+            warnings=findings(view.findings),
+        )
+
+
+class OperatorDefaultOut(BaseModel):
+    """A scope an operator is a default on, and its reach there."""
+
+    scope: str
+    label: str
+    reach: int
+    excluded: int
+
+
+class OperatorSummaryOut(BaseModel):
+    """One line of a team's operators list."""
+
+    team: str
+    name: str
+    in_catalog: bool
+    repourl: str
+    target_revision: str
+    sync: SyncOut
+    ocp_versions: list[str]
+    defaults: list[OperatorDefaultOut]
+    installed_on: int
+    warnings: int
+    writable: bool
+    read_only_reason: str | None
+
+    @classmethod
+    def of(cls, summary: OperatorSummary) -> OperatorSummaryOut:
+        """From the application value."""
+        entry = summary.catalog
+        sync = sync_settings(entry.deploy.values.get(SYNC_POLICY)) if entry else SyncSettings()
+        return cls(
+            team=summary.team,
+            name=summary.chart,
+            in_catalog=entry is not None,
+            repourl=entry.repo_url if entry else "",
+            target_revision=entry.team_revision if entry else "",
+            sync=SyncOut.of(sync),
+            ocp_versions=list(summary.ocp_versions),
+            defaults=[
+                OperatorDefaultOut(
+                    scope=str(d.scope),
+                    label=SCOPE_LABELS[d.scope],
+                    reach=d.reach,
+                    excluded=d.excluded,
+                )
+                for d in summary.defaults
+            ],
+            installed_on=summary.installed_on,
+            warnings=summary.warnings,
+            writable=summary.access.writable,
+            read_only_reason=summary.access.reason,
         )

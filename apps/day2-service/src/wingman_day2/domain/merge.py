@@ -124,3 +124,17 @@ def merge_values(
         user, user_prov = _merge_maps(user, user_prov, values, label)
     merged, provenance = _coalesce(user, user_prov, chart_defaults, chart_label)
     return MergeResult(merged, provenance)
+
+
+def merge_layers(layers: Sequence[tuple[str, Mapping[str, object]]]) -> MergeResult:
+    """Helm's first step only: the ``-f`` files merged in order, ``null`` kept as a value.
+
+    What a change does to a destination, chart defaults aside: a ``null`` here
+    is a layer deleting the chart's own default for that key, which the full
+    merge (with no chart defaults to delete) would hide.
+    """
+    values: Values = {}
+    provenance: Provenance = {}
+    for label, layer in layers:
+        values, provenance = _merge_maps(values, provenance, layer, label)
+    return MergeResult(values, provenance)

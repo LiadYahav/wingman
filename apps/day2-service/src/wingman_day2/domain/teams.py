@@ -7,10 +7,10 @@ Without it, the team is read-only in Wingman (ADR-0043).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from wingman_core.domain.git import AccessLevel, Project, RepoPath
+from wingman_core.domain.git import AccessLevel, ChangeKind, FileChange, Project, RepoPath
 from wingman_day2.domain import layout
 from wingman_day2.domain.clusters import DefaultsScope
 from wingman_day2.domain.tree import RepoTree
@@ -80,6 +80,25 @@ class TeamRepo:
     team: str
     tree: RepoTree
     files: Mapping[str, str] = field(default_factory=dict)
+
+    def with_changes(self, changes: Iterable[FileChange]) -> TeamRepo:
+        """The repo after ``changes``: its tree, and its control files' text as committed."""
+        changes = list(changes)
+        tree = self.tree.with_changes(changes)
+        files = dict(self.files)
+        for change in changes:
+            path = str(change.path)
+            if change.kind is ChangeKind.DELETE:
+                files.pop(path, None)
+                continue
+            moved = None
+            if change.previous_path is not None:
+                moved = files.pop(str(change.previous_path), None)
+            content = change.content if change.content is not None else moved
+            if content is not None:
+                files[path] = content
+        wanted = {str(p) for p in control_files(tree)}
+        return TeamRepo(self.team, tree, {k: v for k, v in files.items() if k in wanted})
 
 
 def control_files(tree: RepoTree) -> list[RepoPath]:
