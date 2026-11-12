@@ -162,9 +162,12 @@ MR. Both carry the 3.8 fields (`action`, `chart`, `scope`, `reach`,
 ```
 
 - `changes` compare the effective deploy config and workload values
-  **before and after, chart defaults aside**, key by key. A `values` change
-  whose `after` is `null` is a Helm `null`: it deletes the chart's own
-  default for that key (the web says so).
+  **before and after, chart defaults aside**, key by key. Each change is
+  `{stack, key, before, after, after_null}`: `after_null: true` is a Helm
+  `null`, which deletes the chart's own default for that key (the web says
+  so); a key no layer sets any more has `after: null` and
+  `after_null: false`. The same shape is in `adopted[].changes`, and an
+  adopted item has `exclusion_removed`.
 - `needs_confirmation` lists every `removed` destination and every `changed`
   one, plus (as in 3.8) adopted clusters whose move changes something.
 - **Confirming**: the request repeats `needs_confirmation` in
@@ -196,8 +199,10 @@ created when absent).
   (`added`); the new Application adopts what is still running.
 - Names in the entry that are no destination of the team are kept as written
   (and stay a lint error, `exclusions-unknown-target`).
-- 422 `rule`: `exclusions-hub` (the hub has none), `exclusion-target` (an id
-  that is not a registered destination of that scope), `own-deploy`
+- 422 `rule`: `hub-override` (the hub has none), `destination-unknown` (an id
+  that is not a registered destination of that scope), `exclusion-shared`
+  (two destinations of the scope share the name: they are excluded together
+  or not at all, `details.clusters`), `own-deploy`
   (including a destination that has its own deploy config: remove that
   instead), `exclusions-layout` (the file cannot be edited exactly; the
   detail says why), `no-change`. 404 when the operator is not a default

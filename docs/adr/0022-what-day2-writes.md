@@ -1,7 +1,7 @@
 # ADR-0022: day2 writes the minimum per change, never pins a version per cluster by default, and says that removal orphans
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0053 (Wingman edits `exclusions.yaml` in place)
 
 ## Context
 
