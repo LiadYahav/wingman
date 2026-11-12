@@ -23,7 +23,9 @@ export type ErrorCode =
   /** 409: neither a Machine of the cluster nor server-scan places the server in it (an uninstall). */
   | "NODE_NOT_IN_CLUSTER"
   /** 409: the orchestrator already runs an uninstall of this server. */
-  | "UNINSTALL_ALREADY_RUNNING";
+  | "UNINSTALL_ALREADY_RUNNING"
+  /** 403: a day2 team has not given Wingman's GitLab account write access to its project (ADR-0043). */
+  | "TEAM_READ_ONLY";
 
 /** One entry of FastAPI's own request validation (`details.errors`). */
 export interface RequestFieldError {
