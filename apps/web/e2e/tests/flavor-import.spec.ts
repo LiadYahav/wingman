@@ -2,8 +2,10 @@
  * The flavor page (mocked): presets and locks on the overview, the flavor's
  * warnings, Delete refused while clusters follow it, and "Add existing
  * clusters" (ADR-0037): pick with filters, a preview with every status, a
- * re-link only with its checkbox, the import request, and a stale preview.
- * Shapes follow docs/notes/2026-11-08-flavors-v2-api-changes.md §5, §6, §9-§11.
+ * re-link only with its checkbox, the import request, a stale preview, and
+ * the result: one MR per cluster with the clusters whose MR did not open
+ * (ADR-0044). Shapes follow docs/notes/2026-11-08-flavors-v2-api-changes.md
+ * §5, §6, §9-§11 and docs/notes/2026-11-12-import-mr-per-cluster.md.
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
@@ -12,8 +14,11 @@ import type {
   ClusterDrift,
   ClusterStatus,
   ImportCandidate,
+  ImportFailure,
   ImportPreview,
   ImportRequest,
+  ImportResult,
+  ImportedCluster,
   SpecCluster,
   SpecDetail,
   ValueDrift,
@@ -164,6 +169,26 @@ const PREVIEW: ImportPreview = {
   ],
 };
 
+/** The import's answer: each picked cluster's MR (ADR-0044). */
+function opened(name: string, iid: number): ImportedCluster {
+  const c = byName(name);
+  return {
+    name: c.name, site: c.site, mce: c.mce, path: c.path,
+    merge_request: mockMR({
+      iid,
+      title: `[Wingman/Day1] Import cluster ${name} into spec ${FLAVOR} v1.0.0`,
+      web_url: `https://gitlab.example.com/gitops-day1/platform-config/-/merge_requests/${iid}`,
+      source_branch: `platform/qa-admin/import-cluster-${name}-20261112T101500`,
+      labels: ["day1", "import", "wingman"],
+    }),
+  };
+}
+
+function notOpened(name: string, code: ImportFailure["code"], detail: string): ImportFailure {
+  const c = byName(name);
+  return { name: c.name, site: c.site, mce: c.mce, path: c.path, code, detail };
+}
+
 const FOLLOWERS: SpecCluster[] = [
   { name: "ocp4-prod-owl-site1", site: "site1", mce: MCE1, phase: "Unknown", state: "drifted", is_drifted: true, error: null },
   { name: "ocp4-prod-herzi-site1", site: "site1", mce: MCE1, phase: "Unknown", state: "in_sync", is_drifted: false, error: null },
@@ -192,6 +217,8 @@ async function open(
 }
 
 const sheet = (page: Page) => page.getByTestId("import-sheet");
+const openedRow = (page: Page, name: string) => page.getByTestId(`import-opened-${name}`);
+const failedRow = (page: Page, name: string) => page.getByTestId(`import-failed-${name}`);
 const pickRow = (page: Page, name: string) => page.getByTestId(`import-pick-${name}`);
 const candidateCard = (page: Page, name: string) => page.getByTestId(`import-candidate-${name}`);
 
@@ -469,19 +496,26 @@ test.describe("Add existing clusters: preview and import", () => {
     await expect(sheet(page).getByTestId("import-summary")).toHaveText("1 to link · 3 left out");
   });
 
-  test("a cluster on another flavor is imported only when moved, and the request carries the preview", async ({ page }) => {
+  test("a cluster on another flavor is imported only when moved, and each cluster gets its own MR", async ({ page }) => {
     const previews: unknown[] = [];
     let sent: ImportRequest | null = null;
+    const result: ImportResult = {
+      spec_name: FLAVOR,
+      spec_version: "1.0.0",
+      merge_requests: [opened("ocp4-prod-heron-site1", 21), opened("ocp4-prod-lark-site1", 22)],
+      failed: [],
+    };
     await open(page, {
       routes: async (p) => {
         await previewRoute(previews)(p);
         await p.route(`${base}/import`, async (r) => {
           sent = r.request().postDataJSON();
-          await json(r, mockMR({ iid: 21, title: `[Wingman/Day1] Import spec ${FLAVOR} into 2 clusters` }), 201);
+          await json(r, result, 201);
         });
       },
     });
     await previewFour(page, previews);
+    await expect(sheet(page).getByTestId("import-explainer")).toContainText("one day1 MR per cluster");
 
     const importButton = sheet(page).getByRole("button", { name: /^Import \d+ clusters?$/ });
     await expect(importButton).toHaveText("Import 1 cluster");
@@ -490,8 +524,21 @@ test.describe("Add existing clusters: preview and import", () => {
     await expect(importButton).toHaveText("Import 2 clusters");
     await importButton.click();
 
-    await expect(page.getByText("Import MR !21 opened")).toBeVisible();
-    await expect(sheet(page)).toHaveCount(0);
+    // The result step: one MR per cluster, each with its review page and its GitLab link
+    await expect(sheet(page).getByRole("listitem").filter({ hasText: "Merge requests" })).toHaveAttribute("aria-current", "step");
+    await expect(sheet(page).getByTestId("import-result-heading")).toHaveText("2 merge requests opened · waiting for approval");
+    await expect(sheet(page).getByTestId("import-result")).toContainText("each is approved, merged or rejected on its own");
+    for (const [name, iid] of [["ocp4-prod-heron-site1", 21], ["ocp4-prod-lark-site1", 22]] as const) {
+      const row = openedRow(page, name);
+      await expect(row).toContainText(`!${iid} [Wingman/Day1] Import cluster ${name} into spec ${FLAVOR} v1.0.0`);
+      await expect(row.getByRole("link", { name: `Review !${iid} for ${name}` })).toHaveAttribute("href", `/approvals/day1-${iid}`);
+      await expect(row.getByRole("link", { name: `Open !${iid} for ${name} in GitLab` })).toHaveAttribute(
+        "href", `https://gitlab.example.com/gitops-day1/platform-config/-/merge_requests/${iid}`
+      );
+    }
+    await expect(sheet(page).getByTestId("import-failed")).toHaveCount(0);
+    await expect(sheet(page).getByTestId("import-summary")).toHaveText("2 opened");
+
     const byCandidate = (name: string) => PREVIEW.clusters.find((c) => c.name === name)!;
     expect(sent).toEqual({
       spec_version: "1.0.0",
@@ -500,6 +547,84 @@ test.describe("Add existing clusters: preview and import", () => {
         { name: "ocp4-prod-lark-site1", site: "site1", mce: MCE1, last_commit_id: byCandidate("ocp4-prod-lark-site1").last_commit_id, relink: true },
       ],
     });
+
+    await sheet(page).getByRole("button", { name: "Done" }).click();
+    await expect(sheet(page)).toHaveCount(0);
+  });
+
+  test("the clusters whose MR did not open are listed apart, each with what it means", async ({ page }) => {
+    const previews: unknown[] = [];
+    // heron, hawk and kite are ready here; lark stays on its flavor
+    const ready = (name: string) => candidate(name, { status: "ready", linked_spec: null, problems: [] });
+    const preview: ImportPreview = {
+      ...PREVIEW,
+      clusters: [PREVIEW.clusters[0], PREVIEW.clusters[1], ready("ocp4-prod-hawk-site1"), ready("ocp4-prep-kite-site2")],
+    };
+    const result: ImportResult = {
+      spec_name: FLAVOR,
+      spec_version: "1.0.0",
+      merge_requests: [opened("ocp4-prod-heron-site1", 31)],
+      failed: [
+        notOpened("ocp4-prod-hawk-site1", "AMBIGUOUS_WRITE", "POST /projects/7/merge_requests timed out after it was sent"),
+        notOpened(
+          "ocp4-prep-kite-site2",
+          "GIT_UNAVAILABLE",
+          "not sent: GitLab did not answer for ocp4-prod-hawk-site1, so no more merge requests were started; import this cluster again"
+        ),
+      ],
+    };
+    await open(page, {
+      routes: async (p) => {
+        await previewRoute(previews, (r) => json(r, preview))(p);
+        await p.route(`${base}/import`, (r) => json(r, result, 201));
+      },
+    });
+    await previewFour(page, previews);
+    await sheet(page).getByRole("button", { name: "Import 3 clusters" }).click();
+
+    await expect(sheet(page).getByTestId("import-result-heading")).toHaveText("1 merge request opened · waiting for approval");
+    await expect(openedRow(page, "ocp4-prod-heron-site1").getByRole("link", { name: /^Review !31/ })).toHaveAttribute(
+      "href", "/approvals/day1-31"
+    );
+    const failed = sheet(page).getByTestId("import-failed");
+    await expect(failed).toContainText("2 clusters' merge requests did not open");
+    // Unconfirmed: it may exist, so check GitLab before importing it again
+    const hawk = failedRow(page, "ocp4-prod-hawk-site1");
+    await expect(hawk).toHaveAttribute("data-code", "AMBIGUOUS_WRITE");
+    await expect(hawk).toContainText("may or may not have been made. Check GitLab for the merge request before trying again");
+    await expect(hawk).toContainText("timed out after it was sent");
+    // Not sent at all
+    const kite = failedRow(page, "ocp4-prep-kite-site2");
+    await expect(kite).toHaveAttribute("data-code", "GIT_UNAVAILABLE");
+    await expect(kite).toContainText("Nothing was sent for it");
+    await expect(kite).toContainText("GitLab did not answer for ocp4-prod-hawk-site1");
+    await expect(openedRow(page, "ocp4-prod-hawk-site1")).toHaveCount(0);
+    await expect(sheet(page).getByTestId("import-summary")).toHaveText("1 opened · 2 not opened");
+  });
+
+  test("an import where no MR opened shows each cluster's failure and stays on the review", async ({ page }) => {
+    const previews: unknown[] = [];
+    const problems = [
+      "ocp4-prod-heron-site1: POST /projects/7/repository/commits timed out after it was sent",
+      "ocp4-prod-lark-site1: not sent: GitLab did not answer for ocp4-prod-heron-site1, so no more merge requests were started; import this cluster again",
+    ];
+    await open(page, {
+      routes: async (p) => {
+        await previewRoute(previews)(p);
+        await p.route(`${base}/import`, (r) =>
+          fulfillProblem(r, 504, "AMBIGUOUS_WRITE", "GitLab confirmed none of the 2 import merge requests", { problems })
+        );
+      },
+    });
+    await previewFour(page, previews);
+    await candidateCard(page, "ocp4-prod-lark-site1").getByRole("checkbox", { name: `Move to ${FLAVOR}` }).click();
+    await sheet(page).getByRole("button", { name: "Import 2 clusters" }).click();
+
+    const alert = sheet(page).getByRole("alert").filter({ hasText: "GitLab did not confirm the change" });
+    await expect(alert).toContainText("Check GitLab for the merge request before trying again");
+    for (const line of problems) await expect(alert).toContainText(line);
+    await expect(sheet(page).getByTestId("import-result")).toHaveCount(0);
+    await expect(candidateCard(page, "ocp4-prod-heron-site1")).toBeVisible();
   });
 
   test("a file or the flavor that changed since the preview asks to preview again", async ({ page }) => {

@@ -645,10 +645,12 @@ spec:
               show as drift once it has: the configs a sync would add and remove per nodepool, and the missing add-ons.
             </Step>
             <Step n={3} title="Import">
-              One Day1 MR writes only the flavor link (<InlineCode># specName</InlineCode>,{" "}
-              <InlineCode># specVersion</InlineCode>) into each file&apos;s header. Nothing changes on the clusters.
-              After it merges they show their differences as drift, and <strong>Sync to flavor</strong> on each
-              cluster&apos;s page fixes them (see Drift Detection).
+              One Day1 MR per cluster writes only the flavor link (<InlineCode># specName</InlineCode>,{" "}
+              <InlineCode># specVersion</InlineCode>) into its file&apos;s header, so each cluster is approved, merged
+              or rejected on its own. Every pick is checked first: if one can&apos;t be imported, none opens. Nothing
+              changes on the clusters. The last step lists each MR, and each cluster whose MR did not open and why.
+              Once a cluster&apos;s MR merges it shows its differences as drift, and <strong>Sync to flavor</strong> on
+              its page fixes them (see Drift Detection).
             </Step>
           </div>
 

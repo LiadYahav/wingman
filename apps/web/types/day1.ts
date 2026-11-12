@@ -3,6 +3,9 @@
 // change is listed in docs/notes/2026-11-07-day1-api-changes.md and, for
 // flavors v2, docs/notes/2026-11-08-flavors-v2-api-changes.md ("§n" below).
 
+import type { ErrorCode } from "./problem";
+import type { MRDetail } from "./index";
+
 // ── Template schema (parsed from the Jinja2 AST by the backend) ─────────────
 
 export interface TemplateField {
@@ -549,10 +552,47 @@ export interface ImportPick {
   relink?: boolean;
 }
 
-/** `POST /specs/{name}/import` body: one day1 MR, at most 50 clusters. */
+/** `POST /specs/{name}/import` body: at most 50 clusters, one day1 MR each (ADR-0044). */
 export interface ImportRequest {
   spec_version: string;
   clusters: ImportPick[];
+}
+
+/** A picked cluster and the day1 MR that links it to the flavor. */
+export interface ImportedCluster {
+  name: string;
+  site: string;
+  mce: string;
+  path: string;
+  merge_request: MRDetail;
+}
+
+/** A picked cluster, checked like the others, whose MR did not open. */
+export interface ImportFailure {
+  name: string;
+  site: string;
+  mce: string;
+  path: string;
+  /**
+   * The problem code its write failed with. `AMBIGUOUS_WRITE`: GitLab did not
+   * confirm it, so the MR may exist (check before importing it again);
+   * `GIT_UNAVAILABLE`: nothing was sent; `REVISION_CONFLICT`: the file moved
+   * since the preview.
+   */
+  code: ErrorCode | (string & {});
+  detail: string;
+}
+
+/**
+ * `POST /specs/{name}/import` (201): one day1 MR per cluster, each list in
+ * pick order (docs/notes/2026-11-12-import-mr-per-cluster.md). When none
+ * opened, the answer is the failure's problem instead.
+ */
+export interface ImportResult {
+  spec_name: string;
+  spec_version: string;
+  merge_requests: ImportedCluster[];
+  failed: ImportFailure[];
 }
 
 // ── Sync a cluster to its flavor (§12, ADR-0037) ────────────────────────────
