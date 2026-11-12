@@ -26,6 +26,7 @@ already have.
 | 3.5 | 3.6.0: creating from a flavor: a nodepool sizing ratio, a suggested name with the next free letter, letters-only sequences for new clusters (ADR-0040); the generic network template (ADR-0027's amendment) | Generic. Optional, in the day1 repo, through an MR: add `mc-files/templates/nm-conf-template.bu` to offer the generic network config, which then becomes every nodepool's default. `MCE_INFRAENV_CACHE_SECONDS` (default 600) needs no value |
 | 3.6.0 | 3.6.1: pages answer from cache while it refreshes, a merge re-reads only the files it changed, a new pod warms up, responses are gzipped (ADR-0041) | Generic: the chart changes (nginx gzip), so take the chart at `v3.6.1`, not only the images. To confirm the speed-up: [../ops/performance.md](../ops/performance.md) |
 | 3.6 | 3.7.0: Create can start the platform's `provision-cluster` workflow instead of opening Wingman's merge request (ADR-0042), off by default | Generic while `day1.provisioner` stays `merge-request`. To turn the workflow on: [3.6-to-3.7.md](3.6-to-3.7.md) |
+| 3.8 | 3.9.0: **Quick Links** for admins (ADR-0052): every cluster's ArgoCD and console, generated from the day1 repo, the team's links from the chart, status dots checked by day1, ArgoCD counts with read-only tokens | Generic: every MCE is listed when `clusterStatus.mceDomain` is set. To add the hub, the team's links and the counts: [3.8-to-3.9.md](3.8-to-3.9.md) |
 
 ### Skipping versions
 

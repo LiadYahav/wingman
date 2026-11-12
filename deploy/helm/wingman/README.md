@@ -116,6 +116,19 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The cluster page links to it and to its search for the cluster's segment. Empty: `segmentsManager.url`; both empty: no link |
 | `segmentsManager.sslVerify` | `SEGMENTS_MANAGER_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `segmentsManager.timeoutSeconds` | `SEGMENTS_MANAGER_TIMEOUT_SECONDS` | `5` | Per request, at most 60 |
+| `quickLinks.hubName` | `QUICK_LINKS_HUB_NAME` | `""` | The hub Wingman runs on, as in `apps.<hubName>.<domain>`: its card on Quick Links ([Quick Links](#quick-links)). Empty: no hub card |
+| `quickLinks.hubDomain` | `QUICK_LINKS_HUB_DOMAIN` | `""` | The hub's domain. Empty: `quickLinks.domain` |
+| `quickLinks.domain` | `QUICK_LINKS_DOMAIN` | `""` | The MCEs' domain. Empty: `clusterStatus.mceDomain` |
+| `quickLinks.argocdUrlTemplate` | `QUICK_LINKS_ARGOCD_URL_TEMPLATE` | `https://openshift-gitops-server-openshift-gitops.apps.{cluster}.{domain}` | A cluster's ArgoCD |
+| `quickLinks.consoleUrlTemplate` | `QUICK_LINKS_CONSOLE_URL_TEMPLATE` | `https://console-openshift-console.apps.{cluster}.{domain}` | A cluster's console |
+| `quickLinks.status.enabled` | `QUICK_LINKS_STATUS_ENABLED` | `true` | `false`: no status dots, and day1 calls none of the links |
+| `quickLinks.status.ttlSeconds` | `QUICK_LINKS_STATUS_TTL_SECONDS` | `60` | How long a check is kept, 10 to 600; answered as long again while it refreshes |
+| `quickLinks.status.timeoutSeconds` | `QUICK_LINKS_TIMEOUT_SECONDS` | `3` | Per check and per ArgoCD read, at most 30 |
+| `quickLinks.status.concurrency` | `QUICK_LINKS_CONCURRENCY` | `8` | Checks at once, 1 to 64 |
+| `quickLinks.sslVerify` | `QUICK_LINKS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
+| `quickLinks.argocdTokensSecret` | | `""` | An existing Secret whose key `tokens` (a YAML map of ArgoCD instance to read-only token) is mounted as `QUICK_LINKS_ARGOCD_TOKENS_FILE`. Empty: no counts |
+| `quickLinks.clusters` | | `{}` | A cluster's own `argocd` and `console` addresses, for one that does not follow the templates (the ConfigMap `wingman-quick-links`) |
+| `quickLinks.sections` | | `[]` | The team's links (the ConfigMap `wingman-quick-links`, re-read by day1 on every page load) |
 | `tls.caBundle` | | `""` | An internal CA (PEM), mounted in every pod |
 | `tls.caBundleMountPath` | `SSL_CERT_FILE` | `/etc/pki/tls/certs/ca-bundle.crt` | Where it is mounted (set only with a `tls.caBundle`) |
 | `route.host` | | `wingman.apps.your-cluster.internal` | The Route's host |
@@ -284,6 +297,73 @@ segmentsManager:
 ```
 
 A running 3.4 adds it with `docs/upgrade/3.4-to-3.5.md`.
+
+### Quick Links
+
+The **Quick Links** page (`/quick-links`, admins only) is a launcher: a card for the hub Wingman
+runs on (`quickLinks.hubName`) and one for every MCE of the day1 repo, by site, each opening the
+cluster's ArgoCD with its console beside it, at `quickLinks.argocdUrlTemplate` and
+`quickLinks.consoleUrlTemplate` in `quickLinks.domain` (default `clusterStatus.mceDomain`). Then
+the team's own links, `quickLinks.sections`. With a domain set, every MCE has its card and nothing
+else is needed.
+
+day1 checks every link itself (`HEAD`, then `GET`; no credential sent; redirects not followed) when
+the page is read, caches the answer `quickLinks.status.ttlSeconds` and shares it between viewers:
+up (2xx, 3xx, 401, 403), down, or unknown (TLS not verified), with the reason on hover. The
+browser never calls a link. day1 needs to reach them: an internal CA goes in `tls.caBundle` or
+`quickLinks.sslVerify`.
+
+`quickLinks.sections` and `quickLinks.clusters` are rendered into the ConfigMap
+`wingman-quick-links`, mounted in day1 as a directory. day1 reads it on every page load, so an
+edit (`helm upgrade`, or `oc edit cm wingman-quick-links`) shows within about a minute, without a
+restart. A mistake in it never breaks the page: the page lists each problem and shows the rest.
+The file's shape and every icon key: `docs/notes/2026-11-12-quick-links-api.md`.
+
+```yaml
+quickLinks:
+  hubName: hub-prod
+  clusters:                       # a cluster that does not follow the templates
+    hub-prod:
+      console: https://console.hub-prod.example.internal
+  sections:
+    - name: Core GitOps
+      columns: 2                  # 1 to 6, default 4
+      links:
+        - name: GitLab GitOps Project
+          url: https://gitlab.example.internal/platform/gitops
+          description: Main GitOps repository
+          icon: gitlab
+          ping: https://gitlab.example.internal   # the URL to check; false: no dot
+        - name: ArgoCD Main
+          url: https://argocd.example.internal
+          icon: argocd
+          argocd: main            # its token's key: the card shows the applications' counts
+```
+
+**ArgoCD counts.** A card for an ArgoCD that has a read-only token shows its applications by sync
+(Synced, OutOfSync) and health (Healthy, Progressing, Degraded, Missing). The tokens never go in
+values: put them in a Secret, a YAML map of instance to token, where an instance is a cluster's
+name (the hub, an MCE) or a link's `argocd:` key, and name the Secret.
+
+```bash
+cat > tokens.yaml <<'YAML'
+hub-prod: <token>
+ocp4-prod-mce-site1-a: <token>
+main: <token>
+YAML
+oc create secret generic wingman-argocd-tokens -n wingman --from-file=tokens=tokens.yaml
+rm tokens.yaml
+```
+
+```yaml
+quickLinks:
+  argocdTokensSecret: wingman-argocd-tokens
+```
+
+A token needs only to list applications: in each ArgoCD, an account with the `apiKey`
+capability and a role allowing `applications, get` (OpenShift GitOps: the `ArgoCD` resource's
+`spec.extraConfig` and `spec.rbac.policy`), and `argocd account generate-token --account <it>`. day1 reads the Secret at start: restart it after replacing a token. A running
+Wingman adds all of this with `docs/upgrade/3.8-to-3.9.md`.
 
 ## Loading Pre-built Images (Air-gapped)
 

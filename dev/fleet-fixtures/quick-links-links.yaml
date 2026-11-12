@@ -1,0 +1,79 @@
+# The demo links file for DAY1_FAKE_FLEET=true when QUICK_LINKS_FILE does
+# not exist (development only, ADR-0052). In a deployment the chart renders
+# this file from quickLinks.sections and quickLinks.clusters
+# (deploy/helm/wingman/README.md, "Quick Links"). Every address is made up.
+
+sections:
+  - name: Core GitOps
+    description: The repositories and the ArgoCD that applies them
+    columns: 2
+    links:
+      - name: GitLab GitOps Project
+        url: https://gitlab.example.internal/platform/gitops
+        description: Main GitOps repository
+        icon: gitlab
+        ping: https://gitlab.example.internal
+      - name: ArgoCD Main
+        url: https://argocd.example.internal
+        description: Main Argo CD instance (tracks the GitOps repo)
+        icon: argocd
+        argocd: main
+
+  - name: DevOps
+    columns: 3
+    links:
+      - name: GitLab Team Group
+        url: https://gitlab.example.internal/groups/platform
+        description: The team's group
+        icon: gitlab
+        ping: https://gitlab.example.internal
+      - name: Confluence
+        url: https://confluence.example.internal
+        description: Team documentation
+        icon: confluence
+      - name: Grafana Dashboard
+        url: https://grafana.example.internal/d/main/main-dashboard
+        description: Main operational dashboard
+        icon: grafana
+        ping: https://grafana.example.internal
+
+  - name: Internal Tools
+    columns: 3
+    links:
+      - name: Segments Manager
+        url: http://segments-manager.example.internal:8000
+        description: VLAN segments of every site
+        icon: network
+      - name: Server Scan
+        url: http://server-scan.example.internal:8000
+        description: The fleet's servers
+        icon: server
+      - name: Cluster Navigator
+        url: http://navigator.example.internal:8001
+        description: OpenShift cluster navigation
+        icon: compass
+
+  - name: DC Systems
+    columns: 4
+    links:
+      - name: Cisco UCS
+        url: https://ucs.example.internal
+        description: UCS Manager
+        icon: cisco
+      - name: NetBox
+        url: https://netbox.example.internal
+        description: IPAM / DCIM
+        icon: network
+      - name: OpenManage
+        url: https://openmanage.example.internal
+        description: Dell OpenManage
+        icon: dell
+      - name: OneView
+        url: https://oneview.example.internal
+        description: HPE OneView
+        icon: server
+
+# The hub of the demo (QUICK_LINKS_HUB_NAME=hub-dev) has its own console address.
+clusters:
+  hub-dev:
+    console: https://console.hub-dev.example.internal
