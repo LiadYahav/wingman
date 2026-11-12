@@ -121,21 +121,30 @@ test("create a cluster from a spec opens an MR its requester cannot approve", as
   // The fixture prod MCE offers the ladder's 4.16-4.18 rungs, not its 4.16.27 default (ADR-0034)
   await alice.getByTestId("ocp-version-select").click();
   await alice.getByRole("option", { name: "4.18.56" }).click();
+  await alice.getByPlaceholder("e.g. 1234").fill("1234");
+  await alice.getByPlaceholder("e.g. 56").fill("56");
+  await alice.getByPlaceholder("e.g. 7").fill("7");
   if (placementOn) {
-    // Wingman picks the MCE (ADR-0050); this flow's later steps read MCE, so choose it with a reason if needed
+    // The MCE's InfraEnvs are a list: each nodepool takes the first, a node type the MCE has servers of
+    const infraEnvPickers = alice.getByRole("combobox", { name: "Infra Env", exact: true });
+    await expect(infraEnvPickers.first()).toBeEnabled();
+    for (let i = 0; i < (await infraEnvPickers.count()); i++) {
+      await infraEnvPickers.nth(i).click();
+      await alice.getByRole("option").first().click();
+    }
+    // Wingman picks the MCE (ADR-0050) from the nodepools' needs too; this flow's later steps read MCE,
+    // so choose it, with a reason when it is not the pick
     const radio = alice.getByRole("radio", { name: MCE, exact: true });
-    await expect(radio).toBeVisible();
+    await expect(radio).toBeEnabled();
     if (!(await radio.isChecked())) {
       await radio.check();
       await alice.getByTestId("placement-reason").fill("The live flow reads its cluster on this MCE");
     }
+  } else {
+    const infraEnvs = alice.getByPlaceholder("e.g. dell-r660-site1-128c-1024gb-5tb");
+    for (let i = 0; i < (await infraEnvs.count()); i++) await infraEnvs.nth(i).fill(`dell-r660-site1-pool${i + 1}`);
   }
   await expect(alice.getByTestId("naming-hint")).toContainText("Follows the naming convention");
-  await alice.getByPlaceholder("e.g. 1234").fill("1234");
-  await alice.getByPlaceholder("e.g. 56").fill("56");
-  await alice.getByPlaceholder("e.g. 7").fill("7");
-  const infraEnvs = alice.getByPlaceholder("e.g. dell-r660-site1-128c-1024gb-5tb");
-  for (let i = 0; i < (await infraEnvs.count()); i++) await infraEnvs.nth(i).fill(`dell-r660-site1-pool${i + 1}`);
   // Each nodepool starts with the nodepool defaults (nm-conf, workers-chrony-configuration,
   // nic-ring-buffer); its nm-conf needs the nodepool's hardware type
   const hardwareTypes = alice.getByRole("combobox", { name: /configs: entry \d+ hardware type$/ });

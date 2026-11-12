@@ -11,7 +11,8 @@ import { test, expect, type Page, type Route } from "@playwright/test";
 import { fulfillProblem, injectAdminAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
 import { ClusterNewPage } from "../pages/cluster-new.page";
 import type {
-  ClusterPreview, CreateClusterRequest, Mce, NameSuggestion, Placement, PlacementCandidate, SpecEntry, TemplateField,
+  ClusterPreview, CreateClusterRequest, Mce, NameSuggestion, Placement, PlacementCandidate, PlacementCheck, PlacementNeed,
+  PlacementNodeType, SpecEntry, TemplateField,
 } from "../../types";
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
@@ -58,7 +59,54 @@ function mce(name: string, env: "prod" | "prep"): Mce {
 const MCES: Mce[] = [mce(A, "prod"), mce(B, "prod"), mce(C, "prod"), mce("ocp4-prep-mce-site1-a", "prep")];
 
 const PASS = (detail: string) => ({ status: "pass" as const, detail });
-function candidate(name: string, overrides: Partial<PlacementCandidate>): PlacementCandidate {
+const DELL = "dell-r660-site1-128c-1024gb-5tb";
+const HP = "hp-gen11-site1-64c-512gb";
+
+/** Each MCE's free Agents and, of them, the healthy servers, per node type (a mock of day1's join). */
+const FREE: Record<string, Record<string, { agents: number; healthy: number }>> = {
+  [B]: { [DELL]: { agents: 4, healthy: 4 }, [HP]: { agents: 3, healthy: 2 } },
+  [A]: { [DELL]: { agents: 5, healthy: 5 }, [HP]: { agents: 3, healthy: 3 } },
+  [C]: { [DELL]: { agents: 1, healthy: 1 }, [HP]: { agents: 0, healthy: 0 } },
+};
+
+/** The `need` params, summed per InfraEnv and sorted, as day1 echoes them. */
+function needsOf(query: URLSearchParams): PlacementNeed[] {
+  const summed = new Map<string, number>();
+  for (const need of query.getAll("need").filter(Boolean)) {
+    const [infraEnv, replicas] = need.split(":");
+    summed.set(infraEnv, (summed.get(infraEnv) ?? 0) + Number(replicas));
+  }
+  return [...summed].sort(([a], [b]) => a.localeCompare(b)).map(([infra_env, replicas]) => ({ infra_env, replicas }));
+}
+
+/** One node type's part of the servers check, from `FREE`. */
+function nodeType(mce: string, need: PlacementNeed): PlacementNodeType {
+  const free = FREE[mce]?.[need.infra_env] ?? { agents: 0, healthy: 0 };
+  return {
+    infra_env: need.infra_env,
+    needed: need.replicas,
+    free_agents: free.agents,
+    healthy: free.healthy,
+    not_in_server_scan: 0,
+    status: free.healthy >= need.replicas ? "pass" : "fail",
+    detail: `${need.infra_env}: ${free.healthy} healthy free of ${need.replicas} needed`,
+  };
+}
+
+/** The servers check a candidate's node types make: one failing type fails it, one unknown makes it unknown. */
+function serversCheck(types: PlacementNodeType[]): PlacementCheck {
+  const status = types.some((t) => t.status === "fail") ? "fail" : types.some((t) => t.status === "unknown") ? "unknown" : "pass";
+  const detail = types.length > 0 ? `${types.map((t) => t.detail).join("; ")}.` : "No nodepool names a node type yet.";
+  return { check: "servers", status, detail };
+}
+
+const PODS = (free: number, allocatable: number, counted: number) => ({
+  free, allocatable, used: allocatable - free, nodes_counted: counted,
+  nodes_excluded: { control_plane: 3, infra: 3, not_ready: 0, unschedulable: 1, tainted: 0 },
+});
+
+function candidate(name: string, needs: PlacementNeed[], overrides: Partial<PlacementCandidate>): PlacementCandidate {
+  const nodeTypes = overrides.node_types ?? needs.map((need) => nodeType(name, need));
   return {
     mce: name,
     eligible: true,
@@ -68,23 +116,26 @@ function candidate(name: string, overrides: Partial<PlacementCandidate>): Placem
     checks: [
       { check: "version", ...PASS("Hosts OpenShift 4.18.22.") },
       { check: "free_pods", ...PASS("212 free pods; a new cluster needs 70.") },
+      serversCheck(nodeTypes),
       { check: "readable", ...PASS("Wingman read its nodes and pods.") },
     ],
+    node_types: nodeTypes,
     versions: VERSIONS,
     clusters: 2,
     open_creates: 0,
     owner_clusters: 0,
     spare: { total: 3, usable: 2 },
     spare_detail: null,
-    pods: { free: 212, allocatable: 500, used: 288, nodes_counted: 2, nodes_excluded: { control_plane: 3, not_ready: 0, unschedulable: 1 } },
+    pods: PODS(212, 500, 2),
     ...overrides,
   };
 }
 
-/** The contract's example: b picked over a on this owner's clusters; c fails two checks. */
+/** The contract's example: b picked over a on this owner's clusters; c fails three checks. */
 function placement(query: URLSearchParams, overrides: Partial<Placement> = {}): Placement {
   const version = query.get("version");
   const owner = query.get("owner");
+  const needs = needsOf(query);
   const base = {
     site: query.get("site") ?? "site1",
     env: query.get("env") ?? "prod",
@@ -92,6 +143,7 @@ function placement(query: URLSearchParams, overrides: Partial<Placement> = {}): 
     owner,
     flavor: query.get("flavor"),
     min_free_pods: 70,
+    needs,
     versions: VERSIONS,
     server_scan_error: null,
   };
@@ -99,32 +151,54 @@ function placement(query: URLSearchParams, overrides: Partial<Placement> = {}): 
     // Without a version: the versions, the numbers, no pick
     return { ...base, pick: null, why: null, problems: ["Choose an OpenShift version."], candidates: [], ...overrides };
   }
+  const cTypes = needs.map((need) => nodeType(C, need));
   return {
     ...base,
     pick: B,
     why: `${B} has the fewest clusters of owner ${owner ?? "?"}: 0, against 2 on ${A}.`,
     problems: [],
     candidates: [
-      candidate(B, { picked: true, rank: 1, open_creates: 1, owner_clusters: owner ? 0 : null }),
-      candidate(A, {
+      candidate(B, needs, { picked: true, rank: 1, open_creates: 1, owner_clusters: owner ? 0 : null }),
+      candidate(A, needs, {
         rank: 2, behind_on: "owner_clusters", clusters: 6, owner_clusters: owner ? 2 : null, spare: { total: 3, usable: 1 },
-        pods: { free: 140, allocatable: 750, used: 610, nodes_counted: 3, nodes_excluded: { control_plane: 3, not_ready: 0, unschedulable: 0 } },
+        pods: PODS(140, 750, 3),
       }),
-      candidate(C, {
+      candidate(C, needs, {
         eligible: false,
         clusters: 1,
         checks: [
           { check: "version", status: "fail", detail: "Hosts 4.16 to 4.17 only (4.17.30, 4.16.27), not 4.18.22." },
           { check: "free_pods", status: "fail", detail: "40 free pods; a new cluster needs 70." },
+          serversCheck(cTypes),
           { check: "readable", ...PASS("Wingman read its nodes and pods.") },
         ],
+        node_types: cTypes,
         versions: ["4.17.30", "4.16.27"],
         spare: null,
         spare_detail: `server-scan names no server for ${C}, so its spare servers are unknown.`,
-        pods: { free: 40, allocatable: 250, used: 210, nodes_counted: 1, nodes_excluded: { control_plane: 3, not_ready: 1, unschedulable: 0 } },
+        pods: { ...PODS(40, 250, 1), nodes_excluded: { control_plane: 3, infra: 0, not_ready: 1, unschedulable: 0, tainted: 0 } },
       }),
     ],
     ...overrides,
+  };
+}
+
+/** `placement` with candidate A's node types replaced (and its servers check and eligibility made from them). */
+function withATypes(query: URLSearchParams, types: (needs: PlacementNeed[]) => PlacementNodeType[]): Placement {
+  const all = placement(query);
+  const nodeTypes = types(all.needs);
+  const servers = serversCheck(nodeTypes);
+  return {
+    ...all,
+    why: `${B} is the only MCE that passes every check.`,
+    candidates: all.candidates.map((c) =>
+      c.mce === A
+        ? {
+            ...c, node_types: nodeTypes, eligible: servers.status === "pass", rank: null, behind_on: null,
+            checks: c.checks.map((check) => (check.check === "servers" ? servers : check)),
+          }
+        : c
+    ),
   };
 }
 
@@ -206,12 +280,19 @@ test.describe("MCE placement: Wingman's pick", () => {
     const form = new ClusterNewPage(page);
     await fillForm(form);
 
-    // The owner is sent once typed (debounced), with the site, env, version and flavor
-    await expect.poll(() => lastPlacement(calls).get("owner")).toBe("7");
-    expect(Object.fromEntries(lastPlacement(calls))).toEqual({
-      site: "site1", env: "prod", version: "4.18.22", owner: "7", flavor: "rcs",
-    });
+    // The owner and the nodepool's need are sent once typed (debounced), with the site, env, version and flavor
+    await expect.poll(() => lastPlacement(calls).toString()).toContain("owner=7");
+    await expect.poll(() => lastPlacement(calls).getAll("need")).toEqual([`${DELL}:2`]);
+    expect(lastPlacement(calls).toString()).toBe(
+      `site=site1&env=prod&version=4.18.22&owner=7&flavor=rcs&need=${DELL}%3A2`
+    );
     await expect(page.getByTestId("placement-owner")).toContainText("Ranked for owner 7");
+    await expect(page.getByTestId("placement-needs")).toHaveText(`Servers counted for the nodepools: 2 × ${DELL}.`);
+    // Each candidate's healthy free servers of the type, against the need
+    await expect(form.candidate(B).getByTestId(`placement-node-type-${DELL}`)).toHaveText(
+      `${DELL}: 4 healthy free of 2 needed`
+    );
+    await expect(form.candidate(A).getByTestId(`placement-node-type-${DELL}`)).toHaveAttribute("data-status", "pass");
 
     await expect(form.placementPick).toContainText("Wingman's pick");
     await expect(page.getByTestId("placement-pick-name")).toHaveText(B);
@@ -272,12 +353,98 @@ test.describe("MCE placement: Wingman's pick", () => {
     await expect(failing.getByTestId("placement-check-version")).toHaveText("Hosts 4.16 to 4.17 only (4.17.30, 4.16.27), not 4.18.22.");
     await expect(failing.getByTestId("placement-check-free_pods")).toHaveText("40 free pods; a new cluster needs 70.");
     await expect(failing.getByTestId("placement-check-readable")).toHaveCount(0);
+    // The servers check is told per node type, not as one more sentence
+    await expect(failing.getByTestId("placement-check-servers")).toHaveCount(0);
+    await expect(failing.getByTestId(`placement-node-type-${DELL}`)).toHaveText(`${DELL}: 1 healthy free of 2 needed`);
+    await expect(failing.getByTestId(`placement-node-type-${DELL}`)).toHaveAttribute("data-status", "fail");
     await expect(failing.getByTestId("placement-cell-spare")).toContainText("unknown");
     await expect(failing).toContainText(`server-scan names no server for ${C}`);
     await expect(form.candidateRadio(C)).toBeDisabled();
     await failing.click({ force: true });
     await expect(form.candidateRadio(B)).toBeChecked();
     await expect(form.placementReason).toHaveCount(0);
+  });
+
+  test("an MCE short only of servers of a node type is explained and cannot be chosen", async ({ page }) => {
+    await setup(page, {
+      answer: (query) =>
+        withATypes(query, (needs) =>
+          needs.map((need) => ({
+            ...nodeType(A, need), healthy: 1, status: "fail" as const,
+            detail: `${need.infra_env}: 1 healthy free of ${need.replicas} needed`,
+          }))
+        ),
+    });
+    const form = new ClusterNewPage(page);
+    await fillForm(form);
+    await expect.poll(async () => (await form.candidate(A).getAttribute("data-eligible")) ?? "").toBe("false");
+
+    const short = form.candidate(A);
+    // Its version, free pods and readability pass: only the node type is listed, and why
+    await expect(short.locator("[data-testid^='placement-check-']")).toHaveCount(0);
+    await expect(short.getByTestId(`placement-node-type-${DELL}`)).toHaveText(`${DELL}: 1 healthy free of 2 needed`);
+    await expect(short.getByTestId(`placement-node-type-${DELL}`)).toHaveAttribute("data-status", "fail");
+    await expect(short).not.toContainText("Passes every check");
+    await expect(form.candidateRadio(A)).toBeDisabled();
+    await expect(form.candidateRadio(B)).toBeChecked();
+  });
+
+  test("a node type Wingman cannot count is unknown, and that MCE is not offered", async ({ page }) => {
+    await setup(page, {
+      answer: (query) =>
+        withATypes(query, (needs) =>
+          needs.map((need) => ({
+            ...nodeType(A, need), healthy: null, not_in_server_scan: 0, status: "unknown" as const,
+            detail: `${need.infra_env}: 5 free Agents for ${need.replicas} needed; server-scan did not answer, so their health is unknown`,
+          }))
+        ),
+    });
+    const form = new ClusterNewPage(page);
+    await fillForm(form);
+
+    const unknown = form.candidate(A).getByTestId(`placement-node-type-${DELL}`);
+    await expect(unknown).toHaveAttribute("data-status", "unknown");
+    await expect(unknown).toHaveText(
+      `Unknown: ${DELL}: 5 free Agents for 2 needed; server-scan did not answer, so their health is unknown`
+    );
+    await expect(form.candidate(A)).toHaveAttribute("data-eligible", "false");
+    await expect(form.candidateRadio(A)).toBeDisabled();
+  });
+
+  test("each nodepool's InfraEnv and replicas are sent as a need, and a change asks again", async ({ page }) => {
+    const calls = await setup(page);
+    const form = new ClusterNewPage(page);
+    await form.goto();
+    await form.chooseSpec("rcs");
+    await form.selectSite("site1");
+    await form.selectEnv("prod");
+    await form.selectVersion("4.18.22");
+
+    // No InfraEnv yet: nothing to count, said calmly; the pick may change once there is one
+    await expect(page.getByTestId("placement-pick-name")).toHaveText(B);
+    await expect(page.getByTestId("placement-no-needs")).toContainText("No nodepool names a node type yet");
+    expect(calls.placements.every((q) => q.getAll("need").join("") === "")).toBe(true);
+    expect(lastPlacement(calls).getAll("need")).toEqual([""]);
+    await expect(form.candidate(B).getByTestId("placement-node-types")).toHaveCount(0);
+
+    await page.getByPlaceholder(`e.g. ${DELL}`).fill(DELL);
+    await expect.poll(() => lastPlacement(calls).getAll("need")).toEqual([`${DELL}:2`]);
+    await expect(page.getByTestId("placement-needs")).toContainText(`2 × ${DELL}`);
+
+    // The replicas shown, as typed; a count day1 would refuse (0) is not a need
+    // The template field is named by its placeholder, the default (2), as every template input is
+    const replicas = page.getByPlaceholder("2", { exact: true });
+    await replicas.fill("0");
+    await expect(page.getByTestId("placement-no-needs")).toBeVisible();
+    await replicas.fill("3");
+    await expect.poll(() => lastPlacement(calls).getAll("need")).toEqual([`${DELL}:3`]);
+    expect(calls.placements.some((q) => q.getAll("need").includes(`${DELL}:0`))).toBe(false);
+    expect(lastPlacement(calls).toString()).toContain(`need=${DELL}%3A3`);
+    await expect(page.getByTestId("placement-needs")).toContainText(`3 × ${DELL}`);
+
+    // An InfraEnv that is not a Kubernetes name is not a need until it is one
+    await page.getByPlaceholder(`e.g. ${DELL}`).fill("Dell R660");
+    await expect(page.getByTestId("placement-no-needs")).toBeVisible();
   });
 
   test("no MCE that passes: the panel says why and Review is refused", async ({ page }) => {
