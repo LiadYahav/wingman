@@ -125,6 +125,8 @@ Explicit user instructions; violating one is a real mistake, not style.
   against the file's VLAN and segment (ADR-0039).
 - Done (2026-11-12): create from a flavor with a nodepool ratio, a suggested
   name and one-letter sequences (ADR-0040).
+- Done (2026-11-12): reads answer from cache while one fetch refreshes them;
+  a merge re-reads only the files it changed (ADR-0041, `docs/ops/performance.md`).
 - **Not done yet, in order:** (1) the architect's
   answers (`docs/ideas/architecture-fit.md`); (2) chart hardening (a values
   schema, a pinned nginx image); (3) flavors v2's "Left for later";
@@ -275,24 +277,28 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-12 — create from a flavor: a sizing ratio, a suggested name, letter sequences (ADR-0040).**
-PR #27 on `roiblum/feat-create-from-flavor` (built by a fork, reviewed here;
-API: `docs/notes/2026-11-12-create-from-flavor-api.md`). A flavor may size
-its nodepools by `spec.day1.nodepool_ratio` (`[1, 2, 1]`): the create form
-asks for one size and the file gets plain `replicas`. Creating from a
-flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>` from
-`GET /clusters/name-suggestion` (the next letter no cluster file or open
-create MR has; editable). A new cluster's sequence is one letter a-z; a
-name without one is still accepted. The MCE's InfraEnv list is cached
-(`MCE_INFRAENV_CACHE_SECONDS`, 600). Before it: 3.4.1 (#25, the add-on
-catalog beside a long selection) and 3.5.0 (#26, the EPG from
-segments-manager, ADR-0039; upgrade `docs/upgrade/3.4-to-3.5.md`).
+**2026-11-12 — 3.6.1: pages answer from cache while it refreshes (ADR-0041); #29 open.**
+Released today: 3.4.1 (#25), 3.5.0 (#26, the EPG from segments-manager,
+ADR-0039), 3.6.0 (#27, create from a flavor: a nodepool ratio whose
+replicas move together, a suggested name with the next free letter,
+letters-only sequences, ADR-0040; the generic network template
+`nm-conf-template.bu`, written as plain `nm-conf` and the default, ADR-0027's
+amendment) and 3.6.1 (#28, ADR-0041: stale-while-refresh in the core cache,
+a merge re-reads only the files it changed, warm-up, gzip; a review found
+and fixed a read after a write joining a pre-write refresh). The upgrade
+index lists every release, with a generic upgrade for those without a guide.
+
+PR #29 (`roiblum/feat-provision-workflow`, ADR-0042, not merged): create can
+start the platform's `provision-cluster` workflow instead of opening
+Wingman's MR, behind `DAY1_PROVISIONER` (default `merge-request`). It waits
+on the team's answers to its API note's open questions
+(`docs/notes/2026-11-12-provision-cluster-workflow-api.md`); when it merges,
+convention 13 above changes.
 
 **Next:**
-- merge PR #27 (3.6.0; no operator steps);
-- the speed fork (`roiblum/perf-shared-cache`) reports why loading is slow
-  in production and what it fixed: review it and open its PR;
-- left for later in ADR-0040: drift, import and sync of a ratio, resizing an
-  existing cluster; whether a new cluster must have a letter;
-- after deploying, check the Nodes tab and the EPG on a real cluster;
-  flavors v2's "Left for later"; the architect's answers.
+- the team's answers for #29; then merge it (3.7.0, `docs/upgrade/3.6-to-3.7.md`);
+- the user's decision: does a cluster name without a letter take `-a` for
+  the suggestion (ADR-0040)?
+- deploy 3.6.1 and check, on a real cluster, the Nodes tab, the EPG and
+  `docs/ops/performance.md`'s numbers;
+- ADR-0040's "Left for later"; flavors v2's; the architect's answers.
