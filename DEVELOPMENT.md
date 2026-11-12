@@ -95,6 +95,12 @@ With `DAY1_FAKE_FLEET`, the card's links to segments-manager point at
 there locally. Without the fake fleet, `SEGMENTS_MANAGER_UI_URL=https://segments-manager.example`
 shows the links alone, and the EPG is "—".
 
+Add `DAY1_PROVISIONER=workflow` as well to see Create start the provision-cluster workflow
+(ADR-0042) instead of opening a merge request. The fake run walks a few sample phases, about
+6 s each, and then waits at `awaiting-merge` with a merge request link to an example host;
+nothing is written to GitLab. A file without a `mastertag` fails its run, and a second create
+of the same name while its run waits is refused (409), as the real workflow does.
+
 `DAY2_SERVICE_URL` matters: without it day1 asks the chart's `http://wingman-day2:8002`, and
 every cluster's drift is Unknown. The web dev server proxies only when both
 `WINGMAN_DEV_*_URL` are set (`apps/web/next.config.ts`); a production build never proxies.

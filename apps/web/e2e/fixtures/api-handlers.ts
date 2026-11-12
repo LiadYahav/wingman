@@ -446,6 +446,8 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/name-suggestion**", (route: Route) =>
     json(route, { name: null, env: null, short_name: "", sequence: null, problems: [] })
   );
+  // A create opens Wingman's merge request unless a test turns the provision-cluster workflow on (ADR-0042)
+  await page.route("**/api/day1/clusters/provisioner", (route: Route) => json(route, { mode: "merge-request" }));
   // segments-manager is off unless a test says otherwise (mockClusterNetwork): the card shows the file, EPG "—"
   await page.route("**/api/day1/clusters/*/network**", (route: Route) =>
     json(route, { vlan_id: null, segment: null, epg: null, ledger: null, problems: [], ledger_error: null })

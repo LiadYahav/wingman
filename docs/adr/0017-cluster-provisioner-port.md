@@ -1,7 +1,7 @@
 # ADR-0017: Provisioning is a ClusterProvisioner port: a merge request today, the create-cluster workflow later
 
 Date: 2026-11-07
-Status: Accepted; superseded in part by ADR-0037 (the port also links several existing files to a flavor in one commit)
+Status: Accepted; superseded in part by ADR-0037 (the port also links several existing files to a flavor in one commit) and ADR-0042 (a create can start the provision-cluster workflow, through a second port used by create only)
 
 ## Context
 
