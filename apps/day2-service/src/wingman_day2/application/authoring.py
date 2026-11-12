@@ -107,6 +107,13 @@ SCOPE_LABELS: Final = {
 }
 """How a fleet scope is named to people: in titles, notes and the web."""
 
+SCOPE_NOUNS: Final = {
+    DefaultsScope.HUB: "hub",
+    DefaultsScope.MCES: "MCE(s)",
+    DefaultsScope.HOSTED_CLUSTERS: "hosted cluster(s)",
+    DefaultsScope.UPI: "UPI cluster(s)",
+}
+
 NAMESPACE: Final = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
 """A Kubernetes namespace name (a DNS label)."""
 
@@ -1040,8 +1047,8 @@ class AuthoringService:
         project = plan.state.team.project.path_with_namespace
         if not apps:
             plan.notes.append(
-                f"No destination of {label} is registered in {project} yet: the default deploys "
-                "to each one once the team has a folder for it."
+                f"{project} registers no {SCOPE_NOUNS[scope]} yet: the default deploys to each "
+                "one once the team has a folder for it."
             )
             return
         leaves = []
@@ -1050,11 +1057,16 @@ class AuthoringService:
             leaves.append(leaf_application(merged, team=plan.team, chart=plan.chart, ref=app.ref))
         auto = sum(1 for leaf in leaves if leaf.auto_sync)
         verb = "generates" if new_default else "updates"
+        names = sorted({leaf.name for leaf in leaves})
+        leaf_name = names[0] if len(names) == 1 else f"{plan.team}-<cluster>-{plan.chart}-deploy"
+        where = (
+            "the hub"
+            if scope is DefaultsScope.HUB
+            else f"the {len(apps)} {SCOPE_NOUNS[scope]} {project} registers "
+            f"({', '.join(a.ref.name for a in apps)}), on each one's ArgoCD"
+        )
         plan.notes.append(
-            f"After the merge, ArgoCD {verb} {plan.team}-<cluster>-{plan.chart}-deploy on "
-            f"{len(apps)} destination(s) of {label} that {project} registers: "
-            + ", ".join(a.ref.name for a in apps)
-            + ". "
+            f"After the merge, ArgoCD {verb} {leaf_name} on {where}. "
             + (
                 "They sync by themselves (auto-sync)."
                 if auto == len(leaves)
