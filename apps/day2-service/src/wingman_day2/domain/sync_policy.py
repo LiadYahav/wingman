@@ -1,0 +1,172 @@
+"""A leaf app's ArgoCD sync options: its deploy config's ``syncPolicy``, as four settings.
+
+``deployApp.yaml`` copies the merged ``syncPolicy`` into the leaf Application
+as it is (``toYaml``), so ArgoCD reads it with its own rules:
+
+- ``automated`` present (a map, even ``{}``) is auto-sync; absent is manual
+  sync, the platform's default for leaves (ADR-0022): nothing deploys after a
+  merge until someone syncs.
+- ``automated.prune`` and ``automated.selfHeal`` only exist with auto-sync.
+- ``syncOptions`` is a list of ``Name=value`` strings.
+
+The deploy config is a stack of Helm value files (``stacks.deploy_config_layers``),
+so a higher layer changes the settings through Helm's merge: maps merge key by
+key, a list replaces, and ``null`` deletes (``automated: null`` turns auto-sync
+off). :func:`policy_override` computes the smallest ``syncPolicy`` a layer must
+set to make the effective settings what was asked, and checks the merge gives
+exactly that. Other ``syncPolicy`` keys (``retry``, ``managedNamespaceMetadata``,
+``automated.allowEmpty``) are kept wherever they are; Wingman does not edit them.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Final
+
+from wingman_day2.domain.deploy_config import SYNC_POLICY
+from wingman_day2.domain.errors import ChangeRefusedError
+from wingman_day2.domain.merge import merge_values
+
+AUTOMATED: Final = "automated"
+PRUNE: Final = "prune"
+SELF_HEAL: Final = "selfHeal"
+SYNC_OPTIONS: Final = "syncOptions"
+
+SYNC_OPTION: Final = re.compile(r"^[A-Za-z][A-Za-z0-9]*=[A-Za-z0-9._-]+$")
+"""``Name=value``, as ArgoCD's sync options are written."""
+
+KNOWN_SYNC_OPTIONS: Final = (
+    "CreateNamespace=true",
+    "ServerSideApply=true",
+    "PruneLast=true",
+    "ApplyOutOfSyncOnly=true",
+    "RespectIgnoreDifferences=true",
+    "Replace=true",
+    "Validate=false",
+    "SkipDryRunOnMissingResource=true",
+    "FailOnSharedResource=true",
+    "PrunePropagationPolicy=foreground",
+    "PrunePropagationPolicy=background",
+    "PrunePropagationPolicy=orphan",
+)
+"""The options the web offers as checkboxes; any option of the right shape is accepted."""
+
+
+@dataclass(frozen=True, slots=True)
+class SyncSettings:
+    """What a ``syncPolicy`` means for the leaf app."""
+
+    auto_sync: bool = False
+    prune: bool = False
+    self_heal: bool = False
+    sync_options: tuple[str, ...] = ()
+
+    def checked(self) -> SyncSettings:
+        """These settings, or a refusal saying what is wrong with them."""
+        if not self.auto_sync and (self.prune or self.self_heal):
+            raise ChangeRefusedError(
+                "prune and self-heal are settings of auto-sync: turn auto-sync on, or leave them "
+                "off (a manual sync chooses its own pruning)",
+                details={"rule": "sync-without-auto"},
+            )
+        bad = [option for option in self.sync_options if not SYNC_OPTION.match(option)]
+        if bad:
+            raise ChangeRefusedError(
+                f"sync options are written Name=value (CreateNamespace=true); not {bad[0]!r}",
+                details={"rule": "sync-option-invalid", "options": bad},
+            )
+        repeated = sorted({o for o in self.sync_options if self.sync_options.count(o) > 1})
+        if repeated:
+            raise ChangeRefusedError(
+                f"{repeated[0]} is listed twice in the sync options",
+                details={"rule": "sync-option-invalid", "options": repeated},
+            )
+        return self
+
+
+PLATFORM_DEFAULT: Final = SyncSettings(sync_options=("CreateNamespace=true",))
+"""A new add-on's settings when the team has none to copy: manual sync, create the namespace."""
+
+
+def sync_settings(policy: object) -> SyncSettings:
+    """What a merged ``syncPolicy`` makes ArgoCD do."""
+    if not isinstance(policy, Mapping):
+        return SyncSettings()
+    automated = policy.get(AUTOMATED)
+    options = policy.get(SYNC_OPTIONS)
+    auto = isinstance(automated, Mapping)
+    return SyncSettings(
+        auto_sync=auto,
+        prune=auto and automated.get(PRUNE) is True,
+        self_heal=auto and automated.get(SELF_HEAL) is True,
+        sync_options=tuple(str(o) for o in options) if isinstance(options, list) else (),
+    )
+
+
+def _automated(settings: SyncSettings, current: object) -> dict[str, object]:
+    automated = dict(current) if isinstance(current, Mapping) else {}
+    automated[PRUNE] = settings.prune
+    automated[SELF_HEAL] = settings.self_heal
+    return automated
+
+
+def full_policy(settings: SyncSettings, current: object = None) -> dict[str, object]:
+    """The ``syncPolicy`` of a lowest layer (a team default): exactly ``settings``.
+
+    ``current`` is the file's ``syncPolicy`` today; its other keys are kept.
+    Empty when there is nothing to write (manual sync, no options).
+    """
+    policy = dict(current) if isinstance(current, Mapping) else {}
+    if settings.auto_sync:
+        policy[AUTOMATED] = _automated(settings, policy.get(AUTOMATED))
+    else:
+        policy.pop(AUTOMATED, None)
+    if settings.sync_options:
+        policy[SYNC_OPTIONS] = list(settings.sync_options)
+    else:
+        policy.pop(SYNC_OPTIONS, None)
+    ordered = {k: policy[k] for k in (AUTOMATED, SYNC_OPTIONS) if k in policy}
+    return {**ordered, **{k: v for k, v in policy.items() if k not in ordered}}
+
+
+def effective_policy(layers: Sequence[Mapping[str, object]]) -> object:
+    """The ``syncPolicy`` Helm makes of deploy-config ``layers`` (lowest first)."""
+    merged = merge_values({}, [(str(i), layer) for i, layer in enumerate(layers)])
+    return merged.values.get(SYNC_POLICY)
+
+
+def policy_override(
+    inherited: Sequence[Mapping[str, object]], desired: SyncSettings, current: object = None
+) -> dict[str, object]:
+    """The ``syncPolicy`` a layer above ``inherited`` must set for ``desired``; ``{}`` for none.
+
+    ``inherited`` are the deploy-config layers below (lowest first);
+    ``current`` the layer's own ``syncPolicy`` today, whose other keys are kept.
+    """
+    below = sync_settings(effective_policy(inherited))
+    policy = dict(current) if isinstance(current, Mapping) else {}
+    policy.pop(AUTOMATED, None)
+    policy.pop(SYNC_OPTIONS, None)
+    if desired.auto_sync:
+        if (below.auto_sync, below.prune, below.self_heal) != (
+            True,
+            desired.prune,
+            desired.self_heal,
+        ):
+            policy[AUTOMATED] = _automated(desired, None)
+    elif below.auto_sync:
+        policy[AUTOMATED] = None
+    if desired.sync_options != below.sync_options:
+        policy[SYNC_OPTIONS] = list(desired.sync_options)
+    ordered = {k: policy[k] for k in (AUTOMATED, SYNC_OPTIONS) if k in policy}
+    override = {**ordered, **{k: v for k, v in policy.items() if k not in ordered}}
+    got = sync_settings(effective_policy([*inherited, {SYNC_POLICY: override}]))
+    if got != desired:
+        raise ChangeRefusedError(
+            "the layers below set sync options Wingman cannot override exactly; edit the deploy "
+            "config by hand",
+            details={"rule": "sync-layering"},
+        )
+    return override

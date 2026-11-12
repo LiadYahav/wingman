@@ -8,6 +8,7 @@ from wingman_core.web.errors import (
     AlreadyExists,
     AppError,
     NotFound,
+    TeamReadOnly,
     ValidationFailed,
 )
 from wingman_core.web.exception_handlers import register_domain_errors
@@ -18,12 +19,14 @@ from wingman_day2.domain.errors import (
     ChartNotInstalledError,
     Day2Error,
     InvalidClusterIdError,
+    TeamReadOnlyError,
     UnknownChartError,
     UnknownClusterError,
     UnknownTeamError,
 )
 
 _MAPPING: tuple[tuple[type[Day2Error], type[AppError]], ...] = (
+    (TeamReadOnlyError, TeamReadOnly),
     (UnknownTeamError, NotFound),
     (UnknownClusterError, NotFound),
     (UnknownChartError, NotFound),

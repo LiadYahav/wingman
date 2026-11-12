@@ -24,21 +24,32 @@ import importlib.util
 import os
 import shutil
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 import pytest
+import yaml
 
+from wingman_core.domain.users import Role, User
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.infrastructure.snapshots import RepoSnapshots
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects
 from wingman_day2.application.apps import load_deploy
+from wingman_day2.application.authoring import AuthoringResult, NewAddon
+from wingman_day2.application.services import Day2Services
 from wingman_day2.application.topology import Topology, TopologyService
+from wingman_day2.domain.clusters import DefaultsScope
 from wingman_day2.domain.findings import Rule, Severity
-from wingman_day2.infrastructure.repositories import GitLabDay1Repository, GitLabSigsRepository
+from wingman_day2.domain.sync_policy import SyncSettings
+from wingman_day2.infrastructure.repositories import (
+    GitLabChartRepository,
+    GitLabDay1Repository,
+    GitLabSigsRepository,
+)
 
 HERE = Path(__file__).parent
 PLATFORM = HERE / "platform"
@@ -360,3 +371,108 @@ async def test_broken_trees_fail_the_same_rules(name: str, tmp_path: Path) -> No
     assert oracle_rules(snapshot["check_failures"]) == mine == rules
     if renders:
         await assert_same_apps(files, tmp_path / "again", team)
+
+
+# ── Authoring (ADR-0043): what Wingman writes renders as it says ────────────
+
+
+async def authored(
+    files: Files, act: Callable[[Day2Services], Awaitable[AuthoringResult]]
+) -> Files:
+    """``files`` after the MR ``act`` opens on Wingman over them (its branch, as merged)."""
+    gitlab = InMemoryGitLab(base_url=URL)
+    for project, tree in files.items():
+        gitlab.create_project(project, tree)
+    cache = TtlCache()
+    snapshots = RepoSnapshots(gitlab, cache, ttl=60)
+    services = Day2Services.build(
+        gitlab=gitlab,
+        sigs=GitLabSigsRepository(gitlab, cache, snapshots, group="sigs", branch="main", ttl=60),
+        day1=GitLabDay1Repository(gitlab, cache, snapshots, project=DAY1, branch="main", ttl=60),
+        charts=GitLabChartRepository(gitlab, cache, base_url=URL, ttl=60),
+        clock=lambda: datetime(2026, 11, 12, tzinfo=UTC),
+        gitlab_url=URL,
+    )
+    result = await act(services)
+    assert result.merge_request is not None
+    project = await gitlab.get_project(f"sigs/{result.plan.team}")
+    after = {name: dict(tree) for name, tree in files.items()}
+    after[project.path_with_namespace] = gitlab.snapshot(
+        project.id, result.merge_request.source_branch
+    )
+    return after
+
+
+def workload(files: Files, team: str, leaf: dict[str, Any]) -> dict[str, Any]:
+    """The workload values a leaf's existing value files merge to (the chart's own aside)."""
+    merged: dict[str, Any] = {}
+    for entry in leaf["resolved"]:
+        assert entry["repo"] == "sigs", entry
+        merged = RC.deep_merge(merged, yaml.safe_load(files[f"sigs/{team}"][entry["path"]]) or {})
+    return merged
+
+
+async def test_a_made_default_keeps_every_app_its_identity_and_its_values(tmp_path: Path) -> None:
+    files = fixture_files()
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    after_files = await authored(
+        files,
+        lambda day2: day2.authoring.make_default(
+            "redbull",
+            "cluster-roles",
+            DefaultsScope.HOSTED_CLUSTERS,
+            User("jane", Role.ADMIN),
+            values={},
+        ),
+    )
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    # The same leaf apps exist, with the same identity and the same values: ArgoCD keeps them.
+    assert sorted(after) == sorted(before)
+    for uid, leaf in after.items():
+        assert leaf["identity"] == before[uid]["identity"], uid
+        assert workload(after_files, "redbull", leaf) == workload(files, "redbull", before[uid]), (
+            uid
+        )
+    moved = [uid for uid in after if "cluster-roles" in uid and "upi" not in uid]
+    assert len(moved) == 4
+    assert all(
+        any(r["path"].startswith("defaults/hosted-clusters/") for r in after[uid]["resolved"])
+        or not after[uid]["resolved"]
+        for uid in moved
+    )
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+async def test_a_created_addon_and_its_default_render_as_wingman_says(tmp_path: Path) -> None:
+    files = fixture_files()
+    spec = NewAddon(
+        team="redbull",
+        chart="podinfo",
+        repourl=f"{URL}/helm-charts/example-chart.git",
+        sync=SyncSettings(True, False, True, ("CreateNamespace=true", "ServerSideApply=true")),
+        project_namespace="podinfo",
+        values={"replicas": 2},
+        default_scope=DefaultsScope.MCES,
+        default_values={"fleet": True},
+    )
+    after_files = await authored(
+        files, lambda day2: day2.authoring.create(spec, User("jane", Role.ADMIN))
+    )
+    snapshot = oracle(after_files, tmp_path, "redbull")
+    assert snapshot["check_failures"] == []
+    podinfo = {uid: leaf for uid, leaf in _leaves(snapshot["apps"]).items() if "podinfo" in uid}
+    assert sorted(podinfo) == [
+        "ocp4-prep-mce-site1-a:redbull-in-cluster-podinfo-deploy",
+        "ocp4-prod-mce-site1-a:redbull-in-cluster-podinfo-deploy",
+    ]
+    for leaf in podinfo.values():
+        assert leaf["identity"]["syncPolicy"] == {
+            "automated": {"prune": False, "selfHeal": True},
+            "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"],
+        }
+        assert leaf["identity"]["source_repoURL"] == f"{URL}/helm-charts/example-chart.git"
+        assert leaf["identity"]["destination"] == {"name": "in-cluster", "namespace": "podinfo"}
+        assert workload(after_files, "redbull", leaf) == {"replicas": 2, "fleet": True}
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")

@@ -45,3 +45,7 @@ class ChartAlreadyInstalledError(Day2Error):
 
 class ChangeRefusedError(Day2Error):
     """The change would break a platform rule; ``details['rule']`` names it."""
+
+
+class TeamReadOnlyError(Day2Error):
+    """The team has not given Wingman's GitLab account write access to its project."""

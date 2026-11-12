@@ -95,7 +95,11 @@ def create_app(
     async def warm_up() -> None:
         # What every day2 page reads: each team repo and the day1 index, once per commit
         teams = await sigs.teams()
-        await asyncio.gather(day1.index(), *(sigs.tree(team) for team in teams))
+        await asyncio.gather(
+            day1.index(),
+            *(sigs.tree(team) for team in teams),
+            *(sigs.access(team) for team in teams),
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
