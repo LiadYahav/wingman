@@ -253,7 +253,8 @@ function DestinationsEditor({ detail, panel, writes }: { detail: OperatorDetail;
                   const locked = lockedReason(d);
                   const checkbox = showBoxes
                     ? {
-                        checked: !excluded.has(d.id),
+                        // Nothing is deployed where the platform renders nothing, excluded or not.
+                        checked: !excluded.has(d.id) && d.state !== "not-rendered",
                         disabledBy: locked ?? (editable ? null : writes.readOnlyReason ?? exclusions?.problem ?? (writes.isAdmin ? "Wingman cannot edit the exclusions file in place" : "Only admins edit exclusions")),
                         onChange: (on: boolean) => toggle(d, on),
                         changed: initial.has(d.id) !== excluded.has(d.id),

@@ -61,7 +61,7 @@ function OperatorRow({ op }: { op: OperatorSummary }) {
             >
               <Layers className="h-3 w-3" aria-hidden />
               {d.label} · {d.reach}
-              {d.excluded > 0 && <span className="opacity-80"> (−{d.excluded})</span>}
+              {d.excluded > 0 && <span className="opacity-80"> · {d.excluded} excluded</span>}
             </span>
           ))}
           {op.ocp_versions.length > 0 && (

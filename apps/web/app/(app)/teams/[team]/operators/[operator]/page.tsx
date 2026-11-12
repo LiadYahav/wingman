@@ -275,7 +275,7 @@ export default function OperatorPage() {
       ) : (
         <>
           <FindingsList findings={detail.warnings} showContext />
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <TeamDefault detail={detail} writes={writes} />
             <OcpVersions detail={detail} />
           </div>
