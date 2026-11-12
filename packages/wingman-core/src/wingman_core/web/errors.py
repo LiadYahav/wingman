@@ -60,6 +60,7 @@ class ErrorCode(StrEnum):
     DEPENDENCY_UNAVAILABLE = "DEPENDENCY_UNAVAILABLE"
     NODE_NOT_IN_CLUSTER = "NODE_NOT_IN_CLUSTER"
     UNINSTALL_ALREADY_RUNNING = "UNINSTALL_ALREADY_RUNNING"
+    TEAM_READ_ONLY = "TEAM_READ_ONLY"
 
     @property
     def slug(self) -> str:
@@ -195,6 +196,13 @@ class UninstallAlreadyRunning(AppError):
 
     status = 409
     code = ErrorCode.UNINSTALL_ALREADY_RUNNING
+
+
+class TeamReadOnly(AppError):
+    """A day2 team has not given Wingman's GitLab account write access to its project."""
+
+    status = 403
+    code = ErrorCode.TEAM_READ_ONLY
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (

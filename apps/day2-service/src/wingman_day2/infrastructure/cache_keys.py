@@ -16,6 +16,11 @@ def teams() -> str:
     return "day2:teams"
 
 
+def access(project_id: int) -> str:
+    """Wingman's access to a team project; outside the project prefix, as no write changes it."""
+    return f"day2:access:{project_id}"
+
+
 def project_prefix(project_id: int) -> str:
     """Every key of one project: what a write to it invalidates."""
     return f"day2:project:{project_id}:"

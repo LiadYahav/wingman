@@ -68,3 +68,10 @@ settings refuse in production (ADR-0009).
   revoked); the suite passes 27/27 and `scripts/assert-junit.py --min-tests 27`
   accepts it; the same suite with no GitLab configured (27 skipped, pytest
   exit 0) is refused. The scheduled run itself only happens on GitHub.
+- 2026-11-12, the nightly workflow run on demand on GitHub (GitLab CE
+  19.5.3): 41/41 pass, `--min-tests 41`, with the five access tests of
+  ADR-0043. Their first run found one more background job the fake does not
+  need to model: a new member's `GET /projects/:id` answers 404 for a few
+  seconds, until GitLab grants the authorization behind the membership (the
+  membership itself, which `permissions` reads, is there at once). The live
+  `new_member` fixture waits until the member can see the project.

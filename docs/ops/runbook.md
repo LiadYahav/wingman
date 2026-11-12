@@ -42,9 +42,14 @@ GitLab answered 401 or 403 to **Wingman's own token**. Every user is affected.
 1. Check the token in the `wingman-secrets` Secret (`GITLAB_TOKEN`, from the
    Helm value `gitlab.accessToken`): has it expired or been revoked? GitLab shows its expiry under the owning
    account's access tokens.
-2. Check the account is still a member of the day1 project, the specs project
-   and every team project in the sigs group, with at least Developer role (it
-   pushes branches and opens merge requests) and the right to merge.
+2. Check the account is still a member of the day1 project and the specs
+   project with at least Developer role (it pushes branches and opens merge
+   requests) and the right to merge. Team projects are per team: a team that
+   gives the account less than Developer is read-only in Wingman rather than
+   denied, and turns its writes on as `deploy/helm/wingman/README.md` (GitLab
+   token) says (ADR-0043); a 401/403 on a team project
+   Wingman lists means the token itself, or a membership removed in the last
+   `DAY2_CACHE_TTL_SECONDS`.
 3. Replace the token (`helm upgrade` with the new `gitlab.accessToken`: a
    changed Secret restarts both services); the alert clears 10 minutes after
    the last denied call.

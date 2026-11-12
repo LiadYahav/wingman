@@ -18,6 +18,8 @@ What Wingman writes:
 Before any MR, the team repo as it would be after the change is linted with
 the platform's rules; a change that adds an error is refused. Nothing is
 synced: leaf apps are manual-sync and Wingman has no ArgoCD access yet.
+Every write is refused first for a team that has not given Wingman write
+access to its project (ADR-0043).
 """
 
 from __future__ import annotations
@@ -42,6 +44,7 @@ from wingman_core.domain.mr_conventions import (
 from wingman_core.domain.users import User
 from wingman_core.ports.clock import Clock
 from wingman_core.ports.gitlab import GitLabPort
+from wingman_day2.application.access import AccessService
 from wingman_day2.application.apps import LoadedLayer, deploy_of, load_deploy, load_layers
 from wingman_day2.application.installed import override_layer
 from wingman_day2.application.preview import find_app, team_version
@@ -60,10 +63,17 @@ from wingman_day2.domain.errors import (
     ChartNotInstalledError,
     Day2Error,
     UnknownChartError,
+    UnknownTeamError,
 )
 from wingman_day2.domain.findings import Finding, Rule, Severity, warning
 from wingman_day2.domain.lints import lint_team
-from wingman_day2.domain.platform import AppSource, PlannedApp, plan_team, scope_exclusions
+from wingman_day2.domain.platform import (
+    AppSource,
+    PlannedApp,
+    TeamPlan,
+    plan_team,
+    scope_exclusions,
+)
 from wingman_day2.domain.stacks import Layer, LayerRole
 from wingman_day2.domain.teams import TeamRepo
 from wingman_day2.domain.tree import RepoTree
@@ -167,6 +177,27 @@ def require_writable(topology: Topology, summary: ClusterSummary) -> None:
     )
 
 
+def refuse_new_errors(topology: Topology, state: TeamState, tree: RepoTree) -> TeamPlan:
+    """What ``tree`` makes the platform generate, or the refusal of the errors it adds (ADR-0023).
+
+    Errors the team repo already has do not block a change; only new ones do.
+    """
+    before = {(f.rule, f.path, f.message) for f in state.findings if f.severity is Severity.ERROR}
+    repo = TeamRepo(state.repo.team, tree, state.repo.files)
+    after_plan = plan_team(repo, topology.day1)
+    added = [
+        f
+        for f in lint_team(repo, topology.day1, after_plan)
+        if f.severity is Severity.ERROR and (f.rule, f.path, f.message) not in before
+    ]
+    if added:
+        raise ChangeRefusedError(
+            f"the change would break the platform's rules: {added[0].message}",
+            details={"rule": str(added[0].rule), "findings": [f.message for f in added]},
+        )
+    return after_plan
+
+
 def _pending(path: RepoPath, values: Mapping[str, object], role: LayerRole) -> LoadedLayer:
     return LoadedLayer(
         Layer(role, path), FileContent(path, _PENDING, dump_values(values), ""), dict(values)
@@ -193,12 +224,14 @@ class ChangeService:
         gitlab: GitLabPort,
         topology: TopologyService,
         sigs: SigsRepository,
+        access: AccessService,
         clock: Clock,
     ) -> None:
-        """Write through ``gitlab``; read through ``topology`` and ``sigs``."""
+        """Write through ``gitlab``; read through ``topology`` and ``sigs``; check ``access``."""
         self._gitlab = gitlab
         self._topology = topology
         self._sigs = sigs
+        self._access = access
         self._clock = clock
 
     # ── install ─────────────────────────────────────────────────────────────
@@ -323,8 +356,10 @@ class ChangeService:
         """Open an MR installing ``spec`` on cluster ``key``."""
         topology = await self._topology.load()
         summary = topology.resolve(key, mce=mce)
+        state = topology.team(spec.team)
+        await self._access.require_write(state.team)
         require_writable(topology, summary)
-        plan = _Plan(topology.team(spec.team), summary)
+        plan = _Plan(state, summary)
         await self._plan_install(plan, spec)
         self._validate(topology, plan)
         return await self._open(plan, user, Verb.INSTALL, message)
@@ -341,6 +376,12 @@ class ChangeService:
         """Install several charts on one cluster: one MR per team, all validated first."""
         topology = await self._topology.load()
         summary = topology.resolve(key, mce=mce)
+        for team in dict.fromkeys(spec.team for spec in specs):
+            try:
+                state = topology.team(team)
+            except UnknownTeamError:
+                continue  # listed with the other problems below
+            await self._access.require_write(state.team)
         require_writable(topology, summary)
         plans: dict[str, _Plan] = {}
         problems: list[dict[str, object]] = []
@@ -400,6 +441,7 @@ class ChangeService:
         topology = await self._topology.load()
         summary = topology.resolve(key, mce=mce)
         state = topology.team(team)
+        await self._access.require_write(state.team)
         app = self._installed(state, summary, chart)
         plan = _Plan(state, summary, charts=[chart])
         await self._plan_values(plan, app, values, last_commit_id)
@@ -520,6 +562,7 @@ class ChangeService:
         topology = await self._topology.load()
         summary = topology.resolve(key, mce=mce)
         state = topology.team(team)
+        await self._access.require_write(state.team)
         app = self._installed(state, summary, chart)
         if app.source is AppSource.FLEET_DEFAULT:
             scope = app.ref.defaults_scope
@@ -566,21 +609,7 @@ class ChangeService:
     def _validate(self, topology: Topology, plan: _Plan) -> None:
         """Refuse a change that adds a platform error; note the apps it adds besides its own."""
         state = plan.state
-        before = {
-            (f.rule, f.path, f.message) for f in state.findings if f.severity is Severity.ERROR
-        }
-        repo = TeamRepo(state.repo.team, plan.tree, state.repo.files)
-        after_plan = plan_team(repo, topology.day1)
-        added = [
-            f
-            for f in lint_team(repo, topology.day1, after_plan)
-            if f.severity is Severity.ERROR and (f.rule, f.path, f.message) not in before
-        ]
-        if added:
-            raise ChangeRefusedError(
-                f"the change would break the platform's rules: {added[0].message}",
-                details={"rule": str(added[0].rule), "findings": [f.message for f in added]},
-            )
+        after_plan = refuse_new_errors(topology, state, plan.tree)
         old = {(a.ref, a.chart, a.source) for a in state.plan.apps}
         for app in after_plan.apps:
             if (app.ref, app.chart, app.source) not in old and app.chart not in plan.charts:

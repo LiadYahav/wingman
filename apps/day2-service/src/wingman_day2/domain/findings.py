@@ -47,6 +47,9 @@ class Rule(StrEnum):
     EMERGENCY_PIN = "emergency-pin"
     CLUSTER_POSITION_CONFLICT = "cluster-position-conflict"
     ENV_UNKNOWN = "env-unknown"
+    CHART_REPO_ELSEWHERE = "chart-repo-elsewhere"
+    CHART_VALUES_MISSING = "chart-values-missing"
+    SYNC_DIFFERS = "sync-differs"
 
 
 @dataclass(frozen=True, slots=True, order=True)

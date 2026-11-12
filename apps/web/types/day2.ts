@@ -40,6 +40,105 @@ export interface Destination {
   warnings: Finding[];
 }
 
+// ── Teams and their write access (ADR-0043) ───────────────────────────────────
+
+/** GitLab's role names, lowest first; `none` is no membership at all. */
+export type AccessRole =
+  | "none"
+  | "minimal"
+  | "guest"
+  | "planner"
+  | "reporter"
+  | "developer"
+  | "maintainer"
+  | "owner"
+  | (string & {});
+
+/**
+ * `GET /api/day2/teams`, `GET /api/day2/teams/{team}`: a team, its project,
+ * and whether Wingman's GitLab account may write there (Developer or higher on
+ * the project). A read-only team's writes are refused with `TEAM_READ_ONLY`.
+ */
+export interface Team {
+  name: string;
+  project_id: number;
+  path_with_namespace: string;
+  web_url: string;
+  writable: boolean;
+  /** GitLab's number: 0 none … 20 reporter, 30 developer, 40 maintainer, 50 owner. */
+  access_level: number;
+  access_role: AccessRole;
+  /** One sentence to show as is; `null` when `writable`. */
+  read_only_reason: string | null;
+}
+
+// ── Sync options (ADR-0043) ──────────────────────────────────────────────────
+
+/** The leaf app's ArgoCD `syncPolicy`, as four settings. */
+export interface SyncSettings {
+  /** `syncPolicy.automated` is present: ArgoCD syncs by itself after the merge. */
+  auto_sync: boolean;
+  /** `automated.prune`; only with `auto_sync`. */
+  prune: boolean;
+  /** `automated.selfHeal`; only with `auto_sync`. */
+  self_heal: boolean;
+  /** `syncPolicy.syncOptions`, in order, each `Name=value`. */
+  sync_options: string[];
+}
+
+/** A `defaults/<scope>/` folder: `hub`, `mces`, `hosted-clusters` or `upi`. */
+export type FleetScope = "hub" | "mces" | "hosted-clusters" | "upi";
+
+/** A fleet scope and the destinations a default there reaches today. */
+export interface ScopeReach {
+  scope: FleetScope;
+  /** "every hosted cluster", "every MCE", "the hub", "every UPI cluster". */
+  label: string;
+  destinations: string[];
+}
+
+/** `GET /api/day2/teams/{team}/addon-template`: what the New add-on form starts from. */
+export interface AddonTemplate {
+  team: string;
+  writable: boolean;
+  read_only_reason: string | null;
+  sync: SyncSettings;
+  /** Where `sync` comes from, for a hint under the control. */
+  sync_source: string;
+  /** The folder most of the team's chart repos sit in (`<prefix><chart>.git`), or `null`. */
+  repourl_prefix: string | null;
+  known_sync_options: string[];
+  scopes: ScopeReach[];
+}
+
+/** `GET /api/day2/fleet-defaults`: one `defaults/<scope>/<chart>/` folder. */
+export interface FleetDefault {
+  team: string;
+  chart: string;
+  scope: FleetScope;
+  scope_label: string;
+  path: string;
+  /** The team has `operators/<chart>/` too. */
+  in_catalog: boolean;
+  /** `defaults/<scope>/<chart>/values.yaml`. */
+  values: Record<string, unknown>;
+  values_exists: boolean;
+  /** Effective: the team default with the fleet layer on top. */
+  sync: SyncSettings;
+  /** The fleet layer (`defaults/<scope>/<chart>/<chart>.yaml`) sets `syncPolicy`. */
+  sync_overridden: boolean;
+  /** Destination ids it deploys to. */
+  reach: string[];
+  /** Destination ids `exclusions.yaml` keeps it off. */
+  excluded: string[];
+  /** The per-env and per-cluster value files (`values-<x>.yaml`). */
+  tweaks: string[];
+  last_commit_id: string | null;
+  writable: boolean;
+  read_only_reason: string | null;
+  warnings: Finding[];
+}
+
 export interface GitLabInfo {
   gitlab_url: string;
   sigs_group_path: string;
@@ -84,6 +183,15 @@ export interface CatalogEntry {
   /** The chart repo on this GitLab, `null` when the repourl is missing or elsewhere. */
   chart_project: string | null;
   warnings: Finding[];
+  /** Wingman may write to the team's repo (ADR-0043). */
+  writable: boolean;
+  read_only_reason: string | null;
+  /** What `operators/<chart>/<chart>.yaml` sets (a pin, a fleet default or a folder may override it). */
+  sync: SyncSettings;
+  ignore_differences: unknown[] | null;
+  deploy_config_exists: boolean;
+  /** The commit the entry was read at: send it back on edit. */
+  last_commit_id: string | null;
 }
 
 // ── Charts on a destination ──────────────────────────────────────────────────
@@ -316,4 +424,121 @@ export interface UpgradeCheck {
   from_version: string | null;
   to_version: string;
   warnings: Finding[];
+}
+
+// ── Authoring: add-ons and fleet defaults (ADR-0043) ─────────────────────────
+
+/** `POST /api/day2/addons/{team}`: a new add-on in the team's catalog. */
+export interface CreateAddonBody {
+  name: string;
+  repourl: string;
+  /** `null`: `HEAD`, the chart repo's default branch (no key written). */
+  target_revision: string | null;
+  /** `null`: `.` (no key written). */
+  path: string | null;
+  project_namespace: string | null;
+  sync: SyncSettings;
+  ignore_differences: unknown[] | null;
+  values: Record<string, unknown>;
+  /** Also make it a fleet default in the same MR. */
+  default_scope: FleetScope | null;
+  default_values: Record<string, unknown>;
+  /** With `default_scope`: the dry run's `needs_confirmation` the user confirmed. */
+  confirm_changes?: string[];
+  message: string | null;
+}
+
+/**
+ * `PUT /api/day2/addons/{team}/{addon}`: an absent field is unchanged; `null`
+ * for `target_revision`, `path`, `project_namespace` or `ignore_differences`
+ * removes that key.
+ */
+export interface UpdateTeamDefaultBody {
+  repourl?: string;
+  target_revision?: string | null;
+  path?: string | null;
+  project_namespace?: string | null;
+  sync?: SyncSettings;
+  ignore_differences?: unknown[] | null;
+  values?: Record<string, unknown>;
+  last_commit_id: string | null;
+  message?: string | null;
+}
+
+/** `POST /api/day2/addons/{team}/{addon}/defaults/{scope}`. */
+export interface MakeDefaultBody {
+  values: Record<string, unknown>;
+  /** `null`: inherit the team default's. */
+  sync: SyncSettings | null;
+  /** Cluster ids, from a dry run's `needs_confirmation`. */
+  confirm_changes: string[];
+  message: string | null;
+}
+
+/** `PUT /api/day2/addons/{team}/{addon}/defaults/{scope}`: absent fields are unchanged; `sync: null` inherits. */
+export interface UpdateFleetDefaultBody {
+  values?: Record<string, unknown>;
+  sync?: SyncSettings | null;
+  last_commit_id: string | null;
+  message?: string | null;
+}
+
+export type AuthoringAction = "create-addon" | "update-team-default" | "make-default" | "update-fleet-default" | (string & {});
+
+/** A file a dry run would write: `content` the new text (`null` for a delete), `previous` the current one. */
+export interface PlannedFileChange {
+  action: "create" | "update" | "delete" | (string & {});
+  path: string;
+  content: string | null;
+  previous: string | null;
+}
+
+/** One key a move into a fleet default changes on a cluster. */
+export interface AdoptionChange {
+  stack: "deploy" | "values" | (string & {});
+  /** A dotted leaf path, e.g. `syncPolicy.automated.prune`. */
+  key: string;
+  before: unknown;
+  after: unknown;
+}
+
+/** A cluster whose own folder of the chart moves into the fleet default. */
+export interface Adoption {
+  cluster: string;
+  name: string;
+  moved: { from: string; to: string }[];
+  deleted: string[];
+  /** The `.gitkeep` that keeps the cluster registered, or `null`. */
+  gitkeep: string | null;
+  /** Empty: the move changes nothing on that cluster. */
+  changes: AdoptionChange[];
+}
+
+/** What an authoring write's `?dry_run=true` answers: everything it would do, nothing opened. */
+export interface AuthoringPlan {
+  team: string;
+  action: AuthoringAction;
+  chart: string;
+  scope: FleetScope | null;
+  /** The MR title it would open. */
+  title: string;
+  files: PlannedFileChange[];
+  reach: string[];
+  adopted: Adoption[];
+  /** The `adopted` ids with `changes`: send them in `confirm_changes`. */
+  needs_confirmation: string[];
+  warnings: Finding[];
+  notes: string[];
+}
+
+/** An authoring write's answer: the opened MR plus what it does. */
+export interface AuthoringChange extends Day2MergeRequest {
+  action: AuthoringAction;
+  chart: string;
+  scope: FleetScope | null;
+  files: FileChange[];
+  reach: string[];
+  adopted: Adoption[];
+  warnings: Finding[];
+  notes: string[];
 }

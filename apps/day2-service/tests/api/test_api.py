@@ -253,14 +253,14 @@ async def test_bulk_install_opens_one_mr_per_team(jane: httpx.AsyncClient) -> No
             json={
                 "addons": [
                     {"team": "redbull", "addon": "bmhgen", "override_values": {"a": 1}},
-                    {"team": "orca", "addon": "metrics"},
+                    {"team": "lynx", "addon": "backup"},
                 ],
                 "custom_message": "rollout",
             },
         ),
         201,
     )
-    assert sorted(mr["team"] for mr in body["merge_requests"]) == ["orca", "redbull"]
+    assert sorted(mr["team"] for mr in body["merge_requests"]) == ["lynx", "redbull"]
     assert body["failed"] == []
     assert all("rollout" in mr["description"] for mr in body["merge_requests"])
     assert len(ok(await jane.get("/api/day2/approvals"))) == 2
@@ -292,10 +292,10 @@ async def test_two_teams_own_mr_1_and_approving_one_leaves_the_other(
     jane: httpx.AsyncClient, bob: httpx.AsyncClient
 ) -> None:
     redbull = ok(await install(jane, "redbull", "bmhgen"), 201)
-    orca = ok(await install(jane, "orca", "metrics"), 201)
-    assert redbull["iid"] == orca["iid"] == 1
-    assert redbull["project_id"] != orca["project_id"]
-    assert ok(await approve(bob, "orca", 1, orca["sha"]))["state"] == "merged"
+    lynx = ok(await install(jane, "lynx", "backup"), 201)
+    assert redbull["iid"] == lynx["iid"] == 1
+    assert redbull["project_id"] != lynx["project_id"]
+    assert ok(await approve(bob, "lynx", 1, lynx["sha"]))["state"] == "merged"
     assert ok(await jane.get("/api/day2/approvals/redbull/1"))["mr"]["state"] == "opened"
     assert [p["team"] for p in ok(await jane.get("/api/day2/approvals"))] == ["redbull"]
 

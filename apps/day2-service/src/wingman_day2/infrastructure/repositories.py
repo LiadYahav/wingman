@@ -16,7 +16,7 @@ from collections.abc import Awaitable, Callable
 from urllib.parse import urlsplit
 
 from wingman_core.domain.errors import NotFoundError
-from wingman_core.domain.git import Commit, FileContent, Project, RepoPath
+from wingman_core.domain.git import AccessLevel, Commit, FileContent, Project, RepoPath
 from wingman_core.domain.merge_request import MergeRequest, MRState
 from wingman_core.domain.mr_conventions import WINGMAN_LABEL
 from wingman_core.infrastructure.cache import TtlCache, stale_for
@@ -92,6 +92,16 @@ class GitLabSigsRepository:
 
         return await self._cache.get_or_fetch(
             cache_keys.teams(), fetch, ttl=self._ttl, stale=stale_for(self._ttl)
+        )
+
+    async def access(self, team: Team) -> AccessLevel:
+        """See SigsRepository.access; kept like the team list, answered stale while refreshed."""
+        pid = team.project.id
+        return await self._cache.get_or_fetch(
+            cache_keys.access(pid),
+            lambda: self._gitlab.access_level(pid),
+            ttl=self._ttl,
+            stale=stale_for(self._ttl),
         )
 
     async def tree(self, team: Team) -> RepoTree:
@@ -211,6 +221,10 @@ class GitLabChartRepository:
             path = path[len(self._prefix) :]
         path = path.strip("/").removesuffix(".git")
         return path or None
+
+    def on_this_gitlab(self, repo_url: str) -> bool:
+        """See ChartRepository.on_this_gitlab."""
+        return self.project_path(repo_url) is not None
 
     async def resolve(self, repo_url: str) -> Project | None:
         """See ChartRepository.resolve."""

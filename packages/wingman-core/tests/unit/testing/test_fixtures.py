@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from wingman_core.domain.git import RepoPath
+from wingman_core.domain.git import AccessLevel, RepoPath
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.testing.fixtures import (
     FixtureProject,
@@ -72,3 +72,41 @@ def test_missing_root_has_no_projects(tmp_path: Path) -> None:
     (tmp_path / "group" / "project" / "a.txt").write_text("a", encoding="utf-8")
     [only] = load_fixture_projects(tmp_path)
     assert only == FixtureProject("group/project", {"a.txt": "a"})
+
+
+def test_access_yaml_gives_orca_a_reporter_role(projects: list[FixtureProject]) -> None:
+    by_path = {p.path_with_namespace: p for p in projects}
+    assert by_path["sigs/orca"].access_level is AccessLevel.REPORTER
+    assert by_path["sigs/redbull"].access_level is None
+
+
+async def test_seed_fake_applies_the_access_levels(projects: list[FixtureProject]) -> None:
+    gitlab = InMemoryGitLab()
+    seed_fake(gitlab, projects)
+    orca = await gitlab.get_project("sigs/orca")
+    redbull = await gitlab.get_project("sigs/redbull")
+    assert await gitlab.access_level(orca.id) is AccessLevel.REPORTER
+    assert await gitlab.access_level(redbull.id) is AccessLevel.OWNER
+
+
+def _tree_with_access(root: Path, access: str) -> Path:
+    (root / "group" / "project").mkdir(parents=True)
+    (root / "group" / "project" / "a.txt").write_text("a", encoding="utf-8")
+    (root / "access.yaml").write_text(access, encoding="utf-8")
+    return root
+
+
+def test_access_yaml_reads_role_names(tmp_path: Path) -> None:
+    [only] = load_fixture_projects(_tree_with_access(tmp_path, "group/project: developer\n"))
+    assert only.access_level is AccessLevel.DEVELOPER
+
+
+@pytest.mark.parametrize(
+    ("access", "message"),
+    [("group/project: boss\n", "not a role"), ("group/ghost: reporter\n", "not fixtures")],
+)
+def test_access_yaml_refuses_unknown_roles_and_projects(
+    tmp_path: Path, access: str, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        load_fixture_projects(_tree_with_access(tmp_path, access))
