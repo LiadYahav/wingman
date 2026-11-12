@@ -23,6 +23,15 @@ data:
       scgi_temp_path         /tmp/scgi_temp;
 
 
+      # Compress the APIs' JSON (the cluster list is about 0.6 KiB per cluster)
+      # and static text. Never text/event-stream: live status is a stream.
+      gzip on;
+      gzip_proxied any;
+      gzip_comp_level 5;
+      gzip_min_length 1024;
+      gzip_vary on;
+      gzip_types application/json application/problem+json application/javascript text/css text/plain image/svg+xml;
+
       # Increase buffer sizes for large YAML payloads
       client_max_body_size 10m;
       proxy_buffer_size 16k;

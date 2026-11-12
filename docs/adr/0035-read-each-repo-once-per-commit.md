@@ -1,7 +1,7 @@
 # ADR-0035: The day1, specs and team repos are read once per commit, from GitLab's archive
 
 Date: 2026-11-08
-Status: Accepted
+Status: Accepted; superseded in part by ADR-0041 (a merge looks up the last change only of the files it changed)
 
 ## Context
 
@@ -74,7 +74,8 @@ option.
     `last_commit_id`.
 - **Day1's first load after each merge** still costs one history lookup per
   cluster (2.3 s here), for "changed by, at". Carrying unchanged files'
-  history forward from a compare would remove that; not done yet.
+  history forward from a compare would remove that; not done yet. (Done by
+  ADR-0041: unchanged files keep their last change across a move.)
 - **Rate limit.** GitLab limits archives to 5 a minute per project and user,
   only when its `archive_rate_limit` feature flag is on (off by default).
   Wingman asks only when a head moves; past the limit it reads file by file.
