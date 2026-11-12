@@ -944,9 +944,10 @@ upi      sites/{site}/{env}/upi/{cluster}/{chart}/`}
             </li>
             <li>
               Its <strong>Defaults &amp; overrides</strong> page has one panel per scope (hosted clusters, MCEs, the hub,
-              UPI clusters): make it a default there and edit that default; give one MCE or one UPI cluster its own
-              values; and <strong>Deploy on specific MCEs</strong>, for an add-on wanted on some MCEs only. A hosted
-              cluster&apos;s own add-ons come from its flavor and the create form.
+              UPI clusters): make it a default there and edit that default; give one env (prod, prep or test) or one
+              MCE, hosted cluster or UPI cluster its own values; and <strong>Deploy on specific MCEs</strong>, for an
+              add-on wanted on some MCEs only. Which add-ons a hosted cluster has of its own comes from its flavor and
+              the create form.
             </li>
             <li>
               Installing it on one cluster, and configuring or removing it there, is on that cluster&apos;s page (its{" "}
@@ -1034,9 +1035,10 @@ cluster               …/{cluster}/{chart}/values.yaml
             writes <InlineCode>defaults/{"{scope}"}/{"{chart}"}/values-{"{cluster}"}.yaml</InlineCode>. It cannot be
             removed or pinned for one cluster from the cluster&apos;s page, nor installed into a cluster folder as well
             (that would generate the app twice). On the add-on&apos;s <strong>Defaults &amp; overrides</strong> page (from
-            the Addons page), the MCE and UPI panels list every destination of the default with{" "}
-            <strong>Override values</strong>: that destination&apos;s own values file (the effective values before and
-            after are shown). Wingman does not exclude destinations from a default: an add-on wanted on some MCEs only
+            the Addons page), the MCE, hosted-cluster and UPI panels have values per env
+            (<InlineCode>values-{"{env}"}.yaml</InlineCode>) and list every destination of the default with{" "}
+            <strong>Override values</strong>: that destination&apos;s own values file, above the env&apos;s (the effective
+            values before and after are shown, with the layer that sets each). Wingman does not exclude destinations from a default: an add-on wanted on some MCEs only
             is not a default, it is deployed on those MCEs (<strong>Deploy on specific MCEs</strong>: one install merge
             request per MCE, into its own <InlineCode>in-cluster/{"{chart}"}/</InlineCode>). A repo&apos;s existing{" "}
             <InlineCode>exclusions.yaml</InlineCode> is read and shown as it is.

@@ -85,6 +85,9 @@ export const day2Api = {
   /** PUT: one destination's `values-<name>.yaml` of a fleet default. */
   destinationValues: (team: string, chart: string, scope: FleetScope, cluster: string, dryRun = false) =>
     `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/destinations/${encodeURIComponent(cluster)}/values${dry(dryRun)}`,
+  /** PUT: one env's `values-<env>.yaml` of a fleet default. */
+  envValues: (team: string, chart: string, scope: FleetScope, env: string, dryRun = false) =>
+    `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/envs/${encodeURIComponent(env)}/values${dry(dryRun)}`,
   /** POST: deploy the add-on on specific MCEs, one install MR per MCE (ADR-0053's amendment). */
   mceInstalls: (team: string, chart: string, dryRun = false) => `${addon(team, chart)}/mce-installs${dry(dryRun)}`,
 };
@@ -111,9 +114,9 @@ export const day2Keys = {
   fleetDefaults: ["day2", "fleet-defaults"] as const,
   teamAddons: (team: string) => ["day2", "team-addons", team] as const,
   addonDetail: (team: string, chart: string) => ["day2", "team-addons", team, chart] as const,
-  /** `merge-preview` of a destination with `override` (stable JSON) as its own file, or without one (`null`). */
-  mergePreview: (id: string, team: string, chart: string, override: string | null) =>
-    ["day2", "merge-preview", id, team, chart, override] as const,
+  /** `merge-preview` of a destination with `override` (stable JSON) as `path` (its own file when `""`), or without one (`null`). */
+  mergePreview: (id: string, team: string, chart: string, override: string | null, path = "") =>
+    ["day2", "merge-preview", id, team, chart, override, path] as const,
 };
 
 /** The web page of a destination's charts. */

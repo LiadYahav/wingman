@@ -375,6 +375,8 @@ export interface MergePreviewBody {
   mce?: string;
   version?: string;
   override_values?: Record<string, unknown>;
+  /** The stack layer `override_values` replaces (a fleet default's `values-<env>.yaml`); the cluster's own file when absent. */
+  override_path?: string;
 }
 
 /** A day2 merge request (`MRDetailOut`). */

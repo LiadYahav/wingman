@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import type { OpenedChanges } from "@/components/addons/change-result";
 import { EditFleetDefaultDialog, MakeDefaultDialog } from "@/components/addons/default-dialogs";
-import { DestinationValuesDialog } from "@/components/addons/destination-values-dialog";
+import { DestinationValuesDialog, EnvValuesDialog } from "@/components/addons/destination-values-dialog";
 import { groupDestinations, stateStyle } from "@/components/addons/destinations";
 import { DeployOnMces } from "@/components/addons/mce-installs";
 import { RepoFileView } from "@/components/addons/repo-file";
@@ -38,8 +38,10 @@ const SCOPE_TITLE: Record<FleetScope, string> = {
   upi: "UPI clusters",
 };
 
-/** The scopes whose destinations get values of their own here (the hub is one; hosted clusters' are their flavor's). */
-const VALUES_SCOPES: readonly FleetScope[] = ["mces", "upi"];
+/** The scopes whose envs and destinations get values of their own here (the hub is one destination). */
+const VALUES_SCOPES: readonly FleetScope[] = ["mces", "hosted-clusters", "upi"];
+
+const ENVS = ["prod", "prep", "test"] as const;
 
 function WriteButton({
   writes,
@@ -181,25 +183,89 @@ function DefaultDestinations({ detail, panel, writes }: { detail: AddonDetail; p
   );
 }
 
-function HostedClustersNote({ detail }: { detail: AddonDetail }) {
+/**
+ * One env's values of the default, prod, prep and test (`values-<env>.yaml`):
+ * below each destination's own values, above the default's.
+ */
+function EnvOverrides({ detail, panel, writes }: { detail: AddonDetail; panel: ScopePanel; writes: AddonWrites }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const fileOf = (env: string) => panel.env_files.find((e) => e.env === env)?.file ?? null;
+  const inEnv = (env: string) =>
+    panel.destinations.filter((d) => d.env === env && ["default", "duplicate", "own-deploy"].includes(d.state));
+  return (
+    <div className="space-y-1" data-testid={`env-overrides-${panel.scope}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Values per env</p>
+      <ul className="divide-y rounded-lg border">
+        {ENVS.map((env) => {
+          const file = fileOf(env);
+          const reached = inEnv(env);
+          return (
+            <li key={env} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs" data-testid={`env-${env}`}>
+              <span className="w-10 font-semibold">{env}</span>
+              {file?.exists ? (
+                <span className="rounded-full bg-chart-5/12 px-2 py-px text-[10px] font-medium text-chart-5" title={file.path}>
+                  values-{env}.yaml
+                </span>
+              ) : (
+                <span className="text-muted-foreground">the default&apos;s values</span>
+              )}
+              <span className="text-muted-foreground">
+                · {reached.length} {panel.noun} in {env}
+              </span>
+              <span className="ml-auto">
+                <WriteButton
+                  writes={writes}
+                  onClick={() => setEditing(env)}
+                  label={`${file?.exists ? "Edit" : "Add"} values for ${env}`}
+                >
+                  <SlidersHorizontal className="h-3 w-3" />
+                  {file?.exists ? "Values" : "Override values"}
+                </WriteButton>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {editing && (
+        <EnvValuesDialog
+          team={detail.team}
+          chart={detail.name}
+          panel={panel}
+          env={editing}
+          file={fileOf(editing)}
+          destinations={inEnv(editing)}
+          open
+          onOpenChange={(next) => !next && setEditing(null)}
+          readOnlyReason={writes.readOnlyReason}
+          onOpened={writes.onOpened}
+        />
+      )}
+    </div>
+  );
+}
+
+function HostedClustersNote({ detail, panel }: { detail: AddonDetail; panel: ScopePanel }) {
   return (
     <p className="rounded-lg border border-dashed px-3 py-2.5 text-xs text-muted-foreground" data-testid="hosted-clusters-note">
-      This is the default for every hosted cluster. A hosted cluster&apos;s own add-ons, and their values, come from its flavor and
-      the create form (
+      {panel.is_default
+        ? `${detail.name} is deployed on every hosted cluster, with the values above. `
+        : `As a default, ${detail.name} is deployed on every hosted cluster, with values per env and per cluster. `}
+      Which add-ons a hosted cluster has of its own
+      comes from its flavor and the create form (
       <Link href="/specs" className="font-medium text-primary hover:underline">
         Flavors
       </Link>
-      ), and are managed on each cluster&apos;s page; {detail.name} is not chosen per hosted cluster here.
+      ), managed on each cluster&apos;s page: there is no deploying it on specific hosted clusters here.
     </p>
   );
 }
 
 /**
  * The add-on on one fleet scope (ADR-0053): whether it is a default there,
- * making it one or editing it. Below it, by scope: per MCE and per UPI
- * cluster, its own values; on MCEs, deploying it on specific ones (an
- * install per MCE); hosted clusters take the default only, their own add-ons
- * being their flavor's.
+ * making it one or editing it. Below it, on the MCE, hosted-cluster and UPI
+ * defaults: values per env and per destination; on MCEs, deploying it on
+ * specific ones (an install per MCE). A hosted cluster's own add-ons are its
+ * flavor's and the create form's.
  */
 export function ScopePanelCard({ detail, panel, writes }: { detail: AddonDetail; panel: ScopePanel; writes: AddonWrites }) {
   const [dialog, setDialog] = useState<"make" | "edit" | null>(null);
@@ -270,8 +336,9 @@ export function ScopePanelCard({ detail, panel, writes }: { detail: AddonDetail;
         </details>
       )}
 
-      {panel.scope === "hosted-clusters" && <HostedClustersNote detail={detail} />}
+      {perDestination && panel.is_default && <EnvOverrides detail={detail} panel={panel} writes={writes} />}
       {perDestination && panel.is_default && <DefaultDestinations detail={detail} panel={panel} writes={writes} />}
+      {panel.scope === "hosted-clusters" && <HostedClustersNote detail={detail} panel={panel} />}
       {panel.scope === "mces" && <DeployOnMces detail={detail} panel={panel} writes={writes} />}
 
       {panel.scope === "upi" && panel.unregistered.length > 0 && (
