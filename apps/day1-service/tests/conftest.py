@@ -27,6 +27,7 @@ from wingman_core.testing.fixtures import default_fixture_root, load_fixture_pro
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.domain.addons import InstalledAddon
 from wingman_day1.domain.auth import Identity
+from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.status import Condition, HostedClusterObservation, NodePoolObservation
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
@@ -51,6 +52,20 @@ BOB = User(username="bob", role=Role.ADMIN, groups=("admins",), full_name="Bob A
 VIEWER = User(username="vera", role=Role.VIEWER, groups=("viewers",))
 
 PROD_MCE = "ocp4-prod-mce-site1-a"
+FIXTURE_MCES = (
+    "ocp4-mce-workflow-test",
+    "ocp4-prep-mce-site1-a",
+    PROD_MCE,
+    "ocp4-prep-mce-site2-a",
+    "ocp4-prod-mce-site2-a",
+)
+"""Every MCE folder of dev/gitlab-fixtures that the shared hub serves."""
+ROOMY = (
+    NodeObservation("master-0", True, False, True, 250),
+    NodeObservation("worker-0", True, False, False, 250),
+    NodeObservation("worker-1", True, False, False, 250),
+)
+"""A hub with room for a control plane: 500 allocatable pods on its two workers."""
 PROD_SITE = "site1"
 
 
@@ -144,6 +159,10 @@ def hub() -> FakeHubApi:
             ]
         },
         infra_envs={PROD_MCE: {"inventory": ["dell-r660-site1-128c-1024gb-5tb"]}},
+        # Each fixture site has one MCE per env, so with room on every hub the
+        # MCE a test creates on is placement's pick (ADR-0050)
+        nodes=dict.fromkeys(FIXTURE_MCES, ROOMY),
+        pods={mce: {"master-0": 120, "worker-0": 100, "worker-1": 90} for mce in FIXTURE_MCES},
     )
 
 

@@ -37,6 +37,7 @@ from wingman_day1.domain.network import NetworkView, SegmentRecord, segment_of
 from wingman_day1.domain.node_pools import NodePoolView, NodeView
 from wingman_day1.domain.openshift_versions import OpenShiftVersions
 from wingman_day1.domain.paths import NODEPOOL_DEFAULTS_FILE
+from wingman_day1.domain.placement import MAX_REASON, Candidate, Placement
 from wingman_day1.domain.segments_manager import SegmentsManagerLinks
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata, rule_problems
@@ -329,6 +330,136 @@ class NamingOut(BaseModel):
             short_name=naming.short_name,
             sequence=naming.sequence,
             problems=list(naming.problems),
+        )
+
+
+class PlacementCheckOut(BaseModel):
+    """One required check of a candidate MCE."""
+
+    check: Literal["version", "free_pods", "readable"]
+    status: Literal["pass", "fail", "unknown"]
+    detail: str
+
+
+class SpareServersOut(BaseModel):
+    """An MCE's spare servers in server-scan."""
+
+    total: int
+    usable: int
+
+
+class ExcludedNodesOut(BaseModel):
+    """Nodes left out of the free pods, by the first reason that applies."""
+
+    control_plane: int
+    not_ready: int
+    unschedulable: int
+
+
+class FreePodsOut(BaseModel):
+    """How an MCE's free pods were counted."""
+
+    free: int
+    allocatable: int
+    used: int
+    nodes_counted: int
+    nodes_excluded: ExcludedNodesOut
+
+
+class PlacementCandidateOut(BaseModel):
+    """One candidate MCE: its checks, its numbers, its place in the ranking."""
+
+    mce: str
+    eligible: bool
+    picked: bool
+    rank: int | None
+    behind_on: Literal["owner_clusters", "clusters", "spare_servers", "name"] | None
+    checks: list[PlacementCheckOut]
+    versions: list[str]
+    clusters: int
+    open_creates: int
+    owner_clusters: int | None
+    spare: SpareServersOut | None
+    spare_detail: str | None
+    pods: FreePodsOut | None
+
+    @classmethod
+    def of(cls, candidate: Candidate) -> PlacementCandidateOut:
+        """From a domain candidate."""
+        picture = candidate.picture
+        pods = picture.pods
+        return cls(
+            mce=candidate.mce,
+            eligible=candidate.eligible,
+            picked=candidate.picked,
+            rank=candidate.rank,
+            behind_on=candidate.behind_on.value if candidate.behind_on else None,
+            checks=[
+                PlacementCheckOut(check=c.check.value, status=c.status.value, detail=c.detail)
+                for c in candidate.checks
+            ],
+            versions=list(picture.versions.versions),
+            clusters=picture.clusters,
+            open_creates=picture.open_creates,
+            owner_clusters=picture.owner_clusters,
+            spare=(
+                SpareServersOut(total=picture.spare.total, usable=picture.spare.usable)
+                if picture.spare
+                else None
+            ),
+            spare_detail=picture.spare_detail,
+            pods=(
+                FreePodsOut(
+                    free=pods.free,
+                    allocatable=pods.allocatable,
+                    used=pods.used,
+                    nodes_counted=pods.nodes_counted,
+                    nodes_excluded=ExcludedNodesOut(
+                        control_plane=pods.excluded.control_plane,
+                        not_ready=pods.excluded.not_ready,
+                        unschedulable=pods.excluded.unschedulable,
+                    ),
+                )
+                if pods
+                else None
+            ),
+        )
+
+
+class PlacementOut(BaseModel):
+    """``GET /placement``: every candidate MCE for a new cluster, and Wingman's pick (ADR-0050)."""
+
+    site: str
+    env: str
+    version: str | None
+    owner: str | None
+    flavor: str | None
+    min_free_pods: int
+    versions: list[str]
+    """Every version some candidate hosts, newest first."""
+    pick: str | None
+    why: str | None
+    problems: list[str]
+    server_scan_error: str | None
+    candidates: list[PlacementCandidateOut]
+
+    @classmethod
+    def of(cls, placement: Placement) -> PlacementOut:
+        """From the domain result."""
+        inputs = placement.inputs
+        return cls(
+            site=inputs.site,
+            env=inputs.env.value,
+            version=inputs.version,
+            owner=inputs.owner,
+            flavor=inputs.flavor,
+            min_free_pods=inputs.min_free_pods,
+            versions=list(placement.versions),
+            pick=placement.pick,
+            why=placement.why,
+            problems=list(placement.problems),
+            server_scan_error=placement.server_scan_error,
+            candidates=[PlacementCandidateOut.of(c) for c in placement.candidates],
         )
 
 
@@ -633,6 +764,15 @@ def cluster_detail(
     )
 
 
+class PlacementChoiceIn(_In):
+    """What the form showed of MCE placement, and an override's reason (ADR-0050)."""
+
+    pick: str | None = Field(default=None, min_length=1, max_length=63)
+    """Wingman's pick when the form showed it."""
+    reason: str | None = Field(default=None, max_length=2 * MAX_REASON)
+    """Why an admin chose ``mce`` instead of the pick; folded to one line, at most 500."""
+
+
 class CreateClusterIn(_In):
     """Create a cluster from a spec. ``variables`` are the template's inputs."""
 
@@ -644,6 +784,8 @@ class CreateClusterIn(_In):
     variables: dict[str, Any] = Field(default_factory=dict)
     addon_overrides: dict[str, dict[str, Any]] | None = None
     """Override values per spec addon, keyed ``team/name``."""
+    placement: PlacementChoiceIn | None = None
+    """With placement on: the pick the form showed and, to choose another MCE, a reason."""
 
 
 class PreviewOut(BaseModel):

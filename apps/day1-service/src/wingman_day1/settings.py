@@ -107,6 +107,11 @@ class Day1Settings(BaseSettings):
     # request itself; needs WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development).
     day1_provisioner: Literal["merge-request", "workflow"] = "merge-request"
 
+    # ── MCE placement (ADR-0050): on with the hubs (CLUSTER_STATUS_ENABLED) ──
+    # The free pods an MCE needs, on its Ready, schedulable, non-control-plane
+    # nodes, to be offered for a new hosted cluster (a control plane is about 70).
+    placement_min_free_pods: int = Field(default=70, ge=0, le=100_000)
+
     # ── segments-manager: a cluster's EPG, checked against Git (ADR-0039) ────
     # Off by default. SEGMENTS_MANAGER_URL is its API (reads need no token);
     # day1 only reads one segment, never writes. SEGMENTS_MANAGER_UI_URL is

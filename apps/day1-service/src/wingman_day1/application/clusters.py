@@ -5,7 +5,8 @@ Reads come from the day1 repo's default branch; changes go through the
 is rendered from the shared template, then checked against the values-file
 contract before anything is written (ADR-0012), its name against the
 naming rules (ADR-0014), and its release against what the MCE can host
-(ADR-0034). The spec's locked values are used and may not be sent different
+(ADR-0034), and, with placement on, its MCE against the placement rule
+(ADR-0050). The spec's locked values are used and may not be sent different
 (ADR-0026), its owners must be numbers (ADR-0028), its machine configs must
 resolve by the day1 CI's rule, and the cluster's network config entry is
 expanded to the name the CI reads before the template renders (ADR-0027). A
@@ -28,6 +29,7 @@ from wingman_core.domain.merge_request import MRState
 from wingman_core.domain.mr_conventions import Repo, ResourceType, Verb, parse_mr_title
 from wingman_core.domain.users import User
 from wingman_day1.application.machine_configs import MachineConfigService
+from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import read_tree
@@ -74,6 +76,7 @@ from wingman_day1.domain.names import (
 from wingman_day1.domain.openshift_versions import unhostable_problems
 from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.placement import Admission, Choice, Decision, describe_placement
 from wingman_day1.domain.sizing import sizing_problems
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
@@ -124,6 +127,8 @@ class CreateCluster:
     variables: Mapping[str, object] = field(default_factory=dict)
     addon_overrides: Mapping[str, Mapping[str, object]] = field(default_factory=dict)
     """Day2 override values per spec addon, keyed ``team/name``; kept in the file header."""
+    placement: Choice | None = None
+    """The pick the form showed, and an override's reason (ADR-0050)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +139,8 @@ class RenderedCluster:
     content: str
     spec: ClusterSpec
     requested_addons: tuple[RequestedAddon, ...]
+    admission: Admission | None = None
+    """The MCE, accepted by the placement rule; ``None`` with placement off."""
 
 
 class ClusterService:
@@ -149,12 +156,15 @@ class ClusterService:
         *,
         naming: HostedClusterNaming,
         provision: ProvisionWorkflow | None = None,
+        placement: PlacementService | None = None,
     ) -> None:
         """Read through ``day1`` (cached), write through ``provisioner``.
 
         With ``provision``, a create starts the provision-cluster workflow
         instead of opening a merge request (``DAY1_PROVISIONER=workflow``,
         ADR-0042); every other change still goes through ``provisioner``.
+        With ``placement``, a new cluster's MCE must pass the placement rule
+        (ADR-0050).
         """
         self._day1 = day1
         self._sites = sites
@@ -163,6 +173,7 @@ class ClusterService:
         self._machine_configs = machine_configs
         self._naming = naming
         self._provision = provision
+        self._placement = placement
         self._parsed: OrderedDict[str, _Parsed] = OrderedDict()
 
     # ── Reads ───────────────────────────────────────────────────────────────
@@ -256,6 +267,10 @@ class ClusterService:
 
     async def preview(self, request: CreateCluster) -> RenderedCluster:
         """Render and check a new cluster file without writing anything."""
+        return await self._prepare(request, counted=False)
+
+    async def _prepare(self, request: CreateCluster, *, counted: bool) -> RenderedCluster:
+        """Render and check a new cluster file; ``counted`` records a refused placement."""
         ref = ClusterRef(request.site, request.mce, request.name)
         await self._sites.require_mce(ref.site, ref.mce)
         problems = new_cluster_problems(ref.name, site=ref.site, mce=ref.mce, naming=self._naming)
@@ -272,24 +287,46 @@ class ClusterService:
         catalog = await self._machine_configs.catalog()
         content = self._render(ref, spec, request.variables, catalog)
         await self._require_hostable(ref.mce, content)
+        admission = await self._admit(ref, content, request, counted=counted)
         provenance = Provenance(spec.metadata.name, spec.metadata.version, tuple(addons))
-        return RenderedCluster(ref, with_provenance(content, provenance), spec, tuple(addons))
+        return RenderedCluster(
+            ref, with_provenance(content, provenance), spec, tuple(addons), admission
+        )
+
+    async def _admit(
+        self, ref: ClusterRef, content: str, request: CreateCluster, *, counted: bool
+    ) -> Admission | None:
+        """The MCE against the placement rule (ADR-0050); ``None`` with placement off."""
+        if self._placement is None:
+            return None
+        try:
+            return await self._placement.admit(
+                ref, content, request.placement, flavor=request.spec_name
+            )
+        except (InvalidInputError, StaleError):
+            if counted:
+                self._placement.record(Decision.REFUSED)
+            raise
 
     async def create(self, request: CreateCluster, *, user: User) -> ProvisionResult:
         """Propose a new cluster: one new file, in one commit, in one MR."""
-        rendered = await self.preview(request)
+        rendered = await self._prepare(request, counted=True)
         values = read_values(load_values(rendered.content))
         addons = ", ".join(f"`{a.key}@{a.version}`" for a in rendered.requested_addons)
+        placement = f"{describe_placement(rendered.admission)}\n\n" if rendered.admission else ""
         summary = (
             f"Creating hosted cluster **{rendered.ref.name}** from spec "
             f"`{rendered.spec.metadata.name}` v{rendered.spec.metadata.version}.\n\n"
             f"Site `{rendered.ref.site}`, MCE `{rendered.ref.mce}`.\n\n"
+            f"{placement}"
             f"{describe_for_review(values)}\n\n"
             f"Day2 addons requested by the spec: {addons or 'none'}.\n\n"
             "After this branch is pushed, CI and the allocate-segment workflow add `vlanId`, "
             "`dhcp_values` and `mcConfigMap` to the file; merge once they have."
         )
-        return await self._provisioner.apply(
+        if rendered.admission is not None:
+            self._log_placement(rendered.admission, rendered.ref, user)
+        result = await self._provisioner.apply(
             ClusterChange(
                 action=ClusterAction.CREATE,
                 cluster=rendered.ref,
@@ -299,6 +336,44 @@ class ClusterService:
                 spec_name=rendered.spec.metadata.name,
                 spec_version=rendered.spec.metadata.version,
             )
+        )
+        self._record(rendered.admission)
+        return result
+
+    def _record(self, admission: Admission | None) -> None:
+        if admission is not None and self._placement is not None:
+            self._placement.record(admission.decision)
+
+    def _log_placement(self, admission: Admission, ref: ClusterRef, user: User) -> None:
+        """The decision and its numbers, as the structured event ``mce_placement_chosen``."""
+        placement = admission.placement
+        event = {
+            "cluster": ref.name,
+            "site": ref.site,
+            "mce": admission.chosen,
+            "pick": placement.pick,
+            "override": admission.override,
+            "reason": admission.reason,
+            "requested_by": user.username,
+            "candidates": [
+                {
+                    "mce": c.mce,
+                    "rank": c.rank,
+                    "clusters": c.picture.clusters,
+                    "owner_clusters": c.picture.owner_clusters,
+                    "spare_usable": c.picture.spare.usable if c.picture.spare else None,
+                    "free_pods": c.picture.pods.free if c.picture.pods else None,
+                    "failures": list(c.failures),
+                }
+                for c in placement.candidates
+            ],
+        }
+        logger.info(
+            "MCE placement for %s: %s%s",
+            ref.name,
+            admission.chosen,
+            f" over the pick {placement.pick}" if admission.override else " (the pick)",
+            extra={"event": "mce_placement_chosen", **event},
         )
 
     @property
@@ -315,7 +390,7 @@ class ClusterService:
         """
         if self._provision is None:
             raise WorkflowsNotConfiguredError("this deployment creates clusters by merge request")
-        rendered = await self.preview(request)
+        rendered = await self._prepare(request, counted=True)
         ref = rendered.ref
         logger.info(
             "%s starts provision-cluster for %s in MCE %s (site %s)",
@@ -324,11 +399,15 @@ class ClusterService:
             ref.mce,
             ref.site,
         )
-        return await self._provision.start(
+        if rendered.admission is not None:
+            self._log_placement(rendered.admission, ref, user)
+        run = await self._provision.start(
             cluster=ref.name.removeprefix(HOSTED_CLUSTER_PREFIX),
             mce=ref.mce,
             content=rendered.content,
         )
+        self._record(rendered.admission)
+        return run
 
     async def provision_run(self, name: str) -> ProvisionRun:
         """The provision run of the cluster file ``<name>.yaml``; 404 when there is none."""

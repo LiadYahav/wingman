@@ -196,7 +196,7 @@ async def test_infraenvs_come_from_the_hub_and_an_unconfigured_mce_raises(
     assert context.status is not None
     assert await context.status.infra_envs(MCE) == ["dell-r660-site1-128c-1024gb-5tb"]
     with pytest.raises(HubNotConfiguredError):
-        await context.status.infra_envs("ocp4-prep-mce-site1-a")
+        await context.status.infra_envs("ocp4-prod-mce-site9-a")
 
 
 async def test_watch_yields_a_status_then_waits_the_interval(context: Day1Context) -> None:

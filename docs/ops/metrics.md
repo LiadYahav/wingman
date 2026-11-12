@@ -29,6 +29,7 @@ fails when this table and the code disagree.
 | `wingman_http_request_duration_seconds` | histogram | `method`, `route` | Time to serve a request. |
 | `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth`, `day2`, `server_scan`, `workflows` (the workflows orchestrator) or `segments_manager`; `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
 | `wingman_dependency_request_duration_seconds` | histogram | `dependency`, `operation` | Time spent in a call, retries included. |
+| `wingman_placement_decisions_total` | counter | `decision` | day1 only: creates checked against MCE placement (ADR-0050). `decision` is `picked` (Wingman's pick), `override` (an admin chose another MCE that passes every check, with a reason) or `refused` (the MCE failed a check, an override had no reason, or the form's pick was stale). Previews are not counted. |
 
 Operations of the other dependencies (day1):
 
@@ -51,6 +52,16 @@ Operations of the other dependencies (day1):
 - `ambiguous` means a write was sent but its result is unknown (a timeout or a
   5xx after sending). Writes are never retried (ADR-0006). Someone must check
   whether the commit or merge happened before trying again.
+
+## Reading placement
+
+- `kubernetes` `list_nodes` and `list_pods` are MCE placement's reads of a
+  hub's own nodes and pods (ADR-0050), one per page of 500. `denied` means
+  the MCE token may not list them: that MCE is never picked until the grant
+  in the chart README is applied (the upgrade guide has the steps).
+- `wingman_placement_decisions_total`: a rising `override` is admins
+  disagreeing with the rule; a rising `refused` is people choosing MCEs that
+  fail a check, or forms left open while the counts moved.
 
 ## Reading the server-scan, workflows and segments-manager outcomes
 

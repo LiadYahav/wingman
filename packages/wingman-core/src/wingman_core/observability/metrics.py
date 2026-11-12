@@ -50,6 +50,17 @@ class Dependency(StrEnum):
     SEGMENTS_MANAGER = "segments_manager"
 
 
+class PlacementDecision(StrEnum):
+    """How a create came out of day1's MCE placement check (ADR-0050)."""
+
+    PICKED = "picked"
+    """Wingman's pick."""
+    OVERRIDE = "override"
+    """An admin's other choice, with a reason."""
+    REFUSED = "refused"
+    """An MCE that fails a check, an override without a reason, or a stale pick."""
+
+
 class Outcome(StrEnum):
     """How a dependency call ended."""
 
@@ -166,6 +177,12 @@ class WingmanMetrics:
             buckets=_LATENCY_BUCKETS,
             registry=registry,
         )
+        self.placement_decisions = Counter(
+            "wingman_placement_decisions_total",
+            "Creates that passed or failed day1's MCE placement check, by decision.",
+            ["decision"],
+            registry=registry,
+        )
         for operation in GitLabOperation:
             for outcome in ALERTED_OUTCOMES:
                 self.dependency_requests.labels(Dependency.GITLAB, operation, outcome)
@@ -175,6 +192,11 @@ class WingmanMetrics:
         label = method_label(method)
         self.http_requests.labels(label, route, status_class(status)).inc()
         self.http_request_duration.labels(label, route).observe(seconds)
+
+    def observe_placement(self, decision: str) -> None:
+        """Count one create's placement decision; anything but a ``PlacementDecision`` is other."""
+        values = {d.value for d in PlacementDecision}
+        self.placement_decisions.labels(decision if decision in values else OTHER).inc()
 
     def observe_dependency(
         self, dependency: Dependency, operation: StrEnum, outcome: Outcome, seconds: float

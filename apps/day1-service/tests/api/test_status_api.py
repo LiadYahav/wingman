@@ -143,7 +143,7 @@ async def test_infraenvs_list_and_an_unconfigured_mce(
     listed = await client.get(f"/api/day1/mces/{MCE}/infraenvs", headers=headers)
     assert listed.json() == ["dell-r660-site1-128c-1024gb-5tb"]
     unconfigured = await client.get(
-        "/api/day1/mces/ocp4-prep-mce-site1-a/infraenvs", headers=headers
+        "/api/day1/mces/ocp4-prod-mce-site9-a/infraenvs", headers=headers
     )
     assert (unconfigured.status_code, unconfigured.json()["code"]) == (422, "VALIDATION_ERROR")
 

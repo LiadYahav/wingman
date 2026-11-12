@@ -174,6 +174,17 @@ def test_values_kept_from_3_4_still_render_segments_manager() -> None:
     assert config["SEGMENTS_MANAGER_TIMEOUT_SECONDS"] == "5"
 
 
+def test_placement_needs_70_free_pods_unless_set_also_for_values_kept_from_3_7() -> None:
+    """ADR-0050: values kept with ``--reuse-values`` from a release before placement have
+    no ``day1.placementMinFreePods``; day1 must still get a number, and 0 stays 0."""
+    assert render()["wingman-config"]["data"]["PLACEMENT_MIN_FREE_PODS"] == "70"
+    kept = render("--set", "day1.placementMinFreePods=null")["wingman-config"]["data"]
+    assert kept["PLACEMENT_MIN_FREE_PODS"] == "70"
+    for value in ("0", "120"):
+        on = render("--set", f"day1.placementMinFreePods={value}")["wingman-config"]["data"]
+        assert on["PLACEMENT_MIN_FREE_PODS"] == value
+
+
 def test_creates_open_merge_requests_unless_the_workflow_is_chosen() -> None:
     """ADR-0042: ``day1.provisioner`` defaults to merge-request, also for values kept from
     3.6 that have no such key; ``workflow`` needs ``workflows.url``."""

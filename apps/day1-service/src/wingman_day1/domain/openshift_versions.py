@@ -23,7 +23,7 @@ missing or unreadable offers no version: unknown is never "everything".
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Final
 
@@ -72,6 +72,16 @@ class OpenShiftVersions:
 def bare_release(version: str) -> str:
     """``4.20.44-x86_64`` → ``4.20.44``, the form the ladder writes."""
     return version.strip().removesuffix(_ARCH_SUFFIX)
+
+
+def is_release(version: str) -> bool:
+    """Whether ``version`` (``-x86_64`` allowed) is a release, ``4.N.N``."""
+    return _RELEASE.match(bare_release(version)) is not None
+
+
+def newest_first(releases: Iterable[str]) -> tuple[str, ...]:
+    """Distinct releases, newest first."""
+    return tuple(sorted(set(releases), key=_order, reverse=True))
 
 
 def _minor(release: str) -> str:

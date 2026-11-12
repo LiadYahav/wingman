@@ -59,6 +59,15 @@ class StaleError(Day1Error):
     """What the caller read has changed since: a spec version, a file, a reviewed MR."""
 
 
+class PlacementChangedError(StaleError):
+    """The form showed one MCE as Wingman's pick, and the pick is now another (ADR-0050)."""
+
+    def __init__(self, message: str, *, pick: str) -> None:
+        """``pick`` is Wingman's pick now."""
+        super().__init__(message)
+        self.pick = pick
+
+
 # ── MCE hub API (cluster status, InfraEnvs) ──────────────────────────────────
 
 

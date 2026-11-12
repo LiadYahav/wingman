@@ -89,6 +89,14 @@ class RepoReads(Protocol):
         """Merge requests, newest first."""
         ...
 
+    async def merge_request_diff(self, merge_request: MergeRequest) -> list[FileDiff]:
+        """What an open merge request changes, at its head ``sha``.
+
+        GitLab computes an MR's stored diff in the background, so a new MR's
+        may be empty for a moment.
+        """
+        ...
+
     def forget_files(self) -> None:
         """Drop cached files, trees and history: the default branch (or a branch) moved."""
         ...
