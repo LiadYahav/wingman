@@ -4,7 +4,7 @@ Subclass :class:`GitLabContract` in a test module and provide two fixtures:
 
 - ``gitlab``: the GitLabPort under test;
 - ``new_project``: an async factory ``(files) -> Project`` that creates a
-  fresh project whose default branch ``main`` holds ``files``;
+  fresh private project whose default branch ``main`` holds ``files``;
 - ``rename_project``: an async ``(project, name) -> None`` that gives the
   project a new last path segment, as a GitLab rename does;
 - ``new_member``: an async ``(project, *, project_level=None,
@@ -12,7 +12,8 @@ Subclass :class:`GitLabContract` in a test module and provide two fixtures:
   the project and/or of the project's group at those levels (group first,
   as GitLab refuses a project role below an inherited one), and returns the
   port acting as that account once it can see the project (GitLab grants
-  that in a background job, seconds after the membership).
+  that in a background job, seconds after the membership). With no level,
+  the account is a member of nothing, and its port is returned at once.
 
 The suite runs against the in-memory fake on every test run and against a
 real GitLab when one is configured. A failure on the real one means the fake
@@ -623,3 +624,12 @@ class GitLabContract:
             project, project_level=AccessLevel.DEVELOPER, group_level=AccessLevel.REPORTER
         )
         assert await member.access_level(project.id) is AccessLevel.DEVELOPER
+
+    async def test_a_private_project_the_account_has_no_access_to_is_not_found(
+        self, new_project: NewProject, new_member: NewMember
+    ) -> None:
+        # GitLab answers 404, not 403 or empty permissions, so as not to reveal the project.
+        project = await new_project(FILES)
+        outsider = await new_member(project)
+        with pytest.raises(NotFoundError):
+            await outsider.access_level(project.id)

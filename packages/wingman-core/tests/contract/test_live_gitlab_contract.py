@@ -185,7 +185,8 @@ class TestLiveGitLabContract(GitLabContract):
             settings = GitLabSettings(url=AnyHttpUrl(URL), token=SecretStr(token.json()["token"]))
             adapter = GitLabHttpAdapter(build_client(settings))
             adapters.append(adapter)
-            await _until_visible(adapter, project)
+            if project_level is not None or group_level is not None:
+                await _until_visible(adapter, project)
             return adapter
 
         yield make

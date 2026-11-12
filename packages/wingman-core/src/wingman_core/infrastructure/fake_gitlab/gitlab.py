@@ -3,7 +3,10 @@
 It models what Wingman depends on, not all of GitLab: projects in groups,
 branches, commits with full file trees, ``last_commit_id`` revision checks,
 merge requests with per-project numbers, merges that change the target
-branch, and conflicts. The contract suite runs the same tests against this
+branch, and conflicts. A project's visibility is modelled where Wingman
+depends on it, in ``access_level``: a private project is not found by an
+account with no access to it, as GitLab answers 404 there. Other reads answer
+every account. The contract suite runs the same tests against this
 and against a real GitLab, so a behaviour asserted here is a behaviour GitLab
 has (ADR-0005). It is not a mock: there is nothing to configure per test,
 only state to seed.
@@ -18,6 +21,7 @@ import itertools
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from typing import Literal
 
 from wingman_core.domain.errors import (
     AlreadyExistsError,
@@ -49,6 +53,9 @@ from wingman_core.domain.merge_request import (
 )
 from wingman_core.ports.clock import Clock, system_clock
 
+Visibility = Literal["private", "internal", "public"]
+"""A project's visibility, as GitLab names it."""
+
 
 @dataclass(frozen=True, slots=True)
 class _CommitRecord:
@@ -79,6 +86,7 @@ class _MergeRequestRecord:
 @dataclass(slots=True)
 class _ProjectRecord:
     project: Project
+    visibility: Visibility = "private"
     branches: dict[str, str] = field(default_factory=dict)
     commits: dict[str, _CommitRecord] = field(default_factory=dict)
     merge_requests: dict[int, _MergeRequestRecord] = field(default_factory=dict)
@@ -121,8 +129,12 @@ class InMemoryGitLab:
         *,
         default_branch: str = "main",
         message: str = "Initial commit",
+        visibility: Visibility = "private",
     ) -> Project:
-        """Create a project whose default branch holds ``files`` in one commit."""
+        """Create a project whose default branch holds ``files`` in one commit.
+
+        Private by default, as a project in a private group is.
+        """
         if path_with_namespace in self._by_path:
             raise AlreadyExistsError(f"project {path_with_namespace} already exists")
         project_id = next(self._ids)
@@ -132,7 +144,7 @@ class InMemoryGitLab:
             default_branch=default_branch,
             web_url=f"{self._base_url}/{path_with_namespace}",
         )
-        record = _ProjectRecord(project=project)
+        record = _ProjectRecord(project=project, visibility=visibility)
         self._projects[project_id] = record
         self._by_path[path_with_namespace] = project_id
         self._project_members[(project_id, self._username)] = AccessLevel.OWNER
@@ -231,15 +243,19 @@ class InMemoryGitLab:
         return sorted(found, key=lambda p: p.path_with_namespace)
 
     async def access_level(self, project_id: int) -> AccessLevel:
-        """See GitLabPort.access_level."""
-        path = self._project(project_id).project.path_with_namespace
+        """See GitLabPort.access_level; a private project without access is not found."""
+        record = self._project(project_id)
+        path = record.project.path_with_namespace
         parts = path.split("/")[:-1]
         groups = ["/".join(parts[: i + 1]) for i in range(len(parts))]
         levels = [
             self._project_members.get((project_id, self._username), AccessLevel.NONE),
             *(self._group_members.get((g, self._username), AccessLevel.NONE) for g in groups),
         ]
-        return max(levels)
+        level = max(levels)
+        if level is AccessLevel.NONE and record.visibility == "private":
+            raise NotFoundError(f"project {project_id} not found")
+        return level
 
     async def read_file(self, project_id: int, path: RepoPath, ref: str) -> FileContent:
         """See GitLabPort.read_file."""

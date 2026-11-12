@@ -54,7 +54,8 @@ class GitLabPort(Protocol):
         Group membership counts from the project's group and every group above
         it, as GitLab inherits it. ``AccessLevel.NONE`` when the account is a
         member of neither (it may still read a public or internal project).
-        Raises ``NotFoundError`` for a project the account cannot see.
+        Raises ``NotFoundError`` for a project the account cannot see: GitLab
+        answers 404 for a private project the account has no access to.
         """
         ...
 
