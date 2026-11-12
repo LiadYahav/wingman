@@ -59,6 +59,19 @@ class RepoFiles(Protocol):
         """The file's text, ``None`` if there is no such file; InvalidRequestError if not UTF-8."""
         ...
 
+    def blob(self, path: str) -> bytes | None:
+        """The file's bytes if they are in memory, without a call; else ``None``."""
+        ...
+
+
+def unchanged(before: RepoFiles, after: RepoFiles, path: str) -> bool:
+    """Whether ``path`` has the same bytes at both commits, known without a GitLab call.
+
+    ``False`` when either side is read file by file: unknown is not "the same".
+    """
+    old = before.blob(path)
+    return old is not None and old == after.blob(path)
+
 
 def _text(content: bytes, path: RepoPath, commit_id: str) -> str:
     try:
@@ -90,6 +103,9 @@ class _ArchiveFiles:
         content = self._archive.files.get(str(path))
         return None if content is None else _text(content, path, self.commit_id)
 
+    def blob(self, path: str) -> bytes | None:
+        return self._archive.files.get(path)
+
 
 class _FileByFile:
     """The fallback: the tree at the commit, and each file read once when asked for."""
@@ -120,6 +136,9 @@ class _FileByFile:
     @property
     def size(self) -> int:
         return 0  # what it reads is a few files, not the repository
+
+    def blob(self, path: str) -> bytes | None:
+        return None  # not held: knowing it would cost a call
 
     async def read(self, path: RepoPath) -> str | None:
         key = str(path)

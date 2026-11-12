@@ -166,6 +166,28 @@ async def test_after_the_ttl_only_the_head_is_checked_until_the_branch_moves(
     assert (counting.calls["read_archive"], counting.calls["read_file"]) == (2, 0)
 
 
+async def test_a_branch_move_looks_up_the_last_change_only_of_the_files_it_changed(
+    repo: CachedRepository, counting: CountingGitLab, clock: Clock
+) -> None:
+    herzi_before = await repo.last_change(HERZI)
+    values_before = await repo.last_change(VALUES)
+    assert counting.calls["list_commits"] == 2
+    project = await repo.project()
+    await counting.commit(
+        project.id,
+        branch="main",
+        message="someone edits the MCE values",
+        changes=[FileChange.update(VALUES, "changed: true\n", last_commit_id=None)],
+    )
+    clock.now += 61
+    counting.calls.clear()
+    assert await repo.last_change(HERZI) == herzi_before  # unchanged: no lookup
+    values_after = await repo.last_change(VALUES)
+    assert values_after is not None and values_after != values_before
+    assert values_after.title == "someone edits the MCE values"
+    assert counting.calls["list_commits"] == 1
+
+
 async def test_reads_at_another_ref_are_never_cached(
     repo: CachedRepository, counting: CountingGitLab
 ) -> None:

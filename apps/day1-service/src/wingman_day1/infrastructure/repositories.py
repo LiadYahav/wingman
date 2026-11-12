@@ -25,7 +25,7 @@ from wingman_core.domain.git import (
 )
 from wingman_core.domain.merge_request import MergeRequest, MRState
 from wingman_core.infrastructure.cache import TtlCache, stale_for
-from wingman_core.infrastructure.snapshots import RepoFiles, RepoSnapshots
+from wingman_core.infrastructure.snapshots import RepoFiles, RepoSnapshots, unchanged
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_day1.infrastructure import cache_keys as keys
 
@@ -55,7 +55,10 @@ class CachedRepository:
         self._ttl = ttl
         self._snapshots = snapshots or RepoSnapshots(gitlab, cache, ttl=ttl)
         self._project_id: int | None = None
-        self._last_changes: tuple[str, dict[str, asyncio.Task[list[Commit]]]] = ("", {})
+        self._last_changes: tuple[RepoFiles | None, dict[str, asyncio.Task[list[Commit]]]] = (
+            None,
+            {},
+        )
 
     @property
     def key(self) -> str:
@@ -101,18 +104,28 @@ class CachedRepository:
         )
 
     async def last_change(self, path: RepoPath) -> Commit | None:
-        """See RepoReads.last_change: one history lookup per file, kept while the head stays."""
+        """See RepoReads.last_change: one history lookup per file and change of it.
+
+        When the branch moves, a file whose bytes did not change keeps the
+        last change it had (ADR-0041): a merge costs a lookup for each file
+        it changed, not for every file. A revert that lands between two head
+        checks (the file changed and changed back) keeps the older answer.
+        """
         project, files = await self._files()
         if files is None:
             return None
-        commit_id, known = self._last_changes
-        if commit_id != files.commit_id:
-            commit_id, known = files.commit_id, {}
-            self._last_changes = (commit_id, known)
+        before, known = self._last_changes
+        if before is None or before.commit_id != files.commit_id:
+            known = (
+                {p: t for p, t in known.items() if _found(t) and unchanged(before, files, p)}
+                if before is not None
+                else {}
+            )
+            self._last_changes = (files, known)
         task = known.get(str(path))
         if task is None:
             task = asyncio.ensure_future(
-                self._gitlab.list_commits(project.id, ref=commit_id, path=path, limit=1)
+                self._gitlab.list_commits(project.id, ref=files.commit_id, path=path, limit=1)
             )
             known[str(path)] = task
         try:
@@ -195,3 +208,8 @@ class CachedRepository:
     def forget_merge_requests(self) -> None:
         """See RepoReads.forget_merge_requests."""
         self._cache.invalidate_prefix(keys.merge_requests_prefix(self._key))
+
+
+def _found(task: asyncio.Task[list[Commit]]) -> bool:
+    """A history lookup that finished and found its answer (a failed one is asked again)."""
+    return task.done() and not task.cancelled() and task.exception() is None
