@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Path, Query
@@ -13,12 +14,14 @@ from wingman_core.web.errors import AppError, from_git_error
 from wingman_day1.api.deps import Context
 from wingman_day1.api.v1.schemas import (
     CommitOut,
+    FlavorUpdateOut,
     ImportFailureOut,
     ImportIn,
     ImportOut,
     ImportPreviewIn,
     ImportPreviewOut,
     MRDetailOut,
+    RolloutStatusOut,
     SpecClusterOut,
     SpecDriftOut,
     SpecOut,
@@ -27,6 +30,7 @@ from wingman_day1.api.v1.schemas import (
 from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.imports import ImportPick, ImportResult
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.rollout import RolloutTrigger
 from wingman_day1.domain.specs import ClusterSpec
 
 router = APIRouter(prefix="/api/day1/specs", tags=["specs"])
@@ -83,6 +87,8 @@ async def spec_clusters(name: Name, context: Context, user: CurrentUser) -> list
             state=d.state.value,
             is_drifted=d.is_drifted,
             error=d.error,
+            spec_version=d.spec_version,
+            update=FlavorUpdateOut.of(d.update),
         )
         for d in await context.drift.for_spec(name)
     ]
@@ -100,9 +106,28 @@ async def spec_drift(name: Name, context: Context, user: CurrentUser) -> list[Sp
             is_drifted=d.is_drifted,
             spec_version=d.spec_version,
             error=d.error,
+            update=FlavorUpdateOut.of(d.update),
         )
         for d in await context.drift.for_spec(name)
     ]
+
+
+@router.get("/{name}/rollout")
+async def rollout_status(name: Name, context: Context, user: CurrentUser) -> RolloutStatusOut:
+    """The rollout of the flavor's newest version, one MR per cluster (ADR-0044).
+
+    From GitLab's state; reading it starts a run when work is pending (the
+    fallback trigger).
+    """
+    return RolloutStatusOut.of(await context.rollouts.read(name))
+
+
+@router.post("/{name}/rollout", status_code=202)
+async def reconcile_rollout(name: Name, context: Context, user: AdminUser) -> RolloutStatusOut:
+    """Reconcile now: open what is missing, failed clusters included (an admin's Reconcile)."""
+    status = await context.rollouts.status(name)
+    context.rollouts.start(name, RolloutTrigger.RECONCILE, force=True)
+    return RolloutStatusOut.of(replace(status, running=True))
 
 
 @router.post("/{name}/import/preview")

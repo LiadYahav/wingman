@@ -5,6 +5,11 @@ A spec that fails to parse is listed with its error rather than dropped
 and a spec is saved only when it meets the flavor rules: safe values
 (ADR-0013), locks that fix a value (ADR-0026), machine configs that resolve
 (ADR-0027) and owner numbers (ADR-0028).
+
+A version, once saved, never changes (ADR-0044): each cluster is measured
+against the version its header names, read from the file's history
+(:meth:`SpecCatalog.at_version`), so an edit must give the flavor a new
+version, and one never used before.
 """
 
 from __future__ import annotations
@@ -12,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from dataclasses import dataclass
+from typing import Final
 
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, EntryKind, RepoPath
@@ -36,6 +42,9 @@ from wingman_day1.domain.specs import (
 )
 from wingman_day1.domain.template import TemplateField, analyze_template
 from wingman_day1.ports import RepoReads, SpecChanges
+
+VERSION_HISTORY: Final = 100
+"""Commits of a flavor's file searched for an older version; one older than that is unknown."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +74,11 @@ class SpecCatalog:
         self._changes = changes
         self._machine_configs = machine_configs
         self._root = specs_root
+        self._versions: dict[tuple[str, str], ClusterSpec] = {}
+        """Older versions found in history: a saved version never changes, so kept for good."""
+        self._missing: dict[tuple[str, str], str] = {}
+        """Versions history did not have, by the commit the repo was read at then."""
+        self._looking: dict[tuple[str, str], asyncio.Lock] = {}
 
     # ── Reads ───────────────────────────────────────────────────────────────
 
@@ -112,6 +126,47 @@ class SpecCatalog:
         """Commits that changed a spec's file."""
         return await self._specs.history(self._path(name))
 
+    async def at_version(self, name: str, version: str) -> ClusterSpec | None:
+        """The flavor as it was at ``version``, with the template; ``None`` when it never was.
+
+        The file on main when it is at that version; otherwise the newest of
+        the last ``VERSION_HISTORY`` commits of the file whose content names
+        it. A version found in history is kept for good (versions never
+        change once saved); one not found is looked for again once the
+        repository moves.
+        """
+        key = (name, version)
+        if key in self._versions:
+            return self._versions[key]
+        path = self._path(name)
+        try:
+            file = await self._specs.read(path)
+        except NotFoundError:
+            return None
+        template = await self.template()
+        with contextlib.suppress(InvalidSpecError):
+            current = parse_spec(file.content, expected_name=name)
+            if current.metadata.version == version:
+                return with_template(current, template)
+        lock = self._looking.setdefault(key, asyncio.Lock())
+        async with lock:
+            if key in self._versions:
+                return self._versions[key]
+            if self._missing.get(key) == file.last_commit_id:
+                return None
+            for commit in await self._specs.history(path, limit=VERSION_HISTORY):
+                try:
+                    old = (await self._specs.read(path, ref=commit.id)).content
+                    spec = parse_spec(old, expected_name=name)
+                except (NotFoundError, InvalidSpecError):
+                    continue
+                if spec.metadata.version == version:
+                    found = with_template(spec, template)
+                    self._versions[key] = found
+                    return found
+            self._missing[key] = file.last_commit_id
+            return None
+
     async def at(self, name: str, sha: str) -> str:
         """A spec file's text at a commit."""
         try:
@@ -153,6 +208,7 @@ class SpecCatalog:
             )
         await self._require_savable(spec)
         current = await self._current(name, last_commit_id)
+        await self._require_new_version(name, spec.metadata.version)
         return await self._changes.apply(
             SpecChange(
                 action=SpecAction.UPDATE,
@@ -196,6 +252,22 @@ class SpecCatalog:
         problems += flavor_config_problems(spec.spec.day1.values, catalog)
         if problems:
             raise InvalidSpecError(f"spec {spec.metadata.name!r} cannot be saved", problems)
+
+    async def _require_new_version(self, name: str, version: str) -> None:
+        """An edit gives the flavor a version never saved before (ADR-0044)."""
+        problem = None
+        with contextlib.suppress(InvalidSpecError):  # a broken file can still be fixed
+            if (await self.get(name)).metadata.version == version:
+                problem = (
+                    f"metadata.version: {version} is the current version; an edit needs a new "
+                    "one, which reaches each cluster through its own merge request"
+                )
+        if problem is None and await self.at_version(name, version) is not None:
+            problem = (
+                f"metadata.version: {version} was used before; a version never changes once saved"
+            )
+        if problem is not None:
+            raise InvalidSpecError(f"spec {name!r} cannot be saved", [problem])
 
     def _path(self, name: str) -> RepoPath:
         try:

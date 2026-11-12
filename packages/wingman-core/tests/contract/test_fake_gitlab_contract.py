@@ -7,7 +7,9 @@ from collections.abc import Mapping
 
 import pytest
 
-from wingman_core.domain.git import Project
+from wingman_core.domain.errors import NotFoundError
+from wingman_core.domain.git import FileChange, Project, RepoPath
+from wingman_core.domain.merge_request import MergeRequestRef, NewMergeRequest
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.testing.gitlab_contract import GitLabContract, NewProject, RenameProject
 
@@ -33,3 +35,24 @@ class TestInMemoryGitLabContract(GitLabContract):
             gitlab.rename_project(project.id, f"{namespace}/{name}")
 
         return rename
+
+
+async def test_the_fake_keeps_each_merge_requests_comments_in_order() -> None:
+    # Only the fake can show a comment back: the port has no read for notes.
+    gitlab = InMemoryGitLab()
+    project = gitlab.create_project("g/p", {"a.yaml": "a: 1\n"})
+    await gitlab.commit(
+        project.id,
+        branch="b1",
+        start_branch="main",
+        message="change",
+        changes=[FileChange.update(RepoPath("a.yaml"), "a: 2\n", last_commit_id=None)],
+    )
+    mr = await gitlab.create_merge_request(project.id, NewMergeRequest("b1", "main", "t"))
+    assert gitlab.notes(mr.ref) == []
+    await gitlab.comment_on_merge_request(mr.ref, "first")
+    await gitlab.close_merge_request(mr.ref)
+    await gitlab.comment_on_merge_request(mr.ref, "second")
+    assert gitlab.notes(mr.ref) == ["first", "second"]
+    with pytest.raises(NotFoundError):
+        gitlab.notes(MergeRequestRef(project.id, 99))

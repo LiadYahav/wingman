@@ -208,3 +208,10 @@ class InstrumentedGitLab:
         return await self._call(
             GitLabOperation.CLOSE_MERGE_REQUEST, self._inner.close_merge_request(ref)
         )
+
+    async def comment_on_merge_request(self, ref: MergeRequestRef, body: str) -> None:
+        """See GitLabPort.comment_on_merge_request."""
+        await self._call(
+            GitLabOperation.COMMENT_ON_MERGE_REQUEST,
+            self._inner.comment_on_merge_request(ref, body),
+        )

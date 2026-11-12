@@ -65,6 +65,7 @@ from wingman_day1.application.imports import ImportService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
+from wingman_day1.application.rollouts import ROLLOUT_USER, RolloutService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
@@ -75,22 +76,25 @@ from wingman_day1.infrastructure.cached_hub import CachedHubApi
 from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
-from wingman_day1.infrastructure.day2_client import HttpDay2Addons
+from wingman_day1.infrastructure.day2_client import HttpDay2Addons, HttpDay2Installs
 from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_tokens
 from wingman_day1.infrastructure.merge_requests import (
     GitClusterProvisioner,
+    GitRolloutMergeRequests,
     GitSpecChanges,
     MergeRequestWriter,
 )
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.provision_workflow import HttpProvisionWorkflow
 from wingman_day1.infrastructure.repositories import CachedRepository
+from wingman_day1.infrastructure.rollout_events import MetricRolloutEvents
 from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.ports import (
     ClusterDeleteWorkflow,
     Day2Addons,
+    Day2Installs,
     HubApi,
     IdentityProvider,
     ProvisionWorkflow,
@@ -147,6 +151,8 @@ class Adapters:
     """segments-manager; ``None`` when ``SEGMENTS_MANAGER_URL`` is empty (ADR-0039)."""
     provision: ProvisionWorkflow | None = None
     """The provision-cluster workflow; ``None`` unless ``DAY1_PROVISIONER=workflow`` (ADR-0042)."""
+    day2_installs: Day2Installs | None = None
+    """Day2 opening a rollout's add-on MRs (ADR-0044); ``None``: listed for a person instead."""
     closers: tuple[Close, ...] = field(default=())
 
 
@@ -156,11 +162,14 @@ def build_adapters(
     *,
     metrics: WingmanMetrics,
     service_token: Callable[[], str],
+    rollout_token: Callable[[], str] | None = None,
     clock: Clock = system_clock,
 ) -> Adapters:
     """The real adapters for these settings (or the in-memory GitLab, for ``fake``).
 
-    ``service_token`` mints the short-lived session day1 presents to day2.
+    ``service_token`` mints the short-lived session day1 presents to day2;
+    ``rollout_token`` the admin one a flavor's rollout asks day2 to install
+    add-ons with (ADR-0044).
     """
     closers: list[Close] = []
     if runtime.git_backend is GitBackend.FAKE:
@@ -185,6 +194,15 @@ def build_adapters(
         metrics=metrics,
     )
     closers.append(day2.aclose)
+    day2_installs: Day2Installs | None = None
+    if rollout_token is not None:
+        installs = HttpDay2Installs(
+            base_url=str(settings.day2_service_url),
+            token=rollout_token,
+            metrics=metrics,
+        )
+        closers.append(installs.aclose)
+        day2_installs = installs
     hub: HubApi | None = None
     if settings.cluster_status_enabled and not settings.day1_fake_fleet:
         hub_api = HttpHubApi(
@@ -222,6 +240,7 @@ def build_adapters(
         uninstall=uninstall,
         ledger=_segment_ledger(settings, metrics=metrics, closers=closers),
         provision=_provision_workflow(settings, metrics=metrics, clock=clock, closers=closers),
+        day2_installs=day2_installs,
         closers=tuple(closers),
     )
 
@@ -326,6 +345,7 @@ def build_context(
     session_tokens: SessionTokens,
     cache: TtlCache,
     clock: Clock = system_clock,
+    metrics: WingmanMetrics | None = None,
 ) -> Day1Context:
     """Wire the use cases onto the adapters."""
     ttl = settings.day1_cache_ttl_seconds
@@ -359,9 +379,9 @@ def build_context(
         machine_configs,
         specs_root=settings.specs_root_path,
     )
-    provisioner = GitClusterProvisioner(
-        MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
-    )
+    day1_writer = MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
+    provisioner = GitClusterProvisioner(day1_writer)
+    rollout_writer = GitRolloutMergeRequests(gitlab, day1, day1_writer)
     cluster_service = ClusterService(
         day1,
         site_catalog,
@@ -376,6 +396,7 @@ def build_context(
         spec_catalog,
         CachedDay2Addons(adapters.day2, cache, ttl=ttl),
         machine_configs,
+        day1,
     )
     repos = {RepoKey.DAY1: day1, RepoKey.SPECS: specs_repo}
     # One cache of hub reads for live status and the nodes view, shared by every user (ADR-0041)
@@ -415,6 +436,21 @@ def build_context(
         if adapters.ledger is not None
         else None,
     )
+    sync = SyncService(
+        cluster_service, spec_catalog, drift, machine_configs, provisioner, day1, rollout_writer
+    )
+    rollouts = RolloutService(
+        cluster_service,
+        spec_catalog,
+        sync,
+        drift,
+        machine_configs,
+        day1,
+        rollout_writer,
+        day2=adapters.day2_installs,
+        events=MetricRolloutEvents(metrics),
+        clock=clock,
+    )
     fake_ui = FAKE_SEGMENTS_MANAGER_UI if settings.day1_fake_fleet else ""
     dev_secret = settings.dev_auth_secret.get_secret_value() if settings.dev_auth_enabled else None
     return Day1Context(
@@ -425,7 +461,8 @@ def build_context(
         audit=AuditService(repos),
         drift=drift,
         imports=ImportService(cluster_service, spec_catalog, drift, machine_configs, provisioner),
-        sync=SyncService(cluster_service, spec_catalog, drift, machine_configs, provisioner),
+        sync=sync,
+        rollouts=rollouts,
         auth=AuthService(
             session_tokens,
             identity=adapters.identity,
@@ -482,6 +519,7 @@ def create_app(
         runtime,
         metrics=metrics,
         service_token=lambda: service_tokens.issue(SERVICE_USER),
+        rollout_token=lambda: service_tokens.issue(ROLLOUT_USER),
         clock=clock,
     )
     context = build_context(
@@ -491,6 +529,7 @@ def create_app(
         session_tokens=session_tokens,
         cache=TtlCache(),
         clock=clock,
+        metrics=metrics,
     )
 
     @asynccontextmanager
@@ -498,6 +537,7 @@ def create_app(
         warm = start_warm_up("day1", lambda: warm_up(context))
         yield
         warm.cancel()
+        await context.rollouts.close()
         for close in adapters.closers:
             await close()
 

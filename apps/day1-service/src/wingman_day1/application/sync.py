@@ -21,6 +21,12 @@ Missing add-ons are not day1's to write (ADR-0016): the preview and the
 result list them, and the web installs them through day2, as the drift fix
 does (one MR per team, ``POST /api/day2/clusters/{id}/addons/bulk``).
 
+A cluster has at most one open sync MR (ADR-0044): a sync to the newest
+version is refused while one is open, whether a person or a flavor's
+rollout opened it, and one to an older version is closed, with a comment,
+when the new one opens. :meth:`SyncService.plan` is the same plan against
+any version of the flavor: the rollout and the approve page use it.
+
 When the update-nodepool workflow owns the NodePool files, a sync of their
 fields must go through it: one writer per file (architecture rule 4). The
 ``ClusterProvisioner`` port is where that switch happens.
@@ -38,6 +44,7 @@ from wingman_core.domain.users import User
 from wingman_day1.application.clusters import ClusterFile, ClusterService
 from wingman_day1.application.drift import DriftService
 from wingman_day1.application.machine_configs import MachineConfigService
+from wingman_day1.application.open_syncs import open_syncs, supersede
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.domain.addons import AddonDrift, VersionDifference
 from wingman_day1.domain.changes import ClusterAction, ClusterChange, ProvisionResult
@@ -50,7 +57,12 @@ from wingman_day1.domain.cluster_text import (
     values_or_refuse,
     with_header,
 )
-from wingman_day1.domain.errors import InvalidInputError, StaleError, UneditableFileError
+from wingman_day1.domain.errors import (
+    AlreadyInUseError,
+    InvalidInputError,
+    StaleError,
+    UneditableFileError,
+)
 from wingman_day1.domain.machine_configs import MachineConfigCatalog, network_choice_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
@@ -61,7 +73,7 @@ from wingman_day1.domain.value_drift import (
     show_value,
     value_drift,
 )
-from wingman_day1.ports import ClusterProvisioner
+from wingman_day1.ports import ClusterProvisioner, RepoReads, RolloutMergeRequests
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,13 +195,20 @@ class SyncService:
         drift: DriftService,
         machine_configs: MachineConfigService,
         provisioner: ClusterProvisioner,
+        day1: RepoReads,
+        rollouts: RolloutMergeRequests,
     ) -> None:
-        """Read the cluster, its flavor and the catalogue; propose through ``provisioner``."""
+        """Read the cluster, its flavor and the catalogue; propose through ``provisioner``.
+
+        ``day1`` gives the open sync MRs; ``rollouts`` closes one a new sync supersedes.
+        """
         self._clusters = clusters
         self._specs = specs
         self._drift = drift
         self._machine_configs = machine_configs
         self._provisioner = provisioner
+        self._day1 = day1
+        self._rollouts = rollouts
 
     async def preview(self, ref: ClusterRef, *, hardware: Mapping[int, str]) -> SyncPlan:
         """What a sync would write, the removals and reboots it means, and what blocks it."""
@@ -203,15 +222,34 @@ class SyncService:
         spec = await self._specs.get(name)
         catalog = await self._machine_configs.catalog()
         try:
-            values = values_or_refuse(cluster.content)
+            return await self.plan(cluster, spec, catalog, hardware=hardware)
         except UneditableFileError as exc:
             raise InvalidInputError(str(exc), exc.problems) from exc
+
+    async def plan(
+        self,
+        cluster: ClusterFile,
+        spec: ClusterSpec,
+        catalog: MachineConfigCatalog,
+        *,
+        hardware: Mapping[int, str] | None = None,
+        addons: bool = True,
+    ) -> SyncPlan:
+        """``cluster`` moved to ``spec`` (any version of its flavor), with ``hardware`` choices.
+
+        Raises ``UneditableFileError`` for a file Wingman cannot edit, and
+        ``InvalidInputError`` for hardware choices that do not fit. With
+        ``addons=False``, day2 is not asked what is missing.
+        """
+        hardware = hardware or {}
+        name = spec.metadata.name
+        values = values_or_refuse(cluster.content)
         cluster_name = cluster.hosted_cluster.cluster_name
         plain = value_drift(spec.locks(), values, cluster_name=cluster_name, catalog=catalog)
         choice_problems = _hardware_problems(hardware, plain, catalog, cluster_name=cluster_name)
         if choice_problems:
             raise InvalidInputError(
-                f"the hardware chosen for {ref.name} is not usable", choice_problems
+                f"the hardware chosen for {cluster.ref.name} is not usable", choice_problems
             )
         changes = value_drift(
             spec.locks(), values, cluster_name=cluster_name, catalog=catalog, hardware=hardware
@@ -228,7 +266,7 @@ class SyncService:
             content = cluster.content
         before = set(edit_problems(cluster.content, cluster.content))
         problems += [p for p in edit_problems(cluster.content, content) if p not in before]
-        addons = await self._drift.against(cluster, spec, catalog)
+        found = await self._drift.against(cluster, spec, catalog) if addons else None
         decided = [d for d in changes if d.needs_decision is None]
         return SyncPlan(
             cluster=cluster,
@@ -248,9 +286,9 @@ class SyncService:
             ),
             problems=tuple(problems),
             warnings=tuple(_mc_files_warnings(values, decided)),
-            addons_to_install=addons.addon_drift,
-            version_differences=addons.version_differences,
-            addons_error=addons.error,
+            addons_to_install=found.addon_drift if found else (),
+            version_differences=found.version_differences if found else (),
+            addons_error=found.error if found else None,
         )
 
     async def sync(
@@ -294,17 +332,32 @@ class SyncService:
             raise InvalidInputError(
                 "the sync removes configs the request does not confirm", unconfirmed
             )
+        flavor, version = spec.metadata.name, spec.metadata.version
+        syncs = await open_syncs(self._day1)
+        already = syncs.to(ref.name, flavor, version)
+        if already is not None:
+            raise AlreadyInUseError(
+                f"an open merge request already syncs {ref.name} to flavor {flavor} "
+                f"v{version}: !{already.ref.iid} {already.web_url}"
+            )
         result = await self._provisioner.apply(
             ClusterChange(
                 action=ClusterAction.SYNC,
                 cluster=ref,
                 requested_by=user,
-                summary=_summary(plan),
+                summary=sync_summary(plan),
                 content=plan.content,
                 last_commit_id=last_commit_id,
-                spec_name=spec.metadata.name,
-                spec_version=spec.metadata.version,
+                spec_name=flavor,
+                spec_version=version,
             )
+        )
+        await supersede(
+            self._rollouts,
+            syncs.older(ref.name, flavor, version),
+            by=result.merge_request,
+            flavor=flavor,
+            version=version,
         )
         return SyncResult(result, plan)
 
@@ -362,11 +415,23 @@ def _confirmation_problems(
     return problems
 
 
-def _summary(plan: SyncPlan) -> str:
+def sync_summary(
+    plan: SyncPlan,
+    *,
+    preface: Sequence[str] = (),
+    addon_lines: Sequence[str] | None = None,
+) -> str:
+    """A sync MR's description: what it sets, removes and rolls on this one cluster.
+
+    ``preface`` comes first (a rollout says why it opened); ``addon_lines``,
+    when given, replace the note that missing add-ons go through day2 (a
+    rollout links the day2 MRs it asked for).
+    """
     cluster, spec = plan.cluster, plan.spec
     ref = cluster.ref
     before = cluster.provenance.spec_version or "?"
     lines = [
+        *([*preface, ""] if preface else []),
         f"Syncing hosted cluster **{ref.name}** to flavor `{spec.metadata.name}` "
         f"v{spec.metadata.version} (the file followed v{before}).",
         "",
@@ -408,7 +473,9 @@ def _summary(plan: SyncPlan) -> str:
         ]
     if plan.warnings:
         lines += ["", *(f"**Check:** {w}" for w in plan.warnings)]
-    if plan.addons_to_install:
+    if addon_lines is not None:
+        lines += ["", *addon_lines] if addon_lines else []
+    elif plan.addons_to_install:
         names = ", ".join(f"`{a.team}/{a.name}`" for a in plan.addons_to_install)
         lines += [
             "",

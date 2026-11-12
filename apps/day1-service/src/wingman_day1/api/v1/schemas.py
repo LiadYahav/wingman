@@ -22,7 +22,7 @@ from wingman_core.web.schemas import FileDiffOut
 from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.audit import AuditCommit
 from wingman_day1.application.clusters import ClusterFile
-from wingman_day1.application.drift import ClusterDrift
+from wingman_day1.application.drift import ClusterDrift, FlavorUpdate
 from wingman_day1.application.imports import (
     ImportCandidate,
     ImportedCluster,
@@ -32,6 +32,13 @@ from wingman_day1.application.imports import (
 )
 from wingman_day1.application.machine_configs import MachineConfigOverview
 from wingman_day1.application.nodes import ClusterNodes
+from wingman_day1.application.rollouts import (
+    ClusterRollout,
+    RolloutPreview,
+    RolloutRun,
+    RolloutState,
+    RolloutStatus,
+)
 from wingman_day1.application.sites import MceView
 from wingman_day1.application.specs import SpecEntry
 from wingman_day1.application.sync import SyncPlan
@@ -958,6 +965,8 @@ class ClusterDriftOut(BaseModel):
     version_differences: list[VersionDifferenceOut]
     """Spec addons at another version; reported only, never fixed (ADR-0025)."""
     error: str | None
+    update: FlavorUpdateOut | None
+    """The flavor's newest version when the cluster is on an older one: never drift (ADR-0044)."""
 
     @classmethod
     def of(cls, drift: ClusterDrift) -> ClusterDriftOut:
@@ -975,6 +984,41 @@ class ClusterDriftOut(BaseModel):
             addon_drift=[AddonDriftOut.of(d) for d in drift.addon_drift],
             version_differences=[VersionDifferenceOut.of(d) for d in drift.version_differences],
             error=drift.error,
+            update=FlavorUpdateOut.of(drift.update),
+        )
+
+
+class MergeRequestLinkOut(BaseModel):
+    """Enough of a day1 MR to link it: its review page is ``/approvals/day1-<iid>``."""
+
+    repo: Literal["day1"] = "day1"
+    iid: int
+    title: str
+    web_url: str
+
+    @classmethod
+    def of(cls, merge_request: MergeRequest) -> MergeRequestLinkOut:
+        """From an MR."""
+        return cls(
+            iid=merge_request.ref.iid, title=merge_request.title, web_url=merge_request.web_url
+        )
+
+
+class FlavorUpdateOut(BaseModel):
+    """A newer version of the cluster's flavor, and the open MR that moves it there."""
+
+    version: str
+    merge_request: MergeRequestLinkOut | None
+
+    @classmethod
+    def of(cls, update: FlavorUpdate | None) -> FlavorUpdateOut | None:
+        """From a drift verdict's update; ``None`` stays ``None``."""
+        if update is None:
+            return None
+        mr = update.merge_request
+        return cls(
+            version=update.version,
+            merge_request=MergeRequestLinkOut.of(mr) if mr is not None else None,
         )
 
 
@@ -987,6 +1031,9 @@ class DriftSummaryItemOut(BaseModel):
     state: DriftStateOut
     is_drifted: bool | None
     error: str | None
+    spec_name: str | None
+    spec_version: str | None
+    update: FlavorUpdateOut | None
 
     @classmethod
     def of(cls, drift: ClusterDrift) -> DriftSummaryItemOut:
@@ -998,6 +1045,9 @@ class DriftSummaryItemOut(BaseModel):
             state=drift.state.value,
             is_drifted=drift.is_drifted,
             error=drift.error,
+            spec_name=drift.spec_name,
+            spec_version=drift.spec_version,
+            update=FlavorUpdateOut.of(drift.update),
         )
 
 
@@ -1011,6 +1061,8 @@ class SpecClusterOut(BaseModel):
     state: DriftStateOut
     is_drifted: bool | None
     error: str | None
+    spec_version: str | None
+    update: FlavorUpdateOut | None
 
 
 MAX_PICKED = 500
@@ -1329,6 +1381,212 @@ class SpecDriftOut(BaseModel):
     is_drifted: bool | None
     spec_version: str | None
     error: str | None
+    update: FlavorUpdateOut | None
+
+
+# ── A flavor's rollout (ADR-0044) ────────────────────────────────────────────
+
+RolloutStateOut = Literal[
+    "on_version",
+    "merge_request_open",
+    "pending",
+    "needs_decision",
+    "declined",
+    "failed",
+    "unknown",
+]
+
+
+class RolloutClusterOut(BaseModel):
+    """One cluster that follows the flavor, and where its update stands."""
+
+    name: str
+    site: str
+    mce: str
+    path: str
+    from_version: str | None
+    """The version its header names."""
+    state: RolloutStateOut
+    merge_request: MergeRequestLinkOut | None
+    """The open MR (``merge_request_open``) or the closed one (``declined``)."""
+    reasons: list[str]
+    """Why it needs a decision, failed or is unknown."""
+
+    @classmethod
+    def of(cls, item: ClusterRollout) -> RolloutClusterOut:
+        """From one cluster's rollout."""
+        ref = item.cluster.ref
+        mr = item.merge_request
+        return cls(
+            name=ref.name,
+            site=ref.site,
+            mce=ref.mce,
+            path=str(ref.path),
+            from_version=item.cluster.provenance.spec_version,
+            state=item.state.value,
+            merge_request=MergeRequestLinkOut.of(mr) if mr is not None else None,
+            reasons=list(item.reasons),
+        )
+
+
+class RolloutRunOut(BaseModel):
+    """This replica's last run for the flavor."""
+
+    trigger: Literal["merge", "webhook", "reconcile", "read"]
+    started_at: str
+    finished_at: str | None
+    opened: int
+    failed: int
+
+    @classmethod
+    def of(cls, run: RolloutRun | None) -> RolloutRunOut | None:
+        """From a run; ``None`` stays ``None``."""
+        if run is None:
+            return None
+        return cls(
+            trigger=run.trigger.value,
+            started_at=run.started_at.isoformat(),
+            finished_at=_iso(run.finished_at),
+            opened=run.opened,
+            failed=run.failed,
+        )
+
+
+class RolloutStatusOut(BaseModel):
+    """``GET /specs/{name}/rollout``: the newest version's rollout, from GitLab's state."""
+
+    spec_name: str
+    version: str | None
+    running: bool
+    last_run: RolloutRunOut | None
+    counts: dict[RolloutStateOut, int]
+    clusters: list[RolloutClusterOut]
+
+    @classmethod
+    def of(cls, status: RolloutStatus) -> RolloutStatusOut:
+        """From a rollout status."""
+        order = list(RolloutState)
+        return cls(
+            spec_name=status.spec_name,
+            version=status.version,
+            running=status.running,
+            last_run=RolloutRunOut.of(status.last_run),
+            counts={state.value: n for state, n in status.counts().items()},
+            clusters=[
+                RolloutClusterOut.of(c)
+                for c in sorted(
+                    status.clusters, key=lambda c: (order.index(c.state), c.cluster.ref.name)
+                )
+            ],
+        )
+
+
+class ClusterRefOut(BaseModel):
+    """A cluster, by name and place."""
+
+    name: str
+    site: str
+    mce: str
+
+
+class DecisionOut(ClusterRefOut):
+    """A cluster that gets no MR until a person syncs it."""
+
+    reasons: list[str]
+
+
+class NodepoolRollOut(BaseModel):
+    """A nodepool whose nodes roll when the cluster's MR merges, and how."""
+
+    name: str
+    replicas: int | None
+    replaces_nodes: bool
+    max_unavailable: int | str | None
+
+
+class RollsOut(ClusterRefOut):
+    """A cluster whose MR rolls nodes."""
+
+    nodepools: list[NodepoolRollOut]
+
+
+class RemovalOut(BaseModel):
+    """A config a cluster's MR removes from a nodepool."""
+
+    nodepool: str
+    name: str
+
+
+class RemovalsOut(ClusterRefOut):
+    """A cluster whose MR removes configs."""
+
+    removals: list[RemovalOut]
+
+
+class ApprovalRolloutOut(BaseModel):
+    """``GET /approvals/{iid}/rollout``: what merging a flavor's MR opens, cluster by cluster."""
+
+    applies: bool
+    reason: str | None
+    spec_name: str
+    version: str | None
+    current_version: str | None
+    following: int
+    opens: int
+    already_on_version: int
+    needs_decision: list[DecisionOut]
+    rolls_nodes: list[RollsOut]
+    removes_configs: list[RemovalsOut]
+    adds_addons: list[str]
+
+    @classmethod
+    def of(cls, preview: RolloutPreview) -> ApprovalRolloutOut:
+        """From a rollout preview."""
+        return cls(
+            applies=preview.applies,
+            reason=preview.reason,
+            spec_name=preview.spec_name,
+            version=preview.version,
+            current_version=preview.current_version,
+            following=preview.following,
+            opens=preview.opens,
+            already_on_version=preview.already_on_version,
+            needs_decision=[
+                DecisionOut(
+                    name=d.ref.name, site=d.ref.site, mce=d.ref.mce, reasons=list(d.reasons)
+                )
+                for d in preview.needs_decision
+            ],
+            rolls_nodes=[
+                RollsOut(
+                    name=r.ref.name,
+                    site=r.ref.site,
+                    mce=r.ref.mce,
+                    nodepools=[
+                        NodepoolRollOut(
+                            name=n.nodepool.name,
+                            replicas=n.replicas,
+                            replaces_nodes=n.replaces_nodes,
+                            max_unavailable=n.max_unavailable,
+                        )
+                        for n in r.rebooting
+                    ],
+                )
+                for r in preview.rolls_nodes
+            ],
+            removes_configs=[
+                RemovalsOut(
+                    name=r.ref.name,
+                    site=r.ref.site,
+                    mce=r.ref.mce,
+                    removals=[
+                        RemovalOut(nodepool=x.nodepool.name, name=x.name) for x in r.removals
+                    ],
+                )
+                for r in preview.removes_configs
+            ],
+            adds_addons=list(preview.adds_addons),
+        )
 
 
 # ── The delete-cluster workflow (ADR-0033) ──────────────────────────────────

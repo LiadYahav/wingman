@@ -161,3 +161,13 @@ class GitLabPort(Protocol):
     async def close_merge_request(self, ref: MergeRequestRef) -> MergeRequest:
         """Close without merging."""
         ...
+
+    async def comment_on_merge_request(self, ref: MergeRequestRef, body: str) -> None:
+        """Add a comment (a note) to a merge request, open or not.
+
+        A write, never retried (ADR-0006): ``AmbiguousWriteError`` means the
+        comment may have been added. Raises ``NotFoundError`` if the merge
+        request does not exist and ``InvalidRequestError`` for a blank body,
+        which GitLab refuses.
+        """
+        ...

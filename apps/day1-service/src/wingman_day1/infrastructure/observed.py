@@ -62,6 +62,8 @@ class Day2Operation(StrEnum):
     """Calls to the day2 service (``dependency="day2"``)."""
 
     LIST_INSTALLED_ADDONS = "list_installed_addons"
+    LIST_OPEN_INSTALLS = "list_open_installs"
+    INSTALL_ADDONS = "install_addons"
 
 
 class ServerScanOperation(StrEnum):

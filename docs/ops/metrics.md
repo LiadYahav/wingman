@@ -18,7 +18,8 @@ fails when this table and the code disagree.
   **route template** (`/api/day1/clusters/{name}`), and `<unmatched>` for
   requests no route matched.
 - Series an alert depends on are created at zero on start-up, so "no failures
-  yet" reads as `0`, not as a missing series.
+  yet" reads as `0`, not as a missing series. So is every value of the
+  rollout counters' one label.
 
 ## Catalogue
 
@@ -29,6 +30,8 @@ fails when this table and the code disagree.
 | `wingman_http_request_duration_seconds` | histogram | `method`, `route` | Time to serve a request. |
 | `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth`, `day2`, `server_scan`, `workflows` (the workflows orchestrator) or `segments_manager`; `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
 | `wingman_dependency_request_duration_seconds` | histogram | `dependency`, `operation` | Time spent in a call, retries included. |
+| `wingman_rollout_runs_total` | counter | `trigger` | Flavor rollout runs (day1, ADR-0044), by what started them: `merge` (Wingman merged the flavor's MR), `webhook` (the specs project's webhook), `reconcile` (an admin pressed Reconcile) or `read` (the rollout status was read with work pending). Every value exists at zero from start-up; day2 exports them at zero. |
+| `wingman_rollout_merge_requests_total` | counter | `outcome` | What flavor rollouts (day1) did with each cluster's merge request: `opened`, `recovered` (an MR opened for a branch an earlier run left without one), `superseded` (an open MR to an older version was closed for the new one), `failed` (GitLab refused the write), `unconfirmed` (GitLab did not confirm the write, ADR-0006; the next run checks the branch and MR) or `not_sent` (not started because GitLab stopped answering in that run). Every value exists at zero from start-up; day2 exports them at zero. Never a cluster, flavor or version label. |
 
 Operations of the other dependencies (day1):
 
@@ -36,7 +39,7 @@ Operations of the other dependencies (day1):
 |---|---|
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
-| `day2` | `list_installed_addons` |
+| `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
 | `server_scan` | `list_server_rows`, `get_server` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision` |
 | `segments_manager` | `get_segment` |

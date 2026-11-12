@@ -213,6 +213,7 @@ def build_app(
             uninstall=uninstall,
             ledger=ledger,
             provision=provision,
+            day2_installs=day2,
         ),
         clock=clock,
     )
