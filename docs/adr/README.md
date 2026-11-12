@@ -40,7 +40,7 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0017](0017-cluster-provisioner-port.md) | Provisioning is a `ClusterProvisioner` port: a merge request today, the `create-cluster` workflow later |
 | [0018](0018-sites-and-mces-are-read-only.md) | Sites and MCEs are read-only folders in Wingman |
 | [0019](0019-hub-api-over-httpx.md) | MCE hubs, OpenShift OAuth and day2 are reached over httpx, behind ports, with failures reported |
-| [0020](0020-day2-four-destination-kinds.md) | day2 models four destination kinds, discovered from folders and day1, each with an id that carries its position |
+| [0020](0020-day2-four-destination-kinds.md) | day2 models four destination kinds, discovered from folders and day1, each with an id that carries its position (amended 2026-11-13: the web's Destinations page is removed; the API and the concept stay) |
 | [0021](0021-value-stacks-with-provenance-checked-by-the-oracle.md) | The values preview is the platform's exact stack with Helm's merge and per-key provenance, held to render_chain.py by an oracle test |
 | [0022](0022-what-day2-writes.md) | day2 writes the minimum per change, never pins a version per cluster by default, and says that removal orphans |
 | [0023](0023-day2-lints.md) | day2 lints are render_chain.py's rules as errors plus Wingman's own; a change that adds an error is refused |

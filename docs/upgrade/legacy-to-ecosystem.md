@@ -263,7 +263,7 @@ Sign in, as an admin and as a viewer, and check each page reads:
 | A cluster | Its values, its HostedCluster (if live status is on), its Drift tab |
 | Specs | Every spec loads, or shows why it doesn't |
 | New cluster | Fill the form for an existing site and MCE and press **Preview**, not Create. The preview must render and pass every check. |
-| Destinations, Addons | Every team repo's clusters and charts |
+| Addons | Every team repo's add-ons and fleet defaults; a cluster's Addons tab lists its charts |
 | Approvals | Open MRs, including those from the old version |
 | Audit | Both tabs load |
 
