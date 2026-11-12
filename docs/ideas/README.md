@@ -28,6 +28,7 @@ checked against it.
 | Idea | Status | File |
 |---|---|---|
 | Where Wingman sits in the architecture: who owns what, the rules that follow, questions for the architect | Reference | [architecture-fit.md](architecture-fit.md) |
+| **One place for the platform**: Servers and Segments inside Wingman behind a top-bar switch, cluster-navigator's data for hosted clusters and MCEs, Wingman picking the MCE, teams authoring add-ons and fleet defaults, one MR per cluster | **Decided** 2026-11-12; the plan, its workstreams and open questions | [single-pane.md](single-pane.md) |
 | Flavors v2: machine configs per nodepool, nodepool defaults, enforced locks, owner numbers, importing existing clusters, a redesigned flavor page | **Built** 2026-11-08 (3.3); a few items left for later | [flavors-v2.md](flavors-v2.md) |
 | Workflow runs on the cluster page, OCP upgrades (control plane, then workers) and reviewing workflow branches | Proposed | [workflow-runs.md](workflow-runs.md) |
 | Servers per hosted cluster from server-scan, why a cluster waits for workers, and moving capacity between clusters | Nodes per cluster by NodePool (why a pool waits, what an update works on) and node uninstall **built** 2026-11-11 ([ADR-0038](../adr/0038-cluster-nodes-from-server-scan-and-the-uninstall-workflow.md)); the rest proposed | [servers-and-nodes.md](servers-and-nodes.md) |
