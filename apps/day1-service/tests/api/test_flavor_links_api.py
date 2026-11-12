@@ -1,20 +1,32 @@
 """Flavors and the clusters that follow them, over HTTP: drift, import, sync, use.
 
-The web stage is built from ``docs/notes/2026-11-08-flavors-v2-api-changes.md``;
-these tests hold the JSON to it.
+The web stage is built from ``docs/notes/2026-11-08-flavors-v2-api-changes.md``
+(the import's answer: ``docs/notes/2026-11-12-import-mr-per-cluster.md``); these
+tests hold the JSON to them.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from dataclasses import replace
+from typing import Any, cast
 
 import httpx
 import yaml
+from fastapi import FastAPI
 
+from wingman_core.domain.errors import AmbiguousWriteError, GitError, RevisionConflictError
 from wingman_core.domain.git import RepoPath
+from wingman_core.domain.mr_conventions import Repo
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
+from wingman_day1.api.deps import Day1Context
+from wingman_day1.application.approvals import RepoKey
+from wingman_day1.application.imports import ImportService
+from wingman_day1.domain.changes import ClusterChange, ProvisionResult
+from wingman_day1.infrastructure.merge_requests import GitClusterProvisioner, MergeRequestWriter
+from wingman_day1.infrastructure.repositories import CachedRepository
+from wingman_day1.ports import ClusterProvisioner
 
 Auth = Callable[[User], dict[str, str]]
 HOSTED = "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters"
@@ -158,44 +170,172 @@ async def test_the_import_preview_lists_each_cluster_with_its_drift_against_the_
     )
 
 
-async def test_the_import_opens_one_day1_mr(
-    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
-) -> None:
-    headers = auth(support.ALICE)
+async def import_body(client: httpx.AsyncClient, headers: dict[str, str], *names: str) -> Any:
+    """The import request for ``names``, from their preview."""
     preview = (
         await client.post(
             "/api/day1/specs/agent-baseline/import/preview",
-            json={"clusters": [{"name": LARK}]},
+            json={"clusters": [{"name": n} for n in names]},
             headers=headers,
         )
     ).json()
-    (lark,) = preview["clusters"]
-    body = {
+    return {
         "spec_version": preview["spec_version"],
         "clusters": [
-            {
-                "name": lark["name"],
-                "site": lark["site"],
-                "mce": lark["mce"],
-                "last_commit_id": lark["last_commit_id"],
-            }
+            {k: c[k] for k in ("name", "site", "mce", "last_commit_id")}
+            for c in preview["clusters"]
         ],
     }
+
+
+async def test_the_import_opens_one_day1_mr_per_cluster(
+    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    headers = auth(support.ALICE)
+    body = await import_body(client, headers, LARK, HERON)
     response = await client.post(
         "/api/day1/specs/agent-baseline/import", json=body, headers=headers
     )
     assert response.status_code == 201, response.text
-    mr = response.json()
-    assert (mr["repo"], mr["title"]) == (
-        "day1",
-        "[Wingman/Day1] Import spec agent-baseline into 1 cluster",
+    result = response.json()
+    assert (result["spec_name"], result["spec_version"], result["failed"]) == (
+        "agent-baseline",
+        "1.0.0",
+        [],
     )
-    assert mr["labels"] == ["day1", "import", "wingman"]
+    lark, heron = result["merge_requests"]
+    assert {k: v for k, v in lark.items() if k != "merge_request"} == {
+        "name": LARK,
+        "site": "site1",
+        "mce": "ocp4-prod-mce-site1-a",
+        "path": f"{HOSTED}/{LARK}.yaml",
+    }
     pid = await support.project_id(gitlab, support.DAY1)
-    content = gitlab.snapshot(pid, mr["source_branch"])[lark["path"]]
-    assert content.startswith('# specName: "agent-baseline"\n# specVersion: "1.0.0"\n# Placeholder')
+    main = gitlab.snapshot(pid, "main")
+    for opened in (lark, heron):
+        mr = opened["merge_request"]
+        assert (mr["repo"], mr["title"], mr["labels"]) == (
+            "day1",
+            f"[Wingman/Day1] Import cluster {opened['name']} into spec agent-baseline v1.0.0",
+            ["day1", "import", "wingman"],
+        )
+        branch = gitlab.snapshot(pid, mr["source_branch"])
+        assert [p for p in branch if branch[p] != main.get(p)] == [opened["path"]]
+        assert branch[opened["path"]].startswith(
+            '# specName: "agent-baseline"\n# specVersion: "1.0.0"\n'
+        )
+    assert lark["merge_request"]["iid"] != heron["merge_request"]["iid"]
     again = await client.post("/api/day1/specs/agent-baseline/import", json=body, headers=headers)
-    assert again.status_code == 201  # the file on main is unchanged until the MR merges
+    assert again.status_code == 201  # the files on main are unchanged until the MRs merge
+
+
+class Failing:
+    """day1's provisioner, except that GitLab answers ``errors[name]`` for those clusters."""
+
+    def __init__(self, real: ClusterProvisioner, errors: dict[str, GitError]) -> None:
+        self.real = real
+        self.errors = errors
+
+    async def apply(self, change: ClusterChange) -> ProvisionResult:
+        error = self.errors.get(change.cluster.name)
+        if error is not None:
+            raise error
+        return await self.real.apply(change)
+
+
+def fail_imports(
+    app: FastAPI, gitlab: InMemoryGitLab, clock: Any, errors: dict[str, GitError]
+) -> None:
+    context: Day1Context = app.state.day1
+    day1 = cast("CachedRepository", context.repos[RepoKey.DAY1])
+    real = GitClusterProvisioner(
+        MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
+    )
+    imports = ImportService(
+        context.clusters,
+        context.specs,
+        context.drift,
+        context.machine_configs,
+        Failing(real, errors),
+    )
+    app.state.day1 = replace(context, imports=imports)
+
+
+async def test_the_clusters_whose_mr_did_not_open_are_listed_beside_those_that_did(
+    app: FastAPI,
+    client: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    gitlab: InMemoryGitLab,
+    clock: Any,
+) -> None:
+    headers = auth(support.ALICE)
+    body = await import_body(client, headers, LARK, HERON)
+    fail_imports(app, gitlab, clock, {HERON: AmbiguousWriteError("the commit timed out")})
+    response = await client.post(
+        "/api/day1/specs/agent-baseline/import", json=body, headers=headers
+    )
+    assert response.status_code == 201, response.text
+    result = response.json()
+    assert [m["name"] for m in result["merge_requests"]] == [LARK]
+    assert result["failed"] == [
+        {
+            "name": HERON,
+            "site": "site1",
+            "mce": "ocp4-prod-mce-site1-a",
+            "path": f"{HOSTED}/{HERON}.yaml",
+            "code": "AMBIGUOUS_WRITE",
+            "detail": "the commit timed out",
+        }
+    ]
+
+
+async def test_an_import_whose_mrs_all_failed_answers_with_the_failures_problem(
+    app: FastAPI,
+    client: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    gitlab: InMemoryGitLab,
+    clock: Any,
+) -> None:
+    headers = auth(support.ALICE)
+    one = await import_body(client, headers, LARK)
+    both = await import_body(client, headers, LARK, HERON)
+    fail_imports(
+        app,
+        gitlab,
+        clock,
+        {
+            LARK: RevisionConflictError("the file changed since that commit"),
+            HERON: AmbiguousWriteError("the commit timed out"),
+        },
+    )
+    # One cluster: its own problem, as any other write's
+    response = await client.post("/api/day1/specs/agent-baseline/import", json=one, headers=headers)
+    assert response.status_code == 409
+    problem = response.json()
+    assert (problem["code"], problem["detail"]) == (
+        "REVISION_CONFLICT",
+        f"{LARK}: the file changed since that commit",
+    )
+    # Several: an unconfirmed write leads (check GitLab before importing again), every one listed
+    response = await client.post(
+        "/api/day1/specs/agent-baseline/import", json=both, headers=headers
+    )
+    assert response.status_code == 504
+    problem = response.json()
+    assert (problem["code"], problem["detail"]) == (
+        "AMBIGUOUS_WRITE",
+        "GitLab confirmed none of the 2 import merge requests",
+    )
+    assert problem["details"]["problems"] == [
+        f"{LARK}: the file changed since that commit",
+        f"{HERON}: the commit timed out",
+    ]
+    assert [(f["name"], f["code"]) for f in problem["details"]["failed"]] == [
+        (LARK, "REVISION_CONFLICT"),
+        (HERON, "AMBIGUOUS_WRITE"),
+    ]
 
 
 async def test_import_problems_are_422s_and_a_moved_file_is_409(

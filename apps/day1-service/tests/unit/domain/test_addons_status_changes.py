@@ -198,6 +198,26 @@ def test_a_delete_carries_no_content_and_a_create_needs_some() -> None:
         ClusterChange(ClusterAction.CREATE, REF, ALICE, "why")
 
 
+def test_an_import_is_one_guarded_file_and_names_the_flavor_it_links() -> None:
+    linked = {"spec_name": "agent-baseline", "spec_version": "1.0.0"}
+    ClusterChange(
+        ClusterAction.IMPORT, REF, ALICE, "why", content="a", last_commit_id="a", **linked
+    )
+    with pytest.raises(ValueError, match="last_commit_id"):
+        ClusterChange(ClusterAction.IMPORT, REF, ALICE, "why", content="a: 1\n", **linked)
+    for missing in ("spec_name", "spec_version"):
+        with pytest.raises(ValueError, match="names the flavor and version"):
+            ClusterChange(
+                ClusterAction.IMPORT,
+                REF,
+                ALICE,
+                "why",
+                content="a: 1\n",
+                last_commit_id="a" * 40,
+                **{**linked, missing: None},
+            )
+
+
 def test_spec_changes_have_the_same_invariants() -> None:
     SpecChange(SpecAction.CREATE, "s", "1.0.0", ALICE, "why", content="x")
     with pytest.raises(ValueError, match="carries no content"):

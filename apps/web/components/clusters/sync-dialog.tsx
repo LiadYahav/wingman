@@ -78,7 +78,7 @@ function atATime(maxUnavailable: number | string): string {
  * rebooted in place, one at a time or `inPlace.maxUnavailable` at a time
  * (the chart's default `upgradeType` is `InPlace`), or replaced.
  */
-export function rollText(r: Rebooting): string {
+export function rollText(r: Pick<Rebooting, "replicas" | "max_unavailable" | "replaces_nodes">): string {
   const nodes = r.replicas === null ? "Its nodes" : `Its ${r.replicas} node${r.replicas === 1 ? "" : "s"}`;
   const are = r.replicas === 1 ? "is" : "are";
   if (r.replaces_nodes) {
@@ -179,6 +179,9 @@ export function SyncDialog({
         setConfirmed(new Set());
         void preview.refetch();
       }
+      // An open MR already syncs the cluster to this version (a rollout's, ADR-0044): the
+      // detail names it, and the drift tab links it once read again
+      if (isApiError(e, "ALREADY_EXISTS")) void queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });
     },
   });
 
@@ -244,7 +247,7 @@ export function SyncDialog({
     : data.problems.length > 0
     ? "Resolve the problems above to sync."
     : !data.can_sync
-    ? "Nothing to sync: the file holds every locked value and names the flavor's current version."
+    ? "Nothing to sync: the file holds every locked value and names the flavor's newest version."
     : !allConfirmed
     ? `Confirm each removal to sync (${confirmedCount} of ${removals.length} confirmed).`
     : null;
@@ -352,7 +355,16 @@ export function SyncDialog({
             )}
 
             {Boolean(sync.error) && !isApiError(sync.error, "REVISION_CONFLICT") && (
-              <ProblemList error={sync.error} title={writeErrorTitle(sync.error, "The sync was refused")} />
+              <div data-testid="sync-refused">
+                <ProblemList
+                  error={sync.error}
+                  title={
+                    isApiError(sync.error, "ALREADY_EXISTS")
+                      ? `A merge request already syncs this cluster${data ? ` to ${data.spec_name} v${data.spec_version}` : ""}, so no second one was opened`
+                      : writeErrorTitle(sync.error, "The sync was refused")
+                  }
+                />
+              </div>
             )}
 
             {deciding.length > 0 && (

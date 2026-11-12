@@ -196,6 +196,8 @@ async def test_a_specs_clusters_and_their_drift(
             "state": "drifted",
             "is_drifted": True,
             "error": None,
+            "spec_version": "1.0.0",
+            "update": None,
         }
     ]
     drift = (await client.get("/api/day1/specs/agent-standard/drift", headers=bob)).json()

@@ -159,10 +159,10 @@ export function ReviewStep({
       <div className="flex items-start gap-2.5 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground" data-testid="import-explainer">
         <FileText className="h-4 w-4 shrink-0 text-foreground/70" aria-hidden />
         <p>
-          The import opens one day1 MR that writes only the flavor link (<code className="font-mono">specName</code>,{" "}
-          <code className="font-mono">specVersion</code>) into each cluster file&apos;s header. Nothing on the clusters
-          changes. Once the MR merges, the differences below show as drift, and Sync on each cluster&apos;s page fixes
-          them.
+          The import opens one day1 MR per cluster, and each writes only the flavor link (
+          <code className="font-mono">specName</code>, <code className="font-mono">specVersion</code>) into its
+          file&apos;s header. Nothing on the clusters changes. Once a cluster&apos;s MR merges, its differences below
+          show as drift, and Sync on its page fixes them.
         </p>
       </div>
 

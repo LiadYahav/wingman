@@ -50,6 +50,27 @@ class InstalledAddon:
     version: str
 
 
+@dataclass(frozen=True, slots=True)
+class Day2InstallRequest:
+    """An open day2 merge request that installs add-ons on a cluster (one team's)."""
+
+    team: str
+    iid: int
+    title: str
+    web_url: str
+    charts: tuple[str, ...]
+    """The charts it installs, as its title names them."""
+
+
+@dataclass(frozen=True, slots=True)
+class Day2InstallResult:
+    """What asking day2 to install add-ons on a cluster opened: one MR per team, or why not."""
+
+    opened: tuple[Day2InstallRequest, ...]
+    failed: tuple[str, ...]
+    """One line per team (or for the whole request) whose MR did not open, and why."""
+
+
 class AddonDriftReason(StrEnum):
     """Why a spec addon counts as drifted. Only a missing addon does (ADR-0025)."""
 

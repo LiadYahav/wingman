@@ -102,7 +102,7 @@ function drift(overrides: Partial<ClusterDrift> = {}): ClusterDrift {
   return {
     cluster: NAME, site: SITE, mce: MCE, state: "drifted", is_drifted: true,
     spec_name: FLAVOR, spec_version: "1.0.0", current_spec_version: "1.0.0",
-    value_drift: [CONFIGS_DRIFT], addon_drift: [], version_differences: [], error: null, ...overrides,
+    value_drift: [CONFIGS_DRIFT], addon_drift: [], version_differences: [], error: null, update: null, ...overrides,
   };
 }
 
@@ -240,11 +240,24 @@ test.describe("Cluster drift on locked values", () => {
     await expect(page.getByRole("button", { name: "Sync to flavor" })).toHaveCount(0);
   });
 
-  test("a cluster in sync whose header names an older version is offered a sync", async ({ page }) => {
-    await openDetail(page, drift({ state: "in_sync", is_drifted: false, value_drift: [], current_spec_version: "1.1.0" }));
+  test("a cluster in sync with an update and no update MR is offered a sync", async ({ page }) => {
+    await openDetail(page, drift({
+      state: "in_sync", is_drifted: false, value_drift: [], current_spec_version: "1.1.0", update: { version: "1.1.0", merge_request: null },
+    }));
 
-    await expect(page.getByText(`The cluster holds every value ${FLAVOR} v1.1.0 locks and has every add-on it lists.`)).toBeVisible();
-    await expect(page.getByText("A sync moves the header to v1.1.0.")).toBeVisible();
+    await expect(page.getByText(`The cluster holds every value ${FLAVOR} v1.0.0 locks and has every add-on it lists.`)).toBeVisible();
+    const update = page.getByTestId("flavor-update");
+    await expect(update).toHaveAttribute("data-state", "available");
+    await expect(update.getByRole("button", { name: "Sync to flavor" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sync to flavor" })).toHaveCount(1);
+  });
+
+  test("a day1 that sends no update: an older header is still an update, and offers a sync", async ({ page }) => {
+    const old = drift({ state: "in_sync", is_drifted: false, value_drift: [], current_spec_version: "1.1.0" }) as Partial<ClusterDrift>;
+    delete old.update;
+    await openDetail(page, old as ClusterDrift);
+
+    await expect(page.getByTestId("flavor-update")).toContainText(`${FLAVOR} v1.1.0 is out.`);
     await expect(page.getByRole("button", { name: "Sync to flavor" })).toBeVisible();
   });
 
@@ -535,7 +548,9 @@ const LIST: ClusterStatus[] = [
   row("ocp4-prod-charlie-site1", { merkaz: "990", anaf: "56", mador: "8" }),
   row("ocp4-prod-delta-site1", {}),
 ];
-const SUMMARY: DriftSummaryItem[] = LIST.map((c) => ({ name: c.name, site: SITE, mce: MCE, state: "in_sync", is_drifted: false, error: null }));
+const SUMMARY: DriftSummaryItem[] = LIST.map((c) => ({
+  name: c.name, site: SITE, mce: MCE, state: "in_sync", is_drifted: false, error: null, spec_name: FLAVOR, spec_version: "1.0.0", update: null,
+}));
 
 test.describe("Cluster list owners", () => {
   test.beforeEach(async ({ page }) => {

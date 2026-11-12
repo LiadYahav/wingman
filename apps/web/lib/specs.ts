@@ -38,6 +38,21 @@ export function specVersionProblem(version: string): string | null {
 }
 
 /**
+ * Why an edit's version would be refused (ADR-0044): clusters are measured
+ * against the version their header names, so a saved version never changes
+ * and an edit needs a new one. day1 also refuses a version used before
+ * (`metadata.version: 0.9.0 was used before`), which this page cannot know.
+ */
+export function editVersionProblem(version: string, saved: string): string | null {
+  const shape = specVersionProblem(version);
+  if (shape) return shape;
+  if (version === saved) {
+    return `${saved} is the current version; an edit needs a new one, which reaches each cluster through its own merge request`;
+  }
+  return null;
+}
+
+/**
  * The document a spec write sends. Request bodies refuse unknown fields, so
  * a read's extras (`load_error`, `load_problems`) never go back, and the
  * shared template (filled on read, never stored) is sent empty.

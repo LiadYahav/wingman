@@ -89,3 +89,8 @@ someone must look.
 2. In GitLab, check whether the commit, branch or MR exists or the MR was
    merged. If it did happen, nothing to do. If not, ask the user to retry from
    Wingman.
+3. A flavor rollout's write (author `system:wingman-rollout`, branch
+   `platform/rollout/<flavor>/v<version>/<cluster>`, ADR-0044) needs nothing:
+   the flavor page shows the cluster as failed, and the next rollout run
+   checks that branch first and opens only what is missing. To run it now,
+   press Reconcile on the flavor's page.
