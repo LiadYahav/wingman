@@ -31,7 +31,7 @@ Wingman becomes the platform team's one place to work from:
 | 1 | A team creates a new add-on, or changes one, from Wingman, sync options included | The add-on's `operators/<chart>/<chart>.yaml` and `values.yaml` in `sigs/<team>`; ArgoCD's `syncPolicy`: auto-sync, prune, self-heal and the `syncOptions` list |
 | 2 | A team makes a new or existing add-on a default across a fleet | Every hosted cluster, every MCE, the hub, or every UPI cluster (`defaults/<scope>/<chart>/`) |
 | 3 | A team that has not given Wingman write access has Wingman's writes off | The team opts in by giving Wingman's GitLab account Developer on `sigs/<team>`. Wingman checks per team and says why a team is read-only |
-| 4 | Every change is one MR per cluster; import too | Import opened one MR for all its clusters (ADR-0037); now one each |
+| 4 | Every change is one MR per cluster; import too | Import opened one MR for all its clusters (ADR-0037); now one each. Decision 21 says why |
 | 5 | Wingman picks the MCE for a new hosted cluster | From the site, the environment (prod/prep) and the OpenShift version; rules below |
 | 6 | "Customer" in placement is the cluster's owner, its mador | The owner numbers of ADR-0028 |
 | 7 | An MCE's spare servers come from server-scan | The MCE keeps spare servers for auto-repair; more spare is better, not a requirement to fit the new cluster |
@@ -47,6 +47,7 @@ Wingman becomes the platform team's one place to work from:
 | 17 | Fine-grained RBAC: groups with their own permissions, such as seeing every server or only your own | Identities and groups from **Keycloak, federating LDAP** (OIDC). There is no Keycloak in the air-gap: Wingman brings one (Red Hat build of Keycloak) |
 | 18 | Wingman may reuse whatever it needs from server-scan, segments-manager and cluster-navigator | Their repositories are public, as Wingman's is |
 | 19 | MCE placement is built first, after the day2 and import PRs | With the per-MCE API address it needs |
+| 21 | **Small blast radius: a change reaches each cluster through its own MR, and the customer takes it when ready.** One concept, not two features | A new flavor version opens one MR per linked cluster, **automatically**, and each customer merges theirs when comfortable. A cluster is measured against its own flavor version, so a newer version is "update available", never "out of sync". Import uses the same engine |
 | 20 | A **Quick Links** page in the sidebar: a launcher in the style of the team's homepage dashboard | Every ArgoCD (the hub's, each MCE's at `openshift-gitops-server-openshift-gitops.apps.<cluster>.<domain>`), each cluster's console, and the team's other links, with their status |
 
 ## What this changes in Wingman's rules
@@ -82,7 +83,7 @@ tag exists.
 | # | Workstream | ADR | Size | Waits on |
 |---|---|---|---|---|
 | 0a | Day2: create add-ons, sync options, fleet defaults, per-team opt-in | 0043 | L | In progress |
-| 0b | Import: one MR per cluster | 0044 | S | In progress |
+| 0b | Changes reach each cluster through its own MR: import, and every flavor version rolled out per cluster | 0044 | L | In progress (PR #32) |
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
 | 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0046 | M | 1 for a place to show it |
 | 3 | Segments area | 0047 | M + M | 2 |
@@ -116,15 +117,30 @@ tag exists.
 - Left for later, unless the PR includes it: "stop being a default", which
   orphans workloads and must say so.
 
-### 0b. Import: one MR per cluster (ADR-0044, in progress)
+### 0b. A change reaches each cluster through its own MR (ADR-0044, PR #32)
 
-- Every picked cluster is checked first, as today; if one is refused, no MR
-  opens.
-- Then one MR per cluster, each changing only that cluster's file, its
-  description showing only that cluster's drift.
-- The result lists each MR, and separately any cluster whose MR could not be
-  opened (never retried, ADR-0006). ADR-0037's "one MR" alternative is marked
-  superseded.
+Decision 21. The goal is a small blast radius: no change rolls 1,000 clusters
+at once, and no cluster shows "out of sync" because of a change it has not
+been offered yet. Each customer takes a change when they are ready.
+
+- **Measured against its own version.** A linked cluster is compared with
+  the flavor as it was at the version in its header, read from the flavors
+  repo's history. A newer version is "update available", with its MR, never
+  drift.
+- **A new flavor version opens one MR per linked cluster, automatically**,
+  once it lands on the flavors repo's main:
+  - each MR is that cluster's sync to the new version;
+  - the day2 MRs for add-ons the new version adds are linked from it;
+  - nothing changes on a cluster until its MR merges.
+
+  Before the flavor MR merges, its review says how many cluster MRs will
+  open, and which clusters will roll nodes. The opening runs in the
+  background and is safe to restart, with one branch per flavor, version and
+  cluster. Clusters that need a person (a hardware choice, for instance) are
+  listed with the reason instead of guessed.
+- **Import** uses the same engine. Every picked cluster is checked first;
+  then one MR per cluster, each changing only that cluster's file. A failure
+  is that cluster's own, never retried (ADR-0006).
 
 ### 1. Wingman on the sandbox (ADR-0045)
 
