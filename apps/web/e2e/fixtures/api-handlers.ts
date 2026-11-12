@@ -456,6 +456,9 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));
   await page.route("**/api/day2/approvals", (route: Route) => json(route, []));
+  // No team list unless a test sets one (mockDay2World): every team counts as writable (ADR-0043)
+  await page.route("**/api/day2/teams", (route: Route) => json(route, []));
+  await page.route("**/api/day2/fleet-defaults**", (route: Route) => json(route, []));
 }
 
 async function mockDay2Api(page: Page) {

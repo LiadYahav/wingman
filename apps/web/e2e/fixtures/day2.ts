@@ -45,6 +45,12 @@ const kyverno: CatalogEntry = {
   ocp_version_pins: [],
   fleet_defaults: [],
   chart_project: null,
+  writable: true,
+  read_only_reason: null,
+  sync: { auto_sync: false, prune: false, self_heal: false, sync_options: [] },
+  ignore_differences: null,
+  deploy_config_exists: true,
+  last_commit_id: "security-catalog-1",
   warnings: [
     finding({
       rule: "repourl-miscased",
