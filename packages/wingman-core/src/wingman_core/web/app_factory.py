@@ -9,7 +9,10 @@ RFC 9457 errors (ADR-0004), request ids, metrics and ``/metrics``
   not restart every pod.
 - ``/health/ready``: each readiness check passes within a timeout. Its body is
   a plain object, not a problem document: it is read by probes, not by the
-  web app (as in server-scan).
+  web app (as in server-scan). A check wrapped in :func:`ready_once` (GitLab,
+  in both services) runs only until it first passes: a pod GitLab refuses
+  never becomes ready, and a later outage does not take every pod out of the
+  Service at once, since the requests report it themselves (ADR-0054).
 - ``<api_prefix>/build`` (any logged-in user): the ``version`` and ``commit``
   the service runs, as ``wingman_build_info`` reports them; the web's settings
   page shows them.
@@ -38,6 +41,26 @@ ReadinessCheck = Callable[[], Awaitable[object]]
 Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
 
 READINESS_TIMEOUT_SECONDS: Final = 3.0
+
+
+def ready_once(check: ReadinessCheck) -> ReadinessCheck:
+    """``check`` until it has passed once in this process; after that, a pass without running it.
+
+    For a dependency a pod needs to start serving whose later outages the
+    requests themselves report as problems: GitLab (ADR-0054). Until the first
+    pass, every probe runs ``check`` under the readiness timeout, and one that
+    fails or times out leaves it unpassed. Probes that overlap before then each
+    run it.
+    """
+    passed = False
+
+    async def until_passed() -> None:
+        nonlocal passed
+        if not passed:
+            await check()
+            passed = True
+
+    return until_passed
 
 
 def create_base_app(

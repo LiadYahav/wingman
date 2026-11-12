@@ -57,6 +57,10 @@ Operations of the other dependencies (day1):
 - `ambiguous` means a write was sent but its result is unknown (a timeout or a
   5xx after sending). Writes are never retried (ADR-0006). Someone must check
   whether the commit or merge happened before trying again.
+- The readiness probe adds GitLab calls only until a pod's first pass
+  (`get_project`, and day2's `list_group_projects`; ADR-0054). After that,
+  every GitLab call is a request's, a rollout's, a warm-up's or a cache
+  refresh's: an idle Wingman makes none, so no GitLab traffic is not an outage.
 
 ## Reading placement
 

@@ -436,10 +436,19 @@ docker push registry.example.com/wingman/wingman-day1:$VERSION
 
 ### Health Check Failures
 
-If pods restart due to liveness probe timeouts:
+If pods restart due to liveness probe timeouts, or never become ready:
 - Liveness is `/health/live` (the process answers); readiness is
-  `/health/ready`, which also needs GitLab to answer. A pod that is live but
-  not ready cannot reach GitLab: check `gitlab.url`, the token and the CA.
+  `/health/ready`, which also needs GitLab to answer once after the pod
+  starts (ADR-0054). A pod that is live but never ready cannot reach GitLab,
+  or the token cannot read what the service checks: day1 the
+  `gitlab.day1ProjectId` and `gitlab.specsProjectId` projects, day2 the
+  `gitlab.day2SigsGroupPath` group and the day1 project. Check `gitlab.url`,
+  the token, those values and the CA; `/health/ready` on the pod's port names
+  the error.
+- Once ready, a pod stays ready through a GitLab outage: readiness no longer
+  asks GitLab, so users get Wingman's own error (a 503 `GIT_UNAVAILABLE`
+  problem) instead of a proxy error page, and cached reads still answer for
+  up to a minute. The GitLab alerts (`docs/ops/runbook.md`) report the outage.
 - `kubectl logs deploy/wingman-day1` (or `-day2`): a configuration the
   service refuses (ADR-0009) is logged at start-up, and the pod exits.
 

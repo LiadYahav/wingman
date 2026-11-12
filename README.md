@@ -328,7 +328,7 @@ reachable through the Route.
 |--------|----------|-------------|
 | `GET` | `/health/live` | The process serves requests (the liveness probe); never checks dependencies |
 | `GET` | `/healthz` | The same, at the legacy probe path |
-| `GET` | `/health/ready` | Every readiness check (GitLab) passes; 503 otherwise (the readiness probe) |
+| `GET` | `/health/ready` | Every readiness check passes; 503 otherwise (the readiness probe). The GitLab check runs only until it first passes: after that, a GitLab outage leaves the pod ready and requests report it (ADR-0054) |
 | `GET` | `/metrics` | Prometheus metrics (`docs/ops/metrics.md`) |
 
 ## Environment Variables
@@ -596,8 +596,8 @@ All changes create Merge Requests instead of direct commits:
 
 ### Health Checks
 
-- Day1: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
-- Day2: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
+- Day1: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab answered once since the pod started), `GET /metrics`
+- Day2: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab answered once since the pod started), `GET /metrics`
 
 Metrics, alerts and their runbook: `docs/ops/metrics.md`, `docs/ops/runbook.md`.
 

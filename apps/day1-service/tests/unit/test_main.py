@@ -11,6 +11,7 @@ from prometheus_client import CollectorRegistry
 from pydantic import SecretStr
 
 import wingman_day1.main as main
+from wingman_core.domain.git import Project
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
@@ -275,8 +276,20 @@ async def test_readiness_asks_gitlab_for_both_projects(client: httpx.AsyncClient
     assert (await client.get("/metrics")).status_code == 200
 
 
-async def test_without_the_specs_project_day1_is_not_ready() -> None:
-    gitlab = InMemoryGitLab()
+class ProjectReadsCounted(InMemoryGitLab):
+    """The in-memory GitLab, counting the project reads readiness makes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.project_reads = 0
+
+    async def get_project(self, project: int | str) -> Project:
+        self.project_reads += 1
+        return await super().get_project(project)
+
+
+async def test_without_the_specs_project_day1_is_not_ready_until_gitlab_has_both() -> None:
+    gitlab = ProjectReadsCounted()
     gitlab.create_project("gitops-day1/platform-config", {"README.md": "day1"})
     app = create_app(
         settings=settings(),
@@ -287,9 +300,16 @@ async def test_without_the_specs_project_day1_is_not_ready() -> None:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://day1"
     ) as client:
-        response = await client.get("/health/ready")
-    assert response.status_code == 503
-    assert response.json()["checks"] == {"gitlab": "error: NotFoundError"}
+        missing = await client.get("/health/ready")
+        assert missing.status_code == 503
+        assert missing.json()["checks"] == {"gitlab": "error: NotFoundError"}
+
+        gitlab.create_project("wingman/cluster-specs", {"README.md": "specs"})
+        ready = [(await client.get("/health/ready")).json() for _ in range(3)]
+    assert ready == [{"status": "ready", "checks": {"gitlab": "ok"}}] * 3
+    # day1, then specs (missing); day1 and specs; then nothing: ready once is
+    # ready, and a later GitLab outage is the requests' to report (ADR-0054).
+    assert gitlab.project_reads == 4
 
 
 async def test_shutting_down_closes_every_adapter() -> None:
