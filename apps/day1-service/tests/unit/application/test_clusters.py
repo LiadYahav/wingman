@@ -429,3 +429,24 @@ async def test_deleting_a_cluster_that_does_not_exist_is_not_found(
             ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-ghost-site1"),
             user=support.ALICE,
         )
+
+
+async def test_a_cluster_file_is_parsed_once_per_text(
+    context: Day1Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import wingman_day1.application.clusters as clusters_module
+
+    parsed: list[str] = []
+    load_values = clusters_module.load_values
+
+    def counting(content: str) -> dict[str, object]:
+        parsed.append(content)
+        return load_values(content)
+
+    monkeypatch.setattr(clusters_module, "load_values", counting)
+    first = await context.clusters.clusters()
+    once = len(parsed)
+    again = await context.clusters.clusters()
+    assert once == len({c.content for c in first}), "one parse per distinct file text"
+    assert len(parsed) == once, "a second list parses nothing (ADR-0041)"
+    assert [c.values for c in again] == [c.values for c in first]
