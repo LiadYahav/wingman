@@ -8,10 +8,13 @@ from wingman_day1.domain.names import (
     Env,
     HostedClusterNaming,
     HostedClusterRef,
+    NameSuggestion,
     describe_cluster,
     describe_mce,
     dns_label_problems,
     new_cluster_problems,
+    short_name_of,
+    suggest_cluster_name,
 )
 
 STRIP = HostedClusterNaming("ocp4-")
@@ -195,3 +198,84 @@ def test_an_explicit_cluster_name_in_the_file_wins_in_both_modes() -> None:
 
 def test_the_default_naming_is_production() -> None:
     assert HostedClusterNaming().strip_prefix == "ocp4-"
+
+
+# ── A new cluster's sequence, and the suggested name (ADR-0040) ─────────────
+
+PROD_MCE = "ocp4-prod-mce-site1-a"
+
+
+@pytest.mark.parametrize("seq", ["01", "1", "aa", "b2"])
+def test_a_new_clusters_sequence_must_be_one_letter(seq: str) -> None:
+    stem = f"ocp4-prod-rcs-site1-{seq}"
+    assert new_cluster_problems(stem, site="site1", mce=PROD_MCE, naming=STRIP) == [
+        f"sequence {seq!r} of cluster {stem!r} must be one letter, a to z "
+        "(ocp4-prod-rcs-site1-a): a number is not the convention"
+    ]
+
+
+def test_an_existing_numeric_sequence_still_reads_as_the_convention() -> None:
+    naming = describe_cluster("ocp4-prod-rcs-site1-01", site="site1")
+    assert naming.follows_convention
+    assert naming.sequence == "01"
+
+
+@pytest.mark.parametrize(
+    "stem", ["ocp4-prod-rcs-site1-a", "ocp4-prod-rcs-site1-z", "ocp4-prod-rcs-site1"]
+)
+def test_a_new_name_with_a_letter_or_no_sequence_is_accepted(stem: str) -> None:
+    assert new_cluster_problems(stem, site="site1", mce=PROD_MCE, naming=STRIP) == []
+
+
+def _suggest(*taken: str, flavor: str = "rcs") -> NameSuggestion:
+    return suggest_cluster_name(flavor, site="site1", mce=PROD_MCE, taken=set(taken), naming=STRIP)
+
+
+def test_the_suggestion_is_env_flavor_site_and_the_first_free_letter() -> None:
+    first = _suggest()
+    assert (first.name, first.env, first.short_name, first.sequence, first.problems) == (
+        "ocp4-prod-rcs-site1-a",
+        Env.PROD,
+        "rcs",
+        "a",
+        (),
+    )
+    assert _suggest("ocp4-prod-rcs-site1-a").name == "ocp4-prod-rcs-site1-b"
+    # A free letter between taken ones is used; the bare base name takes no letter
+    gap = _suggest("ocp4-prod-rcs-site1", "ocp4-prod-rcs-site1-a", "ocp4-prod-rcs-site1-c")
+    assert gap.name == "ocp4-prod-rcs-site1-b"
+
+
+def test_every_letter_taken_gives_no_name_and_says_why() -> None:
+    suggestion = _suggest(*(f"ocp4-prod-rcs-site1-{c}" for c in "abcdefghijklmnopqrstuvwxyz"))
+    assert suggestion.name is None
+    assert suggestion.problems == (
+        "every name from ocp4-prod-rcs-site1-a to ocp4-prod-rcs-site1-z is taken; "
+        "type another name",
+    )
+
+
+def test_an_off_convention_mce_gives_no_env_and_no_name() -> None:
+    suggestion = suggest_cluster_name(
+        "rcs", site="site1", mce="ocp4-mce-workflow-test", taken=set(), naming=STRIP
+    )
+    assert (suggestion.name, suggestion.env) == (None, None)
+    assert "does not follow ocp4-<env>-mce-site1-<letter>" in suggestion.problems[0]
+
+
+def test_a_long_flavor_name_is_cut_until_the_chart_names_fit() -> None:
+    suggestion = _suggest(flavor="agent-standard")
+    assert suggestion.name == "ocp4-prod-agent-standar-site1-a"
+    assert suggestion.problems == ()
+    assert new_cluster_problems(suggestion.name, site="site1", mce=PROD_MCE, naming=STRIP) == []
+    # The sandbox keeps the whole stem, so the cut is deeper
+    sandbox = suggest_cluster_name(
+        "agent-standard", site="site1", mce=PROD_MCE, taken=set(), naming=SANDBOX
+    )
+    assert sandbox.name is not None
+    assert new_cluster_problems(sandbox.name, site="site1", mce=PROD_MCE, naming=SANDBOX) == []
+
+
+def test_the_short_name_is_dns_safe() -> None:
+    assert short_name_of("RCS_Zones..v2") == "rcs-zones-v2"
+    assert short_name_of("-edge-") == "edge"

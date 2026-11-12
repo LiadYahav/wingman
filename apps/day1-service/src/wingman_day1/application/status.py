@@ -35,9 +35,15 @@ class StatusService:
         *,
         naming: HostedClusterNaming,
         infraenv_namespace: str | None,
+        infra_envs: HubApi | None = None,
     ) -> None:
-        """``infraenv_namespace`` ``None`` lists InfraEnvs across the whole hub."""
+        """``infraenv_namespace`` ``None`` lists InfraEnvs across the whole hub.
+
+        ``infra_envs`` reads the InfraEnvs (a cached ``hub``, ADR-0040); live
+        status always reads ``hub`` itself.
+        """
         self._hub = hub
+        self._infra_env_hub = infra_envs or hub
         self._clusters = clusters
         self._naming = naming
         self._infraenv_namespace = infraenv_namespace
@@ -77,7 +83,7 @@ class StatusService:
 
     async def infra_envs(self, mce: str) -> list[str]:
         """InfraEnv names on an MCE; errors propagate (the form falls back to free text)."""
-        return await self._hub.infra_envs(mce, namespace=self._infraenv_namespace)
+        return await self._infra_env_hub.infra_envs(mce, namespace=self._infraenv_namespace)
 
     async def watch(
         self, name: str, mce: str, *, interval: float, sleep: Sleep = asyncio.sleep

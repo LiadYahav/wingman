@@ -44,6 +44,22 @@ async def test_the_preview_shows_the_expanded_network_config(
     assert "    configs:\n      - name: nm-conf-prod-falcon-site1-dell\n" in response.json()["yaml"]
 
 
+async def test_the_preview_writes_the_generic_network_config_as_plain_nm_conf(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    body = with_pools(
+        support, [{"name": "nm-conf", "hardware": "generic"}, {"name": "nic-ring-buffer"}]
+    )
+    response = await client.post(
+        "/api/day1/clusters/preview", json=body, headers=auth(support.ALICE)
+    )
+    assert response.status_code == 200, response.text
+    assert (
+        "    configs:\n      - name: nm-conf\n      - name: nic-ring-buffer\n"
+        in (response.json()["yaml"])
+    )
+
+
 async def test_a_create_with_configs_that_do_not_resolve_is_a_422_listing_each(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
@@ -56,7 +72,8 @@ async def test_a_create_with_configs_that_do_not_resolve_is_a_422_listing_each(
     assert problem["code"] == "VALIDATION_ERROR"
     assert problem["detail"] == "the cluster's inputs are not acceptable"
     assert problem["details"]["problems"] == [
-        "nodepools[0].configs[0]: nm-conf needs a hardware type, one of cisco, dell, dell-data",
+        "nodepools[0].configs[0]: nm-conf needs a hardware type, one of generic, cisco, "
+        "dell, dell-data",
         "nodepools[1].configs[0]: no machine config 'nope' in mc-files/",
     ]
 
@@ -69,7 +86,7 @@ async def test_a_flavor_with_configs_that_do_not_resolve_is_a_422(
     assert response.status_code == 422
     assert response.json()["detail"] == "spec 'agent-flavor' cannot be saved"
     assert response.json()["details"]["problems"] == [
-        "nodepools[0].configs[0]: no hardware type 'hp', one of cisco, dell, dell-data"
+        "nodepools[0].configs[0]: no hardware type 'hp', one of generic, cisco, dell, dell-data"
     ]
     fixed = flavor(values={"nodepools": [{"configs": [{"name": "nm-conf", "hardware": "dell"}]}]})
     created = await client.post("/api/day1/specs", json=fixed, headers=auth(support.ALICE))

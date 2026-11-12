@@ -583,7 +583,9 @@ export default function DocsPage() {
               locked as a rule, so every nodepool of every cluster has exactly these configs, whatever its number or
               order. Configs come from the picker: a file of <InlineCode>mc-files/</InlineCode> by name, or{" "}
               <InlineCode>nm-conf</InlineCode>, the cluster&apos;s own network config, with a hardware type (under
-              the rule, each nodepool picks its own). Replicas and node labels are preset or locked per nodepool.
+              the rule, each nodepool picks its own). The type starts at <strong>generic</strong> when the day1 repo has
+              the generic template (<InlineCode>nm-conf-template.bu</InlineCode>, for any hardware, written as plain{" "}
+              <InlineCode>nm-conf</InlineCode>). Replicas and node labels are preset or locked per nodepool.
             </Step>
             <Step n={3} title="Add-ons">
               Pick charts from the catalog and put them in order. The gear opens{" "}
@@ -697,8 +699,11 @@ spec:
                 Sites and MCEs are the day1 repo&apos;s folders and are read-only: Wingman never creates them. An MCE
                 whose name is off its convention is shown but disabled. New names must follow{" "}
                 <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, with the MCE&apos;s env and the site
-                you picked; the form lists every problem with a name as you type, and fills in site and MCE when it
-                can detect them from the name. The version list is the chosen MCE&apos;s: the releases in the day1
+                you picked, and a sequence of one letter, <InlineCode>a</InlineCode> to <InlineCode>z</InlineCode>, never a
+                number. Once you pick the site and MCE, the form suggests{" "}
+                <InlineCode>{"ocp4-<env>-<flavor>-<site>-<letter>"}</InlineCode> with the first letter no cluster has;
+                type over it to use your own. The form lists every problem with a name as you type, and fills in site
+                and MCE when it can detect them from the name. The version list is the chosen MCE&apos;s: the releases in the day1
                 repo&apos;s upgrade ladder that the MCE can host, so the picker waits for an MCE. It defaults to the
                 flavor&apos;s preset, else the MCE&apos;s mastertag, but only when the MCE offers it. The release becomes
                 the file&apos;s <InlineCode>mastertag</InlineCode>.
@@ -707,11 +712,15 @@ spec:
             <Step n={3} title="Cluster configuration">
               The fields are the inputs of the shared template. With the default template: the owner numbers
               (merkaz, anaf, mador: digits only) and, per nodepool, its InfraEnv, replicas, machine configs, node
-              labels and tuning config. A field the flavor <strong>presets</strong> is filled in and can be changed;
+              labels and tuning config. InfraEnvs are picked from the MCE&apos;s list when this deployment reads the
+              MCE. A flavor that sizes its nodepools by a ratio (<InlineCode>1:2:1</InlineCode>) asks for one size
+              instead, and each sized nodepool gets its part times that size. A field the flavor <strong>presets</strong> is filled in and can be changed;
               a field it <strong>locks</strong> is shown read-only with the flavor&apos;s value. Machine configs come
               from a picker of the day1 repo&apos;s <InlineCode>mc-files/</InlineCode>: a static config by name, or{" "}
               <InlineCode>nm-conf</InlineCode> with a hardware type, the cluster&apos;s own network config, written as{" "}
-              <InlineCode>{"nm-conf-<clusterName>-<hardware>"}</InlineCode>. A nodepool you add starts with the
+              <InlineCode>{"nm-conf-<clusterName>-<hardware>"}</InlineCode>, or <strong>generic</strong> (the
+              default when the day1 repo has <InlineCode>nm-conf-template.bu</InlineCode>), written as plain{" "}
+              <InlineCode>nm-conf</InlineCode>. A nodepool you add starts with the
               team&apos;s defaults (<InlineCode>nodepool-defaults.yaml</InlineCode> in the specs repo), unless the
               flavor locks its configs. Every refusal shows at its field.
             </Step>

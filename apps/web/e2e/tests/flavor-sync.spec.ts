@@ -10,10 +10,10 @@
  */
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
-import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis, mockMR } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis, mockMachineConfigsWithGeneric, mockMR } from "../fixtures/api-handlers";
 import type {
-  AddonDrift, ClusterDetail, ClusterDrift, ClusterStatus, DestinationCharts, DriftSummaryItem, Rebooting, SyncPreview,
-  ValueDrift,
+  AddonDrift, ClusterDetail, ClusterDrift, ClusterStatus, DestinationCharts, DriftSummaryItem, MachineConfigs, Rebooting,
+  SyncPreview, ValueDrift,
 } from "../../types";
 
 const SITE = "site1";
@@ -156,7 +156,7 @@ async function openDetail(
   page: Page,
   clusterDrift: ClusterDrift,
   previews: SyncPreview[] = [preview()],
-  { viewer = false }: { viewer?: boolean } = {}
+  { viewer = false, catalog }: { viewer?: boolean; catalog?: MachineConfigs } = {}
 ) {
   await injectAdminAuth(page);
   if (viewer) {
@@ -166,6 +166,7 @@ async function openDetail(
     });
   }
   await mockDashboardApis(page);
+  if (catalog) await page.route("**/api/day1/machine-configs", (r) => json(r, catalog));
   await page.route("**/api/day1/clusters/bulk-status", (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
   await page.route(/\/api\/day1\/clusters\/[^/]+\/status\?/, (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
   await page.route(`**/api/day1/clusters/${NAME}?**`, (r) => json(r, DETAIL));
@@ -311,6 +312,31 @@ test.describe("Sync to flavor", () => {
       last_commit_id: READ_AT, spec_version: "1.1.0", hardware: [{ nodepool: 0, hardware: "dell" }], confirm_removals: [],
     });
     await expect(page.getByRole("dialog")).toHaveCount(0);
+  });
+
+  test("with nm-conf-template.bu, a nodepool that needs its hardware starts at generic", async ({ page }) => {
+    const undecided = preview({
+      changes: [HARDWARE_DRIFT, CONFIGS_DRIFT],
+      problems: [`nodepool[0].configs: ${HARDWARE_DRIFT.needs_decision}`],
+      can_sync: false,
+    });
+    const decided = preview({
+      changes: [{ ...HARDWARE_DRIFT, needs_decision: null, needs_hardware: false,
+        flavor_value: [{ name: "nm-conf" }, { name: "workers-chrony-configuration" }, { name: "nic-ring-buffer" }] }, CONFIGS_DRIFT],
+      removals: [],
+      rebooting: [roll(0), roll(1, { replicas: 2 })],
+    });
+    const { previewBodies } = await openDetail(page, drift({ value_drift: [HARDWARE_DRIFT, CONFIGS_DRIFT] }), [undecided, decided], {
+      catalog: mockMachineConfigsWithGeneric,
+    });
+
+    await page.getByRole("button", { name: "Sync to flavor" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect.poll(() => previewBodies.length).toBe(2);
+    expect(previewBodies[1]).toEqual({ hardware: [{ nodepool: 0, hardware: "generic" }] });
+    await expect(dialog.getByRole("combobox", { name: `Hardware type for ${POOL0}` })).toContainText("generic");
+    await expect(dialog.getByTestId("sync-hardware")).toContainText("starts at the generic network config");
+    await expect(dialog.getByRole("button", { name: "Open sync MR" })).toBeEnabled();
   });
 
   test("Sync stays disabled until every removal is confirmed, and sends exactly them", async ({ page }) => {

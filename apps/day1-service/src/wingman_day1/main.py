@@ -353,6 +353,12 @@ def build_context(
         if adapters.hub is not None
         else None
     )
+    # InfraEnvs rarely change: their list is kept longer than live status's reads (ADR-0040)
+    infra_env_hub = (
+        CachedHubApi(adapters.hub, cache, ttl=settings.mce_infraenv_cache_seconds)
+        if adapters.hub is not None
+        else None
+    )
     nodes: NodeService | None = None
     if hub is not None:
         runs_ttl = min(ttl, RUNS_TTL_SECONDS)
@@ -407,6 +413,7 @@ def build_context(
                 cluster_service,
                 naming=naming,
                 infraenv_namespace=settings.mce_infraenv_namespace or None,
+                infra_envs=infra_env_hub,
             )
             if hub is not None
             else None

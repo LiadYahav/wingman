@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Network, Package, RotateCcw, RotateCw, TriangleAlert } from "lucide-react";
@@ -12,7 +12,7 @@ import { MRCreationProgress } from "@/components/common/mr-creation-progress";
 import { ProblemList } from "@/components/common/problem-list";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { api, isApiError } from "@/lib/api-client";
-import { useMachineConfigs } from "@/lib/machine-configs";
+import { defaultHardware, hardwareOptions as hardwareOptionsOf, useMachineConfigs } from "@/lib/machine-configs";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { cn } from "@/lib/utils";
@@ -194,10 +194,25 @@ export function SyncDialog({
     return [...byIndex.values()].sort((a, b) => a.nodepool.index - b.nodepool.index);
   }, [data, choices]);
 
-  const hardwareOptions = useMemo<ComboboxOption[]>(
-    () => (catalog?.hardware_types ?? []).map((h) => ({ value: h.name, label: h.name, description: h.template })),
-    [catalog]
-  );
+  const hardwareOptions = useMemo<ComboboxOption[]>(() => hardwareOptionsOf(catalog), [catalog]);
+
+  // A nodepool the preview asks about starts at the generic network config, when mc-files/ has it: it
+  // serves any hardware. Once per nodepool, so a person who clears or changes it is not overruled.
+  const startHardware = defaultHardware(catalog);
+  const defaulted = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (!startHardware || !data) return;
+    const fresh = data.changes.filter(
+      (c) => c.needs_hardware && c.nodepool && !defaulted.current.has(c.nodepool.index) && !choices[c.nodepool.index]
+    );
+    if (fresh.length === 0) return;
+    for (const c of fresh) defaulted.current.add(c.nodepool!.index);
+    setChoices((prev) => {
+      const next = { ...prev };
+      for (const c of fresh) next[c.nodepool!.index] = { nodepool: c.nodepool!, reason: c.needs_decision, hardware: startHardware };
+      return next;
+    });
+  }, [data, choices, startHardware]);
 
   const choose = (nodepool: NodepoolRef, reason: string | null, value: string | null) => {
     sync.reset();
@@ -343,8 +358,17 @@ export function SyncDialog({
             {deciding.length > 0 && (
               <Section title="Network hardware" icon={Network} testId="sync-hardware">
                 <p className="text-xs text-muted-foreground">
-                  Wingman never guesses a nodepool&apos;s network hardware: a wrong network config breaks its nodes&apos;
-                  networking. Choose it for each nodepool below; the preview is read again with your choice.
+                  {startHardware ? (
+                    <>
+                      Each nodepool below starts at the generic network config (nm-conf, for any hardware). Choose a
+                      hardware type instead if a nodepool needs its own; the preview is read again with your choice.
+                    </>
+                  ) : (
+                    <>
+                      Wingman never guesses a nodepool&apos;s network hardware: a wrong network config breaks its nodes&apos;
+                      networking. Choose it for each nodepool below; the preview is read again with your choice.
+                    </>
+                  )}
                 </p>
                 {catalogError ? (
                   <ProblemList error={catalogError} title="The hardware types could not be read" />

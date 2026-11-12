@@ -322,3 +322,37 @@ def test_the_rule_drift_compares_is_the_one_agent_baseline_enforces() -> None:
     }
     (rule,) = enforced_locks(["nodepools[*].configs"], spec_values)
     assert rule == RULE
+
+
+# ── The generic network config (ADR-0027, 2026-11-12) ─────────────────────────
+
+
+def test_the_rule_reads_plain_nm_conf_as_the_generic_network_config() -> None:
+    values = {"nodepool": [pool("nm-conf", "workers-chrony-configuration", "nic-ring-buffer")]}
+    assert drift([RULE], values) == ()
+
+
+def test_a_generic_lock_wants_plain_nm_conf_in_place_of_a_typed_one() -> None:
+    entries = [{"name": "nm-conf", "hardware": "generic"}, {"name": "nic-ring-buffer"}]
+    held = {"nodepool": [pool("nic-ring-buffer", "nm-conf")]}
+    assert drift([lock("nodepools[0].configs", entries)], held) == ()
+    typed = {"nodepool": [pool("nm-conf-prod-x-site1-dell", "nic-ring-buffer")]}
+    (found,) = drift([lock("nodepools[0].configs", entries)], typed)
+    assert (found.added, found.removed) == (("nm-conf",), ("nm-conf-prod-x-site1-dell",))
+
+
+def test_generic_and_a_typed_network_config_together_need_a_person() -> None:
+    values = {
+        "nodepool": [
+            pool(
+                "nm-conf",
+                "nm-conf-prod-x-site1-dell",
+                "workers-chrony-configuration",
+                "nic-ring-buffer",
+            )
+        ]
+    }
+    (found,) = drift([RULE], values)
+    assert found.needs_hardware
+    (chosen,) = drift([RULE], values, hardware={0: "generic"})
+    assert (chosen.added, chosen.removed) == ((), ("nm-conf-prod-x-site1-dell",))

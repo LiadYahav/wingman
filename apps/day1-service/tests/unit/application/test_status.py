@@ -213,3 +213,31 @@ async def test_watch_yields_a_status_then_waits_the_interval(context: Day1Contex
     await stream.aclose()
     assert first.cluster_name == second.cluster_name == HERZI
     assert waits == [7.0]
+
+
+class _CountingInfraEnvs(FakeHubApi):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.infra_env_reads = 0
+
+    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[str]:
+        self.infra_env_reads += 1
+        return await super().infra_envs(mce, namespace=namespace)
+
+
+@pytest.mark.parametrize(("seconds", "reads"), [(600.0, 1), (0.0, 2)])
+async def test_infraenvs_are_kept_for_their_own_ttl(
+    support: Any, gitlab: InMemoryGitLab, identity: Any, clock: Any, seconds: float, reads: int
+) -> None:
+    hub = _CountingInfraEnvs(infra_envs={MCE: {"agents": ["zone-a", "zone-b"]}})
+    app = support.build_app(
+        gitlab=gitlab,
+        hub=hub,
+        identity=identity,
+        day2=FakeDay2Addons(),
+        clock=clock,
+        mce_infraenv_cache_seconds=seconds,
+    )
+    for _ in range(2):
+        assert await status_of(app).infra_envs(MCE) == ["zone-a", "zone-b"]
+    assert hub.infra_env_reads == reads

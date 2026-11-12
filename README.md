@@ -104,7 +104,7 @@ wingman/
 
 | Feature | Description |
 |---------|-------------|
-| **Two-phase spec/cluster form** | Specs (flavors) set the nodepools a cluster starts with, presets and locked values; clusters fill the rest. The create form shows a locked value read-only, prefills presets, starts each nodepool (and one added at create) with the team's machine-config defaults, picks configs and hardware types from `mc-files/`, and shows day1's problems at their fields (ADR-0026 to ADR-0029). |
+| **Two-phase spec/cluster form** | Specs (flavors) set the nodepools a cluster starts with, presets and locked values; clusters fill the rest. The create form shows a locked value read-only, prefills presets, starts each nodepool (and one added at create) with the team's machine-config defaults, picks configs and hardware types from `mc-files/` (the generic network template `nm-conf-template.bu`, written as plain `nm-conf`, first and the default when the repo has it), and shows day1's problems at their fields (ADR-0026 to ADR-0029). |
 | **Marketplace addon picker** | Browse and select Day2 addons from a marketplace UI on the spec creation/edit pages. Configure which fields are overrideable per cluster. |
 | **YAML fields everywhere** | Dynamic form fields accept plain YAML — no JSON syntax required. Scalars (`high-perf-tuned`), maps, and lists all work naturally. |
 | **Sites and MCEs from GitLab folders** | Site and MCE dropdowns list the day1 repo's folders. They are read-only: Wingman never creates a site or an MCE (ADR-0018). |
@@ -115,7 +115,9 @@ wingman/
 | **Reserved template inputs** | `cluster_name`, `site`, `mce` and `openshift_release_version` are set by the create form itself — they are not part of the dynamic variable form and always override spec presets in Jinja2 rendering. |
 | **Cluster nodes by NodePool** | The cluster page's Nodes tab shows each NodePool's nodes from the cluster's MCE: what is there, what a short pool is missing and why (no free Agent, and why each matching one is not free), and which node an update is working on, traced Machine → AgentMachine → Agent → server. server-scan adds each server's health and link, and the servers it places in the cluster that no Machine leads to. An admin can start the platform's `uninstall-server-from-hc` workflow on one node and follow its run; the workflow owns the procedure and its checks (ADR-0038). Needs `CLUSTER_STATUS_ENABLED`; `SERVER_SCAN_URL` and `WORKFLOWS_API_URL` add the rest. |
 | **A cluster's network from Git** | The cluster page's **HostedCluster & network** card shows the VLAN and the /24 segment from the cluster file, which the allocate-segment workflow writes (Git is the source of truth). With `SEGMENTS_MANAGER_URL`, segments-manager adds the segment's EPG and is checked against the file: a VLAN, cluster or status that disagrees is a warning, and segments-manager down never hides the file's values (ADR-0039). Nothing is written to segments-manager. |
-| **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
+| **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. day1 keeps each hub's list for `MCE_INFRAENV_CACHE_SECONDS` (10 minutes). Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
+| **A suggested cluster name** | Creating from a flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>`: the MCE's env and the first letter no cluster or open create MR has. The name stays editable. A new cluster's sequence is one letter, `a` to `z`, never a number (ADR-0040). |
+| **Nodepools sized by a ratio** | A flavor may give its nodepools a ratio (`nodepool_ratio: [1, 2, 1]`): the create form asks for one size and sets each nodepool's replicas to its ratio times that size; create refuses replicas off the ratio (ADR-0040). |
 
 ## Deployment
 
@@ -155,6 +157,7 @@ Changes since the legacy services:
 | `POST` | `/api/day1/clusters` | Create a cluster from a spec (opens the MR that adds its file) |
 | `POST` | `/api/day1/clusters/preview` | Exactly the file a create would commit, after every check a create runs |
 | `GET` | `/api/day1/clusters/drift-summary` | Drift of every cluster |
+| `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040) |
 | `POST` | `/api/day1/clusters/bulk-status` | Live status of many clusters |
 | `GET` | `/api/day1/clusters/{name}` | The cluster's file, values and naming |
 | `PATCH` | `/api/day1/clusters/{name}` | Modify the cluster (opens the MR that replaces its file) |
@@ -181,7 +184,7 @@ Changes since the legacy services:
 | `GET` | `/api/day1/mces` | Every MCE (or one site's, `?site=`), with its default mastertag, hub version and naming |
 | `GET` | `/api/day1/mces/{mce}/openshift-versions` | The releases a new cluster on the MCE may use (`upgrade/` in the day1 repo), newest first, with `problems` when its files are missing or broken |
 | `GET` | `/api/day1/mces/{mce}/infraenvs` | InfraEnv names on the MCE hub (501 when live status is off) |
-| `GET` | `/api/day1/machine-configs` | The machine configs a nodepool can use (`mc-files/` in the day1 repo: static configs and network hardware types) and the specs repo's nodepool defaults |
+| `GET` | `/api/day1/machine-configs` | The machine configs a nodepool can use (`mc-files/` in the day1 repo: static configs and network hardware types, `generic` first when the generic template exists) and the specs repo's nodepool defaults |
 
 #### Specs (presets for the create form)
 
@@ -345,6 +348,7 @@ MCE_TOKENS_FILE=/etc/wingman/mce-tokens/tokens
 MCE_SSL_VERIFY=true                       # true, false, or a CA bundle path
 MCE_TIMEOUT_SECONDS=10
 MCE_INFRAENV_NAMESPACE=                   # empty = all namespaces (the chart does not set it yet)
+MCE_INFRAENV_CACHE_SECONDS=600            # how long a hub's InfraEnv list is kept; 0 = read every time
 DAY1_STATUS_POLL_SECONDS=30               # the live status stream (the chart does not set it yet)
 
 # The nodes' servers from server-scan, uninstall through the workflows orchestrator (ADR-0038; off by default)

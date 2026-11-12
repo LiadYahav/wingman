@@ -7,10 +7,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   NETWORK_CONFIG,
+  defaultHardware,
   entryProblems,
   fileName,
   folderLabel,
+  hardwareOptions as hardwareOptionsOf,
   isNetworkEntry,
+  writtenAs,
 } from "@/lib/machine-configs";
 import type { ConfigEntry, MachineConfigs } from "@/types";
 
@@ -90,16 +93,15 @@ export function ConfigListEditor({
     [entries, catalog, perNodepool]
   );
   const options = useMemo(() => nameOptions(catalog, entries), [catalog, entries]);
-  const hardwareOptions = useMemo<ComboboxOption[]>(
-    () => (catalog?.hardware_types ?? []).map((h) => ({ value: h.name, label: h.name, description: h.template })),
-    [catalog]
-  );
+  const hardwareOptions = useMemo<ComboboxOption[]>(() => hardwareOptionsOf(catalog), [catalog]);
+  // A network entry starts as generic when mc-files/ has the generic template (per nodepool, it takes none here)
+  const startHardware = perNodepool ? null : defaultHardware(catalog);
 
   const set = (index: number, entry: ConfigEntry) => onChange(entries.map((e, i) => (i === index ? entry : e)));
   const remove = (index: number) => onChange(entries.filter((_, i) => i !== index));
   const add = (name: string | null) => {
     if (!name) return;
-    onChange([...entries, name === NETWORK_CONFIG ? { name, hardware: null } : { name }]);
+    onChange([...entries, name === NETWORK_CONFIG ? { name, hardware: startHardware } : { name }]);
   };
 
   if (readOnly) {
@@ -157,7 +159,7 @@ export function ConfigListEditor({
           {entries.map((entry, index) => {
             const shown = [...(local[index] ?? []), ...(problems[index] ?? [])];
             const network = isNetworkEntry(entry);
-            const name = fileName(entry, clusterName);
+            const name = writtenAs(entry, clusterName);
             return (
               <li key={index} className="space-y-1" data-testid={`${testId}-entry-${index}`}>
                 <div className="flex items-start gap-2">
@@ -175,7 +177,7 @@ export function ConfigListEditor({
                   {network && hardwarePicker(entry, index)}
                 </div>
                 {network && name && (
-                  <p className="pl-1 font-mono text-[11px] text-muted-foreground">Written as {name}</p>
+                  <p className="pl-1 font-mono text-[11px] text-muted-foreground" data-testid={`${testId}-entry-${index}-written`}>{name}</p>
                 )}
                 {shown.length > 0 && (
                   <ul className="pl-1 text-xs text-destructive" role="alert">
@@ -200,7 +202,7 @@ export function ConfigListEditor({
         {entries.map((entry, index) => {
           const shown = [...(local[index] ?? []), ...(problems[index] ?? [])];
           const network = isNetworkEntry(entry);
-          const name = fileName(entry, clusterName);
+          const name = writtenAs(entry, clusterName);
           return (
             <li key={index} className="space-y-1" data-testid={`${testId}-entry-${index}`}>
               <div className="flex items-start gap-2">
@@ -209,7 +211,7 @@ export function ConfigListEditor({
                   options={options.map((o) => (o.value === entry.name ? { ...o, disabled: false } : o))}
                   value={entry.name || null}
                   onValueChange={(value) =>
-                    value && set(index, value === NETWORK_CONFIG ? { name: value, hardware: entry.hardware ?? null } : { name: value })
+                    value && set(index, value === NETWORK_CONFIG ? { name: value, hardware: entry.hardware ?? startHardware } : { name: value })
                   }
                   placeholder={loading ? "Loading machine configs…" : "Choose a machine config…"}
                   searchPlaceholder="Search machine configs…"
@@ -230,7 +232,7 @@ export function ConfigListEditor({
                 </Button>
               </div>
               {network && name && !perNodepool && (
-                <p className="pl-1 font-mono text-[11px] text-muted-foreground">Written as {name}</p>
+                <p className="pl-1 font-mono text-[11px] text-muted-foreground" data-testid={`${testId}-entry-${index}-written`}>{name}</p>
               )}
               {network && perNodepool && (
                 <p className="pl-1 text-[11px] text-muted-foreground">Each nodepool&apos;s own network config, for the hardware it chooses</p>

@@ -19,6 +19,7 @@ from wingman_day1.domain.machine_configs import (
     defaults_problems,
     expand_network_configs,
     flavor_config_problems,
+    network_choice_problems,
     network_config_name,
     parse_nodepool_defaults,
 )
@@ -56,7 +57,7 @@ def test_the_fixture_tree_offers_its_static_configs_and_hardware_types() -> None
         ("", "workers-chrony-configuration"),
         ("kubevirt", "kubevirt-worker-tuning"),
     ]
-    assert [h.name for h in CATALOG.hardware_types()] == ["cisco", "dell", "dell-data"]
+    assert [h.name for h in CATALOG.hardware_types()] == ["generic", "cisco", "dell", "dell-data"]
     assert str(CATALOG.hardware["dell"].template) == ("mc-files/templates/nm-conf-template-dell.bu")
     assert str(CATALOG.static["nic-ring-buffer"].path) == "mc-files/nic-ring-buffer.bu"
     assert str(CATALOG.static["worker-kubeletconfig-reserved"].path) == (
@@ -107,9 +108,9 @@ def test_templates_must_follow_the_hardware_naming_and_are_never_static() -> Non
         "templates/deeper/nm-conf-template-cisco.bu",
         "templates/nm-conf-template-Bad_Name.bu",
     )
-    assert set(found.hardware) == {"dell"}
+    assert set(found.hardware) == {"dell", "generic"}
     assert found.static == {}
-    assert len(found.problems) == 4
+    assert len(found.problems) == 3
     assert all("is no hardware type" in p for p in found.problems)
 
 
@@ -151,7 +152,8 @@ def test_a_file_whose_name_is_not_a_usable_config_name_is_reported() -> None:
         ("nm-conf-prod-x-site1-cisco", "cisco"),
         ("nm-conf-prod-x-site1-data", None),
         ("dell", None),
-        ("nm-conf", None),
+        ("nm-conf", "generic"),
+        ("nm-conf-prod-x-site1-generic", None),
     ],
 )
 def test_the_longest_hardware_suffix_wins(name: str, hardware: str | None) -> None:
@@ -175,9 +177,12 @@ def test_a_flavor_may_use_static_configs_and_the_network_config_with_hardware() 
 @pytest.mark.parametrize(
     ("entry", "problem"),
     [
-        ({"name": "nm-conf"}, "nm-conf needs a hardware type, one of cisco, dell, dell-data"),
+        (
+            {"name": "nm-conf"},
+            "nm-conf needs a hardware type, one of generic, cisco, dell, dell-data",
+        ),
         ({"name": "nm-conf", "hardware": ""}, "nm-conf needs a hardware type"),
-        ({"name": "nm-conf", "hardware": "hp"}, "no hardware type 'hp', one of cisco"),
+        ({"name": "nm-conf", "hardware": "hp"}, "no hardware type 'hp', one of generic, cisco"),
         ({"name": "nic-ring-buffer", "hardware": "dell"}, "hardware applies only to nm-conf"),
         (
             {"name": "nm-conf-prod-x-site1-dell"},
@@ -340,6 +345,89 @@ def test_an_accepted_network_entry_is_one_the_ci_renders_from_its_template(
     assert expanded["nodepools"][0]["configs"] == [{"name": name}]
 
 
+# ── The generic network template (ADR-0027, 2026-11-12) ───────────────────────
+
+
+def test_the_generic_template_is_a_hardware_type_listed_first() -> None:
+    found = catalog("templates/nm-conf-template-dell.bu", "templates/nm-conf-template.bu")
+    assert [(h.name, h.generic) for h in found.hardware_types()] == [
+        ("generic", True),
+        ("dell", False),
+    ]
+    assert found.problems == ()
+
+
+def test_generic_is_reserved_as_a_hardware_suffix() -> None:
+    found = catalog("templates/nm-conf-template-generic.bu", "templates/nm-conf-template-dell.bu")
+    assert set(found.hardware) == {"dell"}
+    assert found.problems == (
+        "mc-files/templates/nm-conf-template-generic.bu: 'generic' is reserved for the generic "
+        "template nm-conf-template.bu, so it is no hardware type",
+    )
+
+
+def test_plain_nm_conf_is_the_generic_templates_and_generic_is_never_a_suffix() -> None:
+    with_generic = catalog("templates/nm-conf-template.bu", "templates/nm-conf-template-dell.bu")
+    generic = with_generic.template_for("nm-conf")
+    assert generic is not None and generic.generic
+    assert with_generic.template_for("nm-conf-prod-x-site1-generic") is None
+    assert catalog("templates/nm-conf-template-dell.bu").template_for("nm-conf") is None
+    assert network_config_name("prod-x-site1", "generic") == "nm-conf"
+
+
+def test_a_static_nm_conf_file_is_shadowed_by_the_generic_template() -> None:
+    found = catalog("templates/nm-conf-template.bu", "nm-conf.bu")
+    assert "nm-conf" not in found.static
+    assert found.problems == (
+        "mc-files/nm-conf.bu: the CI renders the generic network template for nm-conf instead "
+        "of this file",
+    )
+
+
+def test_at_create_generic_is_written_as_plain_nm_conf() -> None:
+    inputs = pools(
+        [{"name": "nm-conf", "hardware": "generic"}, {"name": "nic-ring-buffer"}],
+        [{"name": "nm-conf", "hardware": "dell"}],
+    )
+    assert cluster_config_problems(inputs, CATALOG, cluster_name="prod-x-site1") == []
+    expanded: Any = expand_network_configs(inputs, cluster_name="prod-x-site1")
+    assert expanded["nodepools"][0]["configs"] == [{"name": "nm-conf"}, {"name": "nic-ring-buffer"}]
+    assert expanded["nodepools"][1]["configs"] == [{"name": "nm-conf-prod-x-site1-dell"}]
+
+
+def test_generic_needs_the_generic_template() -> None:
+    without = catalog("templates/nm-conf-template-dell.bu")
+    entry = pools([{"name": "nm-conf", "hardware": "generic"}])
+    expected = [
+        "nodepools[0].configs[0]: no generic network template "
+        "mc-files/templates/nm-conf-template.bu; one of dell"
+    ]
+    assert cluster_config_problems(entry, without, cluster_name="prod-x-site1") == expected
+    assert flavor_config_problems(entry, without) == expected
+    assert flavor_config_problems(entry, CATALOG) == []
+
+
+def test_sync_may_choose_the_generic_network_config() -> None:
+    assert (
+        network_choice_problems("hardware: nodepool[0]", "generic", CATALOG, cluster_name="c") == []
+    )
+    without = catalog("templates/nm-conf-template-dell.bu")
+    assert network_choice_problems(
+        "hardware: nodepool[0]", "generic", without, cluster_name="c"
+    ) == [
+        "hardware: nodepool[0]: no generic network template "
+        "mc-files/templates/nm-conf-template.bu; one of dell"
+    ]
+
+
+def test_without_hardware_nm_conf_still_needs_a_choice_at_create() -> None:
+    entry = pools([{"name": "nm-conf"}])
+    assert cluster_config_problems(entry, CATALOG, cluster_name="prod-x-site1") == [
+        "nodepools[0].configs[0]: nm-conf needs a hardware type, one of generic, cisco, dell, "
+        "dell-data"
+    ]
+
+
 # ── Nodepool defaults ────────────────────────────────────────────────────────
 
 
@@ -365,7 +453,7 @@ def test_defaults_may_preset_a_hardware_type_and_are_checked_like_a_flavor() -> 
     assert defaults.configs[0].to_input() == {"name": "nm-conf", "hardware": "dell"}
     assert defaults_problems(defaults, CATALOG) == [
         "configs[1]: no machine config 'nope' in mc-files/",
-        "configs[2]: no hardware type 'hp', one of cisco, dell, dell-data",
+        "configs[2]: no hardware type 'hp', one of generic, cisco, dell, dell-data",
     ]
 
 

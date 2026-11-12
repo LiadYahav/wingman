@@ -12,6 +12,13 @@ import type { ConfigEntry, MachineConfigs } from "@/types";
 /** The entry name that stands for the cluster's own network config. */
 export const NETWORK_CONFIG = "nm-conf";
 
+/**
+ * The hardware that names the generic network template,
+ * `mc-files/templates/nm-conf-template.bu`: for any hardware, written in the
+ * cluster file as plain `nm-conf` (ADR-0027's 2026-11-12 amendment).
+ */
+export const GENERIC_HARDWARE = "generic";
+
 export const machineConfigsKey = ["machine-configs"] as const;
 
 /** The catalogue and the nodepool defaults; cached a minute, like day1's own read. */
@@ -28,9 +35,38 @@ export function isNetworkEntry(entry: ConfigEntry): boolean {
   return entry.name === NETWORK_CONFIG;
 }
 
-/** The name the CI resolves: `nm-conf-<clusterName>-<hw>` (clusterName without `ocp4-`). */
+/** The name the CI resolves: `nm-conf-<clusterName>-<hw>` (clusterName without `ocp4-`); plain `nm-conf` for generic. */
 export function networkConfigName(clusterName: string, hardware: string): string {
-  return `${NETWORK_CONFIG}-${clusterName}-${hardware}`;
+  return hardware === GENERIC_HARDWARE ? NETWORK_CONFIG : `${NETWORK_CONFIG}-${clusterName}-${hardware}`;
+}
+
+/** `generic` when the catalogue has the generic template, else `null`: the hardware a network entry starts with. */
+export function defaultHardware(catalog: MachineConfigs | undefined): string | null {
+  return catalog?.hardware_types.some((h) => h.generic) ? GENERIC_HARDWARE : null;
+}
+
+/** Hardware types as picker options: the generic one first (day1's order), named for what it is. */
+export function hardwareOptions(catalog: MachineConfigs | undefined): { value: string; label: string; description: string }[] {
+  return (catalog?.hardware_types ?? []).map((h) =>
+    h.generic
+      ? { value: h.name, label: h.name, description: `Any hardware: ${h.template}, written as plain ${NETWORK_CONFIG}` }
+      : { value: h.name, label: h.name, description: h.template }
+  );
+}
+
+/** Network entries without hardware get `hardware` (the default); others are kept. */
+export function withHardware(entries: ConfigEntry[], hardware: string | null): ConfigEntry[] {
+  if (!hardware) return entries;
+  return entries.map((e) => (isNetworkEntry(e) && !e.hardware ? { name: NETWORK_CONFIG, hardware } : e));
+}
+
+/** The hint under a network entry: what the cluster file will list for it. */
+export function writtenAs(entry: ConfigEntry, clusterName?: string): string | null {
+  const name = fileName(entry, clusterName);
+  if (!name) return null;
+  return entry.hardware === GENERIC_HARDWARE
+    ? `Written as ${NETWORK_CONFIG}: the generic template, for any hardware`
+    : `Written as ${name}`;
 }
 
 /** What the cluster file will say for an entry; `null` while a network entry has no hardware. */
@@ -45,11 +81,15 @@ export function cleanEntry(entry: ConfigEntry): ConfigEntry {
   return isNetworkEntry(entry) ? { name: NETWORK_CONFIG, hardware: entry.hardware ?? null } : { name: entry.name };
 }
 
-/** Copies of the defaults a new nodepool starts with; none when the file is missing or unusable. */
+/**
+ * Copies of the defaults a new nodepool starts with; none when the file is
+ * missing or unusable. An `nm-conf` the file leaves to the nodepool starts as
+ * generic when the catalogue has the generic template.
+ */
 export function defaultConfigs(catalog: MachineConfigs | undefined): ConfigEntry[] {
   const defaults = catalog?.nodepool_defaults;
   if (!defaults || defaults.error) return [];
-  return defaults.configs.map(cleanEntry);
+  return withHardware(defaults.configs.map(cleanEntry), defaultHardware(catalog));
 }
 
 /** Read a template input value as config entries; anything else in the list is dropped. */

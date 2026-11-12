@@ -131,3 +131,37 @@ refused every nodepool that names a network config. 3.3.1 strips
 `nm-conf-template-hw-dell.bu` is the hardware type `hw-dell`, to the CI and
 to Wingman alike. The decision is unchanged; only the file name it quoted
 was wrong.
+
+## Amendment (2026-11-12): the generic network template
+
+The day1 repo now has a generic network template,
+`mc-files/templates/nm-conf-template.bu`, for any hardware. The CI renders
+a nodepool entry named exactly `nm-conf` from it (the template whose suffix
+after `nm-conf-template` is empty); every other name still resolves by its
+longest `-<hw>` suffix.
+
+- **In the cluster file** the generic config is plain `{name: nm-conf}`: no
+  cluster name and no hardware.
+- **In Wingman's inputs** (a flavor's values, a create's variables, a
+  sync's hardware choice) it is `{name: nm-conf, hardware: generic}`.
+  `generic` is reserved: a template named `nm-conf-template-generic.bu` is
+  no hardware type, and the catalogue says why. `nm-conf` without hardware
+  keeps its meaning (in the configs rule and the nodepool defaults, the
+  nodepool picks).
+- **The catalogue** lists `generic` first (`GET /machine-configs`,
+  `hardware_types[].generic`). Choosing it needs the template; without it
+  day1 refuses the entry and names the missing file.
+- **Read back** (drift, sync, import), a cluster file's plain `nm-conf` is
+  the generic network config, so a flavor that sets generic is in sync with
+  it, and a person may choose `generic` where a nodepool's own cannot be
+  read.
+- **The default.** When the template exists, the web starts every network
+  entry at generic: a new nodepool's, under the rule each nodepool's, the
+  create form's, and the sync dialog's choice for a nodepool that needs
+  one. A person may still choose a hardware type. Without the template
+  nothing changes.
+
+Verified in `test_machine_configs.py` (catalogue, reserved name, entry
+checks, expansion, the sync choice), `test_value_drift.py` (read back), the
+API tests (`generic: true`, a preview writing plain `nm-conf`), and the
+mocked flavor editor, create form and sync dialog.

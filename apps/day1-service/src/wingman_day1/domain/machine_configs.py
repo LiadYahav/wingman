@@ -14,8 +14,10 @@ How the CI resolves a name, described here in Wingman's words:
    ``<hw>``. A name that ends in ``-<hw>`` is rendered from that template
    for the cluster whose file lists it. When several types match, the
    longest wins: ``nm-conf-x-dell-data`` is ``dell-data``, not ``dell``.
-   Templates are tried before static files, so a static file whose name
-   ends in ``-<hw>`` is never the one used.
+   The name ``nm-conf`` itself is rendered from the generic template
+   ``mc-files/templates/nm-conf-template.bu``, for any hardware (ADR-0027's
+   2026-11-12 amendment). Templates are tried before static files, so a
+   static file whose name ends in ``-<hw>`` is never the one used.
 2. **Otherwise it is a static file.** A ``<name>.bu`` anywhere wins over a
    file named exactly ``<name>``; within each, the ``mc-files/`` root wins
    over subfolders, and subfolders are taken in path order. ``templates/``
@@ -33,7 +35,10 @@ A nodepool entry is ``{name: <static config>}`` or ``{name: nm-conf,
 hardware: <hw>}``. The second is the cluster's own network config:
 :func:`expand_network_configs` turns it into ``{name:
 nm-conf-<clusterName>-<hw>}`` before the shared template renders, so the
-template and the file the CI reads keep the shape they have.
+template and the file the CI reads keep the shape they have. The hardware
+``generic`` (reserved) stands for the generic template and is written as
+plain ``{name: nm-conf}``. An entry without hardware is not the generic one:
+in a flavor's rule and the nodepool defaults it means "the nodepool picks".
 """
 
 from __future__ import annotations
@@ -56,6 +61,10 @@ NETWORK_CONFIG: Final = "nm-conf"
 TEMPLATES_DIR: Final = "templates"
 LEGACY_DIR: Final = "legacy"
 TEMPLATE_PREFIX: Final = "nm-conf-template-"
+GENERIC_HARDWARE: Final = "generic"
+"""The hardware that names the generic network template; never a ``-generic`` suffix."""
+GENERIC_TEMPLATE: Final = "nm-conf-template.bu"
+"""``mc-files/templates/nm-conf-template.bu``: the network template for any hardware."""
 BUTANE_SUFFIX: Final = ".bu"
 MAX_CONFIG_NAME: Final = 253
 MAX_HARDWARE_NAME: Final = 63
@@ -79,10 +88,15 @@ class StaticConfig:
 
 @dataclass(frozen=True, slots=True)
 class HardwareType:
-    """A hardware type: one ``templates/nm-conf-template-<name>.bu``."""
+    """A hardware type: one ``templates/nm-conf-template-<name>.bu``, or the generic one."""
 
     name: str
     template: RepoPath
+
+    @property
+    def generic(self) -> bool:
+        """The generic template, ``nm-conf-template.bu``, written as plain ``nm-conf``."""
+        return self.name == GENERIC_HARDWARE
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +112,13 @@ class ConfigEntry:
 
 
 def network_config_name(cluster_name: str, hardware: str) -> str:
-    """``nm-conf-<clusterName>-<hw>``: the name a cluster file lists for its network config."""
+    """``nm-conf-<clusterName>-<hw>``: the name a cluster file lists for its network config.
+
+    The generic hardware is plain ``nm-conf``: the CI renders that name from
+    the generic template, for any cluster.
+    """
+    if hardware == GENERIC_HARDWARE:
+        return NETWORK_CONFIG
     return f"{NETWORK_CONFIG}-{cluster_name}-{hardware}"
 
 
@@ -107,13 +127,21 @@ def _is_config_name(name: str) -> bool:
 
 
 def _hardware_of(relative: Sequence[str]) -> str | None:
-    """``("templates", "nm-conf-template-dell.bu")`` → ``dell``; anything else → ``None``."""
+    """``("templates", "nm-conf-template-dell.bu")`` → ``dell``; anything else → ``None``.
+
+    ``nm-conf-template.bu`` is the generic type; ``nm-conf-template-generic.bu``
+    is no type (the name is reserved, and the catalogue says so).
+    """
     if len(relative) != 2:  # templates/<file>: the CI does not look deeper
         return None
     filename = relative[1]
+    if filename == GENERIC_TEMPLATE:
+        return GENERIC_HARDWARE
     if not filename.startswith(TEMPLATE_PREFIX) or not filename.endswith(BUTANE_SUFFIX):
         return None
     hardware = filename.removeprefix(TEMPLATE_PREFIX).removesuffix(BUTANE_SUFFIX)
+    if hardware == GENERIC_HARDWARE:
+        return None
     if len(hardware) > MAX_HARDWARE_NAME or not _HARDWARE_NAME.fullmatch(hardware):
         return None
     return hardware
@@ -159,7 +187,12 @@ class MachineConfigCatalog:
                 continue
             if relative[0] == TEMPLATES_DIR:
                 found = _hardware_of(relative)
-                if found is None:
+                if relative[-1] == f"{TEMPLATE_PREFIX}{GENERIC_HARDWARE}{BUTANE_SUFFIX}":
+                    problems.append(
+                        f"{path}: {GENERIC_HARDWARE!r} is reserved for the generic template "
+                        f"{GENERIC_TEMPLATE}, so it is no hardware type"
+                    )
+                elif found is None:
                     problems.append(
                         f"{path}: not named {TEMPLATE_PREFIX}<hardware>{BUTANE_SUFFIX} directly in "
                         f"{TEMPLATES_DIR}/, so it is no hardware type"
@@ -189,7 +222,10 @@ class MachineConfigCatalog:
             template = catalog.template_for(name)
             if template is not None:
                 problems.append(
-                    f"{used.path}: the name ends in -{template.name}, so the CI renders the "
+                    f"{used.path}: the CI renders the generic network template for "
+                    f"{NETWORK_CONFIG} instead of this file"
+                    if template.generic
+                    else f"{used.path}: the name ends in -{template.name}, so the CI renders the "
                     f"{template.name} network template for it instead of this file"
                 )
                 continue
@@ -209,12 +245,19 @@ class MachineConfigCatalog:
         return sorted(self.static.values(), key=lambda c: (c.folder != "", c.folder, c.name))
 
     def hardware_types(self) -> list[HardwareType]:
-        """Hardware types by name."""
-        return [self.hardware[name] for name in sorted(self.hardware)]
+        """Hardware types: the generic one first, then by name."""
+        return sorted(self.hardware.values(), key=lambda h: (not h.generic, h.name))
 
     def template_for(self, name: str) -> HardwareType | None:
-        """The network template the CI renders ``name`` from: the longest ``-<hw>`` it ends in."""
-        for hardware in sorted(self.hardware, key=lambda h: (-len(h), h)):
+        """The network template the CI renders ``name`` from.
+
+        Plain ``nm-conf`` is the generic template's (when there is one); any
+        other name, the longest ``-<hw>`` it ends in. ``generic`` is never a suffix.
+        """
+        if name == NETWORK_CONFIG:
+            return self.hardware.get(GENERIC_HARDWARE)
+        typed = (h for h in self.hardware if h != GENERIC_HARDWARE)
+        for hardware in sorted(typed, key=lambda h: (-len(h), h)):
             if name.endswith(f"-{hardware}"):
                 return self.hardware[hardware]
         return None
@@ -223,7 +266,7 @@ class MachineConfigCatalog:
         """The hardware types, for a message."""
         if not self.hardware:
             return f"mc-files/{TEMPLATES_DIR}/ has no {TEMPLATE_PREFIX}<hardware>{BUTANE_SUFFIX}"
-        return "one of " + ", ".join(sorted(self.hardware))
+        return "one of " + ", ".join(h.name for h in self.hardware_types())
 
     def did_you_mean(self, name: str) -> str:
         """A close static name or ``nm-conf``, for a message; empty when none is close."""
@@ -270,6 +313,11 @@ def _network_problems(where: str, entry: ConfigEntry, rules: _Rules) -> list[str
             return []
         return [f"{where}: {NETWORK_CONFIG} needs a hardware type, {catalog.hardware_choices()}"]
     if entry.hardware not in catalog.hardware:
+        if entry.hardware == GENERIC_HARDWARE:
+            return [
+                f"{where}: no generic network template mc-files/{TEMPLATES_DIR}/"
+                f"{GENERIC_TEMPLATE}; {catalog.hardware_choices()}"
+            ]
         return [f"{where}: no hardware type {entry.hardware!r}, {catalog.hardware_choices()}"]
     if rules.cluster_name is None:
         return []

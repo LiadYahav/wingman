@@ -37,7 +37,7 @@ async def test_the_overview_is_the_fixture_catalogue_and_defaults(context: Day1C
         "workers-chrony-configuration",
         "kubevirt-worker-tuning",
     }
-    assert set(overview.catalog.hardware) == {"cisco", "dell", "dell-data"}
+    assert set(overview.catalog.hardware) == {"generic", "cisco", "dell", "dell-data"}
     assert overview.defaults.found
     assert overview.defaults.error is None
     assert overview.defaults.defaults.configs[0] == ConfigEntry("nm-conf")

@@ -47,7 +47,7 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0024](0024-chart-versions-and-defaults.md) | Chart versions and defaults come from the chart repo on the same GitLab, at the resolved revision and path |
 | [0025](0025-version-differences-are-reported-not-drift.md) | A chart version other than the spec's is reported, never drift; a fix only installs a missing chart |
 | [0026](0026-a-flavor-lock-is-a-fixed-value.md) | A flavor lock is a fixed value the flavor enforces; `locked_paths` replaces `immutable_paths`, which is still read |
-| [0027](0027-machine-configs-from-mc-files-and-nodepool-defaults.md) | Machine configs come from mc-files and are checked; new nodepools start from the team's defaults |
+| [0027](0027-machine-configs-from-mc-files-and-nodepool-defaults.md) | Machine configs come from mc-files and are checked; new nodepools start from the team's defaults (amended 2026-11-12: the generic network template, plain `nm-conf`, is the default) |
 | [0028](0028-owner-fields-are-numbers.md) | The owner fields are numbers |
 | [0029](0029-a-configs-rule-locks-every-nodepool.md) | A flavor can lock every nodepool's configs as one rule (`nodepools[*].configs`), compared exactly by name, in any order |
 | [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main (superseded in part by 0031) |
@@ -60,4 +60,5 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0037](0037-import-and-sync-edit-the-cluster-file-text.md) | Existing clusters join a flavor by one MR that writes only the link and sync to it by one MR each, removals confirmed; cluster files are edited as text, checked, never round-tripped |
 | [0038](0038-cluster-nodes-from-server-scan-and-the-uninstall-workflow.md) | A cluster's nodes come from its MCE by NodePool, joined to server-scan's servers; Wingman starts the platform's uninstall workflow on one and shows its run, and the procedure and its checks stay the workflow's |
 | [0039](0039-cluster-network-from-the-file-epg-from-segments-manager.md) | A cluster's VLAN and segment are read from its file; segments-manager adds the EPG and is checked against Git, never written to, and never fails the read |
+| [0040](0040-create-from-a-flavor-ratio-name-and-letter-sequence.md) | A flavor may size its nodepools by a ratio; day1 suggests a new cluster's name from flavor, site and env with the next free letter; a new sequence is one letter, never a number |
 | [0041](0041-reads-refresh-in-the-background.md) | Reads are answered from cache while one fetch refreshes them (never older than a minute), a merge costs a history lookup only for the files it changed, a new replica warms itself, and live status shares the hub cache |

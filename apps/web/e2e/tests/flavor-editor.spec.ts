@@ -8,8 +8,8 @@
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { go, injectAdminAuth, mockDashboardApis, mockMachineConfigs, mockMR } from "../fixtures/api-handlers";
-import type { ClusterSpec, CreateClusterRequest, ErrorCode, Mce, SpecDetail, TemplateField } from "../../types";
+import { go, injectAdminAuth, mockDashboardApis, mockMachineConfigs, mockMachineConfigsWithGeneric, mockMR } from "../fixtures/api-handlers";
+import type { ClusterSpec, CreateClusterRequest, ErrorCode, MachineConfigs, Mce, SpecDetail, TemplateField } from "../../types";
 
 // ── Mock data ────────────────────────────────────────────────────────────────
 
@@ -147,9 +147,14 @@ async function open(page: Page, path: string, routes: (page: Page) => Promise<vo
 }
 
 /** A new flavor whose create is answered by `onPost`; the writes are collected. */
-async function openNew(page: Page, onPost: (route: Route) => Promise<void> = (r) => json(r, mockMR({ repo: "specs", iid: 21 }), 201)) {
+async function openNew(
+  page: Page,
+  onPost: (route: Route) => Promise<void> = (r) => json(r, mockMR({ repo: "specs", iid: 21 }), 201),
+  catalog: MachineConfigs = mockMachineConfigs
+) {
   const writes: Write[] = [];
   await open(page, "/specs/new", async (p) => {
+    await p.route("**/api/day1/machine-configs", (r) => json(r, catalog));
     await p.route("**/api/day1/specs", (r) => {
       if (r.request().method() !== "POST") return json(r, []);
       writes.push({ body: r.request().postDataJSON(), url: new URL(r.request().url()) });
@@ -166,6 +171,41 @@ async function reviewAndConfirm(page: Page, button: RegExp = /review & create/i)
 }
 
 // ── New flavor ───────────────────────────────────────────────────────────────
+
+test.describe("Flavor editor: the generic network config (ADR-0027, 2026-11-12)", () => {
+  test("with nm-conf-template.bu, a nodepool's nm-conf starts as generic, first in the list, and is saved so", async ({ page }) => {
+    const writes = await openNew(page, undefined, mockMachineConfigsWithGeneric);
+    await page.getByTestId("spec-name-input").fill("agent-generic");
+
+    const first = page.getByTestId("nodepool-0-configs");
+    const picker = first.getByRole("combobox", { name: /entry 1 hardware type$/ });
+    await expect(picker).toContainText("generic");
+    await expect(first.getByTestId("nodepool-0-configs-entry-0-written")).toHaveText(
+      "Written as nm-conf: the generic template, for any hardware"
+    );
+    await expect(first.getByText(/Choose the hardware type/)).toHaveCount(0);
+    await picker.click();
+    const generic = page.getByRole("option").first();
+    await expect(generic).toContainText("generic");
+    await expect(generic).toContainText("Any hardware");
+    await page.keyboard.press("Escape");
+
+    // An added nodepool starts there too, and under the rule each nodepool's hardware does
+    await page.getByRole("button", { name: "Add nodepool" }).click();
+    await expect(page.getByTestId("nodepool-1-configs").getByRole("combobox", { name: /entry 1 hardware type$/ })).toContainText("generic");
+    await page.getByRole("radio", { name: /The same on every nodepool/ }).click();
+    await expect(page.getByRole("combobox", { name: "Nodepool 2 network hardware" })).toContainText("generic");
+
+    await reviewAndConfirm(page);
+    await expect(page.getByText("Flavor MR !21 opened")).toBeVisible();
+    const pools = writes[0].body.spec.day1.values?.nodepools as { configs: { name: string; hardware?: string }[] }[];
+    expect(pools.map((pool) => pool.configs.find((c) => c.name === "nm-conf"))).toEqual([
+      { name: "nm-conf", hardware: "generic" },
+      { name: "nm-conf", hardware: "generic" },
+    ]);
+  });
+});
+
 
 test.describe("Flavor editor: a new flavor", () => {
   test("the first nodepool and every added one start with a copy of the nodepool defaults", async ({ page }) => {
@@ -489,6 +529,73 @@ test.describe("Flavor editor: editing a flavor", () => {
     await expect.poll(() => (previews.at(-1)!.variables.nodepools as { configs: unknown[] }[])[0].configs).toEqual(
       AGENT_DELL.spec.day1.values!.nodepools instanceof Array ? (AGENT_DELL.spec.day1.values!.nodepools[0] as { configs: unknown[] }).configs : []
     );
+  });
+});
+
+test.describe("Flavor editor: the nodepool ratio (ADR-0040)", () => {
+  test("nodepools sized by a ratio are saved as nodepool_ratio, one part per nodepool", async ({ page }) => {
+    const writes = await openNew(page);
+    await page.getByTestId("spec-name-input").fill("agent-zones");
+    // One nodepool has no ratio to choose
+    await expect(page.getByTestId("nodepool-ratio")).toHaveCount(0);
+    for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "Add nodepool" }).click();
+    for (const [i, type] of ["dell", "dell", "cisco"].entries()) {
+      await choose(page, page.getByTestId(`nodepool-${i}-configs`).getByRole("combobox", { name: /entry 1 hardware type$/ }), type);
+    }
+
+    const ratio = page.getByTestId("nodepool-ratio");
+    await expect(ratio).toContainText("Off");
+    await ratio.getByRole("switch", { name: "Size the nodepools by a ratio" }).click();
+    await expect(page.getByTestId("nodepool-ratio-label")).toHaveText("1:1:1");
+    await page.getByTestId("nodepool-1-ratio").getByRole("textbox", { name: "Ratio" }).fill("2");
+    await expect(page.getByTestId("nodepool-ratio-label")).toHaveText("1:2:1");
+
+    // A part that is not a whole number from 1 to 100 is refused before anything is sent
+    await page.getByTestId("nodepool-2-ratio").getByRole("textbox", { name: "Ratio" }).fill("0");
+    await expect(page.getByTestId("nodepool-2-ratio").getByRole("alert")).toContainText("A whole number from 1 to 100");
+    await page.getByTestId("nodepool-2-ratio").getByRole("textbox", { name: "Ratio" }).fill("1");
+
+    await reviewAndConfirm(page);
+    await expect(page.getByText("Flavor MR !21 opened")).toBeVisible();
+    const day1 = writes[0].body.spec.day1;
+    expect(day1.nodepool_ratio).toEqual([1, 2, 1]);
+    expect(day1.structure).toEqual({ nodepools: [{}, {}, {}] });
+  });
+
+  test("one nodepool's replicas move the others by the ratio", async ({ page }) => {
+    await openNew(page);
+    await page.getByTestId("spec-name-input").fill("agent-zones");
+    for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "Add nodepool" }).click();
+    await page.getByTestId("nodepool-ratio").getByRole("switch", { name: "Size the nodepools by a ratio" }).click();
+    await page.getByTestId("nodepool-1-ratio").getByRole("textbox", { name: "Ratio" }).fill("2");
+    const replicas = (i: number) => page.getByTestId(`nodepool-${i}`).getByRole("textbox", { name: "Replicas" });
+    const all = async () => Promise.all([0, 1, 2].map((i) => replicas(i).inputValue()));
+
+    await replicas(0).fill("3");
+    await expect.poll(all).toEqual(["3", "6", "3"]);
+    await expect(page.getByTestId("nodepool-ratio-replicas")).toHaveText("3 · 6 · 3");
+
+    await replicas(1).fill("4");
+    await expect.poll(all).toEqual(["2", "4", "2"]);
+
+    // Not a multiple of its part: kept as typed, and flagged
+    await replicas(1).fill("5");
+    await expect.poll(all).toEqual(["2", "5", "2"]);
+    await expect(page.getByTestId("nodepool-1")).toContainText("A multiple of 2");
+
+    // A part that changes keeps the size: 2 · 4 · 2 at 1:2:3 is 2 · 4 · 6
+    await replicas(1).fill("4");
+    await page.getByTestId("nodepool-2-ratio").getByRole("textbox", { name: "Ratio" }).fill("3");
+    await expect.poll(all).toEqual(["2", "4", "6"]);
+  });
+
+  test("a flavor saved without a ratio sends none", async ({ page }) => {
+    const writes = await openNew(page);
+    await page.getByTestId("spec-name-input").fill("agent-plain");
+    await choose(page, page.getByTestId("nodepool-0-configs").getByRole("combobox", { name: /entry 1 hardware type$/ }), "dell");
+    await reviewAndConfirm(page);
+    await expect(page.getByText("Flavor MR !21 opened")).toBeVisible();
+    expect(writes[0].body.spec.day1).not.toHaveProperty("nodepool_ratio");
   });
 });
 

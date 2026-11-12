@@ -449,7 +449,8 @@ async def test_a_nodepool_that_sends_no_configs_gets_the_rule_and_must_pick_its_
     with pytest.raises(InvalidInputError) as caught:
         await context.clusters.preview(request)
     assert caught.value.problems == (
-        "nodepools[1].configs[0]: nm-conf needs a hardware type, one of cisco, dell, dell-data",
+        "nodepools[1].configs[0]: nm-conf needs a hardware type, one of generic, cisco, "
+        "dell, dell-data",
     )
 
 
