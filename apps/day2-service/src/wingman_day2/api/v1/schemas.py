@@ -122,6 +122,10 @@ class MergePreviewBody(_Input):
     mce: str | None = None
     version: str | None = None
     override_values: dict[str, Any] | None = None
+    override_path: str | None = Field(
+        default=None,
+        description="The stack layer override_values replaces; the cluster's own file when absent.",
+    )
 
 
 class SyncIn(_Input):

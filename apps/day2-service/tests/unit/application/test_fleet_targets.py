@@ -8,7 +8,7 @@ from functools import partial
 import pytest
 import yaml
 
-from wingman_core.domain.git import ChangeKind
+from wingman_core.domain.git import ChangeKind, FileChange, RepoPath
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day2.application.authoring import AuthoringResult, Effect
@@ -16,11 +16,13 @@ from wingman_day2.application.services import Day2Services
 from wingman_day2.domain.clusters import DefaultsScope
 from wingman_day2.domain.errors import (
     ChangeRefusedError,
+    ChartNotInstalledError,
     PlanChangedError,
 )
 from wingman_day2.domain.platform import AppSource, TeamPlan
 
 MCES = DefaultsScope.MCES
+HOSTED = DefaultsScope.HOSTED_CLUSTERS
 PREP = "mce:site1:prep:ocp4-prep-mce-site1-a"
 PROD = "mce:site1:prod:ocp4-prod-mce-site1-a"
 EXCLUSIONS = "defaults/mces/exclusions.yaml"
@@ -186,16 +188,88 @@ async def test_a_preview_the_repo_moved_away_from_is_refused(
     assert raised.value.details["rule"] == "plan-changed"
 
 
-async def test_values_are_per_mce_or_per_upi_cluster_only(
+async def test_the_hub_has_no_values_of_its_own_per_env_or_destination(
     services: Day2Services, jane_user: User
 ) -> None:
-    hosted = "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1"
-    for scope, cluster in [(DefaultsScope.HUB, "hub"), (DefaultsScope.HOSTED_CLUSTERS, hosted)]:
+    targets = services.fleet_targets
+    for write in [
+        targets.set_destination_values(
+            "redbull", "example-chart", DefaultsScope.HUB, "hub", {"a": 1}, jane_user
+        ),
+        targets.set_env_values(
+            "redbull", "example-chart", DefaultsScope.HUB, "prod", {"a": 1}, jane_user
+        ),
+    ]:
         with pytest.raises(ChangeRefusedError) as raised:
-            await services.fleet_targets.set_destination_values(
-                "redbull", "example-chart", scope, cluster, {"a": 1}, jane_user
-            )
+            await write
         assert raised.value.details["rule"] == "override-scope"
+
+
+async def test_a_hosted_cluster_gets_values_of_its_own_like_an_mce(
+    services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
+) -> None:
+    # The hosted-cluster defaults mirror the MCE ones (the platform's own README).
+    project = await gitlab.get_project("sigs/redbull")
+    await gitlab.commit(
+        project.id,
+        branch="main",
+        message="by hand",
+        changes=[
+            FileChange.create(RepoPath("defaults/hosted-clusters/kyverno/values.yaml"), "{}\n")
+        ],
+    )
+    herzi = "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1"
+    plan = (
+        await services.fleet_targets.set_destination_values(
+            "redbull", "kyverno", HOSTED, herzi, {"replicas": 2}, jane_user, dry_run=True
+        )
+    ).plan
+    assert [str(c.path) for c in plan.changes] == [
+        "defaults/hosted-clusters/kyverno/values-ocp4-prod-herzi-site1.yaml"
+    ]
+    assert [i.ref.id for i in plan.impact] == [herzi]
+
+
+async def test_an_env_override_changes_that_envs_destinations_only(
+    services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
+) -> None:
+    write = partial(
+        services.fleet_targets.set_env_values,
+        "redbull",
+        "example-chart",
+        MCES,
+        "prep",
+        {"replicas": 4},
+        jane_user,
+    )
+    plan = (await write(dry_run=True)).plan
+    assert [(c.kind, str(c.path)) for c in plan.changes] == [
+        (ChangeKind.CREATE, "defaults/mces/example-chart/values-prep.yaml")
+    ]
+    assert [(i.ref.id, i.effect) for i in plan.impact] == [(PREP, Effect.CHANGED)]
+    assert [r.id for r in plan.reach] == [PREP]
+    assert plan.title == (
+        "[Wingman/Day2] Override addon redbull/example-chart values for prep "
+        "(fleet default on every MCE)"
+    )
+    result = await confirmed(write)
+    assert result.merge_request is not None
+    branch = await main_files(gitlab, result.merge_request.source_branch)
+    assert yaml.safe_load(branch["defaults/mces/example-chart/values-prep.yaml"]) == {"replicas": 4}
+
+
+async def test_env_override_refusals(services: Day2Services, jane_user: User) -> None:
+    targets = services.fleet_targets
+    with pytest.raises(ChangeRefusedError) as raised:
+        await targets.set_env_values(
+            "redbull", "example-chart", MCES, "staging", {"a": 1}, jane_user
+        )
+    assert raised.value.details["rule"] == "env-unknown"
+    with pytest.raises(ChangeRefusedError) as raised:
+        await targets.set_env_values("redbull", "example-chart", MCES, "prod", None, jane_user)
+    assert raised.value.details["rule"] == "no-change"
+    with pytest.raises(ChartNotInstalledError):
+        await targets.set_env_values("redbull", "bmhgen", MCES, "prod", {"a": 1}, jane_user)
 
 
 async def test_wingman_offers_no_exclusion_or_own_deploy_write(services: Day2Services) -> None:

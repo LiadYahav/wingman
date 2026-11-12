@@ -649,3 +649,34 @@ async def test_deploy_on_specific_mces_adds_the_app_on_those_mces_only(tmp_path:
     for uid, leaf in before.items():
         assert after[uid]["identity"] == leaf["identity"], uid
     await assert_same_apps(after_files, tmp_path / "again", "redbull")
+
+
+async def test_an_env_override_changes_that_envs_values_only(tmp_path: Path) -> None:
+    files = fixture_files()
+    before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
+    after_files, _ = await authored_with(
+        files,
+        lambda day2: lambda **kw: day2.fleet_targets.set_env_values(
+            "redbull", "example-chart", DefaultsScope.MCES, "prep", {"replicas": 9}, ADMIN, **kw
+        ),
+    )
+    snapshot = oracle(after_files, tmp_path / "after", "redbull")
+    assert snapshot["check_failures"] == []
+    after = _leaves(snapshot["apps"])
+    assert sorted(after) == sorted(before)
+    prep = "ocp4-prep-mce-site1-a:redbull-in-cluster-example-chart-deploy"
+    for uid, leaf in after.items():
+        assert leaf["identity"] == before[uid]["identity"], uid
+        mine, theirs = (
+            workload(after_files, "redbull", leaf),
+            workload(files, "redbull", before[uid]),
+        )
+        if uid == prep:
+            # The env file sits below the MCE's own values-<mce>.yaml: the cluster wins on its keys.
+            own = yaml.safe_load(
+                files[RB]["defaults/mces/example-chart/values-ocp4-prep-mce-site1-a.yaml"]
+            )
+            assert mine == {**theirs, **{"replicas": 9}, **(own or {})}
+        else:
+            assert mine == theirs, uid
+    await assert_same_apps(after_files, tmp_path / "again", "redbull")

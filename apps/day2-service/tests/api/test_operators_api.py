@@ -218,3 +218,36 @@ async def test_the_addons_paths_and_the_3_12_operators_aliases_answer_the_same(
     assert detail == ok(await vic.get("/api/day2/teams/redbull/operators/dhcp-api-token"))
     assert detail["name"] == "dhcp-api-token"
     problem(await vic.get("/api/day2/teams/redbull/addons/ghost"), 404, "NOT_FOUND")
+
+
+async def test_an_env_override_and_its_preview_on_a_destination_of_that_env(
+    jane: httpx.AsyncClient,
+) -> None:
+    plan = await preview(jane, f"{EXAMPLE}/envs/prep/values", {"values": {"r": 5}})
+    assert plan["action"] == "override-values"
+    assert [f["path"] for f in plan["files"]] == ["defaults/mces/example-chart/values-prep.yaml"]
+    assert [i["cluster"] for i in plan["impact"]] == [PREP]
+    body = {"team": "redbull", "addon": "example-chart", "cluster": PREP}
+    path = "defaults/mces/example-chart/values-prep.yaml"
+    after = ok(
+        await jane.post(
+            "/api/day2/merge-preview",
+            json={**body, "override_values": {"r": 5}, "override_path": path},
+        )
+    )
+    assert after["merged"]["r"] == 5 and after["provenance"]["r"] == "fleet-env"
+    bad = problem(
+        await jane.post(
+            "/api/day2/merge-preview",
+            json={**body, "override_values": {"r": 5}, "override_path": "operators/x.yaml"},
+        ),
+        422,
+        "VALIDATION_ERROR",
+    )
+    assert bad["details"]["rule"] == "override-path"
+    unknown = problem(
+        await jane.put(f"{EXAMPLE}/envs/staging/values", json={"values": {"a": 1}}),
+        422,
+        "VALIDATION_ERROR",
+    )
+    assert unknown["details"]["rule"] == "env-unknown"

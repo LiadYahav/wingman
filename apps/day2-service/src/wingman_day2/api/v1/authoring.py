@@ -193,6 +193,35 @@ async def set_destination_values(
     return _answer(result, response, created=False)
 
 
+@router.put("/addons/{team}/{addon}/defaults/{scope}/envs/{env}/values")
+async def set_env_values(
+    team: str,
+    addon: str,
+    scope: DefaultsScope,
+    env: str,
+    body: DestinationValuesBody,
+    user: AdminUser,
+    day2: Services,
+    response: Response,
+    dry_run: bool = DryRun,
+) -> AuthoringPlanOut | AuthoringChangeOut:
+    """Open an MR setting one env's ``values-<env>.yaml`` of a fleet default ({} deletes it)."""
+    result = await day2.fleet_targets.set_env_values(
+        team,
+        addon,
+        scope,
+        env,
+        body.values,
+        user,
+        last_commit_id=body.last_commit_id,
+        confirm_changes=body.confirm_changes,
+        expected_digest=body.expected_digest,
+        dry_run=dry_run,
+        message=body.message,
+    )
+    return _answer(result, response, created=False)
+
+
 @router.post("/addons/{team}/{addon}/mce-installs")
 async def install_on_mces(
     team: str,
