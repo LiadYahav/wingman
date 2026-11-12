@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from wingman_core.domain.git import (
+    AccessLevel,
     Branch,
     Commit,
     CommitAuthor,
@@ -45,6 +46,16 @@ class GitLabPort(Protocol):
 
     async def list_group_projects(self, group: str) -> list[Project]:
         """Every project directly in a group (not in its subgroups), sorted by path."""
+        ...
+
+    async def access_level(self, project_id: int) -> AccessLevel:
+        """This account's access to a project: the higher of its project and group membership.
+
+        Group membership counts from the project's group and every group above
+        it, as GitLab inherits it. ``AccessLevel.NONE`` when the account is a
+        member of neither (it may still read a public or internal project).
+        Raises ``NotFoundError`` for a project the account cannot see.
+        """
         ...
 
     async def read_file(self, project_id: int, path: RepoPath, ref: str) -> FileContent:

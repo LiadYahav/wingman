@@ -3,7 +3,8 @@
 Request bodies refuse unknown fields (``extra="forbid"``): a typo is a 422,
 not a silently ignored setting. Response shapes keep the legacy field names
 where the meaning is unchanged, and add fields; every change visible to the
-web app is listed in ``docs/notes/2026-11-07-day2-api-changes.md``.
+web app is listed in ``docs/notes/2026-11-07-day2-api-changes.md`` (add-on
+authoring and per-team access: ``docs/notes/2026-11-12-day2-addon-authoring-api.md``).
 """
 
 from __future__ import annotations
@@ -16,16 +17,36 @@ from wingman_core.application.approvals import PendingChange, describe
 from wingman_core.domain.git import Commit, FileChange
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.web.schemas import FileDiffOut
+from wingman_day2.application.authoring import (
+    SCOPE_LABELS,
+    AddonTemplate,
+    Adoption,
+    AuthoringPlan,
+    AuthoringResult,
+    FleetDefault,
+    NewAddon,
+    TeamDefaultEdit,
+)
 from wingman_day2.application.catalog import CatalogEntry, ChartValues
 from wingman_day2.application.changes import ChangeResult
 from wingman_day2.application.installed import ClusterCharts, InstalledChart
 from wingman_day2.application.preview import ValuesPreview
 from wingman_day2.application.topology import ClusterSummary
-from wingman_day2.domain.deploy_config import LeafApplication
+from wingman_day2.domain.clusters import DefaultsScope
+from wingman_day2.domain.deploy_config import (
+    IGNORE_DIFFERENCES,
+    PATH,
+    PROJECT_NAMESPACE,
+    REPOURL,
+    SYNC_POLICY,
+    TARGET_REVISION,
+    LeafApplication,
+)
 from wingman_day2.domain.findings import Finding
 from wingman_day2.domain.platform import ExcludedDefault
 from wingman_day2.domain.stacks import LayerRole
-from wingman_day2.domain.teams import Team
+from wingman_day2.domain.sync_policy import KNOWN_SYNC_OPTIONS, SyncSettings, sync_settings
+from wingman_day2.domain.teams import Team, TeamAccess
 
 
 class _Input(BaseModel):
@@ -89,6 +110,106 @@ class MergePreviewBody(_Input):
     mce: str | None = None
     version: str | None = None
     override_values: dict[str, Any] | None = None
+
+
+class SyncIn(_Input):
+    """A leaf app's sync options (ADR-0043)."""
+
+    auto_sync: bool = False
+    prune: bool = Field(default=False, description="Only with auto_sync.")
+    self_heal: bool = Field(default=False, description="Only with auto_sync.")
+    sync_options: list[str] = Field(default_factory=list, description="Name=value, in order.")
+
+    def settings(self) -> SyncSettings:
+        """The domain settings (checked where they are used)."""
+        return SyncSettings(self.auto_sync, self.prune, self.self_heal, tuple(self.sync_options))
+
+
+class CreateAddonBody(_Input):
+    """A new add-on in a team's catalog (``operators/<name>/``), optionally a fleet default."""
+
+    name: str
+    repourl: str
+    target_revision: str | None = Field(default=None, description="A chart repo branch; HEAD.")
+    path: str | None = None
+    project_namespace: str | None = None
+    sync: SyncIn
+    ignore_differences: list[dict[str, Any]] | None = None
+    values: dict[str, Any] = Field(default_factory=dict)
+    default_scope: DefaultsScope | None = None
+    default_values: dict[str, Any] = Field(default_factory=dict)
+    confirm_changes: list[str] = Field(default_factory=list)
+    message: str | None = None
+
+    def spec(self, team: str) -> NewAddon:
+        """The application's request."""
+        return NewAddon(
+            team=team,
+            chart=self.name,
+            repourl=self.repourl,
+            sync=self.sync.settings(),
+            target_revision=self.target_revision,
+            path=self.path,
+            project_namespace=self.project_namespace,
+            ignore_differences=list(self.ignore_differences) if self.ignore_differences else None,
+            values=self.values,
+            default_scope=self.default_scope,
+            default_values=self.default_values,
+            confirm_changes=tuple(self.confirm_changes),
+        )
+
+
+_DEPLOY_KEYS = {
+    "repourl": REPOURL,
+    "target_revision": TARGET_REVISION,
+    "path": PATH,
+    "project_namespace": PROJECT_NAMESPACE,
+    "ignore_differences": IGNORE_DIFFERENCES,
+}
+
+
+class UpdateTeamDefaultBody(_Input):
+    """An edit of ``operators/<addon>/``: absent fields are unchanged, ``null`` removes a key."""
+
+    repourl: str | None = None
+    target_revision: str | None = None
+    path: str | None = None
+    project_namespace: str | None = None
+    sync: SyncIn | None = Field(default=None, description="Absent or null: unchanged.")
+    ignore_differences: list[dict[str, Any]] | None = None
+    values: dict[str, Any] | None = Field(default=None, description="Absent or null: unchanged.")
+    last_commit_id: str | None = None
+    message: str | None = None
+
+    def edit(self) -> TeamDefaultEdit:
+        """The application's request: only the fields the body sent."""
+        sent = self.model_fields_set
+        return TeamDefaultEdit(
+            keys={
+                key: getattr(self, field) for field, key in _DEPLOY_KEYS.items() if field in sent
+            },
+            sync=self.sync.settings() if self.sync is not None else None,
+            values=self.values,
+            last_commit_id=self.last_commit_id,
+        )
+
+
+class MakeDefaultBody(_Input):
+    """Make an add-on a fleet default."""
+
+    values: dict[str, Any] = Field(default_factory=dict)
+    sync: SyncIn | None = Field(default=None, description="null: the team default's.")
+    confirm_changes: list[str] = Field(default_factory=list)
+    message: str | None = None
+
+
+class UpdateFleetDefaultBody(_Input):
+    """An edit of ``defaults/<scope>/<addon>/``: absent fields are unchanged."""
+
+    values: dict[str, Any] | None = None
+    sync: SyncIn | None = Field(default=None, description="null: back to the team default's.")
+    last_commit_id: str | None = None
+    message: str | None = None
 
 
 class ApproveBody(_Input):
@@ -155,21 +276,135 @@ class GitLabInfoOut(BaseModel):
 
 
 class TeamOut(BaseModel):
-    """A team and its project."""
+    """A team, its project, and whether Wingman may write there (ADR-0043)."""
 
     name: str
     project_id: int
     path_with_namespace: str
     web_url: str
+    writable: bool
+    access_level: int
+    access_role: str
+    read_only_reason: str | None
 
     @classmethod
-    def of(cls, team: Team) -> TeamOut:
-        """From the domain team."""
+    def of(cls, team: Team, access: TeamAccess) -> TeamOut:
+        """From the domain team and its access."""
         return cls(
             name=team.name,
             project_id=team.project.id,
             path_with_namespace=team.project.path_with_namespace,
             web_url=team.project.web_url,
+            writable=access.writable,
+            access_level=int(access.level),
+            access_role=access.level.role,
+            read_only_reason=access.reason,
+        )
+
+
+class SyncOut(BaseModel):
+    """A leaf app's sync options."""
+
+    auto_sync: bool
+    prune: bool
+    self_heal: bool
+    sync_options: list[str]
+
+    @classmethod
+    def of(cls, settings: SyncSettings) -> SyncOut:
+        """From the domain settings."""
+        return cls(
+            auto_sync=settings.auto_sync,
+            prune=settings.prune,
+            self_heal=settings.self_heal,
+            sync_options=list(settings.sync_options),
+        )
+
+
+class ScopeOut(BaseModel):
+    """A fleet scope and the destinations a default there reaches today."""
+
+    scope: str
+    label: str
+    destinations: list[str]
+
+
+class AddonTemplateOut(BaseModel):
+    """What a new add-on form starts from."""
+
+    team: str
+    writable: bool
+    read_only_reason: str | None
+    sync: SyncOut
+    sync_source: str
+    repourl_prefix: str | None
+    known_sync_options: list[str]
+    scopes: list[ScopeOut]
+
+    @classmethod
+    def of(cls, template: AddonTemplate) -> AddonTemplateOut:
+        """From the application value."""
+        return cls(
+            team=template.team,
+            writable=template.access.writable,
+            read_only_reason=template.access.reason,
+            sync=SyncOut.of(template.sync),
+            sync_source=template.sync_source,
+            repourl_prefix=template.repourl_prefix,
+            known_sync_options=list(KNOWN_SYNC_OPTIONS),
+            scopes=[
+                ScopeOut(
+                    scope=str(s.scope),
+                    label=s.label,
+                    destinations=[ref.id for ref in s.destinations],
+                )
+                for s in template.scopes
+            ],
+        )
+
+
+class FleetDefaultOut(BaseModel):
+    """One ``defaults/<scope>/<chart>/`` of a team."""
+
+    team: str
+    chart: str
+    scope: str
+    scope_label: str
+    path: str
+    in_catalog: bool
+    values: dict[str, Any]
+    values_exists: bool
+    sync: SyncOut
+    sync_overridden: bool
+    reach: list[str]
+    excluded: list[str]
+    tweaks: list[str]
+    last_commit_id: str | None
+    writable: bool
+    read_only_reason: str | None
+    warnings: list[FindingOut]
+
+    @classmethod
+    def of(cls, default: FleetDefault) -> FleetDefaultOut:
+        """From the application value."""
+        return cls(
+            team=default.team,
+            chart=default.chart,
+            scope=str(default.scope),
+            scope_label=SCOPE_LABELS[default.scope],
+            path=str(default.folder),
+            in_catalog=default.in_catalog,
+            values=default.values.values,
+            values_exists=default.values.exists,
+            sync=SyncOut.of(default.sync),
+            sync_overridden=default.sync_overridden,
+            reach=[ref.id for ref in default.reach],
+            excluded=[ref.id for ref in default.excluded],
+            tweaks=[str(p) for p in default.tweaks],
+            last_commit_id=default.last_commit_id,
+            writable=default.access.writable,
+            read_only_reason=default.access.reason,
+            warnings=findings(default.findings),
         )
 
 
@@ -208,10 +443,17 @@ class CatalogEntryOut(BaseModel):
     fleet_defaults: list[str]
     chart_project: str | None
     warnings: list[FindingOut]
+    writable: bool
+    read_only_reason: str | None
+    sync: SyncOut
+    ignore_differences: Any
+    deploy_config_exists: bool
+    last_commit_id: str | None
 
     @classmethod
-    def of(cls, entry: CatalogEntry) -> CatalogEntryOut:
-        """From the catalog entry."""
+    def of(cls, entry: CatalogEntry, access: TeamAccess) -> CatalogEntryOut:
+        """From the catalog entry and its team's access."""
+        file = entry.deploy.file or entry.values.file
         return cls(
             team=entry.team,
             name=entry.chart,
@@ -231,6 +473,12 @@ class CatalogEntryOut(BaseModel):
             fleet_defaults=[str(s) for s in entry.fleet_defaults],
             chart_project=entry.chart_project.path_with_namespace if entry.chart_project else None,
             warnings=findings(entry.findings),
+            writable=access.writable,
+            read_only_reason=access.reason,
+            sync=SyncOut.of(sync_settings(entry.deploy.values.get(SYNC_POLICY))),
+            ignore_differences=entry.deploy.values.get(IGNORE_DIFFERENCES),
+            deploy_config_exists=entry.deploy.exists,
+            last_commit_id=file.last_commit_id if file else None,
         )
 
 
@@ -666,3 +914,128 @@ class UpgradeCheckOut(BaseModel):
     from_version: str | None
     to_version: str
     warnings: list[FindingOut]
+
+
+# ── Add-on authoring (ADR-0043) ─────────────────────────────────────────────
+
+
+class PlannedFileOut(BaseModel):
+    """One file a plan writes: its new text and its text before."""
+
+    action: str
+    path: str
+    content: str | None
+    previous: str | None
+
+
+class KeyChangeOut(BaseModel):
+    """One leaf of a cluster's effective deploy config or values that changes."""
+
+    stack: str
+    key: str
+    before: Any
+    after: Any
+
+
+class MovedOut(BaseModel):
+    """A file moved into the fleet default."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: str = Field(serialization_alias="from")
+    to: str
+
+
+class AdoptionOut(BaseModel):
+    """A cluster whose own chart folder moves into the new fleet default."""
+
+    cluster: str
+    name: str
+    moved: list[MovedOut]
+    deleted: list[str]
+    gitkeep: str | None
+    changes: list[KeyChangeOut]
+
+    @classmethod
+    def of(cls, adoption: Adoption) -> AdoptionOut:
+        """From the application value."""
+        return cls(
+            cluster=adoption.ref.id,
+            name=adoption.ref.name,
+            moved=[MovedOut(from_=str(a), to=str(b)) for a, b in adoption.moved],
+            deleted=[str(p) for p in adoption.deleted],
+            gitkeep=str(adoption.gitkeep) if adoption.gitkeep else None,
+            changes=[
+                KeyChangeOut(stack=c.stack, key=c.key, before=c.before, after=c.after)
+                for c in adoption.changes
+            ],
+        )
+
+
+class _AuthoringFields(BaseModel):
+    action: str
+    chart: str
+    scope: str | None
+    reach: list[str]
+    adopted: list[AdoptionOut]
+    needs_confirmation: list[str]
+    warnings: list[FindingOut]
+    notes: list[str]
+
+    @staticmethod
+    def fields_of(plan: AuthoringPlan) -> dict[str, Any]:
+        return {
+            "action": str(plan.action),
+            "chart": plan.chart,
+            "scope": str(plan.scope) if plan.scope else None,
+            "reach": [ref.id for ref in plan.reach],
+            "adopted": [AdoptionOut.of(a) for a in plan.adopted],
+            "needs_confirmation": plan.needs_confirmation,
+            "warnings": findings(plan.findings),
+            "notes": list(plan.notes),
+        }
+
+
+class AuthoringPlanOut(_AuthoringFields):
+    """A dry run: what the MR would write and do; nothing was opened."""
+
+    team: str
+    title: str
+    files: list[PlannedFileOut]
+
+    @classmethod
+    def of(cls, plan: AuthoringPlan) -> AuthoringPlanOut:
+        """From the plan."""
+        return cls(
+            team=plan.team,
+            title=plan.title,
+            files=[
+                PlannedFileOut(
+                    action=str(c.kind),
+                    path=str(c.path),
+                    content=c.content,
+                    previous=plan.previous.get(str(c.path)),
+                )
+                for c in plan.changes
+            ],
+            **cls.fields_of(plan),
+        )
+
+
+class AuthoringChangeOut(MRDetailOut, _AuthoringFields):
+    """An opened authoring MR (an ``MRDetail``) plus what it writes and does."""
+
+    files: list[FileChangeOut]
+
+    @classmethod
+    def of_result(cls, result: AuthoringResult) -> AuthoringChangeOut:
+        """From the result of a real (not dry) run."""
+        plan, merge_request = result.plan, result.merge_request
+        if merge_request is None:
+            raise ValueError("a dry run opened no merge request")
+        base = MRDetailOut.of(plan.team, merge_request)
+        return cls(
+            **base.model_dump(),
+            files=[FileChangeOut.of(c) for c in plan.changes],
+            **_AuthoringFields.fields_of(plan),
+        )

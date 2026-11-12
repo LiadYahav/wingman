@@ -17,6 +17,7 @@ from wingman_core.domain.git import FileChange, FileDiff, RepoPath, commit_autho
 from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef, MRState
 from wingman_core.domain.users import User
 from wingman_core.ports.gitlab import GitLabPort
+from wingman_day2.application.access import AccessService
 from wingman_day2.domain.errors import ChangeRefusedError, UnknownTeamError
 from wingman_day2.domain.teams import Team
 from wingman_day2.ports import SigsRepository
@@ -42,10 +43,15 @@ class FileEdit:
 class ApprovalService:
     """List, inspect, edit, approve and reject day2 MRs."""
 
-    def __init__(self, gitlab: GitLabPort, sigs: SigsRepository) -> None:
-        """Act through ``gitlab`` (Wingman's account); find teams through ``sigs``."""
+    def __init__(self, gitlab: GitLabPort, sigs: SigsRepository, access: AccessService) -> None:
+        """Act through ``gitlab`` (Wingman's account); find teams through ``sigs``.
+
+        Edit, approve and reject are writes: ``access`` refuses them for a team
+        that has not given Wingman write access to its project (ADR-0043).
+        """
         self._gitlab = gitlab
         self._sigs = sigs
+        self._access = access
         self._approvals = Approvals(gitlab)
 
     async def _team(self, name: str) -> tuple[Team, frozenset[int]]:
@@ -95,6 +101,8 @@ class ApprovalService:
         commit it was read at: its ``last_commit_id``, else its last change as
         of ``sha``, so a commit pushed after the review is never overwritten.
         """
+        owner, _ = await self._team(team)
+        await self._access.require_write(owner)
         current, diffs = await self.detail(team, iid)
         merge_request = current.change.merge_request
         if merge_request.state is not MRState.OPENED:
@@ -146,6 +154,7 @@ class ApprovalService:
     async def approve(self, team: str, iid: int, *, sha: str, approver: User) -> MergeRequest:
         """Approve and merge the commit the approver reviewed, unless they requested the change."""
         owner, managed = await self._team(team)
+        await self._access.require_write(owner)
         try:
             return await self._approvals.approve(
                 MergeRequestRef(owner.project.id, iid),
@@ -159,6 +168,7 @@ class ApprovalService:
     async def reject(self, team: str, iid: int) -> MergeRequest:
         """Close without merging."""
         owner, managed = await self._team(team)
+        await self._access.require_write(owner)
         try:
             return await self._approvals.reject(
                 MergeRequestRef(owner.project.id, iid), managed=managed

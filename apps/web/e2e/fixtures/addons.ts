@@ -21,6 +21,12 @@ export function catalogEntry({ team, name, ...rest }: Chart): CatalogEntry {
     fleet_defaults: [],
     chart_project: `helm-charts/${name}`,
     warnings: [],
+    writable: true,
+    read_only_reason: null,
+    sync: { auto_sync: false, prune: false, self_heal: false, sync_options: ["CreateNamespace=true"] },
+    ignore_differences: null,
+    deploy_config_exists: true,
+    last_commit_id: `${team}-catalog-1`,
     ...rest,
   };
 }

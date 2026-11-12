@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, ChevronsUpDown, Layers, Package, RefreshCw, Search, Tag } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronsUpDown, Layers, Package, Pencil, Plus, RefreshCw, Search, Tag } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { day2Api, day2Keys, uniqueFindings } from "@/lib/day2";
+import { day2Api, day2Keys, syncSummary, teamAccess, uniqueFindings } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { inlineYaml, leaves, pathLabel, toYaml } from "@/lib/values";
+import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,12 +15,30 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
-import type { CatalogEntry } from "@/types/day2";
+import { ChangeResultPanel, type OpenedChanges } from "@/components/addons/change-result";
+import { NewAddonDialog } from "@/components/addons/new-addon-dialog";
+import { EditTeamDefaultDialog, MakeDefaultDialog } from "@/components/addons/default-dialogs";
+import { FleetDefaultsList } from "@/components/addons/fleet-defaults";
+import { ReadOnlyBadge, ReadOnlyNote, useTeams } from "@/components/addons/team-access";
+import type { AuthoringChange, CatalogEntry, FleetDefault } from "@/types/day2";
 
 /** `HEAD` is the chart repo's default branch, listed first in `available_versions`. */
 function revisionLabel(entry: CatalogEntry): string {
   const head = entry.available_versions[0];
   return entry.current_version === "HEAD" && head ? `HEAD (${head})` : entry.current_version;
+}
+
+/** What the panel at the top says an authoring write opened. */
+function openedFrom(change: AuthoringChange): OpenedChanges {
+  const verb = change.action === "create-addon" ? "Create" : change.action === "make-default" ? "Promote" : "Update";
+  return { verb, results: [change], failed: [] };
+}
+
+/** Write actions on a team: offered to admins, disabled with the reason while the team is read-only (ADR-0043). */
+interface TeamWrites {
+  isAdmin: boolean;
+  readOnlyReason: string | null;
+  onOpened: (change: AuthoringChange) => void;
 }
 
 function DefinitionList({ items }: { items: [string, React.ReactNode][] }) {
@@ -35,7 +54,21 @@ function DefinitionList({ items }: { items: [string, React.ReactNode][] }) {
   );
 }
 
-function ChartDialog({ entry, open, onOpenChange }: { entry: CatalogEntry; open: boolean; onOpenChange: (open: boolean) => void }) {
+function ChartDialog({
+  entry,
+  open,
+  onOpenChange,
+  writes,
+  onEdit,
+  onMakeDefault,
+}: {
+  entry: CatalogEntry;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  writes: TeamWrites;
+  onEdit: () => void;
+  onMakeDefault: () => void;
+}) {
   const [view, setView] = useState<"table" | "yaml">("table");
   const values = leaves(entry.default_values);
   const meta = entry.argocd_metadata;
@@ -117,6 +150,7 @@ function ChartDialog({ entry, open, onOpenChange }: { entry: CatalogEntry; open:
                 ["path", meta.path],
                 ["targetRevision", revisionLabel(entry)],
                 ["projectNamespace", meta.projectNamespace || "—"],
+                ["sync", syncSummary(entry.sync)],
                 ["syncPolicy", <pre key="sync" className="whitespace-pre-wrap">{toYaml(meta.syncPolicy) || "—"}</pre>],
                 ["fleet default on", entry.fleet_defaults.length > 0 ? entry.fleet_defaults.join(", ") : "—"],
               ]}
@@ -148,21 +182,47 @@ function ChartDialog({ entry, open, onOpenChange }: { entry: CatalogEntry; open:
             </div>
           </TabsContent>
         </Tabs>
-        <DialogFooter showCloseButton />
+        {writes.isAdmin && writes.readOnlyReason && <ReadOnlyNote reason={writes.readOnlyReason} />}
+        <DialogFooter showCloseButton>
+          {writes.isAdmin && (
+            <>
+              <button
+                type="button"
+                onClick={onMakeDefault}
+                disabled={Boolean(writes.readOnlyReason)}
+                title={writes.readOnlyReason ?? "Deploy it to every destination of one kind"}
+                className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
+              >
+                <Layers className="h-3.5 w-3.5" />
+                Make default
+              </button>
+              <button
+                type="button"
+                onClick={onEdit}
+                disabled={Boolean(writes.readOnlyReason)}
+                title={writes.readOnlyReason ?? undefined}
+                className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit team default
+              </button>
+            </>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function ChartCard({ entry }: { entry: CatalogEntry }) {
-  const [open, setOpen] = useState(false);
+function ChartCard({ entry, writes }: { entry: CatalogEntry; writes: TeamWrites }) {
+  const [dialog, setDialog] = useState<"details" | "edit" | "default" | null>(null);
   const count = leaves(entry.default_values).length;
   const warned = uniqueFindings(entry.warnings).length > 0;
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setDialog("details")}
         className={cn(
           "w-full rounded-xl border bg-card p-4 text-left shadow-sm transition-[box-shadow,border-color,transform] duration-150 hover:border-primary/30 hover:shadow-md active:scale-[0.99]",
           warned && "border-status-warning/40",
@@ -212,26 +272,106 @@ function ChartCard({ entry }: { entry: CatalogEntry }) {
           </span>
         </div>
       </button>
-      <ChartDialog entry={entry} open={open} onOpenChange={setOpen} />
+      <ChartDialog
+        entry={entry}
+        open={dialog === "details"}
+        onOpenChange={(next) => setDialog(next ? "details" : null)}
+        writes={writes}
+        onEdit={() => setDialog("edit")}
+        onMakeDefault={() => setDialog("default")}
+      />
+      {dialog === "edit" && (
+        <EditTeamDefaultDialog
+          entry={entry}
+          open
+          onOpenChange={(next) => setDialog(next ? "edit" : null)}
+          readOnlyReason={writes.readOnlyReason}
+          onOpened={writes.onOpened}
+        />
+      )}
+      {dialog === "default" && (
+        <MakeDefaultDialog
+          entry={entry}
+          open
+          onOpenChange={(next) => setDialog(next ? "default" : null)}
+          readOnlyReason={writes.readOnlyReason}
+          onOpened={writes.onOpened}
+        />
+      )}
     </>
   );
 }
 
-function TeamSection({ team, entries }: { team: string; entries: CatalogEntry[] }) {
+function TeamSection({
+  team,
+  entries,
+  fleetDefaults,
+  writes,
+  catalogNames,
+}: {
+  team: string;
+  entries: CatalogEntry[];
+  fleetDefaults: FleetDefault[];
+  writes: TeamWrites;
+  /** Every catalog name of the team, which a new add-on cannot take (a search may hide some). */
+  catalogNames: string[];
+}) {
   const [expanded, setExpanded] = useState(true);
+  const [creating, setCreating] = useState(false);
   return (
-    <section className="space-y-3">
-      <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} className="group flex w-full items-center gap-2 text-left">
-        <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-150", !expanded && "-rotate-90")} />
-        <span className="text-sm font-semibold transition-colors group-hover:text-primary">{team}</span>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{entries.length}</span>
-      </button>
+    <section className="space-y-3" aria-label={`Team ${team}`} data-testid={`team-${team}`}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} className="group flex items-center gap-2 text-left">
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-150", !expanded && "-rotate-90")} />
+          <span className="text-sm font-semibold transition-colors group-hover:text-primary">{team}</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{entries.length}</span>
+        </button>
+        {writes.readOnlyReason && <ReadOnlyBadge />}
+        {writes.isAdmin && (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            disabled={Boolean(writes.readOnlyReason)}
+            title={writes.readOnlyReason ?? `Add a new add-on to sigs/${team}`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto h-7 gap-1.5")}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New add-on
+          </button>
+        )}
+      </div>
+      {writes.isAdmin && writes.readOnlyReason && <ReadOnlyNote reason={writes.readOnlyReason} className="ml-6" />}
       {expanded && (
-        <div className="grid gap-3 pl-6 sm:grid-cols-2 lg:grid-cols-3">
-          {entries.map((entry) => (
-            <ChartCard key={`${entry.team}/${entry.name}`} entry={entry} />
-          ))}
+        <div className="space-y-4 pl-6">
+          {entries.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {entries.map((entry) => (
+                <ChartCard key={`${entry.team}/${entry.name}`} entry={entry} writes={writes} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No add-on in <code>operators/</code> yet{writes.isAdmin && !writes.readOnlyReason ? ": add one with New add-on." : "."}
+            </p>
+          )}
+          <FleetDefaultsList
+            team={team}
+            items={fleetDefaults}
+            canWrite={writes.isAdmin}
+            readOnlyReason={writes.readOnlyReason}
+            onOpened={writes.onOpened}
+          />
         </div>
+      )}
+      {creating && (
+        <NewAddonDialog
+          team={team}
+          open
+          onOpenChange={setCreating}
+          existing={catalogNames}
+          readOnlyReason={writes.readOnlyReason}
+          onOpened={writes.onOpened}
+        />
       )}
     </section>
   );
@@ -242,10 +382,24 @@ type Sort = "name-asc" | "name-desc" | "team-asc";
 export default function AddonsPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("name-asc");
+  const [opened, setOpened] = useState<OpenedChanges | null>(null);
+  const isAdmin = useIsAdmin();
   const { data, isLoading, isFetching, error, refetch } = useQuery<CatalogEntry[]>({
     queryKey: day2Keys.catalog,
     queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),
     staleTime: 120_000,
+  });
+  const teamList = useTeams();
+  const fleet = useQuery<FleetDefault[]>({
+    queryKey: day2Keys.fleetDefaults,
+    queryFn: () => api.get<FleetDefault[]>(day2Api.fleetDefaults()),
+    staleTime: 120_000,
+  });
+
+  const writesOf = (team: string): TeamWrites => ({
+    isAdmin,
+    readOnlyReason: teamAccess(teamList.data, team).reason,
+    onOpened: (change) => setOpened(openedFrom(change)),
   });
 
   const needle = search.trim().toLowerCase();
@@ -260,6 +414,13 @@ export default function AddonsPage() {
     );
   const byTeam = new Map<string, CatalogEntry[]>();
   for (const entry of filtered) byTeam.set(entry.team, [...(byTeam.get(entry.team) ?? []), entry]);
+  // Without a search every team is listed, with or without add-ons: each can get a new one.
+  if (!needle) for (const team of teamList.data ?? []) if (!byTeam.has(team.name)) byTeam.set(team.name, []);
+  const fleetOf = (team: string) =>
+    (fleet.data ?? []).filter(
+      (fd) => fd.team === team && (!needle || fd.chart.toLowerCase().includes(needle) || team.toLowerCase().includes(needle)),
+    );
+  const namesOf = (team: string) => (data ?? []).filter((e) => e.team === team).map((e) => e.name);
   const total = data?.length ?? 0;
   const teams = new Set((data ?? []).map((e) => e.team)).size;
   const warned = (data ?? []).filter((e) => e.warnings.length > 0).length;
@@ -283,7 +444,11 @@ export default function AddonsPage() {
         </div>
         <button
           type="button"
-          onClick={() => void refetch()}
+          onClick={() => {
+            void refetch();
+            void teamList.refetch();
+            void fleet.refetch();
+          }}
           disabled={isFetching}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
         >
@@ -291,6 +456,8 @@ export default function AddonsPage() {
           Refresh
         </button>
       </div>
+
+      {opened && <ChangeResultPanel changes={opened} onDismiss={() => setOpened(null)} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-40 max-w-sm flex-1">
@@ -330,6 +497,8 @@ export default function AddonsPage() {
         </div>
       </div>
 
+      {fleet.error && <ProblemList error={fleet.error} title="The fleet defaults could not be loaded" />}
+
       {error ? (
         <ProblemList error={error} title="The catalog could not be loaded" />
       ) : isLoading ? (
@@ -345,26 +514,35 @@ export default function AddonsPage() {
             </div>
           ))}
         </div>
-      ) : total === 0 ? (
-        <EmptyState
-          icon={Package}
-          bordered
-          title="No charts yet"
-          description={
-            <>
-              A team&apos;s charts appear here once its repo has <code>operators/&lt;chart&gt;/</code>.
-            </>
-          }
-          data-testid="catalog-empty"
-        />
-      ) : byTeam.size === 0 ? (
+      ) : byTeam.size === 0 && total > 0 ? (
         <NoMatches what="charts" onClear={() => setSearch("")} clearLabel="Clear search" bordered />
       ) : (
         <div className="space-y-8">
+          {total === 0 && (
+            <EmptyState
+              icon={Package}
+              bordered
+              title="No charts yet"
+              description={
+                <>
+                  A team&apos;s charts appear here once its repo has <code>operators/&lt;chart&gt;/</code>
+                  {isAdmin && byTeam.size > 0 ? ": add one with a team's New add-on." : "."}
+                </>
+              }
+              data-testid="catalog-empty"
+            />
+          )}
           {[...byTeam.entries()]
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([team, entries]) => (
-              <TeamSection key={team} team={team} entries={entries} />
+              <TeamSection
+                key={team}
+                team={team}
+                entries={entries}
+                fleetDefaults={fleetOf(team)}
+                writes={writesOf(team)}
+                catalogNames={namesOf(team)}
+              />
             ))}
         </div>
       )}

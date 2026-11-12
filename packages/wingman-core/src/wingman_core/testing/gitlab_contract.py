@@ -6,7 +6,13 @@ Subclass :class:`GitLabContract` in a test module and provide two fixtures:
 - ``new_project``: an async factory ``(files) -> Project`` that creates a
   fresh project whose default branch ``main`` holds ``files``;
 - ``rename_project``: an async ``(project, name) -> None`` that gives the
-  project a new last path segment, as a GitLab rename does.
+  project a new last path segment, as a GitLab rename does;
+- ``new_member``: an async ``(project, *, project_level=None,
+  group_level=None) -> GitLabPort`` that makes a fresh account a member of
+  the project and/or of the project's group at those levels (group first,
+  as GitLab refuses a project role below an inherited one), and returns the
+  port acting as that account once it can see the project (GitLab grants
+  that in a background job, seconds after the membership).
 
 The suite runs against the in-memory fake on every test run and against a
 real GitLab when one is configured. A failure on the real one means the fake
@@ -16,6 +22,7 @@ has drifted from GitLab: fix the fake (and this suite) first.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
+from typing import Protocol
 
 import pytest
 
@@ -26,12 +33,34 @@ from wingman_core.domain.errors import (
     NotMergeableError,
     RevisionConflictError,
 )
-from wingman_core.domain.git import CommitAuthor, EntryKind, FileChange, Project, RepoPath
+from wingman_core.domain.git import (
+    AccessLevel,
+    CommitAuthor,
+    EntryKind,
+    FileChange,
+    Project,
+    RepoPath,
+)
 from wingman_core.domain.merge_request import MergeRequestRef, MRState, NewMergeRequest
 from wingman_core.ports.gitlab import GitLabPort
 
 NewProject = Callable[[Mapping[str, str]], Awaitable[Project]]
 RenameProject = Callable[[Project, str], Awaitable[None]]
+
+
+class NewMember(Protocol):
+    """Make a fresh account a member of ``project`` (and/or its group); its port."""
+
+    def __call__(
+        self,
+        project: Project,
+        *,
+        project_level: AccessLevel | None = None,
+        group_level: AccessLevel | None = None,
+    ) -> Awaitable[GitLabPort]:
+        """The port acting as the new member."""
+        ...
+
 
 FILES = {
     "README.md": "# fixture\n",
@@ -562,3 +591,35 @@ class GitLabContract:
             changes=[FileChange.update(_p("README.md"), "# x\n", last_commit_id="0" * 40)],
         )
         assert (await gitlab.read_file(project.id, _p("README.md"), "main")).content == "# x\n"
+
+    # ── Access (ADR-0043) ───────────────────────────────────────────────────
+
+    async def test_the_account_can_write_to_a_project_it_created(
+        self, gitlab: GitLabPort, new_project: NewProject
+    ) -> None:
+        project = await new_project(FILES)
+        assert await gitlab.access_level(project.id) >= AccessLevel.DEVELOPER
+
+    @pytest.mark.parametrize("level", [AccessLevel.REPORTER, AccessLevel.DEVELOPER])
+    async def test_a_project_member_reads_its_own_role(
+        self, new_project: NewProject, new_member: NewMember, level: AccessLevel
+    ) -> None:
+        project = await new_project(FILES)
+        member = await new_member(project, project_level=level)
+        assert await member.access_level(project.id) is level
+
+    async def test_membership_of_the_projects_group_counts(
+        self, new_project: NewProject, new_member: NewMember
+    ) -> None:
+        project = await new_project(FILES)
+        member = await new_member(project, group_level=AccessLevel.DEVELOPER)
+        assert await member.access_level(project.id) is AccessLevel.DEVELOPER
+
+    async def test_the_higher_of_project_and_group_membership_counts(
+        self, new_project: NewProject, new_member: NewMember
+    ) -> None:
+        project = await new_project(FILES)
+        member = await new_member(
+            project, project_level=AccessLevel.DEVELOPER, group_level=AccessLevel.REPORTER
+        )
+        assert await member.access_level(project.id) is AccessLevel.DEVELOPER

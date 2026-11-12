@@ -166,10 +166,13 @@ export function AvailableChartCard({
   onSelectChange,
   selecting,
   onOpened,
+  readOnlyReason = null,
 }: {
   entry: CatalogEntry;
   destination: DestinationRef;
   isAdmin: boolean;
+  /** The team is read-only in Wingman (ADR-0043): Install is off, and the page says why. */
+  readOnlyReason?: string | null;
   excludedHere: boolean;
   selected: boolean;
   onSelectChange: (selected: boolean) => void;
@@ -212,7 +215,7 @@ export function AvailableChartCard({
         data-testid={`available-${entry.team}-${entry.name}`}
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-          {isAdmin && (
+          {isAdmin && !readOnlyReason && (
             <div
               className={cn(
                 "transition-opacity duration-150",
@@ -253,6 +256,8 @@ export function AvailableChartCard({
                   <button
                     type="button"
                     onClick={() => setOpen(true)}
+                    disabled={Boolean(readOnlyReason)}
+                    title={readOnlyReason ?? undefined}
                     className={cn(buttonVariants({ size: "sm" }), "h-7 gap-1.5 active:scale-[0.97]")}
                   >
                     <Plus className="h-3.5 w-3.5" />
