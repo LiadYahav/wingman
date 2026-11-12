@@ -463,8 +463,12 @@ class FleetTargetService(PlanWriter):
             )
         tree = plan.state.repo.tree
         own = layout.chart_dir(ref, chart)
-        others = [p for p in tree.files_under(own) if p.name not in (path.name, layout.VALUES_FILE)]
-        if [p for p in others if not p.name.startswith(".")]:
+        others = [
+            p
+            for p in tree.files_under(own)
+            if p.name not in (path.name, layout.VALUES_FILE) and not p.name.startswith(".")
+        ]
+        if others:
             raise ChangeRefusedError(
                 f"{own}/ holds {others[0]} besides its values and deploy config; move or delete it "
                 "by hand first",
