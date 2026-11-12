@@ -17,12 +17,19 @@ from wingman_core.application.approvals import describe
 from wingman_core.domain.git import Commit
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.domain.users import User
+from wingman_core.web.errors import from_git_error
 from wingman_core.web.schemas import FileDiffOut
 from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.audit import AuditCommit
 from wingman_day1.application.clusters import ClusterFile
 from wingman_day1.application.drift import ClusterDrift
-from wingman_day1.application.imports import ImportCandidate, ImportPreview
+from wingman_day1.application.imports import (
+    ImportCandidate,
+    ImportedCluster,
+    ImportFailure,
+    ImportPreview,
+    ImportResult,
+)
 from wingman_day1.application.machine_configs import MachineConfigOverview
 from wingman_day1.application.nodes import ClusterNodes
 from wingman_day1.application.sites import MceView
@@ -1037,7 +1044,7 @@ class ImportPickIn(_In):
 
 
 class ImportIn(_In):
-    """Link existing clusters to the flavor: one day1 MR."""
+    """Link existing clusters to the flavor: one day1 MR per cluster (ADR-0044)."""
 
     spec_version: str = Field(min_length=1, max_length=64)
     """The flavor version the preview showed."""
@@ -1106,6 +1113,77 @@ class ImportPreviewOut(BaseModel):
             spec_version=preview.spec_version,
             warnings=list(preview.warnings),
             clusters=[ImportCandidateOut.of(c) for c in preview.candidates],
+        )
+
+
+class ImportedClusterOut(BaseModel):
+    """A picked cluster and the day1 MR that links it to the flavor."""
+
+    name: str
+    site: str
+    mce: str
+    path: str
+    merge_request: MRDetailOut
+
+    @classmethod
+    def of(cls, imported: ImportedCluster) -> ImportedClusterOut:
+        """From an opened import MR."""
+        ref = imported.cluster
+        return cls(
+            name=ref.name,
+            site=ref.site,
+            mce=ref.mce,
+            path=str(ref.path),
+            merge_request=change_out(RepoKey.DAY1, imported.merge_request),
+        )
+
+
+class ImportFailureOut(BaseModel):
+    """A picked cluster, checked like the others, whose MR did not open."""
+
+    name: str
+    site: str
+    mce: str
+    path: str
+    code: str
+    """The problem code its write failed with (ADR-0004). ``AMBIGUOUS_WRITE``: GitLab did
+    not confirm it, so the MR may exist; check before importing it again (ADR-0006).
+    ``GIT_UNAVAILABLE``: nothing was sent. ``REVISION_CONFLICT``: the file moved since the
+    preview."""
+    detail: str
+
+    @classmethod
+    def of(cls, failure: ImportFailure) -> ImportFailureOut:
+        """From an import MR that did not open."""
+        ref = failure.cluster
+        return cls(
+            name=ref.name,
+            site=ref.site,
+            mce=ref.mce,
+            path=str(ref.path),
+            code=from_git_error(failure.error).code.value,
+            detail=str(failure.error),
+        )
+
+
+class ImportOut(BaseModel):
+    """``POST /specs/{name}/import``: one day1 MR per picked cluster (ADR-0044)."""
+
+    spec_name: str
+    spec_version: str
+    merge_requests: list[ImportedClusterOut]
+    """The MRs that opened, in pick order."""
+    failed: list[ImportFailureOut]
+    """The clusters whose MR did not open, in pick order."""
+
+    @classmethod
+    def of(cls, result: ImportResult) -> ImportOut:
+        """From an import's result."""
+        return cls(
+            spec_name=result.spec_name,
+            spec_version=result.spec_version,
+            merge_requests=[ImportedClusterOut.of(o) for o in result.opened],
+            failed=[ImportFailureOut.of(f) for f in result.failed],
         )
 
 

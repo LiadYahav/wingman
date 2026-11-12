@@ -205,7 +205,7 @@ Changes since the legacy services:
 | `GET` | `/api/day1/specs/{name}/clusters` | Clusters created from the spec, with their drift |
 | `GET` | `/api/day1/specs/{name}/drift` | Drift of every cluster created from the spec |
 | `POST` | `/api/day1/specs/{name}/import/preview` | Each picked existing cluster against the spec: whether it can join (`ready`, `relink`, `linked`, `refused`) and what will show as drift |
-| `POST` | `/api/day1/specs/{name}/import` | Link up to 50 existing clusters to the spec: one MR that writes only each file's flavor header |
+| `POST` | `/api/day1/specs/{name}/import` | Link up to 50 existing clusters to the spec: one MR per cluster that writes only its file's flavor header, all checked before any opens (ADR-0044) |
 
 #### Approvals and audit
 

@@ -413,6 +413,12 @@ cluster, or a `relink` one without `relink: true`, one problem per cluster;
 `last_commit_id` or the flavor's version is no longer `spec_version`
 (preview again). Another file changing does not make the import stale.
 
+> **Changed 2026-11-12 (ADR-0044):** the import opens one day1 MR per
+> cluster, titled `[Wingman/Day1] Import cluster <name> into spec <flavor>
+> v<version>`, and answers with each MR and each cluster whose MR did not
+> open: `docs/notes/2026-11-12-import-mr-per-cluster.md`. The request, the
+> refusals above and the preview are unchanged.
+
 ## 12. New: sync a cluster to its flavor (ADR-0037), admins only
 
 **`POST /clusters/{name}/sync/preview`** (`?site=&mce=` optional), body

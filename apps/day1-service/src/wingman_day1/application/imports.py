@@ -1,43 +1,61 @@
-"""Existing clusters joining a flavor (ADR-0037).
+"""Existing clusters joining a flavor (ADR-0037, ADR-0044).
 
 A cluster Wingman did not create has no flavor link. Import writes the link
 (the comment header Wingman writes at create, ADR-0012) into each picked
-cluster file, all in one day1 merge request, and changes nothing else in
-them: the text edit keeps every other byte, the CI block included
-(``wingman_day1.domain.cluster_text``). After the merge the clusters follow
-the flavor, and what differs shows as drift (ADR-0036); sync fixes it.
+cluster file, one day1 merge request per cluster (ADR-0044), and changes
+nothing else in it: the text edit keeps every other byte, the CI block
+included (``wingman_day1.domain.cluster_text``). Each cluster's link is
+reviewed, merged or rejected on its own; once merged the cluster follows the
+flavor, and what differs shows as drift (ADR-0036); sync fixes it.
 
 The preview compares each picked cluster with the flavor first. A cluster
 already linked to another flavor is refused unless the request says to
-re-link it; one already linked to this flavor has nothing to import.
+re-link it; one already linked to this flavor has nothing to import. The
+import checks every pick again before it opens anything: one refused or
+moved pick, and no merge request opens.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from wingman_core.domain.errors import AmbiguousWriteError, GitError, GitUnavailableError
+from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.domain.users import User
 from wingman_day1.application.clusters import ClusterFile, ClusterService
 from wingman_day1.application.drift import ClusterDrift, DriftService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.domain.addons import RequestedAddon
-from wingman_day1.domain.changes import FileUpdate, ImportChange, ProvisionResult
+from wingman_day1.domain.changes import ClusterAction, ClusterChange
 from wingman_day1.domain.cluster_file import Provenance
 from wingman_day1.domain.cluster_text import with_header
 from wingman_day1.domain.errors import InvalidInputError, StaleError, UneditableFileError
 from wingman_day1.domain.locks import is_configs_lock
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
+from wingman_day1.domain.value_drift import show_value
 from wingman_day1.ports import ClusterProvisioner
 
+logger = logging.getLogger(__name__)
+
 MAX_IMPORT: Final = 50
-"""Clusters per import: one commit and one review."""
+"""Clusters per import: one review screen, and at most this many merge requests."""
 MAX_IMPORT_CONCURRENCY: Final = 8
+"""Picks read and compared with the flavor at once."""
+MAX_OPEN_CONCURRENCY: Final = 4
+"""Import merge requests opened at once (ADR-0044).
+
+Each is a commit and an MR, about a second on GitLab: fifty in a row can
+outlast the proxy's 60 s, and a request cut while day1 goes on opening
+invites a retry that opens each cluster's MR twice. Four at a time keeps a
+full import near fifteen seconds without many writes on GitLab at once.
+"""
 
 
 class ImportStatus(StrEnum):
@@ -81,6 +99,38 @@ class ImportPreview:
     candidates: tuple[ImportCandidate, ...]
     warnings: tuple[str, ...]
     """About the flavor: locks that mean little on a cluster the flavor did not create."""
+
+
+@dataclass(frozen=True, slots=True)
+class ImportedCluster:
+    """A picked cluster whose import merge request opened."""
+
+    cluster: ClusterRef
+    merge_request: MergeRequest
+
+
+@dataclass(frozen=True, slots=True)
+class ImportFailure:
+    """A picked cluster, checked like the others, whose merge request did not open.
+
+    ``error`` is GitLab's answer. An ``AmbiguousWriteError`` means the MR may
+    have opened: it is reported, never retried (ADR-0006). A cluster whose MR
+    was not started, because GitLab did not answer for another one, has a
+    ``GitUnavailableError`` saying so: nothing was sent for it.
+    """
+
+    cluster: ClusterRef
+    error: GitError
+
+
+@dataclass(frozen=True, slots=True)
+class ImportResult:
+    """One merge request per picked cluster: those opened and those not, each in pick order."""
+
+    spec_name: str
+    spec_version: str
+    opened: tuple[ImportedCluster, ...]
+    failed: tuple[ImportFailure, ...]
 
 
 def positional_warnings(spec: ClusterSpec) -> list[str]:
@@ -151,12 +201,16 @@ class ImportService:
         *,
         spec_version: str,
         user: User,
-    ) -> ProvisionResult:
-        """One day1 MR that links every picked cluster to the flavor, or none at all.
+    ) -> ImportResult:
+        """One day1 MR per picked cluster that links it to the flavor; none if any pick is refused.
 
-        No file may have changed since the ``last_commit_id`` the preview showed
-        (the commit it was read at, ADR-0035); the commit carries it, so a file
-        that moves before the commit fails the whole MR (ADR-0006).
+        Every pick is checked before anything opens: the flavor's version, no
+        file changed since the ``last_commit_id`` the preview showed (the
+        commit it was read at, ADR-0035), and each cluster's status. Then each
+        cluster's MR opens on its own. Its commit carries that
+        ``last_commit_id``, so a file that moves in between fails only its own
+        MR (ADR-0006); a failure is reported beside the MRs that opened, never
+        retried.
         """
         spec = await self._specs.get(flavor)
         if spec.metadata.version != spec_version:
@@ -179,7 +233,7 @@ class ImportService:
                 f"changed since the preview: {', '.join(stale)}; preview the import again"
             )
         problems: list[str] = []
-        files: list[FileUpdate] = []
+        contents: list[str] = []
         for pick, cluster in zip(picks, clusters, strict=True):
             status, found = self._status(cluster, spec, relink=pick.relink)
             if (
@@ -190,26 +244,79 @@ class ImportService:
                 problems += found
                 continue
             provenance = Provenance(flavor, spec_version, _relinked_addons(cluster, spec))
-            files.append(
-                FileUpdate(
-                    cluster.ref, with_header(cluster.content, provenance), pick.last_commit_id
-                )
-            )
+            contents.append(with_header(cluster.content, provenance))
         if problems:
             raise InvalidInputError(
                 f"these clusters cannot be imported into flavor {flavor}", problems
             )
         catalog = await self._machine_configs.catalog()
         drifts = await asyncio.gather(*(self._drift.against(c, spec, catalog) for c in clusters))
-        return await self._provisioner.link(
-            ImportChange(
+        changes = [
+            ClusterChange(
+                ClusterAction.IMPORT,
+                cluster.ref,
+                user,
+                _summary(flavor, spec_version, cluster, drift),
+                content=content,
+                last_commit_id=pick.last_commit_id,
                 spec_name=flavor,
                 spec_version=spec_version,
-                files=tuple(files),
-                requested_by=user,
-                summary=_summary(flavor, spec_version, clusters, drifts),
             )
+            for pick, cluster, drift, content in zip(picks, clusters, drifts, contents, strict=True)
+        ]
+        outcomes = await self._open_each(changes, user=user)
+        return ImportResult(
+            flavor,
+            spec_version,
+            opened=tuple(o for o in outcomes if isinstance(o, ImportedCluster)),
+            failed=tuple(o for o in outcomes if isinstance(o, ImportFailure)),
         )
+
+    async def _open_each(
+        self, changes: Sequence[ClusterChange], *, user: User
+    ) -> list[ImportedCluster | ImportFailure]:
+        """Each change's MR, a few at a time, in order; once GitLab does not answer, no more start.
+
+        A cluster's failure is its own: a moved file or a refused write fails
+        that MR and the others open. GitLab unreachable, or leaving a write
+        unconfirmed, is different: the MRs not started yet would wait on it
+        too, so they are not sent and say why.
+        """
+        limit = asyncio.Semaphore(MAX_OPEN_CONCURRENCY)
+        unanswered: list[str] = []
+
+        async def one(change: ClusterChange) -> ImportedCluster | ImportFailure:
+            ref = change.cluster
+            async with limit:
+                if unanswered:
+                    return ImportFailure(
+                        ref,
+                        GitUnavailableError(
+                            f"not sent: GitLab did not answer for {unanswered[0]}, so no more "
+                            "merge requests were started; import this cluster again"
+                        ),
+                    )
+                try:
+                    result = await self._provisioner.apply(change)
+                except GitError as exc:
+                    if isinstance(exc, GitUnavailableError | AmbiguousWriteError):
+                        unanswered.append(ref.name)
+                    event = {
+                        "user": user.username,
+                        "cluster": ref.name,
+                        "spec": change.spec_name or "",
+                        "error": type(exc).__name__,
+                    }
+                    logger.warning(
+                        "import merge request not opened: %s: %s",
+                        " ".join(f"{k}={v}" for k, v in event.items()),
+                        exc,
+                        extra={"event": "import_mr_not_opened", **event},
+                    )
+                    return ImportFailure(ref, exc)
+            return ImportedCluster(ref, result.merge_request)
+
+        return list(await asyncio.gather(*(one(change) for change in changes)))
 
     @staticmethod
     def _status(
@@ -251,40 +358,55 @@ def _require_picks(refs: Sequence[ClusterRef]) -> None:
         raise InvalidInputError("the clusters picked cannot be imported", problems)
 
 
-def _summary(
-    flavor: str,
-    version: str,
-    clusters: Sequence[ClusterFile],
-    drifts: Sequence[ClusterDrift],
-) -> str:
+def _summary(flavor: str, version: str, cluster: ClusterFile, drift: ClusterDrift) -> str:
+    """One cluster's MR description: the link it gains, and what will show as its drift."""
+    ref = cluster.ref
+    before = cluster.provenance.spec_name
+    relinked = (
+        f" (it followed flavor `{before}` v{cluster.provenance.spec_version or '?'}; "
+        "re-linked on request)"
+        if before
+        else ""
+    )
+    values = len(drift.value_drift)
+    addons = len(drift.addon_drift)
+    facts = [f"{values} locked value{'s differ' if values != 1 else ' differs'}"]
+    decide = sum(1 for d in drift.value_drift if d.needs_decision)
+    if decide:
+        facts.append(f"{decide} need{'s' if decide == 1 else ''} a person to decide")
+    facts.append(
+        f"{addons} add-on{'s' if addons != 1 else ''} missing"
+        if drift.error is None
+        else "missing add-ons unknown"
+    )
     lines = [
-        f"Linking **{len(clusters)} cluster{'s' if len(clusters) != 1 else ''}** to flavor "
-        f"`{flavor}` v{version}.",
+        f"Linking hosted cluster **{ref.name}** to flavor `{flavor}` v{version}{relinked}.",
         "",
-        "Each file gains only the flavor header (`# specName`, `# specVersion`); nothing else "
-        "in it changes. Nothing on a cluster changes when this merges: from then on each "
-        "cluster follows the flavor, and what differs from it shows as drift, which a sync "
-        "fixes.",
+        f"Site `{ref.site}`, MCE `{ref.mce}`.",
         "",
+        "The file gains only the flavor header (`# specName`, `# specVersion`); nothing else "
+        "in it changes. Nothing on the cluster changes when this merges: from then on it "
+        "follows the flavor, and what differs from it shows as drift, which a sync fixes.",
+        "",
+        f"Once linked: {', '.join(facts)}.",
     ]
-    for cluster, drift in zip(clusters, drifts, strict=True):
-        where = f"`{cluster.ref.name}` ({cluster.ref.site}/{cluster.ref.mce})"
-        before = cluster.provenance.spec_name
-        relinked = (
-            f", re-linked from flavor `{before}` v{cluster.provenance.spec_version or '?'}"
-            if before
-            else ""
-        )
-        values = len(drift.value_drift)
-        addons = len(drift.addon_drift)
-        facts = [f"{values} locked value{'s' if values != 1 else ''} differ"]
-        decide = sum(1 for d in drift.value_drift if d.needs_decision)
-        if decide:
-            facts.append(f"{decide} need{'s' if decide == 1 else ''} a person to decide")
-        facts.append(
-            f"{addons} add-on{'s' if addons != 1 else ''} missing"
-            if drift.error is None
-            else "missing add-ons unknown"
-        )
-        lines.append(f"- {where}{relinked}: {', '.join(facts)}")
+    for item in drift.value_drift:
+        where = f"`{item.file_key}`"
+        if item.nodepool is not None:
+            where += f" (nodepool `{item.nodepool.name}`)"
+        if item.needs_decision:
+            lines.append(f"- {where}: needs a person: {item.needs_decision}")
+        elif item.added or item.removed:
+            parts = [f"adds {', '.join(f'`{n}`' for n in item.added)}"] if item.added else []
+            if item.removed:
+                parts.append(f"removes {', '.join(f'`{n}`' for n in item.removed)}")
+            lines.append(f"- {where}: a sync {'; '.join(parts)}")
+        else:
+            lines.append(
+                f"- {where}: the file has {show_value(item.cluster_value)}, "
+                f"the flavor locks {show_value(item.flavor_value)}"
+            )
+    lines += [f"- add-on `{a.team}/{a.name}`: missing; day2 installs it" for a in drift.addon_drift]
+    if drift.error is not None:
+        lines.append(f"- add-ons: unknown ({drift.error})")
     return "\n".join(lines)

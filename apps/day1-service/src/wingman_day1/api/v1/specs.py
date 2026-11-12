@@ -7,11 +7,15 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Path, Query
 from fastapi.responses import PlainTextResponse
 
+from wingman_core.domain.errors import AmbiguousWriteError
 from wingman_core.web.auth import AdminUser, CurrentUser
+from wingman_core.web.errors import AppError, from_git_error
 from wingman_day1.api.deps import Context
 from wingman_day1.api.v1.schemas import (
     CommitOut,
+    ImportFailureOut,
     ImportIn,
+    ImportOut,
     ImportPreviewIn,
     ImportPreviewOut,
     MRDetailOut,
@@ -21,7 +25,7 @@ from wingman_day1.api.v1.schemas import (
     change_out,
 )
 from wingman_day1.application.approvals import RepoKey
-from wingman_day1.application.imports import ImportPick
+from wingman_day1.application.imports import ImportPick, ImportResult
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
 
@@ -113,8 +117,14 @@ async def import_preview(
 @router.post("/{name}/import", status_code=201)
 async def import_clusters(
     name: Name, body: ImportIn, context: Context, user: AdminUser
-) -> MRDetailOut:
-    """Open one day1 MR that links every picked cluster file to the flavor, and nothing else."""
+) -> ImportOut:
+    """Open one day1 MR per picked cluster that links its file to the flavor, and nothing else.
+
+    Every pick is checked first; one refused (422) or moved (409) opens none.
+    201 when at least one MR opened, with the clusters whose MR did not in
+    ``failed``. When none opened, the answer is the problem of the failure
+    (ADR-0044).
+    """
     picks = [
         ImportPick(ClusterRef(c.site, c.mce, c.name), c.last_commit_id, relink=c.relink)
         for c in body.clusters
@@ -122,7 +132,34 @@ async def import_clusters(
     result = await context.imports.import_clusters(
         name, picks, spec_version=body.spec_version, user=user
     )
-    return change_out(RepoKey.DAY1, result.merge_request)
+    if not result.opened:
+        raise _none_opened(result)
+    return ImportOut.of(result)
+
+
+def _none_opened(result: ImportResult) -> AppError:
+    """No import MR opened: an unconfirmed write's problem first, else the first failure's.
+
+    An ``AMBIGUOUS_WRITE`` leads because it is the one a person must check in
+    GitLab before importing again (ADR-0006); every cluster's failure is in
+    ``details.problems`` and, as ``POST`` returns them, ``details.failed``.
+    """
+    failed = result.failed
+    lead = next((f for f in failed if isinstance(f.error, AmbiguousWriteError)), failed[0])
+    error = from_git_error(lead.error)
+    lines = [f"{f.cluster.name}: {f.error}" for f in failed]
+    detail = (
+        lines[0]
+        if len(lines) == 1
+        else f"GitLab confirmed none of the {len(lines)} import merge requests"
+    )
+    return type(error)(
+        detail,
+        details={
+            "problems": lines,
+            "failed": [ImportFailureOut.of(f).model_dump() for f in failed],
+        },
+    )
 
 
 @router.get("/{name}")

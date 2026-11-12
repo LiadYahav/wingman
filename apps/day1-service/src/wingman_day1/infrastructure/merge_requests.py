@@ -44,7 +44,6 @@ from wingman_day1.domain import paths
 from wingman_day1.domain.changes import (
     ClusterAction,
     ClusterChange,
-    ImportChange,
     ProvisionResult,
     SpecAction,
     SpecChange,
@@ -128,6 +127,7 @@ _CLUSTER_VERBS: Final = {
     ClusterAction.MODIFY: Verb.MODIFY,
     ClusterAction.DELETE: Verb.DELETE,
     ClusterAction.SYNC: Verb.SYNC,
+    ClusterAction.IMPORT: Verb.IMPORT,
 }
 
 
@@ -162,38 +162,14 @@ class GitClusterProvisioner:
         )
         return ProvisionResult(merge_request)
 
-    async def link(self, change: ImportChange) -> ProvisionResult:
-        """See ClusterProvisioner.link: every file in one commit, each guarded by its revision."""
-        count = len(change.files)
-        clusters = f"{count} cluster{'s' if count != 1 else ''}"
-        names = "\n".join(
-            f"- {f.cluster.name} ({f.cluster.site}/{f.cluster.mce})" for f in change.files
-        )
-        merge_request = await self._writer.open(
-            requested_by=change.requested_by,
-            verb=Verb.IMPORT,
-            resource_type=ResourceType.SPEC,
-            resource_name=change.spec_name,
-            action="import",
-            changes=[
-                FileChange.update(f.cluster.path, f.content, last_commit_id=f.last_commit_id)
-                for f in change.files
-            ],
-            summary=change.summary,
-            commit_message=(
-                f"Import {clusters} into spec {change.spec_name} v{change.spec_version}\n\n"
-                f"{names}\n\nRequested-by: {change.requested_by.username}"
-            ),
-            title_extra=f"into {clusters}",
-        )
-        return ProvisionResult(merge_request)
-
 
 def _title_extra(change: ClusterChange) -> str:
     if change.action is ClusterAction.CREATE and change.spec_name:
         return f"from spec {change.spec_name}"
     if change.action is ClusterAction.SYNC and change.spec_name:
         return f"to spec {change.spec_name} v{change.spec_version}"
+    if change.action is ClusterAction.IMPORT:
+        return f"into spec {change.spec_name} v{change.spec_version}"
     return ""
 
 

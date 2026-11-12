@@ -16,7 +16,7 @@ from wingman_core.domain.merge_request import MergeRequest, MRState
 from wingman_core.domain.users import User
 from wingman_day1.domain.addons import InstalledAddon
 from wingman_day1.domain.auth import Identity
-from wingman_day1.domain.changes import ClusterChange, ImportChange, ProvisionResult, SpecChange
+from wingman_day1.domain.changes import ClusterChange, ProvisionResult, SpecChange
 from wingman_day1.domain.machines import (
     AgentMachineObservation,
     AgentObservation,
@@ -98,14 +98,15 @@ class RepoReads(Protocol):
 
 
 class ClusterProvisioner(Protocol):
-    """Applies a cluster change. Today: a commit and a merge request (ADR-0017)."""
+    """Applies a cluster change. Today: a commit and a merge request (ADR-0017).
+
+    One change is one cluster file, so each cluster's change is reviewed,
+    merged or rejected on its own; importing several clusters into a flavor
+    is one change each (ADR-0044).
+    """
 
     async def apply(self, change: ClusterChange) -> ProvisionResult:
         """Propose ``change``; raises Git errors as they come (never retried)."""
-        ...
-
-    async def link(self, change: ImportChange) -> ProvisionResult:
-        """Propose linking several cluster files to a flavor in one commit (ADR-0037)."""
         ...
 
 

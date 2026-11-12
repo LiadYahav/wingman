@@ -32,7 +32,7 @@ import difflib
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final, cast
+from typing import cast
 
 from wingman_core.domain.users import User
 from wingman_day1.application.clusters import ClusterFile, ClusterService
@@ -51,14 +51,17 @@ from wingman_day1.domain.cluster_text import (
     with_header,
 )
 from wingman_day1.domain.errors import InvalidInputError, StaleError, UneditableFileError
-from wingman_day1.domain.locks import MISSING
 from wingman_day1.domain.machine_configs import MachineConfigCatalog, network_choice_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
-from wingman_day1.domain.value_drift import NodepoolRef, ValueDrift, file_nodepools, value_drift
+from wingman_day1.domain.value_drift import (
+    NodepoolRef,
+    ValueDrift,
+    file_nodepools,
+    show_value,
+    value_drift,
+)
 from wingman_day1.ports import ClusterProvisioner
-
-_SHOWN: Final = 80
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,20 +171,6 @@ def _hardware_problems(
             continue
         problems += network_choice_problems(where, hardware, catalog, cluster_name=cluster_name)
     return problems
-
-
-def _show(value: object) -> str:
-    if value is MISSING:
-        return "(absent)"
-    if isinstance(value, list):
-        names = [
-            str(cast("Mapping[str, object]", e).get("name")) if isinstance(e, Mapping) else str(e)
-            for e in cast("Sequence[object]", value)
-        ]
-        text = ", ".join(names) or "none"
-    else:
-        text = repr(value) if isinstance(value, str) else str(value)
-    return text if len(text) <= _SHOWN else f"{text[: _SHOWN - 3]}..."
 
 
 class SyncService:
@@ -395,7 +384,8 @@ def _summary(plan: SyncPlan) -> str:
                 parts.append(f"**remove** {', '.join(f'`{n}`' for n in change.removed)}")
             lines.append(f"- {where}: {'; '.join(parts)}")
         else:
-            lines.append(f"- {where}: {_show(change.cluster_value)} → {_show(change.flavor_value)}")
+            was, now = show_value(change.cluster_value), show_value(change.flavor_value)
+            lines.append(f"- {where}: {was} → {now}")
     if not plan.changes:
         lines.append("- none; only the header's flavor version changes")
     if before != spec.metadata.version:
