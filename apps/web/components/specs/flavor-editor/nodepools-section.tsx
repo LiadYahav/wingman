@@ -32,6 +32,8 @@ import {
   setPoolHardware,
   setPoolRatio,
   setRatioOn,
+  setSizedReplicas,
+  ratioSize,
   setRuleEntries,
   type ConfigsMode,
   type FlavorDraft,
@@ -259,6 +261,7 @@ export function NodepoolsSection({
 /** Whether the nodepools grow together by a ratio; each card then has its part (ADR-0040). */
 function RatioChoice({ draft, update }: { draft: FlavorDraft; update: Update }) {
   const on = draft.ratio.length > 0;
+  const size = on ? ratioSize(draft) : null;
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5" data-testid="nodepool-ratio">
       <div className="min-w-0">
@@ -267,7 +270,17 @@ function RatioChoice({ draft, update }: { draft: FlavorDraft; update: Update }) 
           {on ? (
             <>
               Nodepools grow together at <span className="font-mono text-foreground" data-testid="nodepool-ratio-label">{ratioLabel(draft)}</span>
-              : a cluster picks one size, and each nodepool gets its part times that size.
+              {size !== null ? (
+                <>
+                  {" "}· replicas{" "}
+                  <span className="font-mono text-foreground" data-testid="nodepool-ratio-replicas">
+                    {draft.ratio.map((r) => Number(r) * size).join(" · ")}
+                  </span>{" "}
+                  = {draft.ratio.reduce((sum, r) => sum + Number(r) * size, 0)} nodes
+                </>
+              ) : (
+                ": set any nodepool's replicas and the others follow; each cluster can resize them together."
+              )}
             </>
           ) : (
             "Off: each cluster sets every nodepool's replicas. Turn on to keep them in proportion, like zones at 1:2:1."
@@ -364,7 +377,10 @@ function NodepoolCard({
               value={replicas === undefined ? "" : String(replicas)}
               onChange={(e) => {
                 const text = e.target.value.trim();
-                setValue("replicas", text === "" ? undefined : /^\d+$/.test(text) ? Number(text) : text);
+                const value = text === "" ? undefined : /^\d+$/.test(text) ? Number(text) : text;
+                // Under a ratio the nodepools move together: this one's replicas set the others'
+                if (draft.ratio.length > 0) update((d) => setSizedReplicas(d, index, value));
+                else setValue("replicas", value);
               }}
             />
           )}
@@ -386,11 +402,9 @@ function NodepoolCard({
               onChange={(e) => update((d) => setPoolRatio(d, index, e.target.value))}
             />
             <p id={`${fieldId(ratioPath)}-hint`} className="text-xs text-muted-foreground">
-              This nodepool&apos;s share of the cluster&apos;s size
-              {/^\d+$/.test(String(draft.ratio[index] ?? "")) && Number(draft.ratio[index]) >= 1
-                ? `: at size 2 it gets ${2 * Number(draft.ratio[index])} replicas`
-                : ""}
-              . Replicas presets that follow the ratio set the size a new cluster starts at (else 1).
+              This nodepool&apos;s part: change any nodepool&apos;s replicas and the others follow at{" "}
+              <span className="font-mono">{ratioLabel(draft)}</span>. A cluster starts at these replicas and can resize
+              them together.
             </p>
             {ratioProblems.length > 0 && (
               <ul role="alert" className="space-y-0.5 text-xs text-destructive">

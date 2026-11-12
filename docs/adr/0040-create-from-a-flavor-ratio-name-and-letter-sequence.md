@@ -41,6 +41,10 @@ free-text fallback); it read the hub on every form load.
      at create, after those, is sized freely.
    - The create form asks for the size and fills in each sized nodepool's
      replicas, read-only.
+   - In the flavor editor the sized nodepools' replica presets move
+     together: setting one sets the size, and the others follow (at 1:2:1,
+     3 on the first gives 3 · 6 · 3). A number that is not a multiple of its
+     nodepool's part stays as typed and is flagged.
    - Drift, import and sync do not read the ratio (left for later, below).
 2. **InfraEnvs are kept for `MCE_INFRAENV_CACHE_SECONDS`** (default 600)
    per replica, separately from live status, which still reads the hub

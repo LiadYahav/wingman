@@ -522,6 +522,33 @@ test.describe("Flavor editor: the nodepool ratio (ADR-0040)", () => {
     expect(day1.structure).toEqual({ nodepools: [{}, {}, {}] });
   });
 
+  test("one nodepool's replicas move the others by the ratio", async ({ page }) => {
+    await openNew(page);
+    await page.getByTestId("spec-name-input").fill("agent-zones");
+    for (let i = 0; i < 2; i++) await page.getByRole("button", { name: "Add nodepool" }).click();
+    await page.getByTestId("nodepool-ratio").getByRole("switch", { name: "Size the nodepools by a ratio" }).click();
+    await page.getByTestId("nodepool-1-ratio").getByRole("textbox", { name: "Ratio" }).fill("2");
+    const replicas = (i: number) => page.getByTestId(`nodepool-${i}`).getByRole("textbox", { name: "Replicas" });
+    const all = async () => Promise.all([0, 1, 2].map((i) => replicas(i).inputValue()));
+
+    await replicas(0).fill("3");
+    await expect.poll(all).toEqual(["3", "6", "3"]);
+    await expect(page.getByTestId("nodepool-ratio-replicas")).toHaveText("3 · 6 · 3");
+
+    await replicas(1).fill("4");
+    await expect.poll(all).toEqual(["2", "4", "2"]);
+
+    // Not a multiple of its part: kept as typed, and flagged
+    await replicas(1).fill("5");
+    await expect.poll(all).toEqual(["2", "5", "2"]);
+    await expect(page.getByTestId("nodepool-1")).toContainText("A multiple of 2");
+
+    // A part that changes keeps the size: 2 · 4 · 2 at 1:2:3 is 2 · 4 · 6
+    await replicas(1).fill("4");
+    await page.getByTestId("nodepool-2-ratio").getByRole("textbox", { name: "Ratio" }).fill("3");
+    await expect.poll(all).toEqual(["2", "4", "6"]);
+  });
+
   test("a flavor saved without a ratio sends none", async ({ page }) => {
     const writes = await openNew(page);
     await page.getByTestId("spec-name-input").fill("agent-plain");
