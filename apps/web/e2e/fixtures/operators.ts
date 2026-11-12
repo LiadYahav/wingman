@@ -30,7 +30,7 @@ import type {
  * exclusions file; every other operator is generated from the catalog and
  * the fleet defaults.
  *
- * Writes follow the 3.9 contract: a dry run answers the plan with its
+ * Writes follow the 3.10 contract: a dry run answers the plan with its
  * `digest`; a real write must repeat `needs_confirmation` in
  * `confirm_changes` and the digest in `expected_digest` (422 and 409
  * `plan-changed` otherwise, as the service does).
@@ -478,7 +478,7 @@ function operatorPlan(method: string, url: URL, body: Values, version: number): 
     });
   }
 
-  // The 3.8 writes (create, team default, make default, fleet default), with 3.9's impact.
+  // The 3.8 writes (create, team default, make default, fleet default), with 3.10's impact.
   const plan = planFor(method, url, body);
   if (detail && plan.action === "update-team-default" && RICH(team, chart)) {
     const imp = [
