@@ -1,7 +1,7 @@
 # ADR-0053: A team's operators get their own pages; Wingman edits `exclusions.yaml` in place, overrides one destination's values or deploy config, and every authoring write is confirmed against its preview
 
 Date: 2026-11-12
-Status: Accepted; amended 2026-11-12 (the Operators pages are folded into Addons: one place, called add-ons)
+Status: Accepted; amended 2026-11-12 (the Operators pages are folded into Addons: one place, called add-ons) and 2026-11-13 (no exclusions in Wingman; a subset of MCEs is per-MCE installs; hosted-cluster specifics belong to flavors and create)
 
 ## Context
 
@@ -209,7 +209,52 @@ New MR verbs (ADR-0007): `Exclude`, `Include`, `Override`; actions
 
 ## Amendments
 
-**2026-11-12, 3.12.2: the Operators page is folded into Addons; one place,
+**2026-11-13, 3.13.0: no exclusions in Wingman; a subset of MCEs is
+per-MCE installs; hosted-cluster specifics belong to flavors and create.**
+The user, on reviewing the fold (PR #38): "There is no exclude option inside the defaults —
+there is only the option to override values for specific MCEs. If we want
+something only on specific MCEs, it means creating a file inside their
+folders. About the HCs: the default add-on for everyone is there, but the
+specific ones are for the flavor and the create-cluster form, not ours." So,
+superseding the exclusion and carve-out parts of the decision above:
+
+- **Wingman writes no `exclusions.yaml`.** The destination checkboxes, the
+  orphaning-by-exclusion flow and `PUT /addons/{team}/{addon}/defaults/{scope}/exclusions`
+  are gone. The file is still read wherever the platform reads it (the
+  simulation, the lints, the page's states: a repo that has one renders and
+  shows as it is), and 3.12.0's adoption fix stays: making an add-on a
+  default still drops a stale entry that would delete an adopted cluster's
+  app. `domain.exclusions.set_excluded` stays for that.
+- **The per-destination deploy-config carve-out is gone** (`PUT .../destinations/{cluster}/deploy`):
+  it was built on exclusion.
+- **Per-destination values stay, for MCEs and UPI clusters only**
+  (`values-<name>.yaml`, the effective values before and after). The hub is
+  one destination, its default's own values; a hosted cluster's own values
+  are its flavor's, the create form's and its page's (`override-scope`
+  refuses the others).
+- **Deploy on specific MCEs** is new, on the MCE panel of an add-on's page
+  (`POST /addons/{team}/{addon}/mce-installs`). An add-on wanted on some MCEs
+  only is not a default: it is installed in each chosen MCE hub's own
+  `sites/<site>/<env>/mces/<mce>/in-cluster/<chart>/`, by ADR-0022's install
+  (`values.yaml`, and `<chart>.yaml` only when a key is needed), one MR per
+  MCE, as the per-cluster principle of ADR-0044 asks. They are opened four at
+  a time; each MCE is planned, refused (installed already, not rendered, or an
+  MCE default of the add-on: the XOR rule, with the reason) or failed on its
+  own; nothing is retried, and once GitLab does not answer no more are
+  started. A dry run plans each. Where it is installed is listed per MCE with
+  the usual remove and its orphaning warning. An MCE the team's repo does not
+  register yet can be chosen: installing registers it, so the team's MCE
+  defaults reach it too, and the plan says so.
+- **The hosted-clusters panel** is the default for every hosted cluster and
+  its values only, and says that a hosted cluster's own add-ons come from its
+  flavor and the create form (a link to Flavors). A cluster's own page is
+  unchanged.
+- Messages that suggested excluding (the XOR refusal of an install, the
+  refusal to pin or remove a fleet default on one cluster) say what to do
+  instead. Core keeps `Verb.EXCLUDE` and `Verb.INCLUDE`, so the titles of MRs
+  3.12 opened still parse (ADR-0007).
+
+**2026-11-12, released in 3.13.0: the Operators page is folded into Addons; one place,
 called add-ons.** The user, on seeing 3.12.0: "operators IS addons", and "we
 already had it: Addons can control defaults, it just can't control
 overrides". The separate Operators section split one thing in two and named

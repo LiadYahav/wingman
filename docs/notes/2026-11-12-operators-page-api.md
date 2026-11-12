@@ -12,7 +12,7 @@ Words: an **add-on** is a chart in a team's catalog (`operators/<chart>/`,
 the folder's name in the team repo) and the fleet defaults built from it
 (`defaults/<scope>/<chart>/`); its install on one cluster is managed from the
 cluster's page. 3.12.0 called the catalog side an *operator* and gave it its
-own pages; 3.12.2 folds them into Addons (§5), and the reads below moved
+own pages; 3.13.0 folds them into Addons (§5), and the reads below moved
 from `/teams/{team}/operators[...]`, which stay as deprecated aliases.
 
 ## 1. Reads
@@ -285,7 +285,7 @@ destination is excluded from the default and gets its own
 - A values file deleted after the read is a 409, not silently created again.
 - `DELETE /clusters/{cluster}/addons/{team}/{addon}` of a fleet default
   (422 `fleet-default-remove`) points at the add-on's page:
-  `details.addon = "/addons/<team>/<chart>"` (3.12.2; 3.12.0's
+  `details.addon = "/addons/<team>/<chart>"` (3.13.0; 3.12.0's
   `details.operator = "/teams/<team>/operators/<chart>"` stays, and that
   page redirects).
 - `ignore_differences: []` removes the key.
@@ -294,7 +294,7 @@ destination is excluded from the default and gets its own
   failing project no longer fails `/teams`, `/addons`, `/fleet-defaults`).
   Access through a group share of the project counts.
 
-## 5. 3.12.2: one place, called add-ons
+## 5. 3.13.0: one place, called add-ons
 
 The web has no Operators pages any more (ADR-0053's amendment of
 2026-11-12). The Addons page creates an add-on (`/addons/new?team=<team>`)
@@ -305,3 +305,40 @@ every scope panel described here. 3.12.0's pages redirect: `/operators` →
 `/teams/<team>/operators/<chart>` → `/addons/<team>/<chart>`,
 `/teams/<team>/new-operator` → `/addons/new?team=<team>`. No write, body,
 answer or rule changed.
+
+## 6. 3.13.0: no exclusions; deploy on specific MCEs
+
+ADR-0053's amendment of 2026-11-13. §3's exclusions write and the
+per-destination deploy write are **gone** (their paths answer 404/405), and
+`ScopePanel.exclusions` lost `editable` and `problem`: the file is read and
+shown, never written. `PUT .../destinations/{cluster}/values` answers 422
+`override-scope` for the hub and for hosted clusters.
+
+### `POST /addons/{team}/{addon}/mce-installs`
+
+Deploy the add-on on specific MCEs: one install MR per MCE, in each one's own
+`in-cluster/<chart>/` (ADR-0022's install). `?dry_run=true` plans each.
+
+```jsonc
+// request
+{ "clusters": ["mce:site1:prod:ocp4-prod-mce-site1-a"], "values": {}, "message": null }
+// answer: 200 (a dry run, or nothing opened) or 201 (at least one MR opened)
+{ "team": "redbull", "chart": "cluster-roles",
+  "installs": [
+    { "cluster": "mce:site1:prod:ocp4-prod-mce-site1-a", "name": "ocp4-prod-mce-site1-a",
+      "status": "opened",            // "planned" (dry run), "opened", "refused", "failed"
+      "files": [{ "action": "create", "path": "sites/site1/prod/mces/ocp4-prod-mce-site1-a/in-cluster/cluster-roles/values.yaml" }],
+      "notes": ["..."], "warnings": [],
+      "merge_request": { /* MRDetail */ },
+      "detail": null,                // why it was refused or failed
+      "rule": null }                 // a refusal's rule: installed, xor, day1-version-missing, ...
+  ] }
+```
+
+- 422 for the whole request: `not-an-mce` (an id that is no MCE hub), `no-mce`
+  (none chosen); 404 when the team has no `operators/<chart>/`; 403
+  `TEAM_READ_ONLY`, admin only.
+- Each MR is the usual install MR (`[Wingman/Day2] Install addon <team>/<chart> on <mce>`,
+  label `install`); where it is installed shows on the MCE panel as state
+  `own-folder`, removed with `DELETE /clusters/{cluster}/addons/{team}/{addon}`.
+
