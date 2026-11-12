@@ -49,7 +49,7 @@ export function defaultHardware(catalog: MachineConfigs | undefined): string | n
 export function hardwareOptions(catalog: MachineConfigs | undefined): { value: string; label: string; description: string }[] {
   return (catalog?.hardware_types ?? []).map((h) =>
     h.generic
-      ? { value: h.name, label: `${h.name} — any hardware`, description: `${h.template}, written as plain ${NETWORK_CONFIG}` }
+      ? { value: h.name, label: h.name, description: `Any hardware: ${h.template}, written as plain ${NETWORK_CONFIG}` }
       : { value: h.name, label: h.name, description: h.template }
   );
 }

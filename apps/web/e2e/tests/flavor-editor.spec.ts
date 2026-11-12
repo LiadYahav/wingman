@@ -185,7 +185,9 @@ test.describe("Flavor editor: the generic network config (ADR-0027, 2026-11-12)"
     );
     await expect(first.getByText(/Choose the hardware type/)).toHaveCount(0);
     await picker.click();
-    await expect(page.getByRole("option").first()).toContainText("generic — any hardware");
+    const generic = page.getByRole("option").first();
+    await expect(generic).toContainText("generic");
+    await expect(generic).toContainText("Any hardware");
     await page.keyboard.press("Escape");
 
     // An added nodepool starts there too, and under the rule each nodepool's hardware does
