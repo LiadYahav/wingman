@@ -85,6 +85,7 @@ class GitLabOperation(StrEnum):
 
     GET_PROJECT = "get_project"
     LIST_GROUP_PROJECTS = "list_group_projects"
+    ACCESS_LEVEL = "access_level"
     READ_FILE = "read_file"
     LIST_TREE = "list_tree"
     LIST_BRANCHES = "list_branches"

@@ -10,6 +10,7 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 
 from wingman_core.domain.git import (
+    AccessLevel,
     Branch,
     Commit,
     CommitAuthor,
@@ -73,6 +74,10 @@ class InstrumentedGitLab:
         return await self._call(
             GitLabOperation.LIST_GROUP_PROJECTS, self._inner.list_group_projects(group)
         )
+
+    async def access_level(self, project_id: int) -> AccessLevel:
+        """See GitLabPort.access_level."""
+        return await self._call(GitLabOperation.ACCESS_LEVEL, self._inner.access_level(project_id))
 
     async def read_file(self, project_id: int, path: RepoPath, ref: str) -> FileContent:
         """See GitLabPort.read_file."""

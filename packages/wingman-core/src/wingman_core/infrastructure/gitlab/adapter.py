@@ -40,6 +40,7 @@ from wingman_core.domain.errors import (
     RevisionConflictError,
 )
 from wingman_core.domain.git import (
+    AccessLevel,
     Branch,
     Commit,
     CommitAuthor,
@@ -120,6 +121,21 @@ class GitLabHttpAdapter:
             {"include_subgroups": "false", "order_by": "path", "sort": "asc", "archived": "false"},
         )
         return sorted((_project(p) for p in raw), key=lambda p: p.path_with_namespace)
+
+    async def access_level(self, project_id: int) -> AccessLevel:
+        """See GitLabPort.access_level: the ``permissions`` of ``GET /projects/:id``.
+
+        ``project_access`` is a direct project membership; ``group_access`` is
+        the highest membership in the project's group or a group above it.
+        Either is ``null`` when the account has none.
+        """
+        raw = await self._get(f"/projects/{project_id}")
+        permissions = raw.get("permissions") or {}
+        levels = [
+            AccessLevel.of((permissions.get(key) or {}).get("access_level"))
+            for key in ("project_access", "group_access")
+        ]
+        return max(levels)
 
     async def read_file(self, project_id: int, path: RepoPath, ref: str) -> FileContent:
         """See GitLabPort.read_file."""

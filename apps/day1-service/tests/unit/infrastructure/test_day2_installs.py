@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -27,6 +28,8 @@ ADDONS = (
     RequestedAddon("redbull", "kyverno", "3.0.0"),
     RequestedAddon("orca", "metrics", ""),
 )
+REDBULL = ADDONS[:2]
+"""One team's add-ons: one request to day2."""
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -208,12 +211,17 @@ def test_an_install_title_reads_back_its_charts_on_its_cluster_only() -> None:
 # ── install ─────────────────────────────────────────────────────────────────
 
 
-async def test_install_posts_one_bulk_request_and_maps_each_team_mr() -> None:
-    body = {
-        "merge_requests": [change("redbull", 7, "bmhgen,kyverno")],
-        "failed": [{"team": "orca", "error": "GitUnavailableError", "detail": "GitLab\n down"}],
-    }
-    client, requests = make(reply(201, body))
+async def test_install_asks_day2_once_per_team_and_maps_each_team_mr() -> None:
+    def by_team(request: httpx.Request) -> httpx.Response:
+        team = json.loads(request.content)["addons"][0]["team"]
+        if team == "redbull":
+            return httpx.Response(
+                201, json={"merge_requests": [change("redbull", 7, "bmhgen,kyverno")], "failed": []}
+            )
+        failed = [{"team": "orca", "error": "GitUnavailableError", "detail": "GitLab\n down"}]
+        return httpx.Response(201, json={"merge_requests": [], "failed": failed})
+
+    client, requests = make(by_team)
     result = await client.install(CLUSTER, ADDONS, message="Flavor agent-baseline v1.1.0")
     assert result == Day2InstallResult(
         opened=(
@@ -227,33 +235,60 @@ async def test_install_posts_one_bulk_request_and_maps_each_team_mr() -> None:
         ),
         failed=("orca: GitLab down",),
     )
-    (request,) = requests
-    assert request.method == "POST"
-    assert request.url.path == f"/api/day2/clusters/{CLUSTER.name}/addons/bulk"
-    assert dict(request.url.params) == {"mce": CLUSTER.mce}
-    assert request.headers["authorization"] == f"Bearer {TOKEN}"
+    assert [r.method for r in requests] == ["POST", "POST"]
+    assert {r.url.path for r in requests} == {f"/api/day2/clusters/{CLUSTER.name}/addons/bulk"}
+    assert all(dict(r.url.params) == {"mce": CLUSTER.mce} for r in requests)
+    assert all(r.headers["authorization"] == f"Bearer {TOKEN}" for r in requests)
     # No version: a missing add-on installs at its team's default (ADR-0025).
-    assert json.loads(request.content) == {
-        "addons": [
-            {"team": "redbull", "addon": "bmhgen", "override_values": {"replicas": 2}},
-            {"team": "redbull", "addon": "kyverno", "override_values": {}},
-            {"team": "orca", "addon": "metrics", "override_values": {}},
-        ],
-        "custom_message": "Flavor agent-baseline v1.1.0",
-    }
+    assert [json.loads(r.content) for r in requests] == [
+        {
+            "addons": [
+                {"team": "redbull", "addon": "bmhgen", "override_values": {"replicas": 2}},
+                {"team": "redbull", "addon": "kyverno", "override_values": {}},
+            ],
+            "custom_message": "Flavor agent-baseline v1.1.0",
+        },
+        {
+            "addons": [{"team": "orca", "addon": "metrics", "override_values": {}}],
+            "custom_message": "Flavor agent-baseline v1.1.0",
+        },
+    ]
     await client.aclose()
+
+
+async def test_a_team_that_gave_wingman_no_write_access_does_not_hold_back_the_others() -> None:
+    # ADR-0043: day2 answers 403 TEAM_READ_ONLY for that team; it is that team's refusal.
+    def by_team(request: httpx.Request) -> httpx.Response:
+        team = json.loads(request.content)["addons"][0]["team"]
+        if team == "orca":
+            body = {
+                **problem(403, "orca hasn't given Wingman write access to sigs/orca"),
+                "code": "TEAM_READ_ONLY",
+                "details": {"team": "orca", "project": "sigs/orca"},
+            }
+            return httpx.Response(403, json=body)
+        return httpx.Response(
+            201, json={"merge_requests": [change("redbull", 7, "bmhgen,kyverno")], "failed": []}
+        )
+
+    client, _ = make(by_team)
+    result = await client.install(CLUSTER, ADDONS, message="m")
+    assert [r.team for r in result.opened] == ["redbull"]
+    assert result.failed == (
+        "orca: day2 refused the install (403): orca hasn't given Wingman write access to sigs/orca",
+    )
 
 
 async def test_an_opened_mr_whose_title_does_not_parse_keeps_the_requested_charts() -> None:
     odd = {**change("redbull", 7, "bmhgen"), "title": "Install bmhgen and kyverno"}
     client, _ = make(reply(201, {"merge_requests": [odd], "failed": []}))
-    result = await client.install(CLUSTER, ADDONS, message="m")
+    result = await client.install(CLUSTER, REDBULL, message="m")
     assert [r.charts for r in result.opened] == [("bmhgen", "kyverno")]
 
 
 async def test_the_cluster_name_is_encoded_into_one_path_segment() -> None:
     client, requests = make(reply(201, {"merge_requests": [], "failed": []}))
-    await client.install(ClusterRef("site1", "mce", "odd/../name?x"), ADDONS, message="m")
+    await client.install(ClusterRef("site1", "mce", "odd/../name?x"), REDBULL, message="m")
     assert requests[0].url.raw_path.startswith(
         b"/api/day2/clusters/odd%2F..%2Fname%3Fx/addons/bulk"
     )
@@ -283,7 +318,7 @@ async def test_a_bulk_refusal_is_a_result_with_one_line_per_refused_item() -> No
         },
     )
     client, _ = make(reply(422, refused))
-    assert await client.install(CLUSTER, ADDONS, message="m") == Day2InstallResult(
+    assert await client.install(CLUSTER, REDBULL, message="m") == Day2InstallResult(
         opened=(),
         failed=(
             "redbull/kyverno: redbull has no operators/kyverno/",
@@ -299,12 +334,12 @@ async def test_a_bulk_refusal_is_a_result_with_one_line_per_refused_item() -> No
         (
             404,
             problem(404, f"no destination named {CLUSTER.name}"),
-            f"day2 refused the install (404): no destination named {CLUSTER.name}",
+            f"redbull: day2 refused the install (404): no destination named {CLUSTER.name}",
         ),
         (
             409,
             problem(409, "the branch exists already"),
-            "day2 refused the install (409): the branch exists already",
+            "redbull: day2 refused the install (409): the branch exists already",
         ),
         (
             422,
@@ -313,21 +348,21 @@ async def test_a_bulk_refusal_is_a_result_with_one_line_per_refused_item() -> No
                 "The request is not valid.",
                 {"errors": [{"loc": ["body", "addons", 0, "bogus"], "msg": "Extra inputs"}]},
             ),
-            "day2 refused the install (422): The request is not valid: body.addons.0.bogus: "
-            "Extra inputs",
+            "redbull: day2 refused the install (422): The request is not valid: "
+            "body.addons.0.bogus: Extra inputs",
         ),
-        (422, ["not", "a problem"], "day2 refused the install (422)"),
+        (422, ["not", "a problem"], "redbull: day2 refused the install (422)"),
     ],
 )
 async def test_other_refusals_are_one_line(status: int, body: object, line: str) -> None:
     client, _ = make(reply(status, body))
-    assert await client.install(CLUSTER, ADDONS, message="m") == Day2InstallResult((), (line,))
+    assert await client.install(CLUSTER, REDBULL, message="m") == Day2InstallResult((), (line,))
 
 
 async def test_a_refusal_that_is_not_json_is_one_line() -> None:
     client, _ = make(lambda _r: httpx.Response(404, content=b"<html>"))
-    assert await client.install(CLUSTER, ADDONS, message="m") == Day2InstallResult(
-        (), ("day2 refused the install (404)",)
+    assert await client.install(CLUSTER, REDBULL, message="m") == Day2InstallResult(
+        (), ("redbull: day2 refused the install (404)",)
     )
 
 
@@ -336,30 +371,32 @@ async def test_a_server_error_is_unavailable_and_says_the_mrs_may_have_opened(
     status: int,
 ) -> None:
     client, requests = make(reply(status, {"detail": f"echo {TOKEN}"}))
-    with pytest.raises(Day2UnavailableError, match="may have opened") as caught:
-        await client.install(CLUSTER, ADDONS, message="m")
-    assert f"answered {status}" in str(caught.value)
-    assert TOKEN not in str(caught.value)
+    result = await client.install(CLUSTER, REDBULL, message="m")
+    (line,) = result.failed
+    assert (result.opened, line.startswith("redbull: ")) == ((), True)
+    assert "may have opened" in line
+    assert f"answered {status}" in line
+    assert TOKEN not in line
     assert len(requests) == 1  # never retried (ADR-0006)
 
 
 async def test_an_unreadable_201_is_unavailable_and_says_the_mrs_may_have_opened() -> None:
     client, _ = make(reply(201, {"merge_requests": "nope"}))
-    with pytest.raises(Day2UnavailableError, match=r"201.*may have opened"):
-        await client.install(CLUSTER, ADDONS, message="m")
+    (line,) = (await client.install(CLUSTER, REDBULL, message="m")).failed
+    assert re.search(r"^redbull: .*201.*may have opened", line)
 
 
 @pytest.mark.parametrize("status", [401, 403])
 async def test_a_refused_service_session_is_unavailable_and_nothing_opened(status: int) -> None:
     client, _ = make(reply(status, {}))
-    with pytest.raises(Day2UnavailableError, match=r"service session.*nothing was opened"):
-        await client.install(CLUSTER, ADDONS, message="m")
+    (line,) = (await client.install(CLUSTER, REDBULL, message="m")).failed
+    assert re.search(r"^redbull: .*service session.*nothing was opened", line)
 
 
 async def test_another_client_error_is_unavailable_and_nothing_opened() -> None:
     client, _ = make(reply(405, {}))
-    with pytest.raises(Day2UnavailableError, match=r"answered 405.*nothing was opened"):
-        await client.install(CLUSTER, ADDONS, message="m")
+    (line,) = (await client.install(CLUSTER, REDBULL, message="m")).failed
+    assert re.search(r"^redbull: .*answered 405.*nothing was opened", line)
 
 
 @pytest.mark.parametrize("exc", [httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout])
@@ -370,10 +407,10 @@ async def test_a_request_that_never_left_is_unavailable_and_nothing_opened(
         raise exc(f"boom {TOKEN}", request=request)
 
     client, _ = make(fail)
-    with pytest.raises(Day2UnavailableError, match="nothing was opened") as caught:
-        await client.install(CLUSTER, ADDONS, message="m")
-    assert exc.__name__ in str(caught.value)
-    assert TOKEN not in str(caught.value)
+    (line,) = (await client.install(CLUSTER, REDBULL, message="m")).failed
+    assert "nothing was opened" in line
+    assert exc.__name__ in line
+    assert TOKEN not in line
 
 
 @pytest.mark.parametrize("exc", [httpx.ReadTimeout, httpx.WriteTimeout, httpx.RemoteProtocolError])
@@ -384,10 +421,10 @@ async def test_a_request_sent_but_unanswered_says_the_mrs_may_have_opened(
         raise exc(f"boom {TOKEN}", request=request)
 
     client, requests = make(fail)
-    with pytest.raises(Day2UnavailableError, match="may have opened") as caught:
-        await client.install(CLUSTER, ADDONS, message="m")
-    assert exc.__name__ in str(caught.value)
-    assert TOKEN not in str(caught.value)
+    (line,) = (await client.install(CLUSTER, REDBULL, message="m")).failed
+    assert "may have opened" in line
+    assert exc.__name__ in line
+    assert TOKEN not in line
     assert len(requests) == 1
 
 
@@ -396,12 +433,11 @@ async def test_calls_are_counted_under_their_own_operations() -> None:
     ok, _ = make(reply(200, []), metrics=metrics)
     await ok.open_installs(CLUSTER)
     opened, _ = make(reply(201, {"merge_requests": [], "failed": []}), metrics=metrics)
-    await opened.install(CLUSTER, ADDONS, message="m")
+    await opened.install(CLUSTER, REDBULL, message="m")
     refused, _ = make(reply(422, problem(422, "no")), metrics=metrics)
-    await refused.install(CLUSTER, ADDONS, message="m")
+    await refused.install(CLUSTER, REDBULL, message="m")
     down, _ = make(reply(503, {}), metrics=metrics)
-    with pytest.raises(Day2UnavailableError):
-        await down.install(CLUSTER, ADDONS, message="m")
+    assert (await down.install(CLUSTER, REDBULL, message="m")).opened == ()
 
     def count(operation: str, outcome: str) -> float | None:
         return metrics.registry.get_sample_value(
@@ -439,11 +475,12 @@ async def test_the_fake_opens_one_mr_per_team_and_lists_them_as_open() -> None:
     assert await fake.installed(CLUSTER) == []  # an open MR installs nothing
 
 
-async def test_a_refused_team_in_the_fake_opens_nothing_as_day2_validates_first() -> None:
-    fake = FakeDay2Addons(refuse={"orca": "orca has no operators/metrics/"})
+async def test_a_refused_team_in_the_fake_holds_back_only_itself() -> None:
+    fake = FakeDay2Addons(refuse={"orca": "orca hasn't given Wingman write access"})
     result = await fake.install(CLUSTER, ADDONS, message="m")
-    assert result == Day2InstallResult((), ("orca: orca has no operators/metrics/",))
-    assert await fake.open_installs(CLUSTER) == []
+    assert [r.team for r in result.opened] == ["redbull"]
+    assert result.failed == ("orca: orca hasn't given Wingman write access",)
+    assert [r.team for r in await fake.open_installs(CLUSTER)] == ["redbull"]
     assert len(fake.install_requests) == 1
 
 
@@ -454,10 +491,11 @@ async def test_a_team_whose_mr_fails_to_open_leaves_the_others_open() -> None:
     assert result.failed == ("redbull: GitLab is unavailable",)
 
 
-async def test_an_unconfirmed_install_in_the_fake_raises_but_its_mrs_are_open() -> None:
+async def test_an_unconfirmed_install_in_the_fake_says_so_but_its_mrs_are_open() -> None:
     fake = FakeDay2Addons(unconfirmed=True)
-    with pytest.raises(Day2UnavailableError, match="may have opened"):
-        await fake.install(CLUSTER, ADDONS, message="m")
+    result = await fake.install(CLUSTER, ADDONS, message="m")
+    assert result.opened == ()
+    assert all("may have opened" in line for line in result.failed)
     assert [r.team for r in await fake.open_installs(CLUSTER)] == ["redbull", "orca"]
 
 
@@ -465,7 +503,8 @@ async def test_the_fake_down_fails_every_call_and_records_no_install() -> None:
     fake = FakeDay2Addons(unavailable=True)
     with pytest.raises(Day2UnavailableError):
         await fake.open_installs(CLUSTER)
-    with pytest.raises(Day2UnavailableError):
-        await fake.install(CLUSTER, ADDONS, message="m")
+    result = await fake.install(CLUSTER, ADDONS, message="m")
+    assert result.opened == ()
+    assert [line.split(":")[0] for line in result.failed] == ["redbull", "orca"]
     assert fake.install_requests == []
     assert await fake.install(CLUSTER, [], message="m") == Day2InstallResult((), ())

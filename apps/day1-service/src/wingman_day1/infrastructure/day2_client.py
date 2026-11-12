@@ -48,6 +48,8 @@ REFUSALS: Final = frozenset({404, 409, 422})
 """Statuses with which day2 refuses an install it did not act on (its RFC 9457 problems)."""
 
 CHECK_FIRST: Final = "Read its open installs on the cluster before asking again."
+TEAM_READ_ONLY: Final = "TEAM_READ_ONLY"
+"""Day2's 403 for a team that gave Wingman no write access (ADR-0043): that team's refusal."""
 
 
 def _client(
@@ -173,12 +175,32 @@ class HttpDay2Installs:
     async def install(
         self, cluster: ClusterRef, addons: Sequence[RequestedAddon], *, message: str
     ) -> Day2InstallResult:
-        """See Day2Installs.install. Nothing to install asks nothing."""
+        """See Day2Installs.install. Nothing to install asks nothing.
+
+        Day2 is asked once per team: day2 validates a whole request before it
+        opens anything, so one team that refuses (``TEAM_READ_ONLY``: it gave
+        Wingman no write access, ADR-0043) must not hold back the others. A
+        team day2 did not answer for is a ``failed`` line saying whether its
+        MR may have opened; nothing is retried.
+        """
         if not addons:
             return Day2InstallResult(opened=(), failed=())
-        return await self._observer.call(
-            Day2Operation.INSTALL_ADDONS, self._install(cluster, addons, message)
-        )
+        teams: dict[str, list[RequestedAddon]] = {}
+        for addon in addons:
+            teams.setdefault(addon.team, []).append(addon)
+        opened: list[Day2InstallRequest] = []
+        failed: list[str] = []
+        for team, asked in teams.items():
+            try:
+                result = await self._observer.call(
+                    Day2Operation.INSTALL_ADDONS, self._install(cluster, asked, message)
+                )
+            except Day2UnavailableError as exc:
+                failed.append(f"{team}: {exc}")
+                continue
+            opened += result.opened
+            failed += result.failed
+        return Day2InstallResult(opened=tuple(opened), failed=tuple(failed))
 
     async def _install(
         self, cluster: ClusterRef, addons: Sequence[RequestedAddon], message: str
@@ -216,8 +238,8 @@ class HttpDay2Installs:
                     f"day2 accepted {what} (201) but its answer could not be read: its merge "
                     f"requests may have opened. {CHECK_FIRST}"
                 ) from exc
-        if status in REFUSALS:
-            return Day2InstallResult(opened=(), failed=_refusal(response))
+        if status in REFUSALS or _code(response) == TEAM_READ_ONLY:
+            return Day2InstallResult(opened=(), failed=_refusal(response, team=addons[0].team))
         if status in (401, 403):
             raise Day2UnavailableError(
                 f"day2 refused day1's service session ({status}) for {what}: a deployment "
@@ -329,15 +351,25 @@ def _bulk_result(
     return Day2InstallResult(opened=tuple(opened), failed=tuple(failed))
 
 
-def _refusal(response: httpx.Response) -> tuple[str, ...]:
+def _code(response: httpx.Response) -> str | None:
+    """A problem answer's ``code``; ``None`` for any other body."""
+    try:
+        raw = response.json()
+    except ValueError:
+        return None
+    code = raw.get("code") if isinstance(raw, dict) else None
+    return code if isinstance(code, str) else None
+
+
+def _refusal(response: httpx.Response, *, team: str) -> tuple[str, ...]:
     """One line per item day2 refused, from its problem's ``details.problems``; else its detail."""
     status = response.status_code
     try:
         raw = response.json()
     except ValueError:
-        return (f"day2 refused the install ({status})",)
+        return (f"{team}: day2 refused the install ({status})",)
     if not isinstance(raw, dict):
-        return (f"day2 refused the install ({status})",)
+        return (f"{team}: day2 refused the install ({status})",)
     details = raw.get("details")
     details = details if isinstance(details, dict) else {}
     problems = details.get("problems")
@@ -353,7 +385,7 @@ def _refusal(response: httpx.Response) -> tuple[str, ...]:
     errors = details.get("errors")
     if isinstance(errors, list) and errors:
         detail = f"{detail.rstrip('.')}: " + "; ".join(_validation_error(e) for e in errors)
-    return (f"day2 refused the install ({status}): {detail}",)
+    return (f"{team}: day2 refused the install ({status}): {detail}",)
 
 
 def _validation_error(error: JSON) -> str:

@@ -61,6 +61,8 @@ class Verb(StrEnum):
     """Link existing clusters to a flavor (day1)."""
     SYNC = "Sync"
     """Set a cluster's drifted locked values to its flavor's (day1)."""
+    PROMOTE = "Promote"
+    """Make an add-on a fleet default (day2)."""
 
 
 class ResourceType(StrEnum):

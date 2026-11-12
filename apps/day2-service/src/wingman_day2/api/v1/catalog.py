@@ -32,9 +32,17 @@ async def gitlab_info(user: CurrentUser, day2: Services) -> GitLabInfoOut:
 
 @router.get("/teams")
 async def list_teams(user: CurrentUser, day2: Services) -> list[TeamOut]:
-    """Every team: each project directly in the sigs group."""
-    topology = await day2.topology.load()
-    return [TeamOut.of(state.team) for state in topology.teams]
+    """Every team (each project directly in the sigs group), and whether Wingman may write there."""
+    teams = [state.team for state in (await day2.topology.load()).teams]
+    access = await day2.access.of_all(teams)
+    return [TeamOut.of(team, access[team.name]) for team in teams]
+
+
+@router.get("/teams/{team}")
+async def get_team(team: str, user: CurrentUser, day2: Services) -> TeamOut:
+    """One team, and whether Wingman may write there."""
+    found = (await day2.topology.load()).team(team).team
+    return TeamOut.of(found, await day2.access.of(found))
 
 
 @router.get("/addons")
@@ -42,13 +50,18 @@ async def list_addons(
     user: CurrentUser, day2: Services, team: str | None = Query(default=None)
 ) -> list[CatalogEntryOut]:
     """Every catalog entry (``operators/<chart>/``), optionally one team's."""
-    return [CatalogEntryOut.of(e) for e in await day2.catalog.entries(team)]
+    entries = await day2.catalog.entries(team)
+    topology = await day2.topology.load()
+    access = await day2.access.of_all([topology.team(t).team for t in {e.team for e in entries}])
+    return [CatalogEntryOut.of(e, access[e.team]) for e in entries]
 
 
 @router.get("/addons/{team}/{addon}")
 async def get_addon(team: str, addon: str, user: CurrentUser, day2: Services) -> CatalogEntryOut:
     """One catalog entry."""
-    return CatalogEntryOut.of(await day2.catalog.entry(team, addon))
+    entry = await day2.catalog.entry(team, addon)
+    found = (await day2.topology.load()).team(team).team
+    return CatalogEntryOut.of(entry, await day2.access.of(found))
 
 
 @router.get("/addons/{team}/{addon}/versions")

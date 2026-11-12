@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from wingman_core.domain.git import Commit, FileContent, Project, RepoPath
+from wingman_core.domain.git import AccessLevel, Commit, FileContent, Project, RepoPath
 from wingman_core.domain.merge_request import MergeRequest
 from wingman_day2.domain.day1 import Day1Index
 from wingman_day2.domain.teams import Team
@@ -31,6 +31,10 @@ class SigsRepository(Protocol):
 
     async def teams(self) -> list[Team]:
         """Every team, sorted by name."""
+        ...
+
+    async def access(self, team: Team) -> AccessLevel:
+        """Wingman's account's access to the team's project (ADR-0043)."""
         ...
 
     async def tree(self, team: Team) -> RepoTree:
@@ -68,6 +72,10 @@ class Day1Repository(Protocol):
 
 class ChartRepository(Protocol):
     """Chart repos: one GitLab project per chart; each branch is a frozen release."""
+
+    def on_this_gitlab(self, repo_url: str) -> bool:
+        """Whether ``repo_url`` points at this GitLab (scheme, host and sub-path)."""
+        ...
 
     async def resolve(self, repo_url: str) -> Project | None:
         """The project a ``repourl`` names, or ``None`` if it is not on this GitLab."""

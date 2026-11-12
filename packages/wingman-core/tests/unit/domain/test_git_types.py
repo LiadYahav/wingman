@@ -7,7 +7,14 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from wingman_core.domain.errors import InvalidRepoPathError
-from wingman_core.domain.git import ChangeKind, CommitAuthor, FileChange, RepoPath, commit_author
+from wingman_core.domain.git import (
+    AccessLevel,
+    ChangeKind,
+    CommitAuthor,
+    FileChange,
+    RepoPath,
+    commit_author,
+)
 from wingman_core.domain.users import Role, User
 
 
@@ -108,3 +115,36 @@ def test_the_commit_author_cannot_forge_header_lines() -> None:
 def test_a_username_of_only_forbidden_characters_still_gives_an_author() -> None:
     author = commit_author(User(username="<>", role=Role.ADMIN, full_name="\n"))
     assert (author.name, author.email) == ("-", "-@openshift.local")
+
+
+@pytest.mark.parametrize(
+    ("value", "level"),
+    [
+        (None, AccessLevel.NONE),
+        (0, AccessLevel.NONE),
+        (3, AccessLevel.NONE),
+        (20, AccessLevel.REPORTER),
+        (25, AccessLevel.REPORTER),
+        (30, AccessLevel.DEVELOPER),
+        (50, AccessLevel.OWNER),
+        (60, AccessLevel.OWNER),
+    ],
+)
+def test_an_access_level_is_the_highest_known_role_at_or_below_gitlabs_number(
+    value: int | None, level: AccessLevel
+) -> None:
+    assert AccessLevel.of(value) is level
+
+
+def test_access_levels_are_ordered_and_named() -> None:
+    assert AccessLevel.REPORTER < AccessLevel.DEVELOPER < AccessLevel.MAINTAINER
+    assert [level.role for level in AccessLevel] == [
+        "none",
+        "minimal",
+        "guest",
+        "planner",
+        "reporter",
+        "developer",
+        "maintainer",
+        "owner",
+    ]

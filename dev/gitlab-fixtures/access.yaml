@@ -1,0 +1,12 @@
+# The role Wingman's GitLab account has on a fixture project, where it is not
+# the owner (the fake's account owns every project it creates). Values are
+# GitLab role names: none, minimal, guest, planner, reporter, developer,
+# maintainer, owner.
+#
+# day2 writes only to teams that give the account Developer or higher on
+# their own project (per-team opt-in, ADR-0043). sigs/orca stays read-only so
+# the fake backend (WINGMAN_GIT_BACKEND=fake) and the tests show one such
+# team: its pages load, and every day2 write to it is refused with
+# TEAM_READ_ONLY. scripts/dev/seed_gitlab.py cannot apply this to a real
+# GitLab it seeds as root, and says so.
+sigs/orca: reporter

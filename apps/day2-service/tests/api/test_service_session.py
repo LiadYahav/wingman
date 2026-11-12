@@ -44,7 +44,7 @@ def rollout_body() -> dict[str, Any]:
     return {
         "addons": [
             {"team": "redbull", "addon": "bmhgen", "override_values": {"a": 1}},
-            {"team": "orca", "addon": "metrics", "override_values": {}},
+            {"team": "falcon", "addon": "log-forwarder", "override_values": {}},
         ],
         "custom_message": "Flavor agent-baseline v1.1.0 needs these add-ons.",
     }
@@ -61,7 +61,7 @@ async def test_the_rollout_session_opens_install_mrs_in_its_own_name(
         opened = {mr["team"]: mr for mr in body["merge_requests"]}
         assert {team: mr["title"] for team, mr in opened.items()} == {
             "redbull": f"[Wingman/Day2] Install addon redbull/bmhgen on {CLUSTER}",
-            "orca": f"[Wingman/Day2] Install addon orca/metrics on {CLUSTER}",
+            "falcon": f"[Wingman/Day2] Install addon falcon/log-forwarder on {CLUSTER}",
         }
         for mr in opened.values():
             footer = parse_mr_description(mr["description"])
@@ -97,3 +97,17 @@ async def test_a_viewer_service_session_cannot_install(
         assert response.json()["code"] == "FORBIDDEN"
         listed = await client.get("/api/day2/approvals")
         assert listed.json() == []
+
+
+async def test_a_team_that_gave_wingman_no_write_access_refuses_the_rollout_with_its_code(
+    app: FastAPI, config: Config, clock: Any
+) -> None:
+    # Day1 asks once per team and reads TEAM_READ_ONLY as that team's refusal (ADR-0043).
+    body = {
+        "addons": [{"team": "orca", "addon": "metrics", "override_values": {}}],
+        "custom_message": "Flavor agent-baseline v1.1.0 needs these add-ons.",
+    }
+    async with day1_session(app, config, clock, ROLLOUT) as rollout:
+        response = await rollout.post(BULK, params={"mce": MCE}, json=body)
+    assert response.status_code == 403, response.text
+    assert response.json()["code"] == "TEAM_READ_ONLY"
