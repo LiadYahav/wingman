@@ -1,4 +1,4 @@
-import type { Page, Route } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { json } from "./api-handlers";
 import { HOSTED_ID, HOSTED_NAME, MCE_ID, TWIN_IDS } from "./day2";
 import type {
@@ -126,6 +126,8 @@ export const FLEET_DEFAULTS: FleetDefault[] = [
     excluded: [HOSTED_ID],
   }),
   fleetDefault({ team: "security", chart: "kyverno", scope: "mces" }),
+  // A fleet default whose chart is not in the catalog (no operators/node-tuning/).
+  fleetDefault({ team: "platform", chart: "node-tuning", scope: "upi", in_catalog: false }),
 ];
 
 /** The cluster the make-default plan moves into the default with a change, and one it moves unchanged. */
@@ -160,7 +162,7 @@ function file(action: PlannedFileChange["action"], path: string, content: string
 }
 
 /** The plan the service answers a dry run with, for the request at `url`. */
-function planFor(method: string, url: URL, body: Record<string, unknown>): AuthoringPlan {
+export function planFor(method: string, url: URL, body: Record<string, unknown>): AuthoringPlan {
   const parts = url.pathname.split("/").map(decodeURIComponent);
   const [teamName, chart, , scope] = [parts[4], parts[5], parts[6], parts[7]];
   const base = {
@@ -239,7 +241,7 @@ function planFor(method: string, url: URL, body: Record<string, unknown>): Autho
 
 let iid = 80;
 
-function changeOf(plan: AuthoringPlan): AuthoringChange {
+export function changeOf(plan: AuthoringPlan): AuthoringChange {
   iid += 1;
   return {
     iid,
@@ -270,38 +272,16 @@ function changeOf(plan: AuthoringPlan): AuthoringChange {
   };
 }
 
-/** What the page sent: each authoring write, dry run or real. */
-export interface AuthoringRequests {
-  writes: { method: string; url: string; dryRun: boolean; body: Record<string, unknown> }[];
-}
-
 /**
- * Route the teams, the New add-on template, the fleet defaults and the four
- * authoring writes. Register after mockDay2World (route mocks match last
- * registered first).
+ * Route the teams, the New operator template and the fleet defaults. Register
+ * after mockDay2World (route mocks match last registered first); the writes,
+ * with their plans (`planFor`, here), are routed by mockOperators
+ * (fixtures/operators.ts), which also checks what a real write confirms.
  */
-export async function mockAuthoring(page: Page, { teams = TEAMS }: { teams?: Team[] } = {}): Promise<AuthoringRequests> {
-  const seen: AuthoringRequests = { writes: [] };
+export async function mockAuthoring(page: Page, { teams = TEAMS }: { teams?: Team[] } = {}): Promise<void> {
   await page.route("**/api/day2/teams", (r) => json(r, teams));
   await page.route(/\/api\/day2\/teams\/[^/?]+\/addon-template$/, (r) =>
     json(r, template(decodeURIComponent(new URL(r.request().url()).pathname.split("/")[4]))),
   );
   await page.route("**/api/day2/fleet-defaults**", (r) => json(r, FLEET_DEFAULTS));
-
-  const write = async (r: Route) => {
-    const request = r.request();
-    const method = request.method();
-    if (method === "GET") return r.fallback();
-    const url = new URL(request.url());
-    const dryRun = url.searchParams.get("dry_run") === "true";
-    const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
-    seen.writes.push({ method, url: request.url(), dryRun, body });
-    const plan = planFor(method, url, body);
-    if (dryRun) return json(r, plan);
-    return json(r, changeOf(plan), method === "POST" ? 201 : 200);
-  };
-  await page.route(/\/api\/day2\/addons\/[^/?]+(\?.*)?$/, write);
-  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+(\?.*)?$/, write);
-  await page.route(/\/api\/day2\/addons\/[^/?]+\/[^/?]+\/defaults\/[^/?]+(\?.*)?$/, write);
-  return seen;
 }
