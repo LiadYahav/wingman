@@ -22,12 +22,12 @@ import type {
 } from "../../types/day2";
 
 /**
- * The Operators pages' world (ADR-0053), shaped like the service's answers
+ * The world of an add-on's page (ADR-0053), shaped like the service's answers
  * (docs/notes/2026-11-12-operators-page-api.md), on top of fixtures/day2.ts
  * (the catalog, the destinations) and fixtures/authoring.ts (the teams, the
  * fleet defaults). platform/cert-manager is the rich one: a default on every
  * MCE with each destination state, an override, an own deploy config and an
- * exclusions file; every other operator is generated from the catalog and
+ * exclusions file; every other add-on is generated from the catalog and
  * the fleet defaults.
  *
  * Writes follow the 3.10 contract: a dry run answers the plan with its
@@ -175,7 +175,7 @@ function certManagerMces(): ScopePanel {
 
 const RICH = (team: string, chart: string) => team === "platform" && chart === "cert-manager";
 
-/** The destinations of a scope, and their state, for a generated operator. */
+/** The destinations of a scope, and their state, for a generated add-on. */
 function generatedPanel(team: string, chart: string, scope: FleetScope, catalog: CatalogEntry | null): ScopePanel {
   const fd = FLEET_DEFAULTS.find((f) => f.team === team && f.chart === chart && f.scope === scope);
   const isDefault = Boolean(fd) || Boolean(catalog?.fleet_defaults.includes(scope));
@@ -210,8 +210,8 @@ function generatedPanel(team: string, chart: string, scope: FleetScope, catalog:
   });
 }
 
-/** `GET /teams/{team}/operators/{op}`, or `null` (a 404). */
-export function operatorDetail(team: string, chart: string): AddonDetail | null {
+/** `GET /teams/{team}/addons/{addon}`, or `null` (a 404). */
+export function addonDetailOf(team: string, chart: string): AddonDetail | null {
   const catalog = day2Catalog.find((e) => e.team === team && e.name === chart) ?? null;
   const fleet = FLEET_DEFAULTS.filter((f) => f.team === team && f.chart === chart);
   if (!catalog && fleet.length === 0) return null;
@@ -241,14 +241,14 @@ export function operatorDetail(team: string, chart: string): AddonDetail | null 
   };
 }
 
-/** `GET /teams/{team}/operators`: one per catalog entry, plus each fleet default without one. */
-export function operatorsOf(team: string): AddonSummary[] {
+/** `GET /teams/{team}/addons`: one per catalog entry, plus each fleet default without one. */
+export function teamAddonsOf(team: string): AddonSummary[] {
   const names = new Set([
     ...day2Catalog.filter((e) => e.team === team).map((e) => e.name),
     ...FLEET_DEFAULTS.filter((f) => f.team === team).map((f) => f.chart),
   ]);
   return [...names].sort().map((name) => {
-    const d = operatorDetail(team, name) as AddonDetail;
+    const d = addonDetailOf(team, name) as AddonDetail;
     return {
       team,
       name,
@@ -298,8 +298,8 @@ function roles(values: Values, role: string): Values {
 }
 
 /** `POST /merge-preview` of a fleet default's destination: team, fleet, then its `values-<name>.yaml`. */
-export function operatorPreview(body: MergePreviewBody): ValuesPreview {
-  const detail = operatorDetail(body.team, body.addon) as AddonDetail;
+export function addonPreview(body: MergePreviewBody): ValuesPreview {
+  const detail = addonDetailOf(body.team, body.addon) as AddonDetail;
   const scope = detail.scopes.find((s) => s.destinations.some((d) => d.id === body.cluster)) ?? detail.scopes[1];
   const dest = scope.destinations.find((d) => d.id === body.cluster);
   const team = detail.catalog?.default_values ?? {};
@@ -370,10 +370,10 @@ function impact(detail: AddonDetail, id: string, effect: DestinationImpact["effe
 }
 
 /** The plan of a write at `url` with `body`, at repo `version` (a plan-changed bumps it). */
-function operatorPlan(method: string, url: URL, body: Values, version: number): AuthoringPlan {
+function addonPlan(method: string, url: URL, body: Values, version: number): AuthoringPlan {
   const p = url.pathname.split("/").map(decodeURIComponent);
   const [team, chart, scope] = [p[4], p[5], p[7] as FleetScope | undefined];
-  const detail = team && chart ? operatorDetail(team, chart) : null;
+  const detail = team && chart ? addonDetailOf(team, chart) : null;
   const confirmOf = (i: DestinationImpact[]) => i.filter((x) => x.effect !== "added").map((x) => x.cluster);
   const finish = (plan: Omit<AuthoringPlan, "digest">): AuthoringPlan => ({ ...plan, digest:`digest-v${version}-${plan.action}-${chart ?? ""}-${scope ?? ""}` });
 
@@ -498,7 +498,7 @@ function operatorPlan(method: string, url: URL, body: Values, version: number): 
 }
 
 /** What the page sent. */
-export interface OperatorRequests {
+export interface AddonRequests {
   writes: { method: string; path: string; dryRun: boolean; body: Values }[];
   previews: MergePreviewBody[];
 }
@@ -506,32 +506,32 @@ export interface OperatorRequests {
 const sorted = (ids: unknown) => (Array.isArray(ids) ? [...ids].map(String).sort() : []);
 
 /**
- * Route the Operators reads (the list, one operator, merge-preview) and every
+ * Route the add-on reads (the list, one add-on, merge-preview) and every
  * authoring write. Register after mockDay2World and mockAuthoring (route mocks
  * match last registered first). `planChangedOnce`: the repo moves before the
  * first real write, which answers 409 plan-changed.
  */
-export async function mockOperators(
+export async function mockAddonDetail(
   page: Page,
   { teams, planChangedOnce = false }: { teams?: Team[]; planChangedOnce?: boolean } = {},
-): Promise<OperatorRequests> {
-  const seen: OperatorRequests = { writes: [], previews: [] };
+): Promise<AddonRequests> {
+  const seen: AddonRequests = { writes: [], previews: [] };
   let version = 1;
   let moved = false;
   if (teams) await page.route("**/api/day2/teams", (r) => json(r, teams));
-  await page.route(/\/api\/day2\/teams\/[^/?]+\/operators(\?.*)?$/, (r) =>
-    json(r, operatorsOf(decodeURIComponent(new URL(r.request().url()).pathname.split("/")[4]))),
+  await page.route(/\/api\/day2\/teams\/[^/?]+\/addons(\?.*)?$/, (r) =>
+    json(r, teamAddonsOf(decodeURIComponent(new URL(r.request().url()).pathname.split("/")[4]))),
   );
-  await page.route(/\/api\/day2\/teams\/[^/?]+\/operators\/[^/?]+(\?.*)?$/, (r) => {
+  await page.route(/\/api\/day2\/teams\/[^/?]+\/addons\/[^/?]+(\?.*)?$/, (r) => {
     const p = new URL(r.request().url()).pathname.split("/").map(decodeURIComponent);
-    const detail = operatorDetail(p[4], p[6]);
-    if (!detail) return r.fulfill(problem(404, "NOT_FOUND", `${p[4]} has no operator ${p[6]}`));
+    const detail = addonDetailOf(p[4], p[6]);
+    if (!detail) return r.fulfill(problem(404, "NOT_FOUND", `${p[4]} has no add-on ${p[6]}`));
     return json(r, detail);
   });
   await page.route("**/api/day2/merge-preview", (r) => {
     const body = r.request().postDataJSON() as MergePreviewBody;
     seen.previews.push(body);
-    return json(r, operatorPreview(body));
+    return json(r, addonPreview(body));
   });
 
   const write = async (r: Route) => {
@@ -546,7 +546,7 @@ export async function mockOperators(
       moved = true;
       version += 1;
     }
-    const plan = operatorPlan(method, url, body, version);
+    const plan = addonPlan(method, url, body, version);
     if (dryRun) return json(r, plan);
     if (plan.needs_confirmation.length > 0 && !body.expected_digest)
       return r.fulfill(problem(422, "VALIDATION_ERROR", "confirm against a preview: send its digest", { rule: "confirm-against-preview" }));

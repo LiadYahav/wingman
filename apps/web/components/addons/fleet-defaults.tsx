@@ -48,7 +48,7 @@ function FleetDefaultRow({ fd }: { fd: FleetDefault }) {
         <FindingsBadge findings={fd.warnings} />
         <Link
           href={addonHref(fd.team, fd.chart)}
-          aria-label={`Manage ${fd.chart}'s defaults`}
+          aria-label={`Manage the defaults of ${fd.chart}`}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 gap-1.5")}
         >
           Manage

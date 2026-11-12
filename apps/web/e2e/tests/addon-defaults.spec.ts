@@ -1,6 +1,6 @@
 /**
- * The Operators pages (ADR-0053), mocked: a team's operators, one operator's
- * team default and fleet defaults, which destinations a default deploys to
+ * An add-on's page on Addons (ADR-0053), mocked: its team default and fleet
+ * defaults, which destinations a default deploys to
  * (exclusions, which orphan the workload), a destination's value override
  * with the effective values before and after, and its own deploy config.
  * Every write is previewed, confirmed, and sent with the preview's
@@ -21,18 +21,18 @@ import {
   MCE_OVERRIDE_NAME,
   MCE_OWN,
   MCE_OWN_NAME,
-  mockOperators,
-  type OperatorRequests,
-} from "../fixtures/operators";
+  mockAddonDetail,
+  type AddonRequests,
+} from "../fixtures/addon-detail";
 
-let requests: OperatorRequests;
+let requests: AddonRequests;
 
-async function setUp(page: Page, options: Parameters<typeof mockOperators>[1] = {}) {
+async function setUp(page: Page, options: Parameters<typeof mockAddonDetail>[1] = {}) {
   await injectAdminAuth(page);
   await mockDashboardApis(page);
   await mockDay2World(page);
   await mockAuthoring(page);
-  requests = await mockOperators(page, options);
+  requests = await mockAddonDetail(page, options);
 }
 
 const realWrites = () => requests.writes.filter((w) => !w.dryRun);
@@ -44,50 +44,48 @@ const formDialog = (page: Page) => page.getByRole("dialog").filter({ has: page.g
 test.describe("Navigation", () => {
   test.beforeEach(async ({ page }) => setUp(page));
 
-  test("the sidebar's Operators entry leads to a team's operators and one operator, and stays active", async ({ page }) => {
+  test("an add-on's defaults are reached from the Addons page, and there is no Operators entry", async ({ page }) => {
     await go(page, "/");
     const nav = page.getByRole("navigation", { name: "Main" });
-    await nav.getByRole("link", { name: "Operators" }).click();
-    await expect(page).toHaveURL(/\/operators$/);
-    await expect(nav.getByRole("link", { name: "Operators" })).toHaveAttribute("aria-current", "page");
+    await expect(nav.getByRole("link", { name: "Operators" })).toHaveCount(0);
+    await nav.getByRole("link", { name: "Addons" }).click();
+    await expect(page).toHaveURL(/\/addons$/);
 
-    const platform = page.getByTestId("operators-team-platform");
-    await expect(platform.getByTestId("operator-count")).toHaveText("3 operators · 2 fleet defaults");
-    await expect(page.getByTestId("operators-team-security")).toContainText("read-only");
-    await expect(platform).not.toContainText("read-only");
-
-    await platform.click();
-    await expect(page).toHaveURL(/\/teams\/platform\/operators$/);
-    await expect(page.getByRole("heading", { name: "platform's operators" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: "Operators" })).toHaveAttribute("aria-current", "page");
-    await expect(nav.getByRole("link", { name: "Addons" })).not.toHaveAttribute("aria-current", "page");
-    const certManager = page.getByTestId("operator-cert-manager");
-    await expect(certManager).toContainText("every MCE · 2");
-    await expect(page.getByTestId("operator-node-tuning")).toContainText("not in the catalog");
-
-    await certManager.click();
-    await expect(page).toHaveURL(/\/teams\/platform\/operators\/cert-manager$/);
+    await page.getByTestId("team-platform").getByRole("button", { name: /cert-manager/ }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("link", { name: "Defaults & overrides" }).click();
+    await expect(page).toHaveURL(/\/addons\/platform\/cert-manager$/);
     await expect(page.getByRole("heading", { level: 1, name: "cert-manager" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: "Operators" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Addons");
+    await expect(nav.getByRole("link", { name: "Addons" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("main")).not.toContainText(/\boperator\b|Operators/);
   });
 
-  test("with one team it goes straight to that team's operators", async ({ page }) => {
-    await page.route("**/api/day2/teams", (r) => r.fulfill({ json: TEAMS.filter((t) => t.name === "platform") }));
+  test("3.12.0's Operators links redirect to the Addons pages", async ({ page }) => {
     await go(page, "/operators");
-    await expect(page).toHaveURL(/\/teams\/platform\/operators$/);
+    await expect(page).toHaveURL(/\/addons$/);
+    await go(page, "/teams/platform/operators");
+    await expect(page).toHaveURL(/\/addons\?team=platform$/);
+    await expect(page.getByTestId("team-filter")).toContainText("Showing platform only");
+    await expect(page.getByTestId("team-observability")).toHaveCount(0);
+    await go(page, "/teams/platform/operators/cert-manager");
+    await expect(page).toHaveURL(/\/addons\/platform\/cert-manager$/);
+    await go(page, "/teams/platform/new-operator");
+    await expect(page).toHaveURL(/\/addons\/new\?team=platform$/);
+    await expect(page.getByTestId("new-addon-form")).toBeVisible();
   });
 
-  test("an unknown operator says so", async ({ page }) => {
-    await go(page, "/teams/platform/operators/nope");
-    await expect(page.getByTestId("operator-not-found")).toContainText("platform has no operator nope");
+  test("an unknown add-on says so", async ({ page }) => {
+    await go(page, "/addons/platform/nope");
+    await expect(page.getByTestId("addon-not-found")).toContainText("platform has no add-on nope");
   });
 });
 
-test.describe("The operator page", () => {
+test.describe("An add-on's page", () => {
   test.beforeEach(async ({ page }) => setUp(page));
 
   test("shows the files as written, the OCP pins, and the four scopes in order", async ({ page }) => {
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     const teamDefault = page.getByRole("region", { name: "Team default" });
     await expect(teamDefault.getByLabel("Contents of operators/cert-manager/cert-manager.yaml")).toHaveText(CERT_MANAGER_YAML.trimEnd());
     await expect(teamDefault).toContainText("https://gitlab.example.com/helm-charts/cert-manager.git");
@@ -113,7 +111,7 @@ test.describe("The operator page", () => {
   });
 
   test("an edit of the team default is confirmed and sent with the preview's digest", async ({ page }) => {
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     await page.getByRole("region", { name: "Team default" }).getByRole("button", { name: "Edit team default" }).click();
     const form = formDialog(page);
     await form.getByLabel("Contents of operators/cert-manager/values.yaml").fill("replicas: 2\n");
@@ -146,7 +144,7 @@ test.describe("The operator page", () => {
 
   test("a repo that moved since the preview shows the new plan, and only that is sent", async ({ page }) => {
     await setUp(page, { planChangedOnce: true });
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     await page.getByRole("region", { name: "Team default" }).getByRole("button", { name: "Edit team default" }).click();
     await formDialog(page).getByLabel("Contents of operators/cert-manager/values.yaml").fill("replicas: 2\n");
     await formDialog(page).getByRole("button", { name: "Preview changes" }).click();
@@ -177,7 +175,7 @@ test.describe("Which destinations a default deploys to", () => {
   test.beforeEach(async ({ page }) => setUp(page));
 
   test("excluding one orphans its workload: the plan lists exactly it, and it must be confirmed", async ({ page }) => {
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     const preview = mces(page).getByRole("button", { name: "Preview exclusions" });
     await expect(preview).toBeDisabled();
     await mces(page).getByRole("checkbox", { name: `Deployed by this default on ${MCE_A_NAME}` }).click();
@@ -213,7 +211,7 @@ test.describe("Which destinations a default deploys to", () => {
   });
 
   test("destinations that share a name are excluded together", async ({ page }) => {
-    await go(page, "/teams/observability/operators/grafana");
+    await go(page, "/addons/observability/grafana");
     const hosted = page.getByTestId("scope-hosted-clusters");
     const twins = hosted.getByRole("checkbox", { name: "Deployed by this default on twin" });
     await expect(twins).toHaveCount(2);
@@ -231,7 +229,7 @@ test.describe("Which destinations a default deploys to", () => {
   });
 
   test("including one generates its app again, with nothing to confirm", async ({ page }) => {
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     await mces(page).getByRole("checkbox", { name: "Deployed by this default on ocp4-prod-mce-site1-a" }).click();
     await expect(mces(page)).toContainText("generates the app there again");
     await mces(page).getByRole("button", { name: "Preview exclusions" }).click();
@@ -247,7 +245,7 @@ test.describe("A destination's overrides", () => {
   test.beforeEach(async ({ page }) => setUp(page));
 
   test("a value override shows the effective values before and after, and sends the file", async ({ page }) => {
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     await mces(page).getByRole("button", { name: `Add values override on ${MCE_A_NAME}` }).click();
     const form = formDialog(page);
     await expect(form.getByRole("heading", { name: `cert-manager values on ${MCE_A_NAME}` })).toBeVisible();
@@ -284,7 +282,7 @@ test.describe("A destination's overrides", () => {
   });
 
   test("an existing override can be deleted, back to the default's values", async ({ page }) => {
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     await expect(mces(page).getByTestId(`destination-${MCE_OVERRIDE_NAME}`)).toContainText(`values-${MCE_OVERRIDE_NAME}.yaml`);
     await mces(page).getByRole("button", { name: `Edit values override on ${MCE_OVERRIDE_NAME}` }).click();
     const form = formDialog(page);
@@ -299,7 +297,7 @@ test.describe("A destination's overrides", () => {
   });
 
   test("an own deploy config sends only the keys that are set", async ({ page }) => {
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     await mces(page).getByRole("button", { name: `Set an own deploy config on ${MCE_A_NAME}` }).click();
     const form = formDialog(page);
     await expect(form).toContainText("The Application keeps its name");
@@ -326,11 +324,13 @@ test.describe("A read-only team", () => {
   test.beforeEach(async ({ page }) => setUp(page));
 
   test("offers no write, and says why", async ({ page }) => {
-    await go(page, "/teams/security/operators");
-    await expect(page.getByRole("note")).toContainText(READ_ONLY_REASON);
-    await expect(page.getByRole("button", { name: "New operator" })).toBeDisabled();
+    await go(page, "/addons?team=security");
+    const security = page.getByTestId("team-security");
+    await expect(security).toContainText("read-only");
+    await expect(security.getByRole("button", { name: "New add-on" })).toBeDisabled();
+    await expect(security.getByRole("button", { name: "New add-on" })).toHaveAttribute("title", READ_ONLY_REASON);
 
-    await go(page, "/teams/security/operators/kyverno");
+    await go(page, "/addons/security/kyverno");
     await expect(page.getByRole("note").first()).toContainText(READ_ONLY_REASON);
     await expect(page.getByRole("button", { name: "Edit team default" })).toBeDisabled();
     await expect(page.getByTestId("scope-mces").getByRole("button", { name: "Edit the default on every MCE" })).toBeDisabled();
@@ -347,14 +347,14 @@ test.describe("A read-only team", () => {
           : t,
       ),
     });
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     await expect(page.getByRole("note").first()).toContainText("Wingman could not read platform's access");
     await expect(page.getByRole("button", { name: "Edit team default" })).toBeDisabled();
   });
 
   test("writes stay off when the teams list fails", async ({ page }) => {
     await page.route("**/api/day2/teams", (r) => r.fulfill({ status: 503, body: "unavailable" }));
-    await go(page, "/teams/platform/operators/cert-manager");
+    await go(page, "/addons/platform/cert-manager");
     // The list is retried before it fails; until then and after, writes stay off.
     await expect(page.getByRole("button", { name: "Edit team default" })).toBeDisabled();
     await expect(page.getByRole("note").first()).toContainText("Wingman could not read platform's write access yet.", { timeout: 15_000 });

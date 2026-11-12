@@ -273,10 +273,10 @@ export function changeOf(plan: AuthoringPlan): AuthoringChange {
 }
 
 /**
- * Route the teams, the New operator template and the fleet defaults. Register
+ * Route the teams, the New add-on template and the fleet defaults. Register
  * after mockDay2World (route mocks match last registered first); the writes,
- * with their plans (`planFor`, here), are routed by mockOperators
- * (fixtures/operators.ts), which also checks what a real write confirms.
+ * with their plans (`planFor`, here), are routed by mockAddonDetail
+ * (fixtures/addon-detail.ts), which also checks what a real write confirms.
  */
 export async function mockAuthoring(page: Page, { teams = TEAMS }: { teams?: Team[] } = {}): Promise<void> {
   await page.route("**/api/day2/teams", (r) => json(r, teams));
