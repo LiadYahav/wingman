@@ -248,13 +248,16 @@ name that names one destination (`?mce=` when it names more than one).
 
 An *operator* is a chart in a team's catalog (`operators/<op>/`) and the fleet
 defaults built from it; the API keeps calling it an add-on. A team is written
-to only if it gave Wingman's GitLab account Developer on its own project
-(otherwise `403 TEAM_READ_ONLY`, ADR-0043). Every write takes `?dry_run=true`
-(the plan, nothing opened): its `impact` lists every destination whose app goes,
-comes or changes, and what goes or changes is confirmed by id
-(`confirm_changes`) with the preview's `digest` (`expected_digest`); a repo that
-moved since the preview is `409` `plan-changed` (ADR-0053). The web-visible
-shapes: `docs/notes/2026-11-12-operators-page-api.md`.
+to only if it gave Wingman's GitLab account Developer on its own project: as a
+member, from a group above the project, or through a group the project is
+shared with (otherwise `403 TEAM_READ_ONLY`, ADR-0043). A team whose access
+GitLab does not answer is read-only until it does. Every write takes
+`?dry_run=true` (the plan, nothing opened): its `impact` lists every
+destination whose app goes, comes or changes, and what goes or changes is
+confirmed by id (`confirm_changes`) with the preview's `digest`
+(`expected_digest`); a repo that moved since the preview is `409`
+`plan-changed` (ADR-0053). The web-visible shapes:
+`docs/notes/2026-11-12-operators-page-api.md`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

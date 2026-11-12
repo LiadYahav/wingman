@@ -209,7 +209,42 @@ New MR verbs (ADR-0007): `Exclude`, `Include`, `Override`; actions
 
 ## Amendments
 
-<!-- The access and sync-settings fixes (review items 6, 7 and the nits) are recorded below when merged. -->
+The review's access and sync-settings findings, fixed in the same change:
+
+- **6. Access is read per team.** A team whose access GitLab does not answer
+  is read as access unknown: read-only, `writable: false`,
+  `access_role: "unknown"`, `access_level: 0`, its reason naming the project
+  and the cause. Every write for it is refused with `403 TEAM_READ_ONLY`, and
+  the other teams read as usual (one failing `GET /projects/:id` used to fail
+  `/teams`, `/addons` and `/fleet-defaults` for everyone). The failure is not
+  cached (the cache keeps only answers), so the next read asks GitLab again.
+  The web fails closed too: a team whose access it has not read is offered
+  no write.
+- **7. Group shares count.** `access_level` is the highest of the account's
+  project membership, its membership of the project's group or a group above
+  it, and each group the project is shared with (`shared_with_groups`),
+  where a share gives the lower of the share's role and the account's own
+  role in that group, inherited roles included
+  (`GET /groups/:id/members/all/:user_id`). GitLab's `permissions` leaves
+  shares out (both `null` on CE 19.5.3), so a team that opted in by sharing
+  its project with a group Wingman's account is in read as "not a member".
+  The extra reads happen only for shares that could raise the level, inside
+  the `access_level` operation, so the metric labels do not change. Not
+  modelled: a share of the project's *namespace* group with another group.
+- **A project the account cannot see** (GitLab's 404 for a private project
+  it has no access to) reads as no access (level 0, `none`), not as unknown,
+  and is kept like any answer. The fake now answers 404 there too, and the
+  contract suite holds both to it.
+- **Sync options are read as ArgoCD 3 reads them**: `automated` set and its
+  `enabled` absent or true is auto-sync, so `automated: {enabled: false}` is
+  manual sync (ArgoCD's off switch, kept as written when a team default stays
+  manual). An `automated` that is not a map (`automated: true`), or a
+  non-boolean `enabled`, is refused by the Application CRD: it reads as
+  manual sync and is the new lint error `sync-policy-invalid` on the layer
+  that sets it (Wingman's own rule, ADR-0023). Wingman's team-default and
+  fleet-default writes always give exactly the asked settings and a policy
+  ArgoCD takes (`enabled: true` over a switched-off layer, `automated: null`
+  over a refused one).
 
 ## Verification
 
@@ -233,3 +268,9 @@ New MR verbs (ADR-0007): `Exclude`, `Include`, `Override`; actions
   folder are the ones Wingman lists.
 - `tests/api/test_operators_api.py`: the reads, the confirmations and the
   409 through HTTP.
+- Amendments: `tests/unit/application/test_access.py` and
+  `tests/api/test_access_api.py` (one team's failing access read),
+  the GitLab contract suite (shares, a private project's 404; 46/46 on the
+  fake and on GitLab CE 19.5.3, ADR-0005), `tests/unit/domain/test_sync_policy.py`
+  (hypothesis properties over policies as people write them) and
+  `tests/unit/application/test_sync_policy_lint.py`.

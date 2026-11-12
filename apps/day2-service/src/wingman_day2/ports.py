@@ -34,7 +34,11 @@ class SigsRepository(Protocol):
         ...
 
     async def access(self, team: Team) -> AccessLevel:
-        """Wingman's account's access to the team's project (ADR-0043)."""
+        """Wingman's account's access to the team's project (ADR-0043).
+
+        ``AccessLevel.NONE`` for a project the account cannot see; a GitLab
+        failure raises (``AccessService`` makes it "access unknown").
+        """
         ...
 
     async def tree(self, team: Team) -> RepoTree:

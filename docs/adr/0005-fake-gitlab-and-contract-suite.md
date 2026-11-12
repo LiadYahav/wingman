@@ -75,3 +75,11 @@ settings refuse in production (ADR-0009).
   seconds, until GitLab grants the authorization behind the membership (the
   membership itself, which `permissions` reads, is there at once). The live
   `new_member` fixture waits until the member can see the project.
+- 2026-11-12, the local GitLab CE 19.5.3: 46/46 pass (`--min-tests 46`), with
+  five more access tests: a project shared with a group gives the lower of
+  the share's role and the account's role in that group (inherited from its
+  parent too), which `permissions` leaves out (both `null`), and the highest
+  of membership and shares counts; a private project an account has no access
+  to answers 404, which the fake now answers too (it answered no access). The
+  share tests make subgroups of the contract group and remove them for good
+  afterwards: GitLab only marks a top-level group for deletion.
