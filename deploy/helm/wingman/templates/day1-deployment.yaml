@@ -50,8 +50,16 @@ spec:
                   name: {{ .Values.serverScan.tokenSecret.name | quote }}
                   key: {{ .Values.serverScan.tokenSecret.key | default "token" | quote }}
           {{- end }}
-          {{- if or .Values.tls.caBundle .Values.clusterStatus.enabled }}
           volumeMounts:
+            # Quick Links' links file, as a directory so edits reach a running pod (ADR-0052)
+            - name: quick-links
+              mountPath: /etc/wingman/quick-links
+              readOnly: true
+            {{- if and .Values.quickLinks .Values.quickLinks.argocdTokensSecret }}
+            - name: argocd-tokens
+              mountPath: /etc/wingman/argocd-tokens
+              readOnly: true
+            {{- end }}
             {{- if .Values.tls.caBundle }}
             - name: ca-bundle
               mountPath: {{ .Values.tls.caBundleMountPath }}
@@ -63,7 +71,6 @@ spec:
               mountPath: /etc/wingman/mce-tokens
               readOnly: true
             {{- end }}
-          {{- end }}
           resources:
             {{- toYaml .Values.resources.day1 | nindent 12 }}
           livenessProbe:
@@ -78,8 +85,15 @@ spec:
               port: 8001
             initialDelaySeconds: 5
             periodSeconds: 10
-      {{- if or .Values.tls.caBundle .Values.clusterStatus.enabled }}
       volumes:
+        - name: quick-links
+          configMap:
+            name: wingman-quick-links
+        {{- if and .Values.quickLinks .Values.quickLinks.argocdTokensSecret }}
+        - name: argocd-tokens
+          secret:
+            secretName: {{ .Values.quickLinks.argocdTokensSecret | quote }}
+        {{- end }}
         {{- if .Values.tls.caBundle }}
         - name: ca-bundle
           configMap:
@@ -90,4 +104,3 @@ spec:
           secret:
             secretName: {{ .Values.clusterStatus.tokensSecretName | quote }}
         {{- end }}
-      {{- end }}
