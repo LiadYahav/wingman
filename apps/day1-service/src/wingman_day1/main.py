@@ -76,7 +76,7 @@ from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLed
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons
-from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_tokens
+from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_access
 from wingman_day1.infrastructure.merge_requests import (
     GitClusterProvisioner,
     GitSpecChanges,
@@ -187,8 +187,10 @@ def build_adapters(
     closers.append(day2.aclose)
     hub: HubApi | None = None
     if settings.cluster_status_enabled and not settings.day1_fake_fleet:
+        access = load_mce_access(settings.mce_tokens_file)
         hub_api = HttpHubApi(
-            tokens=load_mce_tokens(settings.mce_tokens_file),
+            tokens=access.tokens,
+            urls=access.urls,
             domain=settings.mce_api_domain,
             verify=settings.mce_tls_verify,
             timeout_seconds=settings.mce_timeout_seconds,

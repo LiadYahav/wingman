@@ -347,7 +347,7 @@ DAY2_TIMEOUT_SECONDS=5
 # the nodes need more MCE reads: deploy/helm/wingman/README.md, the MCE token's RBAC)
 CLUSTER_STATUS_ENABLED=false
 MCE_API_DOMAIN=mgmt.example.com           # https://api.<mce>.<domain>:6443
-MCE_TOKENS_FILE=/etc/wingman/mce-tokens/tokens
+MCE_TOKENS_FILE=/etc/wingman/mce-tokens/tokens  # YAML: <mce>: <token>, or <mce>: {token: <token>, url: https://<host>:<port>} (ADR-0045)
 MCE_SSL_VERIFY=true                       # true, false, or a CA bundle path
 MCE_TIMEOUT_SECONDS=10
 MCE_INFRAENV_NAMESPACE=                   # empty = all namespaces (the chart does not set it yet)

@@ -220,14 +220,18 @@ replicaCount:
 # When enabled, the day1-service queries each MCE's OpenShift API using SA tokens
 # stored in a Kubernetes secret.
 #
-# Secret format (key: tokens):
-#   mce-prod: <SA-token>
-#   mce-staging: <SA-token>
+# Secret format (key: tokens), a YAML map of MCE folder name to its token, or to
+# its token and its own API address (ADR-0045):
+#   ocp4-prod-mce-site1-a: <SA-token>                 # https://api.{mce}.{mceDomain}:6443
+#   ocp4-prod-mce-site1-b:
+#     token: <SA-token>
+#     url: https://api.hub-b.example.com:6443         # a hub off that pattern; https, no path
 #
-# API URL constructed as: https://api.{mce-name}.{mceDomain}:6443
+# The same access serves live status, InfraEnvs, the cluster nodes and MCE
+# placement (each needs its reads: the chart README's "Live cluster status").
 clusterStatus:
   enabled: false
-  mceDomain: ""           # e.g. "openshift.example.com" → https://api.{mce}.openshift.example.com:6443
+  mceDomain: ""           # e.g. "openshift.example.com" → https://api.{mce}.openshift.example.com:6443 (unless the MCE has its own url)
   tokensSecretName: "mce-sa-tokens"  # name of the k8s secret holding SA tokens
   sslVerify: "false"                 # set to "true" or CA bundle path for production
 

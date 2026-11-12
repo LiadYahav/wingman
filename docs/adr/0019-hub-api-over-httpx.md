@@ -1,7 +1,7 @@
 # ADR-0019: MCE hubs, OpenShift OAuth and day2 are reached over httpx, behind ports, with failures reported
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; a hub may have its own address in the tokens Secret (ADR-0045)
 
 ## Context
 

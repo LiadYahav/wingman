@@ -100,9 +100,9 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `devAuth.enabled` | `DEV_AUTH_ENABLED` | `false` | Dev login instead of OpenShift: local use only |
 | `devAuth.secret` | `DEV_AUTH_SECRET` (Secret) | `""` | At least 32 characters |
 | `clusterStatus.enabled` | `CLUSTER_STATUS_ENABLED` | `false` | Live status and the cluster nodes, from the MCE hubs ([Live cluster status](#live-cluster-status-mce-hubs)) |
-| `clusterStatus.mceDomain` | `MCE_API_DOMAIN` | `""` | A hub is `https://api.{mce}.{mceDomain}:6443` |
+| `clusterStatus.mceDomain` | `MCE_API_DOMAIN` | `""` | A hub is `https://api.{mce}.{mceDomain}:6443`, unless the tokens Secret gives it its own `url` (ADR-0045) |
 | `clusterStatus.sslVerify` | `MCE_SSL_VERIFY` | `"false"` | `"true"`, `"false"` or a CA bundle path |
-| `clusterStatus.tokensSecretName` | | `mce-sa-tokens` | The Secret whose key `tokens` (a YAML map of MCE name to token) is mounted as `MCE_TOKENS_FILE` |
+| `clusterStatus.tokensSecretName` | | `mce-sa-tokens` | The Secret whose key `tokens` (a YAML map of MCE name to token, or to `{token, url}`) is mounted as `MCE_TOKENS_FILE` |
 | `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. Empty: nodes are listed without their servers ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)) |
 | `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the node links point. Empty: `serverScan.url` |
 | `serverScan.sslVerify` | `SERVER_SCAN_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
@@ -177,6 +177,24 @@ With `clusterStatus.enabled`, day1 reads each MCE hub at `https://api.<mce>.<dom
 `clusterStatus.tokensSecretName` (key `tokens`, a YAML map of MCE name to token). It reads the
 HostedCluster and NodePools for live status, the InfraEnvs for the create form, and, for a cluster's
 nodes (`GET /api/day1/clusters/{name}/nodes`), each NodePool's Machines and Agents.
+
+A hub whose API is not at that address gets its own beside its token (ADR-0045); the plain form
+keeps working for the others:
+
+```yaml
+ocp4-prod-mce-site1-a: <token>                      # https://api.ocp4-prod-mce-site1-a.<domain>:6443
+ocp4-prod-mce-site1-b:
+  token: <token>
+  url: https://api.hub-b.example.com:6443           # https://<host>[:<port>], nothing after it
+```
+
+```bash
+oc create secret generic mce-sa-tokens -n <ns> --from-file=tokens=./tokens.yaml \
+  --dry-run=client -o yaml | oc apply -f -          # then restart day1: it reads the file at start
+```
+
+A `url` that is not `https://<host>[:<port>]` (a path, `http://`, credentials) stops day1 at start,
+naming the MCE and never the token.
 
 The service account behind each token needs `get` and `list` on:
 
