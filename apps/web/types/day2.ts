@@ -52,6 +52,8 @@ export type AccessRole =
   | "developer"
   | "maintainer"
   | "owner"
+  /** Wingman could not read the account's access to the project: the team is read-only (ADR-0053). */
+  | "unknown"
   | (string & {});
 
 /**
@@ -443,8 +445,10 @@ export interface CreateAddonBody {
   /** Also make it a fleet default in the same MR. */
   default_scope: FleetScope | null;
   default_values: Record<string, unknown>;
-  /** With `default_scope`: the dry run's `needs_confirmation` the user confirmed. */
+  /** The preview's `needs_confirmation`, confirmed (ADR-0053). */
   confirm_changes?: string[];
+  /** The preview's `digest`: the plan the user saw (ADR-0053). */
+  expected_digest?: string | null;
   message: string | null;
 }
 
@@ -462,6 +466,8 @@ export interface UpdateTeamDefaultBody {
   ignore_differences?: unknown[] | null;
   values?: Record<string, unknown>;
   last_commit_id: string | null;
+  confirm_changes?: string[];
+  expected_digest?: string | null;
   message?: string | null;
 }
 
@@ -472,6 +478,7 @@ export interface MakeDefaultBody {
   sync: SyncSettings | null;
   /** Cluster ids, from a dry run's `needs_confirmation`. */
   confirm_changes: string[];
+  expected_digest?: string | null;
   message: string | null;
 }
 
@@ -480,10 +487,20 @@ export interface UpdateFleetDefaultBody {
   values?: Record<string, unknown>;
   sync?: SyncSettings | null;
   last_commit_id: string | null;
+  confirm_changes?: string[];
+  expected_digest?: string | null;
   message?: string | null;
 }
 
-export type AuthoringAction = "create-addon" | "update-team-default" | "make-default" | "update-fleet-default" | (string & {});
+export type AuthoringAction =
+  | "create-addon"
+  | "update-team-default"
+  | "make-default"
+  | "update-fleet-default"
+  | "set-exclusions"
+  | "override-values"
+  | "override-deploy"
+  | (string & {});
 
 /** A file a dry run would write: `content` the new text (`null` for a delete), `previous` the current one. */
 export interface PlannedFileChange {
@@ -498,8 +515,12 @@ export interface AdoptionChange {
   stack: "deploy" | "values" | (string & {});
   /** A dotted leaf path, e.g. `syncPolicy.automated.prune`. */
   key: string;
+  /** `null` when absent. */
   before: unknown;
+  /** `null` when no longer set, or when set to a Helm null: `after_null` tells them apart. */
   after: unknown;
+  /** The key is set to a Helm `null`: it deletes the chart's own default (ADR-0053). */
+  after_null?: boolean;
 }
 
 /** A cluster whose own folder of the chart moves into the fleet default. */
@@ -512,6 +533,28 @@ export interface Adoption {
   gitkeep: string | null;
   /** Empty: the move changes nothing on that cluster. */
   changes: AdoptionChange[];
+  /** An old `exclusions.yaml` entry for the chart named it: removed in the same commit, or it would lose its app. */
+  exclusion_removed?: boolean;
+}
+
+/** What a write does to the app of one destination (ADR-0053). */
+export type ImpactEffect = "changed" | "removed" | "added" | (string & {});
+
+/**
+ * One destination whose app of the operator changes, goes, or comes.
+ * `changes` compare the effective deploy config and workload values before
+ * and after, chart defaults aside; a `values` change with `after: null` is a
+ * Helm null: it deletes the chart's own default for that key.
+ */
+export interface DestinationImpact {
+  cluster: string;
+  name: string;
+  kind: DestinationKind | (string & {});
+  effect: ImpactEffect;
+  app_name: string | null;
+  changes: AdoptionChange[];
+  /** `removed` with `prune: false`: the Application goes, the workload keeps running, unmanaged. */
+  orphaned: boolean;
 }
 
 /** What an authoring write's `?dry_run=true` answers: everything it would do, nothing opened. */
@@ -525,10 +568,20 @@ export interface AuthoringPlan {
   files: PlannedFileChange[];
   reach: string[];
   adopted: Adoption[];
-  /** The `adopted` ids with `changes`: send them in `confirm_changes`. */
+  /**
+   * Every destination to confirm: each `removed` and `changed` one of
+   * `impact`, and each `adopted` one whose move changes something. Sent back,
+   * exactly, in `confirm_changes`.
+   */
   needs_confirmation: string[];
   warnings: Finding[];
   notes: string[];
+  /** Every destination whose app of this operator changes, goes, or comes (ADR-0053). */
+  impact: DestinationImpact[];
+  /** The scope's destinations the default skips, after the change. */
+  excluded: string[];
+  /** sha256 of what the MR writes and does: sent back in `expected_digest`. */
+  digest: string;
 }
 
 /** An authoring write's answer: the opened MR plus what it does. */
@@ -541,4 +594,218 @@ export interface AuthoringChange extends Day2MergeRequest {
   adopted: Adoption[];
   warnings: Finding[];
   notes: string[];
+  needs_confirmation?: string[];
+  impact?: DestinationImpact[];
+  excluded?: string[];
+  digest?: string;
+}
+
+// ── Operators (ADR-0053) ─────────────────────────────────────────────────────
+// An operator is a chart in a team's catalog (`operators/<op>/`) and the fleet
+// defaults built from it (`defaults/<scope>/<op>/`); an add-on is that chart on
+// one cluster. The API keeps `addon` in its write paths.
+// docs/notes/2026-11-12-operators-page-api.md.
+
+/** A file of the team repo, as read. Send `last_commit_id` back on an edit of it. */
+export interface RepoFile {
+  path: string;
+  exists: boolean;
+  /** The file's text, comments included; `null` when absent. */
+  text: string | null;
+  /** Parsed; `{}` when absent or invalid. */
+  values: Record<string, unknown>;
+  /** The commit the file was read at. */
+  last_commit_id: string | null;
+  /** The YAML error, if any. */
+  problem: string | null;
+}
+
+/** A scope the operator is a default on, in the operators list. */
+export interface OperatorDefaultSummary {
+  scope: FleetScope;
+  label: string;
+  /** How many destinations it deploys to. */
+  reach: number;
+  /** How many `exclusions.yaml` keeps it off. */
+  excluded: number;
+}
+
+/** `GET /api/day2/teams/{team}/operators`: one per `operators/<op>/`, plus each fleet default without one. */
+export interface OperatorSummary {
+  team: string;
+  name: string;
+  in_catalog: boolean;
+  /** "" when unknown. */
+  repourl: string;
+  target_revision: string;
+  sync: SyncSettings;
+  /** The `ocp-versions/<v>/` folders. */
+  ocp_versions: string[];
+  /** Only the scopes it is a default on. */
+  defaults: OperatorDefaultSummary[];
+  /** Apps from clusters' own folders. */
+  installed_on: number;
+  /** How many findings. */
+  warnings: number;
+  writable: boolean;
+  read_only_reason: string | null;
+}
+
+/** An `operators/<op>/ocp-versions/<version>/` pin. */
+export interface OperatorOcpVersion {
+  version: string;
+  target_revision: string | null;
+  deploy_config: RepoFile;
+  values_file: RepoFile;
+}
+
+/**
+ * Where a scope's destination stands with the operator:
+ * - `default`: the default deploys it here;
+ * - `excluded`: `exclusions.yaml` keeps the default off it, no app;
+ * - `own-deploy`: excluded, and deployed from its own folder with its own deploy config (the platform's carve-out);
+ * - `own-folder`: not a default on this scope; the cluster has the chart in its own folder;
+ * - `duplicate`: a default and its own folder, not excluded: the platform generates the app twice (an error);
+ * - `none`: not a default, no own folder;
+ * - `not-rendered`: the platform renders nothing for it (day1 has no version for it).
+ */
+export type DestinationState =
+  | "default"
+  | "excluded"
+  | "own-deploy"
+  | "own-folder"
+  | "duplicate"
+  | "none"
+  | "not-rendered"
+  | (string & {});
+
+/** One destination of a scope that the team's repo registers. */
+export interface ScopeDestination {
+  id: string;
+  name: string;
+  kind: DestinationKind;
+  site: string;
+  env: string;
+  mce: string;
+  ocp_version: string | null;
+  /** False: day1 has no version for it, the platform renders nothing. */
+  renders: boolean;
+  state: DestinationState;
+  /** An app of this operator exists there. */
+  deployed: boolean;
+  app_name: string | null;
+  /** `defaults/<scope>/<op>/values-<name>.yaml`; `null` for the hub. */
+  override: RepoFile | null;
+  /** Other destinations with the same name, so the same override file. */
+  override_shared_with: string[];
+  /** Its own `<op>/` folder, when it has one. */
+  own_folder: string | null;
+  /** `<own_folder>/<op>.yaml`, when it has an own folder. */
+  own_deploy: RepoFile | null;
+}
+
+/** A destination day1 or another team knows, that this team's repo does not register. */
+export interface UnregisteredDestination {
+  id: string;
+  name: string;
+  site: string;
+  env: string;
+  mce: string;
+}
+
+/** A scope's `defaults/<scope>/exclusions.yaml`, as the operator's entry reads. */
+export interface ScopeExclusions {
+  path: string;
+  exists: boolean;
+  /** This operator's entry, as written. */
+  names: string[];
+  /** Names in it that are no destination of the team. */
+  unknown_names: string[];
+  /** False: Wingman cannot edit it in place (`problem` says why). */
+  editable: boolean;
+  problem: string | null;
+  last_commit_id: string | null;
+}
+
+/** The operator on one fleet scope: a default there or not, and every destination of that kind. */
+export interface ScopePanel {
+  scope: FleetScope;
+  /** "every MCE". */
+  label: string;
+  /** "MCE(s)". */
+  noun: string;
+  is_default: boolean;
+  /** `defaults/<scope>/<op>`. */
+  folder: string;
+  values_file: RepoFile;
+  /** `defaults/<scope>/<op>/<op>.yaml`: the sync override. */
+  deploy_config: RepoFile;
+  /** Effective, over the team default. */
+  sync: SyncSettings;
+  sync_overridden: boolean;
+  /** The `values-<env>.yaml` files that exist (read-only). */
+  env_files: { env: string; file: RepoFile }[];
+  /** `null` for the hub (it has none). */
+  exclusions: ScopeExclusions | null;
+  destinations: ScopeDestination[];
+  unregistered: UnregisteredDestination[];
+  /** The commit the team repo was read at. */
+  last_commit_id: string | null;
+}
+
+/** `GET /api/day2/teams/{team}/operators/{operator}`. */
+export interface OperatorDetail {
+  team: string;
+  name: string;
+  in_catalog: boolean;
+  writable: boolean;
+  read_only_reason: string | null;
+  /** As `GET /addons/{team}/{addon}`; `null` when not in the catalog. */
+  catalog: CatalogEntry | null;
+  /** `operators/<op>/<op>.yaml`. */
+  deploy_config: RepoFile;
+  /** `operators/<op>/values.yaml`. */
+  values_file: RepoFile;
+  ocp_versions: OperatorOcpVersion[];
+  /** hosted-clusters, mces, hub, upi. */
+  scopes: ScopePanel[];
+  warnings: Finding[];
+}
+
+/** `PUT /api/day2/addons/{team}/{addon}/defaults/{scope}/exclusions`: the full excluded set, by id. */
+export interface SetExclusionsBody {
+  excluded: string[];
+  /** `ScopePanel.exclusions.last_commit_id`. */
+  last_commit_id: string | null;
+  confirm_changes: string[];
+  expected_digest: string | null;
+  message: string | null;
+}
+
+/** `PUT .../defaults/{scope}/destinations/{cluster}/values`: `values-<name>.yaml`; `null` deletes it. */
+export interface DestinationValuesBody {
+  values: Record<string, unknown> | null;
+  /** `ScopeDestination.override.last_commit_id` (`null` when absent). */
+  last_commit_id: string | null;
+  confirm_changes: string[];
+  expected_digest: string | null;
+  message: string | null;
+}
+
+/** An own deploy config: only the keys that are set are written. */
+export interface DeployOverride {
+  /** A branch of the chart repo: an emergency pin. */
+  target_revision: string | null;
+  repourl: string | null;
+  path: string | null;
+  project_namespace: string | null;
+}
+
+/** `PUT .../defaults/{scope}/destinations/{cluster}/deploy`: `deploy: null` removes the own deploy config. */
+export interface DestinationDeployBody {
+  deploy: DeployOverride | null;
+  last_commit_id: string | null;
+  confirm_changes: string[];
+  expected_digest: string | null;
+  message: string | null;
 }

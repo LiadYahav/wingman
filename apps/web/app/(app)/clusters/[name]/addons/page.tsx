@@ -152,7 +152,10 @@ function ClusterCharts() {
     staleTime: 120_000,
   });
   const teams = useTeams();
+  // Fail closed (ADR-0053): no writes until the teams list says so.
   const accessOf = (team: string) => teamAccess(teams.data, team);
+  // The reason beside a team's heading, once the list has answered (no flash while it loads).
+  const reasonOf = (team: string) => (canWrite && !teams.isPending ? accessOf(team).reason : null);
   const gitlabInfo = useQuery<GitLabInfo>({
     queryKey: day2Keys.gitlabInfo,
     queryFn: () => api.get<GitLabInfo>(day2Api.gitlabInfo),
@@ -246,7 +249,7 @@ function ClusterCharts() {
             <div className="space-y-6">
               {groupByTeam(installed).map(([team, items]) => (
                 <div key={team} className="space-y-2">
-                  <TeamHeading team={team} count={items.length} readOnlyReason={canWrite ? accessOf(team).reason : null} />
+                  <TeamHeading team={team} count={items.length} readOnlyReason={reasonOf(team)} />
                   <div className="space-y-2 pl-5">
                     {[...items]
                       .sort((a, b) => Number(a.source === "fleet-default") - Number(b.source === "fleet-default") || a.name.localeCompare(b.name))
@@ -340,7 +343,7 @@ function ClusterCharts() {
             <div className="space-y-6">
               {groupByTeam(available).map(([team, items]) => (
                 <div key={team} className="space-y-2">
-                  <TeamHeading team={team} count={items.length} readOnlyReason={canWrite ? accessOf(team).reason : null} />
+                  <TeamHeading team={team} count={items.length} readOnlyReason={reasonOf(team)} />
                   <div className="space-y-2 pl-5">
                     {items.map((entry) => (
                       <AvailableChartCard

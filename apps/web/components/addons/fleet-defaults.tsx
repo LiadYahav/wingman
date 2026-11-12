@@ -1,31 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { Layers, Pencil } from "lucide-react";
-import { scopeLabel, syncSummary } from "@/lib/day2";
+import Link from "next/link";
+import { ArrowRight, Layers } from "lucide-react";
+import { operatorHref, scopeLabel, syncSummary } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { leaves } from "@/lib/values";
 import { buttonVariants } from "@/components/ui/button";
 import { FindingsBadge } from "@/components/addons/findings";
-import { EditFleetDefaultDialog } from "@/components/addons/default-dialogs";
-import type { AuthoringChange, FleetDefault } from "@/types/day2";
+import type { FleetDefault } from "@/types/day2";
 
 /** Why there is no "stop being a default" yet: what it would do to running workloads. */
 export const NO_STOP_NOTE =
-  "Stopping being a default is not in Wingman yet: deleting the folder deletes the default's Applications on every destination it reaches, and with prune: false ArgoCD orphans the workloads, which keep running. Until then, keep it off one cluster with exclusions.yaml (runbook R10), or remove it by hand.";
+  "Stopping being a default is not in Wingman yet: deleting the folder deletes the default's Applications on every destination it reaches, and with prune: false ArgoCD orphans the workloads, which keep running. Until then, keep it off a destination with its exclusions, from its Operators page, or remove it by hand.";
 
-function FleetDefaultRow({
-  fd,
-  canWrite,
-  readOnlyReason,
-  onOpened,
-}: {
-  fd: FleetDefault;
-  canWrite: boolean;
-  readOnlyReason: string | null;
-  onOpened: (change: AuthoringChange) => void;
-}) {
-  const [open, setOpen] = useState(false);
+function FleetDefaultRow({ fd }: { fd: FleetDefault }) {
   const count = leaves(fd.values).length;
   return (
     <li
@@ -58,48 +46,21 @@ function FleetDefaultRow({
           </span>
         )}
         <FindingsBadge findings={fd.warnings} />
-        {canWrite && (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            disabled={Boolean(readOnlyReason)}
-            title={readOnlyReason ?? undefined}
-            aria-label="Edit fleet default"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 gap-1.5")}
-          >
-            <Pencil className="h-3 w-3" />
-            Edit
-          </button>
-        )}
+        <Link
+          href={operatorHref(fd.team, fd.chart)}
+          aria-label={`Manage ${fd.chart} in Operators`}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 gap-1.5")}
+        >
+          Manage
+          <ArrowRight className="h-3 w-3" aria-hidden />
+        </Link>
       </span>
-      {open && (
-        <EditFleetDefaultDialog
-          fleetDefault={fd}
-          open
-          onOpenChange={setOpen}
-          readOnlyReason={readOnlyReason}
-          onOpened={onOpened}
-        />
-      )}
     </li>
   );
 }
 
-/** A team's fleet defaults (`defaults/<scope>/<chart>/`), each editable in place (ADR-0043). */
-export function FleetDefaultsList({
-  team,
-  items,
-  canWrite,
-  readOnlyReason,
-  onOpened,
-}: {
-  team: string;
-  items: FleetDefault[];
-  /** The viewer is an admin: offer Edit (disabled while the team is read-only). */
-  canWrite: boolean;
-  readOnlyReason: string | null;
-  onOpened: (change: AuthoringChange) => void;
-}) {
+/** A team's fleet defaults (`defaults/<scope>/<chart>/`), each managed on its operator's page (ADR-0053). */
+export function FleetDefaultsList({ team, items }: { team: string; items: FleetDefault[] }) {
   if (items.length === 0) return null;
   return (
     <div className="space-y-2" aria-label={`Fleet defaults of ${team}`} role="group">
@@ -112,7 +73,7 @@ export function FleetDefaultsList({
         {[...items]
           .sort((a, b) => a.chart.localeCompare(b.chart) || a.scope.localeCompare(b.scope))
           .map((fd) => (
-            <FleetDefaultRow key={`${fd.chart}|${fd.scope}`} fd={fd} canWrite={canWrite} readOnlyReason={readOnlyReason} onOpened={onOpened} />
+            <FleetDefaultRow key={`${fd.chart}|${fd.scope}`} fd={fd} />
           ))}
       </ul>
       <p className="text-[11px] text-muted-foreground" data-testid="no-stop-default-note">

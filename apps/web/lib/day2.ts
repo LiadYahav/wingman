@@ -77,6 +77,20 @@ export const day2Api = {
   /** POST: make it a fleet default; PUT: edit that fleet default. */
   fleetDefault: (team: string, chart: string, scope: FleetScope, dryRun = false) =>
     `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}${dry(dryRun)}`,
+  /** A team's operators: its catalog and the fleet defaults built from it (ADR-0053). */
+  operators: (team: string) => `/api/day2/teams/${encodeURIComponent(team)}/operators`,
+  /** One operator: its files, OCP-version pins and one panel per fleet scope. */
+  operator: (team: string, operator: string) =>
+    `/api/day2/teams/${encodeURIComponent(team)}/operators/${encodeURIComponent(operator)}`,
+  /** PUT: the full set of the scope's destinations the fleet default skips. */
+  exclusions: (team: string, chart: string, scope: FleetScope, dryRun = false) =>
+    `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/exclusions${dry(dryRun)}`,
+  /** PUT: one destination's `values-<name>.yaml` of a fleet default. */
+  destinationValues: (team: string, chart: string, scope: FleetScope, cluster: string, dryRun = false) =>
+    `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/destinations/${encodeURIComponent(cluster)}/values${dry(dryRun)}`,
+  /** PUT: one destination's own deploy config (the platform's carve-out). */
+  destinationDeploy: (team: string, chart: string, scope: FleetScope, cluster: string, dryRun = false) =>
+    `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}/destinations/${encodeURIComponent(cluster)}/deploy${dry(dryRun)}`,
 };
 
 /**
@@ -99,12 +113,34 @@ export const day2Keys = {
   teams: ["day2", "teams"] as const,
   addonTemplate: (team: string) => ["day2", "addon-template", team] as const,
   fleetDefaults: ["day2", "fleet-defaults"] as const,
+  operators: (team: string) => ["day2", "operators", team] as const,
+  operator: (team: string, operator: string) => ["day2", "operators", team, operator] as const,
+  /** `merge-preview` of a destination with `override` (stable JSON) as its own file, or without one (`null`). */
+  mergePreview: (id: string, team: string, chart: string, override: string | null) =>
+    ["day2", "merge-preview", id, team, chart, override] as const,
 };
 
 /** The web page of a destination's charts. */
 export function chartsHref(key: string, mce?: string): string {
   return `/clusters/${encodeURIComponent(key)}/addons${query({ mce: narrow(key, mce) })}`;
 }
+
+/** The Operators pages: a team's operators, one operator, a new one (ADR-0053). */
+export function teamOperatorsHref(team: string): string {
+  return `/teams/${encodeURIComponent(team)}/operators`;
+}
+
+export function operatorHref(team: string, operator: string): string {
+  return `${teamOperatorsHref(team)}/${encodeURIComponent(operator)}`;
+}
+
+/** Beside `operators/`, not in it: an operator may be named `new`. */
+export function newOperatorHref(team: string): string {
+  return `/teams/${encodeURIComponent(team)}/new-operator`;
+}
+
+/** The pages the Operators nav entry is active on. */
+export const OPERATOR_PAGES = /^\/(operators|teams\/[^/]+\/(operators|new-operator))(\/|$)/;
 
 // ── Catalog ──────────────────────────────────────────────────────────────────
 
@@ -300,17 +336,37 @@ export function isTeamReadOnly(problem: ProblemSummary): boolean {
   return problem.code === "TEAM_READ_ONLY";
 }
 
+/**
+ * The repo moved since the preview, so the plan is no longer the one the user
+ * saw (`409 REVISION_CONFLICT`, `details.rule = "plan-changed"`, ADR-0053):
+ * nothing was opened. Preview again and show the new plan; never submit it unseen.
+ */
+export function isPlanChanged(problem: ProblemSummary): boolean {
+  return problem.code === "REVISION_CONFLICT" && problem.details.rule === "plan-changed";
+}
+
 // ── Teams and write access (ADR-0043) ────────────────────────────────────────
 
+export interface TeamAccess {
+  writable: boolean;
+  /** Why not, as a sentence to show; `null` when writable. */
+  reason: string | null;
+  /** False while there is no teams list (not answered yet, or failed). */
+  known: boolean;
+}
+
 /**
- * Whether the web may offer writes to `team`, and why not. A team the list
- * does not have (it failed to load, or an older service) counts as writable:
- * the service still refuses a read-only team's write, and says why.
+ * Whether the web may offer writes to `team`, and why not. Fails closed: a
+ * team the list does not have (not loaded yet, failed, or missing) is not
+ * writable, and neither is one whose access the service could not read
+ * (`access_role: "unknown"`). The service refuses a read-only team's write
+ * anyway; the page says why before anyone tries.
  */
-export function teamAccess(teams: readonly Team[] | undefined, team: string): { writable: boolean; reason: string | null } {
+export function teamAccess(teams: readonly Team[] | undefined, team: string): TeamAccess {
   const found = teams?.find((t) => t.name === team);
-  if (!found) return { writable: true, reason: null };
-  return { writable: found.writable, reason: found.writable ? null : found.read_only_reason ?? `${team} is read-only in Wingman.` };
+  if (!found) return { writable: false, reason: `Wingman could not read ${team}'s write access yet.`, known: teams !== undefined };
+  if (found.writable && found.access_role !== "unknown") return { writable: true, reason: null, known: true };
+  return { writable: false, reason: found.read_only_reason ?? `${team} is read-only in Wingman.`, known: true };
 }
 
 // ── Fleet scopes and sync options (ADR-0043) ─────────────────────────────────
