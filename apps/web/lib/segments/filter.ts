@@ -34,6 +34,8 @@ function matchesCluster(segment: Segment, cluster: string | null): boolean {
   return cluster === null || segment.holders.some((holder) => holder.name === cluster);
 }
 
+const matchesMismatch = (segment: Segment, only: boolean) => !only || segment.mismatches.length > 0;
+
 /** The segments `view` shows, in segments-manager's order; `ignoreStatus` for the tabs' counts. */
 export function filterSegments(segments: Segment[], view: SegmentsView, { ignoreStatus = false } = {}): Segment[] {
   return segments.filter(
@@ -42,6 +44,7 @@ export function filterSegments(segments: Segment[], view: SegmentsView, { ignore
       matchesSite(s, view.site) &&
       matchesTypes(s, view.types) &&
       matchesCluster(s, view.cluster) &&
+      matchesMismatch(s, view.mismatch) &&
       matchesSearch(s, view.q)
   );
 }

@@ -48,6 +48,15 @@ export interface SegmentHolder {
   day1: Day1Location | null;
 }
 
+/** Where segments-manager disagrees with a cluster file (ADR-0039's checks, from the segment's side). */
+export interface SegmentMismatch {
+  /** The cluster file the sentence is about, and where it is. */
+  cluster: string;
+  site: string;
+  mce: string;
+  detail: string;
+}
+
 export interface Segment {
   /** The CIDR: the key, never null. */
   segment: string;
@@ -62,6 +71,8 @@ export interface Segment {
   cluster_name: string | string[] | null;
   allocated_at: string | null;
   holders: SegmentHolder[];
+  /** Empty when segments-manager and the cluster files agree, or Git says nothing about this segment. */
+  mismatches: SegmentMismatch[];
 }
 
 export interface SegmentList {

@@ -8,15 +8,20 @@ written to segments-manager, and allocation and release stay the workflows'.
 A segment's holders are joined to the day1 repo: a holder whose cluster file
 is there is a hosted cluster Wingman can link to; any other (an MCE, a UPI
 cluster, a name day1 does not have) is only a name.
+
+Each row also carries where segments-manager disagrees with a cluster file:
+ADR-0039's checks seen from the segment, on data day1 already holds. Git
+stays the source of truth: a mismatch is a warning, never a fix.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from wingman_day1.domain.network import SegmentRecord
+from wingman_day1.domain.network import FileNetwork, SegmentRecord, disagreements
 from wingman_day1.domain.paths import ClusterRef
 
 SEGMENT_TYPES: Final = ("HC", "MCE", "INVENTORY", "PXE", "UPI", "HUB")
@@ -74,11 +79,21 @@ class Holder:
 
 
 @dataclass(frozen=True, slots=True)
+class Mismatch:
+    """One way segments-manager disagrees with a cluster file, in plain words."""
+
+    cluster: ClusterRef
+    """The cluster file the sentence is about."""
+    detail: str
+
+
+@dataclass(frozen=True, slots=True)
 class SegmentRow:
     """A segment as the area shows it: segments-manager's record and who holds it."""
 
     record: SegmentRecord
     holders: tuple[Holder, ...]
+    mismatches: tuple[Mismatch, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,3 +143,47 @@ def holders_of(
 def unlinked(record: SegmentRecord) -> SegmentRow:
     """The record with its holders as names only (the day1 repo could not be read)."""
     return SegmentRow(record, tuple(Holder(n, None) for n in holder_names(record.cluster_name)))
+
+
+def with_mismatches(
+    rows: Sequence[SegmentRow], files: Mapping[ClusterRef, FileNetwork]
+) -> tuple[SegmentRow, ...]:
+    """The rows, each with where segments-manager disagrees with a cluster file (ADR-0039).
+
+    ``files`` is every cluster file that parses, with its network. Two checks,
+    from the segment's side:
+
+    - a file whose segment is the row's: ADR-0039's ``disagreements``, word
+      for word (not Allocated, another holder, another VLAN);
+    - a holder whose one file names another segment, or none.
+
+    Holders that are not day1 clusters (an MCE, a UPI cluster) are not
+    checked: Git has nothing to compare them with.
+    """
+    naming: dict[str, list[ClusterRef]] = {}
+    for ref in sorted(files, key=lambda r: (r.site, r.mce, r.name)):
+        if (segment := files[ref].segment) is not None:
+            naming.setdefault(segment, []).append(ref)
+    return tuple(
+        dataclasses.replace(
+            row, mismatches=_mismatches(row, naming.get(row.record.segment, ()), files)
+        )
+        for row in rows
+    )
+
+
+def _mismatches(
+    row: SegmentRow, naming: Sequence[ClusterRef], files: Mapping[ClusterRef, FileNetwork]
+) -> tuple[Mismatch, ...]:
+    found: list[Mismatch] = []
+    for ref in naming:
+        problems = disagreements(files[ref], row.record, cluster=ref.name)
+        found.extend(Mismatch(ref, problem) for problem in problems)
+    for holder in row.holders:
+        if holder.ref is None or (file := files.get(holder.ref)) is None:
+            continue
+        if file.segment is None:
+            found.append(Mismatch(holder.ref, "the file has no segment"))
+        elif file.segment != row.record.segment:
+            found.append(Mismatch(holder.ref, f"the file has segment {file.segment}, not this one"))
+    return tuple(dict.fromkeys(found))

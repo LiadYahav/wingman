@@ -24,11 +24,21 @@ export interface SegmentsView {
   q: string;
   /** Exactly one holder; a shared UPI segment matches when it has it. */
   cluster: string | null;
+  /** Only the segments where segments-manager disagrees with a cluster file. */
+  mismatch: boolean;
   /** `null`: segments-manager's order. */
   sort: SortState | null;
 }
 
-export const DEFAULT_VIEW: SegmentsView = { status: "all", site: null, types: [], q: "", cluster: null, sort: null };
+export const DEFAULT_VIEW: SegmentsView = {
+  status: "all",
+  site: null,
+  types: [],
+  q: "",
+  cluster: null,
+  mismatch: false,
+  sort: null,
+};
 
 const SEGMENTS_PATH = "/segments";
 
@@ -63,6 +73,7 @@ export function parseView(params: Pick<URLSearchParams, "get">): SegmentsView {
     types: orderTypes((params.get("type") ?? "").split(",")),
     q: params.get("q") ?? "",
     cluster: text(params.get("cluster")),
+    mismatch: params.get("mismatch") === "1",
     sort: parseSort(params.get("sort")),
   };
 }
@@ -76,6 +87,7 @@ export function serializeView(view: SegmentsView): string {
   if (types.length > 0) params.set("type", types.join(","));
   if (view.q.trim()) params.set("q", view.q);
   if (view.cluster) params.set("cluster", view.cluster);
+  if (view.mismatch) params.set("mismatch", "1");
   if (view.sort) params.set("sort", `${view.sort.desc ? "-" : ""}${view.sort.id}`);
   return params.toString();
 }
@@ -88,7 +100,14 @@ export function viewHref(view: SegmentsView): string {
 
 /** Whether anything narrows the rows (the sort does not). */
 export function isFiltered(view: SegmentsView): boolean {
-  return view.status !== "all" || view.site !== null || view.types.length > 0 || view.q.trim() !== "" || view.cluster !== null;
+  return (
+    view.status !== "all" ||
+    view.site !== null ||
+    view.types.length > 0 ||
+    view.q.trim() !== "" ||
+    view.cluster !== null ||
+    view.mismatch
+  );
 }
 
 /** The view with every filter cleared; the sort stays. */

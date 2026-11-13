@@ -116,6 +116,25 @@ export function TypeFilter({ types, value, onToggle }: { types: string[]; value:
   );
 }
 
+/** Only the rows where segments-manager disagrees with a cluster file; shown while any does, or while on. */
+export function MismatchToggle({ count, value, onChange }: { count: number; value: boolean; onChange: (on: boolean) => void }) {
+  if (count === 0 && !value) return null;
+  return (
+    <button
+      type="button"
+      aria-pressed={value}
+      onClick={() => onChange(!value)}
+      className={cn(
+        pill(value),
+        !value && "border-status-warning/40 text-status-warning-fg hover:border-status-warning hover:text-status-warning-fg"
+      )}
+    >
+      Disagrees with Git
+      <span className="tabular-nums opacity-70">{count}</span>
+    </button>
+  );
+}
+
 /** A filter the toolbar has no control for (the cluster page's link), as a chip that removes it. */
 export function FilterChip({ label, value, onRemove }: { label: string; value: string; onRemove: () => void }) {
   return (

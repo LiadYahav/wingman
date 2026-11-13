@@ -15,6 +15,7 @@ export function segment(overrides: Partial<Segment> = {}): Segment {
     cluster_name: "ocp4-prep-eyal-site1",
     allocated_at: "2026-10-02T09:12:40+00:00",
     holders: [],
+    mismatches: [],
   };
   const merged = { ...base, ...overrides };
   if (overrides.holders) return merged;

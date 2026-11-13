@@ -21,7 +21,7 @@ import { clearFilters, isFiltered, nextSort, orderTypes, toggleType, type Segmen
 import { SEGMENT_TYPES, type Segment, type SegmentList } from "@/types/segments";
 import { SEGMENT_COLUMNS } from "./segment-columns";
 import { SegmentsHeader } from "./segments-header";
-import { FilterChip, SegmentSearch, SiteFilter, StatusTabs, TypeFilter } from "./segments-toolbar";
+import { FilterChip, MismatchToggle, SegmentSearch, SiteFilter, StatusTabs, TypeFilter } from "./segments-toolbar";
 import { SiteCards, SiteCardsSkeleton } from "./site-cards";
 import { useSearchDraft, useSegmentsView } from "./use-segments-view";
 
@@ -104,6 +104,7 @@ interface TableProps {
 function SegmentsTable({ data, shown, view, setView, sites, visibility, onVisibility }: TableProps) {
   const search = useSearchDraft(view.q, (q) => setView({ ...view, q }));
   const counts = useMemo(() => statusCounts(data.segments, view), [data.segments, view]);
+  const disagreeing = useMemo(() => data.segments.filter((s) => s.mismatches.length > 0).length, [data.segments]);
   const types = useMemo(() => orderTypes([...SEGMENT_TYPES, ...data.segments.flatMap((s) => (s.type ? [s.type] : []))]), [data.segments]);
   const table = useDataTable<Segment>({
     data: shown,
@@ -127,6 +128,7 @@ function SegmentsTable({ data, shown, view, setView, sites, visibility, onVisibi
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <SiteFilter sites={sites} value={view.site} onChange={(site) => setView({ ...view, site })} />
         <TypeFilter types={types} value={view.types} onToggle={(type) => setView(toggleType(view, type))} />
+        <MismatchToggle count={disagreeing} value={view.mismatch} onChange={(mismatch) => setView({ ...view, mismatch })} />
         {view.cluster && <FilterChip label="Cluster" value={view.cluster} onRemove={() => setView({ ...view, cluster: null })} />}
       </div>
       <DataTable
@@ -134,7 +136,12 @@ function SegmentsTable({ data, shown, view, setView, sites, visibility, onVisibi
         label="Segments"
         sort={view.sort}
         onSort={(id) => isColumnId(id) && setView({ ...view, sort: nextSort(view.sort, id) })}
-        rowProps={(s) => ({ "data-testid": "segment-row", "data-segment": s.segment })}
+        rowProps={(s) => ({
+          "data-testid": "segment-row",
+          "data-segment": s.segment,
+          "data-mismatch": s.mismatches.length > 0 ? "true" : undefined,
+          className: s.mismatches.length > 0 ? "bg-status-warning/5" : undefined,
+        })}
         className="max-h-[70vh]"
         empty={
           data.segments.length === 0 ? (

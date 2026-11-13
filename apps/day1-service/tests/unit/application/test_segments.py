@@ -9,7 +9,7 @@ from wingman_core.domain.errors import GitUnavailableError, PermissionDeniedErro
 from wingman_day1.application.segments import FRESH_COOLDOWN_SECONDS, SegmentsService
 from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
-from wingman_day1.domain.segments import Holder, SegmentQuery
+from wingman_day1.domain.segments import Holder, Mismatch, SegmentQuery
 from wingman_day1.infrastructure.fake_segments import FakeSegmentLedger
 
 HERZI = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-herzi-site1")
@@ -25,7 +25,13 @@ class Clusters:
     async def clusters(self) -> list[Any]:
         if self.error is not None:
             raise self.error
-        return [SimpleNamespace(ref=HERZI)]
+        # herzi's file: the VLAN differs from the record's (1418)
+        values = SimpleNamespace(vlan_id=1410, dhcp_network="10.20.44.0")
+        unparsable = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-broken-site1")
+        return [
+            SimpleNamespace(ref=HERZI, values=values),
+            SimpleNamespace(ref=unparsable, values=None),
+        ]
 
 
 class Clock:
@@ -48,6 +54,9 @@ async def test_the_segments_come_with_their_holders_linked_to_day1() -> None:
     (row,) = view.rows
     assert row.holders == (Holder(HERZI.name, HERZI),)
     assert (view.clusters_error, view.fresh, view.unreadable) == (None, False, ())
+    assert row.mismatches == (
+        Mismatch(HERZI, "segments-manager has VLAN 1418 for this segment; the file has 1410"),
+    )
 
 
 async def test_the_query_is_segments_managers() -> None:
@@ -72,7 +81,7 @@ async def test_the_day1_repo_failing_lists_the_segments_unlinked_with_the_reason
     for error in (GitUnavailableError("GitLab answered 503"), PermissionDeniedError("no access")):
         view = await service(FakeSegmentLedger([RECORD]), Clusters(error)).segments()
         (row,) = view.rows
-        assert row.holders == (Holder(HERZI.name, None),)
+        assert (row.holders, row.mismatches) == ((Holder(HERZI.name, None),), ())
         assert view.clusters_error == f"{type(error).__name__.removesuffix('Error')}: {error}"
 
 

@@ -53,7 +53,7 @@ const SEGMENTS_MANAGER = {
 async function mockSegmentsArea(page: Page) {
   const amit = {
     segment: "10.20.90.0/24", site: SITE, vlan_id: 412, epg_name: "EPG_site2_HC_412", dhcp: true, status: "Allocated",
-    type: "HC", cluster_name: AMIT, allocated_at: null, holders: [{ name: AMIT, day1: { site: SITE, mce: MCE } }],
+    type: "HC", cluster_name: AMIT, allocated_at: null, holders: [{ name: AMIT, day1: { site: SITE, mce: MCE } }], mismatches: [],
   };
   await page.route("**/api/day1/segments/sites", (r) => json(r, SITES));
   await page.route("**/api/day1/segments/stats", (r) => json(r, STATS));

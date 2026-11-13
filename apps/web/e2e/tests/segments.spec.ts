@@ -11,7 +11,7 @@
 import { readFile } from "node:fs/promises";
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go } from "../fixtures/api-handlers";
-import { HERZI, SEGMENTS, forbidden, mockSegmentList, off, setUpSegments } from "../fixtures/segments";
+import { HERZI, HERZI_MISMATCH, SEGMENTS, forbidden, mockSegmentList, off, setUpSegments } from "../fixtures/segments";
 
 const areas = (page: Page) => page.getByRole("navigation", { name: "Areas" });
 const rows = (page: Page) => page.getByTestId("segment-row");
@@ -258,6 +258,41 @@ test.describe("The Segments page", () => {
     await expect(page.getByTestId("segments-unreadable")).toContainText("10.20.99.0/24: vlan_id is not a number");
     await expect(page.getByTestId("segments-clusters-error")).toContainText("GitUnavailable: GitLab answered 503");
     await expect(problem(page, "The site cards could not be loaded")).toContainText("answered 500 reading stats");
+  });
+
+  test("a row where segments-manager disagrees with the cluster file is marked, and can be shown alone", async ({ page }) => {
+    await setUpSegments(page);
+    await go(page, "/segments");
+    await expect(rows(page)).toHaveCount(8);
+    await expect(page.locator('[data-mismatch="true"]')).toHaveCount(1);
+    const herzi = page.locator('[data-segment="10.20.44.0/24"]');
+    await expect(herzi).toHaveAttribute("data-mismatch", "true");
+    await expect(page.getByTestId("segment-mismatch")).toHaveCount(1);
+
+    await herzi.getByRole("button", { name: "1 disagreement with the cluster file" }).click();
+    const list = page.getByTestId("segment-mismatches");
+    await expect(list).toContainText(HERZI_MISMATCH);
+    await expect(list.getByRole("link", { name: HERZI })).toHaveAttribute(
+      "href", `/clusters/${HERZI}?site=site1&mce=ocp4-prod-mce-site1-a`
+    );
+    await page.keyboard.press("Escape");
+
+    const toggle = page.getByRole("button", { name: /Disagrees with Git/ });
+    await expect(toggle).toContainText("1");
+    await toggle.click();
+    await expect(page).toHaveURL(/mismatch=1/);
+    await expect.poll(() => cidrs(page)).toEqual(["10.20.44.0/24"]);
+    await page.reload();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(rows(page)).toHaveCount(1);
+  });
+
+  test("no row disagrees: no marks and no toggle", async ({ page }) => {
+    await setUpSegments(page, { list: mockSegmentList({ segments: SEGMENTS.map((s) => ({ ...s, mismatches: [] })) }) });
+    await go(page, "/segments");
+    await expect(rows(page)).toHaveCount(8);
+    await expect(page.getByTestId("segment-mismatch")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Disagrees with Git/ })).toHaveCount(0);
   });
 
   test("no segments at all is an empty state, not an error", async ({ page }) => {

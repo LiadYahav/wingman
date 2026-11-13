@@ -137,7 +137,17 @@ async def test_every_segment_with_its_holders_joined_to_day1(
                 "day1": {"site": "site1", "mce": "ocp4-prod-mce-site1-a"},
             }
         ],
+        "mismatches": [
+            {
+                "cluster": "ocp4-prod-herzi-site1",
+                "site": "site1",
+                "mce": "ocp4-prod-mce-site1-a",
+                "detail": "segments-manager has VLAN 1418 for this segment; the file has 1410",
+            }
+        ],
     }
+    # The fixture's deliberate mismatch is the only one: every other file agrees
+    assert [s for s, row in rows.items() if row["mismatches"]] == ["10.20.44.0/24"]
     upi = rows["10.20.60.0/24"]
     assert upi["cluster_name"] == ["ocp4-upi-a", "ocp4-upi-b"]
     assert upi["holders"] == [

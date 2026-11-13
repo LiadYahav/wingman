@@ -3,7 +3,20 @@ import { compareSegments, filterSegments, matchesSearch, shownSegments, sortSegm
 import { free, segment } from "./testing";
 import { DEFAULT_VIEW, type SegmentsView } from "./view";
 
-const HERZI = segment({ segment: "10.20.44.0/24", vlan_id: 1418, epg_name: "EPG_site1_HC_1418", cluster_name: "ocp4-prod-herzi-site1" });
+const HERZI = segment({
+  segment: "10.20.44.0/24",
+  vlan_id: 1418,
+  epg_name: "EPG_site1_HC_1418",
+  cluster_name: "ocp4-prod-herzi-site1",
+  mismatches: [
+    {
+      cluster: "ocp4-prod-herzi-site1",
+      site: "site1",
+      mce: "ocp4-prod-mce-site1-a",
+      detail: "segments-manager has VLAN 1418 for this segment; the file has 1410",
+    },
+  ],
+});
 const UPI = segment({
   segment: "10.20.60.0/24",
   vlan_id: 1460,
@@ -63,6 +76,11 @@ describe("the filters", () => {
   it("matches one holder exactly, a shared list too, never a substring", () => {
     expect(cidrs(filterSegments(ALL, view({ cluster: "ocp4-upi-a" })))).toEqual(["10.20.60.0/24"]);
     expect(filterSegments(ALL, view({ cluster: "ocp4-upi" }))).toEqual([]);
+  });
+
+  it("keeps only the rows that disagree with a cluster file, when asked", () => {
+    expect(cidrs(filterSegments(ALL, view({ mismatch: true })))).toEqual(["10.20.44.0/24"]);
+    expect(statusCounts(ALL, view({ mismatch: true }))).toEqual({ all: 1, available: 0, allocated: 1 });
   });
 
   it("combines every filter with the search", () => {

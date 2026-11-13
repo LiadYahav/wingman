@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel
 
 from wingman_day1.domain.paths import ClusterRef
-from wingman_day1.domain.segments import Holder, SegmentRow, SegmentsView, SiteStats
+from wingman_day1.domain.segments import Holder, Mismatch, SegmentRow, SegmentsView, SiteStats
 
 
 class SitesOut(BaseModel):
@@ -87,6 +87,21 @@ class HolderOut(BaseModel):
         return cls(name=holder.name, day1=Day1PlaceOut.of(holder.ref))
 
 
+class MismatchOut(BaseModel):
+    """Where segments-manager disagrees with a cluster file: the file, and the sentence."""
+
+    cluster: str
+    site: str
+    mce: str
+    detail: str
+
+    @classmethod
+    def of(cls, mismatch: Mismatch) -> MismatchOut:
+        """From the domain."""
+        ref = mismatch.cluster
+        return cls(cluster=ref.name, site=ref.site, mce=ref.mce, detail=mismatch.detail)
+
+
 class SegmentOut(BaseModel):
     """One segment: segments-manager's record, unchanged, and its holders."""
 
@@ -101,6 +116,8 @@ class SegmentOut(BaseModel):
     """One name; a list for a shared ``UPI`` segment; ``None`` while Available."""
     allocated_at: str | None
     holders: list[HolderOut]
+    mismatches: list[MismatchOut]
+    """ADR-0039's checks from the segment's side; empty when they agree or Git says nothing."""
 
     @classmethod
     def of(cls, row: SegmentRow) -> SegmentOut:
@@ -118,6 +135,7 @@ class SegmentOut(BaseModel):
             cluster_name=list(holder) if isinstance(holder, tuple) else holder,
             allocated_at=record.allocated_at,
             holders=[HolderOut.of(h) for h in row.holders],
+            mismatches=[MismatchOut.of(m) for m in row.mismatches],
         )
 
 

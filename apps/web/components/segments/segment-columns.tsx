@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyCell } from "@/components/data-table/copy-cell";
+import { MismatchMarker } from "./mismatch-marker";
 import { clusterHref } from "@/lib/clusters";
 import { COLUMN_LABELS, dhcpLabel, isAllocated, statusLabel, type ColumnId } from "@/lib/segments/columns";
 import { cn } from "@/lib/utils";
@@ -87,11 +88,16 @@ export const SEGMENT_COLUMNS = [
   column.accessor("vlan_id", {
     header: COLUMN_LABELS.vlan_id,
     meta: meta("vlan_id", "tabular-nums"),
-    cell: (c) => <CopyCell value={c.getValue() === null ? null : String(c.getValue())} label="VLAN ID" className="font-semibold" />,
+    cell: (c) => (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+        <CopyCell value={c.getValue() === null ? null : String(c.getValue())} label="VLAN ID" className="font-semibold" />
+        <MismatchMarker segment={c.row.original} />
+      </span>
+    ),
   }),
   column.accessor("epg_name", {
     header: COLUMN_LABELS.epg_name,
-    meta: meta("epg_name", "max-w-72"),
+    meta: meta("epg_name"),
     cell: (c) => <CopyCell value={c.getValue()} label="EPG name" className="font-mono text-xs" />,
   }),
   column.accessor("segment", {

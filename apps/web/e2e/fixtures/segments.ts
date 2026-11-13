@@ -11,6 +11,8 @@ import { fulfillProblem, injectAdminAuth, injectViewerAuth, json, mockDashboardA
 import type { Segment, SegmentList, SegmentSites, SegmentStats } from "../../types/segments";
 
 export const HERZI = "ocp4-prod-herzi-site1";
+/** The fake fleet's deliberate disagreement (ADR-0039): segments-manager has VLAN 1418, the file 1410. */
+export const HERZI_MISMATCH = "segments-manager has VLAN 1418 for this segment; the file has 1410";
 const MCE_SITE1 = "ocp4-prod-mce-site1-a";
 
 function segment(overrides: Partial<Segment> & Pick<Segment, "segment">): Segment {
@@ -24,6 +26,7 @@ function segment(overrides: Partial<Segment> & Pick<Segment, "segment">): Segmen
     cluster_name: null,
     allocated_at: "2026-10-02T09:12:40+00:00",
     holders: [],
+    mismatches: [],
     ...overrides,
   };
 }
@@ -39,6 +42,7 @@ export const SEGMENTS: Segment[] = [
   segment({
     segment: "10.20.44.0/24", vlan_id: 1418, epg_name: "EPG_site1_HC_1418",
     cluster_name: HERZI, holders: [day1(HERZI)],
+    mismatches: [{ cluster: HERZI, site: "site1", mce: MCE_SITE1, detail: HERZI_MISMATCH }],
   }),
   segment({
     segment: "10.20.48.0/24", vlan_id: 1414, epg_name: "EPG_site1_HC_1414",

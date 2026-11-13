@@ -99,19 +99,22 @@ export function DataTable<T>({
               <td colSpan={columns}>{empty}</td>
             </tr>
           ) : (
-            rows.map((row) => (
-              <tr key={row.id} className="transition-colors hover:bg-muted/40" {...rowProps?.(row.original)}>
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    data-column={cell.column.id}
-                    className={cn("px-3 py-1.5 align-middle", cell.column.columnDef.meta?.className)}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            ))
+            rows.map((row) => {
+              const { className: rowClassName, ...extra } = rowProps?.(row.original) ?? {};
+              return (
+                <tr key={row.id} className={cn("transition-colors hover:bg-muted/40", rowClassName)} {...extra}>
+                  {row.getVisibleCells().map((cell) => (
+                    <td
+                      key={cell.id}
+                      data-column={cell.column.id}
+                      className={cn("px-3 py-1.5 align-middle", cell.column.columnDef.meta?.className)}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

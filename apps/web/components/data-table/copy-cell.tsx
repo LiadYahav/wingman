@@ -26,11 +26,11 @@ export function CopyCell({ value, label, className }: { value: string | null; la
       aria-label={`Copy ${label} ${value}`}
       title={`Copy ${label}`}
       className={cn(
-        "group inline-flex max-w-full items-center gap-1 rounded px-1 -mx-1 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50",
+        "group inline-flex items-center gap-1 whitespace-nowrap rounded px-1 -mx-1 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50",
         className
       )}
     >
-      <span className="truncate">{value}</span>
+      <span>{value}</span>
       <Copy aria-hidden className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60 group-focus-visible:opacity-60" />
     </button>
   );

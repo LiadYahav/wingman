@@ -2,9 +2,11 @@
 
 Read only. The segments come with their holders joined to the day1 repo's
 cluster files (read once per commit and cached, ADR-0035), so a holder that
-is a hosted cluster links to Wingman's page. The day1 repo failing never
-fails the page: the segments are listed with every holder unlinked and the
-reason. segments-manager failing is ``SegmentsManagerUnavailableError``.
+is a hosted cluster links to Wingman's page, and each row says where
+segments-manager disagrees with a cluster file (no further call). The day1
+repo failing never fails the page: the segments are listed with every holder
+unlinked, no checks, and the reason. segments-manager failing is
+``SegmentsManagerUnavailableError``.
 
 A ``fresh`` read (the Refresh button) is honoured at most once per
 ``FRESH_COOLDOWN_SECONDS`` per replica, so a held button cannot hammer
@@ -21,6 +23,7 @@ from typing import Final
 
 from wingman_core.domain.errors import GitUnavailableError, PermissionDeniedError
 from wingman_day1.application.clusters import ClusterFile, ClusterService
+from wingman_day1.domain.network import file_network
 from wingman_day1.domain.segments import (
     ALL_SEGMENTS,
     SegmentQuery,
@@ -30,6 +33,7 @@ from wingman_day1.domain.segments import (
     holders_of,
     refs_by_stem,
     unlinked,
+    with_mismatches,
 )
 from wingman_day1.ports import SegmentLedger
 
@@ -74,7 +78,12 @@ class SegmentsService:
             return SegmentsView(rows, listing.unreadable, clusters_error=files, fresh=fresh)
         refs = refs_by_stem(file.ref for file in files)
         rows = tuple(SegmentRow(r, holders_of(r, refs)) for r in listing.records)
-        return SegmentsView(rows, listing.unreadable, fresh=fresh)
+        networks = {
+            f.ref: file_network(f.values.vlan_id, f.values.dhcp_network)
+            for f in files
+            if f.values is not None
+        }
+        return SegmentsView(with_mismatches(rows, networks), listing.unreadable, fresh=fresh)
 
     def _may_read_fresh(self) -> bool:
         """Whether a fresh read is allowed now; taking it starts the next cool-down."""

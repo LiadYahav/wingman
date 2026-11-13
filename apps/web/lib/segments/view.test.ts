@@ -11,25 +11,26 @@ describe("the view in the URL", () => {
   });
 
   it("reads every filter and the sort", () => {
-    expect(parse("status=allocated&site=site2&type=upi,HC&q=herzi&cluster=ocp4-upi-a&sort=-vlan_id")).toEqual({
+    expect(parse("status=allocated&site=site2&type=upi,HC&q=herzi&cluster=ocp4-upi-a&mismatch=1&sort=-vlan_id")).toEqual({
       status: "allocated",
       site: "site2",
       types: ["HC", "UPI"],
       q: "herzi",
       cluster: "ocp4-upi-a",
+      mismatch: true,
       sort: { id: "vlan_id", desc: true },
     });
   });
 
   it("round-trips, in one canonical order", () => {
-    const view = parse("sort=epg_name&cluster=a b&q=10.20&type=UPI,HC&site=site1&status=available");
+    const view = parse("mismatch=1&sort=epg_name&cluster=a b&q=10.20&type=UPI,HC&site=site1&status=available");
     const query = serializeView(view);
-    expect(query).toBe("status=available&site=site1&type=HC%2CUPI&q=10.20&cluster=a+b&sort=epg_name");
+    expect(query).toBe("status=available&site=site1&type=HC%2CUPI&q=10.20&cluster=a+b&mismatch=1&sort=epg_name");
     expect(parse(query)).toEqual(view);
   });
 
   it("drops what it does not know, never throws", () => {
-    expect(parse("status=locked&sort=-nope&type=,,%20,a b,&site=%20&cluster=")).toEqual(DEFAULT_VIEW);
+    expect(parse("status=locked&sort=-nope&type=,,%20,a b,&site=%20&cluster=&mismatch=yes")).toEqual(DEFAULT_VIEW);
     expect(parse("sort=-").sort).toBeNull();
   });
 
@@ -45,7 +46,8 @@ describe("the view in the URL", () => {
   it("knows when it filters, and clears every filter but the sort", () => {
     expect(isFiltered(DEFAULT_VIEW)).toBe(false);
     expect(isFiltered({ ...DEFAULT_VIEW, sort: { id: "site", desc: false } })).toBe(false);
-    const busy = parse("status=available&site=site1&type=HC&q=x&cluster=c&sort=site");
+    expect(isFiltered({ ...DEFAULT_VIEW, mismatch: true })).toBe(true);
+    const busy = parse("status=available&site=site1&type=HC&q=x&cluster=c&mismatch=1&sort=site");
     expect(isFiltered(busy)).toBe(true);
     expect(clearFilters(busy)).toEqual({ ...DEFAULT_VIEW, sort: { id: "site", desc: false } });
   });
