@@ -193,5 +193,7 @@ stops at the resource name (ADR-0007), so both titles parse to `Update addon
 <team>/<chart>`, and approvals, the audit view and day1's reads of day2 titles
 treat them alike (`test_an_add_on_edit_titled_team_default_reads_as_one_titled_sig_values`,
 `test_an_add_on_edit_says_sig_values_and_one_opened_saying_team_default_still_reads`).
-The API's errors and the platform lints still say team default where they
-describe the API's model.
+Since 3.20.1 day2's errors, lint findings and warnings say Sig values too
+("edit its Sig values instead", "it falls back to its Sig values"); only
+docstrings and schema descriptions that document the API's names keep team
+default (`test_no_message_says_team_default`).

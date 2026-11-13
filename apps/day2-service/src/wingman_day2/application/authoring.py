@@ -413,7 +413,7 @@ class AuthoringService(PlanWriter):
         folder = layout.operators_dir(chart)
         if state.repo.tree.is_dir(folder):
             raise ChartAlreadyInstalledError(
-                f"{state.team.name} has {folder}/ already; edit its team default instead",
+                f"{state.team.name} has {folder}/ already; edit its Sig values instead",
                 details={"rule": "addon-exists", "team": state.team.name, "path": str(folder)},
             )
         sync = spec.sync.checked()

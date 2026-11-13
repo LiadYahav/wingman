@@ -301,7 +301,7 @@ class ChangeService:
         if not tree.is_dir(layout.operators_dir(chart)) and not spec.repourl:
             raise UnknownChartError(
                 f"{state.team.name} has no operators/{chart}/; give a repourl to install a chart "
-                "without a team default",
+                "that has no Sig values",
                 details={"team": state.team.name, "chart": chart},
             )
         self._check_xor(state, ref, chart, tree)
@@ -370,8 +370,8 @@ class ChangeService:
         if spec.version and spec.version != inherited.target_revision:
             if not spec.emergency_pin:
                 raise ChangeRefusedError(
-                    f"{app.ref.name} would get {app.chart} at {inherited.target_revision} (the "
-                    f"team default or its OCP-version pin). Writing {spec.version} into the "
+                    f"{app.ref.name} would get {app.chart} at {inherited.target_revision} (its "
+                    f"Sig values or their OCP-version pin). Writing {spec.version} into the "
                     "cluster folder is an emergency pin that detaches it from every future "
                     "upgrade; ask for it explicitly with emergency_pin, or change the pin in "
                     f"operators/{app.chart}/",
@@ -662,8 +662,8 @@ class ChangeService:
         if app.source is AppSource.FLEET_DEFAULT:
             raise ChangeRefusedError(
                 f"{app.chart} reaches {app.ref.name} as a fleet default, which cannot be pinned "
-                "for one cluster: its revision is the default's, the team default's or an "
-                "OCP-version pin's",
+                "for one cluster: its revision comes from the default, the Sig values or an "
+                "OCP-version pin",
                 details={"rule": "fleet-default-pin"},
             )
         own = layers[-1]
