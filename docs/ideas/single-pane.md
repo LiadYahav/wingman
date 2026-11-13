@@ -88,7 +88,7 @@ tag exists.
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
 | 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0046 | M | 1 for a place to show it |
 | 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand (3.17.0); full parity (decision 22) built for 3.21.0 |
-| 4 | Server Scan area | 0048 | L–XL | The user's go (decision 22); the team's tokens |
+| 4 | Server Scan area | 0048 | L–XL | Sites built (ADR-0048); the other pages follow, one PR each; the auditor and admin tokens with the pages that need them |
 | 5 | Hosted clusters and MCEs from cluster-navigator | 0049 | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
@@ -276,7 +276,12 @@ Never its `/api/logs` endpoints (open, unauthenticated: a finding for the team).
 
 ### 4. Server Scan area (ADR-0048)
 
-**Option C (decision 22), planned, waits on the user's go.** A top-bar
+**Status (2026-11-13): Sites built; the other pages follow**, page by page,
+one PR each (the user: "page over page, not all together"). The contract is
+`docs/notes/2026-11-13-server-scan-area-api.md`; its §8 lists what each
+later page needs.
+
+**Option C (decision 22).** A top-bar
 platform, "Server Scan", with server-scan's own sidebar (its pages below)
 and brand: every page, feature and button of server-scan's UI, writes
 included (decision 14). It is the one view of the server fleet in Wingman:
