@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import type { OpenedChanges } from "@/components/addons/change-result";
+import { DestinationLink } from "@/components/addons/destination-header";
 import { groupDestinations } from "@/components/addons/destinations";
 import { WriteError } from "@/components/addons/file-preview";
 import { YamlValuesField } from "@/components/addons/yaml-values-field";
@@ -196,7 +197,7 @@ export function DeployOnMces({ detail, panel, writes }: { detail: AddonDetail; p
           <ul className="divide-y rounded-lg border bg-card">
             {installed.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs" data-testid={`installed-${d.name}`}>
-                <span className="font-semibold">{d.name}</span>
+                <DestinationLink id={d.id} name={d.name} />
                 <span className="break-all font-mono text-[11px] text-muted-foreground">{d.own_folder ?? d.id}</span>
                 {writes.isAdmin && (
                   <button
@@ -249,7 +250,9 @@ export function DeployOnMces({ detail, panel, writes }: { detail: AddonDetail; p
                         <span className="sr-only">Deploy on {c.name}</span>
                       </label>
                       <div className="min-w-0 flex-1 space-y-0.5">
-                        <p className="font-semibold">{c.name}</p>
+                        <p>
+                          <DestinationLink id={c.id} name={c.name} />
+                        </p>
                         <p className="break-all font-mono text-[11px] text-muted-foreground">{c.id}</p>
                         {!c.registered && (
                           <p className="text-muted-foreground">

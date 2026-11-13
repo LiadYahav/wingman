@@ -80,7 +80,13 @@ hosted cluster, and to `/addons` for the hub, an MCE or a UPI cluster.
 
 Unchanged: the four kinds, the ids, `GET /api/day2/clusters` and
 `GET /api/day2/clusters/{id}` (a bare name with several candidates still
-lists them), and every charts page at `/clusters/<id>/addons`. The hub's, an
-MCE's, a UPI cluster's and a hosted cluster's that day1 does not know have no
-link in the UI now, except a lint finding that names them. Pinned by `apps/web/e2e/tests/day2-charts.spec.ts`
-(the redirect, the back links) and `page-states-day2.spec.ts`.
+lists them), and every charts page at `/clusters/<id>/addons`.
+
+The way in to a charts page that is not a hosted cluster's: an add-on's page
+links each destination it names (the rows per scope, Deploy on specific MCEs,
+the other UPI clusters). The hub is not named there, so its charts page is
+linked only from a lint finding that names it.
+
+Pinned by `apps/web/e2e/tests/day2-charts.spec.ts` (the redirect, the back
+links), `page-states-day2.spec.ts` and `addon-defaults.spec.ts` (an MCE's
+name opens its charts page).
