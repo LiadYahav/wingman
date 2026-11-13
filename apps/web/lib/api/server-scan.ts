@@ -5,12 +5,12 @@
  * treats as "off".
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, isApiError } from "@/lib/api-client";
 import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { SiteStatsList } from "@/types/server-scan";
-import type { ServerRowsAnswer } from "@/types/server-scan-servers";
+import type { MaintenanceAnswer, MaintenanceStart, ServerRowsAnswer } from "@/types/server-scan-servers";
 
 /**
  * As server-scan's own UI (its query client's `staleTime`): the Sites page is
@@ -36,6 +36,10 @@ const serverScanKeys = {
 const serverScanApi = {
   sites: () => api.get<SiteStatsList>("/api/day1/server-scan/sites"),
   servers: () => api.get<ServerRowsAnswer>("/api/day1/server-scan/servers"),
+  maintenance: (id: string, start: MaintenanceStart | null) => {
+    const path = `/api/day1/server-scan/servers/${encodeURIComponent(id)}/maintenance`;
+    return start ? api.put<MaintenanceAnswer>(path, start) : api.del<MaintenanceAnswer>(path);
+  },
 };
 
 /** A problem is day1's answer (403 for a viewer, 501 when off, 502 when server-scan fails): show it. Else once more, as server-scan's UI. */
@@ -76,5 +80,35 @@ export function useServerScanServers() {
     refetchIntervalInBackground: true,
     staleTime: 0,
     retry: retryUnlessProblem,
+  });
+}
+
+/** One server into maintenance (`start`, with its reason and expected end) or out of it (`null`). */
+interface MaintenanceVariables {
+  id: string;
+  start: MaintenanceStart | null;
+}
+
+/**
+ * A server's maintenance on or off (§8.5), behind day1's admin check. Never
+ * retried (ADR-0006): an unanswered change is `AMBIGUOUS_WRITE`. As
+ * server-scan's own hook: the row is patched from the answer at once, then
+ * the rows and the Sites counts are read again; after a failure too, so the
+ * row shows what server-scan has.
+ */
+export function useMaintenanceChange() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, start }: MaintenanceVariables) => serverScanApi.maintenance(id, start),
+    retry: false,
+    onSuccess: (answer) => {
+      client.setQueryData<ServerRowsAnswer>(serverScanKeys.servers, (data) =>
+        data ? { ...data, items: data.items.map((row) => (row.id === answer.id ? { ...row, maintenance: answer.maintenance } : row)) } : data
+      );
+    },
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: serverScanKeys.servers });
+      void client.invalidateQueries({ queryKey: serverScanKeys.sites });
+    },
   });
 }

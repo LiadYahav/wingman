@@ -73,3 +73,17 @@ export interface ServerRowsAnswer {
   /** Why the toggle does not work, in one line; null when it does. */
   maintenance_detail: string | null;
 }
+
+/** The answer to a maintenance change: the server's new maintenance (§8.3). */
+export interface MaintenanceAnswer {
+  id: string;
+  name: string;
+  maintenance: MaintenanceState;
+}
+
+/** `PUT …/maintenance`: both optional, as server-scan's API takes them. */
+export interface MaintenanceStart {
+  reason: string | null;
+  /** ISO 8601 date and time. */
+  expected_end: string | null;
+}

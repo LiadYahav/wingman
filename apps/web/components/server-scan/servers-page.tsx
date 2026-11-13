@@ -24,6 +24,7 @@ import type { SiteStats } from "@/types/server-scan";
 import type { ServerRow, ServerRowsAnswer } from "@/types/server-scan-servers";
 import { Blocked, isBlocked } from "./blocked";
 import { ClusterSidebar } from "./cluster-sidebar";
+import { maintenanceColumn } from "./maintenance-toggle";
 import { rowAccent, serverColumns } from "./server-columns";
 import { ActiveFilters, ServerDropdowns, ServerExports, ServerSearch, ServerToggles } from "./servers-toolbar";
 import { useServersView } from "./use-servers-view";
@@ -80,7 +81,8 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
   const search = useSearchDraft(view.search, (q) => setView(withChange(view, { search: q })), SEARCH_PAUSE_MS);
   const searchError = useMemo(() => parseSearch(search.draft).error, [search.draft]);
   const siteList = siteOptions(sites, model, view.multi.site_id);
-  const columns = useMemo(() => serverColumns(model.withMce), [model.withMce]);
+  const { maintenance_available: writable, maintenance_detail: why } = data;
+  const columns = useMemo(() => serverColumns(model.withMce, [maintenanceColumn(writable, why)]), [model.withMce, writable, why]);
   const table = useDataTable<ServerRow>({
     data: model.page.items,
     columns,

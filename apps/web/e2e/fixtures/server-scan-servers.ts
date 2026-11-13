@@ -140,3 +140,34 @@ export async function setUpServers(
   });
   return { reads: () => reads };
 }
+
+/** A maintenance change the page sent: its method, server id and body. */
+export interface MaintenanceCall {
+  method: string;
+  id: string;
+  body: unknown;
+}
+
+/**
+ * day1's maintenance routes (§8.3) over `answer`'s rows: a PUT puts the server
+ * into maintenance by `api-token-admin` (as server-scan records a token), a
+ * DELETE ends it, and the next read of the rows shows it. `fail` answers
+ * every change with a problem instead.
+ */
+export async function mockMaintenance(page: Page, answer: ServerRowsAnswer, fail?: Handler): Promise<MaintenanceCall[]> {
+  const calls: MaintenanceCall[] = [];
+  await page.route("**/api/day1/server-scan/servers/*/maintenance", (route) => {
+    const request = route.request();
+    const id = decodeURIComponent(new URL(request.url()).pathname.split("/").at(-2) ?? "");
+    calls.push({ method: request.method(), id, body: request.postData() ? JSON.parse(request.postData() ?? "null") : null });
+    if (fail) return fail(route);
+    const at = answer.items.findIndex((row) => row.id === id);
+    const start = request.method() === "PUT" ? (JSON.parse(request.postData() ?? "{}") as { reason: string | null }) : null;
+    const maintenance = start
+      ? { enabled: true, reason: start.reason, created_by: "api-token-admin" }
+      : { enabled: false, reason: null, created_by: null };
+    answer.items[at] = { ...answer.items[at], maintenance };
+    return json(route, { id, name: answer.items[at].name, maintenance });
+  });
+  return calls;
+}

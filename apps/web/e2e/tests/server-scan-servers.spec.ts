@@ -2,14 +2,15 @@
  * The Server Scan area's Servers page (mocked; docs/notes/2026-11-13-server-scan-area-api.md
  * §8, ADR-0048's 3.23.0 amendment): server-scan's fleet page in Wingman, its
  * columns, words, filters, search, sort, cluster sidebar, export and paging,
- * every filter in the URL under server-scan's names; the Sites counts link here.
+ * every filter in the URL under server-scan's names; the Sites counts link
+ * here; and its one write, a server's maintenance on and off.
  */
 
 import { readFile } from "node:fs/promises";
 import { test, expect, type Page } from "@playwright/test";
-import { go, held } from "../fixtures/api-handlers";
+import { fulfillProblem, go, held } from "../fixtures/api-handlers";
 import { failing, forbidden, off } from "../fixtures/server-scan";
-import { FLEET, bigFleet, mockServers, setUpServers } from "../fixtures/server-scan-servers";
+import { FLEET, bigFleet, mockMaintenance, mockServers, setUpServers } from "../fixtures/server-scan-servers";
 import { readXlsx } from "../fixtures/xlsx";
 
 const PAGE = "/server-scan/servers";
@@ -45,7 +46,7 @@ test.describe("The Servers page", () => {
     await expect(summary(page)).toHaveText("12 servers");
     await expect(page.getByTestId("ss-servers-updated")).toContainText("Updated 13/11/2026");
     await expect(page.getByRole("table", { name: "Servers" }).locator("thead th")).toHaveText([
-      "Name", "BMC", "Installation", "MCE", "Cluster", "Model", "State",
+      "Name", "BMC", "Installation", "MCE", "Cluster", "Model", "State", "Maintenance",
     ]);
     // Sorted by name, naturally
     await expect.poll(async () => (await names(page))[0]).toBe("hpe-dl380-site2-stale-10");
@@ -290,5 +291,103 @@ test.describe("The Servers page's states", () => {
     await page.getByTestId("ss-servers-no-matches").getByRole("button", { name: "Clear filters" }).click();
     await expect(rows(page)).toHaveCount(12);
     expect(FLEET).toHaveLength(12);
+  });
+});
+
+test.describe("Maintenance on and off", () => {
+  const toggle = (page: Page, name: string) => row(page, name).getByTestId("ss-maintenance-toggle");
+  const dialog = (page: Page) => page.getByTestId("ss-maintenance-dialog");
+
+  test("on: server-scan's dialog asks why, with the expected end, and the row shows it", async ({ page }) => {
+    const answer = mockServers(structuredClone(FLEET));
+    await setUpServers(page, { servers: answer });
+    const calls = await mockMaintenance(page, answer);
+    await go(page, PAGE);
+    const button = toggle(page, "ocp-dell-r660-site1-node-01");
+    await expect(button).toHaveAccessibleName("Put ocp-dell-r660-site1-node-01 into maintenance");
+    await button.click();
+    await expect(dialog(page).getByRole("heading")).toHaveText("Put into maintenance");
+    await expect(dialog(page)).toContainText("ocp-dell-r660-site1-node-01");
+    await expect(dialog(page)).toContainText("Why is it going into maintenance?");
+    await expect(dialog(page)).toContainText("Include the word “donor” to mark it as a parts donor.");
+    await expect(dialog(page).getByRole("textbox", { name: /^Why is it going/ })).toHaveAttribute("placeholder", "Replacing PSU 2 — INC-4417");
+    // Cancel sends nothing
+    await dialog(page).getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect(calls).toHaveLength(0);
+    await button.click();
+    await dialog(page).getByRole("textbox", { name: /^Why is it going/ }).fill("  Replacing DIMM A1 — INC-5000  ");
+    await dialog(page).getByLabel(/Expected end/).fill("2026-11-14T16:30");
+    await dialog(page).getByRole("button", { name: "Start maintenance" }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe("PUT");
+    expect(calls[0].id).toBe("srv_ocp-dell-r660-site1-node-01");
+    const body = calls[0].body as { reason: string; expected_end: string };
+    expect(body.reason).toBe("Replacing DIMM A1 — INC-5000");
+    expect(new Date(body.expected_end).getTime()).toBe(new Date(2026, 10, 14, 16, 30).getTime());
+    const chip = row(page, "ocp-dell-r660-site1-node-01").getByTestId("ss-maint-chip");
+    await expect(chip).toHaveText("⏸Maint");
+    await expect(chip).toHaveAttribute("title", "Replacing DIMM A1 — INC-5000 - by API token (admin)");
+    await expect(toggle(page, "ocp-dell-r660-site1-node-01")).toHaveAttribute("data-state", "on");
+  });
+
+  test("an empty reason and no expected end are sent as null, as server-scan allows", async ({ page }) => {
+    const answer = mockServers(structuredClone(FLEET));
+    await setUpServers(page, { servers: answer });
+    const calls = await mockMaintenance(page, answer);
+    await go(page, PAGE);
+    await toggle(page, "ocp-dell-r660-site1-node-01").click();
+    await dialog(page).getByRole("button", { name: "Start maintenance" }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect(calls[0].body).toEqual({ reason: null, expected_end: null });
+  });
+
+  test("off: one click ends it, as server-scan", async ({ page }) => {
+    const answer = mockServers(structuredClone(FLEET));
+    await setUpServers(page, { servers: answer });
+    const calls = await mockMaintenance(page, answer);
+    await go(page, PAGE);
+    const button = toggle(page, "ocp-dell-r660-site1-node-03");
+    await expect(button).toHaveAccessibleName("End maintenance on ocp-dell-r660-site1-node-03");
+    await button.click();
+    await expect(row(page, "ocp-dell-r660-site1-node-03").getByTestId("ss-maint-chip")).toHaveCount(0);
+    expect(calls).toEqual([{ method: "DELETE", id: "srv_ocp-dell-r660-site1-node-03", body: null }]);
+    await expect(dialog(page)).toHaveCount(0);
+  });
+
+  test("without server-scan's admin token the toggle is greyed out with day1's one line", async ({ page }) => {
+    const detail =
+      "Maintenance needs server-scan's admin token: add the key admin-token to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN).";
+    const answer = mockServers(structuredClone(FLEET), { maintenance_available: false, maintenance_detail: detail });
+    await setUpServers(page, { servers: answer });
+    const calls = await mockMaintenance(page, answer);
+    await go(page, PAGE);
+    const button = toggle(page, "ocp-dell-r660-site1-node-01");
+    await expect(button).toHaveAttribute("aria-disabled", "true");
+    await expect(button).toHaveAttribute("title", detail);
+    // Playwright waits for an aria-disabled button: force the click, which does nothing
+    await button.click({ force: true });
+    await toggle(page, "ocp-dell-r660-site1-node-03").click({ force: true });
+    await expect(dialog(page)).toHaveCount(0);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("an unanswered change says so in the dialog, and is not sent again", async ({ page }) => {
+    const answer = mockServers(structuredClone(FLEET));
+    await setUpServers(page, { servers: answer });
+    const detail = "server-scan did not answer putting srv_ocp-dell-r660-site1-node-01 into maintenance: it may have changed. Look at the row before trying again.";
+    const calls = await mockMaintenance(page, answer, (route) => fulfillProblem(route, 504, "AMBIGUOUS_WRITE", detail));
+    await go(page, PAGE);
+    await toggle(page, "ocp-dell-r660-site1-node-01").click();
+    await dialog(page).getByRole("textbox", { name: /^Why is it going/ }).fill("PSU");
+    await dialog(page).getByRole("button", { name: "Start maintenance" }).click();
+    await expect(dialog(page).getByRole("alert")).toHaveText(detail);
+    expect(calls).toHaveLength(1);
+    // Ending one that fails is a toast
+    await dialog(page).getByRole("button", { name: "Cancel" }).click();
+    await toggle(page, "ocp-dell-r660-site1-node-03").click();
+    await expect(page.getByText(/Maintenance on ocp-dell-r660-site1-node-03 was not ended/)).toBeVisible();
+    expect(calls).toHaveLength(2);
   });
 });
