@@ -13,8 +13,9 @@ import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessages, isApiError } from "@/lib/api-client";
-import { useRefreshSegments, useSegmentList, useSegmentSites, useSegmentStats } from "@/lib/api/segments";
+import { useRefreshSegments, useSegmentList, useSegmentSites, useSegmentStats, type RefreshFailure } from "@/lib/api/segments";
 import { COLUMN_IDS, COLUMN_LABELS, isColumnId } from "@/lib/segments/columns";
+import { connection, type Attempt } from "@/lib/segments/connection";
 import { segmentsCsv, segmentsTable } from "@/lib/segments/csv";
 import { baseSegments, shownSegments, statusCounts } from "@/lib/segments/filter";
 import { clearFilters, isFiltered, nextSort, type SegmentsView } from "@/lib/segments/view";
@@ -80,6 +81,20 @@ function Notices({ data, error }: { data: SegmentList; error: unknown }) {
       )}
     </>
   );
+}
+
+/**
+ * The page's refreshes so far: the list's last good read, its last failed one
+ * (TanStack Query keeps that error beside the last good data until a read
+ * succeeds), and a failed Refresh.
+ */
+function attempts(list: ReturnType<typeof useSegmentList>, failed: RefreshFailure | null): Attempt[] {
+  const failure = (error: unknown) => errorMessages(error)[0];
+  return [
+    { at: list.dataUpdatedAt, failure: null },
+    ...(list.error ? [{ at: list.errorUpdatedAt, failure: failure(list.error) }] : []),
+    ...(failed ? [{ at: failed.at, failure: failure(failed.error) }] : []),
+  ];
 }
 
 function TableSkeleton() {
@@ -171,7 +186,7 @@ export function SegmentsPage() {
   const list = useSegmentList();
   const stats = useSegmentStats();
   const sites = useSegmentSites();
-  const { refresh, refreshing } = useRefreshSegments();
+  const { refresh, refreshing, failed } = useRefreshSegments();
   const [visibility, setVisibility] = useStoredVisibility(COLUMNS_KEY);
   const [exporting, setExporting] = useState(false);
   const blocked = isApiError(list.error, "FORBIDDEN") || isApiError(list.error, "FEATURE_DISABLED");
@@ -212,6 +227,7 @@ export function SegmentsPage() {
       <SegmentsHeader
         summary={summary}
         updatedAt={data ? list.dataUpdatedAt : null}
+        connection={connection(attempts(list, failed))}
         shown={data && !blocked ? shown.length : null}
         refreshing={refreshing}
         onRefresh={() => void onRefresh()}

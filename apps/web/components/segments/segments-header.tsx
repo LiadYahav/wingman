@@ -3,20 +3,47 @@
 import { useEffect, useState } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SEGMENTS_REFRESH_MS } from "@/lib/api/segments";
+import type { Connection } from "@/lib/segments/connection";
 import { updatedAgo } from "@/lib/segments/sites";
 import { cn } from "@/lib/utils";
 
-/** "Updated 12 s ago · every 30 s", ticking while the page is open. */
-function Updated({ at }: { at: number }) {
+/**
+ * The original's online/offline state, as a dot: green while segments-manager
+ * answered the last refresh, red (its tooltip says why) while it did not and
+ * the page shows the last good data.
+ */
+function ConnectionDot({ connection }: { connection: Connection }) {
+  const online = connection.state === "online";
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        aria-label={connection.label}
+        data-testid="segments-connection"
+        data-state={connection.state}
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <span aria-hidden className={cn("h-2 w-2 rounded-full", online ? "bg-status-ready" : "bg-destructive animate-pulse")} />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{connection.label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** "● Updated 12 s ago · every 30 s", ticking while the page is open. */
+function Updated({ at, connection }: { at: number; connection: Connection }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 5_000);
     return () => clearInterval(timer);
   }, []);
   return (
-    <span className="text-xs text-muted-foreground" data-testid="segments-updated">
-      Updated {updatedAgo(at, Math.max(now, at))} · every {SEGMENTS_REFRESH_MS / 1000} s
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <ConnectionDot connection={connection} />
+      <span data-testid="segments-updated">
+        Updated {updatedAgo(at, Math.max(now, at))} · every {SEGMENTS_REFRESH_MS / 1000} s
+      </span>
     </span>
   );
 }
@@ -59,6 +86,7 @@ function Exports({ shown, exporting, onCsv, onExcel }: { shown: number; exportin
 export function SegmentsHeader({
   summary,
   updatedAt,
+  connection,
   shown,
   refreshing,
   onRefresh,
@@ -69,6 +97,8 @@ export function SegmentsHeader({
   summary: string;
   /** When the list was last read; `null` before the first read. */
   updatedAt: number | null;
+  /** Whether segments-manager answered the last refresh. */
+  connection: Connection;
   /** How many rows the exports hold; `null` hides the actions (nothing to act on). */
   shown: number | null;
   refreshing: boolean;
@@ -90,7 +120,7 @@ export function SegmentsHeader({
       </div>
       {shown !== null && (
         <div className="flex flex-wrap items-center gap-2">
-          {updatedAt !== null && <Updated at={updatedAt} />}
+          {updatedAt !== null && <Updated at={updatedAt} connection={connection} />}
           <button
             type="button"
             onClick={onRefresh}

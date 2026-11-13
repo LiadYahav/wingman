@@ -3,8 +3,10 @@
 The **Segments** area (`/segments`) is segments-manager's read-only page
 rebuilt in Wingman's own design: per-site cards, then every segment in one
 table, with the original's columns and words (workstream 3 of
-`docs/ideas/single-pane.md`, ADR-0047). It is an **alpha**: the user looks
-at it, then decides what stays (§7 lists what was left out on purpose).
+`docs/ideas/single-pane.md`, ADR-0047). It was built as an **alpha**
+(3.15.0); since 3.21.0 it does everything the original's page does (the
+user's decision 22, ADR-0047's second amendment): §7 lists the alpha's cuts,
+now built, and what is still not here.
 
 - **segments-manager's API does not change, and nothing is written to it.**
   day1 calls four of its open GETs (`/api/sites`, `/api/stats`,
@@ -198,6 +200,15 @@ the area and the page says it is not set up.
   Since 3.21.0 the Type column's filter replaces the alpha's Type row.
 - **Fresh data**: the page re-reads every 30 seconds while it is open
   (`fresh=false`), and Refresh reads fresh (`fresh=true`, then the cards).
+- **The connection dot** (the original's online/offline state; since
+  3.21.0), beside "Updated … · every 30 s": green while segments-manager
+  answered the last refresh (the 30-second re-read or Refresh, whichever
+  came last); red when it did not, its tooltip saying "segments-manager
+  didn't answer the last refresh: <reason>; showing the last good data". The
+  page keeps showing the last good rows, never a blank table, with the
+  failed re-read's problem above them, and keeps re-reading: the next good
+  read turns the dot green. No extra call: the original's 10-second
+  `/api/health` heartbeat is not copied.
 - **Every filter lives in the URL**, so a view can be shared and linked:
 
 | Parameter | Meaning |
@@ -234,6 +245,7 @@ cached.
   (§5, ADR-0047's second amendment).*
 - **No connection-status dot.** Wingman's error state replaces it: a failed
   read shows the problem, and the next 30-second re-read clears it.
+  *Built in 3.21.0: the dot beside "Updated" (§5).*
 - **Never the original's `/api/logs` endpoints** (the raw application log,
   served without a token).
 - **No per-column filter popovers.** A Type filter row instead.

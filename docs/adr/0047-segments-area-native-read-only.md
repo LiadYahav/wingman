@@ -175,6 +175,15 @@ cuts are built; the original's `/api/logs` never is.
     only on its own CDN, outside the npm registry and so outside the
     air-gapped mirror. ExcelJS (4.4.0, 2023) brings nine dependencies and
     21 MB for a one-sheet file.
+- **The connection dot** beside "Updated … · every 30 s": green while
+  segments-manager answered the last refresh, red with the reason in its
+  tooltip when it did not. The last refresh is the 30-second re-read or
+  the Refresh button, whichever ended last (`lib/segments/connection.ts`).
+  The page keeps the last good rows (TanStack Query keeps them beside the
+  error) and the failed re-read's problem above them. The original tracks
+  this state silently, pauses its re-reads while offline, and asks
+  `/api/health` every 10 seconds to find out. Wingman shows it, adds no
+  call, and keeps re-reading, so the next good read turns it green.
 - **Rejected: TanStack Table's own column filtering** (`getFilteredRowModel`
   and faceted values). Its faceted values come from the rows the other
   columns' filters keep, not the original's base rows. And the page's
@@ -183,9 +192,10 @@ cuts are built; the original's `/api/logs` never is.
 
 Verification: `apps/web/lib/table/column-filters.test.ts`,
 `apps/web/lib/table/export.test.ts`,
-`apps/web/lib/segments/{view,filter,csv}.test.ts` (Vitest), and
+`apps/web/lib/segments/{view,filter,csv,connection}.test.ts` (Vitest),
 `apps/web/e2e/tests/segments-columns.spec.ts` (it reads the downloaded
-`.xlsx` back and compares it with the CSV).
+`.xlsx` back and compares it with the CSV), and the dot's tests in
+`apps/web/e2e/tests/segments.spec.ts`.
 
 ## Verification
 

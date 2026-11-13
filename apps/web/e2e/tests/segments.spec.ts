@@ -4,9 +4,9 @@
  * cards, then every segment with the original's columns and words; status
  * tabs, the site filter, a search and the sort, all in the URL; a column
  * picker kept per browser; copy on click; the CSV of exactly what is shown;
- * Refresh and a re-read every 30 seconds. Admins only, through the top bar's
- * area switch; off without segments-manager. The column filters, the Excel
- * export and the connection dot: segments-columns.spec.ts.
+ * Refresh and a re-read every 30 seconds, with the connection dot. Admins
+ * only, through the top bar's area switch; off without segments-manager.
+ * The column filters and the Excel export: segments-columns.spec.ts.
  */
 
 import { readFile } from "node:fs/promises";
@@ -225,7 +225,7 @@ test.describe("The Segments page", () => {
       reads.list.push({ fresh: true });
       return route.fulfill({ json: mockSegmentList({ segments: SEGMENTS.slice(0, 2), fresh: true }) });
     });
-    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
     await expect(page.getByText("Read fresh from segments-manager")).toBeVisible();
     await expect(rows(page)).toHaveCount(2);
     expect(reads.list.at(-1)).toEqual({ fresh: true });
@@ -241,6 +241,51 @@ test.describe("The Segments page", () => {
     await page.clock.runFor(31_000);
     await expect.poll(() => reads.list.length).toBeGreaterThan(before);
     expect(reads.list.every((read) => !read.fresh)).toBe(true);
+  });
+
+  test("the connection dot: green while segments-manager answers, red with why when a re-read fails, the rows kept", async ({ page }) => {
+    await page.clock.install();
+    await setUpSegments(page);
+    await go(page, "/segments");
+    await expect(rows(page)).toHaveCount(8);
+    const dot = page.getByTestId("segments-connection");
+    await expect(dot).toHaveAttribute("data-state", "online");
+    await expect(dot).toHaveAccessibleName("segments-manager answered the last refresh");
+
+    // The next re-read fails: red, the reason in its tooltip, the last good rows still shown
+    await page.route(/\/api\/day1\/segments(\?.*)?$/, (route) =>
+      fulfillProblem(route, 502, "DEPENDENCY_UNAVAILABLE", "segments-manager answered 503 listing segments")
+    );
+    await page.clock.runFor(31_000);
+    const why = "segments-manager didn't answer the last refresh: segments-manager answered 503 listing segments; showing the last good data";
+    await expect(dot).toHaveAttribute("data-state", "offline");
+    await expect(dot).toHaveAccessibleName(why);
+    await expect(rows(page)).toHaveCount(8);
+    await expect(page.getByTestId("segments-updated")).toBeVisible();
+    await dot.hover();
+    await page.clock.runFor(1_000); // the tooltip's opening delay
+    await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText(why);
+
+    // segments-manager answers again: green
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await setUpSegments(page);
+    await page.clock.runFor(31_000);
+    await expect(dot).toHaveAttribute("data-state", "online");
+  });
+
+  test("a failed Refresh turns the dot red and keeps the rows", async ({ page }) => {
+    await setUpSegments(page);
+    await go(page, "/segments");
+    await expect(rows(page)).toHaveCount(8);
+    await page.route(/\/api\/day1\/segments\?fresh=true$/, (route) =>
+      fulfillProblem(route, 502, "DEPENDENCY_UNAVAILABLE", "segments-manager did not answer in 5 s")
+    );
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(page.getByText("Refresh failed: segments-manager did not answer in 5 s")).toBeVisible();
+    const dot = page.getByTestId("segments-connection");
+    await expect(dot).toHaveAttribute("data-state", "offline");
+    await expect(dot).toHaveAccessibleName(/segments-manager did not answer in 5 s; showing the last good data$/);
+    await expect(rows(page)).toHaveCount(8);
   });
 
   test("loading, then the problem when segments-manager fails", async ({ page }) => {
