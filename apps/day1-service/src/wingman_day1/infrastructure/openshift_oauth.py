@@ -16,10 +16,9 @@ opaque token.
 
 from __future__ import annotations
 
-import ssl
 import time
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Final
 from urllib.parse import urlencode
 
 import httpx
@@ -28,14 +27,12 @@ from pydantic import SecretStr
 from wingman_core.observability.metrics import Dependency, WingmanMetrics
 from wingman_day1.domain.auth import Identity
 from wingman_day1.domain.errors import IdentityError, IdentityUnavailableError
+from wingman_day1.infrastructure.http import JSON, json_client
 from wingman_day1.infrastructure.observed import OAuthOperation, Observer, Timer
 
 OAUTH_SCOPE: Final = "user:info"
 _DISCOVERY_PATH: Final = "/.well-known/oauth-authorization-server"
 _USER_PATH: Final = "/apis/user.openshift.io/v1/users/~"
-
-JSON = Any
-"""A decoded JSON value; narrowed where it is read."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,13 +76,10 @@ class OpenShiftOAuth:
         self._redirect_uri = redirect_uri
         self._endpoints: _Endpoints | None = None
         self._observer = Observer(Dependency.OPENSHIFT_OAUTH, metrics, timer=timer)
-        self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout_seconds),
-            verify=verify
-            if isinstance(verify, bool)
-            else ssl.create_default_context(cafile=verify),
+        self._client = json_client(
+            verify=verify,
+            timeout_seconds=timeout_seconds,
             transport=transport,
-            headers={"Accept": "application/json"},
         )
 
     async def aclose(self) -> None:

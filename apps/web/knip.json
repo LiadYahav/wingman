@@ -1,0 +1,4 @@
+{
+  "ignoreExportsUsedInFile": { "interface": true, "type": true },
+  "ignoreIssues": { "components/ui/**": ["exports"] }
+}

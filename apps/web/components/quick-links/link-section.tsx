@@ -16,7 +16,7 @@ const GRID: Record<number, string> = {
   6: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6",
 };
 
-export const gridFor = (columns: number): string => GRID[Math.min(6, Math.max(1, Math.round(columns)))] ?? GRID[4];
+const gridFor = (columns: number): string => GRID[Math.min(6, Math.max(1, Math.round(columns)))] ?? GRID[4];
 
 export function LinkSection({ section }: { section: QuickLinkSection }) {
   const headingId = `quick-links-${section.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;

@@ -98,7 +98,7 @@ const LOCK_OPTIONS = [
  * exactly this value). `notEnforced`: the saved lock breaks a rule, so a
  * create does not enforce it (it is not in the flavor's `enforced_locks`).
  */
-export function LockControl({
+function LockControl({
   locked,
   onChange,
   label,
@@ -123,7 +123,7 @@ export function LockControl({
 }
 
 /** What a value's lock state means for a cluster, in one line. */
-export function lockHint(locked: boolean, empty: boolean): string {
+function lockHint(locked: boolean, empty: boolean): string {
   if (locked) return "Fixed: every cluster gets exactly this value.";
   if (empty) return "Not set: each cluster fills it in.";
   return "Prefilled: a cluster may change it.";

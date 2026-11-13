@@ -10,7 +10,6 @@
  * with a retry.
  */
 
-import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, isApiError } from "@/lib/api-client";
 import type { Placement, PlacementCandidate, PlacementCheck } from "@/types";
@@ -26,7 +25,7 @@ const OWNER = /^[0-9]{1,10}$/;
 /** An InfraEnv is a Kubernetes name: one DNS-1123 label. */
 const INFRA_ENV = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 /** The replicas day1 accepts in a need. */
-export const MAX_NEED_REPLICAS = 1000;
+const MAX_NEED_REPLICAS = 1000;
 
 /**
  * What the form asks placement about. Only a valid owner (1 to 10 digits) is
@@ -73,7 +72,7 @@ export function placementNeeds(nodepools: unknown): string[] {
  * need is one `need`. With no need, an empty `need=` tells day1 the nodepools
  * name no node type yet, so it does not fall back to the flavor's presets.
  */
-export function placementPath(query: PlacementQuery): string {
+function placementPath(query: PlacementQuery): string {
   const params = new URLSearchParams();
   const { needs = [], ...single } = query;
   for (const [key, value] of Object.entries(single)) if (value) params.set(key, value);
@@ -96,16 +95,6 @@ export function usePlacement(query: PlacementQuery | null) {
     refetchOnWindowFocus: true,
     retry: false,
   });
-}
-
-/** `value`, once it has stayed the same for `ms`. */
-export function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
 }
 
 /** A 409 from preview or create because Wingman's pick changed since the form showed it: the new pick. */

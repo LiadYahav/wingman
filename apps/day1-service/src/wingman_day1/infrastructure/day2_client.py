@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Final
+from typing import Final
 from urllib.parse import quote
 
 import httpx
@@ -33,16 +33,11 @@ from wingman_day1.domain.addons import (
 )
 from wingman_day1.domain.errors import Day2UnavailableError
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.infrastructure.http import JSON, NOT_SENT, json_client
 from wingman_day1.infrastructure.observed import Day2Operation, Observer, Timer
-
-JSON = Any
-"""A decoded JSON value; narrowed where it is read."""
 
 APPROVALS_PATH: Final = "/api/day2/approvals"
 """Day2's open Wingman MRs across every team repo (``list[MRDetailOut]``)."""
-
-NOT_SENT: Final = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
-"""Transport errors that happen before a request leaves: nothing reached day2."""
 
 REFUSALS: Final = frozenset({404, 409, 422})
 """Statuses with which day2 refuses an install it did not act on (its RFC 9457 problems)."""
@@ -50,17 +45,6 @@ REFUSALS: Final = frozenset({404, 409, 422})
 CHECK_FIRST: Final = "Read its open installs on the cluster before asking again."
 TEAM_READ_ONLY: Final = "TEAM_READ_ONLY"
 """Day2's 403 for a team that gave Wingman no write access (ADR-0043): that team's refusal."""
-
-
-def _client(
-    base_url: str, timeout_seconds: float, transport: httpx.AsyncBaseTransport | None
-) -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        base_url=base_url.rstrip("/"),
-        timeout=httpx.Timeout(timeout_seconds),
-        transport=transport,
-        headers={"Accept": "application/json"},
-    )
 
 
 def _addons_path(cluster: ClusterRef, suffix: str = "") -> str:
@@ -83,7 +67,9 @@ class HttpDay2Addons:
         """Call day2 at ``base_url`` (e.g. ``http://wingman-day2:8002``) as ``token()``."""
         self._token = token
         self._observer = Observer(Dependency.DAY2, metrics, timer=timer)
-        self._client = _client(base_url, timeout_seconds, transport)
+        self._client = json_client(
+            base_url=base_url, timeout_seconds=timeout_seconds, transport=transport
+        )
 
     async def aclose(self) -> None:
         """Close the HTTP client."""
@@ -141,7 +127,9 @@ class HttpDay2Installs:
         """Call day2 at ``base_url`` as ``token()``; an install commits per team, so allow time."""
         self._token = token
         self._observer = Observer(Dependency.DAY2, metrics, timer=timer)
-        self._client = _client(base_url, timeout_seconds, transport)
+        self._client = json_client(
+            base_url=base_url, timeout_seconds=timeout_seconds, transport=transport
+        )
 
     async def aclose(self) -> None:
         """Close the HTTP client."""

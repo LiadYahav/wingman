@@ -11,7 +11,7 @@ import { api } from "@/lib/api-client";
 import type { RolloutState, RolloutStatus } from "@/types";
 
 /** How often a rollout that is opening MRs is read again. */
-export const ROLLOUT_POLL_MS = 3_000;
+const ROLLOUT_POLL_MS = 3_000;
 
 export function rolloutPath(spec: string): string {
   return `/api/day1/specs/${encodeURIComponent(spec)}/rollout`;

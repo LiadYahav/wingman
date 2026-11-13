@@ -14,11 +14,11 @@ import type { ClusterNodes, NodeState, ServerRecord, UninstallNodeRequest, Workf
 /** The nodes, or "off": day1 answers 501 FEATURE_DISABLED when it cannot read the MCE (live status is off). */
 export type NodesRead = { off: false; data: ClusterNodes } | { off: true; detail: string };
 
-export const nodesKey = (name: string) => ["clusters", name, "nodes"] as const;
+const nodesKey = (name: string) => ["clusters", name, "nodes"] as const;
 
 /** How often the nodes are read again while something moves (an update, a Machine coming or going, a run), and otherwise. */
-export const BUSY_POLL_MS = 10_000;
-export const IDLE_POLL_MS = 60_000;
+const BUSY_POLL_MS = 10_000;
+const IDLE_POLL_MS = 60_000;
 
 /** A Machine on its way somewhere: worth watching. A `waiting` one can wait for hours, so it is not. */
 const MOVING: ReadonlySet<NodeState> = new Set(["deleting", "installing", "joining"]);
@@ -28,7 +28,7 @@ const nodesPath = (name: string) => `/api/day1/clusters/${encodeURIComponent(nam
 export const isRunning = (run: WorkflowRun | null | undefined): boolean => run?.status === "running";
 
 /** Something on the page is changing: read it again soon. */
-export function isBusy(data: ClusterNodes): boolean {
+function isBusy(data: ClusterNodes): boolean {
   return (
     data.node_pools.some(
       (pool) => pool.update !== null || pool.nodes.some((n) => n.current || MOVING.has(n.state) || isRunning(n.uninstall))

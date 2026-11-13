@@ -26,10 +26,9 @@ from typing import Final
 from urllib.parse import urlsplit
 
 from wingman_core.domain.errors import NotFoundError, RevisionConflictError
-from wingman_core.domain.git import ChangeKind, FileChange, FileContent, RepoPath, commit_author
-from wingman_core.domain.merge_request import MergeRequest, NewMergeRequest
+from wingman_core.domain.git import ChangeKind, FileChange, FileContent, RepoPath
+from wingman_core.domain.merge_request import MergeRequest
 from wingman_core.domain.mr_conventions import (
-    WINGMAN_LABEL,
     MRMetadata,
     Repo,
     ResourceType,
@@ -46,7 +45,7 @@ from wingman_day2.application.catalog import (
     check_chart_repo,
     version_order,
 )
-from wingman_day2.application.changes import refuse_new_errors
+from wingman_day2.application.changes import open_team_mr, refuse_new_errors
 from wingman_day2.application.topology import TeamState, Topology, TopologyService
 from wingman_day2.domain import layout
 from wingman_day2.domain.clusters import ALLOWED_ENVS, ClusterKind, ClusterRef, DefaultsScope
@@ -246,10 +245,6 @@ class AuthoringPlan:
     def pending(self, path: RepoPath) -> FileChange | None:
         """The last change this plan makes to ``path``."""
         return next((c for c in reversed(self.changes) if c.path == path), None)
-
-    def impact_on(self, ref: ClusterRef) -> DestinationImpact | None:
-        """What the plan does on ``ref``."""
-        return next((i for i in self.impact if i.ref == ref), None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -706,27 +701,18 @@ class PlanWriter:
             f"{plan.title.removeprefix(f'[Wingman/{Repo.DAY2}] ')}\n\n"
             f"Team: {team.name}\nRequested by {user.username} via Wingman"
         )
-        try:
-            await self._gitlab.commit(
-                team.project.id,
-                branch=branch,
-                start_branch=self._sigs.branch,
-                message=commit_message,
-                changes=plan.changes,
-                author=commit_author(user),
-            )
-            merge_request = await self._gitlab.create_merge_request(
-                team.project.id,
-                NewMergeRequest(
-                    source_branch=branch,
-                    target_branch=self._sigs.branch,
-                    title=plan.title,
-                    description=mr_description(describe(plan, message), metadata),
-                    labels=(WINGMAN_LABEL, "day2", action),
-                ),
-            )
-        finally:
-            self._sigs.invalidate(team)
+        merge_request = await open_team_mr(
+            self._gitlab,
+            self._sigs,
+            team,
+            user,
+            branch=branch,
+            action=action,
+            message=commit_message,
+            changes=plan.changes,
+            title=plan.title,
+            description=mr_description(describe(plan, message), metadata),
+        )
         return AuthoringResult(plan, merge_request)
 
 

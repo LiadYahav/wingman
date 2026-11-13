@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
+import { DefinitionList } from "@/components/addons/definition-list";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
 import { FleetDefaultsList } from "@/components/addons/fleet-defaults";
 import { IntentLink } from "@/components/common/intent-link";
@@ -61,19 +62,6 @@ function NewAddonButton({ team, writes }: { team: string; writes: TeamWrites }) 
       <Plus className="h-3.5 w-3.5" aria-hidden />
       New add-on
     </IntentLink>
-  );
-}
-
-function DefinitionList({ items }: { items: [string, React.ReactNode][] }) {
-  return (
-    <dl className="grid grid-cols-[9rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
-      {items.map(([term, value]) => (
-        <div key={term} className="contents">
-          <dt className="text-muted-foreground">{term}</dt>
-          <dd className="break-all font-mono text-[11px]">{value}</dd>
-        </div>
-      ))}
-    </dl>
   );
 }
 

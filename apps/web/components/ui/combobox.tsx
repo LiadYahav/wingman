@@ -36,7 +36,7 @@ function groupOptions(options: readonly ComboboxOption[]): OptionGroup[] | null 
 }
 
 /** Every word of the query appears in the option's label, description, group or value. */
-export function optionMatches(option: ComboboxOption, query: string): boolean {
+function optionMatches(option: ComboboxOption, query: string): boolean {
   const text = [option.label, option.description, option.group, option.value].join(" ").toLowerCase()
   return query
     .toLowerCase()

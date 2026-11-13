@@ -43,7 +43,7 @@ every API call fails: see [Running against local services](#running-against-loca
 | `npm run dev` | Start development server |
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
+| `npm run lint` | Run ESLint, then knip: unused files, exports and dependencies (`knip.json`) |
 | `npm run test:e2e` | Run Playwright E2E tests (both projects) |
 | `npm run test:e2e:mocked` | Run the mocked project, as CI does |
 | `npm run test:e2e:ui` | Open Playwright interactive UI |

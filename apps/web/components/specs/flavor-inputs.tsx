@@ -90,7 +90,7 @@ function lockPattern(lock: string): RegExp {
 }
 
 /** The lock that fixes the value at `path`, the rule first (a rule beside a position enforces the rule). */
-export function lockOf(path: string, locks: readonly string[]): string | null {
+function lockOf(path: string, locks: readonly string[]): string | null {
   const ordered = [...locks].sort((a, b) => Number(isRule(b)) - Number(isRule(a)));
   return ordered.find((lock) => lockPattern(lock).test(path)) ?? null;
 }

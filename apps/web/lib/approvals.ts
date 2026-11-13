@@ -19,7 +19,7 @@ export function mrRef(mr: Pick<MRDetail, "repo" | "iid" | "team">): MRRef {
 }
 
 /** The `/approvals/[id]` segment for an MR. */
-export function approvalId(ref: MRRef): string {
+function approvalId(ref: MRRef): string {
   return ref.service === "day2" ? `day2-${ref.team}-${ref.iid}` : `${ref.repo}-${ref.iid}`;
 }
 

@@ -17,9 +17,9 @@
  * ocp4-prod-herzi-site1 and day2 chart redbull/bmhgen are assumed.
  */
 
-import { test, expect, type Browser, type Page, type Request } from "@playwright/test";
+import { test, expect, type Page, type Request } from "@playwright/test";
+import { SECRET, approveAndMerge, auth, followToast as followMr, loginAs, token } from "../fixtures/live-day1";
 
-const SECRET = process.env.WINGMAN_DEV_AUTH_SECRET ?? "";
 const SPEC = "agent-standard";
 const MCE = "ocp4-prod-mce-site1-a";
 const HERZI = "ocp4-prod-herzi-site1";
@@ -30,43 +30,8 @@ const NEW_SPEC = `e2e-spec-${RUN}`;
 test.describe.configure({ mode: "serial" });
 test.skip(!SECRET, "set WINGMAN_DEV_AUTH_SECRET to the day1 service's DEV_AUTH_SECRET");
 
-async function loginAs(browser: Browser, username: string): Promise<Page> {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  await page.goto("/login");
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Dev login secret").fill(SECRET);
-  await page.getByRole("combobox", { name: "Role" }).click();
-  await page.getByRole("option", { name: "Admin" }).click();
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL((url) => url.pathname === "/");
-  return page;
-}
-
-async function token(page: Page): Promise<string> {
-  return (await page.context().cookies()).find((c) => c.name === "wingman-token")?.value ?? "";
-}
-
-async function auth(page: Page) {
-  return { Authorization: `Bearer ${await token(page)}` };
-}
-
-async function approveAndMerge(page: Page, url: string) {
-  await page.goto(url);
-  await page.getByRole("button", { name: /review & approve/i }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Approve & Merge" }).click();
-  await expect(page.getByText("merged", { exact: true })).toBeVisible({ timeout: 15_000 });
-}
-
 /** Open the MR a write's toast announces (a day1 or specs MR). */
-async function followToast(page: Page, toast: RegExp): Promise<string> {
-  // Earlier writes' toasts may still be up, each with its own Review button.
-  const announced = page.locator("[data-sonner-toast]").filter({ hasText: toast });
-  await expect(announced).toBeVisible({ timeout: 15_000 });
-  await announced.getByRole("button", { name: "Review" }).click();
-  await page.waitForURL(/\/approvals\/(day1|specs)-\d+$/);
-  return page.url();
-}
+const followToast = (page: Page, toast: RegExp) => followMr(page, toast, /\/approvals\/(day1|specs)-\d+$/);
 
 /** The `last_commit_id` the spec is read at now; `null` from a day1 that does not send it. */
 async function specReadAt(page: Page, name: string): Promise<string | null> {

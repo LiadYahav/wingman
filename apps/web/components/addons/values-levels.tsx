@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  * (`operators/<chart>/values.yaml` in the team's repo), and the values a
  * cluster gets where the add-on is used (create, a flavor, its charts page).
  */
-export const VALUES_LEVELS = ["Chart values", "Sig values", "Cluster values"] as const;
+const VALUES_LEVELS = ["Chart values", "Sig values", "Cluster values"] as const;
 export type ValuesLevel = (typeof VALUES_LEVELS)[number];
 
 /** One compact line: the levels, `current` marked, and the file it is in. */

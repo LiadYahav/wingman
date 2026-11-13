@@ -8,11 +8,11 @@ import { useQuery } from "@tanstack/react-query";
 import { api, isApiError } from "@/lib/api-client";
 import type { QuickLinkCard, QuickLinkSection, QuickLinks } from "@/types";
 
-export const quickLinksKeys = {
+const quickLinksKeys = {
   board: ["quick-links"] as const,
 };
 
-export const quickLinksApi = {
+const quickLinksApi = {
   board: () => "/api/day1/quick-links",
 };
 

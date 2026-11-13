@@ -21,9 +21,8 @@ unanswered, ``AmbiguousStartError``: the run may exist.
 
 from __future__ import annotations
 
-import ssl
 import time
-from typing import Any, Final
+from typing import Final
 from urllib.parse import quote
 
 import httpx
@@ -38,11 +37,9 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.servers import run_status
 from wingman_day1.domain.workflows import ProvisionRun
+from wingman_day1.infrastructure.http import JSON, NOT_SENT, json_client
 from wingman_day1.infrastructure.observed import Observer, Timer, WorkflowsOperation
-from wingman_day1.infrastructure.workflows_api import NOT_SENT, RUNS_PATH, orchestrator_detail
-
-JSON = Any
-"""A decoded JSON value; narrowed where it is read."""
+from wingman_day1.infrastructure.workflows_api import RUNS_PATH, orchestrator_detail
 
 START_PATH: Final = "/workflows/cluster-lifecycle/provision-cluster"
 CHECK_FIRST: Final = "Look at the cluster's provision run before starting it again."
@@ -64,14 +61,11 @@ class HttpProvisionWorkflow:
     ) -> None:
         """Call the orchestrator at ``base_url``; ``verify`` is ``True``/``False`` or a CA path."""
         self._observer = Observer(Dependency.WORKFLOWS, metrics, timer=timer)
-        self._client = httpx.AsyncClient(
-            base_url=base_url.rstrip("/"),
-            timeout=httpx.Timeout(timeout_seconds),
-            verify=verify
-            if isinstance(verify, bool)
-            else ssl.create_default_context(cafile=verify),
+        self._client = json_client(
+            base_url=base_url,
+            verify=verify,
+            timeout_seconds=timeout_seconds,
             transport=transport,
-            headers={"Accept": "application/json"},
         )
 
     async def aclose(self) -> None:

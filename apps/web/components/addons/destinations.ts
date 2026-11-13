@@ -1,7 +1,7 @@
 import type { DestinationState } from "@/types/day2";
 
 /** How a destination's state reads beside it, and its tone. */
-export const STATE_LABEL: Record<string, { label: string; tone: string; description: string }> = {
+const STATE_LABEL: Record<string, { label: string; tone: string; description: string }> = {
   default: {
     label: "deployed by the default",
     tone: "bg-status-ready/12 text-status-ready-fg",

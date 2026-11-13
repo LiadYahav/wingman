@@ -19,7 +19,7 @@ const KIND_TONE: Record<DestinationKind, string> = {
   upi: "bg-status-warning/12 text-status-warning-fg",
 };
 
-export function KindBadge({ kind, className }: { kind: DestinationKind | string; className?: string }) {
+function KindBadge({ kind, className }: { kind: DestinationKind | string; className?: string }) {
   const known = kind in KIND_TONE;
   return (
     <span

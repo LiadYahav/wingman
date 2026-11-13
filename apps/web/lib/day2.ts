@@ -64,7 +64,6 @@ export const day2Api = {
   history: (key: string, mce?: string) => `${cluster(key)}/history${query({ mce: narrow(key, mce) })}`,
   upgradeCheck: (id: string, to: string) => `${cluster(id)}/upgrade-check${query({ to })}`,
   teams: "/api/day2/teams",
-  team: (team: string) => `/api/day2/teams/${encodeURIComponent(team)}`,
   /** What the New add-on form of a team starts from. */
   addonTemplate: (team: string) => `/api/day2/teams/${encodeURIComponent(team)}/addon-template`,
   fleetDefaults: (team?: string) => `/api/day2/fleet-defaults${query({ team })}`,
@@ -329,11 +328,6 @@ export function writeErrorMessage(problem: ProblemSummary): string {
   return isAmbiguousWrite(problem) ? `${AMBIGUOUS_WRITE_HINT} ${problem.detail}` : problem.detail;
 }
 
-/** A team's write access refused the request (ADR-0043): its detail is the reason to show. */
-export function isTeamReadOnly(problem: ProblemSummary): boolean {
-  return problem.code === "TEAM_READ_ONLY";
-}
-
 /**
  * The repo moved since the preview, so the plan is no longer the one the user
  * saw (`409 REVISION_CONFLICT`, `details.rule = "plan-changed"`, ADR-0053):
@@ -372,7 +366,7 @@ export function teamAccess(teams: readonly Team[] | undefined, team: string): Te
 export const FLEET_SCOPES: readonly FleetScope[] = ["hosted-clusters", "mces", "hub", "upi"];
 
 /** How a scope reads in a sentence ("a default on every hosted cluster"). */
-export const SCOPE_LABEL: Record<FleetScope, string> = {
+const SCOPE_LABEL: Record<FleetScope, string> = {
   "hosted-clusters": "every hosted cluster",
   mces: "every MCE",
   hub: "the hub",

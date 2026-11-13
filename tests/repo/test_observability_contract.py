@@ -33,25 +33,6 @@ DASHBOARD: dict[str, Any] = json.loads(
 RUNBOOK = (ROOT / "docs/ops/runbook.md").read_text(encoding="utf-8")
 
 TARGET_LABELS = {"job", "instance", "namespace", "pod", "service"}
-PROMQL_WORDS = {
-    "sum",
-    "by",
-    "rate",
-    "increase",
-    "histogram_quantile",
-    "count",
-    "up",
-    "le",
-    "without",
-    "and",
-    "or",
-    "unless",
-    "on",
-    "ignoring",
-    "group_left",
-    "group_right",
-    "bool",
-}
 
 
 def catalogue() -> dict[str, set[str]]:

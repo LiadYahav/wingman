@@ -2,7 +2,7 @@ import { Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** The box of a check toggle; `mixed` for "some of these". */
-export function CheckMark({ checked, disabled }: { checked: boolean | "mixed"; disabled?: boolean }) {
+function CheckMark({ checked, disabled }: { checked: boolean | "mixed"; disabled?: boolean }) {
   return (
     <span
       aria-hidden

@@ -10,7 +10,7 @@ import { IntentLink } from "@/components/common/intent-link";
 import type { FleetDefault } from "@/types/day2";
 
 /** Why there is no "stop being a default" yet: what it would do to running workloads. */
-export const NO_STOP_NOTE =
+const NO_STOP_NOTE =
   "Stopping being a default is not in Wingman yet: deleting the folder deletes the default's Applications on every destination it reaches, and with prune: false ArgoCD orphans the workloads, which keep running. Until then, keep it off a destination by unticking it in the add-on's default (its page, Defaults), or remove it by hand.";
 
 function FleetDefaultRow({ fd }: { fd: FleetDefault }) {

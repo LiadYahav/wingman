@@ -26,9 +26,6 @@ venv/
 .env.local
 .env.*.local
 
-# Turbo
-.turbo/
-
 # IDE
 .idea/
 .vscode/
