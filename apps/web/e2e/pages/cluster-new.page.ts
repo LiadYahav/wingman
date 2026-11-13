@@ -33,6 +33,8 @@ export class ClusterNewPage {
   readonly placementPick: Locator;
   readonly placementPickName: Locator;
   readonly placementReason: Locator;
+  /** The open tooltip (the MCE section's reasons, the suggested name's origin); one closing is left out. */
+  readonly tooltip: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -54,6 +56,7 @@ export class ClusterNewPage {
     this.placementPick = page.getByTestId("placement-pick");
     this.placementPickName = page.getByTestId("placement-pick-name");
     this.placementReason = page.getByTestId("placement-reason");
+    this.tooltip = page.locator("[data-slot=tooltip-content][data-open]");
   }
 
   /** prod or prep. */
@@ -66,6 +69,11 @@ export class ClusterNewPage {
   /** A candidate MCE's row in the placement. */
   candidate(mce: string): Locator {
     return this.page.getByTestId(`placement-candidate-${mce}`);
+  }
+
+  /** A candidate's one mark for its checks; its tooltip holds the reasons. */
+  candidateState(mce: string): Locator {
+    return this.candidate(mce).getByTestId("placement-state");
   }
 
   /** The radio that chooses a candidate MCE. */

@@ -113,7 +113,7 @@ function SortableAddonItem({
 }
 
 function AddonCatalogCard({ addon, isSelected, onAdd }: { addon: CatalogEntry; isSelected: boolean; onAdd: (version: string) => void }) {
-  // The team default (HEAD when it sets none), so a cluster inherits it without a pin
+  // The add-on's revision (HEAD when it sets none), so a cluster inherits it without a pin
   const [selectedVersion, setSelectedVersion] = useState(addon.current_version);
   return (
     <div
@@ -232,7 +232,7 @@ export function AddonsSection({ addons, onChange }: { addons: SpecAddon[]; onCha
 
   const configuringAddon = configuring ? addons.find((a) => keyOf(a) === keyOf(configuring)) : undefined;
   const configuringEntry = configuring ? catalogByKey.get(keyOf(configuring)) : undefined;
-  // The chart's own values at the chosen revision (the team values merge on top)
+  // The chart's own values at the chosen revision (the Sig values merge on top)
   const configuringVersion = configuringAddon?.version ?? configuringEntry?.current_version ?? "HEAD";
   const { data: chartValues, isLoading: chartLoading } = useQuery<Record<string, unknown>>({
     queryKey: day2Keys.chartDefaults(configuring?.team ?? "", configuring?.name ?? "", configuringVersion),

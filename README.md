@@ -118,8 +118,8 @@ wingman/
 | **InfraEnv smart dropdown** | When a spec template contains an `infra_env` variable, the cluster creation form fetches available InfraEnv CRDs from the selected MCE hosting cluster and presents them as a dropdown. day1 keeps each hub's list for `MCE_INFRAENV_CACHE_SECONDS` (10 minutes). Falls back to plain text input when `CLUSTER_STATUS_ENABLED=false`. |
 | **A suggested cluster name** | Creating from a flavor, the form fills in `ocp4-<env>-<flavor>-<site>-<letter>`: the MCE's env and the first letter no cluster or open create MR has. The name stays editable. A new cluster's sequence is one letter, `a` to `z`, never a number (ADR-0040). |
 | **Nodepools sized by a ratio** | A flavor may give its nodepools a ratio (`nodepool_ratio: [1, 2, 1]`): the create form asks for one size and sets each nodepool's replicas to its ratio times that size; create refuses replicas off the ratio (ADR-0040). |
-| **Wingman picks the MCE** | The create form asks for the site, prod or prep and the OpenShift version (the owner and the flavor's nodepools refine it), never for the MCE, and Wingman picks it: of the MCEs at the site whose name says the env, those that host the version, have at least `PLACEMENT_MIN_FREE_PODS` free pods on their workers (allocatable pods less pods in use; masters, infra and tainted nodes left out), have enough healthy free servers of each node type the nodepools need (free Agents in that InfraEnv, healthy in server-scan) and can be read, the one with the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers in server-scan. The form shows every candidate's numbers and why the pick won; an admin may choose another MCE that passes every check, with a reason, and the MR description records it all (ADR-0050). With live status off it decides on the day1 repo and server-scan, and the free pods and servers are "not checked", shown as such. |
-| **Add-ons: catalog, defaults and overrides** | The **Addons** page lists each team's add-ons (its catalog, `operators/<chart>/` in the team repo) and their fleet defaults. A team admin creates an add-on and edits its team default there; an add-on's page (`/addons/<team>/<add-on>`) has its deploy config and values, its OCP-version pins, and per fleet scope (hosted clusters, MCEs, the hub, UPI) whether it is a default there and that default's values. Each env (`values-<env>.yaml`) and each MCE, hosted cluster or UPI cluster (`values-<name>.yaml`) can get values of its own, and an add-on wanted on some MCEs only is deployed on those MCEs, one install merge request each. Which add-ons a hosted cluster has of its own comes from its flavor and the create form. Every change is previewed and confirmed against that preview (ADR-0053). One cluster's add-ons stay on that cluster's page. |
+| **Wingman picks the MCE** | The create form asks for the site, prod or prep and the OpenShift version (the owner and the flavor's nodepools refine it), never for the MCE, and Wingman picks it: of the MCEs at the site whose name says the env, those that host the version, have at least `PLACEMENT_MIN_FREE_PODS` free pods on their workers (allocatable pods less pods in use; masters, infra and tainted nodes left out), have enough healthy free servers of each node type the nodepools need (free Agents in that InfraEnv, healthy in server-scan) and can be read, the one with the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers in server-scan. The form shows every candidate's numbers in one row each, the pick's row marked, with each row's reasons and why the pick won in tooltips; an admin may choose another MCE that passes every check, with a reason, and the MR description records it all (ADR-0050). With live status off it decides on the day1 repo and server-scan, and the free pods and servers are "not checked", shown as such. |
+| **Add-ons: catalog, defaults and overrides** | The **Addons** page lists each team's add-ons (its catalog, `operators/<chart>/` in the team repo) and their fleet defaults. A team admin creates an add-on and edits it there (Edit add-on: its deploy config and its Sig values, `operators/<chart>/values.yaml`; values go chart values → Sig values → cluster values); an add-on's page (`/addons/<team>/<add-on>`) has its deploy config and values, its OCP-version pins, and per fleet scope (hosted clusters, MCEs, the hub, UPI) whether it is a default there and that default's values. Each env (`values-<env>.yaml`) and each MCE, hosted cluster or UPI cluster (`values-<name>.yaml`) can get values of its own, and an add-on wanted on some MCEs only is deployed on those MCEs, one install merge request each. Which add-ons a hosted cluster has of its own comes from its flavor and the create form. Every change is previewed and confirmed against that preview (ADR-0053). One cluster's add-ons stay on that cluster's page. |
 | **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. |
 | **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. Wingman only lists the links and never calls them, and icons ship with Wingman (ADR-0052). |
 
@@ -275,7 +275,7 @@ confirmed by id (`confirm_changes`) with the preview's `digest`
 |--------|----------|-------------|
 | `GET` | `/api/day2/teams/{team}/addon-template` | What a new add-on starts from: the team's usual sync options and chart repos, and each fleet scope's reach |
 | `POST` | `/api/day2/addons/{team}` | Add an add-on to the team's catalog, optionally as a fleet default (opens an MR) |
-| `PUT` | `/api/day2/addons/{team}/{addon}` | Edit its team default: deploy config (edited in place), sync options, values (opens an MR) |
+| `PUT` | `/api/day2/addons/{team}/{addon}` | Edit the add-on (the API's team default): deploy config (edited in place), sync options, Sig values (opens an MR) |
 | `GET` | `/api/day2/fleet-defaults` | Every `defaults/<scope>/<chart>/` (`?team=`), with its reach and sync options |
 | `POST` | `/api/day2/addons/{team}/{addon}/defaults/{scope}` | Make it a fleet default; clusters that have it in their own folder move into it (opens an MR) |
 | `PUT` | `/api/day2/addons/{team}/{addon}/defaults/{scope}` | Edit a fleet default's values and sync options (opens an MR) |
@@ -301,7 +301,7 @@ confirmed by id (`confirm_changes`) with the preview's `digest`
 | `POST` | `/api/day2/clusters/{cluster}/addons/bulk` | Install several charts: one MR per team, all validated before any opens |
 | `POST` | `/api/day2/merge-preview` | The merged values with edited cluster values, before writing them |
 | `GET` | `/api/day2/clusters/{cluster}/history` | Commits that touched the destination's folders, across team repos |
-| `GET` | `/api/day2/clusters/{cluster}/upgrade-check` | Version-pinned charts that would fall back to their team default at `?to=` |
+| `GET` | `/api/day2/clusters/{cluster}/upgrade-check` | Version-pinned charts that would fall back to the add-on's revision at `?to=` |
 
 #### Approvals and audit
 
@@ -551,7 +551,7 @@ details in `docs/ecosystem/notes/day2-kubevirt.md` and ADR-0020):
 
 ```
 sigs/<team>/
-├── operators/<chart>/{<chart>.yaml, values.yaml}         # team default (+ ocp-versions/<v>/ pins)
+├── operators/<chart>/{<chart>.yaml, values.yaml}         # the add-on: deploy config, Sig values (+ ocp-versions/<v>/ pins)
 ├── defaults/{hub,mces,hosted-clusters,upi}/<chart>/       # fleet defaults (+ exclusions.yaml)
 └── sites/<site>/<env>/
     ├── mces/<mce>/in-cluster/<chart>/                     # charts on the MCE hub
@@ -571,7 +571,7 @@ sigs/<team>/
 
 Chart values are merged exactly as the platform's `deployApp.yaml` stacks them:
 the chart's own `values.yaml` at the pinned revision, then up to ten team-repo
-layers for a hosted cluster (team default, OCP-version pin, site, site+env,
+layers for a hosted cluster (Sig values, OCP-version pin, site, site+env,
 fleet default and its env/cluster variants, MCE-wide, cluster-wide, the
 cluster's chart folder). The preview shows which layer set each value
 (ADR-0021).

@@ -39,7 +39,7 @@ function NewAddon({ team }: { team: string }) {
         <Breadcrumbs items={[{ label: "Addons", href: "/addons" }, { label: team, href: teamAddonsHref(team) }, { label: "New add-on" }]} />
         <PageTitle>New add-on in {team}</PageTitle>
         <p className="text-sm text-muted-foreground">
-          Adds <code>operators/&lt;name&gt;/</code> to sigs/{team} through one merge request: the add-on&apos;s team default.
+          Adds <code>operators/&lt;name&gt;/</code> to sigs/{team} through one merge request: its deploy config and Sig values.
           Clusters get it once it is installed on them, or made a fleet default (here or later, from its page).
         </p>
       </div>

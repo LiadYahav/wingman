@@ -1,7 +1,7 @@
 # ADR-0043: Teams opt in to day2 writes per project; Wingman creates add-ons, edits team and fleet defaults, and a new fleet default takes over the clusters that already have the chart
 
 Date: 2026-11-12
-Status: Accepted; superseded in part by ADR-0053 (every write is confirmed against its preview's digest; a stale exclusion of an adopted cluster goes in the same commit; the review of 3.8.0)
+Status: Accepted; superseded in part by ADR-0053 (every write is confirmed against its preview's digest; a stale exclusion of an adopted cluster goes in the same commit; the review of 3.8.0); amended 2026-11-13 (the UI says sig values and the add-on, not team default; the API names stay)
 
 ## Context
 
@@ -169,3 +169,15 @@ labels and footer action `create-addon`, `update-default`, `make-default`
 - The GitLab contract (`wingman_core.testing.gitlab_contract`): project and
   group membership read back the same on the fake and on GitLab CE 19.5.3
   (ADR-0005).
+
+## Amendment (2026-11-13): sig values and the add-on
+
+The UI calls the team's level of an add-on's values (`operators/<chart>/values.yaml`)
+**Sig values**, and the editable deploy config (`operators/<chart>/<chart>.yaml`
+with those values) **the add-on**: its button is **Edit add-on**, the same
+fields as New add-on. That is the user's hierarchy, lowest first: chart values
+< sig values < cluster values (what a cluster gets where the add-on is used:
+create, a flavor, its charts page). "Team default" is no longer a UI word;
+teams stay teams. The API names are unchanged: `PUT /api/day2/addons/{team}/{addon}`,
+the action `update-team-default`, the layer role `team` (shown as *sig values*),
+and day2's own MR titles and messages.

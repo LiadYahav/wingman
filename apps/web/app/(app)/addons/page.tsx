@@ -18,9 +18,10 @@ import { ProblemList } from "@/components/common/problem-list";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
 import { FleetDefaultsList } from "@/components/addons/fleet-defaults";
 import { ChangeResultPanel, type OpenedChanges } from "@/components/addons/change-result";
-import { EditTeamDefaultDialog } from "@/components/addons/default-dialogs";
+import { EditAddonDialog } from "@/components/addons/default-dialogs";
 import { useAddonAccess } from "@/components/addons/page-header";
 import { ReadOnlyBadge, useTeams } from "@/components/addons/team-access";
+import { ValuesLevels } from "@/components/addons/values-levels";
 import type { AuthoringChange, CatalogEntry, FleetDefault } from "@/types/day2";
 
 /** `HEAD` is the chart repo's default branch, listed first in `available_versions`. */
@@ -103,15 +104,13 @@ function ChartDialog({
         <FindingsList findings={entry.warnings} showContext />
         <Tabs defaultValue="values">
           <TabsList>
-            <TabsTrigger value="values">Team values</TabsTrigger>
+            <TabsTrigger value="values">Sig values</TabsTrigger>
             <TabsTrigger value="deploy">Deploy config</TabsTrigger>
             <TabsTrigger value="versions">Versions</TabsTrigger>
           </TabsList>
           <TabsContent value="values" className="space-y-2 pt-2">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                <code>operators/{entry.name}/values.yaml</code>: the team default every destination starts from, above the chart&apos;s own values.
-              </p>
+              <ValuesLevels current="Sig values" path={`operators/${entry.name}/values.yaml`} />
               {values.length > 0 && (
                 <div className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5" role="group" aria-label="View">
                   {(["table", "yaml"] as const).map((v) => (
@@ -133,7 +132,7 @@ function ChartDialog({
             </div>
             <div className="max-h-[55vh] overflow-auto">
               {values.length === 0 ? (
-                <p className="py-4 text-center text-sm italic text-muted-foreground">The team sets no values: the chart&apos;s own values apply.</p>
+                <p className="py-4 text-center text-sm italic text-muted-foreground">No Sig values: the chart&apos;s own values apply.</p>
               ) : view === "yaml" ? (
                 <pre className="whitespace-pre rounded-lg border bg-muted/50 p-4 font-mono text-xs leading-relaxed">{toYaml(entry.default_values)}</pre>
               ) : (
@@ -201,10 +200,6 @@ function ChartDialog({
             </div>
           </TabsContent>
         </Tabs>
-        <p className="text-xs text-muted-foreground">
-          Its fleet defaults, which destinations they reach and each destination&apos;s overrides are on its page; one
-          cluster&apos;s install is on that cluster&apos;s page.
-        </p>
         <DialogFooter showCloseButton>
           {writes.isAdmin && (
             <button
@@ -215,7 +210,7 @@ function ChartDialog({
               className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden />
-              Edit team default
+              Edit add-on
             </button>
           )}
           <DefaultsLink team={entry.team} name={entry.name} />
@@ -277,7 +272,7 @@ function ChartCard({ entry, writes }: { entry: CatalogEntry; writes: TeamWrites 
             </span>
           )}
           <span className="text-xs text-muted-foreground">
-            {entry.available_versions.length} version{entry.available_versions.length === 1 ? "" : "s"} · {count} team value{count === 1 ? "" : "s"}
+            {entry.available_versions.length} version{entry.available_versions.length === 1 ? "" : "s"} · {count} Sig value{count === 1 ? "" : "s"}
           </span>
           <span className="ml-auto">
             <FindingsBadge findings={entry.warnings} />
@@ -295,7 +290,7 @@ function ChartCard({ entry, writes }: { entry: CatalogEntry; writes: TeamWrites 
         }}
       />
       {editing && (
-        <EditTeamDefaultDialog
+        <EditAddonDialog
           entry={entry}
           open
           onOpenChange={setEditing}
@@ -359,7 +354,8 @@ type Sort = "name-asc" | "name-desc" | "team-asc";
 
 /**
  * The add-on catalog (ADR-0043, ADR-0053): what each team offers, and where a
- * team admin adds an add-on and edits its team default. An add-on's page
+ * team admin adds an add-on and edits it (its deploy config and Sig values,
+ * `operators/<chart>/`). An add-on's page
  * (Defaults & overrides) has its fleet defaults, which destinations they
  * reach and each destination's overrides. Installing one on a cluster is on
  * that cluster's page. `?team=` shows one team.

@@ -56,8 +56,8 @@ test.describe("A destination's charts", () => {
     await card.getByRole("button", { name: /^cert-manager/ }).click();
 
     await expect(card.getByTestId("value-row-replicas")).toContainText("cluster");
-    await expect(card.getByTestId("value-row-namespace")).toContainText("team");
-    await expect(card.getByTestId("value-row-resources.limits.cpu")).toContainText("team");
+    await expect(card.getByTestId("value-row-namespace")).toContainText("sig values");
+    await expect(card.getByTestId("value-row-resources.limits.cpu")).toContainText("sig values");
     await expect(card.getByText(`sites/site1/prod/mces/mce-a/${HOSTED_NAME}/cert-manager/values.yaml`).first()).toBeVisible();
 
     await card.getByRole("tab", { name: "Layers" }).click();

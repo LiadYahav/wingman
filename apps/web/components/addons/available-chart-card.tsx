@@ -33,9 +33,9 @@ export interface InstallChoice {
 export const DEFAULT_CHOICE: InstallChoice = { values: EMPTY, version: null, emergencyPin: false, repourl: "" };
 
 /**
- * No layer of the deploy config sets a lowercase `repourl` (the team default
- * may have only the miscased `repoUrl`), so the install must give one. The
- * preview knows what this destination inherits; the catalog only the team default.
+ * No layer of the deploy config sets a lowercase `repourl` (the add-on may
+ * have only the miscased `repoUrl`), so the install must give one. The
+ * preview knows what this destination inherits; the catalog only the add-on's.
  */
 export function needsRepourl(entry: CatalogEntry, preview?: ValuesPreview): boolean {
   return !(preview ? preview.deploy.repo_url : entry.argocd_metadata.repourl);

@@ -70,8 +70,8 @@ export const day2Api = {
   fleetDefaults: (team?: string) => `/api/day2/fleet-defaults${query({ team })}`,
   /** POST: a new add-on in the team's catalog. */
   createAddon: (team: string, dryRun = false) => `/api/day2/addons/${encodeURIComponent(team)}${dry(dryRun)}`,
-  /** PUT: the add-on's team default. */
-  teamDefault: (team: string, chart: string, dryRun = false) => `${addon(team, chart)}${dry(dryRun)}`,
+  /** PUT: Edit add-on, its deploy config and Sig values (the API's team default). */
+  editAddon: (team: string, chart: string, dryRun = false) => `${addon(team, chart)}${dry(dryRun)}`,
   /** POST: make it a fleet default; PUT: edit that fleet default. */
   fleetDefault: (team: string, chart: string, scope: FleetScope, dryRun = false) =>
     `${addon(team, chart)}/defaults/${encodeURIComponent(scope)}${dry(dryRun)}`,
@@ -142,8 +142,8 @@ export function newAddonHref(team: string): string {
 // ── Catalog ──────────────────────────────────────────────────────────────────
 
 /**
- * The revisions a chart can be asked for: the team default first (`HEAD`,
- * the chart repo's default branch, when the team sets none), then the
+ * The revisions a chart can be asked for: the add-on's first (`HEAD`, the
+ * chart repo's default branch, when the add-on sets none), then the
  * branches, default branch first. `also` keeps a revision already chosen
  * (a spec's) on the list, last, when the repo no longer has it.
  */
@@ -199,10 +199,11 @@ const OWN = {
 const ROLES: Record<string, RoleStyle> = {
   chart: { label: "chart", description: "The chart's own values.yaml", ...ORIGIN },
   hub: { label: "hub", description: "Every chart on the hub", ...PLACE },
-  team: { label: "team", description: "The team default (operators/<chart>/values.yaml)", ...TEAM },
+  // The day2 role `team` is the user's Sig values (ADR-0043's amendment); the API name stays.
+  team: { label: "sig values", description: "The Sig values (operators/<chart>/values.yaml)", ...TEAM },
   "team-ocp-version": {
-    label: "team · ocp",
-    description: "The team default for this OCP version (operators/<chart>/ocp-versions/<v>/)",
+    label: "sig values · ocp",
+    description: "The Sig values for this OCP version (operators/<chart>/ocp-versions/<v>/)",
     ...TEAM,
   },
   site: { label: "site", description: "Every chart of the team on the site", ...PLACE },

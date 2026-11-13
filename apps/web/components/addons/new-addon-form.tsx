@@ -18,6 +18,7 @@ import {
 import { WriteError } from "@/components/addons/file-preview";
 import { SyncOptionsControl } from "@/components/addons/sync-options";
 import { ReadOnlyNote } from "@/components/addons/team-access";
+import { ValuesLevels } from "@/components/addons/values-levels";
 import { YamlValuesField } from "@/components/addons/yaml-values-field";
 import type { AuthoringChange, CreateAddonBody, FleetScope, SyncSettings } from "@/types/day2";
 
@@ -26,7 +27,7 @@ function Section({ title, description, children }: { title: string; description?
     <section className="space-y-3 rounded-xl border bg-card p-4 shadow-sm sm:p-5" aria-label={title}>
       <div>
         <h2 className="text-sm font-semibold">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+        {description && <div className="mt-0.5 text-xs text-muted-foreground">{description}</div>}
       </div>
       {children}
     </section>
@@ -35,7 +36,7 @@ function Section({ title, description, children }: { title: string; description?
 
 /**
  * A new add-on in a team's catalog (ADR-0043, ADR-0053):
- * `operators/<name>/<name>.yaml` and `values.yaml` in one MR, optionally a
+ * `operators/<name>/<name>.yaml` and its Sig values, `values.yaml`, in one MR, optionally a
  * fleet default in the same MR. It starts from the team's own files
  * (`GET /teams/{team}/addon-template`). The preview lists every cluster that
  * already has a chart of that name in its own folder and changes; they are
@@ -89,7 +90,7 @@ export function NewAddonForm({
       ? "This team is read-only in Wingman"
       : "Reading the team's write access"
     : !data
-      ? "Loading the team's defaults"
+      ? "Loading what the team's add-ons use"
       : !chart
         ? "Give the add-on a name"
         : !CHART_NAME.test(chart)
@@ -123,7 +124,7 @@ export function NewAddonForm({
   }
 
   if (template.error && !data) {
-    return <ProblemList error={template.error} title={`${team}'s defaults for a new add-on could not be loaded`} />;
+    return <ProblemList error={template.error} title={`What a new add-on in ${team} starts from could not be loaded`} />;
   }
   if (!data) return <TemplateSkeleton />;
 
@@ -180,8 +181,8 @@ export function NewAddonForm({
         <IgnoreDifferencesField path={`operators/${chart || "<name>"}/${chart || "<name>"}.yaml`} text={ignoreText} onTextChange={setIgnoreText} />
       </Section>
 
-      <Section title="Team values" description="The team default every destination starts from, above the chart's own values.">
-        <YamlValuesField label="Team values" path={`operators/${chart || "<name>"}/values.yaml`} initial={{}} onChange={setValues} />
+      <Section title="Sig values" description={<ValuesLevels current="Sig values" />}>
+        <YamlValuesField label="Sig values" path={`operators/${chart || "<name>"}/values.yaml`} initial={{}} onChange={setValues} />
       </Section>
 
       <Section
@@ -195,7 +196,7 @@ export function NewAddonForm({
             path={`defaults/${scope}/${chart || "<name>"}/values.yaml`}
             initial={{}}
             onChange={setDefaultValues}
-            placeholder="# Empty: the team values apply on every destination."
+            placeholder="# Empty: the Sig values apply on every destination."
           />
         )}
       </Section>

@@ -328,8 +328,8 @@ export function ScopePanelCard({ detail, panel, writes }: { detail: AddonDetail;
             Files of the default <code className="font-mono text-[11px] text-muted-foreground">{panel.folder}/</code>
           </summary>
           <div className="mt-2 grid gap-3 lg:grid-cols-2">
-            <RepoFileView file={panel.values_file} absent="No values.yaml: the team values apply." />
-            <RepoFileView file={panel.deploy_config} absent={`No ${detail.name}.yaml: the team default's deploy config and sync options apply.`} />
+            <RepoFileView file={panel.values_file} absent="No values.yaml: the Sig values apply." />
+            <RepoFileView file={panel.deploy_config} absent={`No ${detail.name}.yaml: the add-on's deploy config and sync options apply.`} />
             {panel.env_files.map((e) => (
               <RepoFileView key={e.env} file={e.file} />
             ))}
