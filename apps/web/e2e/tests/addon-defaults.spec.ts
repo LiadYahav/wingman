@@ -42,6 +42,13 @@ const mces = (page: Page) => page.getByTestId("scope-mces");
 const review = (page: Page) => page.getByRole("dialog").filter({ has: page.getByTestId("authoring-plan") });
 const formDialog = (page: Page) => page.getByRole("dialog").filter({ has: page.getByRole("button", { name: "Preview changes" }) });
 
+/** Edit add-on's form once the dialog has focused its first field: text typed before can land there. */
+async function editAddonForm(page: Page) {
+  const form = formDialog(page);
+  await expect(form.getByRole("textbox", { name: "Chart repo URL (repourl)" })).toBeFocused();
+  return form;
+}
+
 test.describe("Navigation", () => {
   test.beforeEach(async ({ page }) => setUp(page));
 
@@ -143,7 +150,7 @@ test.describe("An add-on's page", () => {
   test("an edit of the add-on is confirmed and sent with the preview's digest", async ({ page }) => {
     await go(page, "/addons/platform/cert-manager");
     await page.getByRole("region", { name: "Add-on" }).getByRole("button", { name: "Edit add-on" }).click();
-    const form = formDialog(page);
+    const form = await editAddonForm(page);
     await form.getByLabel("Contents of operators/cert-manager/values.yaml").fill("replicas: 2\n");
     await form.getByRole("button", { name: "Preview changes" }).click();
 
@@ -176,7 +183,7 @@ test.describe("An add-on's page", () => {
     await setUp(page, { planChangedOnce: true });
     await go(page, "/addons/platform/cert-manager");
     await page.getByRole("region", { name: "Add-on" }).getByRole("button", { name: "Edit add-on" }).click();
-    await formDialog(page).getByLabel("Contents of operators/cert-manager/values.yaml").fill("replicas: 2\n");
+    await (await editAddonForm(page)).getByLabel("Contents of operators/cert-manager/values.yaml").fill("replicas: 2\n");
     await formDialog(page).getByRole("button", { name: "Preview changes" }).click();
 
     const plan = review(page);

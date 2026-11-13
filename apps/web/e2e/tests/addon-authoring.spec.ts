@@ -36,6 +36,13 @@ const scope = (page: Page, name: string) => page.getByTestId(`scope-${name}`);
 
 /** The authoring form: the dialog with Preview (another may still be closing). */
 const formDialog = (page: Page) => page.getByRole("dialog").filter({ has: page.getByRole("button", { name: "Preview changes" }) });
+
+/** Edit add-on's form once the dialog has focused its first field: text typed before can land there. */
+async function editAddonForm(page: Page) {
+  const form = formDialog(page);
+  await expect(form.getByRole("textbox", { name: "Chart repo URL (repourl)" })).toBeFocused();
+  return form;
+}
 const reviewDialog = (page: Page) => page.getByRole("dialog").filter({ has: page.getByTestId("authoring-plan") });
 
 /** Preview (the dry run) from `form`: the review dialog with the plan. */
@@ -245,7 +252,7 @@ test.describe("Edit add-on", () => {
   test("a blank revision removes the key (HEAD)", async ({ page }) => {
     await go(page, "/addons/observability/prometheus");
     await page.getByRole("button", { name: "Edit add-on" }).click();
-    const form = formDialog(page);
+    const form = await editAddonForm(page);
     await form.getByRole("combobox", { name: /Revision/ }).fill("");
     await preview(page);
     expect(dryRuns()[0].body).toEqual({ last_commit_id: "observability-catalog-1", target_revision: null });
@@ -310,7 +317,7 @@ test.describe("The Addons page", () => {
     await expect(dialog.getByTestId("values-levels")).toContainText("operators/cert-manager/values.yaml");
     await expect(dialog).not.toContainText(/team (default|value)/i);
     await dialog.getByRole("button", { name: "Edit add-on" }).click();
-    const form = formDialog(page);
+    const form = await editAddonForm(page);
     await form.getByLabel("Contents of operators/cert-manager/values.yaml").fill("replicas: 2\n");
     const review = await preview(page, form);
     await review.getByRole("checkbox", { name: /changes as listed/ }).first().click();
