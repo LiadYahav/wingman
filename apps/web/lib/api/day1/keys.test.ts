@@ -45,9 +45,10 @@ const cases: [string, readonly unknown[], unknown[]][] = [
   ["specs.rollout", day1Keys.specs.rollout("web"), ["specs", "web", "rollout"]],
   ["specs.templateSchema", day1Keys.specs.templateSchema, ["specs", "template-schema"]],
   ["specs.sharedTemplate", day1Keys.specs.sharedTemplate, ["specs", "shared-template"]],
-  ["specs.history", day1Keys.specs.history("web"), ["spec-history", "web"]],
-  ["specs.atSha", day1Keys.specs.atSha("web", "abc123"), ["spec-at-sha", "web", "abc123"]],
-  ["specs.atSha (none chosen)", day1Keys.specs.atSha("web", null), ["spec-at-sha", "web", null]],
+  // Under the flavor since 3.19.1 (they were ["spec-history", n] and ["spec-at-sha", n, sha])
+  ["specs.history", day1Keys.specs.history("web"), ["specs", "web", "history"]],
+  ["specs.atSha", day1Keys.specs.atSha("web", "abc123"), ["specs", "web", "at-sha", "abc123"]],
+  ["specs.atSha (none chosen)", day1Keys.specs.atSha("web", null), ["specs", "web", "at-sha", null]],
   // approvals
   ["approvals.all", day1Keys.approvals.all, ["approvals"]],
   ["approvals.list day1", day1Keys.approvals.list("day1"), ["approvals", "day1"]],
@@ -102,7 +103,9 @@ describe("day1Keys", () => {
     expect(startsWith(day1Keys.approvals.list("day2"), day1Keys.approvals.all)).toBe(true);
     expect(startsWith(day1Keys.audit.mrDiff("x"), day1Keys.audit.all)).toBe(true);
     expect(startsWith(day1Keys.placement.query(query), day1Keys.placement.all)).toBe(true);
-    // The flavor's history is its own namespace, as before: a flavor write does not read it again
-    expect(startsWith(day1Keys.specs.history("web"), day1Keys.specs.all)).toBe(false);
+    // A flavor write, or a merged flavor MR, invalidates `specs.all`: its history is read again too
+    expect(startsWith(day1Keys.specs.history("web"), day1Keys.specs.all)).toBe(true);
+    expect(startsWith(day1Keys.specs.atSha("web", "abc123"), day1Keys.specs.all)).toBe(true);
+    expect(startsWith(day1Keys.specs.history("web"), day1Keys.specs.one("web"))).toBe(true);
   });
 });

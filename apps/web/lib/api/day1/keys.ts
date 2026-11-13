@@ -2,13 +2,15 @@
  * Every query key outside `day2` (lib/day2.ts) and the Segments and Inventory
  * areas (lib/api/segments.ts, inventory.ts), in one place. TanStack matches a
  * key by value and by prefix, so these arrays are exactly the ones the pages
- * spelled inline before 3.18.5: keys.test.ts holds each to its literal.
+ * spelled inline before 3.18.5 (but a flavor's history, moved under it in
+ * 3.19.1): keys.test.ts holds each to its literal.
  *
  * The prefixes a write invalidates:
  * - `clusters.all`: every cluster read, the list and each cluster's;
  *   `clusters.one(name)` one cluster's (detail, drift, history, nodes, upgrade, ...).
- * - `specs.all`: the flavor list and each flavor's reads, but not their
- *   history (`spec-history`, `spec-at-sha` are their own namespaces).
+ * - `specs.all`: the flavor list and each flavor's reads, its history and
+ *   its file at a commit included (3.19.1: they were their own namespaces,
+ *   so a flavor write or a merged flavor MR left the history stale).
  * - `approvals.all`, `audit.all`: both services' lists (approvals.ts says why
  *   both are here); the approval page leaves its own detail out by predicate.
  * - `placement.all`: every placement read.
@@ -54,8 +56,8 @@ const specs = {
   rollout: (name: string) => ["specs", name, "rollout"] as const,
   templateSchema: ["specs", "template-schema"] as const,
   sharedTemplate: ["specs", "shared-template"] as const,
-  history: (name: string) => ["spec-history", name] as const,
-  atSha: (name: string, sha: string | null) => ["spec-at-sha", name, sha] as const,
+  history: (name: string) => ["specs", name, "history"] as const,
+  atSha: (name: string, sha: string | null) => ["specs", name, "at-sha", sha] as const,
 };
 
 const approvals = {
