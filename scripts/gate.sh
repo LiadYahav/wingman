@@ -119,6 +119,7 @@ fi
 if [[ $scope == all || $scope == web ]]; then
   step "npm audit (allowlist may only shrink)" python3 scripts/npm-audit.py
   step "web lint" npm run lint --workspace=web --silent
+  step "web unit tests (vitest)" npm run test:unit --workspace=web --silent
   step "web typecheck" bash -c 'cd apps/web && npx tsc --noEmit'
   step "web build" npm run build --workspace=web --silent
   web_built=true

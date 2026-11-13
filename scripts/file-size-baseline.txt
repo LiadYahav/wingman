@@ -23,7 +23,7 @@
   551  apps/day1-service/src/wingman_day1/domain/template.py
   537  apps/day1-service/src/wingman_day1/infrastructure/fake_mce.py
   787  apps/day1-service/src/wingman_day1/infrastructure/hub_api.py
-  644  apps/day1-service/src/wingman_day1/main.py
+  623  apps/day1-service/src/wingman_day1/main.py
   856  apps/day2-service/src/wingman_day2/application/authoring.py
   895  apps/day2-service/src/wingman_day2/application/changes.py
   776  apps/day2-service/src/wingman_day2/application/plan_writer.py
@@ -36,7 +36,6 @@
  1685  apps/web/app/(app)/docs/page.tsx
   673  apps/web/app/(app)/specs/[name]/page.tsx
   603  apps/web/components/addons/authoring-flow.tsx
-  507  apps/web/components/clusters/cluster-facts.tsx
   722  apps/web/components/clusters/dynamic-variable-form.tsx
   529  apps/web/components/clusters/mce-placement.tsx
   556  apps/web/components/clusters/node-pools.tsx

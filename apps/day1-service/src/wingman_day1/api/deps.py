@@ -25,6 +25,7 @@ from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.rollouts import RolloutService
+from wingman_day1.application.segments import SegmentsService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
@@ -68,6 +69,8 @@ class Day1Context:
     context built without one answers 501."""
     quick_links: QuickLinksService | None = None
     """The Quick Links page (ADR-0052); ``main`` always builds it."""
+    segments: SegmentsService | None = None
+    """The Segments area (ADR-0047); ``None`` when ``SEGMENTS_MANAGER_URL`` is empty: 501."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -131,9 +134,20 @@ def quick_links_service(
     return context.quick_links
 
 
+SEGMENTS_NOT_AVAILABLE = "Segments is not set up in this deployment: SEGMENTS_MANAGER_URL is empty."
+
+
+def segments_service(context: Annotated[Day1Context, Depends(day1_context)]) -> SegmentsService:
+    """The Segments area's use case, or 501 when segments-manager is not configured."""
+    if context.segments is None:
+        raise FeatureDisabled(SEGMENTS_NOT_AVAILABLE)
+    return context.segments
+
+
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
 Nodes = Annotated[NodeService, Depends(node_service)]
 Placements = Annotated[PlacementService, Depends(placement_service)]
 QuickLinks = Annotated[QuickLinksService, Depends(quick_links_service)]
+Segments = Annotated[SegmentsService, Depends(segments_service)]
 Status = Annotated[StatusService, Depends(status_service)]

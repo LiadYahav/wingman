@@ -1,20 +1,32 @@
-# A made-up segments-manager ledger for DAY1_FAKE_FLEET=true (development only, ADR-0039).
+# A made-up segments-manager ledger for DAY1_FAKE_FLEET=true (development only,
+# ADR-0039, ADR-0047).
 #
-# `items` has the exact shape of segments-manager's
-# `GET /api/segments/by-segment?segment=<cidr>` answer, and day1 reads it with
-# the same parser as the real answer
-# (wingman_day1.infrastructure.segments_manager.segment_record). Nothing here is
-# real: the ids, VLANs and EPG names are invented.
+# `items` has the exact shape of segments-manager's answers
+# (`GET /api/segments`, and `GET /api/segments/by-segment?segment=<cidr>` for
+# one), and day1 reads it with the same parser as the real answers
+# (wingman_day1.infrastructure.segments_manager_parse.segment_record). Nothing
+# here is real: the ids, VLANs, EPG names and holders are invented.
+#
+# `sites` is segments-manager's `SITE_NETWORKS` keys: the fake answers
+# `GET /api/sites` with it, and `GET /api/stats` with one entry per site,
+# counted from `items`. site3 has no segments yet, so its card shows 0 / 0.
 #
 # Every segment is a /24, and an allocated one's `cluster_name` is the cluster
 # file's stem (what allocate-segment gives segments-manager). The clusters in
-# dev/gitlab-fixtures that have `vlanId` and `dhcp_values.network` hold the
+# dev/gitlab-fixtures that have `vlanId` and `dhcp_values.network` hold the HC
 # segments below, and the two files agree, except on purpose for one:
 #
 # - ocp4-prod-herzi-site1: segments-manager has VLAN 1418 for 10.20.44.0/24,
-#   the file has 1410. The cluster page shows the file's VLAN and a warning.
+#   the file has 1410. The cluster page and the Segments area show a warning.
 #
-# Two segments are Available (the free pool): nothing holds them.
+# The others cover what segments-manager records besides hosted clusters:
+# every type (MCE and INVENTORY held by an MCE, PXE, HUB, and a UPI segment two
+# UPI clusters share, so its `cluster_name` is a list), an HC held by a name
+# day1 has no file for, `dhcp: false`, Available segments that still carry the
+# `allocated_at` of their last allocation (segments-manager never clears it),
+# and one record with the legacy keys live records still have, all null.
+
+sites: [site1, site2, site3]
 
 items:
   # ── site1 ──────────────────────────────────────────────────────────────────
@@ -89,6 +101,61 @@ items:
     cluster_name: null
     allocated_at: null
     status: Available
+  # Released: segments-manager keeps allocated_at, and this record still has the legacy keys.
+  - _id: 6720f0000000000000000149
+    type: null
+    site: site1
+    vlan_id: 1415
+    epg_name: EPG_site1_HC_1415
+    segment: 10.20.49.0/24
+    dhcp: true
+    cluster_name: null
+    allocated_at: "2026-08-30T10:15:00+00:00"
+    status: Available
+    segment_connectivity_requests: null
+    segment_connectivity_failure: null
+  # An MCE's own network, and the inventory network its servers boot into.
+  - _id: 6720f0000000000000000130
+    type: MCE
+    site: site1
+    vlan_id: 1400
+    epg_name: EPG_site1_MCE_1400
+    segment: 10.20.30.0/24
+    dhcp: true
+    cluster_name: ocp4-prod-mce-site1-a
+    allocated_at: "2026-08-12T07:30:00+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000131
+    type: INVENTORY
+    site: site1
+    vlan_id: 1401
+    epg_name: EPG_site1_INVENTORY_1401
+    segment: 10.20.31.0/24
+    dhcp: true
+    cluster_name: ocp4-prod-mce-site1-a
+    allocated_at: "2026-08-12T07:31:10+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000132
+    type: PXE
+    site: site1
+    vlan_id: 1402
+    epg_name: EPG_site1_PXE_1402
+    segment: 10.20.32.0/24
+    dhcp: false
+    cluster_name: pxe-site1
+    allocated_at: "2026-08-10T12:00:00+00:00"
+    status: Allocated
+  # Shared by two UPI clusters: the only type whose cluster_name is a list.
+  - _id: 6720f0000000000000000160
+    type: UPI
+    site: site1
+    vlan_id: 1460
+    epg_name: EPG_site1_UPI_1460
+    segment: 10.20.60.0/24
+    dhcp: false
+    cluster_name: [ocp4-upi-a, ocp4-upi-b]
+    allocated_at: "2026-09-14T08:00:00+00:00"
+    status: Allocated
 
   # ── site2 ──────────────────────────────────────────────────────────────────
   - _id: 6720f0000000000000000250
@@ -131,3 +198,26 @@ items:
     cluster_name: ocp4-prep-amit-site2-a
     allocated_at: "2026-10-12T12:00:00+00:00"
     status: Allocated
+  # Held by a name no day1 cluster file has (its MR not merged yet, say): plain text, no link.
+  - _id: 6720f0000000000000000253
+    type: HC
+    site: site2
+    vlan_id: 2453
+    epg_name: EPG_site2_HC_2453
+    segment: 10.20.53.0/24
+    dhcp: true
+    cluster_name: ocp4-prep-ghost-site2
+    allocated_at: "2026-11-01T09:00:00+00:00"
+    status: Allocated
+  - _id: 6720f0000000000000000270
+    type: HUB
+    site: site2
+    vlan_id: 2400
+    epg_name: EPG_site2_HUB_2400
+    segment: 10.20.70.0/24
+    dhcp: false
+    cluster_name: hub-prod
+    allocated_at: "2026-07-01T06:00:00+00:00"
+    status: Allocated
+
+  # ── site3: in segments-manager's sites, no segments yet ────────────────────

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSyncExternalStore } from "react";
 import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, ShieldAlert, Link2, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
 
 interface NavItem {
@@ -43,18 +43,6 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     ],
   },
 ];
-
-const noSubscription = () => () => {};
-
-/**
- * False during the server render and the hydration pass, true after. The
- * signed-in user is only known in the browser (the persisted auth store), so
- * admin-only entries appear once mounted, or the server's HTML and the
- * client's first render would disagree.
- */
-function useMounted(): boolean {
-  return useSyncExternalStore(noSubscription, () => true, () => false);
-}
 
 export function SidebarNav() {
   const pathname = usePathname();

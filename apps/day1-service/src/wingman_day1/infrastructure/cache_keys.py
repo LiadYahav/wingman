@@ -16,6 +16,8 @@ Families:
 - ``hub:<mce>:<kind>:<namespace>[:<name>]`` an MCE hub read for the nodes view
 - ``server-scan:rows``                     server-scan's whole fleet, as rows
 - ``segments-manager:segment:<cidr>``      segments-manager's answer for one segment
+- ``segments-manager:{sites,stats}``       its sites and per-site statistics (ADR-0047)
+- ``segments-manager:segments:...``        its segments for one query
 - ``workflows:uninstall:...``              the orchestrator's uninstall runs: the list, one run
 """
 
@@ -72,9 +74,30 @@ def server_scan_rows() -> str:
     return "server-scan:rows"
 
 
+def segments_manager_prefix() -> str:
+    """Everything cached from segments-manager; cleared by a ``fresh`` read (ADR-0047)."""
+    return "segments-manager:"
+
+
 def segment(cidr: str) -> str:
     """segments-manager's answer for one segment (expires; it has no webhook to day1)."""
-    return f"segments-manager:segment:{cidr}"
+    return f"{segments_manager_prefix()}segment:{cidr}"
+
+
+def segment_sites() -> str:
+    """segments-manager's sites."""
+    return f"{segments_manager_prefix()}sites"
+
+
+def segment_stats() -> str:
+    """segments-manager's per-site statistics."""
+    return f"{segments_manager_prefix()}stats"
+
+
+def segment_list(site: str | None, status: str | None, type_: str | None) -> str:
+    """segments-manager's segments for one query (``*`` where it does not filter)."""
+    parts = (part.lower() if part else "*" for part in (site, status, type_))
+    return f"{segments_manager_prefix()}segments:{':'.join(parts)}"
 
 
 def uninstall_runs_prefix() -> str:

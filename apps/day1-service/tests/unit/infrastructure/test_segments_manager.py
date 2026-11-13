@@ -46,6 +46,8 @@ PARSED = SegmentRecord(
     status="Allocated",
     type="HC",
     site="site2",
+    dhcp=True,
+    allocated_at="2026-10-12T12:00:00+00:00",
 )
 
 Handler = Callable[[httpx.Request], httpx.Response]

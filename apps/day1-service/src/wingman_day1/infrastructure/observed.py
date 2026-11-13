@@ -81,6 +81,11 @@ class SegmentsManagerOperation(StrEnum):
     """Calls to segments-manager (``dependency="segments_manager"``)."""
 
     GET_SEGMENT = "get_segment"
+    LIST_SITES = "list_sites"
+    GET_STATS = "get_stats"
+    LIST_SEGMENTS = "list_segments"
+    REFRESH_SEGMENTS = "refresh_segments"
+    """``GET /api/segments?fresh=true``: its database, not its cache (the Refresh button)."""
 
 
 class WorkflowsOperation(StrEnum):

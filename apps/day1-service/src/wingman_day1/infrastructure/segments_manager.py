@@ -1,19 +1,24 @@
-"""HttpSegmentLedger: one segment from segments-manager, over httpx (ADR-0039).
+"""HttpSegmentLedger: segments-manager's open reads, over httpx (ADR-0039, ADR-0047).
 
-Read only, and one call: ``GET /api/segments/by-segment?segment=<cidr>``,
-which segments-manager serves without a token. A 404 is its "Segment not
-found" (also its answer for a CIDR that is not a /24): ``None``. Any other
-failure is ``SegmentsManagerUnavailableError``, so the EPG is unknown, never
-"none" (ADR-0004). Nothing here writes to segments-manager.
+Read only, and only GETs segments-manager serves without a token:
 
-``segment_record`` is also how the fake ledger reads its fixture, so the
-fixture has segments-manager's own shape.
+- ``GET /api/segments/by-segment?segment=<cidr>``: one segment, for the
+  cluster page's EPG. A 404 is its "Segment not found" (also its answer for a
+  CIDR that is not a /24): ``None``.
+- ``GET /api/sites``, ``GET /api/stats`` and ``GET /api/segments`` (with its
+  ``site``, ``status`` and ``type`` filters, and ``fresh=true`` for its
+  Refresh button), for the Segments area.
+
+Any other answer, or a malformed one, is ``SegmentsManagerUnavailableError``,
+so what segments-manager says is unknown, never "none" (ADR-0004). Nothing
+here writes to segments-manager. The answers are typed in
+``segments_manager_parse``.
 """
 
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Callable
 from typing import Final
 
 import httpx
@@ -21,10 +26,20 @@ import httpx
 from wingman_core.observability.metrics import Dependency, WingmanMetrics
 from wingman_day1.domain.errors import SegmentsManagerUnavailableError
 from wingman_day1.domain.network import SegmentRecord
-from wingman_day1.infrastructure.http import JSON, json_client, optional_text, required_text
+from wingman_day1.domain.segments import ALL_SEGMENTS, SegmentList, SegmentQuery, SiteStats
+from wingman_day1.infrastructure.http import JSON, json_client
 from wingman_day1.infrastructure.observed import Observer, SegmentsManagerOperation, Timer
+from wingman_day1.infrastructure.segments_manager_parse import (
+    segment_list,
+    segment_record,
+    site_names,
+    site_stats,
+)
 
 BY_SEGMENT_PATH: Final = "/api/segments/by-segment"
+SITES_PATH: Final = "/api/sites"
+STATS_PATH: Final = "/api/stats"
+SEGMENTS_PATH: Final = "/api/segments"
 
 
 class HttpSegmentLedger:
@@ -59,69 +74,75 @@ class HttpSegmentLedger:
 
     async def segment(self, cidr: str) -> SegmentRecord | None:
         """See SegmentLedger.segment."""
-        return await self._observer.call(SegmentsManagerOperation.GET_SEGMENT, self._read(cidr))
+        return await self._observer.call(SegmentsManagerOperation.GET_SEGMENT, self._one(cidr))
 
-    async def _read(self, cidr: str) -> SegmentRecord | None:
+    async def sites(self) -> tuple[str, ...]:
+        """See SegmentLedger.sites."""
+        read = self._read(SITES_PATH, {}, "reading the sites", site_names)
+        return await self._observer.call(SegmentsManagerOperation.LIST_SITES, read)
+
+    async def stats(self) -> tuple[SiteStats, ...]:
+        """See SegmentLedger.stats."""
+        read = self._read(STATS_PATH, {}, "reading the statistics", site_stats)
+        return await self._observer.call(SegmentsManagerOperation.GET_STATS, read)
+
+    async def segments(
+        self, query: SegmentQuery = ALL_SEGMENTS, *, fresh: bool = False
+    ) -> SegmentList:
+        """See SegmentLedger.segments."""
+        params = {
+            key: value
+            for key, value in (("site", query.site), ("status", query.status), ("type", query.type))
+            if value is not None
+        }
+        if fresh:
+            params["fresh"] = "true"
+        operation = (
+            SegmentsManagerOperation.REFRESH_SEGMENTS
+            if fresh
+            else SegmentsManagerOperation.LIST_SEGMENTS
+        )
+        read = self._read(SEGMENTS_PATH, params, "reading the segments", segment_list)
+        return await self._observer.call(operation, read)
+
+    async def _one(self, cidr: str) -> SegmentRecord | None:
         what = f"reading segment {cidr}"
-        try:
-            response = await self._client.get(BY_SEGMENT_PATH, params={"segment": cidr})
-        except httpx.TransportError as exc:
-            raise SegmentsManagerUnavailableError(
-                f"segments-manager unreachable {what}: {type(exc).__name__}"
-            ) from exc
+        response = await self._get(BY_SEGMENT_PATH, {"segment": cidr}, what)
         if response.status_code == 404:
             return None
-        if response.status_code != 200:
-            raise SegmentsManagerUnavailableError(
-                f"segments-manager answered {response.status_code} {what}"
-            )
-        try:
-            record = segment_record(response.json())
-        except (ValueError, KeyError, TypeError) as exc:
-            raise SegmentsManagerUnavailableError(
-                f"segments-manager returned a malformed segment {what}"
-            ) from exc
+        record = _parsed(response, what, segment_record)
         if record.segment != cidr:
             raise SegmentsManagerUnavailableError(
                 f"segments-manager answered segment {record.segment} {what}"
             )
         return record
 
+    async def _read[T](
+        self, path: str, params: dict[str, str], what: str, parse: Callable[[JSON], T]
+    ) -> T:
+        return _parsed(await self._get(path, params, what), what, parse)
 
-def segment_record(raw: JSON) -> SegmentRecord:
-    """One segment as ``by-segment`` answers it; a malformed one raises Type/Key/ValueError.
-
-    Unknown keys are ignored (live records still carry legacy ones).
-    """
-    if not isinstance(raw, dict):
-        raise TypeError("a segment is not an object")
-    return SegmentRecord(
-        segment=required_text(raw, "segment"),
-        vlan_id=_vlan(raw),
-        epg_name=optional_text(raw, "epg_name"),
-        cluster_name=_holder(raw),
-        status=optional_text(raw, "status"),
-        type=optional_text(raw, "type"),
-        site=optional_text(raw, "site"),
-    )
-
-
-def _vlan(raw: Mapping[str, JSON]) -> int | None:
-    value = raw.get("vlan_id")
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError("vlan_id is not a number")
-    return value
+    async def _get(self, path: str, params: dict[str, str], what: str) -> httpx.Response:
+        """The answer to one GET: 200, or 404 for one segment; anything else is unavailable."""
+        try:
+            response = await self._client.get(path, params=params)
+        except httpx.TransportError as exc:
+            raise SegmentsManagerUnavailableError(
+                f"segments-manager unreachable {what}: {type(exc).__name__}"
+            ) from exc
+        answers = (200, 404) if path == BY_SEGMENT_PATH else (200,)
+        if response.status_code not in answers:
+            raise SegmentsManagerUnavailableError(
+                f"segments-manager answered {response.status_code} {what}"
+            )
+        return response
 
 
-def _holder(raw: Mapping[str, JSON]) -> str | tuple[str, ...] | None:
-    """``cluster_name``: one stem, or a list of them for a shared UPI segment."""
-    value = raw.get("cluster_name")
-    if value is None or value == "":
-        return None
-    if isinstance(value, str):
-        return value
-    if isinstance(value, list) and all(isinstance(name, str) for name in value):
-        return tuple(value)
-    raise TypeError("cluster_name is not a string or a list of strings")
+def _parsed[T](response: httpx.Response, what: str, parse: Callable[[JSON], T]) -> T:
+    """``parse`` of the JSON body; a body it cannot read is unavailable, as malformed."""
+    try:
+        return parse(response.json())
+    except (ValueError, KeyError, TypeError) as exc:
+        raise SegmentsManagerUnavailableError(
+            f"segments-manager returned a malformed answer {what}"
+        ) from exc

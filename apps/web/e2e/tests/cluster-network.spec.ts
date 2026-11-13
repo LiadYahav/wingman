@@ -5,6 +5,7 @@
  */
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, injectAdminAuth, json, mockClusterNetwork, mockDashboardApis } from "../fixtures/api-handlers";
+import { mockSegmentList, SITES, STATS } from "../fixtures/segments";
 import type { ClusterDetail, ClusterNetworkRead, DestinationCharts } from "../../types";
 
 const SITE = "site2";
@@ -44,11 +45,32 @@ const AGREES: ClusterNetworkRead = {
   problems: [], ledger_error: null,
 };
 
-async function openCluster(page: Page, network: ClusterNetworkRead) {
+const SEGMENTS_MANAGER = {
+  url: "https://segments-manager.example/",
+  search_url: `https://segments-manager.example/api/segments/search?q=${AMIT}`,
+};
+
+async function mockSegmentsArea(page: Page) {
+  const amit = {
+    segment: "10.20.90.0/24", site: SITE, vlan_id: 412, epg_name: "EPG_site2_HC_412", dhcp: true, status: "Allocated",
+    type: "HC", cluster_name: AMIT, allocated_at: null, holders: [{ name: AMIT, day1: { site: SITE, mce: MCE } }], mismatches: [],
+  };
+  await page.route("**/api/day1/segments/sites", (r) => json(r, SITES));
+  await page.route("**/api/day1/segments/stats", (r) => json(r, STATS));
+  await page.route(/\/api\/day1\/segments(\?.*)?$/, (r) => json(r, mockSegmentList({ segments: [...mockSegmentList().segments, amit] })));
+}
+
+async function openCluster(
+  page: Page,
+  network: ClusterNetworkRead,
+  { detail = DETAIL, segmentsArea = false }: { detail?: ClusterDetail; segmentsArea?: boolean } = {}
+) {
   await injectAdminAuth(page);
   await mockDashboardApis(page);
+  // The Segments area on (an admin, segments-manager configured): the card links to it (ADR-0047)
+  if (segmentsArea) await mockSegmentsArea(page);
   await page.route(/\/api\/day1\/clusters\/[^/]+\/status\?/, (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
-  await page.route(`**/api/day1/clusters/${AMIT}?**`, (r) => json(r, DETAIL));
+  await page.route(`**/api/day1/clusters/${AMIT}?**`, (r) => json(r, detail));
   await page.route(`**/api/day1/clusters/${AMIT}/drift?**`, (r) =>
     json(r, {
       cluster: AMIT, site: SITE, mce: MCE, state: "not_linked", is_drifted: false, spec_name: null, spec_version: null,
@@ -86,5 +108,23 @@ test.describe("The HostedCluster & network card", () => {
     await expect(page.getByTestId("network-segment")).toHaveText("10.20.90.0/24");
     await expect(page.getByTestId("network-epg-unknown")).toHaveText("unknown");
     await expect(page.getByTestId("network-epg-unknown")).toHaveAttribute("title", /answered 503/);
+  });
+
+  test("for an admin with the Segments area, the card opens Wingman's Segments filtered to the cluster", async ({ page }) => {
+    await openCluster(page, AGREES, { detail: { ...DETAIL, segments_manager: SEGMENTS_MANAGER }, segmentsArea: true });
+    const link = page.getByTestId("cluster-segments").getByRole("link", { name: "This cluster's segments" });
+    await expect(link).toHaveAttribute("href", `/segments?cluster=${AMIT}`);
+    await expect(page.getByTestId("segments-manager")).toHaveCount(0);
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(`/segments\\?cluster=${AMIT}$`));
+    await expect(page.getByRole("button", { name: `Remove the cluster filter ${AMIT}` })).toBeVisible();
+    await expect(page.getByTestId("segment-row")).toHaveCount(1);
+    await expect(page.getByTestId("segment-row")).toHaveAttribute("data-segment", "10.20.90.0/24");
+  });
+
+  test("without the area (here: segments-manager's routes off), the card keeps segments-manager's links", async ({ page }) => {
+    await openCluster(page, AGREES, { detail: { ...DETAIL, segments_manager: SEGMENTS_MANAGER } });
+    await expect(page.getByTestId("segments-manager").getByRole("link", { name: "Segments Manager" })).toHaveAttribute("href", SEGMENTS_MANAGER.url);
+    await expect(page.getByTestId("cluster-segments")).toHaveCount(0);
   });
 });

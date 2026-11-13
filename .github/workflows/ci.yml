@@ -206,6 +206,10 @@ jobs:
       - name: lint
         run: npm run lint --workspace=web
 
+      # Vitest: the pure logic (filters, sorting, URL state, CSV); kept out of the Next build.
+      - name: unit tests
+        run: npm run test:unit --workspace=web
+
       - name: typecheck
         working-directory: apps/web
         run: npx tsc --noEmit

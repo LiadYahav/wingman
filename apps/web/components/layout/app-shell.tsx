@@ -5,6 +5,7 @@ import { Menu } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { SidebarNav } from "./sidebar-nav";
 import { UserMenu } from "./user-menu";
+import { AreaSwitch } from "./area-switch";
 import { EasterEgg, triggerEasterEgg } from "./easter-egg";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
@@ -75,6 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-5 w-5" />
           </button>
+          <AreaSwitch />
           <div className="flex-1" />
           <UserMenu />
         </header>

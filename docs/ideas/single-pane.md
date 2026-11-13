@@ -86,7 +86,7 @@ tag exists.
 | 0b | Changes reach each cluster through its own MR: import, and every flavor version rolled out per cluster | 0044 | L | In progress (PR #32) |
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
 | 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0046 | M | 1 for a place to show it |
-| 3 | Segments area | 0047 | M + M | 2 |
+| 3 | Segments area | 0047 | M + M | Built as an alpha (3.15.0): the user decides what stays |
 | 4 | Servers area | 0048 | L–XL | 2; the team's tokens and an OK on code reuse |
 | 5 | Hosted clusters and MCEs from cluster-navigator | 0049 | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
@@ -222,6 +222,13 @@ The groundwork every area needs, built once:
     (ADR-0010).
 
 ### 3. Segments area (ADR-0047)
+
+**Status (2026-11-13): built as an alpha** (3.15.0), for the user to look
+at and decide what stays: the API below, the page at `/segments` from the
+top bar's area switch, the shared table and Vitest from workstream 2's
+groundwork (only what this page needs). Its cuts (no Excel, no connection
+dot, no `/api/logs`, a Type filter row instead of column filters) are
+listed in `docs/notes/2026-11-13-segments-area-api.md` §7.
 
 segments-manager's UI is one read-only page today (it lost its writes in
 July); its reads need no token.

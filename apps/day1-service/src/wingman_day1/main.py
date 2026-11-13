@@ -56,6 +56,7 @@ from wingman_day1.api.v1 import clusters as clusters_api
 from wingman_day1.api.v1 import machine_configs as machine_configs_api
 from wingman_day1.api.v1 import placement as placement_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
+from wingman_day1.api.v1 import segments as segments_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import webhooks as webhooks_api
@@ -75,6 +76,7 @@ from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
+from wingman_day1.compose_segments import segment_ledger, segments_service
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.domain.quick_links import GeneratedLinks, UrlTemplates
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
@@ -95,7 +97,6 @@ from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.provision_workflow import HttpProvisionWorkflow
 from wingman_day1.infrastructure.repositories import CachedRepository
 from wingman_day1.infrastructure.rollout_events import MetricRolloutEvents
-from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.ports import (
@@ -134,6 +135,7 @@ ROUTERS: Final = (
     machine_configs_api.router,
     placement_api.router,
     quick_links_api.router,
+    segments_api.router,
     approvals_api.router,
     audit_api.router,
     webhooks_api.router,
@@ -251,7 +253,7 @@ def build_adapters(
         identity=identity,
         inventory=inventory,
         uninstall=uninstall,
-        ledger=_segment_ledger(settings, metrics=metrics, closers=closers),
+        ledger=segment_ledger(settings, metrics=metrics, closers=closers),
         provision=_provision_workflow(settings, metrics=metrics, clock=clock, closers=closers),
         day2_installs=day2_installs,
         closers=tuple(closers),
@@ -285,30 +287,6 @@ def _provision_workflow(
     )
     closers.append(workflow.aclose)
     return workflow
-
-
-def _segment_ledger(
-    settings: Day1Settings, *, metrics: WingmanMetrics, closers: list[Close]
-) -> SegmentLedger | None:
-    """segments-manager, real or none; or, with the fake fleet, its fake (ADR-0039)."""
-    if settings.day1_fake_fleet:
-        from wingman_day1.infrastructure.fake_segments import (
-            FakeSegmentLedger,
-            default_segments_file,
-            load_segments,
-        )
-
-        return FakeSegmentLedger(load_segments(default_segments_file()))
-    if not settings.segments_manager_url:
-        return None
-    ledger = HttpSegmentLedger(
-        base_url=settings.segments_manager_url,
-        verify=settings.segments_manager_tls_verify,
-        timeout_seconds=settings.segments_manager_timeout_seconds,
-        metrics=metrics,
-    )
-    closers.append(ledger.aclose)
-    return ledger
 
 
 def _fleet_adapters(
@@ -545,6 +523,7 @@ def build_context(
         segments_manager_ui_url=settings.segments_manager_ui_base or fake_ui or None,
         placement=placement,
         quick_links=quick_links,
+        segments=segments_service(adapters.ledger, cache, cluster_service, ttl=ttl),
     )
 
 

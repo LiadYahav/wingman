@@ -121,6 +121,7 @@ wingman/
 | **Wingman picks the MCE** | The create form asks for the site, prod or prep and the OpenShift version (the owner and the flavor's nodepools refine it), never for the MCE, and Wingman picks it: of the MCEs at the site whose name says the env, those that host the version, have at least `PLACEMENT_MIN_FREE_PODS` free pods on their workers (allocatable pods less pods in use; masters, infra and tainted nodes left out), have enough healthy free servers of each node type the nodepools need (free Agents in that InfraEnv, healthy in server-scan) and can be read, the one with the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers in server-scan. The form shows every candidate's numbers in one row each, the pick's row marked, with each row's reasons and why the pick won in tooltips; an admin may choose another MCE that passes every check, with a reason, and the MR description records it all (ADR-0050). With live status off it decides on the day1 repo and server-scan, and the free pods and servers are "not checked", shown as such. |
 | **Add-ons: catalog, defaults and overrides** | The **Addons** page lists each team's add-ons (its catalog, `operators/<chart>/` in the team repo) and their fleet defaults. A team admin creates an add-on and edits it there (Edit add-on: its deploy config and its Sig values, `operators/<chart>/values.yaml`; values go chart values → Sig values → cluster values); an add-on's page (`/addons/<team>/<add-on>`) has its deploy config and values, its OCP-version pins, and per fleet scope (hosted clusters, MCEs, the hub, UPI) whether it is a default there and that default's values. Each env (`values-<env>.yaml`) and each MCE, hosted cluster or UPI cluster (`values-<name>.yaml`) can get values of its own, and an add-on wanted on some MCEs only is deployed on those MCEs, one install merge request each. Which add-ons a hosted cluster has of its own comes from its flavor and the create form. Every change is previewed and confirmed against that preview (ADR-0053). One cluster's add-ons stay on that cluster's page. |
 | **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. In either mode, the workflow's open merge request (branch `provision-cluster/<stem>`) holds its cluster's name, refuses a second create of it and counts on its MCE for placement (ADR-0042's amendment). |
+| **Segments** | segments-manager's page, rebuilt in Wingman for its admins (`/segments`, from the top bar's area switch): a card per site (allocated out of total, by type), then every segment with the original's columns (Type, Site, VLAN ID, EPG Name, Network Segment, DHCP, Cluster, Status), sorting, status tabs, site and type filters, search, a column picker, copy on click and a CSV of the rows shown, re-read every 30 seconds. Every filter lives in the URL, so the cluster page links to its own segments; a holder that is a hosted cluster links to its page, and a row where segments-manager disagrees with the cluster file (ADR-0039's checks, on data already read) is marked. Read only: nothing is written to segments-manager (ADR-0047). Needs `SEGMENTS_MANAGER_URL`. |
 | **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. Wingman only lists the links and never calls them, and icons ship with Wingman (ADR-0052). |
 
 ## Deployment
@@ -235,6 +236,16 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/day1/quick-links` | The launcher's sections and cards: the hub and every MCE's ArgoCD and console, by site, then the links file's sections, with the links file's problems ([API note](docs/notes/2026-11-12-quick-links-api.md)) |
+
+#### Segments (admins only, ADR-0047)
+
+Read only, from segments-manager's open GETs; `501 FEATURE_DISABLED` while `SEGMENTS_MANAGER_URL` is empty, `502 DEPENDENCY_UNAVAILABLE` when segments-manager fails ([API note](docs/notes/2026-11-13-segments-area-api.md)).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/day1/segments/sites` | segments-manager's sites, in its order |
+| `GET` | `/api/day1/segments/stats` | Each site's allocated and total segments, and the allocated count per type |
+| `GET` | `/api/day1/segments` | Every segment (`site`, `status`, `type` filter), each holder joined to its cluster file in day1; `fresh=true` reads segments-manager's database, at most once per 5 seconds per replica |
 
 ### Day2 Service (Port 8002)
 
@@ -412,8 +423,8 @@ DAY1_FAKE_FLEET=false                     # development only: an MCE, server-sca
 DAY1_PROVISIONER=merge-request            # how a create is proposed (ADR-0042): merge-request, or workflow (start provision-cluster; needs WORKFLOWS_API_URL)
 PLACEMENT_MIN_FREE_PODS=70                # MCE placement (ADR-0050; checked when CLUSTER_STATUS_ENABLED): the free pods on its workers an MCE needs, the cost of one hosted control plane
 
-# segments-manager: the cluster's EPG, checked against the file (ADR-0039; off by default; read only)
-SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG
+# segments-manager: the cluster's EPG, checked against the file (ADR-0039), and the Segments area (ADR-0047); off by default; read only
+SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG, no Segments area
 SEGMENTS_MANAGER_UI_URL=                  # where the cluster page's links point (its UI); default SEGMENTS_MANAGER_URL; both empty: no link
 SEGMENTS_MANAGER_SSL_VERIFY=true          # true, false, or a CA bundle path
 SEGMENTS_MANAGER_TIMEOUT_SECONDS=5
