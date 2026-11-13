@@ -19,14 +19,11 @@ from wingman_day2.domain.errors import (
     ChartNotInstalledError,
     PlanChangedError,
 )
-from wingman_day2.domain.platform import AppSource, TeamPlan
 
 MCES = DefaultsScope.MCES
 HOSTED = DefaultsScope.HOSTED_CLUSTERS
 PREP = "mce:site1:prep:ocp4-prep-mce-site1-a"
 PROD = "mce:site1:prod:ocp4-prod-mce-site1-a"
-EXCLUSIONS = "defaults/mces/exclusions.yaml"
-PROD_IN_CLUSTER = "sites/site1/prod/mces/ocp4-prod-mce-site1-a/in-cluster"
 
 
 async def confirmed(write: Callable[..., Awaitable[AuthoringResult]]) -> AuthoringResult:
@@ -45,10 +42,6 @@ async def merge(services: Day2Services, result: AuthoringResult, approver: User)
     mr = result.merge_request
     assert mr is not None
     await services.approvals.approve(result.plan.team, mr.ref.iid, sha=mr.sha, approver=approver)
-
-
-def apps_of(plan: TeamPlan, chart: str) -> dict[str, AppSource]:
-    return {a.ref.id: a.source for a in plan.apps if a.chart == chart}
 
 
 # ── values for one destination ──────────────────────────────────────────────

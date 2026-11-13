@@ -247,10 +247,6 @@ class AuthoringPlan:
         """The last change this plan makes to ``path``."""
         return next((c for c in reversed(self.changes) if c.path == path), None)
 
-    def impact_on(self, ref: ClusterRef) -> DestinationImpact | None:
-        """What the plan does on ``ref``."""
-        return next((i for i in self.impact if i.ref == ref), None)
-
 
 @dataclass(frozen=True, slots=True)
 class AuthoringResult:
