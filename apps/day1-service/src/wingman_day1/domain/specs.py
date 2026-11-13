@@ -234,10 +234,7 @@ def parse_spec(content: str, *, expected_name: str | None = None) -> ClusterSpec
         raise InvalidSpecError("the spec is not valid YAML", [str(exc)]) from exc
     if not isinstance(document, dict):
         raise InvalidSpecError("the spec is not a YAML mapping")
-    try:
-        spec = ClusterSpec.model_validate(document)
-    except ValidationError as exc:
-        raise InvalidSpecError("the spec is not a valid ClusterSpec", _problems(exc)) from exc
+    spec = validate_spec(document)
     if expected_name is not None and spec.metadata.name != expected_name:
         raise InvalidSpecError(
             "the spec's name does not match its file",
@@ -247,7 +244,7 @@ def parse_spec(content: str, *, expected_name: str | None = None) -> ClusterSpec
 
 
 def validate_spec(document: Mapping[str, object]) -> ClusterSpec:
-    """Validate a spec sent by a client. Raises ``InvalidSpecError``."""
+    """Validate a spec document already parsed. Raises ``InvalidSpecError``."""
     try:
         return ClusterSpec.model_validate(document)
     except ValidationError as exc:

@@ -1,20 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useDebounced } from "@/hooks/use-debounced";
 import { api } from "@/lib/api-client";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { sameValues, stableStringify, type Values } from "@/lib/values";
 import type { MergePreviewBody, ValuesPreview } from "@/types/day2";
-
-export function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
-}
 
 /**
  * The service's preview of a chart on a destination with `draft` as the

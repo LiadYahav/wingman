@@ -1,12 +1,11 @@
-import Link from "next/link";
 import { AlertTriangle, ArrowUpCircle, CheckCircle2, CircleHelp, GitPullRequest, Unlink } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { IntentLink } from "@/components/common/intent-link";
 import { approvalHref } from "@/lib/approvals";
 import {
   flavorDisplayState, flavorStateHint, flavorStateLabel, STATE_NAME, type FlavorDisplayState, type FlavorStateRow,
 } from "@/lib/flavor-state";
 import { cn } from "@/lib/utils";
-import type { DriftState } from "@/types";
 
 const LOOK: Record<FlavorDisplayState, { Icon: typeof CheckCircle2; className: string }> = {
   in_sync: { Icon: CheckCircle2, className: "bg-status-ready/10 text-status-ready-fg" },
@@ -18,36 +17,6 @@ const LOOK: Record<FlavorDisplayState, { Icon: typeof CheckCircle2; className: s
 };
 
 const PILL = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap";
-
-const HINT: Record<DriftState, string> = {
-  in_sync: "The file holds every value its version of the flavor locks, and every add-on it lists is installed",
-  drifted: "A value its version of the flavor locks differs in the file, or an add-on it lists is not installed",
-  unknown: "Drift could not be determined",
-  not_linked: "The cluster follows no flavor, so there is nothing to drift from",
-};
-
-const DRIFT_TO_DISPLAY: Record<DriftState, FlavorDisplayState> = {
-  in_sync: "in_sync", drifted: "drifted", unknown: "unknown", not_linked: "not_linked",
-};
-
-/**
- * A drift state alone. A cluster's own badge is `FlavorStateBadge`: it also
- * says the version the cluster is on and its update.
- */
-export function DriftBadge({ state, error, className }: { state: DriftState; error?: string | null; className?: string }) {
-  const { Icon, className: tone } = LOOK[DRIFT_TO_DISPLAY[state]];
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger className={cn(PILL, "cursor-default", tone, className)}>
-          <Icon className="h-3 w-3 shrink-0" />
-          {STATE_NAME[DRIFT_TO_DISPLAY[state]]}
-        </TooltipTrigger>
-        <TooltipContent className="max-w-xs">{error || HINT[state]}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
 
 /** A display state alone, as the legend beside a count. */
 export function FlavorStateLegend({ state, className }: { state: FlavorDisplayState; className?: string }) {
@@ -79,7 +48,7 @@ export function FlavorStateBadge({ row, className }: { row: FlavorStateRow; clas
           data-testid="flavor-state"
           data-state={state}
           className={cn(PILL, mr ? "hover:underline underline-offset-2" : "cursor-default", tone, className)}
-          render={mr ? <Link href={approvalHref(mr)} aria-label={`${label}: review !${mr.iid}`} /> : undefined}
+          render={mr ? <IntentLink href={approvalHref(mr)} aria-label={`${label}: review !${mr.iid}`} /> : undefined}
         >
           <Icon className="h-3 w-3 shrink-0" aria-hidden />
           {label}

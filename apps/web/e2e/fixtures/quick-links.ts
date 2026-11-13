@@ -5,7 +5,7 @@
  */
 
 import type { Page, Route } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, json, mockDashboardApis } from "./api-handlers";
+import { fulfillProblem, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "./api-handlers";
 import type { QuickLinkCard, QuickLinks, QuickLinkSection } from "../../types";
 
 const DOMAIN = "example.internal";
@@ -13,7 +13,7 @@ export const argocdUrl = (cluster: string) => `https://openshift-gitops-server-o
 export const consoleUrl = (cluster: string) => `https://console-openshift-console.apps.${cluster}.${DOMAIN}`;
 
 /** A generated card: the cluster's ArgoCD, then its console. */
-export function clusterCard(name: string, overrides: Partial<QuickLinkCard> = {}): QuickLinkCard {
+function clusterCard(name: string, overrides: Partial<QuickLinkCard> = {}): QuickLinkCard {
   return {
     id: `cluster:${name}`,
     name,
@@ -28,7 +28,7 @@ export function clusterCard(name: string, overrides: Partial<QuickLinkCard> = {}
 }
 
 /** A links-file card: one link. */
-export function fileCard(section: string, name: string, url: string, overrides: Partial<QuickLinkCard> = {}): QuickLinkCard {
+function fileCard(section: string, name: string, url: string, overrides: Partial<QuickLinkCard> = {}): QuickLinkCard {
   const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return {
     id: `file:${slug(section)}:${slug(name)}`,
@@ -40,9 +40,9 @@ export function fileCard(section: string, name: string, url: string, overrides: 
   };
 }
 
-export const HUB = "hub-prod";
+const HUB = "hub-prod";
 export const MCE_A = "ocp4-prod-mce-site1-a";
-export const MCE_B = "ocp4-prep-mce-site1-a";
+const MCE_B = "ocp4-prep-mce-site1-a";
 export const MCE_C = "ocp4-prod-mce-site2-a";
 
 export const SECTIONS: QuickLinkSection[] = [
@@ -123,12 +123,7 @@ export async function setUpQuickLinks(
   { board = mockQuickLinks(), viewer = false }: { board?: QuickLinks | Handler; viewer?: boolean } = {}
 ) {
   await injectAdminAuth(page);
-  if (viewer) {
-    await page.addInitScript(() => {
-      const state = { state: { user: { username: "vera", groups: ["wingman-viewers"], uid: "vera", full_name: "Vera Viewer", role: "viewer" }, isAuthenticated: true }, version: 0 };
-      localStorage.setItem("wingman-auth", JSON.stringify(state));
-    });
-  }
+  if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
   await page.route("**/api/day1/quick-links", answer(board));
 }

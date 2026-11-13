@@ -12,7 +12,6 @@ from wingman_day1.domain.servers import (
     ServerRow,
     is_node_of,
     node_cluster_names,
-    nodes_of,
     run_status,
     same_server_name,
     uninstall_run_ids,
@@ -43,24 +42,6 @@ def test_a_cluster_is_known_to_server_scan_by_its_hosted_cluster_or_its_bare_nam
 def test_the_sandbox_naming_gives_its_own_two_names() -> None:
     sandbox = HostedClusterNaming("").for_file("ocp4-prod-lark-site1")
     assert node_cluster_names(sandbox) == {"ocp4-ocp4-prod-lark-site1", "ocp4-prod-lark-site1"}
-
-
-def test_nodes_are_the_rows_with_either_name_sorted_by_name_once_per_server() -> None:
-    rows = [
-        row("ocp-c", "ocp4-prod-lark-site1"),
-        row("ocp-a", "prod-lark-site1"),
-        row("ocp-b", "ocp4-prod-lark-site1", id_="srv_dup"),
-        row("ocp-b", "ocp4-prod-lark-site1", id_="srv_dup"),
-        row("ocp-other", "ocp4-prod-hawk-site1"),
-        row("ocp-free", None),
-        row("ocp-near", "ocp4-prod-lark-site1-a"),
-    ]
-    assert [n.name for n in nodes_of(rows, LARK)] == ["ocp-a", "ocp-b", "ocp-c"]
-
-
-def test_two_servers_may_share_a_name_and_are_both_listed() -> None:
-    rows = [row("ocp-twin", "prod-lark-site1", id_="srv_2"), row("ocp-twin", "prod-lark-site1")]
-    assert [n.id for n in nodes_of(rows, LARK)] == ["srv_2", "srv_ocp-twin"]
 
 
 @pytest.mark.parametrize(

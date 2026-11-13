@@ -12,12 +12,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
+import { IntentLink } from "@/components/common/intent-link";
 import { ProblemList } from "@/components/common/problem-list";
+import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
-import { clusterHref } from "@/lib/clusters";
+import { clusterHref, OWNER_KEYS, type OwnerKey } from "@/lib/clusters";
 import { flavorDisplayState, type FlavorDisplayState } from "@/lib/flavor-state";
 import { day2Api, day2Keys } from "@/lib/day2";
 import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftSummaryItem } from "@/types";
@@ -43,9 +45,6 @@ function filterOf(state: FlavorDisplayState): Exclude<DriftFilter, "all"> {
   return state === "update_available" || state === "update_mr_open" ? "update" : state;
 }
 
-/** The owner numbers a cluster file carries (§13 of the flavors v2 API note), in the file's order. */
-const OWNER_KEYS = ["merkaz", "anaf", "mador"] as const;
-type OwnerKey = (typeof OWNER_KEYS)[number];
 type GroupBy = "none" | OwnerKey;
 
 const OWNER_LABEL: Record<OwnerKey, string> = { merkaz: "Merkaz", anaf: "Anaf", mador: "Mador" };
@@ -163,9 +162,9 @@ function ClusterStatusCell({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger>
-          <Link href={clusterHref(cluster)}>
+          <IntentLink href={clusterHref(cluster)}>
             <StatusBadge phase={liveStatusToPhase(status)} />
-          </Link>
+          </IntentLink>
         </TooltipTrigger>
         {errorMsg && <TooltipContent className="max-w-xs">{errorMsg}</TooltipContent>}
       </Tooltip>
@@ -341,7 +340,6 @@ export default function ClustersPage() {
     return sizes;
   }, [filtered, groupBy]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
   const flaggedCount = (clusters ?? []).filter((c) => c.problems.length > 0 || !c.naming.follows_convention).length;
 
@@ -520,25 +518,7 @@ export default function ClustersPage() {
           </button>
         )}
 
-        {filtered.length > 10 && (
-          <div className="flex items-center gap-1.5 ml-auto">
-            <span className="text-xs text-muted-foreground">Rows:</span>
-            <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  onClick={() => { setPageSize(n); setPage(1); }}
-                  className={cn(
-                    "rounded-md px-2 py-0.5 text-xs font-medium transition-all",
-                    pageSize === n
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >{n}</button>
-              ))}
-            </div>
-          </div>
-        )}
+        <PageSizePicker total={filtered.length} sizes={PAGE_SIZE_OPTIONS} pageSize={pageSize} onPageSize={(n) => { setPageSize(n); setPage(1); }} />
       </div>
 
       {error ? (
@@ -595,13 +575,13 @@ export default function ClustersPage() {
                           >
                             <td className="px-3 py-3 max-w-[22rem]">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <Link
+                                <IntentLink
                                   href={clusterHref(cluster)}
                                   className="font-semibold text-foreground hover:text-primary transition-colors truncate"
                                   title={cluster.name}
                                 >
                                   {cluster.name}
-                                </Link>
+                                </IntentLink>
                                 <ClusterFlags cluster={cluster} />
                               </div>
                             </td>
@@ -629,9 +609,9 @@ export default function ClustersPage() {
                             <td className="px-3 py-3">
                               {cluster.spec_name ? (
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <Link href={`/specs/${encodeURIComponent(cluster.spec_name)}`} className="hover:text-primary transition-colors font-medium whitespace-nowrap">
+                                  <IntentLink href={`/specs/${encodeURIComponent(cluster.spec_name)}`} className="hover:text-primary transition-colors font-medium whitespace-nowrap">
                                     {cluster.spec_name}
-                                  </Link>
+                                  </IntentLink>
                                   {cluster.spec_version && (
                                     <span className="rounded-full px-1.5 py-0.5 text-xs bg-primary/8 text-primary font-medium whitespace-nowrap">
                                       v{cluster.spec_version}
@@ -681,51 +661,7 @@ export default function ClustersPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm">
-              <p className="text-xs text-muted-foreground">
-                Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}
-              </p>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "px-2 py-1 h-7 text-xs disabled:opacity-40")}
-                >
-                  ← Prev
-                </button>
-                {(() => {
-                  const allPages = Array.from({ length: totalPages }, (_, x) => x + 1);
-                  const visible = allPages.filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1);
-                  const withGaps: (number | "...")[] = [];
-                  let prev = 0;
-                  for (const p of visible) {
-                    if (p - prev > 1) withGaps.push("...");
-                    withGaps.push(p);
-                    prev = p;
-                  }
-                  return withGaps.map((p, i) =>
-                    p === "..." ? (
-                      <span key={`ellipsis-${i}`} className="px-1 text-muted-foreground text-xs">…</span>
-                    ) : (
-                      <button
-                        key={p}
-                        onClick={() => setPage(p as number)}
-                        className={cn(buttonVariants({ variant: p === page ? "default" : "outline", size: "sm" }), "px-2.5 py-1 h-7 text-xs min-w-[28px]")}
-                      >{p}</button>
-                    )
-                  );
-                })()}
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "px-2 py-1 h-7 text-xs disabled:opacity-40")}
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} />
         </>
       )}
     </div>

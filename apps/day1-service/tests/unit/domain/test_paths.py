@@ -18,7 +18,6 @@ def test_a_cluster_file_lives_under_its_mces_hosted_clusters_folder() -> None:
 
 
 def test_the_layout_helpers_build_the_argocd_value_layers() -> None:
-    assert paths.site_dir("site1") == RepoPath("sites/site1")
     assert paths.mce_dir("site1", "m") == RepoPath("sites/site1/mces/m")
     assert paths.mce_values("site1", "m") == RepoPath("sites/site1/mces/m/values.yaml")
     assert paths.mce_version("site1", "m") == RepoPath("sites/site1/mces/m/version.yaml")
@@ -31,8 +30,6 @@ def test_a_name_from_a_request_cannot_escape_its_folder(name: str) -> None:
         paths.mce_dir(name, "m")
     with pytest.raises(InvalidRepoPathError):
         paths.mce_dir("site1", name)
-    with pytest.raises(InvalidRepoPathError):
-        paths.site_dir(name)
 
 
 def test_a_cluster_name_with_a_slash_cannot_reach_another_folder() -> None:

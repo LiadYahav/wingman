@@ -1,6 +1,7 @@
 import { Page, Locator } from "@playwright/test";
+import { SpecNewPage } from "./spec-new.page";
 
-export class ConfigureDialogPage {
+class ConfigureDialogPage {
   readonly page: Page;
   readonly dialog: Locator;
   readonly saveButton: Locator;
@@ -83,4 +84,15 @@ export class ConfigureDialogPage {
     const match = text?.match(/(\d+)/);
     return match ? parseInt(match[1], 10) : 0;
   }
+}
+
+/** The new-spec form with `team/chart` selected and its configure dialog open. */
+export async function openConfigureDialog(page: Page, team: string, chart: string) {
+  const specPage = new SpecNewPage(page);
+  const configDialog = new ConfigureDialogPage(page);
+  await specPage.goto();
+  await specPage.selectAddon(team, chart);
+  await specPage.openConfigureDialog(team, chart);
+  await configDialog.waitForOpen();
+  return { specPage, configDialog };
 }

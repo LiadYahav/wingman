@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Share2 } from "lucide-react";
+import { useDebounced } from "@/hooks/use-debounced";
 import { api } from "@/lib/api-client";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { cn } from "@/lib/utils";
@@ -12,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProblemList } from "@/components/common/problem-list";
 import { AuthoringDialogs } from "@/components/addons/authoring-flow";
 import { RoleChip } from "@/components/addons/role-chip";
-import { useDebounced } from "@/components/addons/use-values-preview";
 import { ValueLayers } from "@/components/addons/value-layers";
 import { ValuesEditor } from "@/components/addons/values-editor";
 import type { AuthoringChange, DestinationValuesBody, MergePreviewBody, RepoFile, ScopeDestination, ScopePanel, ValuesPreview } from "@/types/day2";
@@ -132,6 +132,35 @@ function BeforeAfter({ before, after, stale }: { before: ValuesPreview; after: V
   );
 }
 
+/** The layers behind the merged values after the edit, and today. */
+function LayerTabs({ before, after, editedPath }: { before: ValuesPreview; after: ValuesPreview; editedPath: string }) {
+  return (
+    <Tabs defaultValue="after">
+      <TabsList>
+        <TabsTrigger value="after">Layers after</TabsTrigger>
+        <TabsTrigger value="before">Layers today</TabsTrigger>
+      </TabsList>
+      <TabsContent value="after" className="pt-2">
+        <ValueLayers preview={after} editedPath={editedPath} />
+      </TabsContent>
+      <TabsContent value="before" className="pt-2">
+        <ValueLayers preview={before} editedPath="" />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+/** A values file's write: the draft, or `null` to delete the file (removing it, or nothing left in it). */
+function valuesFileBody(removing: boolean, draft: Values, file: RepoFile | null | undefined): DestinationValuesBody {
+  return {
+    values: removing || leaves(draft).length === 0 ? null : draft,
+    last_commit_id: file?.last_commit_id ?? null,
+    confirm_changes: [],
+    expected_digest: null,
+    message: null,
+  };
+}
+
 /**
  * One destination's value override of a fleet default (ADR-0053):
  * `defaults/<scope>/<op>/values-<name>.yaml`, added, edited or deleted
@@ -172,16 +201,6 @@ export function DestinationValuesDialog({
   const edited = removing || !sameValues(draft, baseline);
   const blocker = !edited ? "No changes yet" : !removing && !file?.exists && leaves(draft).length === 0 ? "Set at least one value" : null;
 
-  function body(): DestinationValuesBody {
-    return {
-      values: removing || leaves(draft).length === 0 ? null : draft,
-      last_commit_id: file?.last_commit_id ?? null,
-      confirm_changes: [],
-      expected_digest: null,
-      message: null,
-    };
-  }
-
   return (
     <AuthoringDialogs
       open={open}
@@ -190,7 +209,7 @@ export function DestinationValuesDialog({
       description={`${file?.exists ? "Edits" : "Adds"} ${path}: the fleet default's values for ${d.name} alone, above the default's values.yaml and values-<env>.yaml. One merge request; the preview lists every destination it changes.`}
       blocker={blocker}
       readOnlyReason={readOnlyReason}
-      body={body}
+      body={() => valuesFileBody(removing, draft, file)}
       method="put"
       url={(dryRun) => day2Api.destinationValues(team, chart, panel.scope, d.id, dryRun)}
       wide
@@ -248,18 +267,7 @@ export function DestinationValuesDialog({
             </div>
           )}
           {before.data && after.data && (
-            <Tabs defaultValue="after">
-              <TabsList>
-                <TabsTrigger value="after">Layers after</TabsTrigger>
-                <TabsTrigger value="before">Layers today</TabsTrigger>
-              </TabsList>
-              <TabsContent value="after" className="pt-2">
-                <ValueLayers preview={after.data} editedPath={path} />
-              </TabsContent>
-              <TabsContent value="before" className="pt-2">
-                <ValueLayers preview={before.data} editedPath="" />
-              </TabsContent>
-            </Tabs>
+            <LayerTabs before={before.data} after={after.data} editedPath={path} />
           )}
         </div>
       </div>
@@ -315,16 +323,6 @@ export function EnvValuesDialog({
   const edited = removing || !sameValues(draft, baseline);
   const blocker = !edited ? "No changes yet" : !removing && !exists && leaves(draft).length === 0 ? "Set at least one value" : null;
 
-  function body(): DestinationValuesBody {
-    return {
-      values: removing || leaves(draft).length === 0 ? null : draft,
-      last_commit_id: file?.last_commit_id ?? null,
-      confirm_changes: [],
-      expected_digest: null,
-      message: null,
-    };
-  }
-
   return (
     <AuthoringDialogs
       open={open}
@@ -333,7 +331,7 @@ export function EnvValuesDialog({
       description={`${exists ? "Edits" : "Adds"} ${path}: the fleet default's values for every ${panel.noun} in ${env} (${destinations.length} today), above the default's values.yaml and below each one's own values-<name>.yaml. One merge request; the preview lists every destination it changes.`}
       blocker={blocker}
       readOnlyReason={readOnlyReason}
-      body={body}
+      body={() => valuesFileBody(removing, draft, file)}
       method="put"
       url={(dryRun) => day2Api.envValues(team, chart, panel.scope, env, dryRun)}
       wide
@@ -403,18 +401,7 @@ export function EnvValuesDialog({
             </div>
           )}
           {where && before.data && after.data && (
-            <Tabs defaultValue="after">
-              <TabsList>
-                <TabsTrigger value="after">Layers after</TabsTrigger>
-                <TabsTrigger value="before">Layers today</TabsTrigger>
-              </TabsList>
-              <TabsContent value="after" className="pt-2">
-                <ValueLayers preview={after.data} editedPath={path} />
-              </TabsContent>
-              <TabsContent value="before" className="pt-2">
-                <ValueLayers preview={before.data} editedPath="" />
-              </TabsContent>
-            </Tabs>
+            <LayerTabs before={before.data} after={after.data} editedPath={path} />
           )}
         </div>
       </div>

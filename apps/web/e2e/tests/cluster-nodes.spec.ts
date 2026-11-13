@@ -13,7 +13,7 @@
 
 import { test, expect, type Page, type Route } from "@playwright/test";
 import {
-  BOARD, fulfillProblem, go, injectAdminAuth, json, mockClusterNodes, mockDashboardApis, mockNodePool, mockNodes,
+  BOARD, fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockClusterNodes, mockDashboardApis, mockNodePool, mockNodes,
   mockNodesBoard, mockPoolNode, mockServer, mockUninstallNode,
 } from "../fixtures/api-handlers";
 import type { ClusterDetail, ClusterNodes, DestinationCharts, WorkflowRun } from "../../types";
@@ -59,12 +59,7 @@ async function openNodesTab(
   { viewer = false }: { viewer?: boolean } = {}
 ) {
   await injectAdminAuth(page);
-  if (viewer) {
-    await page.addInitScript(() => {
-      const state = { state: { user: { username: "vera", groups: ["wingman-viewers"], uid: "vera", full_name: "Vera Viewer", role: "viewer" }, isAuthenticated: true }, version: 0 };
-      localStorage.setItem("wingman-auth", JSON.stringify(state));
-    });
-  }
+  if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
   await page.route("**/api/day1/clusters/bulk-status", (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
   await page.route(/\/api\/day1\/clusters\/[^/]+\/status\?/, (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));

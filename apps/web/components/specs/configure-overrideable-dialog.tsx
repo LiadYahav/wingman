@@ -47,7 +47,7 @@ export function deepMergeValues(
   return result;
 }
 
-export function flattenKeys(obj: Record<string, unknown>, prefix = ""): string[] {
+function flattenKeys(obj: Record<string, unknown>, prefix = ""): string[] {
   const keys: string[] = [];
   for (const key of Object.keys(obj)) {
     const path = prefix ? `${prefix}.${key}` : key;
@@ -61,7 +61,7 @@ export function flattenKeys(obj: Record<string, unknown>, prefix = ""): string[]
   return keys;
 }
 
-export function inferFieldType(value: unknown): FieldType {
+function inferFieldType(value: unknown): FieldType {
   if (typeof value === "boolean") return "boolean";
   if (typeof value === "number" && Number.isInteger(value)) return "integer";
   if (Array.isArray(value)) return "array";

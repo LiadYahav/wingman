@@ -58,7 +58,7 @@ const MODELED_TOP = new Set([...TOP_LOCKABLE, "nodepools"]);
 
 export const nodepoolPath = (index: number, key: string) => `nodepools[${index}].${key}`;
 
-export function isLockable(path: string): boolean {
+function isLockable(path: string): boolean {
   return TOP_LOCKABLE.includes(path) || POSITIONAL.test(path) || path === CONFIGS_RULE;
 }
 
@@ -136,7 +136,7 @@ export function draftFromSpec(spec: ClusterSpec): FlavorDraft {
 
 // ── The nodepool ratio (ADR-0040) ───────────────────────────────────────────
 
-export const RATIO_HINT = "A whole number from 1 to 100";
+const RATIO_HINT = "A whole number from 1 to 100";
 
 /**
  * Turn the ratio on (every nodepool at 1) or off. On, the first nodepool's
@@ -490,8 +490,8 @@ export function storedForm(spec: ClusterSpec): unknown {
 // ── Checks (day1's, for instant feedback) ───────────────────────────────────
 
 const OWNER = /^[0-9]{1,10}$/;
-export const OWNER_HINT = "A number of 1 to 10 digits, like 1234";
-export const LOCK_NEEDS_VALUE = "A locked value needs a value: set one, or make it a preset";
+const OWNER_HINT = "A number of 1 to 10 digits, like 1234";
+const LOCK_NEEDS_VALUE = "A locked value needs a value: set one, or make it a preset";
 
 export interface Issue {
   path: string;
@@ -575,7 +575,7 @@ function isWholeNumber(value: unknown): boolean {
 // ── Day1's problems at their fields ─────────────────────────────────────────
 
 /** A problem's subject (`owner_anaf`, `nodepools[1].configs[0]`) and the rest of it. */
-export function problemSubject(problem: string): { path: string; message: string } | null {
+function problemSubject(problem: string): { path: string; message: string } | null {
   const lock = /^locked_paths: '?([^\s']+)'?\s(.*)$/.exec(problem);
   if (lock) return { path: lock[1], message: `${lock[1]} ${lock[2]}` };
   const at = problem.indexOf(": ");
@@ -639,7 +639,7 @@ export function inputLabel(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export function showValue(value: unknown): string {
+function showValue(value: unknown): string {
   if (value === undefined || value === null) return "—";
   if (Array.isArray(value)) {
     const entries = asEntries(value);

@@ -15,11 +15,10 @@ the fixture has server-scan's own shape.
 
 from __future__ import annotations
 
-import ssl
 import time
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Final
+from typing import Final
 from urllib.parse import quote
 
 import httpx
@@ -31,10 +30,8 @@ from wingman_day1.domain.errors import (
     ServerScanUnavailableError,
 )
 from wingman_day1.domain.servers import ServerDetail, ServerRow
+from wingman_day1.infrastructure.http import JSON, json_client, optional_text, required_text
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
-
-JSON = Any
-"""A decoded JSON value; narrowed where it is read."""
 
 ROWS_PATH: Final = "/api/v1/servers/rows"
 SERVER_PATH: Final = "/api/v1/servers/{id}"
@@ -63,12 +60,10 @@ class HttpServerInventory:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         self._observer = Observer(Dependency.SERVER_SCAN, metrics, timer=timer)
-        self._client = httpx.AsyncClient(
-            base_url=base_url.rstrip("/"),
-            timeout=httpx.Timeout(timeout_seconds),
-            verify=verify
-            if isinstance(verify, bool)
-            else ssl.create_default_context(cafile=verify),
+        self._client = json_client(
+            base_url=base_url,
+            verify=verify,
+            timeout_seconds=timeout_seconds,
             transport=transport,
             headers=headers,
         )
@@ -153,22 +148,22 @@ def server_row(raw: JSON) -> ServerRow:
     reservation = _object(raw, "reservation")
     held = _flag(reservation, "held", default=False)
     return ServerRow(
-        id=_text(raw, "id"),
-        name=_text(raw, "name"),
-        state=_text(raw, "openshift_state"),
-        health=_text(raw, "health"),
-        serial=_optional_text(raw, "serial"),
-        vendor=_optional_text(raw, "vendor"),
-        model=_optional_text(raw, "model"),
-        site=_optional_text(raw, "site_id"),
-        cluster_name=_optional_text(raw, "cluster_name"),
-        mce=_optional_text(raw, "mce_name"),
+        id=required_text(raw, "id"),
+        name=required_text(raw, "name"),
+        state=required_text(raw, "openshift_state"),
+        health=required_text(raw, "health"),
+        serial=optional_text(raw, "serial"),
+        vendor=optional_text(raw, "vendor"),
+        model=optional_text(raw, "model"),
+        site=optional_text(raw, "site_id"),
+        cluster_name=optional_text(raw, "cluster_name"),
+        mce=optional_text(raw, "mce_name"),
         maintenance=_flag(maintenance, "enabled", default=False),
         reachable=_flag(raw, "reachable"),
         stale=_flag(raw, "stale"),
-        contested=_optional_text(raw, "contested_with") is not None,
+        contested=optional_text(raw, "contested_with") is not None,
         last_seen_at=_timestamp(raw, "last_seen_at"),
-        reserved_by=_optional_text(reservation, "holder") if held else None,
+        reserved_by=optional_text(reservation, "holder") if held else None,
         macs=_macs(raw),
     )
 
@@ -179,26 +174,10 @@ def server_detail(raw: JSON) -> ServerDetail:
         raise TypeError("the server is not an object")
     openshift = _object(raw, "openshift")
     return ServerDetail(
-        id=_text(raw, "id"),
-        name=_text(raw, "name"),
-        cluster_name=_optional_text(openshift, "cluster_name"),
+        id=required_text(raw, "id"),
+        name=required_text(raw, "name"),
+        cluster_name=optional_text(openshift, "cluster_name"),
     )
-
-
-def _text(raw: Mapping[str, JSON], key: str) -> str:
-    value = raw[key]
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"{key} is not a non-empty string")
-    return value
-
-
-def _optional_text(raw: Mapping[str, JSON], key: str) -> str | None:
-    value = raw.get(key)
-    if value is None or value == "":
-        return None
-    if not isinstance(value, str):
-        raise TypeError(f"{key} is not a string")
-    return value
 
 
 def _object(raw: Mapping[str, JSON], key: str) -> Mapping[str, JSON]:
@@ -227,5 +206,5 @@ def _macs(raw: Mapping[str, JSON]) -> tuple[str, ...]:
 
 
 def _timestamp(raw: Mapping[str, JSON], key: str) -> datetime | None:
-    value = _optional_text(raw, key)
+    value = optional_text(raw, key)
     return datetime.fromisoformat(value) if value is not None else None

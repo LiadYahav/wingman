@@ -128,6 +128,16 @@ function SectionHeader({ id, icon: Icon, title, subtitle, badge }: {
   );
 }
 
+/** A term and what it means, in a grid of them. */
+function TermCard({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="text-sm font-semibold mb-1">{title}</p>
+      <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+    </div>
+  );
+}
+
 function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
   return (
     <div className="rounded-xl border bg-card p-4 hover:shadow-md transition-shadow">
@@ -555,10 +565,7 @@ export default function DocsPage() {
               { title: "Preset", desc: "Prefilled in the create form; a cluster may change it. A preset never drifts." },
               { title: "Locked", desc: "Fixed: every cluster gets exactly this value, the create form shows it read-only and day1 refuses another, and a later edit of the file shows as drift. Lockable: the owner numbers, the platform, and per nodepool its replicas, machine configs and node labels." },
             ].map(({ title, desc }) => (
-              <div key={title} className="rounded-xl border bg-card p-4">
-                <p className="text-sm font-semibold mb-1">{title}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-              </div>
+              <TermCard key={title} title={title} desc={desc} />
             ))}
           </div>
 
@@ -885,10 +892,7 @@ nodepool:
                 desc: "Servers server-scan still places in the cluster that no Machine has are listed apart, under the NodePools. That is usual for a few minutes after an uninstall.",
               },
             ].map(({ title, desc }) => (
-              <div key={title} className="rounded-xl border bg-card p-4">
-                <p className="text-sm font-semibold mb-1">{title}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-              </div>
+              <TermCard key={title} title={title} desc={desc} />
             ))}
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
@@ -1149,10 +1153,7 @@ cluster               …/{cluster}/{chart}/values.yaml
               { title: "In sync · v1.0.0", desc: "The file holds every value its version locks, every add-on it lists is installed, and it is the flavor's newest." },
               { title: "No flavor", desc: "The cluster follows no flavor. It can join one from that flavor's page (Add existing clusters)." },
             ].map(({ title, desc }) => (
-              <div key={title} className="rounded-xl border bg-card p-4">
-                <p className="text-sm font-semibold mb-1">{title}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
-              </div>
+              <TermCard key={title} title={title} desc={desc} />
             ))}
           </div>
 

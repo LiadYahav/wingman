@@ -8,10 +8,10 @@ import type {
 // ── MCE placement (docs/notes/2026-11-12-mce-placement-api.md) ────────────────
 
 /** Every release the default placement's MCEs host, newest first. */
-export const PLACEMENT_VERSIONS = ["4.21.40", "4.20.44", "4.18.56", "4.18.22", "4.17.58", "4.16.27"];
+const PLACEMENT_VERSIONS = ["4.21.40", "4.20.44", "4.18.56", "4.18.22", "4.17.58", "4.16.27"];
 
 /** What each MCE hosts, for `placementAnswer`: by default, one prod and one prep MCE per site, hosting everything. */
-export const PLACEMENT_OFFERED: Record<string, string[]> = Object.fromEntries(
+const PLACEMENT_OFFERED: Record<string, string[]> = Object.fromEntries(
   ["site1", "site2"].flatMap((site) =>
     ["prod", "prep"].map((env) => [`ocp4-${env}-mce-${site}-a`, PLACEMENT_VERSIONS])
   )
@@ -133,7 +133,7 @@ import type { Team } from "../../types/day2";
 // apps/day2-service/.../api/v1/schemas.py), typed so a shape change fails `tsc`.
 
 /** The fixtures' teams, each with Wingman's account a Developer on its project. */
-export const WRITABLE_TEAMS: Team[] = ["networking", "observability", "platform", "security"].map((name, i) => ({
+const WRITABLE_TEAMS: Team[] = ["networking", "observability", "platform", "security"].map((name, i) => ({
   name,
   project_id: i + 2,
   path_with_namespace: `sigs/${name}`,
@@ -561,6 +561,17 @@ export async function injectAdminAuth(page: Page, username = "test-admin") {
     // Set a fake token cookie so the API client includes it in requests
     document.cookie = "wingman-token=fake-e2e-token; path=/; SameSite=Strict";
   }, username);
+}
+
+/**
+ * Sign in as the viewer Vera instead. Call it after `injectAdminAuth`: init
+ * scripts run in order, so this user replaces the admin it seeds.
+ */
+export async function injectViewerAuth(page: Page) {
+  await page.addInitScript(() => {
+    const state = { state: { user: { username: "vera", groups: ["wingman-viewers"], uid: "vera", full_name: "Vera Viewer", role: "viewer" }, isAuthenticated: true }, version: 0 };
+    localStorage.setItem("wingman-auth", JSON.stringify(state));
+  });
 }
 
 /**

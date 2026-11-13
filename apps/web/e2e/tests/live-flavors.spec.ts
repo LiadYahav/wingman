@@ -11,48 +11,17 @@
  *     npx playwright test live-flavors --project=live
  */
 
-import { test, expect, type Browser, type Page } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { SECRET, approveAndMerge, auth, followToast as followMr, loginAs } from "../fixtures/live-day1";
 
-const SECRET = process.env.WINGMAN_DEV_AUTH_SECRET ?? "";
 const FLAVOR = "agent-baseline";
 const LARK = "ocp4-prod-lark-site1";
 
 test.describe.configure({ mode: "serial" });
 test.skip(!SECRET, "set WINGMAN_DEV_AUTH_SECRET to the day1 service's DEV_AUTH_SECRET");
 
-async function loginAs(browser: Browser, username: string): Promise<Page> {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  await page.goto("/login");
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Dev login secret").fill(SECRET);
-  await page.getByRole("combobox", { name: "Role" }).click();
-  await page.getByRole("option", { name: "Admin" }).click();
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL((url) => url.pathname === "/");
-  return page;
-}
-
-async function auth(page: Page) {
-  const token = (await page.context().cookies()).find((c) => c.name === "wingman-token")?.value ?? "";
-  return { Authorization: `Bearer ${token}` };
-}
-
-/** Open the MR a write's toast announces. */
-async function followToast(page: Page, toast: RegExp): Promise<string> {
-  const announced = page.locator("[data-sonner-toast]").filter({ hasText: toast });
-  await expect(announced).toBeVisible({ timeout: 15_000 });
-  await announced.getByRole("button", { name: "Review" }).click();
-  await page.waitForURL(/\/approvals\/day1-\d+$/);
-  return page.url();
-}
-
-async function approveAndMerge(page: Page, url: string) {
-  await page.goto(url);
-  await page.getByRole("button", { name: /review & approve/i }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Approve & Merge" }).click();
-  await expect(page.getByText("merged", { exact: true })).toBeVisible({ timeout: 15_000 });
-}
+/** Open the MR a write's toast announces (a day1 MR). */
+const followToast = (page: Page, toast: RegExp) => followMr(page, toast, /\/approvals\/day1-\d+$/);
 
 let alice: Page;
 let bob: Page;

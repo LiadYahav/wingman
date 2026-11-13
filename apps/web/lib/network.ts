@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import type { ClusterNetworkRead } from "@/types";
 
-export const networkKey = (name: string) => ["clusters", name, "network"] as const;
+const networkKey = (name: string) => ["clusters", name, "network"] as const;
 
 /** `GET /clusters/{name}/network{where}`, read with the page: the detail does not wait on it. */
 export function useClusterNetwork(name: string, where: string) {

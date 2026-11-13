@@ -10,7 +10,7 @@
 
 import { test, expect, type Page, type Request, type Route } from "@playwright/test";
 import {
-  fulfillProblem, go, injectAdminAuth, json, mockApprovalRollout, mockDashboardApis, mockMergeRequestLink, mockMR, mockRollout,
+  fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockApprovalRollout, mockDashboardApis, mockMergeRequestLink, mockMR, mockRollout,
   mockRolloutCluster,
 } from "../fixtures/api-handlers";
 import type {
@@ -68,12 +68,6 @@ function listItem(name: string, spec_version: string | null): ClusterStatus {
     owner: {}, problems: [],
   };
 }
-
-const viewer = (page: Page) =>
-  page.addInitScript(() => {
-    const state = { state: { user: { username: "vera", groups: ["wingman-viewers"], uid: "vera", full_name: "Vera Viewer", role: "viewer" }, isAuthenticated: true }, version: 0 };
-    localStorage.setItem("wingman-auth", JSON.stringify(state));
-  });
 
 // ── Drift against the cluster's own version, and its update ─────────────────
 
@@ -295,7 +289,7 @@ async function openFlavor(
   { clusters = [] as SpecCluster[], rollout, asViewer = false }: { clusters?: SpecCluster[]; rollout?: RolloutStatus | ((route: Route) => Promise<void> | void); asViewer?: boolean } = {}
 ) {
   await injectAdminAuth(page);
-  if (asViewer) await viewer(page);
+  if (asViewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
   await page.route(/\/api\/day1\/specs\/agent-baseline(\?.*)?$/, (r) => json(r, SPEC));
   await page.route(`**/api/day1/specs/${FLAVOR}/clusters`, (r) => json(r, clusters));

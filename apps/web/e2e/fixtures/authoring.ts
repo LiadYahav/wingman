@@ -26,7 +26,7 @@ export const READ_ONLY_REASON =
 
 export const MANUAL: SyncSettings = { auto_sync: false, prune: false, self_heal: false, sync_options: ["CreateNamespace=true"] };
 
-export const KNOWN_SYNC_OPTIONS = [
+const KNOWN_SYNC_OPTIONS = [
   "CreateNamespace=true",
   "ServerSideApply=true",
   "PruneLast=true",
@@ -65,14 +65,14 @@ export const TEAMS: Team[] = [
 
 const UPI_ID = "upi:site2:prep:ocp4-dok-site2";
 
-export const SCOPES: AddonTemplate["scopes"] = [
+const SCOPES: AddonTemplate["scopes"] = [
   { scope: "hosted-clusters", label: "every hosted cluster", destinations: [HOSTED_ID, ...TWIN_IDS] },
   { scope: "mces", label: "every MCE", destinations: [MCE_ID] },
   { scope: "hub", label: "the hub", destinations: ["hub"] },
   { scope: "upi", label: "every UPI cluster", destinations: [UPI_ID] },
 ];
 
-export function template(name: string): AddonTemplate {
+function template(name: string): AddonTemplate {
   const found = TEAMS.find((t) => t.name === name);
   return {
     team: name,
@@ -131,7 +131,7 @@ export const FLEET_DEFAULTS: FleetDefault[] = [
 ];
 
 /** The cluster the make-default plan moves into the default with a change, and one it moves unchanged. */
-export const ADOPTED: Adoption[] = [
+const ADOPTED: Adoption[] = [
   {
     cluster: HOSTED_ID,
     name: HOSTED_NAME,

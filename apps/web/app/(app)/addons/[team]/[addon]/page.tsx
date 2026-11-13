@@ -17,6 +17,7 @@ import { ChangeResultPanel, type OpenedChanges } from "@/components/addons/chang
 import { EditAddonDialog } from "@/components/addons/default-dialogs";
 import { FindingsList } from "@/components/addons/findings";
 import { ReadOnlyBadge, ReadOnlyNote } from "@/components/addons/team-access";
+import { DefinitionList } from "@/components/addons/definition-list";
 import { Breadcrumbs, PageTitle, useAddonAccess } from "@/components/addons/page-header";
 import { RepoFileView } from "@/components/addons/repo-file";
 import { ScopePanelCard, type AddonWrites } from "@/components/addons/scope-panel";
@@ -24,19 +25,6 @@ import { ValuesLevels } from "@/components/addons/values-levels";
 import type { AuthoringChange, CatalogEntry, AddonDetail, ScopePanel } from "@/types/day2";
 
 const VERB: Record<string, OpenedChanges["verb"]> = { "create-addon": "Create", "make-default": "Promote" };
-
-function DefinitionList({ items }: { items: [string, React.ReactNode][] }) {
-  return (
-    <dl className="grid grid-cols-[9rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
-      {items.map(([term, value]) => (
-        <div key={term} className="contents">
-          <dt className="text-muted-foreground">{term}</dt>
-          <dd className="break-all font-mono text-[11px]">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
 
 function Card({ title, icon: Icon, action, children, label }: { title: string; icon: typeof Boxes; action?: React.ReactNode; children: React.ReactNode; label: string }) {
   return (

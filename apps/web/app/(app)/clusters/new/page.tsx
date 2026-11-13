@@ -31,8 +31,9 @@ import type {
 import { ProvisionRunPanel } from "@/components/clusters/provision-run";
 import { MCEPlacementPanel, PlacementRule } from "@/components/clusters/mce-placement";
 import { isProvisionRun, useProvisioner } from "@/lib/provision";
+import { useDebounced } from "@/hooks/use-debounced";
 import {
-  PLACEMENT_ENVS, REASON_MAX, changedPick, cleanReason, placementNeeds, placementOwner, useDebounced, usePlacement,
+  PLACEMENT_ENVS, REASON_MAX, changedPick, cleanReason, placementNeeds, placementOwner, usePlacement,
   type PlacementEnv,
 } from "@/lib/placement";
 import {

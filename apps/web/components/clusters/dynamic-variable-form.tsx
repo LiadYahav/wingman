@@ -86,12 +86,6 @@ function emptyObjectForFields(fields: TemplateField[]): Record<string, FieldValu
   return obj;
 }
 
-export function initFormValues(schema: TemplateField[]): FormValues {
-  const vals: FormValues = {};
-  for (const field of schema) vals[field.name] = defaultForField(field);
-  return vals;
-}
-
 export function seedFromStructure(structure: Record<string, unknown>, schema: TemplateField[]): FormValues {
   const vals: FormValues = {};
   for (const field of schema) {
@@ -541,7 +535,7 @@ function ObjectListEditor({
 
 // ── Field editor ──────────────────────────────────────────────────────────────
 
-export function FieldEditor({
+function FieldEditor({
   field, value, onChange, mode, path, immutablePaths, onToggleImmutable,
   infraEnvOptions, infraEnvsLoading,
 }: {
