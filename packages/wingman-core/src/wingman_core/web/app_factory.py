@@ -2,7 +2,9 @@
 
 ``create_base_app`` wires what each service must have and none may forget:
 RFC 9457 errors (ADR-0004), request ids, metrics and ``/metrics``
-(ADR-0010), session tokens for ``CurrentUser``/``AdminUser``, and health:
+(ADR-0010), Wingman's own INFO log records on stderr (``emit_wingman_logs``:
+uvicorn configures only its own loggers), session tokens for
+``CurrentUser``/``AdminUser``, and health:
 
 - ``/health/live`` and ``/healthz`` (the chart's existing probe path): the
   process serves requests. Never checks dependencies, so a GitLab outage does
@@ -29,6 +31,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from wingman_core.infrastructure.session_tokens import SessionTokens
+from wingman_core.observability.logs import emit_wingman_logs
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.web.auth import CurrentUser
 from wingman_core.web.exception_handlers import register_exception_handlers
@@ -81,6 +84,7 @@ def create_base_app(
     There is no CORS: the web app is served from the same origin as the API
     (the legacy services allowed ``*`` with credentials).
     """
+    emit_wingman_logs()
     app = FastAPI(title=title, version=version, lifespan=lifespan)
     app.state.metrics = metrics
     app.state.session_tokens = session_tokens

@@ -413,7 +413,9 @@ maintenance:
   with `user`, `server_id`, `server_name`, `reason` and `expected_end`, and
   `server_maintenance_unconfirmed` (warning) when the answer did not come
   back. Wingman has no audit store besides Git; these log lines are its
-  record.
+  record. (Until 3.23.0 none of Wingman's INFO records reached the pod's log:
+  uvicorn configures only its own loggers. `create_base_app` now writes them
+  to stderr, node uninstall's too.)
 - **Never retried** (ADR-0006). Not sent (server-scan unreachable before the
   request left) is `502`, nothing changed. Sent but unanswered (a timeout or a
   connection lost after sending, or a gateway's `504`), or answered `200` in a
