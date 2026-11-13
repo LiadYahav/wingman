@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
+import { IntentLink } from "@/components/common/intent-link";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -163,9 +164,9 @@ function ClusterStatusCell({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger>
-          <Link href={clusterHref(cluster)}>
+          <IntentLink href={clusterHref(cluster)}>
             <StatusBadge phase={liveStatusToPhase(status)} />
-          </Link>
+          </IntentLink>
         </TooltipTrigger>
         {errorMsg && <TooltipContent className="max-w-xs">{errorMsg}</TooltipContent>}
       </Tooltip>
@@ -595,13 +596,13 @@ export default function ClustersPage() {
                           >
                             <td className="px-3 py-3 max-w-[22rem]">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <Link
+                                <IntentLink
                                   href={clusterHref(cluster)}
                                   className="font-semibold text-foreground hover:text-primary transition-colors truncate"
                                   title={cluster.name}
                                 >
                                   {cluster.name}
-                                </Link>
+                                </IntentLink>
                                 <ClusterFlags cluster={cluster} />
                               </div>
                             </td>
@@ -629,9 +630,9 @@ export default function ClustersPage() {
                             <td className="px-3 py-3">
                               {cluster.spec_name ? (
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <Link href={`/specs/${encodeURIComponent(cluster.spec_name)}`} className="hover:text-primary transition-colors font-medium whitespace-nowrap">
+                                  <IntentLink href={`/specs/${encodeURIComponent(cluster.spec_name)}`} className="hover:text-primary transition-colors font-medium whitespace-nowrap">
                                     {cluster.spec_name}
-                                  </Link>
+                                  </IntentLink>
                                   {cluster.spec_version && (
                                     <span className="rounded-full px-1.5 py-0.5 text-xs bg-primary/8 text-primary font-medium whitespace-nowrap">
                                       v{cluster.spec_version}

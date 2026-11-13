@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ExternalLink, Layers, MoreVertical, Package, Pin, Trash2, Unplug } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +11,7 @@ import { sameValues, toYaml, type Values } from "@/lib/values";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { IntentLink } from "@/components/common/intent-link";
 import { ProblemList } from "@/components/common/problem-list";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
@@ -284,9 +284,9 @@ export function InstalledChartCard({
                       <span>
                         A fleet default is not removed per cluster: it is on every destination of its kind. Its values
                         here are edited above; the default itself is on{" "}
-                        <Link href={addonHref(chart.team, chart.name)} className="font-medium text-primary hover:underline">
+                        <IntentLink href={addonHref(chart.team, chart.name)} className="font-medium text-primary hover:underline">
                           its add-on page
-                        </Link>
+                        </IntentLink>
                         .
                       </span>
                     </p>

@@ -185,6 +185,11 @@ types/
   is a `ProblemList` (`components/common/problem-list.tsx`) given the error itself, so it shows
   the problem's detail, every broken rule and the request id: never `error.message` in a
   string, and never an empty list or a missing section.
+- **A link that repeats down a list** (a row, a card, a destination, a team's New add-on) is an
+  `IntentLink` (`components/common/intent-link.tsx`), not a bare `Link`: it prefetches its route
+  once the pointer, focus or a touch reaches it, never because it rendered. A bare `Link`
+  prefetches whenever it is on screen, one `?_rsc=` request per row, and behind an HTTP/1.1
+  route those queue the page's own API calls (`docs/ops/performance.md`).
 
 ## Environment Variables
 

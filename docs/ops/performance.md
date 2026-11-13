@@ -75,6 +75,16 @@ should show `content-encoding: gzip`.
 To feel what a new person gets, use a private window: it starts with an
 empty browser cache.
 
+Look at what queues in front of the API calls too. The OpenShift route
+serves HTTP/1.1, so the browser opens at most six connections to Wingman,
+and every `?_rsc=` request (Next.js prefetching a linked page) takes one.
+Lists link with `IntentLink`, which prefetches a page only once the pointer
+or focus reaches its link (`apps/web/README.md`, UI conventions). Before it,
+the Addons page prefetched about nine add-on pages as it loaded and its API
+calls waited about 700 ms behind them. The sidebar's links still prefetch
+as a page loads (two requests per page it links). Any more `?_rsc=` requests
+before a page's `/api/` calls mean a bare `Link` in a list.
+
 ## 4. The same numbers on a laptop
 
 `scripts/dev/bench_day1_reads.py` runs day1 in-process on the in-memory
