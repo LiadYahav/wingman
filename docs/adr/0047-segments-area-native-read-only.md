@@ -1,7 +1,7 @@
 # ADR-0047: The Segments area is Wingman's own read-only page over segments-manager's open reads, for admins, built as an alpha
 
 Date: 2026-11-13
-Status: Accepted
+Status: Accepted; amended 2026-11-13 (each area has its own sidebar and brand)
 
 ## Context
 
@@ -95,6 +95,36 @@ alpha to look at before deciding what stays.
   npm mirror, as with knip; the running image is unchanged (Vitest is a dev
   dependency, kept out of the Next build).
 - The Servers area (ADR-0048) builds on the same table, switch and Vitest.
+
+## Amendments
+
+**2026-11-13, 3.17.0: each area has its own sidebar and brand.** The user,
+on seeing the alpha: in Segments the sidebar should be segments-manager's,
+not Wingman's, and the top left should say which platform you are in.
+
+- **The brand** (top left) is the current area's: Wingman's logo and name in
+  Wingman; in Segments, a server-rack mark (lucide's `Server`, as the
+  original's header) and "Segments Manager". It links to the area's home.
+- **The sidebar** is the area's. Wingman's stays its own list
+  (`sidebar-nav.tsx`, unchanged). The original has no sidebar, so the
+  Segments one is the page's own options, each a link that sets the URL
+  filters (the rest of the view stays) and is marked from the URL:
+  **Segments** (All, Available, Allocated, Disagrees with Git), **Sites**
+  (every site with used out of total, from the same stats query and cache
+  as the cards; a site without segments too) and **Help** (Documentation:
+  Wingman's docs page, which has no Segments part yet).
+- **The top bar's switch** is the "Platform" landmark, the current one
+  marked with `aria-current`; no text was added.
+- **Data, not layout.** `apps/web/lib/areas.ts` holds each area's switch
+  label, home and brand, and the types of a data-driven sidebar
+  (`NavSection`); `lib/segments/sidebar.ts` builds the Segments sections;
+  the shell picks the brand and the sidebar by area. A page wears its
+  area's chrome only for someone who has the area: a viewer on `/segments`
+  sees Wingman's.
+
+Verification: `apps/web/lib/areas.test.ts` and
+`apps/web/lib/segments/sidebar.test.ts` (Vitest), and
+`apps/web/e2e/tests/area-chrome.spec.ts`.
 
 ## Verification
 

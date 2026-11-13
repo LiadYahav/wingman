@@ -13,7 +13,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go } from "../fixtures/api-handlers";
 import { HERZI, HERZI_MISMATCH, SEGMENTS, forbidden, mockSegmentList, off, setUpSegments } from "../fixtures/segments";
 
-const areas = (page: Page) => page.getByRole("navigation", { name: "Areas" });
+const areas = (page: Page) => page.getByRole("navigation", { name: "Platform" });
 const rows = (page: Page) => page.getByTestId("segment-row");
 const cidrs = (page: Page) => rows(page).evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-segment")));
 const search = (page: Page) => page.getByRole("searchbox", { name: "Search segments" });

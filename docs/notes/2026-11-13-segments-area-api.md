@@ -223,3 +223,5 @@ cached.
 - **Files whose segment segments-manager does not list** are not listed here
   (§4); the cluster page shows them.
 - **The area's own sidebar** (workstream 2): `/segments` keeps Wingman's.
+  *Done in 3.17.0 (ADR-0047's amendment): Segments has its own sidebar and
+  brand.*
