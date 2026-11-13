@@ -281,40 +281,36 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-12 — 3.8.0 to 3.12.0: the one-place plan, teams author operators, per-cluster rollout, MCE placement, Quick Links.**
-The architect's vision is the plan in `docs/ideas/single-pane.md` (#31,
-3.9.1): decisions 1–21, workstreams with fixed ADR numbers, open questions.
-Released today, each built by an agent and reviewed here:
-- 3.8.0 (#33, ADR-0043): teams create add-ons and edit team and fleet
-  defaults with ArgoCD sync options; per-team opt-in by the GitLab account's
-  access (`TEAM_READ_ONLY`). Merged before its review finished, at the
-  user's request; the review's 8 findings were fixed in 3.12.0.
-- 3.9.0 (#34, ADR-0052): Quick Links, a launcher of every ArgoCD and console
-  (hub and MCEs) plus the team's own links, with server-side status and
-  optional ArgoCD counts.
-- 3.10.0 (#32, ADR-0044): **a change reaches each cluster through its own MR**
-  (the user's core principle: small blast radius, the customer takes it when
-  ready). Import opens one MR per cluster; a new flavor version opens one sync
-  MR per linked cluster automatically, restart-safe; a cluster is measured
-  against its own flavor version, so a newer one is "update available".
-- 3.11.0 (#35, ADR-0045, ADR-0050): Wingman picks the MCE: version, free pods
-  on workers (allocatable − in use ≥ `PLACEMENT_MIN_FREE_PODS`, 70), healthy
-  free servers per node type from the InfraEnv and server-scan; then fewest of
-  this owner (mador), fewest overall, most spare; an admin may override with a
-  reason. A per-MCE API address in the MCE tokens Secret.
-- 3.12.0 (#36, ADR-0053): an Operators page per team: which destinations a
-  fleet default reaches (`exclusions.yaml`, edited in place), per-destination
-  values and deploy-config carve-outs, every write listing what it does to
-  each destination, confirmed against the preview's digest.
+**2026-11-13 — 3.12.2 to 3.13.1: Wingman always picks the MCE, add-ons in one place, Wingman made lighter.**
+- 3.12.2 (#39, ADR-0050's amendment): the create form asks the site, prod or
+  prep and the version, never the MCE; placement always runs, and with live
+  MCE reads off it decides on Git and server-scan and says what it did not check.
+- 3.13.0 (#38, ADR-0053's amendments): the Operators pages are folded into
+  Addons (the user: "operators is addons"; `operators/` is only the folder);
+  no exclusions (production has none, only per-env and per-cluster values);
+  values per env and per MCE, hosted or UPI cluster; Deploy on specific MCEs,
+  one install MR per MCE.
+- 3.13.1 (#40; the user: "we have put many many loads into the wingman"):
+  Quick Links lists links and never calls them, no status dots or ArgoCD
+  counts (ADR-0052's amendment, ~2,250 lines fewer); the Destinations page is
+  removed, a destination's name on an add-on's page opens its charts
+  (ADR-0020's amendment); `/health/ready` asks GitLab only until it has
+  answered once (ADR-0054; it made hundreds of calls an hour on the sandbox).
+  **Side features stay thin from now on**: config and links, no live calls,
+  no new adapter or Secret, unless the user asks for more.
 
-Wingman 3.12.0 runs on the team's sandbox in namespace `wingman` with its own
-GitLab seeded from `dev/gitlab-fixtures` (addresses and Secrets are in the
-git-ignored `CLAUDE.local.md`; its workers are near the disk eviction line).
+The team's sandbox runs Wingman in namespace `wingman` with its own GitLab
+(addresses and Secrets in the git-ignored `CLAUDE.local.md`). Its GitLab now
+also has four real charts for trying New add-on: `helm-charts/cert-manager`,
+`external-secrets`, `reloader`, `podinfo`, two version branches each.
 
-**Next** (the plan's order): the single pane (top-bar switch, the design
-pass, a table component) proven on the Segments area (ADR-0047); the Servers
-area with server-scan's exact behaviour, writes included (ADR-0048); the RBAC
-design with Keycloak federating LDAP (ADR-0051); cluster-navigator's data once
-the team rolls out collectors (ADR-0049). Waiting on the user and the team:
-the real pod cost of a control plane, server-scan's MCE names in production,
-the shared Git store on the sandbox, ADR-0042's open questions.
+**Next:** the user's report that New add-on is very slow on the sandbox
+(retry on 3.13.x and read day2's and GitLab's logs for that request); a
+flaky E2E in `addon-defaults.spec.ts` (the edit form can open before its
+repo URL is filled: "Give the chart repo URL"). Then the plan's order in
+`docs/ideas/single-pane.md`: the single pane proven on Segments (ADR-0047),
+Servers (ADR-0048), RBAC with Keycloak federating LDAP (ADR-0051),
+cluster-navigator's data (ADR-0049). Before building any of it, ask what the
+thin version is. Waiting on the user and the team: the real pod cost of a
+control plane, server-scan's MCE names in production, the shared Git store,
+ADR-0042's open questions.

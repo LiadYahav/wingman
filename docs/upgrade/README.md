@@ -33,6 +33,7 @@ already have.
 | 3.11 | 3.12.0: an Operators page per team: which destinations each fleet default reaches (`exclusions.yaml`, edited in place), a destination's own values and deploy config; every day2 authoring write lists what it does to each destination and is confirmed against its preview (ADR-0053); a team whose access cannot be read is read-only, the others unaffected | Generic: no new value, Secret, grant or variable. A script that called the 3.8 to 3.11 authoring API without a preview now gets 422 `confirm-changes`/`confirm-against-preview` when the write changes a destination: send the preview's `needs_confirmation` and `digest` |
 | 3.12 | 3.12.2: the create form always asks for the site, prod or prep and the version, never the MCE, and Wingman picks it; with live status off placement decides on the day1 repo and server-scan and says the free pods and servers were not checked (ADR-0050's amendment) | Generic |
 | 3.12 | 3.13.0: the Operators pages are folded into **Addons**, one place called add-ons (ADR-0053's amendments): the Addons page creates an add-on and edits its team default again, and an add-on's page (`/addons/<team>/<chart>`) has its defaults with values per env and per MCE, hosted cluster or UPI cluster, and **Deploy on specific MCEs** (one install MR per MCE). Wingman no longer writes `exclusions.yaml` or own deploy configs (their two endpoints are gone). 3.12.0's `/operators` and `/teams/<team>/operators…` links redirect; the API's `/teams/{team}/operators` paths stay as aliases of `/teams/{team}/addons` | Generic |
+| 3.13.0 | 3.13.1: Wingman made lighter. Quick Links lists links only: no status dots, no ArgoCD counts (ADR-0052's amendment). The Destinations page is removed and `/destinations` opens Clusters; a destination's name on an add-on's page opens its charts (ADR-0020's amendment). `/health/ready` asks GitLab only until it has answered once per pod (ADR-0054) | Generic. Optional clean-up, nothing breaks if skipped: drop the values `quickLinks.status`, `quickLinks.sslVerify` and `quickLinks.argocdTokensSecret` (`--reset-then-reuse-values --set quickLinks.status=null --set quickLinks.sslVerify=null --set quickLinks.argocdTokensSecret=null`), delete the ArgoCD tokens Secret (usually `wingman-argocd-tokens`) and the read-only accounts made for it in each ArgoCD, and remove `ping:` and `argocd:` from the links in `quickLinks.sections` (until then the page names them as unknown keys). A GitLab outage no longer makes the pods unready; it shows on the requests, and a pod that never reached GitLab still never becomes ready |
 
 ### Skipping versions
 
@@ -44,7 +45,7 @@ row you pass, in order. For example, from 3.3.x to 3.11.0: do
 with the newest `<tag>` instead of its own, then 3.6.0's optional template,
 3.6-to-3.7.md only if the team turns the provision workflow on,
 3.7-to-3.8.md's discovery (which teams give Wingman write access),
-3.8-to-3.9.md for Quick Links' hub, team links and ArgoCD tokens (optional),
+3.8-to-3.9.md for Quick Links' hub and team links (optional; its ArgoCD tokens are gone since 3.13.1),
 and 3.10-to-3.11.md's grant check.
 Rows marked Generic add nothing. A guide's checks still apply: run them
 before its upgrade step.
