@@ -5,7 +5,7 @@ import { go } from "../fixtures/api-handlers";
 export type Place = { site?: string; env: "prod" | "prep"; version: string };
 
 /** The reason the page object gives when a test goes with another MCE than Wingman's pick. */
-export const OVERRIDE_REASON = "The test creates its cluster on this MCE";
+const OVERRIDE_REASON = "The test creates its cluster on this MCE";
 
 /**
  * The two-step create form at /clusters/new: choose a spec, then configure the

@@ -13,7 +13,7 @@ export const argocdUrl = (cluster: string) => `https://openshift-gitops-server-o
 export const consoleUrl = (cluster: string) => `https://console-openshift-console.apps.${cluster}.${DOMAIN}`;
 
 /** A generated card: the cluster's ArgoCD, then its console. */
-export function clusterCard(name: string, overrides: Partial<QuickLinkCard> = {}): QuickLinkCard {
+function clusterCard(name: string, overrides: Partial<QuickLinkCard> = {}): QuickLinkCard {
   return {
     id: `cluster:${name}`,
     name,
@@ -28,7 +28,7 @@ export function clusterCard(name: string, overrides: Partial<QuickLinkCard> = {}
 }
 
 /** A links-file card: one link. */
-export function fileCard(section: string, name: string, url: string, overrides: Partial<QuickLinkCard> = {}): QuickLinkCard {
+function fileCard(section: string, name: string, url: string, overrides: Partial<QuickLinkCard> = {}): QuickLinkCard {
   const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return {
     id: `file:${slug(section)}:${slug(name)}`,
@@ -40,9 +40,9 @@ export function fileCard(section: string, name: string, url: string, overrides: 
   };
 }
 
-export const HUB = "hub-prod";
+const HUB = "hub-prod";
 export const MCE_A = "ocp4-prod-mce-site1-a";
-export const MCE_B = "ocp4-prep-mce-site1-a";
+const MCE_B = "ocp4-prep-mce-site1-a";
 export const MCE_C = "ocp4-prod-mce-site2-a";
 
 export const SECTIONS: QuickLinkSection[] = [

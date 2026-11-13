@@ -51,15 +51,15 @@ export const MCE_A = "mce:site1:prep:ocp4-prep-mce-site1-a";
 export const MCE_A_NAME = "ocp4-prep-mce-site1-a";
 export const MCE_EXCLUDED = "mce:site1:prod:ocp4-prod-mce-site1-a";
 export const MCE_EXCLUDED_NAME = "ocp4-prod-mce-site1-a";
-export const MCE_OWN = "mce:site2:prod:ocp4-prod-mce-site2-b";
-export const MCE_OWN_NAME = "ocp4-prod-mce-site2-b";
+const MCE_OWN = "mce:site2:prod:ocp4-prod-mce-site2-b";
+const MCE_OWN_NAME = "ocp4-prod-mce-site2-b";
 export const MCE_OVERRIDE = "mce:site2:test:ocp4-test-mce-site2-c";
 export const MCE_OVERRIDE_NAME = "ocp4-test-mce-site2-c";
-export const MCE_UNRENDERED = "mce:site3:prep:ocp4-prep-mce-site3-d";
+const MCE_UNRENDERED = "mce:site3:prep:ocp4-prep-mce-site3-d";
 export const MCE_UNREGISTERED = "mce:site9:prod:ocp4-prod-mce-site9-z";
 
 /** The commit every read of a team repo is at. */
-export const commitOf = (team: string) => `${team}-repo-1`;
+const commitOf = (team: string) => `${team}-repo-1`;
 
 /** The deploy config of platform/cert-manager, comments and all: the page shows the text, not a re-rendering. */
 export const CERT_MANAGER_YAML =
@@ -246,7 +246,7 @@ function generatedPanel(team: string, chart: string, scope: FleetScope, catalog:
 }
 
 /** `GET /teams/{team}/addons/{addon}`, or `null` (a 404). */
-export function addonDetailOf(team: string, chart: string): AddonDetail | null {
+function addonDetailOf(team: string, chart: string): AddonDetail | null {
   const catalog = day2Catalog.find((e) => e.team === team && e.name === chart) ?? null;
   const fleet = FLEET_DEFAULTS.filter((f) => f.team === team && f.chart === chart);
   if (!catalog && fleet.length === 0) return null;
@@ -282,7 +282,7 @@ export function addonDetailOf(team: string, chart: string): AddonDetail | null {
 }
 
 /** `GET /teams/{team}/addons`: one per catalog entry, plus each fleet default without one. */
-export function teamAddonsOf(team: string): AddonSummary[] {
+function teamAddonsOf(team: string): AddonSummary[] {
   const names = new Set([
     ...day2Catalog.filter((e) => e.team === team).map((e) => e.name),
     ...FLEET_DEFAULTS.filter((f) => f.team === team).map((f) => f.chart),
@@ -338,7 +338,7 @@ function roles(values: Values, role: string): Values {
 }
 
 /** `POST /merge-preview` of a fleet default's destination: team, fleet, then its `values-<name>.yaml`. */
-export function addonPreview(body: MergePreviewBody): ValuesPreview {
+function addonPreview(body: MergePreviewBody): ValuesPreview {
   const detail = addonDetailOf(body.team, body.addon) as AddonDetail;
   const scope = detail.scopes.find((s) => s.destinations.some((d) => d.id === body.cluster)) ?? detail.scopes[1];
   const dest = scope.destinations.find((d) => d.id === body.cluster);
@@ -610,7 +610,7 @@ export async function mockAddonDetail(
 let installIid = 40;
 
 /** `POST /addons/{team}/{addon}/mce-installs`: one install per MCE; a site3 one renders nothing. */
-export function mceInstalls(team: string, chart: string, clusters: string[], dryRun: boolean, failMce: string | null = null): MceInstalls {
+function mceInstalls(team: string, chart: string, clusters: string[], dryRun: boolean, failMce: string | null = null): MceInstalls {
   return {
     team,
     chart,
