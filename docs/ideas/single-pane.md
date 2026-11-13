@@ -328,8 +328,8 @@ Its pure TypeScript (row filtering and facets, sorting, event descriptions,
 date formatting, its types) is reused as it is, with its unit tests.
 
 **Watch for names.** server-scan's MCE and site names must equal day1's MCE
-folders and site names, or the joins fail. They differ on the sandbox; check
-production (ecosystem question 7).
+folders and site names, or the joins fail. In production they are the same
+(the user, 2026-11-13); only the sandbox differs (`mce-<site>`).
 
 ### 5. Hosted clusters and MCEs from cluster-navigator (ADR-0049)
 
@@ -541,8 +541,8 @@ Still open:
    developers.)
 2. **cluster-navigator**: does the team roll out the collectors, issue
    Wingman a token, and add a typed report endpoint?
-3. **Names**: do server-scan's `mce_name` and site names equal day1's in
-   production? (The user is checking.)
+3. ~~**Names**~~: answered 2026-11-13: in production server-scan's
+   `mce_name` and site names equal day1's. Only the sandbox differs.
 4. **RBAC** (workstream 8): the permission list, the scopes, and which LDAP
    groups map to which permissions; written as its design.
 
