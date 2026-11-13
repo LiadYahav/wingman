@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X, ChevronDown, ChevronRight,
-  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, Files,
+  FilePlus, FileX, FileEdit, Edit2, Eye, UserX, Files,
 } from "lucide-react";
 import { toast } from "sonner";
 import { isApiError } from "@/lib/api-client";
@@ -19,10 +19,11 @@ import { cn, formatDate } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { StaleAlert } from "@/components/common/stale-alert";
 import { EmptyState } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { ApprovalRolloutPanel, opensText, useApprovalRollout } from "@/components/specs/approval-rollout";
-import { computeLineDiff } from "@/lib/diff";
+import { computeLineDiff, diffLabel } from "@/lib/diff";
 import { writeErrorTitle } from "@/lib/write-errors";
 import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
 
@@ -44,9 +45,7 @@ function FileDiffCard({ diff }: { diff: FileDiff }) {
     : null;
 
   const Icon = diff.new_file ? FilePlus : diff.deleted_file ? FileX : FileEdit;
-  const filePath = diff.renamed_file
-    ? `${diff.old_path} → ${diff.new_path}`
-    : diff.new_path || diff.old_path;
+  const filePath = diffLabel(diff);
 
   return (
     <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -226,16 +225,61 @@ function EditMRPanel({
 
 // ── MR detail page ────────────────────────────────────────────────────────────
 
+/** One fact of the MR card, its label over its value; `clip` lets a long value truncate. */
+function Fact({ label, clip = false, ...value }: { label: string; clip?: boolean } & React.ComponentProps<"p">) {
+  return (
+    <div className={clip ? "min-w-0" : undefined}>
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <p {...value} />
+    </div>
+  );
+}
+
+/** The page while the MR loads: its meta card, then two changed files. */
+function ApprovalSkeleton() {
+  return (
+    <div className="space-y-6" data-testid="approval-loading">
+      {/* The MR meta card: badges, then the five facts */}
+      <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-6 w-16 rounded-full" />
+          <Skeleton className="h-5 w-14 rounded-full" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="h-4 w-24 max-w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Changed files: each a path bar over a few diff lines */}
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-32" />
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3">
+              <Skeleton className="h-3.5 w-3.5 shrink-0" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+            <div className="border-t px-4 py-3 space-y-2">
+              {["w-1/2", "w-3/4", "w-2/5", "w-3/5"].map((w) => (
+                <Skeleton key={w} className={cn("h-3", w)} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function ActionError({ error, onReload }: { error: unknown; onReload: () => void }) {
   if (isApiError(error, "REVISION_CONFLICT")) {
-    return (
-      <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm">
-        <p className="text-status-warning-fg">{BRANCH_MOVED}</p>
-        <button onClick={onReload} className={buttonVariants({ variant: "outline", size: "sm" })}>
-          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload
-        </button>
-      </div>
-    );
+    return <StaleAlert message={BRANCH_MOVED} onReload={onReload} />;
   }
   if (isApiError(error, "SELF_APPROVAL")) {
     return <ProblemList error={error} title="You requested this change, so another admin must approve it." />;
@@ -395,41 +439,7 @@ function MRDetailContent() {
       {error ? (
         <ProblemList error={error} title={isApiError(error, 404) ? "This merge request does not exist or is not a Wingman MR" : "The merge request could not be loaded"} />
       ) : isLoading ? (
-        <div className="space-y-6" data-testid="approval-loading">
-          {/* The MR meta card: badges, then the five facts */}
-          <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Skeleton className="h-6 w-20 rounded-full" />
-              <Skeleton className="h-6 w-16 rounded-full" />
-              <Skeleton className="h-5 w-14 rounded-full" />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="space-y-1.5">
-                  <Skeleton className="h-3 w-14" />
-                  <Skeleton className="h-4 w-24 max-w-full" />
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Changed files: each a path bar over a few diff lines */}
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-32" />
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="rounded-xl border bg-card shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3">
-                  <Skeleton className="h-3.5 w-3.5 shrink-0" />
-                  <Skeleton className="h-4 w-2/3" />
-                </div>
-                <div className="border-t px-4 py-3 space-y-2">
-                  {["w-1/2", "w-3/4", "w-2/5", "w-3/5"].map((w) => (
-                    <Skeleton key={w} className={cn("h-3", w)} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ApprovalSkeleton />
       ) : mr ? (
         <>
           {/* MR Meta card */}
@@ -453,26 +463,11 @@ function MRDetailContent() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Author</p>
-                <p className="font-medium truncate">{mr.author.username}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">{mr.merged_at ? "Merged" : "Created"}</p>
-                <p className="font-medium">{formatDate(mr.merged_at ?? mr.created_at)}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Source branch</p>
-                <p className="font-mono text-xs font-medium truncate" title={mr.source_branch}>{mr.source_branch}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Target branch</p>
-                <p className="font-mono text-xs font-medium truncate">{mr.target_branch}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Head</p>
-                <p className="font-mono text-xs font-medium" title={mr.sha}>{mr.sha.slice(0, 8)}</p>
-              </div>
+              <Fact clip label="Author" className="font-medium truncate">{mr.author.username}</Fact>
+              <Fact label={mr.merged_at ? "Merged" : "Created"} className="font-medium">{formatDate(mr.merged_at ?? mr.created_at)}</Fact>
+              <Fact clip label="Source branch" className="font-mono text-xs font-medium truncate" title={mr.source_branch}>{mr.source_branch}</Fact>
+              <Fact clip label="Target branch" className="font-mono text-xs font-medium truncate">{mr.target_branch}</Fact>
+              <Fact label="Head" className="font-mono text-xs font-medium" title={mr.sha}>{mr.sha.slice(0, 8)}</Fact>
             </div>
 
             {mr.description && (

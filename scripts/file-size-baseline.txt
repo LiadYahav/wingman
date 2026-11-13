@@ -27,8 +27,7 @@
   895  apps/day2-service/src/wingman_day2/application/changes.py
   776  apps/day2-service/src/wingman_day2/application/plan_writer.py
   541  apps/web/app/(app)/addons/page.tsx
-  631  apps/web/app/(app)/approvals/[id]/page.tsx
-  504  apps/web/app/(app)/audit/page.tsx
+  626  apps/web/app/(app)/approvals/[id]/page.tsx
   563  apps/web/app/(app)/clusters/[name]/page.tsx
  1894  apps/web/app/(app)/clusters/new/page.tsx
   613  apps/web/app/(app)/clusters/page.tsx

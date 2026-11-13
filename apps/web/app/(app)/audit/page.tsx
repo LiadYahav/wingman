@@ -2,15 +2,16 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, GitCommitHorizontal, GitPullRequest, ChevronDown, ChevronRight, FilePlus, FileX, FileEdit, RefreshCw, Search, X, Eye } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ExternalLink, GitCommitHorizontal, GitPullRequest, ChevronDown, ChevronRight, FilePlus, FileX, FileEdit, Search, X, Eye } from "lucide-react";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { approvalHref, mrKey, mrRef } from "@/lib/approvals";
-import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime, newestFirst } from "@/lib/utils";
+import { diffLabel } from "@/lib/diff";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ProblemList } from "@/components/common/problem-list";
+import { RefreshButton } from "@/components/common/refresh-button";
 import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
@@ -20,15 +21,12 @@ type RepoFilter = "all" | CommitRecord["repo"];
 
 function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
   const [openFiles, setOpenFiles] = useState<Set<number>>(new Set());
-  const toggle = (i: number) => setOpenFiles((s) => {
-    const n = new Set(s);
-    if (n.has(i)) {
-      n.delete(i);
-    } else {
-      n.add(i);
-    }
-    return n;
-  });
+  const toggle = (i: number) =>
+    setOpenFiles((s) => {
+      const next = new Set(s);
+      if (!next.delete(i)) next.add(i);
+      return next;
+    });
 
   if (diffs.length === 0) {
     return <p className="text-xs text-muted-foreground italic px-6 pb-3">No file changes</p>;
@@ -43,9 +41,7 @@ function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
           : diff.deleted_file
           ? { label: "deleted", cls: "bg-status-error/10 text-status-error", Icon: FileX }
           : { label: null, cls: "", Icon: FileEdit };
-        const filePath = diff.renamed_file
-          ? `${diff.old_path} → ${diff.new_path}`
-          : diff.new_path || diff.old_path;
+        const filePath = diffLabel(diff);
 
         return (
           <div key={i}>
@@ -147,20 +143,17 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
   );
 }
 
+/** An MR's state colours: merged purple, closed red, opened (or locked) green. */
+function stateTone(state: MRDetail["state"]): { text: string; bg: string } {
+  if (state === "merged") return { text: "text-chart-5 dark:text-[#c084fc]", bg: "bg-chart-5/15" };
+  if (state === "closed") return { text: "text-status-error dark:text-[#f87171]", bg: "bg-status-error/15" };
+  return { text: "text-status-ready", bg: "bg-status-ready/15" };
+}
+
 function MRRow({ mr }: { mr: MRDetail }) {
   const [expanded, setExpanded] = useState(false);
 
-  const stateColor = mr.state === "merged"
-    ? "text-chart-5 dark:text-[#c084fc]"
-    : mr.state === "closed"
-    ? "text-status-error dark:text-[#f87171]"
-    : "text-status-ready";
-
-  const stateBg = mr.state === "merged"
-    ? "bg-chart-5/15"
-    : mr.state === "closed"
-    ? "bg-status-error/15"
-    : "bg-status-ready/15";
+  const { text: stateColor, bg: stateBg } = stateTone(mr.state);
 
   const { data: detail, isLoading: detailLoading, error: detailError } = useQuery<ApprovalDetail>({
     queryKey: day1Keys.audit.mrDiff(mrKey(mr)),
@@ -227,7 +220,6 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 // eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export default function AuditPage() {
   const [activeTab, setActiveTab] = useState<"commits" | "mrs">("commits");
-  const queryClient = useQueryClient();
 
   // Filter/pagination state
   const [search, setSearch] = useState("");
@@ -263,15 +255,9 @@ export default function AuditPage() {
 
   const isFetching = fetchingD1C || fetchingD2C || fetchingD1M || fetchingD2M;
 
-  const allCommits = useMemo(() => [
-    ...(day1Commits ?? []),
-    ...(day2Commits ?? []),
-  ].sort((a, b) => new Date(b.authored_date).getTime() - new Date(a.authored_date).getTime()), [day1Commits, day2Commits]);
+  const allCommits = useMemo(() => newestFirst([day1Commits, day2Commits], (c) => c.authored_date), [day1Commits, day2Commits]);
 
-  const allMrs = useMemo(() => [
-    ...(day1Mrs ?? []),
-    ...(day2Mrs ?? []),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [day1Mrs, day2Mrs]);
+  const allMrs = useMemo(() => newestFirst([day1Mrs, day2Mrs], (mr) => mr.created_at), [day1Mrs, day2Mrs]);
 
   const commitsLoading = loadingD1C || loadingD2C;
   const mrsLoading = loadingD1M || loadingD2M;
@@ -342,15 +328,7 @@ export default function AuditPage() {
             Changes across the day1, specs and day2 team repos — click any entry to view its diff
           </p>
         </div>
-        <button
-          onClick={() => queryClient.invalidateQueries({ queryKey: day1Keys.audit.all })}
-          disabled={isFetching}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-          title="Refresh audit log"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-          Refresh
-        </button>
+        <RefreshButton queryKey={day1Keys.audit.all} fetching={isFetching} title="Refresh audit log" />
       </div>
 
       {/* Monday.com-style line tabs */}

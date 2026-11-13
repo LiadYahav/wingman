@@ -300,7 +300,7 @@ and write yours here.
   - the web calls day1 through `lib/api/day1/` (`day1Api`, `day1Keys`,
     3.18.5).
 
-  35 files are left in `scripts/file-size-baseline.txt`.
+  34 files are left in `scripts/file-size-baseline.txt`.
 - **Segments area** (ADR-0047, 3.15.0): segments-manager's page in Wingman,
   read-only, admins only, from the top bar's area switch, on a shared
   TanStack table (`components/data-table/`) with Vitest for pure logic. In
