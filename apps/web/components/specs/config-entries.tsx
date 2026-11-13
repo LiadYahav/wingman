@@ -8,7 +8,7 @@ import type { ConfigEntry } from "@/types";
  * name, or `{name: nm-conf, hardware: dell}` as the cluster's own network
  * config for dell hardware (the file gets `nm-conf-<clusterName>-dell`).
  */
-export function ConfigEntryChip({ entry, className }: { entry: ConfigEntry; className?: string }) {
+function ConfigEntryChip({ entry, className }: { entry: ConfigEntry; className?: string }) {
   if (isNetworkEntry(entry)) {
     const hardware = entry.hardware;
     return (

@@ -148,7 +148,7 @@ export function installBlocker(entry: CatalogEntry, choice: InstallChoice, previ
   return null;
 }
 
-export function installBody(choice: InstallChoice): Omit<InstallBody, "message"> {
+function installBody(choice: InstallChoice): Omit<InstallBody, "message"> {
   return {
     override_values: choice.values,
     ...(choice.version !== null ? { version: choice.version, emergency_pin: choice.emergencyPin } : {}),
@@ -319,7 +319,7 @@ export function AvailableChartCard({
  * The files an install creates: the folder's `values.yaml` always, its
  * `<chart>.yaml` only for a key the inherited deploy config lacks (ADR-0022).
  */
-export function plannedInstall(entry: CatalogEntry, choice: InstallChoice, preview: ValuesPreview | undefined): PlannedFile[] {
+function plannedInstall(entry: CatalogEntry, choice: InstallChoice, preview: ValuesPreview | undefined): PlannedFile[] {
   const paths = installPaths(entry, preview);
   const files: PlannedFile[] = [{ action: "create", path: paths.values, after: toYaml(choice.values) }];
   const deploy: Values = {

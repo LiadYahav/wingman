@@ -11,7 +11,7 @@ import { isRunning } from "@/lib/nodes";
 import type { MRDetail, ProvisionRun, Provisioner } from "@/types";
 
 /** How often a running provision run is read again. */
-export const PROVISION_POLL_MS = 10_000;
+const PROVISION_POLL_MS = 10_000;
 
 /** What Create does here; `merge-request` until day1 says otherwise. */
 export function useProvisioner() {

@@ -33,6 +33,6 @@ export function writeErrorTitle(error: unknown, refused = "The change was refuse
  * project (`TEAM_READ_ONLY`, ADR-0043): nothing was written, and retrying
  * will not help until the team opts in. The problem's detail says how.
  */
-export function isTeamReadOnlyError(error: unknown): boolean {
+function isTeamReadOnlyError(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "TEAM_READ_ONLY";
 }

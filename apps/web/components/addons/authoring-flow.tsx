@@ -50,7 +50,7 @@ function shown(value: unknown): string {
  * set to a Helm null (`after_null`) deletes the chart's own default for that
  * key, which the table says; one that is simply no longer set shows "—".
  */
-export function ChangesTable({ changes }: { changes: AdoptionChange[] }) {
+function ChangesTable({ changes }: { changes: AdoptionChange[] }) {
   return (
     <table className="w-full border-collapse">
       <thead>
@@ -200,7 +200,7 @@ function OrphanWarning({ removed }: { removed: DestinationImpact[] }) {
 }
 
 /** What an authoring write would do, from its dry run (ADR-0043, ADR-0053). */
-export function PlanView({ plan }: { plan: AuthoringPlan }) {
+function PlanView({ plan }: { plan: AuthoringPlan }) {
   const impact = plan.impact ?? [];
   const removed = impact.filter((i) => i.effect === "removed");
   const others = impact.filter((i) => i.effect !== "removed");
@@ -275,7 +275,7 @@ export interface Acknowledgements {
   changed: string[];
 }
 
-export function acknowledgementsOf(plan: AuthoringPlan): Acknowledgements {
+function acknowledgementsOf(plan: AuthoringPlan): Acknowledgements {
   const removedIds = new Set((plan.impact ?? []).filter((i) => i.effect === "removed").map((i) => i.cluster));
   return {
     removed: plan.needs_confirmation.filter((id) => removedIds.has(id)),

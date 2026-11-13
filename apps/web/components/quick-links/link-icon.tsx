@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  * §4), from lucide, which Wingman already ships. A static map, so the bundle
  * holds exactly these.
  */
-export const GENERIC_ICONS: Record<string, LucideIcon> = {
+const GENERIC_ICONS: Record<string, LucideIcon> = {
   link: Link2,
   globe: Globe,
   book: BookOpen,
@@ -52,7 +52,7 @@ export const GENERIC_ICONS: Record<string, LucideIcon> = {
 };
 
 /** Whether `key` names an icon Wingman ships; any other key shows `link`. */
-export const isKnownIcon = (key: string): boolean => isBrandIcon(key) || Object.hasOwn(GENERIC_ICONS, key);
+const isKnownIcon = (key: string): boolean => isBrandIcon(key) || Object.hasOwn(GENERIC_ICONS, key);
 
 /**
  * A card's icon by key, in a small rounded tile: a brand mark in its brand

@@ -78,7 +78,7 @@ function DriftSkeleton() {
 }
 
 /** `value_drift`, which a day1 that predates it does not send. */
-export function valueDriftOf(drift: ClusterDrift): ValueDrift[] {
+function valueDriftOf(drift: ClusterDrift): ValueDrift[] {
   return drift.value_drift ?? [];
 }
 
@@ -103,7 +103,7 @@ export function updateOf(drift: ClusterDrift): FlavorUpdate | null {
  * moves `specVersion` to it). Not while an update MR is open: that MR is the
  * sync, and the panel links it instead (a second one is refused, 409).
  */
-export function syncOffered(drift: ClusterDrift | undefined): boolean {
+function syncOffered(drift: ClusterDrift | undefined): boolean {
   if (!drift || drift.state === "not_linked" || !drift.spec_name) return false;
   const update = updateOf(drift);
   if (update?.merge_request) return false;

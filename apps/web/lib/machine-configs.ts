@@ -17,9 +17,9 @@ export const NETWORK_CONFIG = "nm-conf";
  * `mc-files/templates/nm-conf-template.bu`: for any hardware, written in the
  * cluster file as plain `nm-conf` (ADR-0027's 2026-11-12 amendment).
  */
-export const GENERIC_HARDWARE = "generic";
+const GENERIC_HARDWARE = "generic";
 
-export const machineConfigsKey = ["machine-configs"] as const;
+const machineConfigsKey = ["machine-configs"] as const;
 
 /** The catalogue and the nodepool defaults; cached a minute, like day1's own read. */
 export function useMachineConfigs(enabled = true) {
@@ -140,16 +140,6 @@ export function entryProblems(
     else seen.set(key, index);
     return problems;
   });
-}
-
-/** Two config lists name the same configs, each as often, in any order (the rule's comparison, ADR-0029). */
-export function sameConfigs(a: ConfigEntry[], b: ConfigEntry[]): boolean {
-  const key = (e: ConfigEntry) => (isNetworkEntry(e) ? NETWORK_CONFIG : e.name);
-  const count = (entries: ConfigEntry[]) =>
-    entries.reduce((m, e) => m.set(key(e), (m.get(key(e)) ?? 0) + 1), new Map<string, number>());
-  const ca = count(a);
-  const cb = count(b);
-  return ca.size === cb.size && [...ca].every(([name, n]) => cb.get(name) === n);
 }
 
 /** `mc-files/` or `mc-files/<folder>/`: where a static config lives, for grouping the picker. */

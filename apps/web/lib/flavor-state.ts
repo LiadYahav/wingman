@@ -41,7 +41,7 @@ export function flavorDisplayState(row: FlavorStateRow): FlavorDisplayState {
 const v = (version: string | null | undefined) => (version ? `v${version}` : null);
 
 /** `v1.0.0 → v1.1.0`, or just the new one when the cluster's own version is not known. */
-export function updateSpan(row: FlavorStateRow): string {
+function updateSpan(row: FlavorStateRow): string {
   const to = v(row.update?.version) ?? "";
   const from = v(row.spec_version);
   return from ? `${from} → ${to}` : to;

@@ -25,7 +25,7 @@ import type { ConfigEntry, MachineConfigs, SpecEntry, TemplateField } from "@/ty
 export const NODEPOOLS = "nodepools";
 export const CONFIGS = "configs";
 /** The one rule path (§9): every nodepool's configs. */
-export const CONFIGS_RULE = "nodepools[*].configs";
+const CONFIGS_RULE = "nodepools[*].configs";
 export const OWNER_INPUTS: readonly string[] = ["owner_merkaz", "owner_anaf", "owner_mador"];
 
 const isMap = (value: unknown): value is Record<string, unknown> =>
@@ -36,7 +36,7 @@ const isMap = (value: unknown): value is Record<string, unknown> =>
 type Segment = string | number;
 
 /** `nodepools[1].configs` → `["nodepools", 1, "configs"]`; `null` when it is not a path of §2 (no `[*]`). */
-export function pathSegments(path: string): Segment[] | null {
+function pathSegments(path: string): Segment[] | null {
   const head = /^[A-Za-z_][A-Za-z0-9_]*/.exec(path);
   if (!head) return null;
   const segments: Segment[] = [head[0]];
@@ -275,7 +275,7 @@ export function requestVariables(form: FormValues, locks: FlavorLocks): Record<s
 const OWNER = /^[0-9]{1,10}$/;
 
 /** Why day1 would refuse this owner (ADR-0028); `null` when it is fine or still empty (required is checked apart). */
-export function ownerProblem(value: unknown): string | null {
+function ownerProblem(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return null;
   const text = String(value);
   if (OWNER.test(text)) return null;

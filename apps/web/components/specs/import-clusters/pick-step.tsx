@@ -17,7 +17,7 @@ export const MAX_IMPORT = 50;
 /** Rows listed at once; a narrower search shows the rest. */
 const MAX_SHOWN = 200;
 
-export const OWNER_KEYS = ["merkaz", "anaf", "mador"] as const;
+const OWNER_KEYS = ["merkaz", "anaf", "mador"] as const;
 type OwnerKey = (typeof OWNER_KEYS)[number];
 
 export interface PickFilters {
