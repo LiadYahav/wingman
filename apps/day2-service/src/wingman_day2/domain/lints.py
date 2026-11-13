@@ -369,8 +369,8 @@ def lint_leaf(
                 info(
                     Rule.EMERGENCY_PIN,
                     f"{layer.path} pins targetRevision {doc[TARGET_REVISION]!r} for this cluster "
-                    "only: an emergency pin that detaches it from the team default and from "
-                    "ocp-versions/ pins until removed",
+                    "only: an emergency pin that detaches it from the add-on's Sig values and "
+                    "their ocp-versions/ pins until removed",
                     path=str(layer.path),
                     **where,
                 )
@@ -402,7 +402,7 @@ def lint_leaf(
                 Rule.OCP_VERSION_PIN_MISSING,
                 f"{app.chart} is pinned per OCP version ({', '.join(pins)}) but has no "
                 f"{layout.ocp_version_dir(app.chart, app.ocp_version)}/ for this cluster's "
-                f"{app.ocp_version}: it falls back to the team default",
+                f"{app.ocp_version}: it falls back to its Sig values",
                 path=str(layout.ocp_versions_dir(app.chart)),
                 **where,
             )
@@ -437,7 +437,7 @@ def upgrade_check(
                     Rule.OCP_VERSION_PIN_MISSING,
                     f"{app.team}/{app.chart} is pinned per OCP version ({', '.join(pins)}); create "
                     f"{layout.ocp_version_dir(app.chart, to)}/ before the cluster moves to {to}, "
-                    "or it falls back to the team default",
+                    "or it falls back to its Sig values",
                     team=app.team,
                     path=str(layout.ocp_versions_dir(app.chart)),
                     cluster=app.ref.id,

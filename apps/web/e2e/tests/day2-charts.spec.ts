@@ -242,7 +242,7 @@ test.describe("A destination's charts", () => {
     await go(page, HOSTED_PAGE);
     await page.getByLabel("Upgrade check", { exact: true }).fill("4.19.3");
     await page.getByRole("button", { name: "Check", exact: true }).click();
-    await expect(page.getByText(/no ocp-versions\/4\.19\.3\//)).toBeVisible();
+    await expect(page.getByText(/no ocp-versions\/4\.19\.3\/: it would fall back to its Sig values/)).toBeVisible();
   });
 
   test("a name two destinations share asks which one", async ({ page }) => {

@@ -129,6 +129,20 @@ async def test_create_dry_run_then_real(jane: httpx.AsyncClient) -> None:
     assert bad["details"]["rule"] == "revision-unknown"
 
 
+async def test_an_existing_add_on_is_refused_with_its_sig_values_named(
+    jane: httpx.AsyncClient,
+) -> None:
+    # ADR-0043's amendment: day2's messages say Sig values, as the UI does, since 3.20.1.
+    exists = problem(
+        await jane.post("/api/day2/addons/redbull", json={**NEW, "name": "bmhgen"}),
+        409,
+        "ALREADY_EXISTS",
+    )
+    assert exists["detail"] == "redbull has operators/bmhgen/ already; edit its Sig values instead"
+    assert exists["details"]["rule"] == "addon-exists"
+    assert "team default" not in str(exists).lower()
+
+
 async def test_writes_are_admin_only(vic: httpx.AsyncClient) -> None:
     problem(await vic.post("/api/day2/addons/redbull", json=NEW), 403, "FORBIDDEN")
     assert ok(await vic.get("/api/day2/fleet-defaults"))

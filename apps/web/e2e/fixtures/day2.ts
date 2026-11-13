@@ -399,7 +399,7 @@ export async function mockDay2World(page: Page): Promise<Day2Requests> {
       warnings: [
         finding({
           rule: "ocp-version-pin-missing",
-          message: `prometheus is pinned for 4.18.22 but has no ocp-versions/${to}/: it would fall back to the team default`,
+          message: `prometheus is pinned for 4.18.22 but has no ocp-versions/${to}/: it would fall back to its Sig values`,
           team: "observability",
           path: "operators/prometheus/ocp-versions",
           cluster: HOSTED_ID,
