@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, CheckCircle2, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api-client";
@@ -11,7 +10,8 @@ import { ProblemList } from "@/components/common/problem-list";
 import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
-import { approvalHref, mrKey } from "@/lib/approvals";
+import { ApprovalLink, WorkflowBadge } from "@/components/common/workflow-mr";
+import { mrKey } from "@/lib/approvals";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn, formatDate } from "@/lib/utils";
 import type { MRDetail } from "@/types";
@@ -172,18 +172,22 @@ export default function ApprovalsPage() {
                     <tr key={mrKey(mr)} className="hover:bg-primary/[0.03] transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Link
-                            href={approvalHref(mr)}
+                          <ApprovalLink
+                            mr={mr}
                             className="font-semibold text-foreground hover:text-primary transition-colors break-words"
                           >
                             {mr.title}
-                          </Link>
+                          </ApprovalLink>
+                          <WorkflowBadge mr={mr} />
                           {mr.has_conflicts === true && (
                             <span className="rounded-full px-2 py-0.5 text-xs font-medium bg-status-error/10 text-status-error">
                               Conflicted
                             </span>
                           )}
                         </div>
+                        {mr.opened_by_workflow && (
+                          <p className="mt-1 text-xs text-muted-foreground">Review and merge it in GitLab.</p>
+                        )}
                         {mr.labels.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {mr.labels.map((label) => (

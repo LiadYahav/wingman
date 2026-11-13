@@ -148,7 +148,7 @@ will do before it is pressed.
    suggestion, a refused create (`409 ALREADY_EXISTS` with the MR's URL),
    and a cluster on its MCE for placement. `GET /api/day1/approvals` lists
    it with `"opened_by_workflow": "provision-cluster"` (`null` on Wingman's
-   own MRs). It is reviewed and
+   own MRs); the page marks it and opens it in GitLab. It is reviewed and
    merged there: the workflow records no requester, so Wingman's "nobody
    approves their own change" can't hold, and approving, rejecting or
    editing it through Wingman answers `404`.

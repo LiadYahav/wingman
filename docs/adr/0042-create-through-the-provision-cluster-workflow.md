@@ -123,7 +123,9 @@ workflow's GitLab account.
 3. **Approvals lists it, view only.** `GET /api/day1/approvals` adds the
    workflow's open merge requests; `MRDetail.opened_by_workflow` is
    `"provision-cluster"` for them and `null` for Wingman's, so the web
-   never reads branch names.
+   never reads branch names. The page marks the row with a
+   `provision-cluster workflow` badge and opens it in GitLab, not on
+   Wingman's review page.
 
 **Why approval stays in GitLab.** Wingman's rule is that nobody approves
 their own change, and it knows the requester from its own description
@@ -146,4 +148,5 @@ with `opened_by_workflow`, a taken name, a refused create with its URL,
 404 for approve, reject and detail, a webhook shows a new one, an
 unlabelled MR on another branch ignored);
 `apps/day1-service/tests/api/test_placement_api.py`
-(`test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_owner`).
+(`test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_owner`);
+`apps/web/e2e/tests/approvals.spec.ts` (the badge and the GitLab link).

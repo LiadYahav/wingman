@@ -1255,6 +1255,11 @@ cluster               …/{cluster}/{chart}/values.yaml
               commit to cluster MRs), nothing is merged: <strong>Reload</strong> and review the new diff. Nobody
               approves a change they requested themselves; the button is disabled on your own MRs.
             </Callout>
+            <Callout type="info" title="The provision-cluster workflow's MRs">
+              The day1 MRs the <InlineCode>provision-cluster</InlineCode> workflow opens are listed too, with a{" "}
+              <strong>provision-cluster workflow</strong> badge. They open in GitLab: review and merge them there, since
+              the workflow records no requester for Wingman to check.
+            </Callout>
             <Callout type="tip" title="Each MR has its own address">
               GitLab numbers MRs per repository, so every team&apos;s repo has its own !5. Wingman&apos;s links name
               the repo: <InlineCode>/approvals/day1-12</InlineCode>, <InlineCode>/approvals/specs-4</InlineCode>,{" "}

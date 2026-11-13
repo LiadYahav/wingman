@@ -42,6 +42,8 @@ export interface MRDetail {
   team?: string;
   /** day2 only: GitLab's author (the service account). */
   gitlab_author?: string;
+  /** day1 only: the platform workflow that opened it; it is reviewed and merged in GitLab, not here. */
+  opened_by_workflow?: "provision-cluster" | null;
 }
 
 export interface FileDiff {
