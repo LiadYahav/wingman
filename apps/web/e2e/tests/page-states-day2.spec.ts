@@ -8,7 +8,7 @@
 
 import { test, expect, type Route } from "@playwright/test";
 import { fulfillProblem, go, held, injectAdminAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
-import { HOSTED_NAME, day2Catalog, hostedCharts, mockDay2World } from "../fixtures/day2";
+import { HOSTED_NAME, MCE_ID, day2Catalog, hostedCharts, mockDay2World } from "../fixtures/day2";
 
 const REQUEST_ID = "request req_e2e0000000000001";
 const UNREACHABLE = "GitLab could not be reached";
@@ -58,39 +58,6 @@ test.describe("Lints", () => {
     await page.locator("tbody").getByRole("button", { name: "Clear filters" }).click();
     await expect(rows).toHaveCount(3);
     await expect(page.getByPlaceholder("Search rules, messages, paths...")).toHaveValue("");
-  });
-});
-
-test.describe("Destinations", () => {
-  test("a failed read shows the problem, never an empty list", async ({ page }) => {
-    await page.route("**/api/day2/clusters", unreachable);
-    await go(page, "/destinations");
-
-    const alert = page.getByRole("alert").filter({ hasText: "The destinations could not be loaded" });
-    await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
-    await expect(alert).toContainText(REQUEST_ID);
-    await expect(page.getByTestId("destinations-empty")).toHaveCount(0);
-  });
-
-  test("with none it says where they come from and offers a new cluster", async ({ page }) => {
-    await page.route("**/api/day2/clusters", (r) => json(r, []));
-    await go(page, "/destinations");
-
-    const empty = page.getByTestId("destinations-empty");
-    await expect(empty).toContainText("No destinations yet");
-    await expect(empty.getByRole("link", { name: "New cluster" })).toHaveAttribute("href", "/clusters/new");
-  });
-
-  test("filters that match nothing say so and clear in one click", async ({ page }) => {
-    await go(page, "/destinations");
-    const rows = page.locator("tbody tr");
-    await expect(rows).toHaveCount(6);
-
-    await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: /UPI/ }).click();
-    await page.getByPlaceholder("Search names, ids or teams...").fill("no-such-destination");
-    await expect(page.getByText("No destinations match")).toBeVisible();
-    await page.locator("tbody").getByRole("button", { name: "Clear filters" }).click();
-    await expect(rows).toHaveCount(6);
   });
 });
 
@@ -154,7 +121,7 @@ test.describe("A destination's charts", () => {
     await expect(page.getByTestId("charts-loading")).toHaveCount(0);
   });
 
-  test("a failed read shows the problem and the way back to the destinations", async ({ page }) => {
+  test("a failed read shows the problem and the way back: the clusters, or the add-ons for any other kind", async ({ page }) => {
     await page.route(/\/api\/day2\/clusters\/[^/?]+\/addons(\?.*)?$/, unreachable);
     await go(page, HOSTED_PAGE);
 
@@ -162,7 +129,13 @@ test.describe("A destination's charts", () => {
     const alert = page.getByRole("alert").filter({ hasText: `The charts of ${HOSTED_NAME} could not be loaded` });
     await expect(alert).toContainText(UNREACHABLE, { timeout: 10_000 });
     await expect(alert).toContainText(REQUEST_ID);
-    await expect(page.getByRole("link", { name: "Browse destinations" })).toHaveAttribute("href", "/destinations");
+    await expect(page.getByRole("link", { name: "Back to clusters" })).toHaveAttribute("href", "/clusters");
+
+    await go(page, `/clusters/${encodeURIComponent(MCE_ID)}/addons`);
+    await expect(page.getByRole("alert").filter({ hasText: `The charts of ${MCE_ID} could not be loaded` })).toContainText(UNREACHABLE, {
+      timeout: 10_000,
+    });
+    await expect(page.getByRole("link", { name: "Back to add-ons" })).toHaveAttribute("href", "/addons");
   });
 
   test("a failed catalog says so instead of hiding Available", async ({ page }) => {

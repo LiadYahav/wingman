@@ -5,7 +5,9 @@ its first cluster list reads every repository and every cluster's last
 change. The warm-up makes those reads as the service starts. It never holds
 up readiness: a request that arrives meanwhile joins the same fetches
 (single-flight), and a failed warm-up is only logged, since the first real
-read retries it and reports its error itself.
+read retries it and reports its error itself. Readiness asks GitLab only until
+it has answered once (``ready_once``, ADR-0054); after that, a GitLab failure
+is reported the same way, by the request that meets it.
 """
 
 from __future__ import annotations

@@ -25,7 +25,7 @@ Throughout:
 | Cluster name prefix | `MCE_CLUSTER_NAME_PREFIX` (`clusterStatus.clusterNamePrefix`) | `DAY1_CLUSTER_NAME_STRIP_PREFIX` (`day1.clusterNameStripPrefix`, default `ocp4-`). The old name is still read. |
 | Default branch | `GITLAB_DEFAULT_BRANCH` | day1 uses each project's default branch from GitLab; day2 uses `DAY2_GITOPS_BRANCH` (`gitlab.day2GitopsBranch`, default `main`) |
 | Runtime | — | `WINGMAN_ENVIRONMENT` (`environment`, default `production`). Production refuses the in-memory GitLab and a weak dev login. |
-| Probes | `/healthz` | `/health/live` (the process) and `/health/ready` (GitLab answers). `/healthz` still answers. |
+| Probes | `/healthz` | `/health/live` (the process) and `/health/ready` (GitLab answered once since the pod started, ADR-0054). `/healthz` still answers. |
 | Monitoring | — | A ServiceMonitor, alert rules and a Grafana dashboard, all off by default (`monitoring.*`) |
 | The specs project's `cluster-template.j2` | Rendered as is | **Every rendered file is checked against the values-file contract** before an MR is opened (ADR-0012). The template must produce the new chart's values: see check 4.4. |
 | Day2 repos | `operators/<addon>` plus `mces/<mce>/<cluster>/<addon>` at the repo root | The gitops-day2 layout: `sites/<site>/<env>/mces/<mce>/<cluster>/<chart>/`, `defaults/<kind>/<chart>/`, `operators/<chart>/`, `exclusions.yaml`. See check 4.3. |
@@ -263,7 +263,7 @@ Sign in, as an admin and as a viewer, and check each page reads:
 | A cluster | Its values, its HostedCluster (if live status is on), its Drift tab |
 | Specs | Every spec loads, or shows why it doesn't |
 | New cluster | Fill the form for an existing site and MCE and press **Preview**, not Create. The preview must render and pass every check. |
-| Destinations, Addons | Every team repo's clusters and charts |
+| Addons | Every team repo's add-ons and fleet defaults; a cluster's Addons tab lists its charts |
 | Approvals | Open MRs, including those from the old version |
 | Audit | Both tabs load |
 

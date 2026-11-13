@@ -1,7 +1,7 @@
 # ADR-0020: day2 models four destination kinds, discovered from folders and day1, each with an id that carries its position
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; amended 2026-11-13 (the web's Destinations page is removed; the API and the concept stay)
 
 ## Context
 
@@ -65,3 +65,28 @@ knows MCEs and hosted clusters no team repo places yet.
   Argo instance and fleet scope per kind.
 - `tests/unit/application/test_reads.py`: discovery, env resolution,
   ambiguity, unknown env.
+
+## Amendment (2026-11-13): the Destinations page is removed
+
+The user removed the web's **Destinations** page (`/destinations`, one table
+of every destination, each linking to its charts) and its sidebar entry: it
+repeated what other pages do. A hosted cluster's charts are on its page; an
+add-on's page on Addons has its defaults per scope, the destinations each
+reaches, the values per env and per destination, and Deploy on specific MCEs
+(ADR-0053's amendments). `/destinations` redirects to `/clusters`
+(`next.config.ts`, 307). A destination's charts page leads back to its
+cluster's page for a hosted cluster in day1, to `/clusters` for any other
+hosted cluster, and to `/addons` for the hub, an MCE or a UPI cluster.
+
+Unchanged: the four kinds, the ids, `GET /api/day2/clusters` and
+`GET /api/day2/clusters/{id}` (a bare name with several candidates still
+lists them), and every charts page at `/clusters/<id>/addons`.
+
+The way in to a charts page that is not a hosted cluster's: an add-on's page
+links each destination it names (the rows per scope, Deploy on specific MCEs,
+the other UPI clusters). The hub is not named there, so its charts page is
+linked only from a lint finding that names it.
+
+Pinned by `apps/web/e2e/tests/day2-charts.spec.ts` (the redirect, the back
+links), `page-states-day2.spec.ts` and `addon-defaults.spec.ts` (an MCE's
+name opens its charts page).

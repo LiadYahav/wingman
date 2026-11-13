@@ -55,11 +55,6 @@ spec:
             - name: quick-links
               mountPath: /etc/wingman/quick-links
               readOnly: true
-            {{- if and .Values.quickLinks .Values.quickLinks.argocdTokensSecret }}
-            - name: argocd-tokens
-              mountPath: /etc/wingman/argocd-tokens
-              readOnly: true
-            {{- end }}
             {{- if .Values.tls.caBundle }}
             - name: ca-bundle
               mountPath: {{ .Values.tls.caBundleMountPath }}
@@ -89,11 +84,6 @@ spec:
         - name: quick-links
           configMap:
             name: wingman-quick-links
-        {{- if and .Values.quickLinks .Values.quickLinks.argocdTokensSecret }}
-        - name: argocd-tokens
-          secret:
-            secretName: {{ .Values.quickLinks.argocdTokensSecret | quote }}
-        {{- end }}
         {{- if .Values.tls.caBundle }}
         - name: ca-bundle
           configMap:

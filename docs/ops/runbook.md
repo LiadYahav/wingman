@@ -38,6 +38,10 @@ the air gap by hand, so one is usually missing.
 ## WingmanGitLabTokenRejected
 
 GitLab answered 401 or 403 to **Wingman's own token**. Every user is affected.
+The pods stay ready, since readiness asks GitLab only until a pod's first
+pass (ADR-0054): users get a 502 `GIT_PERMISSION_DENIED` problem. The alert
+counts real calls only, so a token revoked while nobody uses Wingman fires on
+the first request after it.
 
 1. Check the token in the `wingman-secrets` Secret (`GITLAB_TOKEN`, from the
    Helm value `gitlab.accessToken`): has it expired or been revoked? GitLab shows its expiry under the owning
@@ -58,6 +62,10 @@ GitLab answered 401 or 403 to **Wingman's own token**. Every user is affected.
 
 More than 20% of a service's GitLab calls fail with "unavailable" (unreachable,
 or 5xx after retries) for 10 minutes. No write was attempted for these.
+The pods stay ready through it (ADR-0054): users get a 503 `GIT_UNAVAILABLE`
+problem, and cached reads answer for up to a minute. A pod that starts
+meanwhile stays unready until GitLab answers. An outage while nobody uses
+Wingman shows only once someone does: readiness no longer calls GitLab.
 
 1. Is GitLab itself healthy? Check its status page or `/-/readiness` from
    inside the cluster.

@@ -98,6 +98,17 @@ function TeamHeading({ team, count, readOnlyReason }: { team: string; count: num
   );
 }
 
+/**
+ * Where a destination's charts page leads back to: a hosted cluster to the
+ * clusters, any other kind (the hub, an MCE, a UPI cluster) to the add-ons.
+ * Before the page has read it, the kind comes from the id; a bare name is a
+ * hosted cluster's, as the day1 pages link by name.
+ */
+function homeOf(kind: string | undefined, key: string): { href: string; label: string } {
+  const known = kind ?? (key === "hub" ? "hub" : isDestinationId(key) ? key.split(":")[0] : "hosted");
+  return known === "hosted" ? { href: "/clusters", label: "Back to clusters" } : { href: "/addons", label: "Back to add-ons" };
+}
+
 /** A bare name that several destinations share: pick one by id (ADR-0020). */
 function CandidatePicker({ name, candidates }: { name: string; candidates: string[] }) {
   return (
@@ -183,10 +194,11 @@ function ClusterCharts() {
   const selectedEntries = available.filter((e) => selected.has(chartKey(e)));
   const isFetching = charts.isFetching || catalog.isFetching;
 
+  const home = homeOf(data?.kind ?? destination.data?.kind, key);
   const backHref =
     data?.kind === "hosted" && destination.data?.in_day1 !== false
       ? `/clusters/${encodeURIComponent(data.cluster)}?site=${encodeURIComponent(data.site)}&mce=${encodeURIComponent(data.mce)}`
-      : "/destinations";
+      : home.href;
 
   function showOpened(changes: OpenedChanges) {
     setOpened(changes);
@@ -218,8 +230,8 @@ function ClusterCharts() {
       ) : (
         <div className="space-y-3">
           <ProblemList error={charts.error} title={`The charts of ${key} could not be loaded`} />
-          <Link href="/destinations" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Browse destinations
+          <Link href={home.href} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            {home.label}
           </Link>
         </div>
       );

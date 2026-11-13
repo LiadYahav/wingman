@@ -122,12 +122,6 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `quickLinks.domain` | `QUICK_LINKS_DOMAIN` | `""` | The MCEs' domain. Empty: `clusterStatus.mceDomain` |
 | `quickLinks.argocdUrlTemplate` | `QUICK_LINKS_ARGOCD_URL_TEMPLATE` | `https://openshift-gitops-server-openshift-gitops.apps.{cluster}.{domain}` | A cluster's ArgoCD |
 | `quickLinks.consoleUrlTemplate` | `QUICK_LINKS_CONSOLE_URL_TEMPLATE` | `https://console-openshift-console.apps.{cluster}.{domain}` | A cluster's console |
-| `quickLinks.status.enabled` | `QUICK_LINKS_STATUS_ENABLED` | `true` | `false`: no status dots, and day1 calls none of the links |
-| `quickLinks.status.ttlSeconds` | `QUICK_LINKS_STATUS_TTL_SECONDS` | `60` | How long a check is kept, 10 to 600; answered as long again while it refreshes |
-| `quickLinks.status.timeoutSeconds` | `QUICK_LINKS_TIMEOUT_SECONDS` | `3` | Per check and per ArgoCD read, at most 30 |
-| `quickLinks.status.concurrency` | `QUICK_LINKS_CONCURRENCY` | `8` | Checks at once, 1 to 64 |
-| `quickLinks.sslVerify` | `QUICK_LINKS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
-| `quickLinks.argocdTokensSecret` | | `""` | An existing Secret whose key `tokens` (a YAML map of ArgoCD instance to read-only token) is mounted as `QUICK_LINKS_ARGOCD_TOKENS_FILE`. Empty: no counts |
 | `quickLinks.clusters` | | `{}` | A cluster's own `argocd` and `console` addresses, for one that does not follow the templates (the ConfigMap `wingman-quick-links`) |
 | `quickLinks.sections` | | `[]` | The team's links (the ConfigMap `wingman-quick-links`, re-read by day1 on every page load) |
 | `tls.caBundle` | | `""` | An internal CA (PEM), mounted in every pod |
@@ -353,11 +347,11 @@ cluster's ArgoCD with its console beside it, at `quickLinks.argocdUrlTemplate` a
 the team's own links, `quickLinks.sections`. With a domain set, every MCE has its card and nothing
 else is needed.
 
-day1 checks every link itself (`HEAD`, then `GET`; no credential sent; redirects not followed) when
-the page is read, caches the answer `quickLinks.status.ttlSeconds` and shares it between viewers:
-up (2xx, 3xx, 401, 403), down, or unknown (TLS not verified), with the reason on hover. The
-browser never calls a link. day1 needs to reach them: an internal CA goes in `tls.caBundle` or
-`quickLinks.sslVerify`.
+Wingman only lists the links: neither day1 nor the browser calls them, so the page shows no
+status dots and no ArgoCD application counts (both removed in 3.13.1; the ArgoCD shows its own
+counts one click away). day1 needs no route to the links, and no token for any of them. Values
+kept from 3.9 to 3.13.0 that still set the checks or the ArgoCD tokens are ignored; what to
+delete is at the top of `docs/upgrade/3.8-to-3.9.md`.
 
 `quickLinks.sections` and `quickLinks.clusters` are rendered into the ConfigMap
 `wingman-quick-links`, mounted in day1 as a directory. day1 reads it on every page load, so an
@@ -379,37 +373,12 @@ quickLinks:
           url: https://gitlab.example.internal/platform/gitops
           description: Main GitOps repository
           icon: gitlab
-          ping: https://gitlab.example.internal   # the URL to check; false: no dot
         - name: ArgoCD Main
           url: https://argocd.example.internal
           icon: argocd
-          argocd: main            # its token's key: the card shows the applications' counts
 ```
 
-**ArgoCD counts.** A card for an ArgoCD that has a read-only token shows its applications by sync
-(Synced, OutOfSync) and health (Healthy, Progressing, Degraded, Missing). The tokens never go in
-values: put them in a Secret, a YAML map of instance to token, where an instance is a cluster's
-name (the hub, an MCE) or a link's `argocd:` key, and name the Secret.
-
-```bash
-cat > tokens.yaml <<'YAML'
-hub-prod: <token>
-ocp4-prod-mce-site1-a: <token>
-main: <token>
-YAML
-oc create secret generic wingman-argocd-tokens -n wingman --from-file=tokens=tokens.yaml
-rm tokens.yaml
-```
-
-```yaml
-quickLinks:
-  argocdTokensSecret: wingman-argocd-tokens
-```
-
-A token needs only to list applications: in each ArgoCD, an account with the `apiKey`
-capability and a role allowing `applications, get` (OpenShift GitOps: the `ArgoCD` resource's
-`spec.extraConfig` and `spec.rbac.policy`), and `argocd account generate-token --account <it>`. day1 reads the Secret at start: restart it after replacing a token. A running
-Wingman adds all of this with `docs/upgrade/3.8-to-3.9.md`.
+A running Wingman adds all of this with `docs/upgrade/3.8-to-3.9.md`.
 
 ## Loading Pre-built Images (Air-gapped)
 
@@ -436,10 +405,19 @@ docker push registry.example.com/wingman/wingman-day1:$VERSION
 
 ### Health Check Failures
 
-If pods restart due to liveness probe timeouts:
+If pods restart due to liveness probe timeouts, or never become ready:
 - Liveness is `/health/live` (the process answers); readiness is
-  `/health/ready`, which also needs GitLab to answer. A pod that is live but
-  not ready cannot reach GitLab: check `gitlab.url`, the token and the CA.
+  `/health/ready`, which also needs GitLab to answer once after the pod
+  starts (ADR-0054). A pod that is live but never ready cannot reach GitLab,
+  or the token cannot read what the service checks: day1 the
+  `gitlab.day1ProjectId` and `gitlab.specsProjectId` projects, day2 the
+  `gitlab.day2SigsGroupPath` group and the day1 project. Check `gitlab.url`,
+  the token, those values and the CA; `/health/ready` on the pod's port names
+  the error.
+- Once ready, a pod stays ready through a GitLab outage: readiness no longer
+  asks GitLab, so users get Wingman's own error (a 503 `GIT_UNAVAILABLE`
+  problem) instead of a proxy error page, and cached reads still answer for
+  up to a minute. The GitLab alerts (`docs/ops/runbook.md`) report the outage.
 - `kubectl logs deploy/wingman-day1` (or `-day2`): a configuration the
   service refuses (ADR-0009) is logged at start-up, and the pod exits.
 

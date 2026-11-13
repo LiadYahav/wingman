@@ -58,7 +58,7 @@ wingman/
 ├── apps/
 │   ├── web/                       # Next.js frontend (apps/web/README.md)
 │   │   ├── app/                   # App Router: login/, and the signed-in pages in (app)/:
-│   │   │                          #   clusters, specs, addons, destinations, lints,
+│   │   │                          #   clusters, specs, addons, lints, quick-links,
 │   │   │                          #   approvals, audit, docs, settings
 │   │   ├── components/            # ui, common, layout, clusters, specs, addons
 │   │   ├── hooks/ lib/ stores/    # query hooks, the API client and helpers, the auth store
@@ -121,7 +121,7 @@ wingman/
 | **Wingman picks the MCE** | The create form asks for the site, prod or prep and the OpenShift version (the owner and the flavor's nodepools refine it), never for the MCE, and Wingman picks it: of the MCEs at the site whose name says the env, those that host the version, have at least `PLACEMENT_MIN_FREE_PODS` free pods on their workers (allocatable pods less pods in use; masters, infra and tainted nodes left out), have enough healthy free servers of each node type the nodepools need (free Agents in that InfraEnv, healthy in server-scan) and can be read, the one with the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers in server-scan. The form shows every candidate's numbers and why the pick won; an admin may choose another MCE that passes every check, with a reason, and the MR description records it all (ADR-0050). With live status off it decides on the day1 repo and server-scan, and the free pods and servers are "not checked", shown as such. |
 | **Add-ons: catalog, defaults and overrides** | The **Addons** page lists each team's add-ons (its catalog, `operators/<chart>/` in the team repo) and their fleet defaults. A team admin creates an add-on and edits its team default there; an add-on's page (`/addons/<team>/<add-on>`) has its deploy config and values, its OCP-version pins, and per fleet scope (hosted clusters, MCEs, the hub, UPI) whether it is a default there and that default's values. Each env (`values-<env>.yaml`) and each MCE, hosted cluster or UPI cluster (`values-<name>.yaml`) can get values of its own, and an add-on wanted on some MCEs only is deployed on those MCEs, one install merge request each. Which add-ons a hosted cluster has of its own comes from its flavor and the create form. Every change is previewed and confirmed against that preview (ADR-0053). One cluster's add-ons stay on that cluster's page. |
 | **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. |
-| **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. day1 checks every link (up, down or unknown, with the reason) and an ArgoCD with a read-only token shows its applications' sync and health counts; the browser never pings anything, and icons ship with Wingman (ADR-0052). |
+| **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. Wingman only lists the links and never calls them, and icons ship with Wingman (ADR-0052). |
 
 ## Deployment
 
@@ -235,7 +235,6 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/day1/quick-links` | The launcher's sections and cards: the hub and every MCE's ArgoCD and console, by site, then the links file's sections, with the links file's problems ([API note](docs/notes/2026-11-12-quick-links-api.md)) |
-| `GET` | `/api/day1/quick-links/status` | Each link's check (`up`, `down` or `unknown`, with the reason) and each ArgoCD's applications by sync and health; cached `QUICK_LINKS_STATUS_TTL_SECONDS`, shared by every viewer |
 
 ### Day2 Service (Port 8002)
 
@@ -328,7 +327,7 @@ reachable through the Route.
 |--------|----------|-------------|
 | `GET` | `/health/live` | The process serves requests (the liveness probe); never checks dependencies |
 | `GET` | `/healthz` | The same, at the legacy probe path |
-| `GET` | `/health/ready` | Every readiness check (GitLab) passes; 503 otherwise (the readiness probe) |
+| `GET` | `/health/ready` | Every readiness check passes; 503 otherwise (the readiness probe). The GitLab check runs only until it first passes: after that, a GitLab outage leaves the pod ready and requests report it (ADR-0054) |
 | `GET` | `/metrics` | Prometheus metrics (`docs/ops/metrics.md`) |
 
 ## Environment Variables
@@ -426,12 +425,6 @@ QUICK_LINKS_HUB_DOMAIN=                   # the hub's domain; default QUICK_LINK
 QUICK_LINKS_DOMAIN=                       # the MCEs' domain; default MCE_API_DOMAIN
 QUICK_LINKS_ARGOCD_URL_TEMPLATE=https://openshift-gitops-server-openshift-gitops.apps.{cluster}.{domain}
 QUICK_LINKS_CONSOLE_URL_TEMPLATE=https://console-openshift-console.apps.{cluster}.{domain}
-QUICK_LINKS_STATUS_ENABLED=true           # false: no status dots, and day1 calls none of the links
-QUICK_LINKS_STATUS_TTL_SECONDS=60         # how long a check is kept (10 to 600), answered as long again while it refreshes
-QUICK_LINKS_TIMEOUT_SECONDS=3             # per check and per ArgoCD read, at most 30
-QUICK_LINKS_CONCURRENCY=8                 # checks at once, 1 to 64
-QUICK_LINKS_SSL_VERIFY=true               # true, false, or a CA bundle path
-QUICK_LINKS_ARGOCD_TOKENS_FILE=/etc/wingman/argocd-tokens/tokens   # YAML map of ArgoCD instance to read-only token; missing: no counts
 ```
 
 ### Day2 Service
@@ -596,8 +589,8 @@ All changes create Merge Requests instead of direct commits:
 
 ### Health Checks
 
-- Day1: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
-- Day2: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab reachable), `GET /metrics`
+- Day1: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab answered once since the pod started), `GET /metrics`
+- Day2: `GET /healthz` (`/health/live`), `GET /health/ready` (GitLab answered once since the pod started), `GET /metrics`
 
 Metrics, alerts and their runbook: `docs/ops/metrics.md`, `docs/ops/runbook.md`.
 

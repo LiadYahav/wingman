@@ -1,8 +1,8 @@
 """Metrics for day1's calls to systems other than GitLab (ADR-0010).
 
 GitLab calls are counted by ``InstrumentedGitLab``. The MCE hub APIs,
-OpenShift OAuth, the day2 service, server-scan, the workflows orchestrator,
-segments-manager, and Quick Links' checks and ArgoCD reads are counted here, on the same
+OpenShift OAuth, the day2 service, server-scan, the workflows orchestrator
+and segments-manager are counted here, on the same
 ``wingman_dependency_*`` families, with an ``operation`` from a fixed enum
 (listed in ``docs/ops/metrics.md``) and an ``outcome`` derived from the
 day1 domain error the adapter raised.
@@ -81,18 +81,6 @@ class SegmentsManagerOperation(StrEnum):
     """Calls to segments-manager (``dependency="segments_manager"``)."""
 
     GET_SEGMENT = "get_segment"
-
-
-class LinkCheckOperation(StrEnum):
-    """Quick Links' status checks (``dependency="link_check"``; the URL is never a label)."""
-
-    CHECK_LINK = "check_link"
-
-
-class ArgoCdOperation(StrEnum):
-    """Reads of an ArgoCD's applications (``dependency="argocd"``; nor is the instance)."""
-
-    LIST_APPLICATIONS = "list_applications"
 
 
 class WorkflowsOperation(StrEnum):

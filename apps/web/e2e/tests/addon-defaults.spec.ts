@@ -120,6 +120,21 @@ test.describe("An add-on's page", () => {
     await expect(mces(page).getByTestId("env-prep")).toContainText("the default's values");
   });
 
+  test("a destination's name opens its charts page: an MCE's, in its row and where it is installed", async ({ page }) => {
+    await go(page, "/addons/platform/external-secrets");
+    const installedRow = mces(page).getByTestId(`installed-${MCE_EXCLUDED_NAME}`);
+    await expect(installedRow.getByRole("link", { name: MCE_EXCLUDED_NAME })).toHaveAttribute(
+      "href",
+      `/clusters/${encodeURIComponent(MCE_EXCLUDED)}/addons`,
+    );
+
+    await go(page, "/addons/platform/cert-manager");
+    await mces(page).getByTestId(`destination-${MCE_A_NAME}`).getByRole("link", { name: MCE_A_NAME }).click();
+    await expect(page).toHaveURL(new RegExp(`/clusters/${encodeURIComponent(MCE_A)}/addons$`));
+    // The mocked day2 world does not know this MCE: its page says so, and leads back to the add-ons.
+    await expect(page.getByRole("link", { name: "Back to add-ons" })).toHaveAttribute("href", "/addons");
+  });
+
   test("an edit of the team default is confirmed and sent with the preview's digest", async ({ page }) => {
     await go(page, "/addons/platform/cert-manager");
     await page.getByRole("region", { name: "Team default" }).getByRole("button", { name: "Edit team default" }).click();

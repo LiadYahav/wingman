@@ -38,8 +38,9 @@ const WINGMAN_WEB_BUILD = new Date().toISOString();
 
 /**
  * 3.12.0's Operators pages are folded into Addons, one place called add-ons
- * (ADR-0053's amendment of 2026-11-12): their links keep working. Temporary
- * (307), so no browser caches them for good.
+ * (ADR-0053's amendment of 2026-11-12): their links keep working. The
+ * Destinations page is gone (ADR-0020's amendment of 2026-11-13): its link
+ * opens the clusters. Temporary (307), so no browser caches them for good.
  */
 async function redirects() {
   return [
@@ -47,6 +48,7 @@ async function redirects() {
     { source: "/teams/:team/operators", destination: "/addons?team=:team", permanent: false },
     { source: "/teams/:team/operators/:addon", destination: "/addons/:team/:addon", permanent: false },
     { source: "/teams/:team/new-operator", destination: "/addons/new?team=:team", permanent: false },
+    { source: "/destinations", destination: "/clusters", permanent: false },
   ];
 }
 

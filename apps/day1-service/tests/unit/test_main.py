@@ -11,18 +11,17 @@ from prometheus_client import CollectorRegistry
 from pydantic import SecretStr
 
 import wingman_day1.main as main
+from wingman_core.domain.git import Project
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.settings import AuthSettings, Environment, GitBackend, RuntimeSettings
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects
-from wingman_day1.infrastructure.argocd_api import HttpArgoCd
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory, FakeUninstallWorkflow
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_segments import FakeSegmentLedger
 from wingman_day1.infrastructure.hub_api import HttpHubApi
-from wingman_day1.infrastructure.link_probe import HttpLinkProbe
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
@@ -65,9 +64,7 @@ async def test_the_fake_backend_is_seeded_with_every_fixture_project() -> None:
         assert adapters.hub is None
         assert adapters.identity is None
         assert (adapters.inventory, adapters.uninstall, adapters.ledger) == (None, None, None)
-        assert isinstance(adapters.link_probe, HttpLinkProbe)
-        assert adapters.argocd is None, "no ArgoCD token is configured"
-        assert len(adapters.closers) == 2, "only the day2 client and the link probe hold one"
+        assert len(adapters.closers) == 1, "only the day2 client holds a connection"
     finally:
         await close(adapters)
 
@@ -105,7 +102,7 @@ async def test_the_gitlab_backend_builds_every_real_adapter_without_calling_anyt
         assert isinstance(adapters.gitlab, InstrumentedGitLab)
         assert isinstance(adapters.hub, HttpHubApi)
         assert isinstance(adapters.identity, OpenShiftOAuth)
-        assert len(adapters.closers) == 5
+        assert len(adapters.closers) == 4
     finally:
         await close(adapters)
 
@@ -120,7 +117,7 @@ async def test_server_scan_and_the_orchestrator_get_real_adapters_when_configure
     try:
         assert isinstance(adapters.inventory, HttpServerInventory)
         assert isinstance(adapters.uninstall, HttpUninstallWorkflow)
-        assert len(adapters.closers) == 4
+        assert len(adapters.closers) == 3
     finally:
         await close(adapters)
 
@@ -130,7 +127,7 @@ async def test_segments_manager_gets_a_real_adapter_when_configured() -> None:
     adapters = build_adapters(configured, FAKE, metrics=metrics(), service_token=lambda: "t")
     try:
         assert isinstance(adapters.ledger, HttpSegmentLedger)
-        assert len(adapters.closers) == 3
+        assert len(adapters.closers) == 2
     finally:
         await close(adapters)
     link_only = settings(segments_manager_ui_url="https://segments-manager.example")
@@ -275,8 +272,20 @@ async def test_readiness_asks_gitlab_for_both_projects(client: httpx.AsyncClient
     assert (await client.get("/metrics")).status_code == 200
 
 
-async def test_without_the_specs_project_day1_is_not_ready() -> None:
-    gitlab = InMemoryGitLab()
+class ProjectReadsCounted(InMemoryGitLab):
+    """The in-memory GitLab, counting the project reads readiness makes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.project_reads = 0
+
+    async def get_project(self, project: int | str) -> Project:
+        self.project_reads += 1
+        return await super().get_project(project)
+
+
+async def test_without_the_specs_project_day1_is_not_ready_until_gitlab_has_both() -> None:
+    gitlab = ProjectReadsCounted()
     gitlab.create_project("gitops-day1/platform-config", {"README.md": "day1"})
     app = create_app(
         settings=settings(),
@@ -287,9 +296,16 @@ async def test_without_the_specs_project_day1_is_not_ready() -> None:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://day1"
     ) as client:
-        response = await client.get("/health/ready")
-    assert response.status_code == 503
-    assert response.json()["checks"] == {"gitlab": "error: NotFoundError"}
+        missing = await client.get("/health/ready")
+        assert missing.status_code == 503
+        assert missing.json()["checks"] == {"gitlab": "error: NotFoundError"}
+
+        gitlab.create_project("wingman/cluster-specs", {"README.md": "specs"})
+        ready = [(await client.get("/health/ready")).json() for _ in range(3)]
+    assert ready == [{"status": "ready", "checks": {"gitlab": "ok"}}] * 3
+    # day1, then specs (missing); day1 and specs; then nothing: ready once is
+    # ready, and a later GitLab outage is the requests' to report (ADR-0054).
+    assert gitlab.project_reads == 4
 
 
 async def test_shutting_down_closes_every_adapter() -> None:
@@ -326,26 +342,3 @@ def test_the_module_builds_app_once_from_the_environment(monkeypatch: pytest.Mon
     assert main.app is built
     with pytest.raises(AttributeError):
         _ = main.application
-
-
-async def test_quick_links_get_a_probe_and_an_argocd_client_only_when_configured(
-    tmp_path: Path,
-) -> None:
-    tokens = tmp_path / "argocd-tokens"
-    tokens.write_text("hub-prod: read-only\n", encoding="utf-8")
-    configured = settings(quick_links_argocd_tokens_file=tokens)
-    adapters = build_adapters(configured, FAKE, metrics=metrics(), service_token=lambda: "t")
-    try:
-        assert isinstance(adapters.link_probe, HttpLinkProbe)
-        assert isinstance(adapters.argocd, HttpArgoCd)
-        assert adapters.argocd.has_token("hub-prod")
-        assert len(adapters.closers) == 3
-    finally:
-        await close(adapters)
-    off = settings(quick_links_status_enabled=False)
-    adapters = build_adapters(off, FAKE, metrics=metrics(), service_token=lambda: "t")
-    try:
-        assert (adapters.link_probe, adapters.argocd) == (None, None)
-        assert len(adapters.closers) == 1
-    finally:
-        await close(adapters)

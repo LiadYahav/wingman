@@ -98,6 +98,26 @@ async def test_create_app_without_a_gitlab_seeds_the_fake_from_the_fixtures(
     assert [t.team.name for t in teams.teams] == ["falcon", "lynx", "orca", "redbull"]
 
 
+async def test_readiness_asks_gitlab_only_until_it_has_answered_once(
+    env: pytest.MonkeyPatch,
+) -> None:
+    app = main.create_app(load_config())
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://day2"
+    ) as client:
+        ready = [(await client.get("/health/ready")).json() for _ in range(3)]
+    assert ready == [{"status": "ready", "checks": {"gitlab": "ok"}}] * 3
+    # The sigs group and the day1 project once; then a later GitLab outage is
+    # the requests' to report (ADR-0054).
+    registry = app.state.metrics.registry
+    for operation in ("list_group_projects", "get_project"):
+        calls = registry.get_sample_value(
+            "wingman_dependency_requests_total",
+            {"dependency": "gitlab", "operation": operation, "outcome": "ok"},
+        )
+        assert calls == 1, operation
+
+
 async def test_a_session_expires_by_the_clock_the_app_was_given(env: pytest.MonkeyPatch) -> None:
     now = [datetime(2026, 11, 7, tzinfo=UTC)]
     config = load_config()

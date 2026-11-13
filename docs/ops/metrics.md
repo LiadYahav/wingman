@@ -28,7 +28,7 @@ fails when this table and the code disagree.
 | `wingman_build_info` | gauge | `component`, `version`, `commit` | Always 1; which build is running. `component` is `day1` or `day2` (not `service`: Prometheus adds that as a target label). Version skew shows here. |
 | `wingman_http_requests_total` | counter | `method`, `route`, `status_class` | HTTP requests served. `status_class` is `2xx`..`5xx`. |
 | `wingman_http_request_duration_seconds` | histogram | `method`, `route` | Time to serve a request. |
-| `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth`, `day2`, `server_scan`, `workflows` (the workflows orchestrator), `segments_manager`, `link_check` (Quick Links' status checks) or `argocd` (Quick Links' ArgoCD counts); `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
+| `wingman_dependency_requests_total` | counter | `dependency`, `operation`, `outcome` | Calls to an external system. `dependency` is `gitlab`, `kubernetes` (an MCE hub's API), `openshift_oauth`, `day2`, `server_scan`, `workflows` (the workflows orchestrator) or `segments_manager`; `operation` is a GitLabPort method, or one of the fixed operations below; `outcome` is `ok`, `not_found`, `already_exists`, `conflict`, `not_mergeable`, `denied`, `rejected`, `unavailable`, `ambiguous` or `error`. |
 | `wingman_dependency_request_duration_seconds` | histogram | `dependency`, `operation` | Time spent in a call, retries included. |
 | `wingman_placement_decisions_total` | counter | `decision` | day1 only: creates checked against MCE placement (ADR-0050). `decision` is `picked` (Wingman's pick), `override` (an admin chose another MCE that passes every check, with a reason) or `refused` (the MCE failed a check, an override had no reason, or the form's pick was stale). Previews are not counted. |
 | `wingman_rollout_runs_total` | counter | `trigger` | Flavor rollout runs (day1, ADR-0044), by what started them: `merge` (Wingman merged the flavor's MR), `webhook` (the specs project's webhook), `reconcile` (an admin pressed Reconcile) or `read` (the rollout status was read with work pending). Every value exists at zero from start-up; day2 exports them at zero. |
@@ -44,8 +44,6 @@ Operations of the other dependencies (day1):
 | `server_scan` | `list_server_rows`, `get_server` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision` |
 | `segments_manager` | `get_segment` |
-| `link_check` | `check_link` |
-| `argocd` | `list_applications` |
 
 ## Reading the GitLab outcomes
 
@@ -57,6 +55,10 @@ Operations of the other dependencies (day1):
 - `ambiguous` means a write was sent but its result is unknown (a timeout or a
   5xx after sending). Writes are never retried (ADR-0006). Someone must check
   whether the commit or merge happened before trying again.
+- The readiness probe adds GitLab calls only until a pod's first pass
+  (`get_project`, and day2's `list_group_projects`; ADR-0054). After that,
+  every GitLab call is a request's, a rollout's, a warm-up's or a cache
+  refresh's: an idle Wingman makes none, so no GitLab traffic is not an outage.
 
 ## Reading placement
 
@@ -70,7 +72,7 @@ Operations of the other dependencies (day1):
   disagreeing with the rule; a rising `refused` is people choosing MCEs that
   fail a check, or forms left open while the counts moved.
 
-## Reading the server-scan, workflows, segments-manager and Quick Links outcomes
+## Reading the server-scan, workflows and segments-manager outcomes
 
 - `server_scan` `denied` means server-scan refused **Wingman's viewer token**
   (`SERVER_SCAN_TOKEN`); `unavailable` means it could not be reached or
@@ -90,17 +92,3 @@ Operations of the other dependencies (day1):
   an answer, shown as a warning. `unavailable` means it could not be reached
   or answered with an error; the cluster's VLAN and segment are still shown
   (they are the file's), and the answer's `ledger_error` says why.
-- `link_check` `check_link` is one of Quick Links' status checks (ADR-0052):
-  `ok` the link answered 2xx, 3xx, 401 or 403 (a dot that is up);
-  `not_found` it answered 404, `rejected` another 4xx, `unavailable` 5xx,
-  no answer within `QUICK_LINKS_TIMEOUT_SECONDS` or no connection (a dot
-  that is down); `error` TLS could not be verified (a dot that is unknown:
-  set `QUICK_LINKS_SSL_VERIFY` or the CA bundle). The URL is never a label.
-  Checks run only while someone reads the page, at most once per link per
-  `QUICK_LINKS_STATUS_TTL_SECONDS`.
-- `argocd` `list_applications` is one ArgoCD's application list, read with
-  its read-only token for a Quick Links card's counts. `denied` means the
-  ArgoCD refused **that token** (expired, revoked, or the account may not
-  list applications): replace it in the ArgoCD tokens Secret and restart
-  day1. `unavailable` means no answer or an error answer; the card shows
-  its link and dot without the counts. The instance is never a label.

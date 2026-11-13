@@ -153,14 +153,14 @@ test("a UPI fleet default edits its values-<cluster>.yaml", async ({ page }) => 
   await expect(metrics.getByTestId("value-row-clusterName")).toContainText("cluster-wide");
 });
 
-test("the hub, the destinations list and the lints", async ({ page }) => {
+test("the hub, the removed Destinations page's link and the lints", async ({ page }) => {
   await go(page, "/clusters/hub/addons");
   await expect(page.getByTestId("installed-falcon-hub-reporter")).toBeVisible();
   await expect(page.getByText("Upgrade check")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Back", exact: true })).toHaveAttribute("href", "/addons");
 
   await go(page, "/destinations");
-  await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: /UPI/ }).click();
-  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expect(page).toHaveURL(/\/clusters$/);
 
   await go(page, "/lints");
   await page.getByRole("group", { name: "Severity" }).getByRole("button", { name: /error/ }).click();

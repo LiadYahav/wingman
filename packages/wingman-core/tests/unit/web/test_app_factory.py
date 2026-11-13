@@ -14,7 +14,7 @@ from wingman_core.domain.users import Role, User
 from wingman_core.infrastructure.session_tokens import SessionTokens
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.web import app_factory
-from wingman_core.web.app_factory import ReadinessCheck, create_base_app
+from wingman_core.web.app_factory import ReadinessCheck, create_base_app, ready_once
 
 
 def make_app(*, readiness: Mapping[str, ReadinessCheck] | None = None) -> FastAPI:
@@ -72,6 +72,89 @@ async def test_readiness_reports_each_check(monkeypatch: pytest.MonkeyPatch) -> 
         "b": "error: ConnectionError",
         "c": "timeout",
     }
+
+
+class Dependency:
+    """A readiness check that fails, hangs or passes as the test says, and counts its calls."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.outcome: str = "down"
+
+    async def check(self) -> None:
+        self.calls += 1
+        if self.outcome == "slow":
+            await asyncio.sleep(1)
+        elif self.outcome == "down":
+            raise ConnectionError("refused")
+
+
+async def test_a_ready_once_check_fails_until_it_first_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app_factory, "READINESS_TIMEOUT_SECONDS", 0.05)
+    gitlab = Dependency()
+    app = make_app(readiness={"gitlab": ready_once(gitlab.check)})
+
+    for _ in range(2):
+        down = await get(app, "/health/ready")
+        assert (down.status_code, down.json()) == (
+            503,
+            {"status": "not_ready", "checks": {"gitlab": "error: ConnectionError"}},
+        )
+    assert gitlab.calls == 2, "every probe asks until the first pass"
+
+    gitlab.outcome = "up"
+    ready = await get(app, "/health/ready")
+    assert (ready.status_code, ready.json()) == (
+        200,
+        {"status": "ready", "checks": {"gitlab": "ok"}},
+    )
+    assert gitlab.calls == 3
+
+
+async def test_after_its_first_pass_a_ready_once_check_is_never_run_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app_factory, "READINESS_TIMEOUT_SECONDS", 0.05)
+    gitlab = Dependency()
+    gitlab.outcome = "up"
+    app = make_app(readiness={"gitlab": ready_once(gitlab.check)})
+    assert (await get(app, "/health/ready")).status_code == 200
+
+    for outcome in ("down", "slow"):
+        gitlab.outcome = outcome
+        later = await get(app, "/health/ready")
+        assert (later.status_code, later.json()) == (
+            200,
+            {"status": "ready", "checks": {"gitlab": "ok"}},
+        )
+    assert gitlab.calls == 1, "a pod that was ready once does not ask the dependency again"
+
+
+async def test_the_timeout_applies_to_a_ready_once_check_before_its_first_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app_factory, "READINESS_TIMEOUT_SECONDS", 0.05)
+    gitlab = Dependency()
+    gitlab.outcome = "slow"
+    app = make_app(readiness={"gitlab": ready_once(gitlab.check)})
+
+    slow = await get(app, "/health/ready")
+    assert (slow.status_code, slow.json()["checks"]) == (503, {"gitlab": "timeout"})
+
+    gitlab.outcome = "up"
+    assert (await get(app, "/health/ready")).status_code == 200, "a timeout is not a pass"
+    assert gitlab.calls == 2
+
+
+async def test_only_the_wrapped_check_stops_running() -> None:
+    gitlab, other = Dependency(), Dependency()
+    gitlab.outcome = other.outcome = "up"
+    app = make_app(readiness={"gitlab": ready_once(gitlab.check), "other": other.check})
+    for _ in range(3):
+        assert (await get(app, "/health/ready")).status_code == 200
+    assert (gitlab.calls, other.calls) == (1, 3)
 
 
 async def test_the_build_is_shown_to_a_logged_in_user_under_the_api_prefix() -> None:

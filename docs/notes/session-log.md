@@ -4,6 +4,44 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-12 — 3.8.0 to 3.12.0: the one-place plan, teams author operators, per-cluster rollout, MCE placement, Quick Links.**
+The architect's vision is the plan in `docs/ideas/single-pane.md` (#31,
+3.9.1): decisions 1–21, workstreams with fixed ADR numbers, open questions.
+Released today, each built by an agent and reviewed here:
+- 3.8.0 (#33, ADR-0043): teams create add-ons and edit team and fleet
+  defaults with ArgoCD sync options; per-team opt-in by the GitLab account's
+  access (`TEAM_READ_ONLY`). Merged before its review finished, at the
+  user's request; the review's 8 findings were fixed in 3.12.0.
+- 3.9.0 (#34, ADR-0052): Quick Links, a launcher of every ArgoCD and console
+  (hub and MCEs) plus the team's own links, with server-side status and
+  optional ArgoCD counts.
+- 3.10.0 (#32, ADR-0044): **a change reaches each cluster through its own MR**
+  (the user's core principle: small blast radius, the customer takes it when
+  ready). Import opens one MR per cluster; a new flavor version opens one sync
+  MR per linked cluster automatically, restart-safe; a cluster is measured
+  against its own flavor version, so a newer one is "update available".
+- 3.11.0 (#35, ADR-0045, ADR-0050): Wingman picks the MCE: version, free pods
+  on workers (allocatable − in use ≥ `PLACEMENT_MIN_FREE_PODS`, 70), healthy
+  free servers per node type from the InfraEnv and server-scan; then fewest of
+  this owner (mador), fewest overall, most spare; an admin may override with a
+  reason. A per-MCE API address in the MCE tokens Secret.
+- 3.12.0 (#36, ADR-0053): an Operators page per team: which destinations a
+  fleet default reaches (`exclusions.yaml`, edited in place), per-destination
+  values and deploy-config carve-outs, every write listing what it does to
+  each destination, confirmed against the preview's digest.
+
+Wingman 3.12.0 runs on the team's sandbox in namespace `wingman` with its own
+GitLab seeded from `dev/gitlab-fixtures` (addresses and Secrets are in the
+git-ignored `CLAUDE.local.md`; its workers are near the disk eviction line).
+
+**Next** (the plan's order): the single pane (top-bar switch, the design
+pass, a table component) proven on the Segments area (ADR-0047); the Servers
+area with server-scan's exact behaviour, writes included (ADR-0048); the RBAC
+design with Keycloak federating LDAP (ADR-0051); cluster-navigator's data once
+the team rolls out collectors (ADR-0049). Waiting on the user and the team:
+the real pod cost of a control plane, server-scan's MCE names in production,
+the shared Git store on the sandbox, ADR-0042's open questions.
+
 **2026-11-12 — 3.7.0: create can start the provision-cluster workflow (ADR-0042), off by default.**
 Released today: 3.4.1 (#25), 3.5.0 (#26, the EPG from segments-manager,
 ADR-0039), 3.6.0 (#27, create from a flavor: a nodepool ratio whose

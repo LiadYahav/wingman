@@ -1,11 +1,8 @@
-# helm template fixture: Quick Links with a hub, its own domain, ArgoCD tokens,
-# a cluster's own addresses and the team's links (ADR-0052).
+# helm template fixture: Quick Links with a hub, its own domain, a cluster's
+# own addresses and the team's links (ADR-0052).
 quickLinks:
   hubName: hub-prod
   domain: mgmt.example.internal
-  status:
-    enabled: false
-  argocdTokensSecret: wingman-argocd-tokens
   clusters:
     hub-prod:
       console: https://console.hub-prod.example.internal
@@ -16,8 +13,6 @@ quickLinks:
         - name: GitLab GitOps Project
           url: https://gitlab.example.internal/platform/gitops
           icon: gitlab
-          ping: https://gitlab.example.internal
         - name: ArgoCD Main
           url: https://argocd.example.internal
           icon: argocd
-          argocd: main

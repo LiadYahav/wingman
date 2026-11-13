@@ -12,12 +12,10 @@ sections:
         url: https://gitlab.example.internal/platform/gitops
         description: Main GitOps repository
         icon: gitlab
-        ping: https://gitlab.example.internal
       - name: ArgoCD Main
         url: https://argocd.example.internal
         description: Main Argo CD instance (tracks the GitOps repo)
         icon: argocd
-        argocd: main
 
   - name: DevOps
     columns: 3
@@ -26,7 +24,6 @@ sections:
         url: https://gitlab.example.internal/groups/platform
         description: The team's group
         icon: gitlab
-        ping: https://gitlab.example.internal
       - name: Confluence
         url: https://confluence.example.internal
         description: Team documentation
@@ -35,7 +32,6 @@ sections:
         url: https://grafana.example.internal/d/main/main-dashboard
         description: Main operational dashboard
         icon: grafana
-        ping: https://grafana.example.internal
 
   - name: Internal Tools
     columns: 3
