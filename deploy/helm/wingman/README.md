@@ -86,6 +86,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `day1.clusterNameStripPrefix` | `DAY1_CLUSTER_NAME_STRIP_PREFIX` | `ocp4-` | ADR-0015: `""` for the GitHub sandbox |
 | `day1.cacheTtlSeconds` | `DAY1_CACHE_TTL_SECONDS` | `30` | Per replica, at most 60 (ADR-0011) |
 | `day1.provisioner` | `DAY1_PROVISIONER` | `merge-request` | How a create is proposed (ADR-0042): `merge-request` (Wingman opens the MR) or `workflow` (Wingman starts the platform's `provision-cluster` workflow, which opens it). `workflow` needs `workflows.url` |
+| `day1.upgrades.enabled` | `DAY1_UPGRADES` | `false` | Upgrades through the platform's `upgrade-cluster` workflow (ADR-0055): the cluster page starts it, shows its run and sends its decisions, and an edit may no longer change `mastertag` or a `workertag`. Needs `workflows.url`; the workflow must read the same day1 repo as Wingman. On, the Route's timeout is 130 s (`haproxy.router.openshift.io/timeout`), for the targets read |
 | `day1.placementMinFreePods` | `PLACEMENT_MIN_FREE_PODS` | `70` | MCE placement (ADR-0050), checked with `clusterStatus.enabled` (without it, not checked): the cost of one hosted control plane. An MCE is offered for a new cluster only with at least this many free pods (allocatable less in use) on its workers: masters, infra nodes and tainted, cordoned or NotReady nodes are left out ([Live cluster status](#live-cluster-status-mce-hubs)) |
 | `day2.cacheTtlSeconds` | `DAY2_CACHE_TTL_SECONDS` | `15` | Per replica, at most 60 (ADR-0011) |
 | `auth.openshiftOAuthHost` | `OPENSHIFT_OAUTH_HOST` | | The OAuth server's host ([Login](#login-openshift-oauth)) |
@@ -113,6 +114,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
+| `workflows.targetsTimeoutSeconds` | `WORKFLOWS_TARGETS_TIMEOUT_SECONDS` | `65` | An upgrade's targets read, at most 120: the orchestrator waits up to 60 s for it. nginx gives that one path 130 s |
 | `segmentsManager.url` | `SEGMENTS_MANAGER_URL` | `""` | segments-manager's API, e.g. `http://segments-manager.<ns>.svc:8000`. The cluster page shows its EPG for the cluster's segment and where it disagrees with the file, and admins get the **Segments** area ([segments-manager](#segments-manager)). Empty: no EPG, no Segments area |
 | `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The cluster page links to it and to its search for the cluster's segment. Empty: `segmentsManager.url`; both empty: no link |
 | `segmentsManager.sslVerify` | `SEGMENTS_MANAGER_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |

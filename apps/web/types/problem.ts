@@ -25,7 +25,13 @@ export type ErrorCode =
   /** 409: the orchestrator already runs an uninstall of this server. */
   | "UNINSTALL_ALREADY_RUNNING"
   /** 403: a day2 team has not given Wingman's GitLab account write access to its project (ADR-0043). */
-  | "TEAM_READ_ONLY";
+  | "TEAM_READ_ONLY"
+  /** 409: the cluster already has an open upgrade run (ADR-0055). */
+  | "UPGRADE_ALREADY_RUNNING"
+  /** 409: the upgrade run was not waiting for that decision; the detail is the run's own words. */
+  | "UPGRADE_DECISION_REFUSED"
+  /** 409: the upgrade workflow cannot use the cluster file or its rules for targets. */
+  | "UPGRADE_TARGETS_REFUSED";
 
 /** One entry of FastAPI's own request validation (`details.errors`). */
 export interface RequestFieldError {

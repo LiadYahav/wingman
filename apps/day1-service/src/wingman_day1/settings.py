@@ -117,6 +117,15 @@ class Day1Settings(BaseSettings):
     # request itself; needs WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development).
     day1_provisioner: Literal["merge-request", "workflow"] = "merge-request"
 
+    # ── Upgrades through the upgrade-cluster workflow (ADR-0055) ─────────────
+    # Off by default. On: the cluster page starts the platform's upgrade-cluster
+    # workflow, shows its run and sends its decisions, and while it is on an edit
+    # may not change mastertag or a workertag, nor add pausedUntil. Needs
+    # WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development). The targets read
+    # waits for a short run the orchestrator waits up to 60 s for: its own timeout.
+    day1_upgrades: bool = False
+    workflows_targets_timeout_seconds: float = Field(default=65.0, gt=0, le=120)
+
     # ── MCE placement (ADR-0050): always on; this needs the hubs ─────────────
     # The cost of one hosted control plane: with CLUSTER_STATUS_ENABLED, an MCE
     # is offered for a new cluster only with at least this many free pods
@@ -222,6 +231,16 @@ class Day1Settings(BaseSettings):
             raise ValueError(
                 "DAY1_PROVISIONER=workflow needs WORKFLOWS_API_URL: creates start the "
                 "provision-cluster workflow there"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _upgrades_have_an_orchestrator(self) -> Self:
+        """The upgrade is the orchestrator's workflow; without it no upgrade could start."""
+        if self.day1_upgrades and not self.workflows_api_url and not self.day1_fake_fleet:
+            raise ValueError(
+                "DAY1_UPGRADES=true needs WORKFLOWS_API_URL: upgrades start the "
+                "upgrade-cluster workflow there"
             )
         return self
 

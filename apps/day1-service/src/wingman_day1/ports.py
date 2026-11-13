@@ -35,6 +35,7 @@ from wingman_day1.domain.rollout import RolloutOutcome, RolloutTrigger
 from wingman_day1.domain.segments import ALL_SEGMENTS, SegmentList, SegmentQuery, SiteStats
 from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
+from wingman_day1.domain.upgrades import UpgradeDecision, UpgradeRequest, UpgradeRun, UpgradeTargets
 from wingman_day1.domain.workflows import ProvisionRun, WorkflowRun
 
 
@@ -359,6 +360,62 @@ class ProvisionWorkflow(Protocol):
 
     async def run(self, workflow_id: str) -> ProvisionRun | None:
         """One run's status, phase, merge request and error; ``None`` when there is none."""
+        ...
+
+
+class UpgradeWorkflow(Protocol):
+    """The orchestrator's ``upgrade-cluster`` workflow (ADR-0055).
+
+    The workflow plans, checks and commits; Wingman starts a run, reads it
+    and passes on a person's decisions, which the run's validators judge.
+    ``cluster`` is the cluster file's stem. Nothing is retried (ADR-0006).
+    Reads raise ``WorkflowsUnavailableError``.
+    """
+
+    async def targets(self, cluster: str) -> UpgradeTargets:
+        """What the cluster can be upgraded to; an empty list is an answer.
+
+        Raises ``ResourceNotFoundError`` when the workflow's day1 has no such
+        file and ``UpgradeTargetsRefusedError`` when it cannot use it.
+        """
+        ...
+
+    async def start(self, request: UpgradeRequest) -> UpgradeRun:
+        """Start an upgrade; the run then plans, checks and waits for approval.
+
+        Raises ``UpgradeAlreadyRunningError`` while a run is open,
+        ``UpgradeRefusedError`` for a body the orchestrator refuses,
+        ``WorkflowsUnavailableError`` when nothing was started, and
+        ``AmbiguousStartError`` when it was sent but the answer was lost.
+        """
+        ...
+
+    async def run(self, workflow_id: str) -> UpgradeRun | None:
+        """The run as the orchestrator reports it; ``None`` when it has none."""
+        ...
+
+    async def decide(
+        self,
+        workflow_id: str,
+        decision: UpgradeDecision,
+        *,
+        by: str,
+        reason: str | None = None,
+        nodepool: str | None = None,
+    ) -> None:
+        """Send one decision; the run's validator judges it.
+
+        Raises ``UpgradeDecisionRefusedError`` when the run refuses it,
+        ``ResourceNotFoundError`` for no running run, ``AmbiguousDecisionError``
+        when the answer was lost and ``WorkflowsUnavailableError`` when it was
+        not sent.
+        """
+        ...
+
+    async def decide_action(
+        self, workflow_id: str, action_id: str, *, approve: bool, by: str
+    ) -> None:
+        """Approve or reject one of the upgrade agent's proposals; raises as ``decide``."""
         ...
 
 

@@ -38,6 +38,7 @@ from yaml.resolver import BaseResolver
 
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.errors import InvalidClusterFileError
+from wingman_day1.domain.upgrades import version_problems
 
 AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap")
 """Written on the MR branch by the allocate-segment workflow and CI; never by Wingman."""
@@ -330,11 +331,13 @@ def rendered_file_problems(content: str) -> list[str]:
     return problems
 
 
-def edit_problems(current: str, edited: str) -> list[str]:
+def edit_problems(current: str, edited: str, *, versions_by_workflow: bool = False) -> list[str]:
     """Why an edit of an existing cluster file may not be proposed; empty when it may.
 
     Keys owned by automation, and ``clusterName`` (which would rename the
-    cluster), must keep exactly the values they have in ``current``.
+    cluster), must keep exactly the values they have in ``current``. With
+    ``versions_by_workflow`` (``DAY1_UPGRADES``, ADR-0055), so must the version
+    keys the upgrade workflow owns (``upgrades.version_problems``).
     """
     try:
         new = load_values(edited)
@@ -354,6 +357,8 @@ def edit_problems(current: str, edited: str) -> list[str]:
         for key in ("site", "mce")
         if key in new and old.get(key) != new.get(key)
     ]
+    if versions_by_workflow:
+        problems += version_problems(old, new)
     return problems
 
 

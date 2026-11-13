@@ -11,7 +11,7 @@
 # TypeScript source files, and one test.
 
  2073  apps/day1-service/src/wingman_day1/api/v1/schemas.py
-  621  apps/day1-service/src/wingman_day1/application/clusters.py
+  588  apps/day1-service/src/wingman_day1/application/clusters.py
   720  apps/day1-service/src/wingman_day1/application/rollouts.py
   507  apps/day1-service/src/wingman_day1/application/sync.py
   706  apps/day1-service/src/wingman_day1/domain/cluster_text.py
@@ -23,17 +23,17 @@
   551  apps/day1-service/src/wingman_day1/domain/template.py
   537  apps/day1-service/src/wingman_day1/infrastructure/fake_mce.py
   787  apps/day1-service/src/wingman_day1/infrastructure/hub_api.py
-  623  apps/day1-service/src/wingman_day1/main.py
+  562  apps/day1-service/src/wingman_day1/main.py
   856  apps/day2-service/src/wingman_day2/application/authoring.py
   895  apps/day2-service/src/wingman_day2/application/changes.py
   776  apps/day2-service/src/wingman_day2/application/plan_writer.py
   541  apps/web/app/(app)/addons/page.tsx
   631  apps/web/app/(app)/approvals/[id]/page.tsx
   511  apps/web/app/(app)/audit/page.tsx
-  694  apps/web/app/(app)/clusters/[name]/page.tsx
+  628  apps/web/app/(app)/clusters/[name]/page.tsx
  1894  apps/web/app/(app)/clusters/new/page.tsx
   670  apps/web/app/(app)/clusters/page.tsx
- 1685  apps/web/app/(app)/docs/page.tsx
+ 1645  apps/web/app/(app)/docs/page.tsx
   673  apps/web/app/(app)/specs/[name]/page.tsx
   603  apps/web/components/addons/authoring-flow.tsx
   722  apps/web/components/clusters/dynamic-variable-form.tsx

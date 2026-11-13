@@ -36,6 +36,12 @@ data:
   # MCE placement (ADR-0050): the free pods an MCE needs to be offered for a new
   # cluster. 70 for values kept from a release before it (0 is kept as 0).
   PLACEMENT_MIN_FREE_PODS: {{ if kindIs "invalid" .Values.day1.placementMinFreePods }}"70"{{ else }}{{ .Values.day1.placementMinFreePods | quote }}{{ end }}
+  # Upgrades through the upgrade-cluster workflow (ADR-0055); values kept from
+  # a release before it have no day1.upgrades map: off.
+  {{- if and .Values.day1.upgrades .Values.day1.upgrades.enabled (not (and .Values.workflows .Values.workflows.url)) }}
+  {{- fail "day1.upgrades.enabled needs workflows.url: upgrades start the upgrade-cluster workflow there" }}
+  {{- end }}
+  DAY1_UPGRADES: {{ if .Values.day1.upgrades }}{{ .Values.day1.upgrades.enabled | default false | quote }}{{ else }}"false"{{ end }}
   DAY2_SERVICE_URL: "http://wingman-day2:8002"
 
   # ── day2 ─────────────────────────────────────────────────────────────────────
@@ -84,6 +90,7 @@ data:
   WORKFLOWS_API_URL: {{ .Values.workflows.url | quote }}
   WORKFLOWS_SSL_VERIFY: {{ .Values.workflows.sslVerify | default "true" | quote }}
   WORKFLOWS_TIMEOUT_SECONDS: {{ .Values.workflows.timeoutSeconds | default 10 | quote }}
+  WORKFLOWS_TARGETS_TIMEOUT_SECONDS: {{ .Values.workflows.targetsTimeoutSeconds | default 65 | quote }}
   {{- end }}
 
   # ── segments-manager: the cluster's EPG (read only) and the links ────────────

@@ -61,6 +61,9 @@ class ErrorCode(StrEnum):
     NODE_NOT_IN_CLUSTER = "NODE_NOT_IN_CLUSTER"
     UNINSTALL_ALREADY_RUNNING = "UNINSTALL_ALREADY_RUNNING"
     TEAM_READ_ONLY = "TEAM_READ_ONLY"
+    UPGRADE_ALREADY_RUNNING = "UPGRADE_ALREADY_RUNNING"
+    UPGRADE_DECISION_REFUSED = "UPGRADE_DECISION_REFUSED"
+    UPGRADE_TARGETS_REFUSED = "UPGRADE_TARGETS_REFUSED"
 
     @property
     def slug(self) -> str:
@@ -203,6 +206,27 @@ class TeamReadOnly(AppError):
 
     status = 403
     code = ErrorCode.TEAM_READ_ONLY
+
+
+class UpgradeAlreadyRunning(AppError):
+    """The cluster already has an open upgrade-cluster run (ADR-0055)."""
+
+    status = 409
+    code = ErrorCode.UPGRADE_ALREADY_RUNNING
+
+
+class UpgradeDecisionRefused(AppError):
+    """The upgrade run was not waiting for that decision; the detail is the run's own words."""
+
+    status = 409
+    code = ErrorCode.UPGRADE_DECISION_REFUSED
+
+
+class UpgradeTargetsRefused(AppError):
+    """The upgrade workflow cannot use the cluster's file or its upgrade rules."""
+
+    status = 409
+    code = ErrorCode.UPGRADE_TARGETS_REFUSED
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (

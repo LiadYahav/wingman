@@ -244,6 +244,18 @@ def test_creates_start_the_workflow_only_with_an_orchestrator() -> None:
         dev(day1_provisioner="temporal")
 
 
+def test_upgrades_need_an_orchestrator_and_have_their_own_targets_timeout() -> None:
+    """ADR-0055: off by default; on needs WORKFLOWS_API_URL; the targets read waits 65 s."""
+    off = dev()
+    assert (off.day1_upgrades, off.workflows_targets_timeout_seconds) == (False, 65.0)
+    with pytest.raises(ValidationError, match="DAY1_UPGRADES=true needs WORKFLOWS_API_URL"):
+        dev(day1_upgrades=True)
+    assert dev(day1_upgrades=True, workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN)
+    assert dev(day1_upgrades=True, day1_fake_fleet=True).day1_upgrades
+    with pytest.raises(ValidationError):
+        dev(workflows_targets_timeout_seconds=121)
+
+
 def test_the_server_scan_token_is_a_secret() -> None:
     loaded = dev(server_scan_url=SERVER_SCAN, server_scan_token=SecretStr("viewer-token-0001"))
     assert "viewer-token-0001" not in repr(loaded)

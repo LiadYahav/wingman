@@ -72,6 +72,13 @@ data:
           proxy_pass http://day1;
         }
 
+        # An upgrade's targets: the orchestrator waits up to 60 s for a short run,
+        # day1 up to WORKFLOWS_TARGETS_TIMEOUT_SECONDS (ADR-0055)
+        location ~ ^/api/day1/clusters/[^/]+/upgrade-targets$ {
+          proxy_read_timeout 130s;
+          proxy_pass http://day1;
+        }
+
         # GitLab webhook receiver
         location /api/webhooks/ {
           proxy_pass http://day1;

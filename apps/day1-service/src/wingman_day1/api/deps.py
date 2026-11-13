@@ -30,6 +30,7 @@ from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
+from wingman_day1.application.upgrades import UpgradeService
 from wingman_day1.ports import ClusterDeleteWorkflow, RepoReads
 
 
@@ -71,6 +72,8 @@ class Day1Context:
     """The Quick Links page (ADR-0052); ``main`` always builds it."""
     segments: SegmentsService | None = None
     """The Segments area (ADR-0047); ``None`` when ``SEGMENTS_MANAGER_URL`` is empty: 501."""
+    upgrades: UpgradeService | None = None
+    """``None`` when ``DAY1_UPGRADES`` is off: the upgrade routes answer 501 (ADR-0055)."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -144,6 +147,19 @@ def segments_service(context: Annotated[Day1Context, Depends(day1_context)]) -> 
     return context.segments
 
 
+UPGRADES_NOT_AVAILABLE = (
+    "Upgrades are not turned on in this deployment (DAY1_UPGRADES=false): a cluster's "
+    "version changes by editing its file."
+)
+
+
+def upgrade_service(context: Annotated[Day1Context, Depends(day1_context)]) -> UpgradeService:
+    """The upgrade use case, or 501 when ``DAY1_UPGRADES`` is off (ADR-0055)."""
+    if context.upgrades is None:
+        raise FeatureDisabled(UPGRADES_NOT_AVAILABLE)
+    return context.upgrades
+
+
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
 Nodes = Annotated[NodeService, Depends(node_service)]
@@ -151,3 +167,4 @@ Placements = Annotated[PlacementService, Depends(placement_service)]
 QuickLinks = Annotated[QuickLinksService, Depends(quick_links_service)]
 Segments = Annotated[SegmentsService, Depends(segments_service)]
 Status = Annotated[StatusService, Depends(status_service)]
+Upgrades = Annotated[UpgradeService, Depends(upgrade_service)]

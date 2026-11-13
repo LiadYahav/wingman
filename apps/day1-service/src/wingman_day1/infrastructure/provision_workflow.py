@@ -110,7 +110,7 @@ class HttpProvisionWorkflow:
             )
         if status == 422:
             raise ProvisionRefusedError(
-                f"the orchestrator refused to provision {cluster}", _problems(response)
+                f"the orchestrator refused to provision {cluster}", orchestrator_problems(response)
             )
         if status == 504:
             raise AmbiguousStartError(
@@ -189,7 +189,7 @@ def provision_run(raw: JSON) -> ProvisionRun:
     )
 
 
-def _problems(response: httpx.Response) -> list[str]:
+def orchestrator_problems(response: httpx.Response) -> list[str]:
     """The orchestrator's 422 detail, one line per finding (FastAPI's list, or its text)."""
     try:
         detail = response.json().get("detail")

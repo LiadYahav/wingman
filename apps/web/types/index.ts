@@ -85,3 +85,4 @@ export interface CommitRecord {
 export * from "./problem";
 export * from "./day1";
 export * from "./quick-links";
+export * from "./upgrade";

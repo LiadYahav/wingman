@@ -40,6 +40,7 @@ from wingman_day1.ports import (
     SegmentLedger,
     ServerInventory,
     UninstallWorkflow,
+    UpgradeWorkflow,
 )
 from wingman_day1.settings import Day1Settings
 
@@ -219,6 +220,7 @@ def build_app(
     uninstall: UninstallWorkflow | None = None,
     ledger: SegmentLedger | None = None,
     provision: ProvisionWorkflow | None = None,
+    upgrade: UpgradeWorkflow | None = None,
     **settings: object,
 ) -> FastAPI:
     return create_app(
@@ -234,6 +236,7 @@ def build_app(
             uninstall=uninstall,
             ledger=ledger,
             provision=provision,
+            upgrade=upgrade,
             day2_installs=day2,
         ),
         clock=clock,

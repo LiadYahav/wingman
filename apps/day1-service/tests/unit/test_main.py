@@ -21,10 +21,12 @@ from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory, FakeUninstallWorkflow
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_segments import FakeSegmentLedger
+from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
+from wingman_day1.infrastructure.upgrade_workflow import HttpUpgradeWorkflow
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.main import Adapters, build_adapters, create_app
 from wingman_day1.settings import Day1Settings
@@ -122,6 +124,35 @@ async def test_server_scan_and_the_orchestrator_get_real_adapters_when_configure
         await close(adapters)
 
 
+async def test_upgrades_get_the_orchestrators_adapter_only_when_turned_on() -> None:
+    """ADR-0055: the targets read gets its own, longer timeout."""
+    workflows = "http://workflows-orchestrator-api.redbull-workflows.svc:8080"
+    scan = "http://server-scan-api.inventory.svc:8000"
+    adapters = build_adapters(
+        settings(workflows_api_url=workflows, server_scan_url=scan),
+        FAKE,
+        metrics=metrics(),
+        service_token=lambda: "t",
+    )
+    try:
+        assert adapters.upgrade is None
+    finally:
+        await close(adapters)
+    on = settings(
+        day1_upgrades=True,
+        workflows_api_url=workflows,
+        server_scan_url=scan,
+        workflows_targets_timeout_seconds=70,
+    )
+    adapters = build_adapters(on, FAKE, metrics=metrics(), service_token=lambda: "t")
+    try:
+        assert isinstance(adapters.upgrade, HttpUpgradeWorkflow)
+        assert adapters.upgrade._targets_timeout.read == 70
+        assert len(adapters.closers) == 4
+    finally:
+        await close(adapters)
+
+
 async def test_segments_manager_gets_a_real_adapter_when_configured() -> None:
     configured = settings(segments_manager_url="http://segments-manager.segments.svc:8000")
     adapters = build_adapters(configured, FAKE, metrics=metrics(), service_token=lambda: "t")
@@ -142,6 +173,7 @@ async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -
     adapters = build_adapters(
         settings(
             day1_fake_fleet=True,
+            day1_upgrades=True,
             server_scan_url="http://server-scan.example",
             cluster_status_enabled=True,
             mce_tokens_file=tmp_path / "absent",
@@ -163,6 +195,8 @@ async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -
         herzi = await adapters.ledger.segment("10.20.44.0/24")
         assert herzi is not None
         assert herzi.cluster_name == "ocp4-prod-herzi-site1"
+        assert isinstance(adapters.upgrade, FakeUpgradeWorkflow)
+        assert (await adapters.upgrade.targets("ocp4-prod-lark-site1")).targets
         assert len(adapters.closers) == 1, "the fakes hold no connection"
     finally:
         await close(adapters)
@@ -177,6 +211,7 @@ def test_the_nodes_view_needs_the_mce_hubs(app: FastAPI) -> None:
         adapters=Adapters(gitlab=InMemoryGitLab(), day2=FakeDay2Addons()),
     )
     assert off.state.day1.nodes is None
+    assert off.state.day1.upgrades is None, "upgrades are off by default (ADR-0055)"
 
 
 def test_the_fake_fleet_refuses_to_start_outside_development() -> None:

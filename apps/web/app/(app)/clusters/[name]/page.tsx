@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Package, Edit2, Eye, X, ExternalLink, GitCommitHorizontal, History, RotateCcw, Lock } from "lucide-react";
+import { ArrowLeft, Trash2, Package, Edit2, Eye, X, ExternalLink, RotateCcw, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { api, errorMessages, getToken, isApiError } from "@/lib/api-client";
 import { useIsAdmin } from "@/stores/auth-store";
@@ -14,94 +14,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
-import { EmptyState } from "@/components/common/empty-state";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { ClusterDriftPanel, updateOf } from "@/components/clusters/cluster-drift";
 import { SyncDialog } from "@/components/clusters/sync-dialog";
 import { DeleteWorkflowPanel } from "@/components/clusters/delete-workflow-panel";
 import { ClusterNodes } from "@/components/clusters/cluster-nodes";
+import { CommitList, type CommitEntry } from "@/components/clusters/commit-list";
 import { LiveStatusCard } from "@/components/clusters/live-status-card";
-import {
-  ClusterInfoCard, FileProblems, HostedClusterCard, NamingNotice, NodePoolsCard, SpecCard,
-} from "@/components/clusters/cluster-facts";
+import { UpgradeAction } from "@/components/clusters/upgrade/upgrade-action";
+import { UpgradePanel } from "@/components/clusters/upgrade/upgrade-panel";
+import { ClusterInfoCard, HostedClusterCard, NodePoolsCard, SpecCard } from "@/components/clusters/cluster-facts";
+import { FileProblems, NamingNotice } from "@/components/clusters/cluster-notices";
 import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
 import { chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { fetchLiveStatus } from "@/lib/live-status";
-import { formatDate } from "@/lib/utils";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
 import type {
   AddonDrift, CatalogEntry, ChangeResult, ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts, MRDetail,
   ModifyClusterRequest,
 } from "@/types";
-
-interface CommitEntry {
-  sha: string;
-  short_sha: string;
-  message: string;
-  author: string;
-  date: string;
-  web_url: string;
-  team?: string;
-}
-
-/** One source's commits: skeleton rows, its problem when the read failed, or an empty state. */
-function CommitList({
-  commits,
-  isLoading,
-  error,
-  errorTitle,
-  empty,
-  teamColumn,
-}: {
-  commits?: CommitEntry[];
-  isLoading: boolean;
-  error: unknown;
-  errorTitle: string;
-  empty: { title: string; description: string; testId: string };
-  teamColumn?: boolean;
-}) {
-  if (isLoading) return <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>;
-  if (error) return <ProblemList error={error} title={errorTitle} />;
-  if (!commits?.length) {
-    return (
-      <EmptyState
-        icon={History}
-        title={empty.title}
-        description={empty.description}
-        bordered
-        className="py-8"
-        data-testid={empty.testId}
-      />
-    );
-  }
-  return (
-    <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border">
-      {commits.map((c) => (
-        <div key={c.sha} className="flex items-start gap-3 px-4 py-3">
-          <GitCommitHorizontal className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium line-clamp-1">{c.message}</p>
-            <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-              <span className="font-mono">{c.short_sha}</span>
-              <span>·</span>
-              <span>{c.author}</span>
-              <span>·</span>
-              <span>{formatDate(c.date)}</span>
-              {teamColumn && c.team && <><span>·</span><span className="text-primary/70">{c.team}</span></>}
-            </div>
-          </div>
-          {c.web_url && (
-            <a href={c.web_url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors shrink-0">
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /** A 409 REVISION_CONFLICT: the file moved since this page read it. */
 const STALE_FILE =
@@ -500,8 +433,9 @@ function ClusterDetailContent() {
             <>
               <FileProblems problems={cluster.problems} />
               <NamingNotice cluster={cluster} />
+              <UpgradePanel name={name} where={where} isAdmin={isAdmin} onOpenNodesTab={() => setActiveTab("nodes")} />
               <div className="grid gap-4 sm:grid-cols-2">
-                <ClusterInfoCard cluster={cluster} />
+                <ClusterInfoCard cluster={cluster} mastertagAction={<UpgradeAction name={name} where={where} isAdmin={isAdmin} />} />
                 <HostedClusterCard cluster={cluster} where={where} />
               </div>
               {/* Only when the deployment reads HostedClusters from the hubs; then its nodepools, then its flavor */}

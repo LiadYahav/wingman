@@ -17,7 +17,7 @@ links file (ADR-0038, ADR-0039, ADR-0052).
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -47,6 +47,7 @@ from wingman_core.settings import (
     project_ref,
 )
 from wingman_core.web.app_factory import create_base_app, ready_once
+from wingman_day1 import platform_adapters as platform
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.api.errors import register_day1_error_handlers
 from wingman_day1.api.v1 import approvals as approvals_api
@@ -59,6 +60,7 @@ from wingman_day1.api.v1 import quick_links as quick_links_api
 from wingman_day1.api.v1 import segments as segments_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
+from wingman_day1.api.v1 import upgrades as upgrades_api
 from wingman_day1.api.v1 import webhooks as webhooks_api
 from wingman_day1.application.approvals import ApprovalService, RepoKey
 from wingman_day1.application.audit import AuditService
@@ -94,11 +96,9 @@ from wingman_day1.infrastructure.merge_requests import (
     MergeRequestWriter,
 )
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
-from wingman_day1.infrastructure.provision_workflow import HttpProvisionWorkflow
 from wingman_day1.infrastructure.repositories import CachedRepository
 from wingman_day1.infrastructure.rollout_events import MetricRolloutEvents
-from wingman_day1.infrastructure.server_scan import HttpServerInventory
-from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
+from wingman_day1.platform_adapters import Close
 from wingman_day1.ports import (
     ClusterDeleteWorkflow,
     Day2Addons,
@@ -109,6 +109,7 @@ from wingman_day1.ports import (
     SegmentLedger,
     ServerInventory,
     UninstallWorkflow,
+    UpgradeWorkflow,
 )
 from wingman_day1.settings import Day1Settings, check_runtime
 
@@ -136,12 +137,11 @@ ROUTERS: Final = (
     placement_api.router,
     quick_links_api.router,
     segments_api.router,
+    upgrades_api.router,
     approvals_api.router,
     audit_api.router,
     webhooks_api.router,
 )
-
-Close = Callable[[], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +166,8 @@ class Adapters:
     """The provision-cluster workflow; ``None`` unless ``DAY1_PROVISIONER=workflow`` (ADR-0042)."""
     day2_installs: Day2Installs | None = None
     """Day2 opening a rollout's add-on MRs (ADR-0044); ``None``: listed for a person instead."""
+    upgrade: UpgradeWorkflow | None = None
+    """The upgrade-cluster workflow; ``None`` unless ``DAY1_UPGRADES`` (ADR-0055)."""
     closers: tuple[Close, ...] = field(default=())
 
 
@@ -243,7 +245,7 @@ def build_adapters(
         )
         closers.append(oauth.aclose)
         identity = oauth
-    fake_hub, inventory, uninstall = _fleet_adapters(
+    fake_hub, inventory, uninstall = platform.fleet_adapters(
         settings, metrics=metrics, clock=clock, closers=closers
     )
     return Adapters(
@@ -254,7 +256,10 @@ def build_adapters(
         inventory=inventory,
         uninstall=uninstall,
         ledger=segment_ledger(settings, metrics=metrics, closers=closers),
-        provision=_provision_workflow(settings, metrics=metrics, clock=clock, closers=closers),
+        provision=platform.provision_workflow(
+            settings, metrics=metrics, clock=clock, closers=closers
+        ),
+        upgrade=platform.upgrade_workflow(settings, metrics=metrics, clock=clock, closers=closers),
         day2_installs=day2_installs,
         closers=tuple(closers),
     )
@@ -267,74 +272,6 @@ def _links_file(settings: Day1Settings) -> FileLinksSource:
 
         return FileLinksSource(default_demo_links_file())
     return FileLinksSource(settings.quick_links_file)
-
-
-def _provision_workflow(
-    settings: Day1Settings, *, metrics: WingmanMetrics, clock: Clock, closers: list[Close]
-) -> ProvisionWorkflow | None:
-    """The provision-cluster workflow when creates start it; or, with the fake fleet, its fake."""
-    if settings.day1_provisioner != "workflow":
-        return None
-    if settings.day1_fake_fleet:
-        from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
-
-        return FakeProvisionWorkflow(clock=clock)
-    workflow = HttpProvisionWorkflow(
-        base_url=settings.workflows_api_url,
-        verify=settings.workflows_tls_verify,
-        timeout_seconds=settings.workflows_timeout_seconds,
-        metrics=metrics,
-    )
-    closers.append(workflow.aclose)
-    return workflow
-
-
-def _fleet_adapters(
-    settings: Day1Settings, *, metrics: WingmanMetrics, clock: Clock, closers: list[Close]
-) -> tuple[HubApi | None, ServerInventory | None, UninstallWorkflow | None]:
-    """server-scan and the orchestrator, real or none; or the fake fleet (ADR-0038).
-
-    The fake fleet is both fakes and a fake MCE, which then also serves live
-    status and InfraEnvs.
-    """
-    if settings.day1_fake_fleet:
-        from wingman_day1.infrastructure.fake_fleet import (
-            FakeServerInventory,
-            FakeUninstallWorkflow,
-            default_fleet_file,
-            load_fleet,
-        )
-        from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
-
-        rows, runs = load_fleet(default_fleet_file())
-        fake = FakeServerInventory(rows)
-        workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)
-        naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
-        mce = load_fake_mce(default_mce_file(), servers=rows, naming=naming)
-        workflow.after_uninstall(mce.remove_server)
-        return mce, fake, workflow
-    inventory: ServerInventory | None = None
-    if settings.server_scan_url:
-        scan = HttpServerInventory(
-            base_url=settings.server_scan_url,
-            token=settings.server_scan_token.get_secret_value(),
-            verify=settings.server_scan_tls_verify,
-            timeout_seconds=settings.server_scan_timeout_seconds,
-            metrics=metrics,
-        )
-        closers.append(scan.aclose)
-        inventory = scan
-    uninstall: UninstallWorkflow | None = None
-    if settings.workflows_api_url:
-        orchestrator = HttpUninstallWorkflow(
-            base_url=settings.workflows_api_url,
-            verify=settings.workflows_tls_verify,
-            timeout_seconds=settings.workflows_timeout_seconds,
-            metrics=metrics,
-        )
-        closers.append(orchestrator.aclose)
-        uninstall = orchestrator
-    return None, inventory, uninstall
 
 
 def build_context(
@@ -413,6 +350,7 @@ def build_context(
         naming=naming,
         provision=adapters.provision,
         placement=placement,
+        versions_by_workflow=settings.day1_upgrades,
     )
     drift = DriftService(
         cluster_service,
@@ -489,7 +427,7 @@ def build_context(
         clusters=cluster_service,
         sites=site_catalog,
         specs=spec_catalog,
-        approvals=ApprovalService(gitlab, repos),
+        approvals=ApprovalService(gitlab, repos, versions_by_workflow=settings.day1_upgrades),
         audit=AuditService(repos),
         drift=drift,
         imports=ImportService(cluster_service, spec_catalog, drift, machine_configs, provisioner),
@@ -524,6 +462,7 @@ def build_context(
         placement=placement,
         quick_links=quick_links,
         segments=segments_service(adapters.ledger, cache, cluster_service, ttl=ttl),
+        upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service),
     )
 
 
