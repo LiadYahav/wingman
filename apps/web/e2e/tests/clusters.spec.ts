@@ -180,6 +180,22 @@ test.describe("Cluster list", () => {
     await expect(status).toHaveText("—");
     await expect(page.getByText("Error")).toHaveCount(0);
   });
+
+  test("prefetches no cluster or flavor page as it loads", async ({ page }) => {
+    await go(page, "/");
+    const prefetched: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.searchParams.has("_rsc") && /^\/(clusters|specs)\/(?!new$)/.test(url.pathname)) prefetched.push(url.pathname);
+    });
+    await page.goto("/clusters");
+    const row = page.getByTestId("cluster-row-ocp4-prod-alpha-site1");
+    await expect(row.getByRole("link", { name: "ocp4-prod-alpha-site1" })).toBeVisible();
+    await expect(row.getByRole("link", { name: "agent-standard" })).toBeVisible();
+    // Next.js prefetches a bare <Link> as soon as it is on screen; give it the time it would take.
+    await page.waitForTimeout(1_000);
+    expect(prefetched).toEqual([]);
+  });
 });
 
 test.describe("Cluster detail", () => {

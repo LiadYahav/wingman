@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { AlertTriangle, ArrowUpCircle, CheckCircle2, CircleHelp, GitPullRequest, Unlink } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { IntentLink } from "@/components/common/intent-link";
 import { approvalHref } from "@/lib/approvals";
 import {
   flavorDisplayState, flavorStateHint, flavorStateLabel, STATE_NAME, type FlavorDisplayState, type FlavorStateRow,
@@ -48,7 +48,7 @@ export function FlavorStateBadge({ row, className }: { row: FlavorStateRow; clas
           data-testid="flavor-state"
           data-state={state}
           className={cn(PILL, mr ? "hover:underline underline-offset-2" : "cursor-default", tone, className)}
-          render={mr ? <Link href={approvalHref(mr)} aria-label={`${label}: review !${mr.iid}`} /> : undefined}
+          render={mr ? <IntentLink href={approvalHref(mr)} aria-label={`${label}: review !${mr.iid}`} /> : undefined}
         >
           <Icon className="h-3 w-3 shrink-0" aria-hidden />
           {label}

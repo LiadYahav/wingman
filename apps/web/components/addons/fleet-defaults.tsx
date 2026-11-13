@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowRight, Layers } from "lucide-react";
 import { addonHref, scopeLabel, syncSummary } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { leaves } from "@/lib/values";
 import { buttonVariants } from "@/components/ui/button";
 import { FindingsBadge } from "@/components/addons/findings";
+import { IntentLink } from "@/components/common/intent-link";
 import type { FleetDefault } from "@/types/day2";
 
 /** Why there is no "stop being a default" yet: what it would do to running workloads. */
@@ -46,14 +46,14 @@ function FleetDefaultRow({ fd }: { fd: FleetDefault }) {
           </span>
         )}
         <FindingsBadge findings={fd.warnings} />
-        <Link
+        <IntentLink
           href={addonHref(fd.team, fd.chart)}
           aria-label={`Manage the defaults of ${fd.chart}`}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 gap-1.5")}
         >
           Manage
           <ArrowRight className="h-3 w-3" aria-hidden />
-        </Link>
+        </IntentLink>
       </span>
     </li>
   );
