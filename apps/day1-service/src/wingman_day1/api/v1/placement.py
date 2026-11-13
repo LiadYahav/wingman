@@ -14,7 +14,7 @@ from fastapi import APIRouter, Query
 
 from wingman_core.web.auth import CurrentUser
 from wingman_day1.api.deps import Placements
-from wingman_day1.api.v1.schemas import PlacementOut
+from wingman_day1.api.v1.placement_schemas import PlacementOut
 from wingman_day1.domain.errors import InvalidInputError
 from wingman_day1.domain.names import Env
 

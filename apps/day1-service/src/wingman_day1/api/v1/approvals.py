@@ -17,15 +17,15 @@ from fastapi import APIRouter, Path, Query
 
 from wingman_core.domain.mr_conventions import ResourceType
 from wingman_core.web.auth import AdminUser, CurrentUser
+from wingman_core.web.schemas import FileDiffOut
 from wingman_day1.api.deps import Context
-from wingman_day1.api.v1.schemas import (
+from wingman_day1.api.v1.approvals_schemas import (
     ApprovalDetailOut,
     ApprovalRolloutOut,
     ApproveIn,
-    FileDiffOut,
-    MRDetailOut,
     UpdateMRIn,
 )
+from wingman_day1.api.v1.schemas import MRDetailOut
 from wingman_day1.application.approvals import Change, RepoKey
 from wingman_day1.application.rollouts import RolloutPreview
 from wingman_day1.domain.rollout import RolloutTrigger

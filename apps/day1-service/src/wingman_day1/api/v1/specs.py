@@ -12,20 +12,19 @@ from wingman_core.domain.errors import AmbiguousWriteError
 from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_core.web.errors import AppError, from_git_error
 from wingman_day1.api.deps import Context
-from wingman_day1.api.v1.schemas import (
-    CommitOut,
-    FlavorUpdateOut,
+from wingman_day1.api.v1.schemas import CommitOut, FlavorUpdateOut, MRDetailOut, change_out
+from wingman_day1.api.v1.spec_import_schemas import (
     ImportFailureOut,
     ImportIn,
     ImportOut,
     ImportPreviewIn,
     ImportPreviewOut,
-    MRDetailOut,
+)
+from wingman_day1.api.v1.specs_schemas import (
     RolloutStatusOut,
     SpecClusterOut,
     SpecDriftOut,
     SpecOut,
-    change_out,
 )
 from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.imports import ImportPick, ImportResult

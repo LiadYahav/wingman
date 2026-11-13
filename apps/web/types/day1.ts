@@ -1,5 +1,5 @@
 // Types of the day1 service (`/api/day1`), from its Pydantic schemas in
-// apps/day1-service/src/wingman_day1/api/v1/schemas.py. Every web-visible
+// apps/day1-service/src/wingman_day1/api/v1/*schemas.py. Every web-visible
 // change is listed in docs/notes/2026-11-07-day1-api-changes.md and, for
 // flavors v2, docs/notes/2026-11-08-flavors-v2-api-changes.md ("§n" below);
 // a flavor's rollout, one MR per cluster: docs/notes/2026-11-12-flavor-rollout-api.md.

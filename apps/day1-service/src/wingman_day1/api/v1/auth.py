@@ -6,7 +6,13 @@ from fastapi import APIRouter
 
 from wingman_core.web.auth import CurrentUser
 from wingman_day1.api.deps import Context
-from wingman_day1.api.v1.schemas import AuthConfigOut, CallbackIn, DevLoginIn, SessionOut, UserOut
+from wingman_day1.api.v1.auth_schemas import (
+    AuthConfigOut,
+    CallbackIn,
+    DevLoginIn,
+    SessionOut,
+    UserOut,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
