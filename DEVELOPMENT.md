@@ -28,7 +28,7 @@ the direction (domain → ports → application → infrastructure → api):
 | Where | What |
 |-------|------|
 | `domain/` | Pure rules and types: no I/O, no FastAPI |
-| `ports.py` | The service's own ports (protocols); GitLab is core's `GitLabPort` (ADR-0002) |
+| `ports.py` (day1: `ports/`) | The service's own ports (protocols); GitLab is core's `GitLabPort` (ADR-0002) |
 | `application/` | Use cases, written against ports only |
 | `infrastructure/` | Adapters for the ports, and their fakes |
 | `api/` | FastAPI routers (`api/v1/`), the dependencies that hand them the use cases, error mapping |
@@ -135,7 +135,7 @@ variable is listed in the README's [Environment Variables](README.md#environment
 ## Adding an endpoint
 
 1. **The rule**, if there is one, goes in `domain/`; **the use case** in `application/`, over
-   the ports in `ports.py` (GitLab through `GitLabPort`). GitLab reads go through the service's
+   the ports in `ports.py` (day1: `ports/`; GitLab through `GitLabPort`). GitLab reads go through the service's
    cached repositories, which use `TtlCache.get_or_fetch` (`wingman_core.infrastructure.cache`)
    with the service's TTL (ADR-0011); a write clears what it changed. A read every page waits
    on can pass `stale=stale_for(ttl)` to be answered while it refreshes (ADR-0041). Measure a

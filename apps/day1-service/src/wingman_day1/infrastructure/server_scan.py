@@ -1,11 +1,13 @@
-"""HttpServerInventory: server-scan's fleet and one server, over httpx (ADR-0038).
+"""HttpServerInventory: server-scan's fleet, one server and its sites, over httpx.
 
-Read only. Day1 presents a viewer token (``Authorization: Bearer``), or none
-for an instance that runs with auth off. The fleet is one read,
-``GET /api/v1/servers/rows`` (about 250 KB gzipped for 3,000 servers); its
-weak ``ETag`` goes back as ``If-None-Match``, so an unchanged fleet costs a
-304 and no download. One server is ``GET /api/v1/servers/{id}``, read fresh
-for the uninstall's check.
+Read only (ADR-0038, ADR-0048). Day1 presents a viewer token
+(``Authorization: Bearer``), or none for an instance that runs with auth off.
+The fleet is one read, ``GET /api/v1/servers/rows`` (about 250 KB gzipped for
+3,000 servers); its weak ``ETag`` goes back as ``If-None-Match``, so an
+unchanged fleet costs a 304 and no download. One server is
+``GET /api/v1/servers/{id}``, read fresh for the uninstall's check. The Server
+Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
+(read by ``server_scan_sites``).
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
@@ -29,12 +31,15 @@ from wingman_day1.domain.errors import (
     ServerScanDeniedError,
     ServerScanUnavailableError,
 )
+from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.http import JSON, json_client, optional_text, required_text
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
+from wingman_day1.infrastructure.server_scan_sites import fleet_sites
 
 ROWS_PATH: Final = "/api/v1/servers/rows"
 SERVER_PATH: Final = "/api/v1/servers/{id}"
+SITES_PATH: Final = "/api/v1/sites"
 
 
 class HttpServerInventory:
@@ -82,6 +87,10 @@ class HttpServerInventory:
         """See ServerInventory.server."""
         return await self._observer.call(ServerScanOperation.GET_SERVER, self._server(server_id))
 
+    async def sites(self) -> FleetSites:
+        """See ServerInventory.sites."""
+        return await self._observer.call(ServerScanOperation.LIST_SITES, self._sites())
+
     async def _fleet(self) -> list[ServerRow]:
         what = "listing servers"
         headers = {"If-None-Match": self._etag} if self._etag and self._rows is not None else {}
@@ -109,6 +118,15 @@ class HttpServerInventory:
             raise ServerScanUnavailableError(
                 f"server-scan returned a malformed server {server_id}"
             ) from exc
+
+    async def _sites(self) -> FleetSites:
+        what = "listing sites"
+        response = await self._get(SITES_PATH, what=what)
+        _check(response, what=what)
+        try:
+            return fleet_sites(response.json())
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ServerScanUnavailableError("server-scan returned malformed sites") from exc
 
     async def _get(
         self, path: str, *, what: str, headers: Mapping[str, str] | None = None
@@ -168,6 +186,7 @@ def server_row(raw: JSON) -> ServerRow:
         reserved_for_infra_env=optional_text(reservation, "infra_env") if held else None,
         reserved_until=_timestamp(reservation, "expires_at") if held else None,
         macs=_macs(raw),
+        installation_type=optional_text(raw, "installation_type"),
     )
 
 

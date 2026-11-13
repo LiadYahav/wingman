@@ -59,6 +59,7 @@ from wingman_day1.api.v1 import machine_configs as machine_configs_api
 from wingman_day1.api.v1 import placement as placement_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
 from wingman_day1.api.v1 import segments as segments_api
+from wingman_day1.api.v1 import server_scan as server_scan_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import upgrades as upgrades_api
@@ -81,11 +82,11 @@ from wingman_day1.application.sync import SyncService
 from wingman_day1.compose_inventory import add_server_workflow, inventory_service
 from wingman_day1.compose_quick_links import quick_links_service
 from wingman_day1.compose_segments import segment_ledger, segments_service
+from wingman_day1.compose_server_scan import cached_inventory, server_scan_service
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
 from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
-from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons, HttpDay2Installs
 from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_access
@@ -139,6 +140,7 @@ ROUTERS: Final = (
     quick_links_api.router,
     inventory_api.router,
     segments_api.router,
+    server_scan_api.router,
     upgrades_api.router,
     approvals_api.router,
     audit_api.router,
@@ -317,11 +319,7 @@ def build_context(
     day1_writer = MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
     provisioner = GitClusterProvisioner(day1_writer)
     rollout_writer = GitRolloutMergeRequests(gitlab, day1, day1_writer)
-    inventory = (
-        CachedServerInventory(adapters.inventory, cache, ttl=ttl)
-        if adapters.inventory is not None
-        else None
-    )
+    inventory = cached_inventory(adapters.inventory, cache, ttl=ttl)
     # Placement always runs (ADR-0050). An MCE's nodes, pods and Agents are read when a
     # create asks, kept for seconds; without live reads it decides on Git and server-scan.
     placement = PlacementService(
@@ -457,6 +455,7 @@ def build_context(
             workflows=adapters.add_server,
             cache=cache,
         ),
+        server_scan=server_scan_service(inventory),
     )
 
 

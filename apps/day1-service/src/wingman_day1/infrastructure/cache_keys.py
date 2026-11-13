@@ -15,6 +15,7 @@ Families:
 - ``day2:installed:<site>:<mce>:<name>``  day2's installed addons for one cluster
 - ``hub:<mce>:<kind>:<namespace>[:<name>]`` an MCE hub read for the nodes view
 - ``server-scan:rows``                     server-scan's whole fleet, as rows
+- ``server-scan:sites``                    its per-site and fleet counts (ADR-0048)
 - ``segments-manager:segment:<cidr>``      segments-manager's answer for one segment
 - ``segments-manager:{sites,stats}``       its sites and per-site statistics (ADR-0047)
 - ``segments-manager:segments:...``        its segments for one query
@@ -73,6 +74,11 @@ def hub(mce: str, kind: str, namespace: str, name: str | None = None) -> str:
 def server_scan_rows() -> str:
     """server-scan's fleet rows (expires; server-scan has no webhook to day1)."""
     return "server-scan:rows"
+
+
+def server_scan_sites() -> str:
+    """server-scan's sites and fleet counts, the Server Scan area's Sites page (expires)."""
+    return "server-scan:sites"
 
 
 def segments_manager_prefix() -> str:

@@ -71,7 +71,7 @@ wingman/
 │   │   │   ├── application/       # Use cases, over ports only
 │   │   │   ├── infrastructure/    # Adapters (day2, MCE hubs, OpenShift OAuth) and their fakes
 │   │   │   ├── api/               # deps.py, errors.py, v1/ (the FastAPI routers)
-│   │   │   ├── ports.py           # day1's own ports
+│   │   │   ├── ports/             # day1's own ports (server-scan's in server_scan.py)
 │   │   │   ├── settings.py        # Every variable day1 reads
 │   │   │   └── main.py            # The composition root
 │   │   └── tests/
@@ -254,6 +254,14 @@ Read only, from segments-manager's open GETs; `501 FEATURE_DISABLED` while `SEGM
 | `GET` | `/api/day1/segments/sites` | segments-manager's sites, in its order |
 | `GET` | `/api/day1/segments/stats` | Each site's allocated and total segments, and the allocated count per type |
 | `GET` | `/api/day1/segments` | Every segment (`site`, `status`, `type` filter), each holder joined to its cluster file in day1; `fresh=true` reads segments-manager's database, at most once per 5 seconds per replica |
+
+#### Server Scan (admins only, ADR-0048)
+
+server-scan's pages, read through day1 in server-scan's own shapes; `501 FEATURE_DISABLED` while `SERVER_SCAN_URL` is empty, `502 DEPENDENCY_UNAVAILABLE` when server-scan fails or refuses the viewer token ([API note](docs/notes/2026-11-13-server-scan-area-api.md)).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/day1/server-scan/sites` | server-scan's Sites: every configured site in its order, then `unassigned`, and the fleet, each counted per vendor, health, maintenance, installation type and OpenShift state, as server-scan counts them (cached 10 seconds per replica) |
 
 #### Inventory Management (everyone reads, admins add; ADR-0057)
 
@@ -649,7 +657,7 @@ A configuration a service refuses (ADR-0009) is logged at start-up, naming the v
 ### Adding a New Feature
 
 1. Backend code goes in its layer (ADR-0001): `domain/`, `application/` (use cases over the ports in
-   `ports.py`), `infrastructure/` (adapters and fakes), `api/v1/` (routers); `uv run lint-imports` holds the
+   `ports.py`, day1's `ports/`), `infrastructure/` (adapters and fakes), `api/v1/` (routers); `uv run lint-imports` holds the
    layers. GitLab only through `GitLabPort` (ADR-0002). DEVELOPMENT.md walks through a new endpoint.
 2. Shared code goes in `packages/wingman-core`
 3. Frontend routes go in `app/(app)/` and stay thin; the feature they render goes in `components/<area>/`
