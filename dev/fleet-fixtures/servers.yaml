@@ -16,6 +16,16 @@
 #
 # The fake MCE in mce.yaml places these servers in NodePools; the two files
 # tell one story.
+#
+# `sites` is server-scan's INVENTORY_SITES (`code:Display Name`, in order) for
+# the fake: its `GET /api/v1/sites` counts `items` by server-scan's rules over
+# it (the Server Scan area's Sites page, ADR-0048). site3 has no servers, so
+# its card shows 0.
+
+sites:
+  - {code: site1, name: Site 1}
+  - {code: site2, name: Site 2}
+  - {code: site3, name: Site 3}
 
 x-free: &free {held: false, holder: null, mce_cluster: null, infra_env: null, expires_at: null}
 x-no-maintenance: &no-maintenance {enabled: false, reason: null, created_by: null}

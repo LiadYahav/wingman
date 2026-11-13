@@ -71,7 +71,7 @@ wingman/
 │   │   │   ├── application/       # Use cases, over ports only
 │   │   │   ├── infrastructure/    # Adapters (day2, MCE hubs, OpenShift OAuth) and their fakes
 │   │   │   ├── api/               # deps.py, errors.py, v1/ (the FastAPI routers)
-│   │   │   ├── ports.py           # day1's own ports
+│   │   │   ├── ports/             # day1's own ports (server-scan's in server_scan.py)
 │   │   │   ├── settings.py        # Every variable day1 reads
 │   │   │   └── main.py            # The composition root
 │   │   └── tests/
@@ -122,6 +122,7 @@ wingman/
 | **Add-ons: catalog, defaults and overrides** | The **Addons** page lists each team's add-ons (its catalog, `operators/<chart>/` in the team repo) and their fleet defaults. A team admin creates an add-on and edits it there (Edit add-on: its deploy config and its Sig values, `operators/<chart>/values.yaml`; values go chart values → Sig values → cluster values); an add-on's page (`/addons/<team>/<add-on>`) has its deploy config and values, its OCP-version pins, and per fleet scope (hosted clusters, MCEs, the hub, UPI) whether it is a default there and that default's values. Each env (`values-<env>.yaml`) and each MCE, hosted cluster or UPI cluster (`values-<name>.yaml`) can get values of its own, and an add-on wanted on some MCEs only is deployed on those MCEs, one install merge request each. Which add-ons a hosted cluster has of its own comes from its flavor and the create form. Every change is previewed and confirmed against that preview (ADR-0053). One cluster's add-ons stay on that cluster's page. |
 | **Create through the provision-cluster workflow** | With `DAY1_PROVISIONER=workflow` (off by default), Create renders and checks the file as before and then starts the platform's `provision-cluster` workflow, which reserves the segment, opens the merge request and waits for it; the page shows the run's phase, its merge request and its error (ADR-0042). Modify, delete, sync and import still open Wingman's merge requests. In either mode, the workflow's open merge request (branch `provision-cluster/<stem>`) holds its cluster's name, refuses a second create of it and counts on its MCE for placement (ADR-0042's amendment). |
 | **Segments** | segments-manager's page, rebuilt in Wingman for its admins (`/segments`, from the top bar's area switch, with its own sidebar and brand): a card per site (allocated out of total, by type), then every segment with the original's columns (Type, Site, VLAN ID, EPG Name, Network Segment, DHCP, Cluster, Status), sorting, status tabs, the site filter, an Excel-style filter on every column, search, a column picker, copy on click and a CSV or Excel file of the rows shown, re-read every 30 seconds with a dot that turns red (showing the last good data) when segments-manager does not answer. Every filter lives in the URL, so the cluster page links to its own segments; a holder that is a hosted cluster links to its page, and a row where segments-manager disagrees with the cluster file (ADR-0039's checks, on data already read) is marked. Read only: nothing is written to segments-manager (ADR-0047). Needs `SEGMENTS_MANAGER_URL`. |
+| **Server Scan** | server-scan's UI, rebuilt in Wingman for its admins one page at a time (`/server-scan`, from the top bar's area switch, with server-scan's own mark and a sidebar of the pages built; ADR-0048). Its first page, **Sites**, is server-scan's landing page: cards for the fleet, each installation type (UPI, hosted cluster, MCE), available and installed, then one per configured site (and Unassigned when a server's name carries no site), each with its critical, major, warning, maintenance and unknown counts, installed and available, and a bar per vendor, as server-scan counts them, read with the viewer token. The counts become links with the Servers page. |
 | **Upgrade through the upgrade-cluster workflow** | With `DAY1_UPGRADES=true` (off by default), an admin's **Upgrade** on the cluster page's Mastertag row starts the platform's `upgrade-cluster` workflow toward a target the workflow offers; it plans and checks, then waits for approval with nothing committed. The cluster page shows the run (its phase, what it waits for, the plan, the log) and admins press its decisions; the workflow commits the versions to day1 `main` itself, and while it is on an edit may not change `mastertag` or a `workertag` (ADR-0055). In the clusters list each row shows its upgrade under its mastertag: **Upgrading** with the run's phase (what it waits for in a tooltip), or **Upgrade available → <version>** when its MCE offers a newer OpenShift (a suggestion; the workflow plans the path), with an admin's **Upgrade** opening the same dialog from the row; an **Upgrades** filter (kept in the URL) shows only those. A finished run's panel can be dismissed. Off, an admin sees Upgrade greyed out with why. |
 | **Inventory Management** | A sidebar page (`/inventory`) for the orchestrator's server workflows, which everyone signed in reads: each MCE's available Agents by InfraEnv pool and hardware, as server-scan counts them; the add-server runs with their phase, server and error, herzi's included (a named run is a person's, a pool draw "herzi or a person"); and, with `DAY1_ADD_SERVERS`, admins install servers (the header's **Install servers**, or a pool's row) into a pool they pick or an InfraEnv they type, by count or by name, never a server server-scan has locked; no live status needed (ADR-0057 and its amendment). Off, admins see the button disabled with the reason. Not a fleet view. |
 | **Quick Links** | A launcher page for Wingman's admins (`/quick-links`): a card for the hub Wingman runs on and for every MCE of the day1 repo, by site, each opening the cluster's ArgoCD with its console beside it, then the team's own links from a ConfigMap the chart renders (`quickLinks.sections`), in the style of the team's homepage dashboard. Wingman only lists the links and never calls them, and icons ship with Wingman (ADR-0052). |
@@ -254,6 +255,14 @@ Read only, from segments-manager's open GETs; `501 FEATURE_DISABLED` while `SEGM
 | `GET` | `/api/day1/segments/sites` | segments-manager's sites, in its order |
 | `GET` | `/api/day1/segments/stats` | Each site's allocated and total segments, and the allocated count per type |
 | `GET` | `/api/day1/segments` | Every segment (`site`, `status`, `type` filter), each holder joined to its cluster file in day1; `fresh=true` reads segments-manager's database, at most once per 5 seconds per replica |
+
+#### Server Scan (admins only, ADR-0048)
+
+server-scan's pages, read through day1 in server-scan's own shapes; `501 FEATURE_DISABLED` while `SERVER_SCAN_URL` is empty, `502 DEPENDENCY_UNAVAILABLE` when server-scan fails or refuses the viewer token ([API note](docs/notes/2026-11-13-server-scan-area-api.md)).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/day1/server-scan/sites` | server-scan's Sites: every configured site in its order, then `unassigned`, and the fleet, each counted per vendor, health, maintenance, installation type and OpenShift state, as server-scan counts them (cached 10 seconds per replica) |
 
 #### Inventory Management (everyone reads, admins add; ADR-0057)
 
@@ -429,10 +438,11 @@ MCE_INFRAENV_NAMESPACE=                   # empty = all namespaces (the chart do
 MCE_INFRAENV_CACHE_SECONDS=600            # how long a hub's InfraEnv list is kept; 0 = read every time
 DAY1_STATUS_POLL_SECONDS=30               # the live status stream (the chart does not set it yet)
 
-# The nodes' servers from server-scan, uninstall through the workflows orchestrator (ADR-0038; off by default)
-SERVER_SCAN_URL=                          # e.g. http://server-scan-api.<ns>.svc:8000; empty: nodes without servers, no uninstall
+# The nodes' servers from server-scan, uninstall through the workflows orchestrator (ADR-0038; off by default);
+# the same server-scan feeds Inventory Management (ADR-0057) and the Server Scan area for admins (ADR-0048)
+SERVER_SCAN_URL=                          # e.g. http://server-scan-api.<ns>.svc:8000; empty: nodes without servers, no uninstall, no Server Scan area
 SERVER_SCAN_UI_URL=                       # where node links point (server-scan's UI); default SERVER_SCAN_URL
-SERVER_SCAN_TOKEN=                        # a server-scan viewer token (Bearer), from a Secret; empty: no header
+SERVER_SCAN_TOKEN=                        # a server-scan viewer token (Bearer), from a Secret, for every read (the Server Scan area too); empty: no header
 SERVER_SCAN_SSL_VERIFY=true               # true, false, or a CA bundle path
 SERVER_SCAN_TIMEOUT_SECONDS=10
 WORKFLOWS_API_URL=                        # e.g. http://workflows-orchestrator-api.<ns>.svc:8080; needs SERVER_SCAN_URL
@@ -649,7 +659,7 @@ A configuration a service refuses (ADR-0009) is logged at start-up, naming the v
 ### Adding a New Feature
 
 1. Backend code goes in its layer (ADR-0001): `domain/`, `application/` (use cases over the ports in
-   `ports.py`), `infrastructure/` (adapters and fakes), `api/v1/` (routers); `uv run lint-imports` holds the
+   `ports.py`, day1's `ports/`), `infrastructure/` (adapters and fakes), `api/v1/` (routers); `uv run lint-imports` holds the
    layers. GitLab only through `GitLabPort` (ADR-0002). DEVELOPMENT.md walks through a new endpoint.
 2. Shared code goes in `packages/wingman-core`
 3. Frontend routes go in `app/(app)/` and stay thin; the feature they render goes in `components/<area>/`

@@ -2,21 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Plane, Server, type LucideIcon } from "lucide-react";
-import { useSegmentsArea } from "@/lib/api/segments";
+import { Plane, ScanSearch, Server, type LucideIcon } from "lucide-react";
 import { areaOf, areasFor, type AreaId } from "@/lib/areas";
 import { cn } from "@/lib/utils";
+import { useAreaAccess } from "./use-area-access";
 
-const ICONS: Record<AreaId, LucideIcon> = { wingman: Plane, segments: Server };
+const ICONS: Record<AreaId, LucideIcon> = { wingman: Plane, segments: Server, "server-scan": ScanSearch };
 
 /**
  * The top bar's area switch: plain links, one per area this person has, the
- * current one marked. With Wingman's area alone (a viewer, or segments-manager
- * not configured) there is nothing to switch to, so it is not shown.
+ * current one marked. With Wingman's area alone (a viewer, or neither
+ * segments-manager nor server-scan configured) there is nothing to switch to,
+ * so it is not shown.
  */
 export function AreaSwitch() {
   const current = areaOf(usePathname());
-  const areas = areasFor({ segments: useSegmentsArea() === true });
+  const areas = areasFor(useAreaAccess());
   if (areas.length < 2) return null;
   return (
     <nav aria-label="Platform" className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5">

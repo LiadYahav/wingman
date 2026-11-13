@@ -3,7 +3,8 @@
 Each has an adapter in ``wingman_day1.infrastructure`` and a fake used by
 tests and by ``WINGMAN_GIT_BACKEND=fake``. GitLab itself is
 ``wingman_core.ports.gitlab.GitLabPort``; :class:`RepoReads` is the cached
-read side of one project on top of it.
+read side of one project on top of it. server-scan's port is in
+:mod:`wingman_day1.ports.server_scan` (ADR-0048), re-exported here.
 """
 
 from __future__ import annotations
@@ -39,10 +40,11 @@ from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.rollout import RolloutOutcome, RolloutTrigger
 from wingman_day1.domain.segments import ALL_SEGMENTS, SegmentList, SegmentQuery, SiteStats
-from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
+from wingman_day1.domain.servers import RunSummary
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 from wingman_day1.domain.upgrades import UpgradeDecision, UpgradeRequest, UpgradeRun, UpgradeTargets
 from wingman_day1.domain.workflows import ProvisionRun, WorkflowRun
+from wingman_day1.ports.server_scan import ServerInventory as ServerInventory
 
 
 class RepoReads(Protocol):
@@ -300,23 +302,6 @@ class Day2Installs(Protocol):
         self, cluster: ClusterRef, addons: Sequence[RequestedAddon], *, message: str
     ) -> Day2InstallResult:
         """Ask day2 to install ``addons`` on ``cluster``: an MR per team; refusals in ``failed``."""
-        ...
-
-
-class ServerInventory(Protocol):
-    """server-scan: the platform's record of physical servers (read only, ADR-0038).
-
-    Raises ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a
-    refused token) when server-scan cannot answer: servers are then unknown,
-    never "none".
-    """
-
-    async def rows(self) -> list[ServerRow]:
-        """Every server in the fleet, as flat rows."""
-        ...
-
-    async def server(self, server_id: str) -> ServerDetail:
-        """One server, read now. An unknown id is ``ServerNotFoundError``."""
         ...
 
 

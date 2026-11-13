@@ -18,8 +18,10 @@ from wingman_day1.domain.errors import (
     ServerScanDeniedError,
     ServerScanUnavailableError,
 )
+from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
+from wingman_day1.infrastructure.fake_server_scan_sites import count_sites
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 
 TOKEN = "server-scan-viewer-token-never-shown-0001"
@@ -73,6 +75,7 @@ PARSED = ServerRow(
     last_seen_at=datetime(2026, 11, 10, 22, 0, 3, 530203, tzinfo=UTC),
     reserved_by=None,
     macs=("02:00:00:00:00:01", "02:00:00:00:00:02"),
+    installation_type="HOSTED_CLUSTER",
 )
 DETAIL: dict[str, Any] = {
     "id": SERVER_ID,
@@ -306,6 +309,7 @@ class CountingInventory:
     def __init__(self) -> None:
         self.row_reads = 0
         self.server_reads = 0
+        self.site_reads = 0
         self.fail = False
 
     async def rows(self) -> list[ServerRow]:
@@ -317,6 +321,12 @@ class CountingInventory:
     async def server(self, server_id: str) -> ServerDetail:
         self.server_reads += 1
         return ServerDetail(server_id, "n", None)
+
+    async def sites(self) -> FleetSites:
+        self.site_reads += 1
+        if self.fail:
+            raise ServerScanUnavailableError("down")
+        return count_sites([PARSED], [("bat-yam", "Bat Yam")])
 
 
 async def test_the_cache_reads_the_fleet_once_per_ttl_and_one_server_every_time() -> None:
@@ -337,3 +347,38 @@ async def test_a_failed_fleet_read_is_not_cached() -> None:
         await cached.rows()
     inner.fail = False
     assert await cached.rows() == [PARSED]
+
+
+async def test_the_sites_are_cached_for_their_own_ttl_apart_from_the_rows() -> None:
+    clock = [0.0]
+    inner = CountingInventory()
+    cached = CachedServerInventory(inner, TtlCache(clock=lambda: clock[0]), ttl=30, sites_ttl=10)
+    first = await cached.sites()
+    assert await cached.sites() == first
+    await cached.rows()
+    assert (inner.site_reads, inner.row_reads) == (1, 1)
+    clock[0] = 11.0
+    await cached.sites()
+    await cached.rows()
+    assert (inner.site_reads, inner.row_reads) == (2, 1)
+
+
+async def test_without_a_sites_ttl_the_sites_keep_the_rows_ttl() -> None:
+    clock = [0.0]
+    inner = CountingInventory()
+    cached = CachedServerInventory(inner, TtlCache(clock=lambda: clock[0]), ttl=30)
+    await cached.sites()
+    clock[0] = 29.0
+    await cached.sites()
+    assert inner.site_reads == 1
+
+
+async def test_a_failed_sites_read_is_not_cached() -> None:
+    inner = CountingInventory()
+    inner.fail = True
+    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
+    with pytest.raises(ServerScanUnavailableError):
+        await cached.sites()
+    inner.fail = False
+    assert (await cached.sites()).sites[0].site_id == "bat-yam"
+    assert inner.site_reads == 2

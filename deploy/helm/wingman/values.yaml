@@ -256,7 +256,9 @@ clusterStatus:
 
 # ── Cluster nodes from server-scan (ADR-0038) ─────────────────────────────────
 # Off by default. With a url, day1 lists the servers under each hosted cluster
-# from server-scan's API; the node links point at its UI.
+# from server-scan's API (the node links point at its UI), Inventory
+# Management counts its servers (ADR-0057), and admins get the Server Scan area
+# (ADR-0048), all with the one viewer token below.
 serverScan:
   url: ""                 # the API, e.g. "http://server-scan-api.<ns>.svc:8000"; empty: off
   uiUrl: ""               # the UI, e.g. "https://server-scan.example"; empty: url

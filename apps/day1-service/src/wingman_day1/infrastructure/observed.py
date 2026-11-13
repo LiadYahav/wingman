@@ -83,6 +83,8 @@ class ServerScanOperation(StrEnum):
 
     LIST_SERVER_ROWS = "list_server_rows"
     GET_SERVER = "get_server"
+    LIST_SITES = "list_sites"
+    """``GET /api/v1/sites``: the Server Scan area's Sites page (ADR-0048)."""
 
 
 class SegmentsManagerOperation(StrEnum):

@@ -59,6 +59,8 @@ class ServerRow:
     """While held: when the reservation expires; ``None`` for no expiry."""
     macs: tuple[str, ...] = ()
     """Its NICs' MAC addresses, lowercase."""
+    installation_type: str | None = None
+    """What the server was named to be: ``HOSTED_CLUSTER``, ``MCE``, ``UPI`` or ``UNCLASSIFIED``."""
 
 
 @dataclass(frozen=True, slots=True)

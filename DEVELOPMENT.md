@@ -28,7 +28,7 @@ the direction (domain → ports → application → infrastructure → api):
 | Where | What |
 |-------|------|
 | `domain/` | Pure rules and types: no I/O, no FastAPI |
-| `ports.py` | The service's own ports (protocols); GitLab is core's `GitLabPort` (ADR-0002) |
+| `ports.py` (day1: `ports/`) | The service's own ports (protocols); GitLab is core's `GitLabPort` (ADR-0002) |
 | `application/` | Use cases, written against ports only |
 | `infrastructure/` | Adapters for the ports, and their fakes |
 | `api/` | FastAPI routers (`api/v1/`), the dependencies that hand them the use cases, error mapping |
@@ -73,7 +73,10 @@ Add `DAY1_FAKE_FLEET=true` to day1's line for the cluster page's Nodes tab and n
 (ADR-0038), and the EPG on its **HostedCluster & network** card (ADR-0039). It replaces the MCE
 hubs, server-scan, the workflows orchestrator and segments-manager with fakes seeded from
 `dev/fleet-fixtures/`:
-- `servers.yaml` is a made-up fleet in server-scan's own row shape;
+- `servers.yaml` is a made-up fleet in server-scan's own row shape, and its `sites` catalog
+  (server-scan's configured sites): the Server Scan area's Sites page (`/server-scan`,
+  ADR-0048) counts these rows by server-scan's rules over it; `site3` has no server, so its
+  card shows 0;
 - `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update
   half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
   approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace
@@ -135,7 +138,7 @@ variable is listed in the README's [Environment Variables](README.md#environment
 ## Adding an endpoint
 
 1. **The rule**, if there is one, goes in `domain/`; **the use case** in `application/`, over
-   the ports in `ports.py` (GitLab through `GitLabPort`). GitLab reads go through the service's
+   the ports in `ports.py` (day1: `ports/`; GitLab through `GitLabPort`). GitLab reads go through the service's
    cached repositories, which use `TtlCache.get_or_fetch` (`wingman_core.infrastructure.cache`)
    with the service's TTL (ADR-0011); a write clears what it changed. A read every page waits
    on can pass `stale=stale_for(ttl)` to be answered while it refreshes (ADR-0041). Measure a

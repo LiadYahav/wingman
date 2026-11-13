@@ -27,6 +27,7 @@ from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.rollouts import RolloutService
 from wingman_day1.application.segments import SegmentsService
+from wingman_day1.application.server_scan import ServerScanService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
@@ -77,6 +78,8 @@ class Day1Context:
     """``None`` when ``DAY1_UPGRADES`` is off: the upgrade routes answer 501 (ADR-0055)."""
     inventory: InventoryService | None = None
     """Inventory Management (ADR-0057); ``None`` when ``SERVER_SCAN_URL`` is empty: 501."""
+    server_scan: ServerScanService | None = None
+    """The Server Scan area (ADR-0048); ``None`` when ``SERVER_SCAN_URL`` is empty: 501."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -178,6 +181,20 @@ def inventory_service(
     return context.inventory
 
 
+SERVER_SCAN_NOT_AVAILABLE = (
+    "Server Scan is not set up in this deployment: SERVER_SCAN_URL is empty."
+)
+
+
+def server_scan_service(
+    context: Annotated[Day1Context, Depends(day1_context)],
+) -> ServerScanService:
+    """The Server Scan area's use cases, or 501 when server-scan is not configured (ADR-0048)."""
+    if context.server_scan is None:
+        raise FeatureDisabled(SERVER_SCAN_NOT_AVAILABLE)
+    return context.server_scan
+
+
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
 Inventory = Annotated[InventoryService, Depends(inventory_service)]
@@ -185,5 +202,6 @@ Nodes = Annotated[NodeService, Depends(node_service)]
 Placements = Annotated[PlacementService, Depends(placement_service)]
 QuickLinks = Annotated[QuickLinksService, Depends(quick_links_service)]
 Segments = Annotated[SegmentsService, Depends(segments_service)]
+ServerScan = Annotated[ServerScanService, Depends(server_scan_service)]
 Status = Annotated[StatusService, Depends(status_service)]
 Upgrades = Annotated[UpgradeService, Depends(upgrade_service)]

@@ -3,7 +3,8 @@
 Tests seed them directly; ``DAY1_FAKE_FLEET=true`` (development only) seeds
 them from ``dev/fleet-fixtures/servers.yaml``, written in server-scan's own
 row shape and read by the HTTP adapter's parser. They raise the same domain
-errors as the real adapters.
+errors as the real adapters. The fake's sites are its rows counted by
+server-scan's rules over a site catalog (``fake_server_scan_sites``, ADR-0048).
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which
@@ -18,7 +19,7 @@ run, as the real one does: refusals happen inside the run.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
     WorkflowsUnavailableError,
 )
+from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import (
     UNINSTALL_HOLDER,
     RunSummary,
@@ -42,6 +44,7 @@ from wingman_day1.domain.servers import (
     uninstall_workflow_id,
 )
 from wingman_day1.domain.workflows import WorkflowRun
+from wingman_day1.infrastructure.fake_server_scan_sites import SiteName, catalog_of, count_sites
 from wingman_day1.infrastructure.server_scan import server_row
 
 DEMO_PHASES: Final = (
@@ -58,10 +61,17 @@ FLEET_FILE: Final = Path("dev/fleet-fixtures/servers.yaml")
 class FakeServerInventory:
     """A ``ServerInventory`` over seeded rows; ``unavailable`` fails every call, as if down."""
 
-    def __init__(self, rows: Iterable[ServerRow] = (), *, unavailable: bool = False) -> None:
-        """Seed the fleet."""
+    def __init__(
+        self,
+        rows: Iterable[ServerRow] = (),
+        *,
+        unavailable: bool = False,
+        sites: Sequence[SiteName] = (),
+    ) -> None:
+        """Seed the fleet; ``sites`` is server-scan's site catalog (none: the rows' own sites)."""
         self._rows = {row.id: row for row in rows}
         self.unavailable = unavailable
+        self._sites = tuple(sites)
         self.server_reads = 0
         """How many times ``server`` was called (the uninstall's fresh read)."""
         self._before_read: list[Callable[[], None]] = []
@@ -99,6 +109,12 @@ class FakeServerInventory:
         if row is None:
             raise ServerNotFoundError(f"server-scan has no server {server_id!r} (fake)")
         return ServerDetail(id=row.id, name=row.name, cluster_name=row.cluster_name)
+
+    async def sites(self) -> FleetSites:
+        """See ServerInventory.sites: the rows now, counted as server-scan counts them."""
+        self._read()
+        rows = list(self._rows.values())
+        return count_sites(rows, self._sites or catalog_of(rows))
 
     def _read(self) -> None:
         if self.unavailable:

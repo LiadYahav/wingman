@@ -130,6 +130,23 @@ def test_the_server_scan_token_comes_from_its_secret_to_day1_only() -> None:
     assert "SERVER_SCAN_TOKEN" not in chart_variables(), "the token is set with server-scan off"
 
 
+def test_the_server_scan_area_reads_with_the_one_viewer_token() -> None:
+    """The Server Scan area's Sites page (ADR-0048) needs no Secret of its own.
+
+    day1 holds one server-scan token, the viewer's. A later page that needs the
+    auditor or the admin token adds its own key here
+    (docs/notes/2026-11-13-server-scan-area-api.md §4, §8).
+    """
+    day1 = service_env(*ALL_ON)["wingman-day1"]
+    secret_refs = {
+        name: entry["valueFrom"]["secretKeyRef"]
+        for name, entry in day1.items()
+        if "secretKeyRef" in (entry.get("valueFrom") or {})
+    }
+    server_scan = {name for name in secret_refs if name.startswith("SERVER_SCAN_")}
+    assert server_scan == {"SERVER_SCAN_TOKEN"}
+
+
 def test_values_kept_from_a_release_before_3_4_still_render() -> None:
     """``helm upgrade --reuse-values`` from 3.3 has no ``serverScan``, ``workflows`` or
     ``segmentsManager`` map."""

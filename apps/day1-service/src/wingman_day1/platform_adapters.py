@@ -73,9 +73,10 @@ def fleet_adapters(
             load_fleet,
         )
         from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
+        from wingman_day1.infrastructure.fake_server_scan_sites import load_site_catalog
 
         rows, runs = load_fleet(default_fleet_file())
-        fake = FakeServerInventory(rows)
+        fake = FakeServerInventory(rows, sites=load_site_catalog(default_fleet_file()))
         workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)
         naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
         mce = load_fake_mce(default_mce_file(), servers=rows, naming=naming)

@@ -8,8 +8,8 @@ import { AreaBrand } from "./area-brand";
 import { AreaSidebar } from "./area-sidebar";
 import { AreaSwitch } from "./area-switch";
 import { EasterEgg } from "./easter-egg";
+import { useAreaAccess } from "./use-area-access";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { useSegmentsArea } from "@/lib/api/segments";
 import { chromeArea, type AreaId } from "@/lib/areas";
 
 /** The current area's brand and sidebar: each platform wears its own (ADR-0047's amendment). */
@@ -26,7 +26,7 @@ function SidebarContent({ area }: { area: AreaId }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const area = chromeArea(usePathname(), { segments: useSegmentsArea() });
+  const area = chromeArea(usePathname(), useAreaAccess());
 
   return (
     <div className="flex h-screen overflow-hidden">
