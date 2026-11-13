@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { parseApprovalId, type MRRef } from "@/lib/approvals";
+import { changedBy } from "@/lib/approval-changes";
 import { useAuthStore, useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -327,10 +328,11 @@ function MRDetailContent() {
   const rollout = useApprovalRollout(id, ref?.iid ?? 0, data?.mr.sha, flavorMr);
   const rolloutApplies = flavorMr && rollout.data?.applies === true;
 
-  /** Refresh the lists; this page's own detail is set or refetched by the caller. */
-  const afterChange = () => {
+  /** Refresh the lists, and once merged or closed what the MR touched; the caller sets or refetches this page's detail. */
+  const afterChange = (closed = false) => {
     queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all, predicate: (q) => q.queryKey[1] !== "detail" });
     queryClient.invalidateQueries({ queryKey: day1Keys.audit.all });
+    if (closed && ref) for (const filters of changedBy(ref)) queryClient.invalidateQueries(filters);
   };
 
   const approveMutation = useMutation({
@@ -347,9 +349,7 @@ function MRDetailContent() {
           : undefined
       );
       setApproveOpen(false);
-      afterChange();
-      // What the merge changed
-      queryClient.invalidateQueries({ queryKey: ref?.service === "day2" ? day1Keys.clusters.all : ref?.repo === "specs" ? day1Keys.specs.all : day1Keys.clusters.all });
+      afterChange(true);
       refetch();
     },
     onError: (e) => {
@@ -363,7 +363,7 @@ function MRDetailContent() {
     onSuccess: (mr) => {
       toast.success(`!${mr.iid} rejected`);
       setRejectReviewOpen(false);
-      afterChange();
+      afterChange(true);
       refetch();
     },
     onError: (e) => {

@@ -339,6 +339,14 @@ test.describe("Clusters that follow the flavor", () => {
     );
   });
 
+  test("one cluster follows it, in the singular", async ({ page }) => {
+    await open(page, { followers: FOLLOWERS.slice(0, 1) });
+
+    const del = page.getByRole("main").getByRole("button", { name: "Delete", exact: true });
+    await expect(del).toHaveAccessibleDescription(/^1 cluster follows this flavor, so it can't be deleted/);
+    await expect(page.getByTestId("flavor-followers")).toHaveText("1 cluster follows it");
+  });
+
   test("a flavor no cluster follows can be deleted, and offers to add clusters", async ({ page }) => {
     await open(page);
 

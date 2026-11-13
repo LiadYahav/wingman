@@ -163,6 +163,15 @@ def test_import_and_sync_titles_parse() -> None:
     assert synced == ParsedTitle(Repo.DAY1, Verb.SYNC, ResourceType.CLUSTER, "ocp4-prod-a-site1")
 
 
+def test_an_add_on_edit_titled_team_default_reads_as_one_titled_sig_values() -> None:
+    # Day2 said "team default" before 3.19.1; MRs opened then are still open in GitLab.
+    new = mr_title(Repo.DAY2, Verb.UPDATE, ResourceType.ADDON, "redbull/bmhgen", "Sig values")
+    assert new == "[Wingman/Day2] Update addon redbull/bmhgen Sig values"
+    old = "[Wingman/Day2] Update addon redbull/bmhgen team default"
+    expected = ParsedTitle(Repo.DAY2, Verb.UPDATE, ResourceType.ADDON, "redbull/bmhgen")
+    assert parse_mr_title(old) == parse_mr_title(new) == expected
+
+
 @given(
     st.sampled_from(Repo),
     st.sampled_from(Verb),

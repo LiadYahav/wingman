@@ -242,7 +242,8 @@ Every field is optional; an absent field is left as it is.
 
 The notes say which destinations the change reaches (every destination that
 gets the add-on and does not override the changed keys). Title:
-`[Wingman/Day2] Update addon <team>/<addon> team default`. Label
+`[Wingman/Day2] Update addon <team>/<addon> Sig values` (before 3.19.1:
+`... team default`; both still parse, ADR-0043's amendment). Label
 `update-default`.
 
 ## 5. Making an add-on a fleet default

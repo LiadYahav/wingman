@@ -8,6 +8,7 @@
  * keep working (ADR-0020). `?mce=` narrows a bare name.
  */
 
+import type { InvalidateQueryFilters } from "@tanstack/react-query";
 import { AMBIGUOUS_WRITE_HINT, isAmbiguousWrite } from "@/lib/write-errors";
 import type { CatalogEntry, DestinationKind, Finding, FleetScope, LayerRole, SyncSettings, Team } from "@/types/day2";
 
@@ -114,6 +115,19 @@ export const day2Keys = {
   /** `merge-preview` of a destination with `override` (stable JSON) as `path` (its own file when `""`), or without one (`null`). */
   mergePreview: (id: string, team: string, chart: string, override: string | null, path = "") =>
     ["day2", "merge-preview", id, team, chart, override, path] as const,
+};
+
+/** day2 reads no team merge request changes: a chart repo's own values, GitLab's info, each team's access. */
+const NOT_FROM_TEAM_REPOS = new Set<unknown>(["chart-defaults", "gitlab-info", "teams"]);
+
+/**
+ * Every day2 read a team's merge request can change once it is merged or
+ * closed: all but those, so a key added to `day2Keys` is refreshed too unless
+ * it is listed there (lib/approval-changes.ts).
+ */
+export const DAY2_TEAM_REPO_READS: InvalidateQueryFilters = {
+  queryKey: ["day2"],
+  predicate: (query) => !NOT_FROM_TEAM_REPOS.has(query.queryKey[1]),
 };
 
 /** The web page of a destination's charts. */
