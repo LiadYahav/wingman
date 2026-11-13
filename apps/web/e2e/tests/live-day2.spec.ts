@@ -49,7 +49,7 @@ test("the catalog flags the miscased repoUrl", async ({ page }) => {
   await expect(page.getByRole("button", { name: /kyverno/ })).toContainText("No lowercase repourl");
 });
 
-test("the catalog sorts, folds a team, and shows team values as YAML", async ({ page }) => {
+test("the catalog sorts, folds a team, and shows Sig values as YAML", async ({ page }) => {
   await go(page, "/addons");
   const redbull = page.locator("section").filter({ has: page.getByRole("button", { name: /^redbull/ }) });
   await expect(redbull.locator("h3")).toHaveText(["bmhgen", "cluster-roles", "kyverno"]);

@@ -1,10 +1,11 @@
 /**
  * Add-on authoring and per-team write access (ADR-0043, ADR-0053), mocked:
  * a new add-on from the team's template, making an add-on a fleet default
- * (the clusters that move into it, the changed ones confirmed), editing a
- * team default and a fleet default, and a team that has not given Wingman
- * write access. Everything starts on the Addons page: New add-on on a team,
- * Edit team default on an add-on, and its Defaults & overrides page for the
+ * (the clusters that move into it, the changed ones confirmed), editing an
+ * add-on (its deploy config and Sig values) and a fleet default, and a team
+ * that has not given Wingman write access. Everything starts on the Addons
+ * page: New add-on on a team, Edit add-on on an add-on, and its Defaults &
+ * overrides page for the
  * fleet defaults. Every write is previewed with `?dry_run=true`
  * first, and what was previewed is what is sent, with the preview's
  * `needs_confirmation` and `digest`
@@ -163,7 +164,7 @@ test.describe("Make default", () => {
     const form = formDialog(page);
     await expect(form.getByRole("heading", { name: "Make platform/cert-manager a default on every hosted cluster" })).toBeVisible();
     await expect(form).toContainText(`${HOSTED_NAME}, twin have cert-manager in their own folder today`);
-    await expect(form.getByRole("radio", { name: /Inherit the team default's/ })).toBeChecked();
+    await expect(form.getByRole("radio", { name: /Inherit the add-on's/ })).toBeChecked();
 
     const review = await preview(page);
     await expect(review).toContainText("2 clusters have cert-manager in their own folder.");
@@ -204,19 +205,21 @@ test.describe("Make default", () => {
 
   test("an add-on not in the catalog cannot be made a default elsewhere", async ({ page }) => {
     await go(page, "/addons/platform/node-tuning");
-    await expect(page.getByRole("region", { name: "Team default" })).toContainText("not in platform's catalog");
+    await expect(page.getByRole("region", { name: "Add-on" })).toContainText("not in platform's catalog");
     const make = scope(page, "mces").getByRole("button", { name: "Make it a default on every MCE" });
     await expect(make).toBeDisabled();
     await expect(make).toHaveAttribute("title", "node-tuning is not in platform's catalog (operators/node-tuning/)");
   });
 });
 
-test.describe("Team default", () => {
+test.describe("Edit add-on", () => {
   test("an edit sends only what changed, with the commit the entry was read at", async ({ page }) => {
     await go(page, "/addons/observability/prometheus");
-    await page.getByRole("button", { name: "Edit team default" }).click();
+    await page.getByRole("button", { name: "Edit add-on" }).click();
     const form = formDialog(page);
-    await expect(form.getByRole("heading", { name: "Edit the team default of observability/prometheus" })).toBeVisible();
+    await expect(form.getByRole("heading", { name: "Edit add-on observability/prometheus" })).toBeVisible();
+    await expect(form.getByLabel("Contents of operators/prometheus/values.yaml")).toBeVisible();
+    await expect(form).toContainText("Sig values");
     const button = form.getByRole("button", { name: "Preview changes" });
     await expect(button).toBeDisabled();
     await expect(button).toHaveAttribute("title", "No changes yet");
@@ -241,7 +244,7 @@ test.describe("Team default", () => {
 
   test("a blank revision removes the key (HEAD)", async ({ page }) => {
     await go(page, "/addons/observability/prometheus");
-    await page.getByRole("button", { name: "Edit team default" }).click();
+    await page.getByRole("button", { name: "Edit add-on" }).click();
     const form = formDialog(page);
     await form.getByRole("combobox", { name: /Revision/ }).fill("");
     await preview(page);
@@ -272,7 +275,7 @@ test.describe("Fleet defaults", () => {
     await scope(page, "hosted-clusters").getByRole("button", { name: "Edit the default on every hosted cluster" }).click();
     const form = formDialog(page);
     await expect(form.getByRole("radio", { name: /Set them for this fleet default/ })).toBeChecked();
-    await form.getByRole("radio", { name: /Inherit the team default's/ }).check();
+    await form.getByRole("radio", { name: /Inherit the add-on's/ }).check();
     const review = await preview(page);
     await review.getByRole("button", { name: /Create MR/ }).click();
 
@@ -290,7 +293,7 @@ test.describe("Fleet defaults", () => {
 });
 
 test.describe("The Addons page", () => {
-  test("adds an add-on, edits a team default, and opens an add-on's defaults", async ({ page }) => {
+  test("adds an add-on, edits one, and opens an add-on's defaults", async ({ page }) => {
     await go(page, "/addons");
     const platform = teamSection(page, "platform");
     await expect(platform.getByRole("link", { name: "New add-on in platform" })).toHaveAttribute("href", "/addons/new?team=platform");
@@ -299,7 +302,14 @@ test.describe("The Addons page", () => {
     await page.getByRole("button", { name: /^cert-manager/ }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("link", { name: "Defaults & overrides" })).toHaveAttribute("href", "/addons/platform/cert-manager");
-    await dialog.getByRole("button", { name: "Edit team default" }).click();
+    // The Sig values, between the chart's and a cluster's, in the user's words (ADR-0043's amendment)
+    await expect(dialog.getByRole("tab", { name: "Sig values" })).toHaveAttribute("aria-selected", "true");
+    const levels = dialog.getByRole("list", { name: "Values, lowest first" });
+    await expect(levels.getByRole("listitem")).toHaveText(["Chart values", "→Sig values", "→Cluster values"]);
+    await expect(levels.locator("[aria-current]")).toHaveText("Sig values");
+    await expect(dialog.getByTestId("values-levels")).toContainText("operators/cert-manager/values.yaml");
+    await expect(dialog).not.toContainText(/team (default|value)/i);
+    await dialog.getByRole("button", { name: "Edit add-on" }).click();
     const form = formDialog(page);
     await form.getByLabel("Contents of operators/cert-manager/values.yaml").fill("replicas: 2\n");
     const review = await preview(page, form);
@@ -323,11 +333,11 @@ test.describe("A read-only team", () => {
     await expect(security.getByRole("button", { name: "New add-on" })).toBeDisabled();
     await expect(teamSection(page, "platform")).not.toContainText("read-only");
     await security.getByRole("button", { name: /^kyverno/ }).click();
-    await expect(page.getByRole("dialog").getByRole("button", { name: "Edit team default" })).toBeDisabled();
+    await expect(page.getByRole("dialog").getByRole("button", { name: "Edit add-on" })).toBeDisabled();
 
     await go(page, "/addons/security/kyverno");
     await expect(page.getByRole("note").first()).toContainText(READ_ONLY_REASON);
-    await expect(page.getByRole("button", { name: "Edit team default" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Edit add-on" })).toBeDisabled();
     await expect(scope(page, "hosted-clusters").getByRole("button", { name: "Make it a default on every hosted cluster" })).toBeDisabled();
   });
 

@@ -498,7 +498,7 @@ function addonPlan(method: string, url: URL, body: Values, version: number): Aut
     }
   }
 
-  // The 3.8 writes (create, team default, make default, fleet default), with 3.10's impact.
+  // The 3.8 writes (create, edit the add-on: the API's update-team-default, make default, fleet default), with 3.10's impact.
   const plan = planFor(method, url, body);
   if (detail && plan.action === "update-team-default" && RICH(team, chart)) {
     const imp = [
