@@ -161,7 +161,7 @@ export interface UpgradeDecisionResult {
 }
 
 /**
- * One cluster's newest upgrade run, for the Clusters page's Upgrades view
+ * One cluster's newest upgrade run, for the clusters list's "Upgrading" rows
  * (`GET /api/day1/upgrades`, open runs first). Strings are the workflow's.
  */
 export interface FleetUpgrade {

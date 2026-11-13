@@ -9,21 +9,24 @@ requires one, a NodePool only for ``continue``) and that the cluster is in
 the day1 repo. Who asked is the signed-in user, never the request, and day1
 logs who did what. Nothing is retried (ADR-0006).
 
-The fleet's list (the Clusters page's Upgrades view) is one cached read of
+The fleet's list (the clusters list's "Upgrading") is one cached read of
 the orchestrator's run list, one row per cluster, and the first rows read by
-id for their phase; a cluster's own panel reads its run uncached.
+id for their phase; a cluster's own panel reads its run uncached. The list's
+"Upgrade available" is day1's own: the newest release each cluster's MCE
+offers above its mastertag (``upgrade_hints``), from the cached day1 repo.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Mapping
+from collections.abc import Awaitable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
 from wingman_core.domain.users import User
-from wingman_day1.application.clusters import ClusterService
+from wingman_day1.application.clusters import ClusterFile, ClusterService
+from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.domain.errors import (
     AmbiguousDecisionError,
     AmbiguousNameError,
@@ -33,6 +36,7 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
 )
 from wingman_day1.domain.fleet_upgrades import FleetRun, newest_upgrades
+from wingman_day1.domain.openshift_versions import upgrade_hint
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.upgrades import (
     UpgradeDecision,
@@ -80,6 +84,24 @@ class FleetUpgrade:
     """The run read by its id (its phase, ``waiting_for``, outcome); ``None`` when not read."""
     ref: ClusterRef | None
     """Where day1 has the cluster's file; ``None`` when it has none, or several."""
+
+
+async def upgrade_hints(
+    sites: SiteCatalog, clusters: Sequence[ClusterFile]
+) -> dict[ClusterRef, str]:
+    """Each cluster's "Upgrade available → <version>" (the clusters list); up to date ones left out.
+
+    The newest release its MCE offers a new cluster (ADR-0034) above its
+    ``mastertag``: the ladder and each MCE's rules read once, from the cached
+    day1 repo, nothing per cluster and nothing from the orchestrator. A
+    suggestion: the dialog asks the workflow for its targets (ADR-0055).
+    """
+    offered = await sites.versions_by_mce(c.ref.mce for c in clusters)
+    hints = {
+        c.ref: upgrade_hint(c.values.mastertag if c.values else None, offered[c.ref.mce])
+        for c in clusters
+    }
+    return {ref: version for ref, version in hints.items() if version}
 
 
 class UpgradeService:

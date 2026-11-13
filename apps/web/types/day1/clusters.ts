@@ -43,6 +43,12 @@ export interface ClusterStatus {
   owner: Record<string, string>;
   /** Why the file does not parse; empty when it does. */
   problems: string[];
+  /**
+   * While upgrades are on, the newest release the cluster's MCE offers above
+   * its mastertag (ADR-0034's list); `null` when none is, or upgrades are off.
+   * A suggestion: the upgrade-cluster workflow plans the path (ADR-0055).
+   */
+  upgrade_available: string | null;
 }
 
 export interface NodePoolValues {

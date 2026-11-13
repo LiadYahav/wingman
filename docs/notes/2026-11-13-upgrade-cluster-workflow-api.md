@@ -182,7 +182,8 @@ day1 refuses to start without it (ADR-0009). `WORKFLOWS_TARGETS_TIMEOUT_SECONDS`
 shows nothing but, to an admin, a greyed-out Upgrade saying why (§4).
 `DAY1_FAKE_FLEET` fakes the workflow for a local demo, with three demo runs.
 
-`GET /api/day1/upgrades` lists every cluster's run (below). Every other route
+`GET /api/day1/upgrades` lists every cluster's run, and the clusters list
+carries each cluster's `upgrade_available` (both below). Every other route
 is under `/api/day1/clusters/{name}`, with the optional
 `?site=&mce=` of the other cluster routes. `{name}` is the cluster file's
 stem, which is the workflow's `cluster`; the run's id is
@@ -346,8 +347,9 @@ Errors of both decision routes:
 
 ### `GET /api/day1/upgrades` (any signed-in user; since 3.19.0)
 
-Every cluster's newest upgrade run, for the Clusters page's Upgrades view and
-its "Upgrading" badges (ADR-0055's amendment). One read of the orchestrator's
+Every cluster's newest upgrade run, for the clusters list's "Upgrading" rows
+and its Upgrades filter (ADR-0055's amendments; until 3.20.0 also a separate
+Upgrades view). One read of the orchestrator's
 `GET /workflows/runs?workflow_type=UpgradeClusterWorkflow&limit=200` (status
 and times only), folded to one row per run id, so one per cluster: its
 newest upgrade, the `continued_as_new` segments of that upgrade joined,
@@ -390,6 +392,30 @@ start or a decision through day1 drops them. Never every run by id.
 | 501 | `FEATURE_DISABLED` | `DAY1_UPGRADES` is off |
 | 502 | `DEPENDENCY_UNAVAILABLE` | The orchestrator did not answer the list or a read: the runs are unknown, not "none" |
 
+### `upgrade_available` in `GET /api/day1/clusters` (since 3.20.0)
+
+Each cluster of the list carries `upgrade_available`: while `DAY1_UPGRADES`
+is on, the newest release its MCE offers above its `mastertag`, else `null`.
+"Offered" is ADR-0034's list, the one `GET /mces/{mce}/openshift-versions`
+answers and the create form uses: the ladder's rungs in the minors the MCE
+hosts. `4.18.22-x86_64` compares as `4.18.22`, releases as numbers.
+
+```json
+{"name": "ocp4-prod-lark-site1", "mastertag": "4.18.22-x86_64", "upgrade_available": "4.18.56", "...": "..."}
+```
+
+- `null` when nothing offered is newer (up to date, or ahead of every minor
+  the MCE hosts), when the mastertag is missing or not a release, when the
+  MCE has no `upgrade/mces/<mce>.yaml` or the ladder is missing, and always
+  while upgrades are off.
+- Day1's own rule (`upgrade_hint` in `wingman_day1.domain.openshift_versions`),
+  computed with the list from the cached day1 repo: the ladder and each MCE's
+  rules read once per list, nothing per cluster, nothing from the
+  orchestrator. The list answers it even when the orchestrator does not.
+- A suggestion, never a target: Wingman sends nothing from it. The dialog
+  asks `upgrade-targets`; the workflow plans the path and may offer another
+  target, or none.
+
 ### Versions belong to the workflow while `DAY1_UPGRADES` is on
 
 A modify (`PATCH /clusters/{name}`) or an MR review edit
@@ -410,7 +436,7 @@ New `workflows` operations (`docs/ops/metrics.md`): `upgrade_targets`,
 name and no cluster in the labels). The run read is `get_run`; the fleet's
 list is `list_runs`, its reads `get_run`.
 
-## 4. The web (the cluster page, and since 3.19.0 the Clusters page's Upgrades view)
+## 4. The web (the cluster page, and since 3.20.0 the clusters list)
 
 - **Overview, the Mastertag row:** an "Upgrade" button for admins, when
   upgrades are on and the cluster has no open run. With upgrades off an
@@ -458,17 +484,28 @@ list is `list_runs`, its reads `get_run`.
   validators judge every decision.
 - **History tab:** nothing to build. The workflow's commits to the file
   appear there (`upgrade(<cluster>): ... [upgrade-cluster-<cluster>]`).
-- **The Clusters page (3.19.0):** two views as tabs under its heading,
-  Clusters and Upgrades (`/clusters#upgrades`), shown only while upgrades
-  are on. The Upgrades view lists `GET /api/day1/upgrades`, read every 15 s:
-  each cluster (linked to its page, its MCE under it, or "not in this day1
-  repo"), the status, the phase humanized (or the outcome once closed),
-  `waiting_for` cut at a word with the whole text in a tooltip, and when it
-  started. No decisions there: they are the panel's. The Upgrades tab counts
-  the open runs.
-- **The clusters list (3.19.0):** an "Upgrading" badge beside the mastertag
-  of each cluster whose run is open, from the same query; its tooltip is the
-  phase and `waiting_for`, and it opens the cluster.
+- **The clusters list (3.20.0; replaces 3.19.0's Upgrades view and its
+  tab, and the "Upgrading" badge).** Under each row's mastertag, its
+  upgrade, read from `GET /api/day1/upgrades` (one query for every row,
+  every 15 s) and the list's `upgrade_available`; nothing per row:
+  - **Upgrading · <phase>** while the cluster's run is open: the phase
+    humanized (Paused when paused, "Upgrading" alone before the run is
+    read), `waiting_for` verbatim in its tooltip, a link to the cluster page.
+    It wins over a suggestion.
+  - **Upgrade available → <version>** from `upgrade_available`; its tooltip
+    says the MCE offers that release, newer than the mastertag, and that the
+    workflow plans the path and may offer other targets, or none.
+  - An admin's **Upgrade** beside the suggestion opens the cluster page's
+    dialog in place (the same component). After a start the row shows
+    "Upgrading" at once: the started run replaces the cluster's row in the
+    query until its next read. A viewer sees no button (starting is
+    `AdminUser`; with per-team RBAC it moves to the cluster's owners).
+  - Nothing when up to date, and nothing at all while upgrades are off.
+  - An **Upgrades** filter beside Site and Drift: All, Upgrade available,
+    Upgrading, with counts, kept in the URL (`?upgrade=available`,
+    `?upgrade=upgrading`; the change replaces the history entry). When the
+    run list fails, it carries a warning mark saying why no row shows
+    Upgrading.
 - Not in this version: a list of runs waiting for a person on the approvals
   page.
 

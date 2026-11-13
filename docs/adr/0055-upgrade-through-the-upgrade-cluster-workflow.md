@@ -1,7 +1,7 @@
 # ADR-0055: Upgrade a hosted cluster through the upgrade-cluster workflow, behind a setting
 
 Date: 2026-11-13
-Status: Accepted; amends ADR-0012 (who owns `mastertag`, `workertag` and `pausedUntil`); amended 2026-11-13 (3.19.0: the fleet's upgrades on the Clusters page)
+Status: Accepted; amends ADR-0012 (who owns `mastertag`, `workertag` and `pausedUntil`); amended 2026-11-13 (3.19.0: the fleet's upgrades on the Clusters page; 3.20.0: upgrades inside the clusters list, its Upgrades view removed)
 
 ## Context
 
@@ -49,7 +49,9 @@ The limbs are on the sandbox only, "not in production yet".
 3. **Wingman keeps no copy of the workflow's logic.**
    - No phase list: the phase is the workflow's word, humanized.
    - No targets of its own: the ladder is read by the workflow
-     (ADR-0034's read stays for a new cluster's versions only).
+     (ADR-0034's read stays for a new cluster's versions only; since 3.20.0
+     it also feeds the clusters list's "Upgrade available", a suggestion
+     Wingman never sends as a target).
    - Which buttons to draw: the run's `progress.decisions` once it carries
      it. Until then one small map in the web, phase → decisions, the same as
      the orchestrator page keeps (`awaiting-approval` → approve,
@@ -138,6 +140,10 @@ The limbs are on the sandbox only, "not in production yet".
 
 ## Amendment (2026-11-13, 3.19.0): the fleet's upgrades on the Clusters page
 
+*Partly superseded by the 3.20.0 amendment below: the Upgrades view and its
+tab are gone, and the "Upgrading" badge became each row's upgrade state. The
+run list, its cache, dismiss and the fake's demo runs stand.*
+
 The user: "The upgrade panel should be inside clusters, no?" With upgrades
 off on the sandbox, nothing showed at all, and nothing listed the fleet's
 upgrades the way the orchestrator's own `/ui/cluster-upgrade` page does.
@@ -208,3 +214,80 @@ start and a decision, 502); `apps/web/lib/fleet-upgrades.test.ts` and
 (greyed out when off, dismiss). 2026-11-13: the stack with
 `DAY1_FAKE_FLEET=true DAY1_UPGRADES=true` and live status off lists the
 fake's runs on `/clusters#upgrades`.
+
+## Amendment (2026-11-13, 3.20.0): upgrades inside the clusters list, and a suggestion
+
+The user: "I want to unite the upgrade cluster within the existing cluster,
+also suggest him Upgrade! Because the customer will see his clusters only
+and will press on it." One view per thing: a cluster's upgrade is part of
+its row, not a second list of runs.
+
+- **No Upgrades view.** The tab, `/clusters#upgrades` and its table are
+  removed. `GET /api/day1/upgrades` stays: the list reads it (one query every
+  row shares, every 15 s) for each open run.
+- **Each row's upgrade, under its mastertag**, and nothing when up to date:
+  - **Upgrading · <phase>**: the open run's phase made readable (Paused when
+    paused; just "Upgrading" before the run is read); `waiting_for` verbatim
+    in its tooltip. It links to the cluster page, whose panel keeps the plan,
+    the log and the decisions. An open run wins over a suggestion.
+  - **Upgrade available → <version>**: the cluster's MCE offers a newer
+    release than its `mastertag`. "Offered" is ADR-0034's list, the one the
+    create form uses: the ladder's rungs in the minors the MCE hosts. The
+    tooltip says no more than that: the workflow plans the path, and may
+    offer other targets, or none (the dialog then says "Nothing newer to
+    offer").
+- **The rule is day1's**, where the version comparison already lives
+  (`bare_release`, numeric order): `upgrade_hint(mastertag, offered)` in
+  `wingman_day1.domain.openshift_versions`, the newest offered release newer
+  than the mastertag, `None` when there is none or the mastertag is not a
+  release. `GET /api/day1/clusters` carries it as `upgrade_available` while
+  upgrades are on (`null` otherwise): the ladder and each MCE's rules read
+  once per list from the cached day1 repo (ADR-0035), nothing per row, and
+  nothing from the orchestrator, so the suggestion stays when the
+  orchestrator is down. It is a suggestion, not a target: this is not the
+  rejected "computing targets from the ladder in Wingman" above, since
+  Wingman never sends it and never plans with it.
+- **Upgrade from the row.** An admin's **Upgrade** beside the suggestion
+  opens the cluster page's dialog (the same component) in place: it asks the
+  workflow for its targets as before. After a start the row shows
+  "Upgrading" at once (the started run replaces the cluster's row in the
+  fleet query until its next read). The cluster page keeps its Upgrade and
+  its panel.
+- **Who may press it.** Starting stays `AdminUser`: a viewer sees the
+  suggestion and the state, with no Upgrade. The user wants customers to
+  press it once each sees only their own clusters; with per-team RBAC
+  (single-pane workstream 8) the start permission moves to the cluster's
+  owners, and the row's button follows that check.
+- **An Upgrades filter** beside Site and Drift, in their style (one shared
+  pill component now): All, Upgrade available, Upgrading, with counts, shown
+  only while upgrades are on. It is kept in the URL (`?upgrade=available`,
+  `?upgrade=upgrading`), replacing the old view's shareable link; a change
+  replaces the history entry, as the Segments page's filters do. The list's
+  other filters are still the page's state. When the run list cannot be read,
+  the filter carries a warning saying no row can show Upgrading.
+- **Off** (`DAY1_UPGRADES=false`): no `upgrade_available`, no state, no
+  button, no filter; the cluster page's greyed-out Upgrade is unchanged.
+
+Alternatives rejected:
+- **The rule in the web**, reading `GET /mces/{mce}/openshift-versions`
+  per MCE: one request per MCE per list, and a second copy of the release
+  order.
+- **The suggestion in `GET /api/day1/upgrades`**: it would vanish whenever
+  the orchestrator does not answer, though it needs nothing from it.
+- **Asking the workflow's `upgrade-targets` per row**: a Temporal run per
+  cluster per view.
+- **"Upgrade to <version>" as the button**: the workflow may offer another
+  target; the button opens its targets.
+
+Verification: `tests/unit/domain/test_upgrade_hint.py` (the rule);
+`tests/api/test_fleet_upgrades_api.py` (off: every hint `null`; on: the
+fixtures' hints, none when up to date or ahead of the MCE, none for an MCE
+without its rules file, and none of it needs the orchestrator);
+`apps/web/lib/fleet-upgrades.test.ts` (Vitest: a row's state, the counts and
+the filter, the URL, the started run); `apps/web/e2e/tests/clusters-upgrades.spec.ts`
+(the suggestion and its tooltip, Upgrading with `waiting_for`, Upgrade from
+the row opening the dialog and the row then Upgrading, the workflow offering
+nothing, a viewer without a button, the filter in the URL, the run list
+unreadable, off, and the old view gone). 2026-11-13: the stack with
+`DAY1_FAKE_FLEET=true DAY1_UPGRADES=true` shows "Upgrade available" on the
+clusters whose MCE offers newer, and "Upgrading" for the fake's open runs.

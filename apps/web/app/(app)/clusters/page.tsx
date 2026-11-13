@@ -11,8 +11,11 @@ import { day1Api, day1Keys } from "@/lib/api/day1";
 import { useIsAdmin } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
-import { ClustersViewTabs, UpgradesView, UpgradingBadge, useClustersView } from "@/components/clusters/fleet-upgrades";
+import { UpgradeFilterGroup } from "@/components/clusters/list/upgrade-filter";
+import { UpgradeState } from "@/components/clusters/list/upgrade-state";
+import { useListUpgrades } from "@/components/clusters/list/use-list-upgrades";
 import { ClusterFlags, ClusterStatusCell, OwnerCell } from "@/components/clusters/list/cells";
+import { FilterPills } from "@/components/clusters/list/filter-pills";
 import { SortIcon } from "@/components/clusters/list/sort-icon";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { IntentLink } from "@/components/common/intent-link";
@@ -36,7 +39,6 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 export default function ClustersPage() {
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
-  const view = useClustersView();
 
   // Filter / sort / pagination state
   const [search, setSearch] = useState("");
@@ -56,6 +58,7 @@ export default function ClustersPage() {
   });
 
   const { data: liveStatuses, isLoading: statusLoading, isError: statusFailed } = useBulkStatus(clusters);
+  const upgrades = useListUpgrades(clusters);
 
   const { data: driftSummary, isError: driftFailed } = useQuery<DriftSummaryItem[]>({
     queryKey: day1Keys.clusters.driftSummary,
@@ -164,6 +167,7 @@ export default function ClustersPage() {
       const wanted = ownerFilter[key];
       if (wanted !== null) list = list.filter((c) => ownerOf(c, key) === (wanted === NO_OWNER ? "" : wanted));
     }
+    list = list.filter(upgrades.matches);
 
     return [...list].sort((a, b) => {
       // Grouped: the group first, then the chosen order within it
@@ -174,7 +178,7 @@ export default function ClustersPage() {
       const cmp = compareBy(sortField, a, b);
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [clusters, search, siteFilter, driftFilter, ownerFilter, groupBy, sortField, sortDir, driftOf]);
+  }, [clusters, search, siteFilter, driftFilter, ownerFilter, groupBy, sortField, sortDir, driftOf, upgrades.matches]);
 
   /** How many filtered clusters each group has, for its heading (a group can span pages). */
   const groupSizes = useMemo(
@@ -195,7 +199,7 @@ export default function ClustersPage() {
   }
 
   function clearFilters() {
-    setSearch(""); setSiteFilter("all"); setDriftFilter("all"); setOwnerFilter({ merkaz: null, anaf: null, mador: null }); setPage(1);
+    setSearch(""); setSiteFilter("all"); setDriftFilter("all"); setOwnerFilter({ merkaz: null, anaf: null, mador: null }); upgrades.setFilter("all"); setPage(1);
   }
 
   const setOwner = (key: OwnerKey, value: string | null) => {
@@ -203,8 +207,8 @@ export default function ClustersPage() {
     setPage(1);
   };
 
-  const hasActiveFilters =
-    search || siteFilter !== "all" || driftFilter !== "all" || OWNER_KEYS.some((k) => ownerFilter[k] !== null);
+  const hasActiveFilters = search || siteFilter !== "all" || driftFilter !== "all" || upgrades.filter !== "all" ||
+    OWNER_KEYS.some((k) => ownerFilter[k] !== null);
   const hasOwners = (clusters ?? []).some((c) => OWNER_KEYS.some((k) => ownerOf(c, k)));
   const columns = 8;
   const statusOff = liveStatuses === null;
@@ -215,7 +219,6 @@ export default function ClustersPage() {
     </button>
   );
 
-  if (view === "upgrades") return <UpgradesView />;
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-4 animate-in fade-in duration-300">
       {/* Header */}
@@ -247,7 +250,6 @@ export default function ClustersPage() {
           )}
         </div>
       </div>
-      <ClustersViewTabs />
 
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -263,43 +265,22 @@ export default function ClustersPage() {
         </div>
 
         {sites.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium">Site:</span>
-            {["all", ...sites].map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilter(setSiteFilter)(siteFilter === s && s !== "all" ? "all" : s)}
-                className={cn(
-                  "rounded-full px-2.5 py-1 text-xs font-medium transition-all border",
-                  siteFilter === s
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-                )}
-              >{s === "all" ? "All" : s}</button>
-            ))}
-          </div>
+          <FilterPills
+            label="Site"
+            pills={["all", ...sites].map((s) => ({ value: s, label: s === "all" ? "All" : s }))}
+            value={siteFilter}
+            onChange={(s) => setFilter(setSiteFilter)(siteFilter === s && s !== "all" ? "all" : s)}
+          />
         )}
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-muted-foreground font-medium">Drift:</span>
-          {DRIFT_FILTERS.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setFilter(setDriftFilter)(value)}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all border",
-                driftFilter === value
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-              )}
-            >
-              {label}
-              {value !== "all" && clusters && (
-                <span className="tabular-nums opacity-70">{driftCounts[value]}</span>
-              )}
-            </button>
-          ))}
-        </div>
+        <FilterPills
+          label="Drift"
+          pills={DRIFT_FILTERS.map((f) => ({ ...f, count: f.value !== "all" && clusters ? driftCounts[f.value] : undefined }))}
+          value={driftFilter}
+          onChange={setFilter(setDriftFilter)}
+        />
+
+        <UpgradeFilterGroup upgrades={upgrades} onFilter={setFilter(upgrades.setFilter)} />
 
         {hasOwners && (
           <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Owner filters">
@@ -439,8 +420,9 @@ export default function ClustersPage() {
                             <td className="px-3 py-3">
                               <OwnerCell cluster={cluster} />
                             </td>
-                            <td className="px-3 py-3 whitespace-nowrap font-mono text-xs text-muted-foreground">
-                              {cluster.mastertag ?? "—"}<UpgradingBadge name={cluster.name} />
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <p className="font-mono text-xs text-muted-foreground">{cluster.mastertag ?? "—"}</p>
+                              <UpgradeState cluster={cluster} upgrade={upgrades.stateOf(cluster)} isAdmin={isAdmin} />
                             </td>
                             <td className="px-3 py-3">
                               {cluster.spec_name ? (

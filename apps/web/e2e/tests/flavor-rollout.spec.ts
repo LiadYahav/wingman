@@ -65,7 +65,7 @@ function listItem(name: string, spec_version: string | null): ClusterStatus {
     path: `sites/${SITE}/mces/${MCE}/hostedClusters/${name}.yaml`,
     hosted_cluster: { cluster_name: short, name: `ocp4-${short}`, namespace: `hcp-${short}` },
     naming: { follows_convention: true, env: "prod", short_name: short, sequence: null, problems: [] },
-    owner: {}, problems: [],
+    owner: {}, problems: [], upgrade_available: null,
   };
 }
 

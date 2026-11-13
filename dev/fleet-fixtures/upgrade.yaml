@@ -87,11 +87,13 @@ run:
   after:
     - {phase: postflight, seconds: 3, waiting_for: "the post-flight checks (fake)"}
 
-# `demo`: runs started when day1 starts, so the Clusters page's Upgrades view
-# and its "Upgrading" badges have something to show. Each is started toward
-# `target` by `by`, then sent `decisions` as it comes to wait for each.
-# ocp4-prod-herzi-site1 waits for approval, ocp4-prod-lark-site1 for the day2
-# confirm after its control plane, and ocp4-prod-hawk-site1 was cancelled.
+# `demo`: runs started when day1 starts, so the clusters list has "Upgrading"
+# rows to show. Each is started toward `target` by `by`, then sent
+# `decisions` as it comes to wait for each. ocp4-prod-herzi-site1 waits for
+# approval, ocp4-prod-lark-site1 for the day2 confirm after its control
+# plane, and ocp4-prod-hawk-site1 was cancelled, so the list suggests it an
+# upgrade again (as it does ocp4-prod-owl-site1, whose `targets` above are
+# empty: the dialog then says there is nothing newer).
 demo:
   - {cluster: ocp4-prod-herzi-site1, target: 4.17.58, by: dana}
   - {cluster: ocp4-prod-lark-site1, target: 4.18.56, by: alice, decisions: [approve]}

@@ -498,6 +498,7 @@ const TEST_CLUSTER: ClusterStatus = {
   naming: { follows_convention: false, env: null, short_name: null, sequence: null, problems: ["cluster 'test-cluster' does not follow ocp4-<env>-<name>-site-east[-<seq>]"] },
   owner: {},
   problems: [],
+  upgrade_available: null,
 };
 
 test.describe("Cluster Addons Flow", () => {

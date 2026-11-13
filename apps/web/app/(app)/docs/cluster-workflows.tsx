@@ -39,10 +39,14 @@ export function ClusterWorkflowsDocs() {
         run&apos;s panel can be dismissed (×) in this browser; the next upgrade shows again.
       </p>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        The Clusters page&apos;s <strong>Upgrades</strong> view (<InlineCode>/clusters#upgrades</InlineCode>) lists
-        every cluster&apos;s newest run, open ones first: its status, its phase, what it waits for and when it
-        started. Each row opens its cluster, where the decisions are. The list marks each cluster being upgraded with{" "}
-        <strong>Upgrading</strong>.
+        The clusters list shows each cluster&apos;s upgrade under its mastertag. <strong>Upgrading</strong> names the
+        run&apos;s phase, says what it waits for in its tooltip, and opens the cluster, where the decisions are.{" "}
+        <strong>Upgrade available → 4.18.56</strong> means the cluster&apos;s MCE offers a newer OpenShift than its
+        mastertag (the versions a new cluster there may use); it is only a suggestion, since the workflow plans the
+        path when the dialog opens and may offer other targets, or none. An admin&apos;s <strong>Upgrade</strong> beside
+        it opens the same dialog without leaving the list. An up to date cluster shows nothing. The{" "}
+        <strong>Upgrades</strong> filter (<InlineCode>?upgrade=available</InlineCode> or{" "}
+        <InlineCode>?upgrade=upgrading</InlineCode>) shows only those clusters.
       </p>
       <Callout type="info" title="Versions change through Upgrade">
         While upgrades are on, an edit (or an MR review edit) that changes <InlineCode>mastertag</InlineCode> or a{" "}
