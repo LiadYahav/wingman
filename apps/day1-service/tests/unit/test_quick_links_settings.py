@@ -17,12 +17,6 @@ QUICK_LINKS_ENV = (
     "QUICK_LINKS_DOMAIN",
     "QUICK_LINKS_ARGOCD_URL_TEMPLATE",
     "QUICK_LINKS_CONSOLE_URL_TEMPLATE",
-    "QUICK_LINKS_STATUS_ENABLED",
-    "QUICK_LINKS_STATUS_TTL_SECONDS",
-    "QUICK_LINKS_TIMEOUT_SECONDS",
-    "QUICK_LINKS_CONCURRENCY",
-    "QUICK_LINKS_SSL_VERIFY",
-    "QUICK_LINKS_ARGOCD_TOKENS_FILE",
 )
 
 
@@ -46,7 +40,6 @@ def settings(**values: object) -> Day1Settings:
 def test_the_defaults() -> None:
     loaded = settings()
     assert loaded.quick_links_file == Path("/etc/wingman/quick-links/links.yaml")
-    assert loaded.quick_links_argocd_tokens_file == Path("/etc/wingman/argocd-tokens/tokens")
     assert loaded.quick_links_hub_name == ""
     assert loaded.quick_links_argocd_url_template == (
         "https://openshift-gitops-server-openshift-gitops.apps.{cluster}.{domain}"
@@ -54,11 +47,6 @@ def test_the_defaults() -> None:
     assert loaded.quick_links_console_url_template == (
         "https://console-openshift-console.apps.{cluster}.{domain}"
     )
-    assert loaded.quick_links_status_enabled is True
-    assert loaded.quick_links_status_ttl_seconds == 60
-    assert loaded.quick_links_timeout_seconds == 3
-    assert loaded.quick_links_concurrency == 8
-    assert loaded.quick_links_tls_verify is True
 
 
 def test_the_domains_fall_back_to_the_mce_api_domain() -> None:
@@ -78,12 +66,10 @@ def test_the_domains_fall_back_to_the_mce_api_domain() -> None:
 
 def test_the_environment_names(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("QUICK_LINKS_HUB_NAME", "hub-prod")
-    monkeypatch.setenv("QUICK_LINKS_SSL_VERIFY", "/etc/pki/ca.pem")
-    monkeypatch.setenv("QUICK_LINKS_STATUS_ENABLED", "false")
+    monkeypatch.setenv("QUICK_LINKS_DOMAIN", "apps.example.internal")
     loaded = settings()
     assert loaded.quick_links_hub_name == "hub-prod"
-    assert loaded.quick_links_tls_verify == "/etc/pki/ca.pem"
-    assert loaded.quick_links_status_enabled is False
+    assert loaded.quick_links_mce_domain == "apps.example.internal"
 
 
 @pytest.mark.parametrize("name", ["Hub_Prod", "hub.prod", "-hub", "a" * 64])
@@ -111,16 +97,3 @@ def test_a_url_template_is_checked_at_start(template: str, message: str) -> None
         settings(quick_links_argocd_url_template=template)
     with pytest.raises(ValidationError, match=message):
         settings(quick_links_console_url_template=template)
-
-
-def test_the_checks_are_bounded() -> None:
-    for field, value in (
-        ("quick_links_status_ttl_seconds", 5),
-        ("quick_links_status_ttl_seconds", 601),
-        ("quick_links_timeout_seconds", 0),
-        ("quick_links_timeout_seconds", 31),
-        ("quick_links_concurrency", 0),
-        ("quick_links_concurrency", 65),
-    ):
-        with pytest.raises(ValidationError):
-            settings(**{field: value})

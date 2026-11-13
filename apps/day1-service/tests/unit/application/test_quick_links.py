@@ -13,15 +13,13 @@ from wingman_day1.domain.quick_links import (
     LinksFileState,
     LinksFileUnreadableError,
 )
-from wingman_day1.infrastructure.fake_quick_links import FakeArgoCd, FakeLinkProbe, counts
 
 LINKS = """
 sections:
   - name: Tools
     links:
-      - {name: ArgoCD Main, url: "https://argocd.example.internal", argocd: main}
-      - {name: Wiki, url: "https://wiki.example.internal", ping: "https://wiki.example.internal/health"}
-      - {name: Same ping, url: "https://wiki.example.internal/x", ping: "https://wiki.example.internal/health"}
+      - {name: ArgoCD Main, url: "https://argocd.example.internal", icon: argocd}
+      - {name: Wiki, url: "https://wiki.example.internal"}
 clusters:
   hub-prod: {console: "https://console.hub.example.internal"}
 """
@@ -62,7 +60,7 @@ def service(**kw: Any) -> QuickLinksService:
 
 
 async def test_generated_sections_come_first_then_the_file_s() -> None:
-    board = await service(links=Links(), probe=FakeLinkProbe()).board()
+    board = await service(links=Links()).board()
     assert [s.id for s in board.sections] == ["hub", "site:site1", "file:tools"]
     hub = board.sections[0].cards[0]
     assert hub.links[1].url == "https://console.hub.example.internal"  # the file's address
@@ -90,35 +88,3 @@ async def test_an_unreadable_or_missing_file_gives_only_the_generated_cards() ->
     none = await service().board()
     assert none.links_file.state is LinksFileState.MISSING
     assert none.links_path == ""
-
-
-async def test_without_a_probe_there_are_no_dots() -> None:
-    board = await service(links=Links()).board()
-    assert board.pings() == []
-    status = await service(links=Links()).status()
-    assert status.checks == ()
-
-
-async def test_counts_are_offered_only_for_an_argocd_with_a_token() -> None:
-    argocd = FakeArgoCd({"hub-prod": counts(synced=3, healthy=3), "main": "ArgoCD answered 503"})
-    board = await service(links=Links(), argocd=argocd).board()
-    by_id = {c.id: c for s in board.sections for c in s.cards}
-    assert by_id["hub:hub-prod"].argocd is not None
-    assert by_id["cluster:ocp4-prod-mce-site1-a"].argocd is None  # no token
-    assert by_id["file:tools:argocd-main"].argocd is not None
-    no_argocd = await service(links=Links()).board()
-    assert all(c.argocd is None for s in no_argocd.sections for c in s.cards)
-
-
-async def test_status_checks_each_ping_once_and_reads_each_argocd() -> None:
-    probe = FakeLinkProbe()
-    argocd = FakeArgoCd({"hub-prod": counts(synced=3, healthy=3), "main": "ArgoCD answered 503"})
-    status = await service(links=Links(), probe=probe, argocd=argocd).status()
-    assert sorted(probe.checked) == sorted(set(probe.checked))
-    assert "https://wiki.example.internal/health" in probe.checked
-    assert len(probe.checked) == 2 + 2 + 2  # hub, the MCE, then ArgoCD Main and the wiki's ping
-    assert {r.instance: r.error for r in status.argocd} == {
-        "hub-prod": None,
-        "main": "ArgoCD answered 503",
-    }
-    assert [i for i, _ in argocd.reads] == ["hub-prod", "main"]

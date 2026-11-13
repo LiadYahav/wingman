@@ -52,7 +52,6 @@ ALL_ON = [
         "workflows.url=http://workflows-orchestrator-api.wingman.svc:8080",
         "segmentsManager.url=http://segments-manager.wingman.svc:8000",
         "segmentsManager.uiUrl=https://segments-manager.example",
-        "quickLinks.argocdTokensSecret=wingman-argocd-tokens",
     )
     for arg in ("--set", value)
 ]

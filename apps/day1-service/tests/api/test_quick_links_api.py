@@ -1,7 +1,7 @@
-"""``GET /api/day1/quick-links`` and ``/status`` (docs/notes/2026-11-12-quick-links-api.md).
+"""``GET /api/day1/quick-links`` (docs/notes/2026-11-12-quick-links-api.md).
 
-Admins only (decision 13, until RBAC). Built on the fixture day1 repo with
-the fake checks and ArgoCD, and a links file in a temporary folder.
+Admins only (decision 13, until RBAC). Built on the fixture day1 repo and a
+links file in a temporary folder.
 """
 
 from __future__ import annotations
@@ -16,14 +16,7 @@ import pytest
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.settings import Environment, GitBackend, RuntimeSettings
-from wingman_day1.domain.quick_links import LinkState
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
-from wingman_day1.infrastructure.fake_quick_links import (
-    CheckRule,
-    FakeArgoCd,
-    FakeLinkProbe,
-    counts,
-)
 from wingman_day1.main import Adapters, create_app
 
 Auth = Callable[[User], dict[str, str]]
@@ -37,7 +30,6 @@ sections:
       - name: ArgoCD Main
         url: https://argocd.example.internal
         icon: argocd
-        argocd: main
       - name: Typo
         href: https://typo.example.internal
 """
@@ -49,9 +41,6 @@ async def call(
     clock: Any,
     headers: dict[str, str],
     path: str,
-    *,
-    probe: FakeLinkProbe | None = None,
-    argocd: FakeArgoCd | None = None,
     **settings: object,
 ) -> httpx.Response:
     values: dict[str, object] = {
@@ -63,7 +52,7 @@ async def call(
         settings=support.make_settings(**values),
         auth=support.make_auth(),
         runtime=RuntimeSettings(environment=Environment.TEST, git_backend=GitBackend.FAKE),
-        adapters=Adapters(gitlab=gitlab, day2=FakeDay2Addons({}), link_probe=probe, argocd=argocd),
+        adapters=Adapters(gitlab=gitlab, day2=FakeDay2Addons({})),
         clock=clock,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
@@ -78,10 +67,10 @@ def links_file(tmp_path: Path) -> Path:
     return path
 
 
-@pytest.mark.parametrize("path", ["/api/day1/quick-links", "/api/day1/quick-links/status"])
 async def test_only_admins_see_quick_links(
-    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth, path: str
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
+    path = "/api/day1/quick-links"
     viewer = await call(support, gitlab, clock, auth(support.VIEWER), path)
     assert viewer.status_code == 403
     assert viewer.json()["code"] == "FORBIDDEN"
@@ -98,8 +87,6 @@ async def test_the_cards_are_the_hub_each_site_s_mces_then_the_file(
         clock,
         auth(support.ALICE),
         "/api/day1/quick-links",
-        probe=FakeLinkProbe(),
-        argocd=FakeArgoCd({"hub-prod": counts(synced=1, healthy=1)}),
         quick_links_file=links_file,
     )
     assert response.status_code == 200
@@ -116,18 +103,9 @@ async def test_the_cards_are_the_hub_each_site_s_mces_then_the_file(
         "name": "hub-prod",
         "description": None,
         "icon": "argocd",
-        "argocd": "hub-prod",
         "links": [
-            {
-                "label": "ArgoCD",
-                "url": ARGOCD.format("hub-prod"),
-                "ping": ARGOCD.format("hub-prod"),
-            },
-            {
-                "label": "Console",
-                "url": CONSOLE.format("hub-prod"),
-                "ping": CONSOLE.format("hub-prod"),
-            },
+            {"label": "ArgoCD", "url": ARGOCD.format("hub-prod")},
+            {"label": "Console", "url": CONSOLE.format("hub-prod")},
         ],
     }
     site1 = body["sections"][1]
@@ -136,7 +114,10 @@ async def test_the_cards_are_the_hub_each_site_s_mces_then_the_file(
     assert names == sorted(names)
     assert "ocp4-prod-mce-site1-a" in names
     prod = next(c for c in site1["cards"] if c["name"] == "ocp4-prod-mce-site1-a")
-    assert prod["argocd"] is None  # no token for it
+    assert [link["url"] for link in prod["links"]] == [
+        ARGOCD.format("ocp4-prod-mce-site1-a"),
+        CONSOLE.format("ocp4-prod-mce-site1-a"),
+    ]
     assert "hosted cluster" in (prod["description"] or "")
     core = body["sections"][3]
     assert (core["columns"], core["generated"]) == (2, False)
@@ -196,69 +177,10 @@ async def test_a_file_that_is_not_yaml_is_named_and_the_generated_cards_stay(
     assert body["sections"][0]["id"] == "hub"
 
 
-async def test_status_has_each_check_and_each_argocd_s_counts(
-    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth, links_file: Path
-) -> None:
-    probe = FakeLinkProbe(
-        [CheckRule("console-openshift-console", LinkState.DOWN, "no answer within 3 s", None, None)]
-    )
-    argocd = FakeArgoCd(
-        {
-            "hub-prod": counts(synced=40, out_of_sync=2, healthy=39, degraded=2, progressing=1),
-            "main": "ArgoCD refused the token (401)",
-        }
-    )
-    response = await call(
-        support,
-        gitlab,
-        clock,
-        auth(support.ALICE),
-        "/api/day1/quick-links/status",
-        probe=probe,
-        argocd=argocd,
-        quick_links_file=links_file,
-    )
-    assert response.status_code == 200
-    body = response.json()
-    checks = {c["url"]: c for c in body["checks"]}
-    assert checks[CONSOLE.format("hub-prod")]["state"] == "down"
-    assert checks[CONSOLE.format("hub-prod")]["reason"] == "no answer within 3 s"
-    up = checks[ARGOCD.format("hub-prod")]
-    assert (up["state"], up["reason"], up["http_status"], up["latency_ms"]) == (
-        "up",
-        "answered 200",
-        200,
-        40,
-    )
-    assert "checked_at" in up
-    assert "https://argocd.example.internal" in checks
-    by_instance = {a["instance"]: a for a in body["argocd"]}
-    assert by_instance["hub-prod"]["counts"] == {
-        "applications": 42,
-        "sync": {"synced": 40, "out_of_sync": 2, "unknown": 0},
-        "health": {
-            "healthy": 39,
-            "progressing": 1,
-            "degraded": 2,
-            "missing": 0,
-            "suspended": 0,
-            "unknown": 0,
-        },
-    }
-    assert by_instance["main"] == {
-        "instance": "main",
-        "counts": None,
-        "error": "ArgoCD refused the token (401)",
-        "checked_at": by_instance["main"]["checked_at"],
-    }
-
-
-async def test_status_checks_are_off_without_a_probe(
+async def test_there_is_no_status_route(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
-    board = await call(support, gitlab, clock, auth(support.ALICE), "/api/day1/quick-links")
-    links = [link for s in board.json()["sections"] for c in s["cards"] for link in c["links"]]
-    assert links
-    assert all(link["ping"] is None for link in links)
-    status = await call(support, gitlab, clock, auth(support.ALICE), "/api/day1/quick-links/status")
-    assert status.json() == {"checks": [], "argocd": []}
+    # 3.13.1 removed the status dots and the ArgoCD counts (ADR-0052's amendment)
+    path = "/api/day1/quick-links/status"
+    response = await call(support, gitlab, clock, auth(support.ALICE), path)
+    assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")

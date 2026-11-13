@@ -33,10 +33,8 @@ from wingman_day1.domain.status import HostedClusterObservation, NodePoolObserva
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.observed import (
-    ArgoCdOperation,
     Day2Operation,
     HubOperation,
-    LinkCheckOperation,
     OAuthOperation,
     Observer,
     SegmentsManagerOperation,
@@ -166,8 +164,6 @@ def test_the_metrics_catalogue_lists_exactly_day1s_operations_per_dependency() -
         Dependency.SERVER_SCAN: set(ServerScanOperation),
         Dependency.WORKFLOWS: set(WorkflowsOperation),
         Dependency.SEGMENTS_MANAGER: set(SegmentsManagerOperation),
-        Dependency.LINK_CHECK: set(LinkCheckOperation),
-        Dependency.ARGOCD: set(ArgoCdOperation),
     }
 
 

@@ -1,4 +1,4 @@
-"""Quick Links' cards: the generated ones, the links file, the counts (ADR-0052)."""
+"""Quick Links' cards: the generated ones and the links file (ADR-0052)."""
 
 from __future__ import annotations
 
@@ -13,24 +13,18 @@ from wingman_day1.domain.quick_links import (
     DEFAULT_COLUMNS,
     NO_DOMAIN,
     NO_HUB_DOMAIN,
-    ArgoCdTarget,
-    Board,
     ClusterOverride,
     GeneratedLinks,
     LinksFileState,
-    LinkState,
     MceInfo,
     UrlTemplates,
-    count_applications,
     generated_sections,
     is_http_url,
     parse_links_file,
     render,
     slug,
-    state_of,
     template_problems,
     unreadable_links_file,
-    without_pings,
 )
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -99,12 +93,13 @@ def test_a_cluster_card_opens_its_argocd_with_the_console_beside_it() -> None:
     assert hub.icon == "argocd"
     assert [link.label for link in hub.links] == [ARGOCD_LABEL, CONSOLE_LABEL]
     argocd = "https://openshift-gitops-server-openshift-gitops.apps.hub-prod.example.internal"
-    assert hub.links[0].url == hub.links[0].ping == argocd
-    assert hub.argocd == ArgoCdTarget("hub-prod", argocd)
+    assert hub.links[0].url == argocd
+    assert hub.links[1].url == "https://console-openshift-console.apps.hub-prod.example.internal"
     prod = sections[1].cards[1]
     assert prod.id == "cluster:ocp4-prod-mce-site1-a"
-    assert prod.argocd is not None
-    assert prod.argocd.instance == "ocp4-prod-mce-site1-a"
+    assert prod.links[0].url == (
+        "https://openshift-gitops-server-openshift-gitops.apps.ocp4-prod-mce-site1-a.example.internal"
+    )
 
 
 def test_an_mce_card_says_its_hub_version_and_how_many_clusters_it_holds() -> None:
@@ -123,7 +118,6 @@ def test_an_override_replaces_a_cluster_address_and_the_rest_follow_the_template
     hub = sections[0].cards[0]
     assert hub.links[0].url == "https://gitops.hub.example.internal"
     assert hub.links[1].url == "https://console-openshift-console.apps.hub-prod.example.internal"
-    assert hub.argocd == ArgoCdTarget("hub-prod", "https://gitops.hub.example.internal")
 
 
 def test_no_hub_name_means_no_hub_section() -> None:
@@ -147,7 +141,6 @@ def test_an_override_lists_a_cluster_without_a_domain() -> None:
     card = sections[0].cards[0]
     assert [link.label for link in card.links] == [CONSOLE_LABEL]
     assert card.icon == "openshift"
-    assert card.argocd is None
     assert problems == [NO_DOMAIN]
 
 
@@ -174,16 +167,13 @@ sections:
         url: https://gitlab.example.internal/platform/gitops
         description: Main GitOps repository
         icon: gitlab
-        ping: https://gitlab.example.internal
       - name: ArgoCD Main
         url: https://argocd.example.internal/
         icon: argocd
-        argocd: main
   - name: DC Systems
     links:
       - name: NetBox
         url: https://netbox.example.internal
-        ping: false
 clusters:
   hub-prod:
     argocd: https://gitops.hub-prod.example.internal
@@ -208,12 +198,10 @@ def test_a_good_file_gives_its_sections_in_order() -> None:
     assert gitlab.description == "Main GitOps repository"
     assert len(gitlab.links) == 1
     assert gitlab.links[0].label is None
-    assert gitlab.links[0].ping == "https://gitlab.example.internal"
-    assert argocd.argocd == ArgoCdTarget("main", "https://argocd.example.internal/")
-    assert argocd.links[0].ping == argocd.links[0].url
+    assert gitlab.links[0].url == "https://gitlab.example.internal/platform/gitops"
+    assert (argocd.icon, argocd.links[0].url) == ("argocd", "https://argocd.example.internal/")
     assert dc.columns == DEFAULT_COLUMNS
     assert dc.cards[0].icon == "link"
-    assert dc.cards[0].links[0].ping is None
     assert links.clusters == {
         "hub-prod": ClusterOverride(argocd="https://gitops.hub-prod.example.internal")
     }
@@ -285,8 +273,6 @@ sections:
       - name: A
         url: https://a.example.internal
         icon: Not An Icon
-        ping: not a url
-        argocd: "has spaces"
         description: 7
 """
     )
@@ -294,11 +280,29 @@ sections:
     card = section.cards[0]
     assert section.columns == DEFAULT_COLUMNS
     assert card.icon == "link"
-    assert card.links[0].ping == "https://a.example.internal"
-    assert card.argocd is None
     assert card.description is None
-    assert len(links.problems) == 5
-    assert links.problems[0] == 'sections[0] "Tools": columns must be 1 to 6 (using 4)'
+    assert links.problems == (
+        'sections[0] "Tools": columns must be 1 to 6 (using 4)',
+        "sections[0] \"Tools\" links[0] \"A\": icon must be a key such as 'gitlab' (using 'link')",
+        'sections[0] "Tools" links[0] "A": description must be text of at most 200 characters',
+    )
+
+
+def test_ping_and_argocd_are_no_longer_read_and_are_named_like_any_unknown_key() -> None:
+    # 3.13.1 removed the status dots and the ArgoCD counts (ADR-0052's amendment)
+    links = parse_links_file(
+        """
+sections:
+  - name: Tools
+    links:
+      - {name: A, url: "https://a.example.internal", ping: false, argocd: main}
+"""
+    )
+    card = links.sections[0].cards[0]
+    assert [link.url for link in card.links] == ["https://a.example.internal"]
+    assert links.problems == (
+        "sections[0] \"Tools\" links[0] \"A\": unknown key 'argocd', 'ping' (ignored)",
+    )
 
 
 def test_a_section_without_a_name_or_links_is_skipped() -> None:
@@ -406,65 +410,10 @@ def test_is_http_url(value: str, ok: bool) -> None:
     assert is_http_url(value) is ok
 
 
-@pytest.mark.parametrize(
-    ("status", "state"),
-    [
-        (200, LinkState.UP),
-        (204, LinkState.UP),
-        (302, LinkState.UP),
-        (401, LinkState.UP),
-        (403, LinkState.UP),
-        (404, LinkState.DOWN),
-        (405, LinkState.DOWN),
-        (500, LinkState.DOWN),
-        (503, LinkState.DOWN),
-    ],
-)
-def test_state_of_an_answer(status: int, state: LinkState) -> None:
-    assert state_of(status) is state
-
-
 def test_slug() -> None:
     assert slug("Core GitOps") == "core-gitops"
     assert slug("  DC / Systems!! ") == "dc-systems"
     assert slug("!!!") == ""
-
-
-def test_count_applications_by_sync_and_health() -> None:
-    counts = count_applications(
-        [
-            ("Synced", "Healthy"),
-            ("Synced", "Healthy"),
-            ("OutOfSync", "Degraded"),
-            ("OutOfSync", "Missing"),
-            ("Unknown", "Progressing"),
-            (None, "Suspended"),
-            ("Synced", None),
-            ("Synced", "Weird"),
-        ]
-    )
-    assert counts.applications == 8
-    assert (counts.sync.synced, counts.sync.out_of_sync, counts.sync.unknown) == (4, 2, 2)
-    health = counts.health
-    assert (health.healthy, health.progressing, health.degraded, health.missing) == (2, 1, 1, 1)
-    assert (health.suspended, health.unknown) == (1, 2)
-    assert count_applications([]).applications == 0
-
-
-def test_the_board_lists_each_ping_and_argocd_once() -> None:
-    sections, _ = generated_sections(config(), MCES[:1], {})
-    links = parse_links_file(GOOD)
-    board = Board((*sections, *links.sections), (), links, "links.yaml")
-    pings = board.pings()
-    assert pings == sorted(set(pings))
-    assert "https://gitlab.example.internal" in pings
-    assert len(pings) == 2 + 2 + 2  # hub, one MCE, then GitLab's ping and ArgoCD Main
-    assert [t.instance for t in board.argocd_targets()] == [
-        "hub-prod",
-        "main",
-        "ocp4-prod-mce-site2-a",
-    ]
-    assert without_pings(sections[0]).cards[0].links[0].ping is None
 
 
 def test_the_default_argocd_template_is_exported_for_the_settings() -> None:

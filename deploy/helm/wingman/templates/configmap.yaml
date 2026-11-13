@@ -99,8 +99,7 @@ data:
 
   # ── Quick Links (ADR-0052): the links file is the ConfigMap wingman-quick-links ─
   # Values reused from 3.8 (helm upgrade --reuse-values) have no quickLinks
-  # map: day1's own defaults, which are these, apply then. STATUS_ENABLED is
-  # not `default true`: Helm's default would turn an explicit false into true.
+  # map: day1's own defaults, which are these, apply then.
   {{- if .Values.quickLinks }}
   QUICK_LINKS_FILE: "/etc/wingman/quick-links/links.yaml"
   QUICK_LINKS_HUB_NAME: {{ .Values.quickLinks.hubName | default "" | quote }}
@@ -108,16 +107,6 @@ data:
   QUICK_LINKS_DOMAIN: {{ .Values.quickLinks.domain | default .Values.clusterStatus.mceDomain | default "" | quote }}
   QUICK_LINKS_ARGOCD_URL_TEMPLATE: {{ .Values.quickLinks.argocdUrlTemplate | default "https://openshift-gitops-server-openshift-gitops.apps.{cluster}.{domain}" | quote }}
   QUICK_LINKS_CONSOLE_URL_TEMPLATE: {{ .Values.quickLinks.consoleUrlTemplate | default "https://console-openshift-console.apps.{cluster}.{domain}" | quote }}
-  {{- if .Values.quickLinks.status }}
-  QUICK_LINKS_STATUS_ENABLED: {{ ternary .Values.quickLinks.status.enabled true (hasKey .Values.quickLinks.status "enabled") | quote }}
-  QUICK_LINKS_STATUS_TTL_SECONDS: {{ .Values.quickLinks.status.ttlSeconds | default 60 | quote }}
-  QUICK_LINKS_TIMEOUT_SECONDS: {{ .Values.quickLinks.status.timeoutSeconds | default 3 | quote }}
-  QUICK_LINKS_CONCURRENCY: {{ .Values.quickLinks.status.concurrency | default 8 | quote }}
-  {{- end }}
-  QUICK_LINKS_SSL_VERIFY: {{ .Values.quickLinks.sslVerify | default "true" | quote }}
-  {{- if .Values.quickLinks.argocdTokensSecret }}
-  QUICK_LINKS_ARGOCD_TOKENS_FILE: "/etc/wingman/argocd-tokens/tokens"
-  {{- end }}
   {{- end }}
 
   # ── TLS CA bundle path (used when caBundle is set) ───────────────────────────
