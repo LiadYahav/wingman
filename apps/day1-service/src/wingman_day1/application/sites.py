@@ -11,6 +11,7 @@ OpenShift releases a new cluster on it may use, from the day1 repo's
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from wingman_core.domain.errors import NotFoundError
@@ -95,12 +96,25 @@ class SiteCatalog:
         """
         if all(name != mce for _, name in (await self.tree()).mces):
             raise ResourceNotFoundError(f"MCE {mce!r} does not exist in the day1 repo")
-        ladder_text, rules_text = await asyncio.gather(
-            self._optional(paths.UPGRADE_LADDER), self._optional(paths.upgrade_mce_rules(mce))
+        return (await self.versions_by_mce([mce]))[mce]
+
+    async def versions_by_mce(self, mces: Iterable[str]) -> dict[str, OpenShiftVersions]:
+        """``openshift_versions`` of several MCEs, the ladder read once.
+
+        For MCEs already found in the repo: none is checked to exist.
+        """
+        names = sorted(set(mces))
+        ladder_text, *rules = await asyncio.gather(
+            self._optional(paths.UPGRADE_LADDER),
+            *(self._optional(paths.upgrade_mce_rules(mce)) for mce in names),
         )
         ladder = missing_ladder() if ladder_text is None else parse_ladder(ladder_text)
-        hosted = missing_mce_rules(mce) if rules_text is None else parse_mce_rules(mce, rules_text)
-        return versions_for(mce, ladder, hosted)
+        return {
+            mce: versions_for(
+                mce, ladder, missing_mce_rules(mce) if text is None else parse_mce_rules(mce, text)
+            )
+            for mce, text in zip(names, rules, strict=True)
+        }
 
     async def default_mastertag(self, site: str, mce: str) -> str | None:
         """The MCE's default ``mastertag`` for new clusters, if it sets one."""

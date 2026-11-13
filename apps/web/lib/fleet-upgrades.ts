@@ -1,19 +1,16 @@
 /**
- * How the fleet's upgrade runs read on the Clusters page (ADR-0055's
- * amendment), as pure functions. The words are the workflow's: a phase is
- * only made readable, `waiting_for` only shortened (its whole text is the
- * tooltip). The decisions stay on the cluster page.
+ * The clusters list's upgrades (ADR-0055's amendments), as pure functions:
+ * each row's state, the list's Upgrade filter in the URL, and the fleet's
+ * runs kept current after a start. The words are the workflow's: a phase is
+ * only made readable. The plan and the decisions stay on the cluster page.
  */
 
-import { clusterQuery } from "@/lib/clusters";
-import type { FleetUpgrade } from "@/types";
-
-export type FleetTone = "open" | "done" | "stopped" | "failed";
+import type { FleetUpgrade, UpgradeRun } from "@/types";
 
 /** Whether the upgrade is still going on. */
-export const isOpenUpgrade = (run: FleetUpgrade): boolean => run.status === "running";
+const isOpenUpgrade = (run: FleetUpgrade): boolean => run.status === "running";
 
-/** The open upgrades, by cluster: the clusters list's "Upgrading" badges. */
+/** The open upgrades, by cluster. */
 export function openByCluster(runs: readonly FleetUpgrade[]): Map<string, FleetUpgrade> {
   return new Map(runs.filter(isOpenUpgrade).map((run) => [run.cluster, run]));
 }
@@ -28,32 +25,84 @@ export function stateWord(run: FleetUpgrade): string | null {
   return run.outcome ?? run.status;
 }
 
-/** The status chip's colour family. */
-export function fleetTone(run: FleetUpgrade): FleetTone {
-  if (isOpenUpgrade(run)) return "open";
-  if (run.outcome === "done") return "done";
-  if (run.outcome === "cancelled" || run.outcome === "aborted") return "stopped";
-  return "failed";
+/**
+ * A row's upgrade: its open run, else the newer release its MCE offers
+ * (day1's `upgrade_available`, a suggestion), else nothing: up to date rows
+ * stay quiet. An open run wins: the cluster has one upgrade at a time.
+ */
+export type RowUpgrade = { kind: "upgrading"; run: FleetUpgrade } | { kind: "available"; version: string } | null;
+
+export function rowUpgrade(
+  cluster: { name: string; upgrade_available: string | null },
+  open: ReadonlyMap<string, FleetUpgrade>
+): RowUpgrade {
+  const run = open.get(cluster.name);
+  if (run) return { kind: "upgrading", run };
+  return cluster.upgrade_available ? { kind: "available", version: cluster.upgrade_available } : null;
 }
 
-/** At most `max` characters of `text`, cut at a word, with an ellipsis when cut. */
-export function brief(text: string, max = 90): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  if (flat.length <= max) return flat;
-  const cut = flat.slice(0, max - 1);
-  const space = cut.lastIndexOf(" ");
-  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+// ── The list's Upgrade filter, kept in the URL (`?upgrade=`) ────────────────
+
+export type UpgradeFilter = "all" | "available" | "upgrading";
+
+export const UPGRADE_FILTERS: readonly { value: UpgradeFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "available", label: "Upgrade available" },
+  { value: "upgrading", label: "Upgrading" },
+];
+
+const UPGRADE_PARAM = "upgrade";
+
+/** The filter a URL's query asks for; anything else is All. */
+export function upgradeFilterOf(search: string): UpgradeFilter {
+  const value = new URLSearchParams(search).get(UPGRADE_PARAM);
+  return value === "available" || value === "upgrading" ? value : "all";
 }
 
-/** The cluster's page, where its Upgrade panel shows the run and its decisions. */
-export function upgradeHref(run: FleetUpgrade): string {
-  return `/clusters/${encodeURIComponent(run.cluster)}${clusterQuery(run.site ?? "", run.mce ?? "")}`;
+/** The URL showing `filter`, every other part of `url` kept. */
+export function withUpgradeFilter(url: { pathname: string; search: string; hash: string }, filter: UpgradeFilter): string {
+  const params = new URLSearchParams(url.search);
+  if (filter === "all") params.delete(UPGRADE_PARAM);
+  else params.set(UPGRADE_PARAM, filter);
+  const query = params.toString();
+  return `${url.pathname}${query ? `?${query}` : ""}${url.hash}`;
 }
 
-/** The Clusters page's two views; the URL's `#upgrades` picks the second. */
-export type ClustersView = "clusters" | "upgrades";
+/** Whether a row with `upgrade` is shown under `filter`. */
+export function matchesUpgradeFilter(upgrade: RowUpgrade, filter: UpgradeFilter): boolean {
+  return filter === "all" || upgrade?.kind === filter;
+}
 
-export const UPGRADES_HASH = "#upgrades";
+/** How many rows each filter shows. */
+export function countUpgrades(upgrades: readonly RowUpgrade[]): Record<Exclude<UpgradeFilter, "all">, number> {
+  return {
+    available: upgrades.filter((u) => u?.kind === "available").length,
+    upgrading: upgrades.filter((u) => u?.kind === "upgrading").length,
+  };
+}
 
-/** The view a URL hash asks for. */
-export const clustersViewOf = (hash: string): ClustersView => (hash === UPGRADES_HASH ? "upgrades" : "clusters");
+// ── After a start ───────────────────────────────────────────────────────────
+
+/**
+ * The fleet's runs with a run just started on its cluster, in place of that
+ * cluster's previous one: the list shows "Upgrading" at once, until the next
+ * read (day1 dropped its cached list on the start). Where day1 has the file
+ * is kept from the previous row.
+ */
+export function withStartedRun(runs: readonly FleetUpgrade[], run: UpgradeRun, startedAt: string): FleetUpgrade[] {
+  const previous = runs.find((r) => r.cluster === run.cluster);
+  const started: FleetUpgrade = {
+    workflow_id: run.workflow_id,
+    cluster: run.cluster,
+    site: previous?.site ?? null,
+    mce: previous?.mce ?? run.mce,
+    status: run.status,
+    started_at: startedAt,
+    closed_at: null,
+    phase: run.phase,
+    waiting_for: run.waiting_for,
+    paused: run.paused,
+    outcome: run.outcome,
+  };
+  return [started, ...runs.filter((r) => r.cluster !== run.cluster)];
+}

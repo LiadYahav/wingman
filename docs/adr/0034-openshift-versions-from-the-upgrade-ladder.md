@@ -1,7 +1,7 @@
 # ADR-0034: A new cluster's OpenShift versions come from the upgrade ladder, per MCE
 
 Date: 2026-11-08
-Status: Accepted
+Status: Accepted; amended 2026-11-13 (3.20.0: the clusters list's upgrade suggestion)
 
 ## Context
 
@@ -92,3 +92,11 @@ when it was missing. Production's `upgrade/ladder.yaml` has no
 MCE offered nothing and no cluster could be created. Wingman now ignores
 `schemaVersion`: it reads only `ladder[].version`, and checks each rung's own
 shape, so a file whose format moves on still says which rung it can't read.
+
+## Amendment (2026-11-13, 3.20.0)
+
+The same list, per MCE, feeds the clusters list's "Upgrade available →
+<version>" while upgrades are on (ADR-0055's 3.20.0 amendment):
+`upgrade_hint` takes the newest release a cluster's MCE offers that is newer
+than its `mastertag`. It is a suggestion only; the upgrade-cluster workflow
+still plans every upgrade from the ladder itself.

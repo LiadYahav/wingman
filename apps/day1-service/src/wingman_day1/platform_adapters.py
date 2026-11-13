@@ -34,7 +34,7 @@ from wingman_day1.settings import Day1Settings
 
 Close = Callable[[], Awaitable[None]]
 FLEET_RUNS_TTL_SECONDS: Final = 10.0
-"""The longest the fleet's upgrade runs are kept: the Upgrades view reads them every 15 s."""
+"""The longest the fleet's upgrade runs are kept: the clusters list reads them every 15 s."""
 
 
 def provision_workflow(

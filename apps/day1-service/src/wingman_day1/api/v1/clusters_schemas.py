@@ -99,10 +99,14 @@ class ClusterStatusOut(BaseModel):
     owner: dict[str, str]
     """The file's ``owner`` numbers (merkaz, anaf, mador) as text; ``{}`` when it has none."""
     problems: list[str]
+    upgrade_available: str | None = None
+    """While upgrades are on, the newest release the cluster's MCE offers above its
+    ``mastertag`` (ADR-0034's list); ``null`` when none is, or upgrades are off. A
+    suggestion: the upgrade-cluster workflow plans the path (ADR-0055)."""
 
     @classmethod
-    def of(cls, cluster: ClusterFile) -> ClusterStatusOut:
-        """From a cluster file."""
+    def of(cls, cluster: ClusterFile, *, upgrade_available: str | None = None) -> ClusterStatusOut:
+        """From a cluster file, and its upgrade hint."""
         change = cluster.last_change
         owner = cluster.values.owner if cluster.values and cluster.values.owner else {}
         return cls(
@@ -123,6 +127,7 @@ class ClusterStatusOut(BaseModel):
                 if isinstance(value, str | int) and not isinstance(value, bool)
             },
             problems=list(cluster.problems),
+            upgrade_available=upgrade_available,
         )
 
 

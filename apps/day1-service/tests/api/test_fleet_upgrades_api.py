@@ -1,9 +1,12 @@
-"""``GET /api/day1/upgrades``: every cluster's upgrade run, for the Clusters page (ADR-0055).
+"""The clusters list's upgrades (ADR-0055's amendments): its runs and its hints.
 
-Behind ``DAY1_UPGRADES`` like the rest of the upgrade routes; anyone signed
-in reads it. One cached read of the orchestrator's run list, one row per
-cluster (open first), the first rows read by id for their phase and
-``waiting_for``; a start or a decision drops the cache.
+``GET /api/day1/upgrades`` is behind ``DAY1_UPGRADES`` like the rest of the
+upgrade routes; anyone signed in reads it. One cached read of the
+orchestrator's run list, one row per cluster (open first), the first rows
+read by id for their phase and ``waiting_for``; a start or a decision drops
+the cache. ``GET /api/day1/clusters`` carries each cluster's
+``upgrade_available`` while upgrades are on: the newest release its MCE
+offers above its mastertag, from the day1 repo only.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from typing import Any
 import httpx
 import pytest
 
+from wingman_core.domain.git import FileChange, RepoPath
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.domain.upgrades import UpgradeDecision, UpgradeRequest
@@ -30,6 +34,7 @@ from wingman_day1.infrastructure.fake_upgrade_script import (
 Auth = Callable[[User], dict[str, str]]
 
 FLEET = "/api/day1/upgrades"
+CLUSTERS = "/api/day1/clusters"
 LARK = "ocp4-prod-lark-site1"
 HERZI = "ocp4-prod-herzi-site1"
 
@@ -179,3 +184,54 @@ async def test_an_unreachable_orchestrator_is_502(
     upgrade.unavailable = True
     response = await on.get(FLEET, headers=auth(support.ALICE))
     assert (response.status_code, response.json()["code"]) == (502, "DEPENDENCY_UNAVAILABLE")
+
+
+# ── The clusters list's "Upgrade available" ─────────────────────────────────
+
+
+async def hints(client: httpx.AsyncClient, headers: dict[str, str]) -> dict[str, str | None]:
+    response = await client.get(CLUSTERS, headers=headers)
+    assert response.status_code == 200, response.text
+    return {c["name"]: c["upgrade_available"] for c in response.json()}
+
+
+async def test_off_no_cluster_carries_a_hint(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    listed = await hints(client, auth(support.ALICE))
+    assert listed[LARK] is None
+    assert set(listed.values()) == {None}
+
+
+async def test_on_each_cluster_gets_the_newest_release_its_mce_offers_above_its_mastertag(
+    on: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    listed = await hints(on, auth(support.VIEWER))
+    # ocp4-prod-mce-site1-a hosts 4.16 to 4.18: from 4.18.22 and from 4.16.27 alike
+    assert (listed[LARK], listed[HERZI]) == ("4.18.56", "4.18.56")
+    assert listed["ocp4-prep-eyal-site1"] == "4.21.40"  # 4.20.9; its MCE hosts up to 4.21
+    assert listed["ocp4-prep-wren-site2"] is None  # 4.19.10, newer than its MCE's 4.18
+    assert listed["ocp4-upgrade-demo"] is None  # at the ladder's newest rung
+
+
+async def test_the_hints_need_no_orchestrator(
+    on: httpx.AsyncClient, auth: Auth, support: Any, upgrade: FakeUpgradeWorkflow
+) -> None:
+    upgrade.unavailable = True
+    assert (await hints(on, auth(support.ALICE)))[LARK] == "4.18.56"
+
+
+async def test_an_mce_without_its_upgrade_file_suggests_nothing(
+    on: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    path = RepoPath("upgrade/mces/ocp4-prod-mce-site1-a.yaml")
+    pid = await support.project_id(gitlab, support.DAY1)
+    current = await gitlab.read_file(pid, path, "main")
+    await gitlab.commit(
+        pid,
+        branch="main",
+        message="remove the MCE's rules",
+        changes=[FileChange.delete(path, last_commit_id=current.last_commit_id)],
+    )
+    listed = await hints(on, auth(support.ALICE))
+    assert (listed[LARK], listed["ocp4-prep-eyal-site1"]) == (None, "4.21.40")

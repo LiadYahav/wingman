@@ -3,7 +3,7 @@
 import { Fragment, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, X, FileWarning, Server, TriangleAlert } from "lucide-react";
+import { Plus, Search, X, Server, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { api } from "@/lib/api-client";
@@ -11,8 +11,11 @@ import { day1Api, day1Keys } from "@/lib/api/day1";
 import { useIsAdmin } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
-import { StatusBadge } from "@/components/clusters/status-badge";
-import { ClustersViewTabs, UpgradesView, UpgradingBadge, useClustersView } from "@/components/clusters/fleet-upgrades";
+import { UpgradeFilterGroup } from "@/components/clusters/list/upgrade-filter";
+import { UpgradeState } from "@/components/clusters/list/upgrade-state";
+import { useListUpgrades } from "@/components/clusters/list/use-list-upgrades";
+import { ClusterFlags, ClusterStatusCell, OwnerCell } from "@/components/clusters/list/cells";
+import { FilterPills } from "@/components/clusters/list/filter-pills";
 import { SortIcon } from "@/components/clusters/list/sort-icon";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { IntentLink } from "@/components/common/intent-link";
@@ -20,9 +23,7 @@ import { ProblemList } from "@/components/common/problem-list";
 import { RefreshButton } from "@/components/common/refresh-button";
 import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
-import { liveStatusToPhase } from "@/lib/live-status";
 import { clusterHref, OWNER_KEYS, type OwnerKey } from "@/lib/clusters";
 import { flavorDisplayState } from "@/lib/flavor-state";
 import {
@@ -30,119 +31,14 @@ import {
   type DriftFilter, type GroupBy, type SortDir, type SortField,
 } from "@/components/clusters/list/model";
 import { day2Api, day2Keys } from "@/lib/day2";
-import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftSummaryItem } from "@/types";
+import type { CatalogEntry, ClusterStatus, DestinationCharts, DriftSummaryItem } from "@/types";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
-
-function OwnerCell({ cluster }: { cluster: ClusterStatus }) {
-  const parts = OWNER_KEYS.map((k) => ownerOf(cluster, k));
-  if (parts.every((p) => !p)) return <span className="text-muted-foreground/60 text-xs">—</span>;
-  return (
-    <span className="font-mono text-xs text-muted-foreground whitespace-nowrap" data-testid="cluster-owner">
-      {OWNER_KEYS.map((k, i) => (
-        <Fragment key={k}>
-          {i > 0 && " / "}
-          <span title={`${OWNER_LABEL[k]} ${parts[i] || "not set"}`}>{parts[i] || "—"}</span>
-        </Fragment>
-      ))}
-    </span>
-  );
-}
-
-/** A flag whose tooltip lists why: its trigger takes the remaining props. */
-function FlagTooltip({ title, problems, ...trigger }: { title: string; problems: string[] } & React.ComponentProps<typeof TooltipTrigger>) {
-  return (
-    <Tooltip>
-      <TooltipTrigger {...trigger} />
-      <TooltipContent className="max-w-sm">
-        <p className="font-medium mb-1">{title}</p>
-        <ul className="list-disc pl-4 space-y-0.5">{problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/** Off-convention names and unreadable files are flagged in place, never hidden. */
-function ClusterFlags({ cluster }: { cluster: ClusterStatus }) {
-  const offConvention = !cluster.naming.follows_convention;
-  const unreadable = cluster.problems.length > 0;
-  if (!offConvention && !unreadable) return null;
-  return (
-    <TooltipProvider>
-      {unreadable && (
-        <FlagTooltip
-          title="The cluster file does not parse"
-          problems={cluster.problems}
-          data-testid="cluster-unreadable"
-          className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium bg-status-error/10 text-status-error-fg cursor-default"
-        >
-          <FileWarning className="h-3 w-3" />Unreadable
-        </FlagTooltip>
-      )}
-      {offConvention && (
-        <FlagTooltip
-          title="Off the naming convention"
-          problems={cluster.naming.problems}
-          data-testid="cluster-off-convention"
-          aria-label="Name does not follow the naming convention"
-          className="inline-flex items-center text-status-warning cursor-default"
-        >
-          <TriangleAlert className="h-3.5 w-3.5" />
-        </FlagTooltip>
-      )}
-    </TooltipProvider>
-  );
-}
-
-function ClusterStatusCell({
-  cluster,
-  status,
-  statusOff,
-  isLoading,
-  failed,
-}: {
-  cluster: ClusterStatus;
-  status: ClusterLiveStatus | undefined;
-  statusOff: boolean;
-  isLoading: boolean;
-  failed: boolean;
-}) {
-  if (isLoading) return <Skeleton className="h-5 w-16" />;
-  if (!status) {
-    const reason = statusOff
-      ? "Live status is off in this deployment"
-      : failed
-      ? "Live status could not be read"
-      : "No live status for this cluster";
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger className="text-muted-foreground/60 text-xs cursor-default">—</TooltipTrigger>
-          <TooltipContent>{reason}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
-  const errorMsg = status.error ?? status.hc_problems[0];
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger>
-          <IntentLink href={clusterHref(cluster)}>
-            <StatusBadge phase={liveStatusToPhase(status)} />
-          </IntentLink>
-        </TooltipTrigger>
-        {errorMsg && <TooltipContent className="max-w-xs">{errorMsg}</TooltipContent>}
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
 
 // eslint-disable-next-line max-lines-per-function -- size baseline (ADR-0056)
 export default function ClustersPage() {
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
-  const view = useClustersView();
 
   // Filter / sort / pagination state
   const [search, setSearch] = useState("");
@@ -162,6 +58,7 @@ export default function ClustersPage() {
   });
 
   const { data: liveStatuses, isLoading: statusLoading, isError: statusFailed } = useBulkStatus(clusters);
+  const upgrades = useListUpgrades(clusters);
 
   const { data: driftSummary, isError: driftFailed } = useQuery<DriftSummaryItem[]>({
     queryKey: day1Keys.clusters.driftSummary,
@@ -270,6 +167,7 @@ export default function ClustersPage() {
       const wanted = ownerFilter[key];
       if (wanted !== null) list = list.filter((c) => ownerOf(c, key) === (wanted === NO_OWNER ? "" : wanted));
     }
+    list = list.filter(upgrades.matches);
 
     return [...list].sort((a, b) => {
       // Grouped: the group first, then the chosen order within it
@@ -280,7 +178,7 @@ export default function ClustersPage() {
       const cmp = compareBy(sortField, a, b);
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [clusters, search, siteFilter, driftFilter, ownerFilter, groupBy, sortField, sortDir, driftOf]);
+  }, [clusters, search, siteFilter, driftFilter, ownerFilter, groupBy, sortField, sortDir, driftOf, upgrades.matches]);
 
   /** How many filtered clusters each group has, for its heading (a group can span pages). */
   const groupSizes = useMemo(
@@ -301,7 +199,7 @@ export default function ClustersPage() {
   }
 
   function clearFilters() {
-    setSearch(""); setSiteFilter("all"); setDriftFilter("all"); setOwnerFilter({ merkaz: null, anaf: null, mador: null }); setPage(1);
+    setSearch(""); setSiteFilter("all"); setDriftFilter("all"); setOwnerFilter({ merkaz: null, anaf: null, mador: null }); upgrades.setFilter("all"); setPage(1);
   }
 
   const setOwner = (key: OwnerKey, value: string | null) => {
@@ -309,8 +207,8 @@ export default function ClustersPage() {
     setPage(1);
   };
 
-  const hasActiveFilters =
-    search || siteFilter !== "all" || driftFilter !== "all" || OWNER_KEYS.some((k) => ownerFilter[k] !== null);
+  const hasActiveFilters = search || siteFilter !== "all" || driftFilter !== "all" || upgrades.filter !== "all" ||
+    OWNER_KEYS.some((k) => ownerFilter[k] !== null);
   const hasOwners = (clusters ?? []).some((c) => OWNER_KEYS.some((k) => ownerOf(c, k)));
   const columns = 8;
   const statusOff = liveStatuses === null;
@@ -321,7 +219,6 @@ export default function ClustersPage() {
     </button>
   );
 
-  if (view === "upgrades") return <UpgradesView />;
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-4 animate-in fade-in duration-300">
       {/* Header */}
@@ -353,7 +250,6 @@ export default function ClustersPage() {
           )}
         </div>
       </div>
-      <ClustersViewTabs />
 
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -369,43 +265,22 @@ export default function ClustersPage() {
         </div>
 
         {sites.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium">Site:</span>
-            {["all", ...sites].map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilter(setSiteFilter)(siteFilter === s && s !== "all" ? "all" : s)}
-                className={cn(
-                  "rounded-full px-2.5 py-1 text-xs font-medium transition-all border",
-                  siteFilter === s
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-                )}
-              >{s === "all" ? "All" : s}</button>
-            ))}
-          </div>
+          <FilterPills
+            label="Site"
+            pills={["all", ...sites].map((s) => ({ value: s, label: s === "all" ? "All" : s }))}
+            value={siteFilter}
+            onChange={(s) => setFilter(setSiteFilter)(siteFilter === s && s !== "all" ? "all" : s)}
+          />
         )}
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-muted-foreground font-medium">Drift:</span>
-          {DRIFT_FILTERS.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setFilter(setDriftFilter)(value)}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all border",
-                driftFilter === value
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-              )}
-            >
-              {label}
-              {value !== "all" && clusters && (
-                <span className="tabular-nums opacity-70">{driftCounts[value]}</span>
-              )}
-            </button>
-          ))}
-        </div>
+        <FilterPills
+          label="Drift"
+          pills={DRIFT_FILTERS.map((f) => ({ ...f, count: f.value !== "all" && clusters ? driftCounts[f.value] : undefined }))}
+          value={driftFilter}
+          onChange={setFilter(setDriftFilter)}
+        />
+
+        <UpgradeFilterGroup upgrades={upgrades} onFilter={setFilter(upgrades.setFilter)} />
 
         {hasOwners && (
           <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Owner filters">
@@ -545,8 +420,9 @@ export default function ClustersPage() {
                             <td className="px-3 py-3">
                               <OwnerCell cluster={cluster} />
                             </td>
-                            <td className="px-3 py-3 whitespace-nowrap font-mono text-xs text-muted-foreground">
-                              {cluster.mastertag ?? "—"}<UpgradingBadge name={cluster.name} />
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              <p className="font-mono text-xs text-muted-foreground">{cluster.mastertag ?? "—"}</p>
+                              <UpgradeState cluster={cluster} upgrade={upgrades.stateOf(cluster)} isAdmin={isAdmin} />
                             </td>
                             <td className="px-3 py-3">
                               {cluster.spec_name ? (

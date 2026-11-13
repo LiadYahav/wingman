@@ -533,7 +533,7 @@ function row(name: string, owner: Record<string, string>): ClusterStatus {
     path: `sites/${SITE}/mces/${MCE}/hostedClusters/${name}.yaml`,
     hosted_cluster: { cluster_name: short, name: `openshift-${short}`, namespace: `hcp-${short}` },
     naming: { follows_convention: true, env: "prod", short_name: "x", sequence: null, problems: [] },
-    owner, problems: [],
+    owner, problems: [], upgrade_available: null,
   };
 }
 

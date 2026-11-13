@@ -10,6 +10,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
+import { withStartedRun } from "@/lib/fleet-upgrades";
 import { isOpen } from "@/lib/upgrade";
 import type {
   ErrorCode,
@@ -101,12 +102,22 @@ function useRunUpdates(name: string) {
   };
 }
 
-/** `POST /clusters/{name}/upgrade{where}`: day1 adds the cluster and who asked. Never retried. */
+/**
+ * `POST /clusters/{name}/upgrade{where}`: day1 adds the cluster and who asked.
+ * Never retried. The started run shows at once on the cluster page and in the
+ * clusters list ("Upgrading"), until the next read of each.
+ */
 export function useStartUpgrade(name: string, where: string) {
   const updates = useRunUpdates(name);
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: StartUpgradeRequest) => day1Api.clusters.startUpgrade(name, where, body),
-    onSuccess: (run) => updates.show(run),
+    onSuccess: (run) => {
+      updates.show(run);
+      queryClient.setQueryData<FleetUpgradesRead>(day1Keys.clusters.upgrades, (read) =>
+        read?.state === "on" ? { state: "on", runs: withStartedRun(read.runs, run, new Date().toISOString()) } : read
+      );
+    },
     onError: updates.refreshIfStale,
   });
 }
@@ -134,9 +145,9 @@ export function useUpgradeActionDecision(name: string, where: string) {
 }
 
 /**
- * Every cluster's newest upgrade run, for the Clusters page's Upgrades view
- * and its "Upgrading" badges, which share this one query (ADR-0055's
- * amendment). Upgrades off (501 FEATURE_DISABLED): the page shows neither.
+ * Every cluster's newest upgrade run, for the clusters list's "Upgrading"
+ * rows and its Upgrades filter, which share this one query (ADR-0055's
+ * amendments). Upgrades off (501 FEATURE_DISABLED): the list shows neither.
  */
 export function useFleetUpgrades() {
   return useQuery<FleetUpgradesRead>({

@@ -169,7 +169,7 @@ test.describe("Upgrade a cluster through the upgrade-cluster workflow", () => {
     await dialog.getByTestId("upgrade-target").filter({ hasText: "4.18.56" }).click();
     await dialog.getByTestId("upgrade-start").click();
     await expect(dialog).toHaveCount(0);
-    expect(starts).toEqual([{ target_version: "4.18.56" }]);
+    await expect.poll(() => starts).toEqual([{ target_version: "4.18.56" }]);
     await expect(page.getByTestId("upgrade-panel")).toBeVisible();
     await expect(page.getByTestId("upgrade-phase")).toHaveText("Starting");
     await expect(page.getByTestId("upgrade-action")).toHaveCount(0);
@@ -203,7 +203,7 @@ test.describe("Upgrade a cluster through the upgrade-cluster workflow", () => {
     await panel.getByTestId("upgrade-decision-approve").click();
     await page.getByTestId("upgrade-decision-submit").click();
     await expect(page.getByTestId("upgrade-decision-dialog")).toHaveCount(0);
-    expect(upgrades.writes).toEqual([{ path: `/api/day1/clusters/${LARK}/upgrade-run/approve`, body: {} }]);
+    await expect.poll(() => upgrades.writes).toEqual([{ path: `/api/day1/clusters/${LARK}/upgrade-run/approve`, body: {} }]);
     await expect(panel.getByTestId("upgrade-phase")).toHaveText("Control plane step");
     await expect(panel.getByTestId("upgrade-step").first()).toHaveAttribute("data-state", "current");
     await expect(panel.getByTestId("upgrade-decisions").getByRole("button")).toHaveText(["Pause", "Abort"]);
@@ -241,7 +241,10 @@ test.describe("Upgrade a cluster through the upgrade-cluster workflow", () => {
     await page.getByTestId("upgrade-decision-reason").fill("  wrong target  ");
     await expect(submit).toBeEnabled();
     await submit.click();
-    expect(upgrades.writes).toEqual([{ path: `/api/day1/clusters/${LARK}/upgrade-run/abort`, body: { reason: "wrong target" } }]);
+    // The click does not wait for the request: poll until the route has seen it
+    await expect.poll(() => upgrades.writes).toEqual([
+      { path: `/api/day1/clusters/${LARK}/upgrade-run/abort`, body: { reason: "wrong target" } },
+    ]);
     const panel = page.getByTestId("upgrade-panel");
     await expect(panel.getByTestId("upgrade-phase")).toHaveText("Cancelled");
     await expect(panel.getByTestId("upgrade-outcome")).toContainText("0 of 2 steps ran");

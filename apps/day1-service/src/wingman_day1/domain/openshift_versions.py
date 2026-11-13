@@ -198,6 +198,22 @@ def versions_for(mce: str, ladder: Ladder, hosted: HostedMinors) -> OpenShiftVer
     return OpenShiftVersions(mce, tuple(versions), tuple(problems))
 
 
+def upgrade_hint(mastertag: str | None, offered: OpenShiftVersions) -> str | None:
+    """The clusters list's "Upgrade available → <version>" (ADR-0055's 3.20.0 amendment).
+
+    The newest release ``offered`` (what a new cluster on the MCE may use)
+    that is newer than ``mastertag``; ``None`` when there is none, or when
+    ``mastertag`` is missing or not a release. A suggestion only: it says a
+    newer version is offered on this MCE, nothing about the path. The
+    upgrade-cluster workflow plans that, and may offer other targets or none.
+    """
+    if mastertag is None or not is_release(mastertag):
+        return None
+    current = _order(bare_release(mastertag))
+    newer = [release for release in offered.versions if _order(release) > current]
+    return max(newer, key=_order) if newer else None
+
+
 def unhostable_problems(version: str, offered: OpenShiftVersions) -> list[str]:
     """Why ``version`` cannot be a new cluster's release on ``offered.mce``; empty when it can."""
     if bare_release(version) in offered.versions:

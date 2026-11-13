@@ -25,6 +25,7 @@ function cluster(name: string): ClusterStatus {
     naming: { follows_convention: true, env: "prod", short_name: "x", sequence: null, problems: [] },
     owner: { merkaz: "1234", anaf: "56", mador: "7" },
     problems: [],
+    upgrade_available: null,
   };
 }
 

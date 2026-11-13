@@ -1,32 +1,38 @@
 /**
- * The Clusters page's Upgrades view and its "Upgrading" badges (mocked;
- * ADR-0055's amendment, docs/notes/2026-11-13-upgrade-cluster-workflow-api.md
- * §3): every cluster's newest upgrade run from one day1 read, its status, the
- * workflow's phase made readable, `waiting_for` short with the whole text in
- * a tooltip, and when it started. Each row opens its cluster's page, where the
- * decisions are. Upgrades off: neither the view nor a badge.
+ * Upgrades in the clusters list (mocked; ADR-0055's amendments,
+ * docs/notes/2026-11-13-upgrade-cluster-workflow-api.md §3-4): each row's
+ * state under its mastertag, "Upgrading · <phase>" with `waiting_for` in a
+ * tooltip, or "Upgrade available → <version>" from day1's
+ * `upgrade_available`; an admin's Upgrade on the row opens the cluster page's
+ * dialog, without leaving the list; the Upgrades filter, kept in the URL.
+ * No separate Upgrades view any more. Upgrades off: nothing of them.
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
-import type { ClusterStatus, FleetUpgrade } from "../../types";
+import type { ClusterStatus, FleetUpgrade, UpgradeRun, UpgradeTargets } from "../../types";
 
 const SITE = "site1";
 const MCE = "ocp4-prod-mce-site1-a";
 const LARK = "ocp4-prod-lark-site1";
 const OWL = "ocp4-prod-owl-site1";
 const HAWK = "ocp4-prod-hawk-site1";
+const HERON = "ocp4-prod-heron-site1";
 const LONG_WAIT =
   "continue, once the customer's readiness checks after the last step pass: prod-lark-site1-dell-r760-site1-64c-512gb-20tb rolls next";
 
-const cluster = (name: string): ClusterStatus => ({
+const cluster = (name: string, upgrade_available: string | null): ClusterStatus => ({
   name, site: SITE, mce: MCE, phase: "Unknown", spec_name: null, spec_version: null, created_by: "alice",
   created_at: "2026-11-07T10:00:00+00:00", mastertag: "4.18.22-x86_64",
   path: `sites/${SITE}/mces/${MCE}/hostedClusters/${name}.yaml`,
   hosted_cluster: { cluster_name: name.replace(/^ocp4-/, ""), name: name, namespace: `hcp-${name}` },
   naming: { follows_convention: true, env: "prod", short_name: "x", sequence: null, problems: [] },
-  owner: { merkaz: "1", anaf: "2", mador: "3" }, problems: [],
+  owner: { merkaz: "1", anaf: "2", mador: "3" }, problems: [], upgrade_available,
 });
+
+/** LARK is upgrading (its MCE offers newer too), OWL and HAWK could be, HERON is up to date. */
+const CLUSTERS = [cluster(LARK, "4.18.56"), cluster(OWL, "4.18.56"), cluster(HAWK, "4.18.56"), cluster(HERON, null)];
+const OFF = CLUSTERS.map((c) => ({ ...c, upgrade_available: null }));
 
 const fleetRun = (name: string, overrides: Partial<FleetUpgrade> = {}): FleetUpgrade => ({
   workflow_id: `upgrade-cluster-${name}`, cluster: name, site: SITE, mce: MCE, status: "running",
@@ -34,102 +40,162 @@ const fleetRun = (name: string, overrides: Partial<FleetUpgrade> = {}): FleetUpg
   phase: "awaiting-continue", waiting_for: LONG_WAIT, paused: false, outcome: null, ...overrides,
 });
 
+/** LARK's upgrade is open; HAWK's was cancelled, so HAWK may be upgraded again. */
 const RUNS: FleetUpgrade[] = [
   fleetRun(LARK),
-  fleetRun(OWL, { phase: "awaiting-approval", waiting_for: "approve: 4.18.22 → 4.18.56 in 2 steps" }),
   fleetRun(HAWK, { status: "completed", phase: null, waiting_for: null, outcome: "cancelled", closed_at: new Date().toISOString() }),
-  fleetRun("ocp4-prod-gone-site1", { site: null, mce: null, status: "failed", phase: null, waiting_for: null }),
 ];
 
-/** The clusters list with upgrades on and `runs` (or `answer`, any route handler); returns how often it was read. */
+const TARGETS = (name: string, versions: string[]): UpgradeTargets => ({
+  cluster: name, mce: MCE, mce_version: "2.8.2", control_plane_version: "4.18.22",
+  supported_minors: ["4.18", "4.17", "4.16"], ladder_revision: "3f2a9c1", verified_against_graph: "2026-10-31",
+  targets: versions.map((version) => ({ version, minor: "4.18", steps: 1, control_plane_steps: 1, newest_in_minor: true, must: true })),
+  nodepools: [], nodepool_order: [],
+});
+
+/**
+ * The clusters list with upgrades on: `runs` (or `fleet`, any route handler)
+ * from `GET /upgrades`, the workflow's targets per cluster, and a start that
+ * adds its run to the list. Returns the starts sent.
+ */
 async function openClusters(
   page: Page,
-  { runs = RUNS, answer, viewer = false, path = "/clusters" }: { runs?: FleetUpgrade[]; answer?: (route: Route) => Promise<void>; viewer?: boolean; path?: string } = {}
+  { runs = RUNS, fleet, viewer = false, path = "/clusters", clusters = CLUSTERS }:
+    { runs?: FleetUpgrade[]; fleet?: (route: Route) => Promise<void>; viewer?: boolean; path?: string; clusters?: ClusterStatus[] } = {}
 ) {
-  const reads = { count: 0 };
+  const listed = [...runs];
+  const starts: { cluster: string; body: unknown }[] = [];
   await injectAdminAuth(page);
   if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
-  await page.route("**/api/day1/clusters", (r) => json(r, [LARK, OWL, HAWK].map(cluster)));
-  await page.route("**/api/day1/upgrades", (route) => {
-    reads.count += 1;
-    return answer ? answer(route) : json(route, { runs });
+  await page.route("**/api/day1/clusters", (r) => json(r, clusters));
+  await page.route("**/api/day1/upgrades", (route) => (fleet ? fleet(route) : json(route, { runs: listed })));
+  await page.route(/\/api\/day1\/clusters\/[^/]+\/upgrade-targets(\?.*)?$/, (route) => {
+    const name = new URL(route.request().url()).pathname.split("/")[4];
+    return json(route, TARGETS(name, name === OWL ? [] : ["4.18.56", "4.18.40"]));
+  });
+  await page.route(/\/api\/day1\/clusters\/[^/]+\/upgrade(\?.*)?$/, (route) => {
+    const name = new URL(route.request().url()).pathname.split("/")[4];
+    starts.push({ cluster: name, body: route.request().postDataJSON() });
+    const started = { workflow_id: `upgrade-cluster-${name}`, cluster: name, status: "running", phase: null, waiting_for: null,
+      mce: null, paused: false, outcome: null } as UpgradeRun;
+    listed.unshift(fleetRun(name, { phase: "planning", waiting_for: null }));
+    return json(route, started, 202);
   });
   await go(page, path);
-  return reads;
+  return starts;
 }
 
-const tabs = (page: Page) => page.getByRole("tablist", { name: "Clusters views" });
+const row = (page: Page, name: string) => page.getByTestId(`cluster-row-${name}`);
+const tooltip = (page: Page) => page.locator("[data-slot=tooltip-content][data-open]");
 
-test.describe("The Clusters page's Upgrades view", () => {
-  test("upgrades off: no Upgrades tab and no badge", async ({ page }) => {
+test.describe("Upgrades in the clusters list", () => {
+  test("upgrades off: no state, no Upgrade, no filter, and no Upgrades view", async ({ page }) => {
     await injectAdminAuth(page);
     await mockDashboardApis(page);
-    await page.route("**/api/day1/clusters", (r) => json(r, [cluster(LARK)]));
-    await go(page, "/clusters");
-    await expect(page.getByTestId(`cluster-row-${LARK}`)).toBeVisible();
-    await expect(tabs(page)).toHaveCount(0);
+    await page.route("**/api/day1/clusters", (r) => json(r, OFF));
+    await go(page, "/clusters#upgrades");
+    await expect(row(page, LARK)).toBeVisible();
     await expect(page.getByTestId("cluster-upgrading")).toHaveCount(0);
+    await expect(page.getByTestId("cluster-upgrade-available")).toHaveCount(0);
+    await expect(page.getByTestId("row-upgrade-action")).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Upgrades filters" })).toHaveCount(0);
+    await expect(page.getByRole("tablist")).toHaveCount(0);
   });
 
-  test("the list badges each cluster whose upgrade is open, and the badge says where it is", async ({ page }) => {
-    await openClusters(page);
-    await expect(page.getByTestId(`cluster-row-${LARK}`).getByTestId("cluster-upgrading")).toHaveText("Upgrading");
-    await expect(page.getByTestId(`cluster-row-${OWL}`).getByTestId("cluster-upgrading")).toBeVisible();
-    await expect(page.getByTestId(`cluster-row-${HAWK}`).getByTestId("cluster-upgrading")).toHaveCount(0);
-    await page.getByTestId(`cluster-row-${OWL}`).getByTestId("cluster-upgrading").hover();
-    await expect(page.locator("[data-slot=tooltip-content][data-open]")).toContainText("Awaiting approval");
-    await expect(page.getByTestId("upgrades-open-count")).toHaveText("2");
-  });
-
-  test("lists every cluster's run, open first, in the workflow's words, and links each to its cluster", async ({ page }) => {
-    await openClusters(page);
-    await tabs(page).getByRole("tab", { name: /Upgrades/ }).click();
-    await expect(page).toHaveURL(/\/clusters#upgrades$/);
-    const rows = page.getByTestId("fleet-upgrade-row");
-    await expect(rows).toHaveCount(4);
-    await expect(page.getByTestId("fleet-upgrades-summary")).toHaveText("2 upgrading · 4 clusters with a run");
-    const lark = page.locator(`[data-cluster="${LARK}"]`);
-    await expect(lark.getByTestId("fleet-upgrade-status")).toHaveText("running");
-    await expect(lark.getByTestId("fleet-upgrade-phase")).toHaveText("Awaiting continue");
-    const waiting = lark.getByTestId("fleet-upgrade-waiting");
-    await expect(waiting).toContainText("…");
-    await waiting.hover();
-    await expect(page.locator("[data-slot=tooltip-content][data-open]")).toHaveText(LONG_WAIT);
-    await expect(lark).toContainText("12 min ago");
-    await expect(page.locator(`[data-cluster="${HAWK}"]`).getByTestId("fleet-upgrade-phase")).toHaveText("Cancelled");
-    await expect(page.locator('[data-cluster="ocp4-prod-gone-site1"]')).toContainText("not in this day1 repo");
-    await expect(page.getByTestId("upgrade-decisions")).toHaveCount(0);
-    await expect(lark.getByRole("link", { name: LARK })).toHaveAttribute("href", `/clusters/${LARK}?site=${SITE}&mce=${MCE}`);
-  });
-
-  test("Back from the Upgrades view returns to the list, and #upgrades opens it", async ({ page }) => {
+  test("the separate Upgrades view is gone: #upgrades is the clusters list", async ({ page }) => {
     await openClusters(page, { path: "/clusters#upgrades" });
-    await expect(page.getByTestId("fleet-upgrade-row")).toHaveCount(4);
-    await tabs(page).getByRole("tab", { name: "Clusters" }).click();
-    await expect(page.getByTestId(`cluster-row-${LARK}`)).toBeVisible();
-    await page.goBack();
-    await expect(page.getByTestId("fleet-upgrade-row")).toHaveCount(4);
+    await expect(row(page, LARK)).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "Clusters views" })).toHaveCount(0);
+    await expect(page.getByTestId("fleet-upgrade-row")).toHaveCount(0);
   });
 
-  test("a viewer reads it too", async ({ page }) => {
-    await openClusters(page, { viewer: true, path: "/clusters#upgrades" });
-    await expect(page.getByTestId("fleet-upgrade-row")).toHaveCount(4);
+  test("an upgrading row shows the phase, waiting_for in its tooltip, and opens its cluster", async ({ page }) => {
+    await openClusters(page);
+    const upgrading = row(page, LARK).getByTestId("cluster-upgrading");
+    await expect(upgrading).toHaveText("Upgrading · Awaiting continue");
+    await expect(row(page, LARK).getByTestId("cluster-upgrade-available")).toHaveCount(0);
+    await expect(upgrading).toHaveAttribute("href", `/clusters/${LARK}?site=${SITE}&mce=${MCE}`);
+    await upgrading.hover();
+    await expect(tooltip(page)).toContainText(LONG_WAIT);
+    await expect(tooltip(page)).toContainText("the decisions");
+    await expect(page.getByTestId("upgrade-decisions")).toHaveCount(0);
   });
 
-  test("no runs: the view says so and how one starts", async ({ page }) => {
-    await openClusters(page, { runs: [], path: "/clusters#upgrades" });
-    await expect(page.getByTestId("fleet-upgrades-empty")).toContainText("Upgrade on a cluster's Mastertag row");
-    await expect(page.getByTestId("upgrades-open-count")).toHaveCount(0);
+  test("a newer release on the MCE is suggested, and only that; up to date stays quiet", async ({ page }) => {
+    await openClusters(page);
+    const hint = row(page, OWL).getByTestId("cluster-upgrade-available");
+    await expect(hint).toHaveText("Upgrade available → 4.18.56");
+    // A finished run frees the cluster: HAWK is suggested again
+    await expect(row(page, HAWK).getByTestId("cluster-upgrade-available")).toBeVisible();
+    await expect(row(page, HAWK).getByTestId("cluster-upgrading")).toHaveCount(0);
+    await expect(row(page, HERON).getByTestId("cluster-upgrade-available")).toHaveCount(0);
+    await expect(row(page, HERON).getByTestId("row-upgrade-action")).toHaveCount(0);
+    await hint.hover();
+    await expect(tooltip(page)).toContainText(`MCE ${MCE} offers OpenShift 4.18.56, newer than this cluster's 4.18.22-x86_64`);
+    await expect(tooltip(page)).toContainText("may offer other targets, or none");
   });
 
-  test("an orchestrator that does not answer is shown, not an empty list", async ({ page }) => {
+  test("Upgrade on a row opens the cluster page's dialog in place; once started the row is Upgrading", async ({ page }) => {
+    const starts = await openClusters(page);
+    await row(page, HAWK).getByTestId("row-upgrade-action").click();
+    const dialog = page.getByTestId("upgrade-dialog");
+    await expect(dialog).toContainText(`Upgrade ${HAWK}`);
+    await expect(dialog.getByTestId("upgrade-target")).toHaveCount(2);
+    await dialog.getByTestId("upgrade-target").filter({ hasText: "4.18.56" }).click();
+    await dialog.getByTestId("upgrade-start").click();
+    await expect(dialog).toHaveCount(0);
+    await expect.poll(() => starts).toEqual([{ cluster: HAWK, body: { target_version: "4.18.56" } }]);
+    await expect(page).toHaveURL(/\/clusters$/);
+    await expect(row(page, HAWK).getByTestId("cluster-upgrading")).toContainText("Upgrading");
+    await expect(row(page, HAWK).getByTestId("row-upgrade-action")).toHaveCount(0);
+  });
+
+  test("when the workflow then offers nothing, the dialog says so", async ({ page }) => {
+    await openClusters(page);
+    await row(page, OWL).getByTestId("row-upgrade-action").click();
+    await expect(page.getByTestId("upgrade-targets-empty")).toHaveText("Nothing newer to offer.");
+    await expect(page.getByTestId("upgrade-start")).toHaveCount(0);
+  });
+
+  test("a viewer sees the suggestion and the state, with no Upgrade", async ({ page }) => {
+    await openClusters(page, { viewer: true });
+    await expect(row(page, OWL).getByTestId("cluster-upgrade-available")).toBeVisible();
+    await expect(row(page, LARK).getByTestId("cluster-upgrading")).toBeVisible();
+    await expect(page.getByTestId("row-upgrade-action")).toHaveCount(0);
+  });
+
+  test("the Upgrades filter counts and filters each state, and is kept in the URL", async ({ page }) => {
+    await openClusters(page);
+    await expect(page.getByTestId("upgrade-filter-available")).toHaveText(/^Upgrade available\s*2$/);
+    await expect(page.getByTestId("upgrade-filter-upgrading")).toHaveText(/^Upgrading\s*1$/);
+
+    await page.getByTestId("upgrade-filter-upgrading").click();
+    await expect(page).toHaveURL(/\/clusters\?upgrade=upgrading$/);
+    await expect(page.locator("[data-testid^=cluster-row-]")).toHaveCount(1);
+    await expect(row(page, LARK)).toBeVisible();
+
+    await page.getByTestId("upgrade-filter-available").click();
+    await expect(page).toHaveURL(/\/clusters\?upgrade=available$/);
+    await expect(page.locator("[data-testid^=cluster-row-]")).toHaveCount(2);
+    await page.reload();
+    await expect(page.getByTestId("upgrade-filter-available")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("[data-testid^=cluster-row-]")).toHaveCount(2);
+    await expect(row(page, HERON)).toHaveCount(0);
+
+    await page.getByText("Clear filters").click();
+    await expect(page).toHaveURL(/\/clusters$/);
+    await expect(page.locator("[data-testid^=cluster-row-]")).toHaveCount(4);
+  });
+
+  test("runs the orchestrator can't list: the suggestions stay, and the filter says why", async ({ page }) => {
     await openClusters(page, {
-      path: "/clusters#upgrades",
-      answer: (route) => fulfillProblem(route, 502, "DEPENDENCY_UNAVAILABLE", "the orchestrator is unreachable listing upgrade runs"),
+      fleet: (route) => fulfillProblem(route, 502, "DEPENDENCY_UNAVAILABLE", "the orchestrator is unreachable listing upgrade runs"),
     });
-    await expect(page.getByText("The upgrade runs could not be read")).toBeVisible();
-    await expect(page.getByText("the orchestrator is unreachable listing upgrade runs")).toBeVisible();
-    await expect(page.getByTestId("fleet-upgrades-empty")).toHaveCount(0);
+    await expect(row(page, LARK).getByTestId("cluster-upgrade-available")).toBeVisible();
+    await expect(page.getByTestId("cluster-upgrading")).toHaveCount(0);
+    await expect(page.getByTestId("upgrade-runs-unknown")).toHaveAccessibleDescription(
+      /could not be read, so no cluster shows Upgrading: the orchestrator is unreachable/
+    );
   });
 });

@@ -46,6 +46,7 @@ from wingman_day1.api.v1.schemas import (
 )
 from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.clusters import CreateCluster
+from wingman_day1.application.upgrades import upgrade_hints
 from wingman_day1.domain.errors import Day1Error
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.placement import Choice
@@ -99,8 +100,13 @@ async def _ref(context: Context, name: str, site: str | None, mce: str | None) -
 
 @router.get("")
 async def list_clusters(context: Context, user: CurrentUser) -> list[ClusterStatusOut]:
-    """Every cluster file; off-convention and unparsable files are flagged, not hidden."""
-    return [ClusterStatusOut.of(c) for c in await context.clusters.clusters()]
+    """Every cluster file; off-convention and unparsable files are flagged, not hidden.
+
+    While upgrades are on, each says the newer release its MCE offers, if any.
+    """
+    clusters = await context.clusters.clusters()
+    hints = await upgrade_hints(context.sites, clusters) if context.upgrades is not None else {}
+    return [ClusterStatusOut.of(c, upgrade_available=hints.get(c.ref)) for c in clusters]
 
 
 @router.get("/drift-summary")

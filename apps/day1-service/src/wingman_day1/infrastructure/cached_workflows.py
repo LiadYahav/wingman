@@ -3,7 +3,7 @@
 A cluster's nodes need the fleet's newest uninstall runs (one list) and, for
 the nodes that have one, the run itself (its step and error); Inventory
 Management the newest add-server runs and their phases (ADR-0057); the
-Clusters page's Upgrades view the newest upgrade runs (ADR-0055). All are
+clusters list's "Upgrading" rows the newest upgrade runs (ADR-0055). All are
 cached for a short TTL per replica (ADR-0011). Starting a run clears that
 workflow's reads, whatever the answer, so the next read sees the run if it
 exists. A failure is not cached.

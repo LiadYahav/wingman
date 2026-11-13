@@ -323,7 +323,7 @@ class UpgradeDecisionOut(BaseModel):
 
 
 class FleetUpgradeOut(BaseModel):
-    """One cluster's newest upgrade run, for the Clusters page's Upgrades view."""
+    """One cluster's newest upgrade run, for the clusters list's "Upgrading" rows."""
 
     workflow_id: str
     cluster: str
