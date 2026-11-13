@@ -48,7 +48,7 @@ Wingman becomes the platform team's one place to work from:
 | 18 | Wingman may reuse whatever it needs from server-scan, segments-manager and cluster-navigator | Their repositories are public, as Wingman's is |
 | 19 | MCE placement is built first, after the day2 and import PRs | With the per-MCE API address it needs |
 | 21 | **Small blast radius: a change reaches each cluster through its own MR, and the customer takes it when ready.** One concept, not two features | A new flavor version opens one MR per linked cluster, **automatically**, and each customer merges theirs when comfortable. A cluster is measured against its own flavor version, so a newer version is "update available", never "out of sync". Import uses the same engine |
-| 20 | A **Quick Links** page in the sidebar: a launcher in the style of the team's homepage dashboard | Every ArgoCD (the hub's, each MCE's at `openshift-gitops-server-openshift-gitops.apps.<cluster>.<domain>`), each cluster's console, and the team's other links, with their status |
+| 20 | A **Quick Links** page in the sidebar: a launcher in the style of the team's homepage dashboard | Every ArgoCD (the hub's, each MCE's at `openshift-gitops-server-openshift-gitops.apps.<cluster>.<domain>`), each cluster's console, and the team's other links, with their status (the status: dropped 2026-11-13, ADR-0052's amendment) |
 
 ## What this changes in Wingman's rules
 
@@ -424,7 +424,8 @@ on it.
 
 Decision 20, modelled on the team's homepage dashboard (gethomepage): cards
 in sections, each with an icon, a description, a status dot and, where it
-has one, a live widget.
+has one, a live widget. (2026-11-13: the dots and the widgets are dropped,
+ADR-0052's amendment: Wingman lists the links and never calls them.)
 
 - **Generated from what Wingman knows:**
   - the hub Wingman runs on: its ArgoCD and console;
@@ -440,10 +441,10 @@ has one, a live widget.
   and an icon.
 - **Icons ship with Wingman** (no CDN in the air gap). Brand icons come from
   a permissive set, and the rest from the icon library Wingman already uses.
-- **Status**: Wingman's backend checks each URL on a timer with a short
+- *Dropped 2026-11-13 (ADR-0052's amendment).* **Status**: Wingman's backend checks each URL on a timer with a short
   timeout and caches the answer: up, down or unknown. The browser never pings
   them, because of CORS and the many origins.
-- **Widgets**: where an ArgoCD instance has a read-only token configured
+- *Dropped 2026-11-13 (ADR-0052's amendment).* **Widgets**: where an ArgoCD instance has a read-only token configured
   (a Secret map of instance to token), its card shows the applications'
   sync and health counts (synced, out of sync, healthy, degraded). Without a
   token the card is a link with a status dot.
