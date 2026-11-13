@@ -317,7 +317,6 @@ def build_context(
     day1_writer = MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
     provisioner = GitClusterProvisioner(day1_writer)
     rollout_writer = GitRolloutMergeRequests(gitlab, day1, day1_writer)
-    # server-scan's fleet rows, one cache for the nodes view, placement and Inventory
     inventory = (
         CachedServerInventory(adapters.inventory, cache, ttl=ttl)
         if adapters.inventory is not None
@@ -448,10 +447,11 @@ def build_context(
         placement=placement,
         quick_links=quick_links,
         segments=segments_service(adapters.ledger, cache, cluster_service, ttl=ttl),
-        upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service),
+        upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service, cache),
         inventory=inventory_service(
             settings,
             site_catalog,
+            cluster_service,
             inventory=inventory,
             infra_envs=infra_env_hub,
             workflows=adapters.add_server,

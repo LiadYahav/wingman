@@ -1,10 +1,10 @@
-"""``/api/day1/clusters/{name}/upgrade*``: a cluster's upgrade through the platform's workflow.
+"""``/api/day1/clusters/{name}/upgrade*`` and ``/api/day1/upgrades``: upgrades through the workflow.
 
 ADR-0055, docs/notes/2026-11-13-upgrade-cluster-workflow-api.md. Behind
 ``DAY1_UPGRADES``: off, every route answers 501. ``{name}`` is the cluster
-file's stem, which is the workflow's ``cluster``. Reading the run needs a
-session; the targets, a start and every decision need an admin, who is the
-``by`` the workflow records.
+file's stem, which is the workflow's ``cluster``. Reading a run, or the
+fleet's runs, needs a session; the targets, a start and every decision need
+an admin, who is the ``by`` the workflow records.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from fastapi import APIRouter, Path, Query
 from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_day1.api.deps import Context, Upgrades
 from wingman_day1.api.v1.upgrade_schemas import (
+    FleetUpgradeOut,
+    FleetUpgradesOut,
     StartUpgradeIn,
     UpgradeDecisionIn,
     UpgradeDecisionOut,
@@ -25,7 +27,7 @@ from wingman_day1.api.v1.upgrade_schemas import (
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.upgrades import UpgradeDecision
 
-router = APIRouter(prefix="/api/day1/clusters", tags=["upgrades"])
+router = APIRouter(prefix="/api/day1", tags=["upgrades"])
 
 Site = Annotated[str | None, Query(max_length=63, description="Site folder")]
 Mce = Annotated[str | None, Query(max_length=63, description="MCE folder")]
@@ -39,7 +41,13 @@ async def _ref(context: Context, name: str, site: str | None, mce: str | None) -
     return await context.clusters.locate(name, site=site, mce=mce)
 
 
-@router.get("/{name}/upgrade-targets")
+@router.get("/upgrades")
+async def fleet_upgrades(user: CurrentUser, upgrades: Upgrades) -> FleetUpgradesOut:
+    """Every cluster's newest upgrade run, open ones first, from the orchestrator's run list."""
+    return FleetUpgradesOut(runs=[FleetUpgradeOut.of(row) for row in await upgrades.fleet()])
+
+
+@router.get("/clusters/{name}/upgrade-targets")
 async def upgrade_targets(
     name: str,
     context: Context,
@@ -53,7 +61,7 @@ async def upgrade_targets(
     return UpgradeTargetsOut.of(await upgrades.targets(ref))
 
 
-@router.post("/{name}/upgrade", status_code=202)
+@router.post("/clusters/{name}/upgrade", status_code=202)
 async def start_upgrade(
     name: str,
     body: StartUpgradeIn,
@@ -68,7 +76,7 @@ async def start_upgrade(
     return UpgradeRunOut.of(await upgrades.start(ref, body.choice(), user=user))
 
 
-@router.get("/{name}/upgrade-run")
+@router.get("/clusters/{name}/upgrade-run")
 async def upgrade_run(
     name: str,
     context: Context,
@@ -82,7 +90,7 @@ async def upgrade_run(
     return UpgradeRunOut.of(await upgrades.run(ref))
 
 
-@router.post("/{name}/upgrade-run/actions/{action_id}/{verdict}")
+@router.post("/clusters/{name}/upgrade-run/actions/{action_id}/{verdict}")
 async def decide_action(
     name: str,
     action_id: ActionId,
@@ -99,7 +107,7 @@ async def decide_action(
     return UpgradeDecisionOut.of(decided)
 
 
-@router.post("/{name}/upgrade-run/{decision}")
+@router.post("/clusters/{name}/upgrade-run/{decision}")
 async def decide(
     name: str,
     decision: UpgradeDecision,

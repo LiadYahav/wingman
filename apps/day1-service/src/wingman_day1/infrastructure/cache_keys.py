@@ -131,6 +131,21 @@ def add_server_run(workflow_id: str) -> str:
     return f"{add_server_runs_prefix()}run:{workflow_id}"
 
 
+def upgrade_runs_prefix() -> str:
+    """Every cached read of the fleet's upgrade runs; cleared on a start or a decision."""
+    return "workflows:upgrade:"
+
+
+def upgrade_runs() -> str:
+    """The newest upgrade runs of the fleet."""
+    return f"{upgrade_runs_prefix()}runs"
+
+
+def upgrade_run(workflow_id: str) -> str:
+    """One upgrade run, as the fleet's list reads it."""
+    return f"{upgrade_runs_prefix()}run:{workflow_id}"
+
+
 def merge_requests_prefix(repo: str) -> str:
     """Every merge-request list; cleared when an MR is opened, updated, merged or closed."""
     return f"{repo}:mrs:"

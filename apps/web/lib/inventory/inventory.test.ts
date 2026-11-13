@@ -8,7 +8,7 @@ import { MAX_SERVERS, addRequest, isSettled, refusalTitle, startSummary, toggled
 
 const mce = (name: string, site: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
   site, mce: name, known: true, servers: 3, in_clusters: 1, available: 2, usable: 2,
-  pools: [], infra_envs: [], infra_envs_error: null, ...overrides,
+  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ...overrides,
 });
 
 const run = (overrides: Partial<InventoryRun> = {}): InventoryRun => ({

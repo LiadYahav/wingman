@@ -36,6 +36,7 @@ const cases: [string, readonly unknown[], unknown[]][] = [
   ],
   ["clusters.upgradeRun", day1Keys.clusters.upgradeRun(name), ["clusters", name, "upgrade-run"]],
   ["clusters.upgradeTargets", day1Keys.clusters.upgradeTargets(name), ["clusters", name, "upgrade-targets"]],
+  ["clusters.upgrades", day1Keys.clusters.upgrades, ["clusters", "upgrades"]],
   // specs
   ["specs.all", day1Keys.specs.all, ["specs"]],
   ["specs.one", day1Keys.specs.one("web"), ["specs", "web"]],

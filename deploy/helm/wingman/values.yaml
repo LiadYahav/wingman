@@ -96,10 +96,11 @@ day1:
   # workflows.url, and the workflow must read the same day1 repo as Wingman.
   upgrades:
     enabled: false
-  # Inventory Management (ADR-0057): admins add servers to an MCE's InfraEnv
-  # pool by starting the platform's add-server-to-mce workflow. Needs
-  # workflows.url; the page itself needs serverScan.url, and the InfraEnvs
-  # come from the MCE (clusterStatus.enabled).
+  # Inventory Management (ADR-0057): admins install servers into an MCE's
+  # InfraEnv pool by starting the platform's add-server-to-mce workflow. Needs
+  # workflows.url; the page itself needs serverScan.url. Live status
+  # (clusterStatus.enabled) is not needed: the InfraEnv is picked or typed, and
+  # the workflow checks the MCE has it. Off, admins see the button disabled.
   addServers:
     enabled: false
 day2:

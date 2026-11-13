@@ -12,6 +12,7 @@ import { api } from "@/lib/api-client";
 import type {
   ClusterNodes,
   DeleteWorkflowState,
+  FleetUpgrades,
   ProvisionRun,
   Provisioner,
   StartUpgradeRequest,
@@ -41,6 +42,8 @@ export const clusterWorkflowsApi = {
   uninstallNode: (name: string, serverId: string, where: string, body: UninstallNodeRequest) =>
     api.post<WorkflowRun>(`${clusterPath(name)}/nodes/${encodeURIComponent(serverId)}/uninstall${where}`, body),
   upgradeRun: (name: string, where: string) => api.get<UpgradeRun>(`${upgradeRunPath(name)}${where}`),
+  /** Every cluster's newest upgrade run, open ones first (the Clusters page's Upgrades view). */
+  upgrades: () => api.get<FleetUpgrades>("/api/day1/upgrades"),
   /** Starts a short run of the workflow: it can take up to a minute. */
   upgradeTargets: (name: string, where: string) =>
     api.get<UpgradeTargets>(`${clusterPath(name)}/upgrade-targets${where}`),

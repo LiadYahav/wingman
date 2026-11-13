@@ -1,7 +1,7 @@
 # ADR-0057: Inventory Management: MCE pools, adding servers, herzi's runs
 
 Date: 2026-11-13
-Status: Accepted
+Status: Accepted; amended 2026-11-13 (3.19.0: Install servers without live status)
 
 ## Context
 
@@ -123,3 +123,55 @@ own.
   grouping, the run labels, what the dialog may send.
 - 2026-11-13: the stack with `DAY1_FAKE_FLEET=true DAY1_ADD_SERVERS=true`
   shows the counts, herzi's fake runs, and an install by count and by name.
+
+## Amendment (2026-11-13, 3.19.0): Install servers from the page, without live status
+
+The user could not find installing on the page ("there is no Install Server
+(that we took from the workflow orchestrator)"). On the team's sandbox,
+adding was off, and even on it needed live status for the MCE's InfraEnv
+list, which is off there: the only entry was a small Add on a pool row, and
+without the list there were no pool rows.
+
+- **A page-level "Install servers"** in the header, the orchestrator's own
+  wording, opening one dialog: pick the MCE (day1's MCEs by site) and the
+  pool, then "Let the pool pick" N or "Choose servers", with the three
+  sentences, the lock rules and the never-retried submit as before. Each
+  pool row keeps a shortcut, now **Install**, that opens the same dialog on
+  that MCE and pool.
+- **The pool is picked or typed.** The choices are the InfraEnvs the page
+  knows on that MCE: its pools, and those its pool-draw runs filled. An
+  admin may type another name; the dialog only checks it is a DNS label,
+  and so does day1 (`422`).
+- **Day1 no longer reads the MCE to install.** It checks the MCE is a day1
+  MCE and the InfraEnv a DNS label; whether the MCE has that InfraEnv is the
+  workflow's first phase (`validating-infraenv`), a FAILED run naming it
+  otherwise. This is what the orchestrator's own form does (its InfraEnv and
+  MCE are typed text): Wingman keeps no second copy of the check, and an
+  install works with live status off. A pool's servers (§2 of the API note)
+  are read from server-scan alone too.
+- **Without the MCE's own list**, the pools are the InfraEnvs the MCE's day1
+  cluster files name (`nodepool[].infraEnvName`), marked
+  `infra_envs_from: "day1"`, and the card says so in a quiet line with the
+  reason in a tooltip. When the MCE's list is read it is the only source.
+- **Off, it says why.** With `DAY1_ADD_SERVERS` off or no orchestrator, an
+  admin sees Install servers disabled with day1's one-line reason in a
+  tooltip ("Installing servers is off on this Wingman"), instead of nothing;
+  a viewer sees no button. Live status is no longer a reason.
+
+Rejected: keeping the InfraEnv check against the MCE when live status is on
+(two behaviours, and the workflow checks it anyway); reading InfraEnvs from
+server-scan's server names (an InfraEnv is not a prefix one can cut off a
+name: `ocp-dell-r660-site1-128c-1024gb-<serial>` is not in pool
+`dell-r660-site1-128c-1024gb-5tb`); herzi's InfraEnv annotations, still left
+out (a new MCE read and grant, and the hub client is at its size ceiling).
+
+Consequence: a typed InfraEnv the MCE lacks is a FAILED run in the runs
+table, in the workflow's words, not a refusal before the start.
+
+Verification: `apps/day1-service/tests/api/test_inventory_install_api.py`
+(the page and installs with no hub, a typed InfraEnv, a non-label `422`, an
+unknown MCE `404`, a failing hub falling back to the day1 files);
+`apps/web/lib/inventory/install.test.ts` (Vitest: the label rule, the known
+InfraEnvs, the pickers); `apps/web/e2e/tests/inventory.spec.ts` (the header
+button, a picked and a typed pool, the row's preselected dialog, the
+disabled button and its tooltip, a viewer's page with no button).

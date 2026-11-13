@@ -10,11 +10,13 @@ import { isApiError } from "@/lib/api-client";
 import { useInventory, useInventoryRuns } from "@/lib/api/inventory";
 import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
+import type { InstallTarget } from "@/lib/inventory/install";
 import { bySite, totalAvailable } from "@/lib/inventory/pools";
 import { runningCount } from "@/lib/inventory/runs";
 import type { Availability } from "@/types/inventory";
-import { AddServersDialog } from "./add-servers-dialog";
-import { MceCard, type PoolTarget } from "./mce-card";
+import { InstallServersButton } from "./install-servers-button";
+import { InstallServersDialog } from "./install-servers-dialog";
+import { MceCard } from "./mce-card";
 import { RunsTable } from "./runs-table";
 
 /** Why the page cannot show anything: no server-scan. */
@@ -69,17 +71,20 @@ function RunsSection({ availability }: { availability: Availability }) {
 
 /**
  * Inventory Management (ADR-0057): each MCE's available Agents by InfraEnv
- * pool, as server-scan counts them; adding servers to a pool through the
- * platform's add-server-to-mce workflow; and its runs, herzi's included.
- * Not a fleet view: a server's record is server-scan's. Everyone signed in
- * reads it; only an admin sees Add (day1 refuses anyone else's start).
+ * pool, as server-scan counts them; installing servers into a pool through
+ * the platform's add-server-to-mce workflow, from the header or a pool's row;
+ * and its runs, herzi's included. Not a fleet view: a server's record is
+ * server-scan's. Everyone signed in reads it; only an admin sees Install
+ * servers (day1 refuses anyone else's start), disabled with the reason where
+ * installing is off.
  */
 export function InventoryPage() {
   const overview = useInventory();
   const admin = useIsAdmin();
   const mounted = useMounted();
-  const [target, setTarget] = useState<PoolTarget | null>(null);
+  const [target, setTarget] = useState<InstallTarget | null>(null);
   const data = overview.data;
+  const runs = useInventoryRuns({ enabled: data?.runs.available ?? false });
 
   if (overview.isLoading) {
     return (
@@ -115,14 +120,14 @@ export function InventoryPage() {
             <Info aria-hidden className="h-4 w-4 text-muted-foreground" />
           </Hint>
         </div>
-        <p className="text-sm text-muted-foreground" data-testid="inventory-total">
-          <span className="font-semibold tabular-nums text-foreground">{totalAvailable(data.mces)}</span> available
-          {isAdmin && !canAdd && data.add_servers.detail && (
-            <Hint hint={data.add_servers.detail} label="Why adding is off">
-              <span className="ml-3 text-xs" data-testid="add-servers-off">Adding off</span>
-            </Hint>
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-muted-foreground" data-testid="inventory-total">
+            <span className="font-semibold tabular-nums text-foreground">{totalAvailable(data.mces)}</span> available
+          </p>
+          {isAdmin && (
+            <InstallServersButton availability={data.add_servers} onOpen={() => setTarget({ mce: null, infraEnv: null })} />
           )}
-        </p>
+        </div>
       </header>
 
       {bySite(data.mces).map((group) => (
@@ -144,7 +149,7 @@ export function InventoryPage() {
       <RunsSection availability={data.runs} />
 
       {target && (
-        <AddServersDialog mce={target.mce} infraEnv={target.infraEnv} drawable={target.drawable} onClose={() => setTarget(null)} />
+        <InstallServersDialog mces={data.mces} runs={runs.data?.runs ?? []} initial={target} onClose={() => setTarget(null)} />
       )}
     </div>
   );

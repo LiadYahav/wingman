@@ -1,14 +1,18 @@
 /**
  * Inventory Management (mocked; docs/notes/2026-11-13-inventory-management-api.md,
- * ADR-0057): each MCE's available Agents by pool, as server-scan counts them;
- * a pool's servers with their locks; the add-server runs, whose author is
- * never guessed; adding servers by count or by name, sent once and never
- * retried. Everyone signed in reads it from the sidebar; only admins add.
+ * ADR-0057 and its amendment): each MCE's available Agents by pool, as
+ * server-scan counts them; a pool's servers with their locks; the add-server
+ * runs, whose author is never guessed; installing servers from the header or
+ * a pool's row, into a known or typed InfraEnv, by count or by name, sent once
+ * and never retried. Everyone signed in reads it from the sidebar; only admins
+ * install, and see why when installing is off.
  */
 
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, held } from "../fixtures/api-handlers";
-import { DONOR, FREE, LOCKED, OVERVIEW, R650, SITE1_A, STARTED, off, setUpInventory } from "../fixtures/inventory";
+import {
+  DONOR, FREE, LOCKED, OVERVIEW, R650, SITE1_A, SITE1_B, SITE1_B_POOL, STARTED, off, setUpInventory,
+} from "../fixtures/inventory";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Main" });
 const card = (page: Page, mce: string) => page.locator(`section[data-mce="${mce}"]`);
@@ -16,9 +20,19 @@ const pool = (page: Page, infraEnv: string) => card(page, SITE1_A).locator(`tr[d
 const dialog = (page: Page) => page.getByTestId("add-servers-dialog");
 
 async function openAdd(page: Page) {
-  await pool(page, R650).getByRole("button", { name: `Add servers to ${R650}` }).click();
+  await pool(page, R650).getByRole("button", { name: `Install servers into ${R650}` }).click();
   await expect(dialog(page)).toBeVisible();
 }
+
+/** Pick an option of a Combobox by its label (an option's name also holds its description). */
+async function choose(page: Page, combobox: ReturnType<Page["getByRole"]>, option: string) {
+  await combobox.click();
+  await page.getByRole("option").filter({ has: page.getByText(option, { exact: true }) }).click();
+  // The list is a popup until its exit animation ends
+  await expect(page.getByRole("option")).toHaveCount(0);
+}
+
+const ADDING_OFF = "Installing servers is off on this Wingman (DAY1_ADD_SERVERS=false).";
 
 test.describe("Who sees it", () => {
   test("an admin opens it from the sidebar", async ({ page }) => {
@@ -29,14 +43,15 @@ test.describe("Who sees it", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Inventory Management" })).toBeVisible();
   });
 
-  test("a viewer sees the pools and the runs from the sidebar, with no Add", async ({ page }) => {
+  test("a viewer sees the pools and the runs from the sidebar, with no Install", async ({ page }) => {
     const calls = await setUpInventory(page, { viewer: true });
     await go(page, "/");
     await nav(page).getByRole("link", { name: "Inventory Management" }).click();
     await expect(card(page, SITE1_A).getByTestId("mce-available")).toHaveText("6 available");
     await expect(page.getByTestId("run-row")).toHaveCount(2);
-    await expect(page.getByRole("button", { name: /Add servers to/ })).toHaveCount(0);
-    await expect(page.getByTestId("add-servers-off")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Install servers/ })).toHaveCount(0);
+    await expect(page.getByTestId("install-servers")).toHaveCount(0);
+    await expect(page.getByTestId("install-servers-off")).toHaveCount(0);
     await pool(page, R650).getByRole("button", { name: `1 free in server-scan for ${R650}` }).click();
     await expect(page.getByTestId("candidate")).toHaveCount(3);
     expect(calls.starts).toEqual([]);
@@ -60,8 +75,9 @@ test.describe("The pools", () => {
     await expect(r650.getByTestId("pool-available")).toContainText("1 not usable");
     await expect(r650).toContainText("dell PowerEdge R650 ×2");
     await expect(pool(page, "")).toContainText("No InfraEnv");
-    await expect(pool(page, "").getByRole("button", { name: /Add servers/ })).toHaveCount(0);
-    await expect(card(page, "ocp4-prod-mce-site1-b").getByTestId("mce-infra-envs-error")).toContainText("InfraEnvs unknown");
+    await expect(pool(page, "").getByRole("button", { name: /Install servers/ })).toHaveCount(0);
+    await expect(card(page, SITE1_B).getByTestId("mce-pools-from-day1")).toContainText("Pools named by this MCE's cluster files");
+    await expect(card(page, SITE1_B).locator(`tr[data-pool="${SITE1_B_POOL}"]`)).toBeVisible();
     await expect(page.getByTestId("quiet-mces")).toContainText("ocp4-prod-mce-site1-c");
   });
 
@@ -113,10 +129,11 @@ test.describe("Adding servers", () => {
     await expect(dialog(page)).toContainText("Sending again installs more.");
     await expect(page.getByTestId("add-servers-drawable")).toHaveText("1 free in server-scan");
     await dialog(page).getByRole("spinbutton", { name: "How many servers" }).fill("2");
-    await dialog(page).getByRole("button", { name: "Add 2" }).click();
+    await dialog(page).getByRole("button", { name: "Install 2" }).click();
     await expect(dialog(page)).toHaveCount(0);
     await expect(page.getByText("2 started")).toBeVisible();
     expect(calls.starts).toEqual([{ count: 2 }]);
+    expect(calls.paths).toEqual([`/api/day1/inventory/mces/${SITE1_A}/infra-envs/${R650}/add-servers`]);
   });
 
   test("by name: only an offered server can be picked", async ({ page }) => {
@@ -125,9 +142,9 @@ test.describe("Adding servers", () => {
     await openAdd(page);
     await dialog(page).getByRole("tab", { name: "Choose servers" }).click();
     await expect(dialog(page).getByRole("checkbox", { name: `Install ${LOCKED}` })).toBeDisabled();
-    await expect(dialog(page).getByRole("button", { name: "Add", exact: true })).toBeDisabled();
+    await expect(dialog(page).getByRole("button", { name: "Install", exact: true })).toBeDisabled();
     await dialog(page).getByRole("checkbox", { name: `Install ${FREE}` }).click();
-    await dialog(page).getByRole("button", { name: "Add 1" }).click();
+    await dialog(page).getByRole("button", { name: "Install 1" }).click();
     await expect(dialog(page)).toHaveCount(0);
     expect(calls.starts).toEqual([{ server_names: [FREE] }]);
   });
@@ -137,7 +154,7 @@ test.describe("Adding servers", () => {
     const calls = await setUpInventory(page, { start: hold.answer(STARTED) });
     await go(page, "/inventory");
     await openAdd(page);
-    await dialog(page).getByRole("button", { name: "Add 1" }).click();
+    await dialog(page).getByRole("button", { name: "Install 1" }).click();
     await expect(dialog(page).getByRole("button", { name: "Starting…" })).toBeDisabled();
     hold.release();
     await expect(dialog(page)).toHaveCount(0);
@@ -150,9 +167,9 @@ test.describe("Adding servers", () => {
     });
     await go(page, "/inventory");
     await openAdd(page);
-    await dialog(page).getByRole("button", { name: "Add 1" }).click();
+    await dialog(page).getByRole("button", { name: "Install 1" }).click();
     await expect(page.getByTestId("add-servers-error")).toContainText("Look at the runs before sending again");
-    await expect(dialog(page).getByRole("button", { name: "Add 1" })).toBeDisabled();
+    await expect(dialog(page).getByRole("button", { name: "Install 1" })).toBeDisabled();
     await expect(dialog(page).getByRole("button", { name: "Close" })).toBeVisible();
     expect(calls.starts).toHaveLength(1);
   });
@@ -168,16 +185,66 @@ test.describe("Adding servers", () => {
     await openAdd(page);
     await dialog(page).getByRole("tab", { name: "Choose servers" }).click();
     await dialog(page).getByRole("checkbox", { name: `Install ${FREE}` }).click();
-    await dialog(page).getByRole("button", { name: "Add 1" }).click();
+    await dialog(page).getByRole("button", { name: "Install 1" }).click();
     await expect(page.getByTestId("add-servers-error")).toContainText(`${FREE}: locked by add-server-to-mce`);
   });
 
-  test("with adding off there is no Add, and the header says why", async ({ page }) => {
-    const overview = { ...OVERVIEW, add_servers: { available: false, detail: "Adding servers is off in this deployment (DAY1_ADD_SERVERS=false)." } };
+  test("with installing off an admin sees Install servers disabled, and why", async ({ page }) => {
+    const overview = { ...OVERVIEW, add_servers: { available: false, detail: ADDING_OFF } };
     await setUpInventory(page, { overview });
     await go(page, "/inventory");
     await expect(pool(page, R650)).toBeVisible();
-    await expect(page.getByRole("button", { name: /Add servers to/ })).toHaveCount(0);
-    await expect(page.getByTestId("add-servers-off")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Install servers into/ })).toHaveCount(0);
+    const button = page.getByTestId("install-servers");
+    await expect(button).toBeDisabled();
+    await expect(button).toHaveAccessibleDescription(ADDING_OFF);
+    await page.getByTestId("install-servers-off").hover();
+    await expect(page.locator("[data-slot=tooltip-content][data-open]")).toHaveText(ADDING_OFF);
+  });
+});
+
+test.describe("Install servers from the header", () => {
+  test("picks the MCE and a pool it knows, and sends the count once to that pool", async ({ page }) => {
+    const calls = await setUpInventory(page);
+    await go(page, "/inventory");
+    await page.getByTestId("install-servers").click();
+    await expect(dialog(page)).toBeVisible();
+    await expect(dialog(page).getByRole("heading", { name: "Install servers" })).toBeVisible();
+    const submit = dialog(page).getByRole("button", { name: "Install 1" });
+    await expect(submit).toBeDisabled();
+    await expect(dialog(page).getByRole("combobox", { name: "InfraEnv" })).toBeDisabled();
+    await choose(page, dialog(page).getByRole("combobox", { name: "MCE" }), SITE1_B);
+    await choose(page, dialog(page).getByRole("combobox", { name: "InfraEnv" }), SITE1_B_POOL);
+    await expect(page.getByTestId("add-servers-drawable")).toHaveText("2 free in server-scan");
+    await submit.click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect(calls.starts).toEqual([{ count: 1 }]);
+    expect(calls.paths).toEqual([`/api/day1/inventory/mces/${SITE1_B}/infra-envs/${SITE1_B_POOL}/add-servers`]);
+  });
+
+  test("takes a typed InfraEnv once it is a DNS label, and the workflow judges the rest", async ({ page }) => {
+    const calls = await setUpInventory(page);
+    await go(page, "/inventory");
+    await page.getByTestId("install-servers").click();
+    await choose(page, dialog(page).getByRole("combobox", { name: "MCE" }), SITE1_A);
+    await choose(page, dialog(page).getByRole("combobox", { name: "InfraEnv" }), "Another InfraEnv…");
+    const typed = dialog(page).getByRole("textbox", { name: "InfraEnv name" });
+    await typed.fill("Cisco_M6");
+    await expect(page.getByTestId("infra-env-problem")).toContainText("Lowercase letters");
+    await expect(dialog(page).getByRole("button", { name: "Install 1" })).toBeDisabled();
+    await typed.fill("cisco-m6-site1-64c-512gb");
+    await expect(page.getByTestId("infra-env-problem")).toHaveCount(0);
+    await dialog(page).getByRole("button", { name: "Install 1" }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect(calls.paths).toEqual([`/api/day1/inventory/mces/${SITE1_A}/infra-envs/cisco-m6-site1-64c-512gb/add-servers`]);
+  });
+
+  test("a pool's Install opens the same dialog on that MCE and pool", async ({ page }) => {
+    await setUpInventory(page);
+    await go(page, "/inventory");
+    await openAdd(page);
+    await expect(dialog(page).getByRole("heading", { name: "Install servers" })).toBeVisible();
+    await expect(dialog(page).getByRole("combobox", { name: "MCE" })).toContainText(SITE1_A);
+    await expect(dialog(page).getByRole("combobox", { name: "InfraEnv" })).toContainText(R650);
   });
 });

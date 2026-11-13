@@ -1,7 +1,7 @@
 # ADR-0055: Upgrade a hosted cluster through the upgrade-cluster workflow, behind a setting
 
 Date: 2026-11-13
-Status: Accepted; amends ADR-0012 (who owns `mastertag`, `workertag` and `pausedUntil`)
+Status: Accepted; amends ADR-0012 (who owns `mastertag`, `workertag` and `pausedUntil`); amended 2026-11-13 (3.19.0: the fleet's upgrades on the Clusters page)
 
 ## Context
 
@@ -135,3 +135,76 @@ The limbs are on the sandbox only, "not in production yet".
 - `apps/web/e2e/tests/cluster-upgrade.spec.ts`: the dialog's targets, start,
   a run waiting for approval, approve, a refused decision's words, abort
   with a reason, and nothing shown when upgrades are off.
+
+## Amendment (2026-11-13, 3.19.0): the fleet's upgrades on the Clusters page
+
+The user: "The upgrade panel should be inside clusters, no?" With upgrades
+off on the sandbox, nothing showed at all, and nothing listed the fleet's
+upgrades the way the orchestrator's own `/ui/cluster-upgrade` page does.
+The alternative rejected above ("a fleet view would be a filter on the
+clusters list, later") is now built, as a view of the Clusters page.
+
+- **`GET /api/day1/upgrades`** (any signed-in user; 501 while
+  `DAY1_UPGRADES` is off, like every upgrade route). One read of the
+  orchestrator's run list, `GET /workflows/runs?workflow_type=UpgradeClusterWorkflow&limit=200`,
+  folded to **one row per cluster**: its newest upgrade, the
+  `continued_as_new` segments of that upgrade joined and started when the
+  first of them started (the run continues-as-new after every step; the id
+  is reused by the next upgrade). Open upgrades first, then the newest. The
+  first 25 rows are read by id for the phase, `waiting_for`, `paused` and
+  the outcome, as the orchestrator's page reads its newest 25; the rest carry
+  the list's status only. Every row says where day1 has the cluster's file
+  (`site`, `mce`), or `null` when it has none.
+- **Cached, not every run read on each poll.** The list and those reads are
+  kept 10 s per replica (ADR-0011), the TTL of Inventory's add-server runs,
+  through `CachedUpgradeWorkflow`; a start or a decision through day1 drops
+  them. A cluster's own Upgrade panel still reads its run uncached, so a
+  decision shows at once. No new metrics operation: the list is `list_runs`,
+  the reads `get_run`.
+- **The Clusters page has two views**, Clusters and Upgrades, as tabs under
+  its heading, the second at `/clusters#upgrades` (a hash, so Back returns to
+  it and the page needs no Suspense boundary for a query parameter). A view,
+  not a filter: its rows are runs, not clusters (a finished run, and a run
+  on a cluster this day1 repo lacks, are listed too), and its columns are
+  the run's: the status, the workflow's phase made readable, `waiting_for`
+  verbatim (cut at a word, the whole text in a tooltip) and when it started.
+  Each row links to its cluster's page. **No decisions in the list**: the
+  cluster page's panel keeps the plan, the log and the decisions (one view
+  per thing).
+- **The clusters list** marks each cluster whose upgrade is open with an
+  "Upgrading" badge beside its mastertag, from the same query; its tooltip
+  says the phase and what the run waits for, and it opens the cluster.
+- **Off, admins learn it exists**: no tab and no badge for anyone, and on the
+  cluster page an admin sees Upgrade greyed out, its tooltip "Upgrades are
+  off on this Wingman (DAY1_UPGRADES=false)."; a viewer sees nothing.
+- **A finished run's panel can be dismissed**, in this browser only (a
+  per-viewer convenience, as the tables keep their hidden columns). What is kept
+  is the run's fingerprint (its id, outcome, target and last log line), so
+  the cluster's next upgrade, under the same id, shows again.
+- **The fake fleet** starts three demo runs (`demo:` in
+  `dev/fleet-fixtures/upgrade.yaml`): one waiting for approval, one for the
+  day2 confirm, one cancelled.
+
+Alternatives rejected:
+- **A filter on the clusters list** ("upgrading"): its rows are clusters and
+  its columns the file's; the run's phase, `waiting_for` and start would be
+  new columns on every row, and finished runs would have no row.
+- **A separate `/upgrades` page**: the user wants it inside Clusters, and the
+  run belongs to one cluster.
+- **Reading every run by id on each poll**: one orchestrator read per
+  cluster per viewer every 15 s. The list is one read; 25 cached reads at
+  most.
+- **Decisions in the list**: two places to decide one run would drift; the
+  panel has the plan the decision is about.
+
+Verification: `tests/unit/domain/test_fleet_upgrades.py` (the fold);
+`tests/unit/infrastructure/test_upgrade_workflow.py` (the run list's request
+and answers) and `test_fake_upgrade.py` (the fake's list and demo runs);
+`tests/api/test_fleet_upgrades_api.py` (off 501, a session, an empty list,
+the rows with phase and place, a cluster day1 lacks, the cache dropped by a
+start and a decision, 502); `apps/web/lib/fleet-upgrades.test.ts` and
+`upgrade-dismiss.test.ts` (Vitest); `apps/web/e2e/tests/clusters-upgrades.spec.ts`
+(the view, the badge, empty, unreachable, Back) and `cluster-upgrade.spec.ts`
+(greyed out when off, dismiss). 2026-11-13: the stack with
+`DAY1_FAKE_FLEET=true DAY1_UPGRADES=true` and live status off lists the
+fake's runs on `/clusters#upgrades`.

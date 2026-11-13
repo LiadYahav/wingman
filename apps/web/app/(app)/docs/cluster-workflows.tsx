@@ -35,13 +35,20 @@ export function ClusterWorkflowsDocs() {
         and its log. Admins press what it waits for (<strong>Approve</strong>, <strong>Day2 is ready</strong>,{" "}
         <strong>Continue</strong> before each NodePool, <strong>Retry</strong>), and <strong>Pause</strong> or{" "}
         <strong>Abort</strong> (with a reason) while it is open; the run judges each, and a refusal is shown in its
-        words. The workflow commits each step to day1 itself, so the History tab shows its commits.
+        words. The workflow commits each step to day1 itself, so the History tab shows its commits. A finished
+        run&apos;s panel can be dismissed (×) in this browser; the next upgrade shows again.
+      </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+        The Clusters page&apos;s <strong>Upgrades</strong> view (<InlineCode>/clusters#upgrades</InlineCode>) lists
+        every cluster&apos;s newest run, open ones first: its status, its phase, what it waits for and when it
+        started. Each row opens its cluster, where the decisions are. The list marks each cluster being upgraded with{" "}
+        <strong>Upgrading</strong>.
       </p>
       <Callout type="info" title="Versions change through Upgrade">
         While upgrades are on, an edit (or an MR review edit) that changes <InlineCode>mastertag</InlineCode> or a{" "}
         <InlineCode>workertag</InlineCode>, or adds <InlineCode>pausedUntil</InlineCode>, is refused. Removing{" "}
-        <InlineCode>pausedUntil</InlineCode> after an aborted upgrade is a normal edit. Off, nothing on the page
-        mentions upgrades.
+        <InlineCode>pausedUntil</InlineCode> after an aborted upgrade is a normal edit. Off, an admin sees{" "}
+        <strong>Upgrade</strong> greyed out with why, and nothing else mentions upgrades.
       </Callout>
     </>
   );

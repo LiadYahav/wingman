@@ -74,16 +74,24 @@ export function useCandidates(mce: string, infraEnv: string, { enabled }: { enab
   });
 }
 
+/** One start: the pool it fills and what to install. */
+export interface AddServersVariables {
+  mce: string;
+  infraEnv: string;
+  body: AddServersRequest;
+}
+
 /**
- * Start add-server-to-mce on one pool. Never retried: sent again, it installs
- * more. Whatever the answer, the runs and the pools are read again.
+ * Start add-server-to-mce on one pool (any InfraEnv name; the workflow checks
+ * the MCE has it). Never retried: sent again, it installs more. Whatever the
+ * answer, the runs and the pools are read again.
  */
-export function useAddServers(mce: string, infraEnv: string) {
+export function useAddServers() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (body: AddServersRequest) => inventoryApi.addServers(mce, infraEnv, body),
+    mutationFn: ({ mce, infraEnv, body }: AddServersVariables) => inventoryApi.addServers(mce, infraEnv, body),
     retry: false,
-    onSettled: () => {
+    onSettled: (_data, _error, { mce, infraEnv }) => {
       void client.invalidateQueries({ queryKey: inventoryKeys.runs });
       void client.invalidateQueries({ queryKey: inventoryKeys.overview });
       void client.invalidateQueries({ queryKey: inventoryKeys.candidates(mce, infraEnv) });

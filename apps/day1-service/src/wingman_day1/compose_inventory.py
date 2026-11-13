@@ -2,9 +2,9 @@
 
 The add-server-to-mce workflow's adapter (real, none, or the fake fleet's),
 and the page's use case: it reads server-scan through the one cached
-``ServerInventory`` the Nodes tab and placement share, each MCE's InfraEnvs
-through the hub cache the create form uses, and the add-server runs through
-their own short cache.
+``ServerInventory`` the Nodes tab and placement share (``main.py`` builds it),
+each MCE's InfraEnvs through the hub cache the create form uses (else from
+its day1 cluster files), and the add-server runs through their own short cache.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import Final
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock
+from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.inventory import InventoryService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.infrastructure.add_server_workflow import HttpAddServerWorkflow
@@ -31,6 +32,7 @@ Close = Callable[[], Awaitable[None]]
 def inventory_service(
     settings: Day1Settings,
     sites: SiteCatalog,
+    clusters: ClusterService,
     *,
     inventory: ServerInventory | None,
     infra_envs: HubApi | None,
@@ -43,6 +45,7 @@ def inventory_service(
     return InventoryService(
         sites,
         inventory,
+        clusters=clusters,
         hub=infra_envs,
         workflows=(
             CachedAddServerWorkflow(

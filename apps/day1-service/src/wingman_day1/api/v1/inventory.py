@@ -28,7 +28,14 @@ from wingman_day1.api.v1.inventory_schemas import (
 router = APIRouter(prefix="/api/day1/inventory", tags=["inventory"])
 
 Mce = Annotated[str, Path(min_length=1, max_length=63, description="A day1 MCE folder")]
-InfraEnv = Annotated[str, Path(min_length=1, max_length=63, description="An InfraEnv on the MCE")]
+InfraEnv = Annotated[
+    str,
+    Path(
+        min_length=1,
+        max_length=253,
+        description="An InfraEnv (a DNS label; the workflow checks the MCE has it)",
+    ),
+]
 
 
 @router.get("")
@@ -58,7 +65,10 @@ async def candidates(
 async def add_servers(
     mce: Mce, infra_env: InfraEnv, body: AddServersIn, user: AdminUser, service: Inventory
 ) -> AddServersOut:
-    """Start add-server-to-mce: one run per server. Never retried; sent again, it installs more."""
+    """Start add-server-to-mce: one run per server. Never retried; sent again, it installs more.
+
+    Needs no live status: whether the InfraEnv is on the MCE is the workflow's first check.
+    """
     result = await service.add_servers(
         mce, infra_env, count=body.count, server_names=body.server_names or (), user=user
     )

@@ -41,7 +41,10 @@ export interface MceInventory {
   usable: number;
   pools: PoolCount[];
   infra_envs: string[];
+  /** Why the MCE's own InfraEnv list is unknown (live status off, or its hub unreadable). */
   infra_envs_error: string | null;
+  /** `mce`: the MCE's own list. `day1`: the InfraEnvs its day1 cluster files name. */
+  infra_envs_from: "mce" | "day1";
 }
 
 export interface InventoryOverview {

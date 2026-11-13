@@ -126,11 +126,22 @@ async function mockUpgradeRun(page: Page, upgrades: Upgrades, decide?: (route: R
 }
 
 test.describe("Upgrade a cluster through the upgrade-cluster workflow", () => {
-  test("upgrades off: no Upgrade on the Mastertag row and no panel", async ({ page }) => {
+  test("upgrades off: an admin sees Upgrade greyed out with why, and no panel", async ({ page }) => {
     await openCluster(page, null);
     await expect(page.getByText("4.18.22-x86_64").first()).toBeVisible();
     await expect(page.getByTestId("upgrade-action")).toHaveCount(0);
+    const off = page.getByTestId("upgrade-action-off");
+    await expect(off).toHaveAccessibleName("Upgrade is off: why");
+    await off.hover();
+    await expect(page.locator("[data-slot=tooltip-content][data-open]")).toHaveText("Upgrades are off on this Wingman (DAY1_UPGRADES=false).");
     await expect(page.getByTestId("upgrade-panel")).toHaveCount(0);
+  });
+
+  test("upgrades off: a viewer sees no Upgrade at all", async ({ page }) => {
+    await openCluster(page, null, { viewer: true });
+    await expect(page.getByText("4.18.22-x86_64").first()).toBeVisible();
+    await expect(page.getByTestId("upgrade-action-off")).toHaveCount(0);
+    await expect(page.getByTestId("upgrade-action")).toHaveCount(0);
   });
 
   test("the dialog lists the workflow's targets, and Start sends only the target", async ({ page }) => {
@@ -254,5 +265,29 @@ test.describe("Upgrade a cluster through the upgrade-cluster workflow", () => {
     await expect(page.getByTestId("upgrade-waiting-for")).toHaveText(WAITING);
     await expect(page.getByTestId("upgrade-decisions")).toHaveCount(0);
     await expect(page.getByTestId("upgrade-action")).toHaveCount(0);
+  });
+
+  test("a finished run's panel can be dismissed in this browser; the next run shows again", async ({ page }) => {
+    const done = run({
+      status: "completed", phase: null, waiting_for: null, outcome: "done", steps_completed: 2, control_plane_version: "4.18.56",
+    });
+    const upgrades: Upgrades = { run: done, writes: [] };
+    await openCluster(page, upgrades);
+    const panel = page.getByTestId("upgrade-panel");
+    await expect(panel.getByTestId("upgrade-phase")).toHaveText("Done");
+    await panel.getByTestId("upgrade-dismiss").click();
+    await expect(panel).toHaveCount(0);
+    await expect(page.getByTestId("upgrade-action")).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("upgrade-action")).toBeVisible();
+    await expect(page.getByTestId("upgrade-panel")).toHaveCount(0);
+    expect(upgrades.writes).toEqual([]);
+
+    upgrades.run = run({ log: [{ at: "2026-11-14T09:00:00Z", event: "planned", by: "test-admin", detail: "2 steps" }] });
+    // The query cache is kept in the browser too: drop it, so the reload reads the new run
+    await page.evaluate(() => window.localStorage.removeItem("wingman-query-cache"));
+    await page.reload();
+    await expect(page.getByTestId("upgrade-panel")).toBeVisible();
+    await expect(page.getByTestId("upgrade-dismiss")).toHaveCount(0);
   });
 });

@@ -128,6 +128,7 @@ async def test_every_mce_is_counted_by_pool_as_server_scan_reports_it(
     assert body["add_servers"] == {"available": True, "detail": None}
     assert body["runs"] == {"available": True, "detail": None}
     site1_a = next(m for m in body["mces"] if m["mce"] == SITE1_A)
+    assert (site1_a["infra_envs_from"], site1_a["infra_envs_error"]) == ("mce", None)
     assert (site1_a["site"], site1_a["known"]) == ("site1", True)
     assert (site1_a["servers"], site1_a["in_clusters"], site1_a["available"]) == (16, 10, 6)
     pools = {p["infra_env"]: p for p in site1_a["pools"]}
@@ -164,15 +165,23 @@ async def test_a_pools_candidates_show_the_lock_and_offer_no_locked_server(
     }  # fmt: skip
 
 
-async def test_an_unknown_mce_or_infra_env_is_not_found(
+async def test_an_unknown_mce_is_not_found_and_an_infra_env_must_be_a_dns_label(
     fleet: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    for path in (
-        "/api/day1/inventory/mces/ocp4-nope/infra-envs/x/candidates",
+    response = await fleet.get(
+        "/api/day1/inventory/mces/ocp4-nope/infra-envs/x/candidates", headers=auth(support.ALICE)
+    )
+    assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
+    response = await fleet.get(
+        f"/api/day1/inventory/mces/{SITE1_A}/infra-envs/Not_A_Label/candidates",
+        headers=auth(support.ALICE),
+    )
+    assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+    response = await fleet.get(
         f"/api/day1/inventory/mces/{SITE1_A}/infra-envs/nope/candidates",
-    ):
-        response = await fleet.get(path, headers=auth(support.ALICE))
-        assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
+        headers=auth(support.ALICE),
+    )
+    assert response.json()["candidates"] == [], "the workflow judges the InfraEnv, not day1"
 
 
 async def test_the_runs_say_who_may_have_started_them(
@@ -322,30 +331,6 @@ async def test_adding_off_says_why_and_answers_501_and_runs_need_the_orchestrato
         assert body["runs"]["available"] is False
         response = await client.get("/api/day1/inventory/runs", headers=admin)
         assert (response.status_code, response.json()["code"]) == (501, "FEATURE_DISABLED")
-    assert workflow.starts == []
-
-
-async def test_without_live_status_the_pools_are_unknown_and_adding_is_not_offered(
-    support: Any,
-    gitlab: InMemoryGitLab,
-    clock: Any,
-    inventory: FakeServerInventory,
-    workflow: FakeAddServerWorkflow,
-    auth: Auth,
-) -> None:
-    admin = auth(support.ALICE)
-    app = app_of(
-        support, gitlab, clock, hub=None, inventory=inventory, workflow=workflow,
-        DAY1_ADD_SERVERS=True,
-    )  # fmt: skip
-    async for client in serve(app):
-        body = (await client.get("/api/day1/inventory", headers=admin)).json()
-        site1_a = next(m for m in body["mces"] if m["mce"] == SITE1_A)
-        assert [p["infra_env"] for p in site1_a["pools"]] == [None]
-        assert "CLUSTER_STATUS_ENABLED" in site1_a["infra_envs_error"]
-        assert body["add_servers"]["available"] is False
-        response = await client.post(f"{POOL}/add-servers", json={"count": 1}, headers=admin)
-        assert response.status_code == 501
     assert workflow.starts == []
 
 

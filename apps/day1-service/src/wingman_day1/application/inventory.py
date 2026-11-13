@@ -3,16 +3,18 @@
 ADR-0057. The counts are server-scan's, through the one cached
 ``ServerInventory`` the Nodes tab and placement read; the MCEs are the day1
 repo's folders (read-only); each MCE's InfraEnvs come from its hub, cached as
-for the create form. An MCE whose InfraEnvs cannot be read is still counted,
-its servers under no InfraEnv, and says why. server-scan unreadable fails
-the read: the page is its numbers.
+for the create form. Without them (live status off, or the hub unreadable)
+the pools are the InfraEnvs the MCE's day1 cluster files name, and the MCE
+says why its own list is unknown. server-scan unreadable fails the read: the
+page is its numbers.
 
-Adding servers starts the platform's ``add-server-to-mce`` workflow. Day1
-checks only what makes the button act on what the page showed: the MCE is
-a day1 MCE, the InfraEnv is on its list, and each named server is one the
+Installing servers starts the platform's ``add-server-to-mce`` workflow and
+needs no hub (ADR-0057's amendment). Day1 checks only that the MCE is a day1
+MCE, that the InfraEnv is a DNS label, and that each named server is one the
 page offered (an ``AVAILABLE`` server named for the pool, not locked, out of
-maintenance, not contested). Everything else is the workflow's. A start is
-never retried (ADR-0006) and is logged with who asked.
+maintenance, not contested). Whether the InfraEnv exists on the MCE is the
+workflow's first check (``validating-infraenv``), as on the orchestrator's
+own form. A start is never retried (ADR-0006) and is logged with who asked.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from wingman_core.domain.users import User
+from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.domain.add_server import (
     AddServerRequest,
@@ -41,22 +44,25 @@ from wingman_day1.domain.errors import (
     WorkflowsNotConfiguredError,
 )
 from wingman_day1.domain.inventory import (
+    FROM_DAY1,
+    FROM_MCE,
     Candidate,
     MceInventory,
     candidates,
     mce_inventory,
     named_refusals,
 )
+from wingman_day1.domain.names import dns_label_problems
 from wingman_day1.ports import AddServerWorkflow, HubApi, ServerInventory
 
 logger = logging.getLogger(__name__)
 
-ADD_SERVERS_OFF: Final = "Adding servers is off in this deployment (DAY1_ADD_SERVERS=false)."
+ADD_SERVERS_OFF: Final = "Installing servers is off on this Wingman (DAY1_ADD_SERVERS=false)."
 NO_ORCHESTRATOR: Final = (
     "The workflows orchestrator is not configured (WORKFLOWS_API_URL): no add-server runs."
 )
 NO_HUB: Final = (
-    "Live status is off (CLUSTER_STATUS_ENABLED=false): the MCE's InfraEnvs are not read."
+    "Live status is off (CLUSTER_STATUS_ENABLED=false): the MCE's own InfraEnv list is not read."
 )
 SHOWN_RUNS: Final = 50
 """The newest runs shown."""
@@ -98,6 +104,7 @@ class InventoryService:
         sites: SiteCatalog,
         inventory: ServerInventory,
         *,
+        clusters: ClusterService,
         hub: HubApi | None,
         workflows: AddServerWorkflow | None,
         add_servers: bool,
@@ -105,10 +112,12 @@ class InventoryService:
     ) -> None:
         """``hub`` lists InfraEnvs (``None``: live status off); ``workflows`` is the orchestrator.
 
-        ``namespace`` is where InfraEnvs are listed and is sent to the workflow
-        when set (the orchestrator's default is ``inventory``).
+        ``clusters`` names each MCE's InfraEnvs from its cluster files when its
+        hub list is unknown. ``namespace`` is where InfraEnvs are listed and is
+        sent to the workflow when set (the orchestrator's default is ``inventory``).
         """
         self._sites = sites
+        self._clusters = clusters
         self._inventory = inventory
         self._hub = hub
         self._workflows = workflows
@@ -129,8 +138,6 @@ class InventoryService:
             return Availability(False, ADD_SERVERS_OFF)
         if self._workflows is None:
             return Availability(False, NO_ORCHESTRATOR)
-        if self._hub is None:
-            return Availability(False, NO_HUB)
         return Availability(True)
 
     async def overview(self) -> InventoryOverview:
@@ -138,8 +145,16 @@ class InventoryService:
         tree = await self._sites.tree()
         rows = await self._inventory.rows()
         found = await asyncio.gather(*(self._infra_envs(mce) for _, mce in tree.mces))
+        named = await self._named_by_files() if any(e for _, e in found) else {}
         mces = tuple(
-            mce_inventory(site, mce, rows, infra_envs=names, infra_envs_error=error)
+            mce_inventory(
+                site,
+                mce,
+                rows,
+                infra_envs=names if error is None else named.get(mce, []),
+                infra_envs_error=error,
+                infra_envs_from=FROM_MCE if error is None else FROM_DAY1,
+            )
             for (site, mce), (names, error) in zip(tree.mces, found, strict=True)
         )
         return InventoryOverview(mces, self.add_availability, self.runs_availability)
@@ -227,12 +242,23 @@ class InventoryService:
         return site
 
     async def _require_pool(self, mce: str, infra_env: str) -> None:
-        """``mce`` is a day1 MCE and ``infra_env`` is on its list; hub errors propagate."""
+        """``mce`` is a day1 MCE and ``infra_env`` a DNS label; no MCE read.
+
+        Whether the InfraEnv exists on the MCE is the workflow's first check
+        (``validating-infraenv``), as on the orchestrator's own form.
+        """
         await self._site_of(mce)
-        if self._hub is None:
-            raise WorkflowsNotConfiguredError(NO_HUB)
-        if infra_env not in await self._hub.infra_envs(mce, namespace=self._namespace):
-            raise ResourceNotFoundError(f"InfraEnv {infra_env!r} is not on MCE {mce!r}")
+        if problems := dns_label_problems(infra_env, what="InfraEnv"):
+            raise InvalidInputError(f"InfraEnv {infra_env!r} is not a DNS label", problems)
+
+    async def _named_by_files(self) -> dict[str, list[str]]:
+        """Each MCE's InfraEnvs, as its day1 cluster files name them (``infraEnvName``)."""
+        named: dict[str, set[str]] = {}
+        for found in await self._clusters.clusters():
+            pools = found.values.nodepools if found.values is not None else ()
+            names = {pool.infra_env_name for pool in pools if pool.infra_env_name}
+            named.setdefault(found.ref.mce, set()).update(names)
+        return {mce: sorted(names) for mce, names in named.items()}
 
     async def _infra_envs(self, mce: str) -> tuple[list[str], str | None]:
         """``mce``'s InfraEnvs, or why they are unknown."""

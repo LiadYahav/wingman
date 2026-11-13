@@ -405,6 +405,47 @@ async def test_no_run_is_none_and_a_bad_answer_is_unavailable() -> None:
             await workflow.run(WORKFLOW_ID)
 
 
+# ── The fleet's run list ─────────────────────────────────────────────────────
+
+
+async def test_the_run_list_is_filtered_by_type_and_read_newest_first() -> None:
+    listed = [
+        {
+            "workflow_id": WORKFLOW_ID,
+            "workflow_type": "UpgradeClusterWorkflow",
+            "status": "RUNNING",
+            "start_time": "2026-11-13T10:00:00Z",
+            "close_time": None,
+        },
+        {
+            "workflow_id": WORKFLOW_ID,
+            "workflow_type": "UpgradeClusterWorkflow",
+            "status": "CONTINUED_AS_NEW",
+            "start_time": "2026-11-13T09:00:00Z",
+            "close_time": "2026-11-13T10:00:00Z",
+        },
+    ]
+    workflow, requests = make(answer(200, listed))
+    newest, older = await workflow.runs()
+    assert requests[0].url.path == "/workflows/runs"
+    assert dict(requests[0].url.params) == {
+        "workflow_type": "UpgradeClusterWorkflow",
+        "limit": "200",
+    }
+    assert (newest.workflow_id, newest.status, newest.closed_at) == (WORKFLOW_ID, "running", None)
+    assert older.status == "continued_as_new"
+    assert older.started_at is not None and older.started_at.hour == 9
+
+
+async def test_an_empty_run_list_is_an_answer_and_a_bad_one_is_unavailable() -> None:
+    workflow, _ = make(answer(200, []))
+    assert await workflow.runs() == []
+    for handler in (answer(500, {}), answer(200, {"runs": []}), failing(httpx.ReadTimeout)):
+        workflow, _ = make(handler)
+        with pytest.raises(WorkflowsUnavailableError):
+            await workflow.runs()
+
+
 # ── Metrics and the OpenAPI ──────────────────────────────────────────────────
 
 

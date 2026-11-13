@@ -13,6 +13,7 @@ import { day1Api, day1Keys } from "@/lib/api/day1";
 import { isOpen } from "@/lib/upgrade";
 import type {
   ErrorCode,
+  FleetUpgrade,
   StartUpgradeRequest,
   UpgradeDecision,
   UpgradeDecisionRequest,
@@ -23,8 +24,14 @@ import type {
 /** Upgrades off (501 FEATURE_DISABLED: the web shows nothing), on with no run yet, or the newest run. */
 export type UpgradeRead = { state: "off" } | { state: "none" } | { state: "run"; run: UpgradeRun };
 
+/** Upgrades off, or every cluster's newest run (`GET /api/day1/upgrades`). */
+export type FleetUpgradesRead = { state: "off" } | { state: "on"; runs: FleetUpgrade[] };
+
 /** How often an open run is read again. */
 const RUN_POLL_MS = 10_000;
+
+/** How often the fleet's runs are read again while shown; day1 keeps the orchestrator's answer 10 s. */
+const FLEET_POLL_MS = 15_000;
 
 /** Refusals after which the run on the page is out of date: it is read again. */
 const STALE_RUN_CODES: readonly ErrorCode[] = [
@@ -123,5 +130,27 @@ export function useUpgradeActionDecision(name: string, where: string) {
       day1Api.clusters.decideUpgradeAction(name, where, actionId, approve),
     onSuccess: (result) => updates.show(result.run),
     onError: updates.refreshIfStale,
+  });
+}
+
+/**
+ * Every cluster's newest upgrade run, for the Clusters page's Upgrades view
+ * and its "Upgrading" badges, which share this one query (ADR-0055's
+ * amendment). Upgrades off (501 FEATURE_DISABLED): the page shows neither.
+ */
+export function useFleetUpgrades() {
+  return useQuery<FleetUpgradesRead>({
+    queryKey: day1Keys.clusters.upgrades,
+    queryFn: async () => {
+      try {
+        return { state: "on", runs: (await day1Api.clusters.upgrades()).runs };
+      } catch (e) {
+        if (isApiError(e, "FEATURE_DISABLED")) return { state: "off" };
+        throw e;
+      }
+    },
+    staleTime: 10_000,
+    refetchInterval: FLEET_POLL_MS,
+    retry: false,
   });
 }
