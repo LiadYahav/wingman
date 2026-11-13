@@ -23,7 +23,7 @@ export function inheritedRevision(deployLayers: readonly ValueLayer[]): string {
 
 /**
  * Pick the chart revision. Anything but the inherited one is an emergency
- * pin (ADR-0022): it detaches this cluster from the team default and its
+ * pin (ADR-0022): it detaches this cluster from the add-on's revision and its
  * OCP-version pins until removed, so it has to be asked for explicitly.
  */
 export function VersionField({
@@ -74,7 +74,7 @@ export function VersionField({
           <p className="flex items-start gap-2 text-status-warning-fg">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>
-              {value} is an <strong>emergency pin</strong>: {clusterName} stops following the team default ({inherited}) and
+              {value} is an <strong>emergency pin</strong>: {clusterName} stops following the add-on&apos;s revision ({inherited}) and
               its OCP-version pins until someone removes it.
             </span>
           </p>

@@ -256,7 +256,7 @@ function ClusterDetailContent() {
 
   /**
    * Install a missing spec addon on day2 with the values requested at create,
-   * at the team's default version (ADR-0025: day2 refuses another version
+   * at the add-on's revision (ADR-0025: day2 refuses another version
    * unless it is an emergency pin). A write names the destination by the id
    * day2 resolved the name to.
    */
@@ -651,7 +651,7 @@ function ClusterDetailContent() {
           open
           onOpenChange={(open) => { if (!open) setFixingAddon(null); }}
           title={`Fix: Install ${fixingAddon.addon_name}`}
-          description={`Install ${fixingAddon.addon_name} at the ${fixingAddon.team} team's default version, with the values requested at create. Opens a GitLab MR for approval.`}
+          description={`Install ${fixingAddon.addon_name} of ${fixingAddon.team} at the add-on's revision, with the values requested at create. Opens a GitLab MR for approval.`}
           onConfirm={() => addonFixMutation.mutate(fixingAddon)}
           isPending={addonFixMutation.isPending}
           confirmLabel="Confirm — Create Install MR"
@@ -667,14 +667,14 @@ function ClusterDetailContent() {
             </div>
             <div className="flex gap-3">
               <span className="text-muted-foreground w-24 shrink-0">Version</span>
-              <span className="font-medium">team default</span>
+              <span className="font-medium">the add-on&apos;s revision</span>
             </div>
             <div className="flex gap-3">
               <span className="text-muted-foreground w-24 shrink-0">Values</span>
               <span className="font-medium">
                 {Object.keys(fixingAddon.override_values).length > 0
                   ? `${Object.keys(fixingAddon.override_values).length} requested at create`
-                  : "chart and team defaults"}
+                  : "chart and Sig values"}
               </span>
             </div>
           </div>

@@ -7,7 +7,7 @@ import { parseValuesYaml, toYaml, type Values } from "@/lib/values";
 /**
  * A values file edited as YAML, as the values editor's YAML view does: the
  * text is the file, checked as it is typed. Used where there is no merged
- * stack to show (a team default, a fleet default, a new add-on): the file is
+ * stack to show (Sig values, a fleet default, a new add-on): the file is
  * the whole story. `onChange` gets the values while the text parses, and
  * `null` while it does not, so the form can hold its submit.
  */

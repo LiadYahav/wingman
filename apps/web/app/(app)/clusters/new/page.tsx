@@ -639,7 +639,7 @@ export default function NewClusterPage() {
   });
   const schema = useMemo(() => templateSchema ?? [], [templateSchema]);
 
-  // The day2 catalog: the team defaults seed the full values YAML editor
+  // The day2 catalog: the Sig values seed the full values YAML editor
   const { data: addonCatalog = [] } = useQuery<CatalogEntry[]>({
     queryKey: day2Keys.catalog,
     queryFn: () => api.get<CatalogEntry[]>(day2Api.catalog),

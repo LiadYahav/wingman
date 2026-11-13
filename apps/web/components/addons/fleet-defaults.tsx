@@ -36,7 +36,7 @@ function FleetDefaultRow({ fd }: { fd: FleetDefault }) {
         </span>
         <span className="block truncate text-xs" title={syncSummary(fd.sync)}>
           <span className="text-foreground/90">{syncSummary(fd.sync)}</span>
-          <span className="text-muted-foreground">{fd.sync_overridden ? " · set by the fleet default" : " · the team default's"}</span>
+          <span className="text-muted-foreground">{fd.sync_overridden ? " · set by the fleet default" : " · the add-on's"}</span>
         </span>
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-1.5">

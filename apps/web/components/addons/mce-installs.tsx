@@ -151,7 +151,7 @@ export function DeployOnMces({ detail, panel, writes }: { detail: AddonDetail; p
   const blockedBy = panel.is_default
     ? `${detail.name} is a default on every MCE: installing it in an MCE's own folder too would generate its app twice (the XOR rule). Give one MCE its own values above instead.`
     : !detail.catalog
-      ? `${detail.name} is not in ${detail.team}'s catalog (operators/${detail.name}/): an install starts from its team default.`
+      ? `${detail.name} is not in ${detail.team}'s catalog (operators/${detail.name}/): an install starts from the add-on.`
       : null;
   const writable = writes.isAdmin && !writes.readOnlyReason && !blockedBy;
   const valuesPath = `sites/<site>/<env>/mces/<mce>/in-cluster/${detail.name}/values.yaml`;
@@ -274,7 +274,7 @@ export function DeployOnMces({ detail, panel, writes }: { detail: AddonDetail; p
                 path={valuesPath}
                 initial={{}}
                 onChange={setValues}
-                placeholder="# Empty: the team values apply."
+                placeholder="# Empty: the Sig values apply."
               />
               <div className="flex justify-end">
                 <button
