@@ -119,6 +119,7 @@ own.
   unconfigured, start 202/409/422/502/504, and a locked server refused for a
   named install.
 - `apps/web/e2e/tests/inventory.spec.ts`: the page, the runs and the dialog
-  on mocked routes.
+  on mocked routes; `apps/web/lib/inventory/inventory.test.ts` (Vitest): the
+  grouping, the run labels, what the dialog may send.
 - 2026-11-13: the stack with `DAY1_FAKE_FLEET=true DAY1_ADD_SERVERS=true`
   shows the counts, herzi's fake runs, and an install by count and by name.

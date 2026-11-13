@@ -268,9 +268,10 @@ now and then on one short pool (`dev/fleet-fixtures/inventory.yaml`).
 
 ## 8. Left for later
 
-- **The shared table.** The runs and a pool's servers are simple lists.
-  TODO: switch the runs to `apps/web/components/data-table/` once the
-  Segments branch (ADR-0047) is on main.
+- **The shared table.** The runs use `apps/web/components/data-table/`
+  (ADR-0047), without sorting, filters or a column picker; a pool's servers
+  are a short list in the picker. Filters (by MCE, pool, origin, status)
+  come when the runs outgrow one screen.
 - **A link from each server to its record** in the future Server Scan area,
   once it exists.
 - herzi's annotations (§0), its Lease ("is herzi running here?") and its
