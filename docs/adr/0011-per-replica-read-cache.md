@@ -49,3 +49,21 @@ GitLab at once.
 single-flight, failures not cached, prefix invalidation, a fetch across an
 invalidation not kept, the size bound. Each service adds a test that its
 write path clears its read keys and fails if the invalidation is removed.
+
+## Amendment (2026-11-13): a dropped request never cancels a shared fetch
+
+The first reader of a missing key used to run the fetch itself, and the
+readers who joined it waited on its result. When that first request was
+cancelled (the browser left the page, a client timed out), the fetch was
+cancelled with it: every reader who had joined failed as if it had been
+cancelled too, and nothing was kept, so the next reader fetched again.
+
+The fetch now runs in a task of its own, and every reader awaits it shielded,
+the first one included (as the snapshot store's archive reads already did,
+ADR-0035). A cancelled reader stops waiting; the fetch finishes, the others
+get its value, and it is kept as usual. Single-flight, failures not cached and
+the invalidation rules are unchanged.
+
+Pinned by `packages/wingman-core/tests/unit/infrastructure/test_cache.py`: a
+cancelled first reader leaves the second its value, and a fetch whose only
+reader was cancelled still keeps its value for the next.
