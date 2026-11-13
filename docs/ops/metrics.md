@@ -42,7 +42,7 @@ Operations of the other dependencies (day1):
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
 | `server_scan` | `list_server_rows`, `get_server` |
-| `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision` |
+| `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
 ## Reading the GitLab outcomes
@@ -87,6 +87,18 @@ Operations of the other dependencies (day1):
   lost; look at the cluster's provision run before creating it again.
   `conflict`: a run for the cluster is already going. `rejected`: the
   orchestrator refused the name or the file (its 422).
+- `workflows` `upgrade_targets`, `start_upgrade` and `decide_upgrade` are a
+  cluster's upgrade through the upgrade-cluster workflow (`DAY1_UPGRADES`,
+  ADR-0055). The targets read waits for a short run, up to
+  `WORKFLOWS_TARGETS_TIMEOUT_SECONDS`: a slow one is the orchestrator's
+  wait, and `unavailable` includes its 504 (no limb answered). `not_found`:
+  the workflow's day1 has no such file, or no running run takes the
+  decision; `rejected`: the file or the rules cannot be used, or a body the
+  orchestrator refused. `decide_upgrade` counts every decision and agent
+  proposal, with no decision label: `conflict` is the run's validator
+  refusing one (the person sees its words), `ambiguous` a decision sent
+  whose answer was lost (it may have landed; never retried). `start_upgrade`
+  `conflict`: the cluster already has an open run.
 - `segments_manager` `get_segment` is one cluster's segment, read for its
   EPG (ADR-0039). A segment segments-manager does not have is `ok`: that is
   an answer, shown as a warning. `unavailable` means it could not be reached

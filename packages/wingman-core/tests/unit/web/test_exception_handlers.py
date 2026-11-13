@@ -18,6 +18,9 @@ from wingman_core.web.errors import (
     FeatureDisabled,
     NodeNotInCluster,
     UninstallAlreadyRunning,
+    UpgradeAlreadyRunning,
+    UpgradeDecisionRefused,
+    UpgradeTargetsRefused,
     ValidationFailed,
 )
 from wingman_core.web.exception_handlers import (
@@ -125,6 +128,9 @@ async def test_unexpected_errors_hide_internals_and_mint_a_request_id(
         (DependencyUnavailable("hub down"), 502, "DEPENDENCY_UNAVAILABLE"),
         (NodeNotInCluster("moved"), 409, "NODE_NOT_IN_CLUSTER"),
         (UninstallAlreadyRunning("running"), 409, "UNINSTALL_ALREADY_RUNNING"),
+        (UpgradeAlreadyRunning("running"), 409, "UPGRADE_ALREADY_RUNNING"),
+        (UpgradeDecisionRefused("not now"), 409, "UPGRADE_DECISION_REFUSED"),
+        (UpgradeTargetsRefused("no rules"), 409, "UPGRADE_TARGETS_REFUSED"),
     ],
 )
 async def test_non_git_errors_have_their_own_codes(error: AppError, status: int, code: str) -> None:

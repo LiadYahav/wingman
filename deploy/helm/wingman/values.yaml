@@ -90,6 +90,12 @@ day1:
   # (masters, infra nodes and tainted, cordoned or NotReady nodes left out).
   # Without live status the free pods are not checked.
   placementMinFreePods: 70
+  # Upgrades through the platform's upgrade-cluster workflow (ADR-0055): the
+  # cluster page starts it, shows its run and sends its decisions; while on, an
+  # edit may not change mastertag or a workertag, nor add pausedUntil. Needs
+  # workflows.url, and the workflow must read the same day1 repo as Wingman.
+  upgrades:
+    enabled: false
 day2:
   cacheTtlSeconds: 15     # GitLab reads, per replica (ADR-0011; at most 60)
 
@@ -265,6 +271,7 @@ workflows:
   url: ""                 # e.g. "http://workflows-orchestrator-api.<ns>.svc:8080"; empty: off
   sslVerify: "true"       # "true", "false" or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
+  targetsTimeoutSeconds: 65  # the upgrade targets read (the orchestrator waits up to 60 s), at most 120
 
 # ── segments-manager: the cluster's EPG, checked against Git (ADR-0039) ───────
 # Off by default. With a url, the cluster page's "HostedCluster & network" card

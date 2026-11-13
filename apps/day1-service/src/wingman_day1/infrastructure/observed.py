@@ -16,6 +16,7 @@ from enum import StrEnum
 
 from wingman_core.observability.metrics import Dependency, Outcome, WingmanMetrics
 from wingman_day1.domain.errors import (
+    AmbiguousDecisionError,
     AmbiguousStartError,
     Day2UnavailableError,
     HubDeniedError,
@@ -26,11 +27,16 @@ from wingman_day1.domain.errors import (
     IdentityUnavailableError,
     ProvisionAlreadyRunningError,
     ProvisionRefusedError,
+    ResourceNotFoundError,
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanDeniedError,
     ServerScanUnavailableError,
     UninstallAlreadyRunningError,
+    UpgradeAlreadyRunningError,
+    UpgradeDecisionRefusedError,
+    UpgradeRefusedError,
+    UpgradeTargetsRefusedError,
     WorkflowRefusedError,
     WorkflowsUnavailableError,
 )
@@ -95,6 +101,11 @@ class WorkflowsOperation(StrEnum):
     GET_RUN = "get_run"
     START_UNINSTALL = "start_uninstall"
     START_PROVISION = "start_provision"
+    UPGRADE_TARGETS = "upgrade_targets"
+    """The targets of one cluster (a short read-only run the orchestrator waits for, ADR-0055)."""
+    START_UPGRADE = "start_upgrade"
+    DECIDE_UPGRADE = "decide_upgrade"
+    """Every decision on an upgrade run, and on its agent's proposals (no decision label)."""
 
 
 _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
@@ -111,7 +122,13 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (UninstallAlreadyRunningError, Outcome.CONFLICT),
     (ProvisionAlreadyRunningError, Outcome.CONFLICT),
     (ProvisionRefusedError, Outcome.REJECTED),
+    (UpgradeAlreadyRunningError, Outcome.CONFLICT),
+    (UpgradeDecisionRefusedError, Outcome.CONFLICT),
+    (UpgradeRefusedError, Outcome.REJECTED),
+    (UpgradeTargetsRefusedError, Outcome.REJECTED),
+    (ResourceNotFoundError, Outcome.NOT_FOUND),
     (AmbiguousStartError, Outcome.AMBIGUOUS),
+    (AmbiguousDecisionError, Outcome.AMBIGUOUS),
     (WorkflowRefusedError, Outcome.REJECTED),
     (WorkflowsUnavailableError, Outcome.UNAVAILABLE),
     (SegmentsManagerUnavailableError, Outcome.UNAVAILABLE),

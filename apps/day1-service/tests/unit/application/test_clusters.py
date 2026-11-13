@@ -434,16 +434,16 @@ async def test_deleting_a_cluster_that_does_not_exist_is_not_found(
 async def test_a_cluster_file_is_parsed_once_per_text(
     context: Day1Context, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import wingman_day1.application.clusters as clusters_module
+    import wingman_day1.application.parsed_files as parsed_files
 
     parsed: list[str] = []
-    load_values = clusters_module.load_values
+    load_values = parsed_files.load_values
 
     def counting(content: str) -> dict[str, object]:
         parsed.append(content)
         return load_values(content)
 
-    monkeypatch.setattr(clusters_module, "load_values", counting)
+    monkeypatch.setattr(parsed_files, "load_values", counting)
     first = await context.clusters.clusters()
     once = len(parsed)
     again = await context.clusters.clusters()

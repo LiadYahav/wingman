@@ -7,7 +7,9 @@ the merge is refused rather than merging what nobody saw (ADR-0006).
 
 Editing an MR's files adds a commit on top of its branch, never a force-push,
 guarded per file by the revision the reviewer saw. A cluster file edited this
-way must keep every automation-owned key as the branch has it.
+way must keep every automation-owned key as the branch has it, and, with
+``DAY1_UPGRADES`` on, its versions too unless the cluster is still being
+created (ADR-0055).
 
 The list also shows the provision-cluster workflow's open day1 MRs, marked
 as the workflow's; they are reviewed and merged in GitLab, never here: the
@@ -69,11 +71,22 @@ class Change:
 class ApprovalService:
     """List, show, edit, approve and reject Wingman MRs in the day1 and specs projects."""
 
-    def __init__(self, gitlab: GitLabPort, repos: Mapping[RepoKey, RepoReads]) -> None:
-        """Act through ``gitlab``; ``repos`` give each project and its cached MR lists."""
+    def __init__(
+        self,
+        gitlab: GitLabPort,
+        repos: Mapping[RepoKey, RepoReads],
+        *,
+        versions_by_workflow: bool = False,
+    ) -> None:
+        """Act through ``gitlab``; ``repos`` give each project and its cached MR lists.
+
+        ``versions_by_workflow`` (``DAY1_UPGRADES``): a cluster's versions are
+        the upgrade workflow's, and a review edit may not change them (ADR-0055).
+        """
         self._gitlab = gitlab
         self._approvals = Approvals(gitlab)
         self._repos = dict(repos)
+        self._versions_by_workflow = versions_by_workflow
 
     async def pending(self) -> list[Change]:
         """Open Wingman MRs in both projects, newest first, whatever branch they target.
@@ -164,7 +177,14 @@ class ApprovalService:
         if not files:
             raise InvalidInputError("nothing to commit", ["no files were sent"])
         changes = [
-            await self._guarded_update(repo, ref, RepoPath(path), content, at=reviewed)
+            await self._guarded_update(
+                repo,
+                ref,
+                RepoPath(path),
+                content,
+                at=reviewed,
+                target=merge_request.target_branch,
+            )
             for path, content in sorted(files.items())
         ]
         await self._gitlab.commit(
@@ -186,6 +206,14 @@ class ApprovalService:
             return []
         return [p.merge_request for p in await provision_merge_requests(day1)]
 
+    async def _exists(self, ref: MergeRequestRef, path: RepoPath, branch: str) -> bool:
+        """Whether ``path`` is on ``branch``: a create MR's cluster does not exist yet."""
+        try:
+            await self._gitlab.read_file(ref.project_id, path, branch)
+        except NotFoundError:
+            return False
+        return True
+
     async def _ref(self, repo: RepoKey, iid: int) -> MergeRequestRef:
         return MergeRequestRef((await self._repos[repo].project()).id, iid)
 
@@ -194,14 +222,22 @@ class ApprovalService:
         return {p.id for p in projects}
 
     async def _guarded_update(
-        self, repo: RepoKey, ref: MergeRequestRef, path: RepoPath, content: str, *, at: str
+        self,
+        repo: RepoKey,
+        ref: MergeRequestRef,
+        path: RepoPath,
+        content: str,
+        *,
+        at: str,
+        target: str,
     ) -> FileChange:
         try:
             current = await self._gitlab.read_file(ref.project_id, path, at)
         except NotFoundError:
             return FileChange.create(path, content)
         if repo is RepoKey.DAY1 and paths.parse_hosted_clusters_path(path) is not None:
-            problems = edit_problems(current.content, content)
+            versions = self._versions_by_workflow and await self._exists(ref, path, target)
+            problems = edit_problems(current.content, content, versions_by_workflow=versions)
             if problems:
                 raise InvalidInputError(f"the edit of {path} is not valid", problems)
         if repo is RepoKey.SPECS and str(path).endswith(paths.SPEC_SUFFIX):

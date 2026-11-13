@@ -169,6 +169,26 @@ class ProvisionRefusedError(InvalidInputError):
     """The orchestrator refused the name or the file of a provision (its 422); nothing started."""
 
 
+class UpgradeAlreadyRunningError(WorkflowsError):
+    """The cluster already has an open upgrade-cluster run (the orchestrator's 409, ADR-0055)."""
+
+
+class UpgradeRefusedError(InvalidInputError):
+    """The orchestrator refused an upgrade's body (its 422); nothing started."""
+
+
+class UpgradeDecisionRefusedError(WorkflowsError):
+    """The run was not waiting for that decision (its validator's 409); the message is its words."""
+
+
+class UpgradeTargetsRefusedError(WorkflowsError):
+    """The workflow cannot use the cluster's file or the upgrade rules (its 409 to the targets)."""
+
+
+class AmbiguousDecisionError(WorkflowsError):
+    """A decision was sent but its outcome is unknown: it may have landed. Never retried."""
+
+
 # ── segments-manager (a cluster's EPG, checked against Git; ADR-0039) ────────
 
 

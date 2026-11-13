@@ -18,10 +18,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import OrderedDict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Final
 
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, FileContent
@@ -35,6 +33,7 @@ from wingman_core.domain.mr_conventions import (
 )
 from wingman_core.domain.users import User
 from wingman_day1.application.machine_configs import MachineConfigService
+from wingman_day1.application.parsed_files import ParsedFiles
 from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.application.sites import SiteCatalog
@@ -48,7 +47,6 @@ from wingman_day1.domain.cluster_file import (
     describe_for_review,
     edit_problems,
     load_values,
-    read_provenance,
     read_values,
     rendered_file_problems,
     require_valid,
@@ -57,7 +55,6 @@ from wingman_day1.domain.cluster_file import (
 from wingman_day1.domain.errors import (
     AlreadyInUseError,
     AmbiguousNameError,
-    InvalidClusterFileError,
     InvalidInputError,
     RenderError,
     ResourceNotFoundError,
@@ -93,17 +90,6 @@ from wingman_day1.ports import ClusterProvisioner, ProvisionWorkflow, RepoReads
 logger = logging.getLogger(__name__)
 
 MAX_LIST_CONCURRENCY = 16
-MAX_PARSED: Final = 4096
-"""Parsed cluster files kept, by content (ADR-0041); a production repo has a few hundred."""
-
-
-@dataclass(frozen=True, slots=True)
-class _Parsed:
-    """What a cluster file's text says, which depends on nothing else."""
-
-    values: ClusterValues | None
-    provenance: Provenance
-    problems: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,6 +150,7 @@ class ClusterService:
         naming: HostedClusterNaming,
         provision: ProvisionWorkflow | None = None,
         placement: PlacementService | None = None,
+        versions_by_workflow: bool = False,
     ) -> None:
         """Read through ``day1`` (cached), write through ``provisioner``.
 
@@ -171,7 +158,8 @@ class ClusterService:
         instead of opening a merge request (``DAY1_PROVISIONER=workflow``,
         ADR-0042); every other change still goes through ``provisioner``.
         With ``placement``, a new cluster's MCE must pass the placement rule
-        (ADR-0050).
+        (ADR-0050). With ``versions_by_workflow`` (``DAY1_UPGRADES``), a modify
+        may not change the versions the upgrade workflow owns (ADR-0055).
         """
         self._day1 = day1
         self._sites = sites
@@ -181,7 +169,8 @@ class ClusterService:
         self._naming = naming
         self._provision = provision
         self._placement = placement
-        self._parsed: OrderedDict[str, _Parsed] = OrderedDict()
+        self._parsed = ParsedFiles()
+        self._versions_by_workflow = versions_by_workflow
 
     # ── Reads ───────────────────────────────────────────────────────────────
 
@@ -442,7 +431,10 @@ class ClusterService:
         expected = await self._expect(ref, current, last_commit_id)
         if content == current.content:
             raise InvalidInputError("the edit changes nothing", ["the content is identical"])
-        require_valid(edit_problems(current.content, content), message="the edit is not valid")
+        problems = edit_problems(
+            current.content, content, versions_by_workflow=self._versions_by_workflow
+        )
+        require_valid(problems, message="the edit is not valid")
         return await self._provisioner.apply(
             ClusterChange(
                 action=ClusterAction.MODIFY,
@@ -579,7 +571,7 @@ class ClusterService:
 
     async def _load(self, ref: ClusterRef, *, with_commit: bool) -> ClusterFile:
         file = await self._read(ref)
-        parsed = self._parse(file.content)
+        parsed = self._parsed.parse(file.content)
         last_change = await self._day1.last_change(ref.path) if with_commit else None
         values = parsed.values
         explicit = values.cluster_name if values else None
@@ -594,28 +586,3 @@ class ClusterService:
             problems=parsed.problems,
             last_change=last_change,
         )
-
-    def _parse(self, content: str) -> _Parsed:
-        """The file's values, header and problems, parsed once per distinct text (ADR-0041).
-
-        YAML parsing was most of a list's time, repeated for every file on
-        every request; the result depends only on the text, and nothing
-        changes it after.
-        """
-        hit = self._parsed.get(content)
-        if hit is not None:
-            self._parsed.move_to_end(content)
-            return hit
-        problems: list[str] = []
-        values: ClusterValues | None = None
-        try:
-            values = read_values(load_values(content))
-        except InvalidClusterFileError as exc:
-            problems.extend(exc.problems or [str(exc)])
-        provenance = read_provenance(content)
-        problems.extend(provenance.problems)
-        hit = _Parsed(values, provenance, tuple(problems))
-        self._parsed[content] = hit
-        if len(self._parsed) > MAX_PARSED:
-            self._parsed.popitem(last=False)
-        return hit

@@ -8,6 +8,11 @@ metadata:
   namespace: {{ include "wingman.namespace" . }}
   labels:
     {{- include "wingman.labels" . | nindent 4 }}
+  {{- if and .Values.day1.upgrades .Values.day1.upgrades.enabled }}
+  annotations:
+    # An upgrade's targets can take a minute (ADR-0055); the router's default is 30 s
+    haproxy.router.openshift.io/timeout: 130s
+  {{- end }}
 spec:
   host: {{ .Values.route.host }}
   to:

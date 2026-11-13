@@ -1,0 +1,88 @@
+# The upgrade-cluster workflow's fake for DAY1_FAKE_FLEET=true (development
+# only, ADR-0055; wingman_day1.infrastructure.fake_upgrade).
+#
+# `targets`: what GET /workflows/cluster-upgrade/upgrade-targets answers, in
+# the orchestrator's own shape, read with the real adapter's parser. A cluster
+# not listed gets `default`, with its own name. ocp4-prod-owl-site1 has nothing
+# newer to offer: an empty list is an answer. NodePool names follow the
+# default DAY1_CLUSTER_NAME_STRIP_PREFIX (`ocp4-`), as on the Nodes tab.
+#
+# `run`: the steps a started run walks, in the workflow's own words, on the
+# injected clock. A step with `seconds` moves on by itself; one with
+# `waits_for` stays until that decision. `control_plane` runs once,
+# `each_nodepool` once per NodePool of the plan in roll order (none with
+# "control plane only"); `moves` says which version is the target's once the
+# step is over. `{from}`, `{to}`, `{mce}`, `{nodepool}`, `{steps}` and
+# `{next}` are filled in. A sample for the demo, nothing more: day1 passes the
+# real workflow's phases and texts through and keeps no list of them.
+
+targets:
+  default:
+    mce_cluster: ""
+    mce_version: "2.8.2"
+    control_plane_version: "4.18.22"
+    supported_minors: ["4.18", "4.17", "4.16"]
+    ladder_revision: fake0001
+    verified_against_graph: "2026-10-31"
+    targets:
+      - {version: 4.18.56, minor: "4.18", steps: 1, control_plane_steps: 1, newest_in_minor: true, must: true}
+    nodepools: []
+    nodepool_order: []
+
+  ocp4-prod-lark-site1:
+    mce_cluster: ocp4-prod-mce-site1-a
+    mce_version: "2.8.2"
+    control_plane_version: "4.18.22"
+    supported_minors: ["4.18", "4.17", "4.16"]
+    ladder_revision: fake0001
+    verified_against_graph: "2026-10-31"
+    targets:
+      - {version: 4.18.56, minor: "4.18", steps: 2, control_plane_steps: 1, newest_in_minor: true, must: true}
+    nodepools:
+      - {name: prod-lark-site1-dell-r660-site1-128c-1024gb-5tb, workertag: null, upgrade_type: InPlace, zone: null, replicas: 3, max_unavailable: null}
+      - {name: prod-lark-site1-dell-r760-site1-64c-512gb-20tb, workertag: null, upgrade_type: InPlace, zone: null, replicas: 2, max_unavailable: "1"}
+    nodepool_order:
+      - prod-lark-site1-dell-r660-site1-128c-1024gb-5tb
+      - prod-lark-site1-dell-r760-site1-64c-512gb-20tb
+
+  ocp4-prod-herzi-site1:
+    mce_cluster: ocp4-prod-mce-site1-a
+    mce_version: "2.8.2"
+    control_plane_version: "4.16.27"
+    supported_minors: ["4.18", "4.17", "4.16"]
+    ladder_revision: fake0001
+    verified_against_graph: "2026-10-31"
+    targets:
+      - {version: 4.18.56, minor: "4.18", steps: 4, control_plane_steps: 3, newest_in_minor: true, must: true}
+      - {version: 4.17.58, minor: "4.17", steps: 3, control_plane_steps: 2, newest_in_minor: true, must: true}
+      - {version: 4.16.55, minor: "4.16", steps: 2, control_plane_steps: 1, newest_in_minor: true, must: true}
+    nodepools:
+      - {name: prod-herzi-site1-hp-gen11-site1-64c-512gb, workertag: null, upgrade_type: InPlace, zone: null, replicas: 3, max_unavailable: null}
+    nodepool_order: [prod-herzi-site1-hp-gen11-site1-64c-512gb]
+
+  ocp4-prod-owl-site1:
+    mce_cluster: ocp4-prod-mce-site1-a
+    mce_version: "2.8.2"
+    control_plane_version: "4.18.22"
+    supported_minors: ["4.18", "4.17", "4.16"]
+    ladder_revision: fake0001
+    verified_against_graph: "2026-10-31"
+    targets: []
+    nodepools: []
+    nodepool_order: []
+
+run:
+  before:
+    - {phase: planning, seconds: 3, waiting_for: "the plan: {from} → {to} along the ladder (fake)"}
+    - {phase: preflight, seconds: 3, waiting_for: "the pre-flight checks on {mce} (fake)"}
+    - {phase: awaiting-approval, waits_for: approve, waiting_for: "approve: {from} → {to} in {steps} steps (control plane, then each NodePool). Nothing is committed before approval (fake)"}
+  control_plane:
+    - {phase: waiting-for-slot, seconds: 3, waiting_for: "a control-plane slot on {mce} (fake)"}
+    - {phase: control-plane-step, seconds: 8, moves: control-plane, waiting_for: "the control plane to settle on {to} (fake)"}
+    - {phase: awaiting-day2-confirm, waits_for: confirm-day2, waiting_for: "confirm-day2: sync every sig's ocp-versions/{to}/ layer for this cluster, then confirm (fake)"}
+  each_nodepool:
+    - {phase: awaiting-continue, waits_for: continue, waiting_for: "continue, once the customer's readiness checks after the last step pass: {nodepool} rolls next (fake)"}
+    - {phase: nodepool-roll, seconds: 8, moves: nodepool, waiting_for: "{nodepool} to roll to {to}, one node at a time (fake)"}
+    - {phase: nodepool-gate, seconds: 4, waiting_for: "{nodepool}'s gate and soak (fake)"}
+  after:
+    - {phase: postflight, seconds: 3, waiting_for: "the post-flight checks (fake)"}

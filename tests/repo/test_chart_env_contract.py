@@ -202,3 +202,26 @@ def test_creates_open_merge_requests_unless_the_workflow_is_chosen() -> None:
     )
     assert refused.returncode != 0
     assert "day1.provisioner workflow needs workflows.url" in refused.stderr
+
+
+def test_upgrades_are_off_unless_turned_on_also_for_values_kept_from_3_15() -> None:
+    """ADR-0055: ``day1.upgrades.enabled`` defaults to off, also for values kept from a
+    release before it (no ``day1.upgrades`` map); on needs ``workflows.url``, and the
+    targets read gets its own timeout, 65 s unless set."""
+    assert render()["wingman-config"]["data"]["DAY1_UPGRADES"] == "false"
+    kept = render("--set", "day1.upgrades=null")["wingman-config"]["data"]
+    assert kept["DAY1_UPGRADES"] == "false"
+    on = render(*ALL_ON, "--set", "day1.upgrades.enabled=true")["wingman-config"]["data"]
+    assert on["DAY1_UPGRADES"] == "true"
+    assert on["WORKFLOWS_TARGETS_TIMEOUT_SECONDS"] == "65"
+    reused = render(*ALL_ON, "--set", "workflows.targetsTimeoutSeconds=null")
+    assert reused["wingman-config"]["data"]["WORKFLOWS_TARGETS_TIMEOUT_SECONDS"] == "65"
+    assert HELM is not None
+    refused = subprocess.run(  # noqa: S603 - a fixed argv, no shell
+        [HELM, "template", "wingman", str(CHART), "--set", "day1.upgrades.enabled=true"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode != 0
+    assert "day1.upgrades.enabled needs workflows.url" in refused.stderr

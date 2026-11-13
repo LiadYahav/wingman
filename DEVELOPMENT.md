@@ -101,6 +101,15 @@ Add `DAY1_PROVISIONER=workflow` as well to see Create start the provision-cluste
 nothing is written to GitLab. A file without a `mastertag` fails its run, and a second create
 of the same name while its run waits is refused (409), as the real workflow does.
 
+Add `DAY1_UPGRADES=true` to see a cluster's **Upgrade** through the upgrade-cluster workflow
+(ADR-0055). The fake answers the targets from `dev/fleet-fixtures/upgrade.yaml`
+(`ocp4-prod-lark-site1` and `ocp4-prod-herzi-site1` have NodePools, `ocp4-prod-owl-site1` has
+nothing newer, any other cluster gets a default), and a started run walks the fixture's steps
+on the clock: planning, `awaiting-approval` (Approve), a control-plane step,
+`awaiting-day2-confirm` (Confirm day2), then `awaiting-continue` (Continue) and a roll for each
+NodePool, and done. A decision the run is not waiting for is refused in words (409); Pause,
+Resume and Abort work while it is open. Nothing is written to GitLab.
+
 `DAY2_SERVICE_URL` matters: without it day1 asks the chart's `http://wingman-day2:8002`, and
 every cluster's drift is Unknown. The web dev server proxies only when both
 `WINGMAN_DEV_*_URL` are set (`apps/web/next.config.ts`); a production build never proxies.

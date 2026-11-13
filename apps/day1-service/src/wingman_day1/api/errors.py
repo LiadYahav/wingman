@@ -25,11 +25,15 @@ from wingman_core.web.errors import (
     RevisionConflict,
     Unauthorized,
     UninstallAlreadyRunning,
+    UpgradeAlreadyRunning,
+    UpgradeDecisionRefused,
+    UpgradeTargetsRefused,
     ValidationFailed,
 )
 from wingman_core.web.exception_handlers import app_error_response, register_domain_errors
 from wingman_day1.domain.errors import (
     AlreadyInUseError,
+    AmbiguousDecisionError,
     AmbiguousNameError,
     AmbiguousStartError,
     Day1Error,
@@ -51,6 +55,9 @@ from wingman_day1.domain.errors import (
     ServerScanUnavailableError,
     StaleError,
     UninstallAlreadyRunningError,
+    UpgradeAlreadyRunningError,
+    UpgradeDecisionRefusedError,
+    UpgradeTargetsRefusedError,
     WorkflowsNotConfiguredError,
     WorkflowsUnavailableError,
 )
@@ -76,7 +83,11 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (WorkflowsNotConfiguredError, FeatureDisabled),
     (WorkflowsUnavailableError, DependencyUnavailable),
     (UninstallAlreadyRunningError, UninstallAlreadyRunning),
+    (UpgradeAlreadyRunningError, UpgradeAlreadyRunning),
+    (UpgradeDecisionRefusedError, UpgradeDecisionRefused),
+    (UpgradeTargetsRefusedError, UpgradeTargetsRefused),
     (AmbiguousStartError, AmbiguousWrite),
+    (AmbiguousDecisionError, AmbiguousWrite),
     (SegmentsManagerUnavailableError, DependencyUnavailable),
 )
 
