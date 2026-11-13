@@ -117,3 +117,66 @@ installation type and OpenShift state, with the site catalog's display names.
 - `apps/web/e2e/tests/server-scan.spec.ts`: the switch for admins only, the
   brand and sidebar per area, the cards and counts, loading, error and
   not-configured states.
+
+## Amendments
+
+**2026-11-13, 3.23.0: the Servers page, and the area's first write.** The
+second page, server-scan's Servers page at `/server-scan/servers`, every
+feature and button (decision 14), in Wingman's design. The contract is §8 of
+`docs/notes/2026-11-13-server-scan-area-api.md`.
+
+- **The fleet rows from the one cache, with two `304`s.** The page reads
+  `GET /api/day1/server-scan/servers`: the rows the Nodes tab, placement and
+  Inventory Management already share (cached for `DAY1_CACHE_TTL_SECONDS`
+  and revalidated against server-scan's `ETag`), in server-scan's own shape,
+  every one of its 22 fields read. day1 answers with its own weak `ETag` and
+  `Cache-Control: no-cache`, so a page polling an unchanged fleet every 30
+  seconds, as the original does, gets a bodiless `304`. No open page makes
+  day1 read server-scan again.
+- **Reuse**: server-scan's row type, its pure filtering, search, sort, facet,
+  cluster-list and paging functions and their test cases, its export's
+  columns; the filters in the URL under server-scan's parameter names, so
+  the Sites counts become links with the filters they already carried.
+  Wingman's column filter is added to Model, the one column server-scan
+  cannot filter.
+- **Paged, not virtualised**: 50 rows a page as server-scan, through the
+  shared table, so the DOM holds 50 rows of the ~3,100; the filters run in
+  memory over the whole fleet. The rows are not persisted in the browser's
+  query cache (2 MB, polled).
+- **The cluster sidebar (MCEs, hosted clusters, UPI clusters) sits inside the
+  page**, as in server-scan: it is this page's filter, with counts that follow
+  the other filters; the area's sidebar stays navigation.
+- **The first write: a server's maintenance on and off**, as server-scan's UI
+  does it (its dialog's reason and words, Start maintenance; ending in one
+  click), plus the optional expected end server-scan's API takes and its
+  dialog does not ask. Behind Wingman's admin check, through the same port
+  and adapter (`ServerInventory.start_maintenance`, `end_maintenance`), never
+  retried (ADR-0006): unanswered is `504 AMBIGUOUS_WRITE`. day1 drops its
+  cached rows and sites after a write, so the next read shows it.
+- **server-scan's admin token** is a second, optional key of the existing
+  Secret (`serverScan.tokenSecret.adminKey`, default `admin-token`, read into
+  `SERVER_SCAN_ADMIN_TOKEN` by day1 only) and is sent only on the writes.
+  Without it the toggle is greyed out with one line saying so, unless
+  Wingman holds no token at all: that is a server-scan with auth off (the
+  sandbox), where writes need none.
+- **The person is recorded by Wingman.** server-scan records the token
+  (`api-token-admin`); day1 logs every write with the person's name
+  (`server_maintenance_started`, `_ended`, `_unconfirmed`), as node uninstall
+  logs its starts. Wingman has no other audit store than Git.
+
+Rejected: **virtualising the table** (one more library and a scroll unlike
+the original's pages, for a page of 50); **the cluster sidebar in the area's
+sidebar** (navigation and one page's filter state mixed, its counts tied to
+filters the other pages do not have); **writing with the viewer token** (a
+production server-scan refuses it, and a viewer token able to write is not a
+viewer token); **a second client or port for the writes** (ADR-0001: one
+server-scan client); **adding the person to the reason sent to server-scan**
+(it would change what the operator typed, which server-scan's donor rule
+reads).
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_rows.py`
+and `test_server_scan_maintenance.py` (every field, the `304`s, the writes:
+allowed, refused, unanswered, no token), `apps/day1-service/tests/api/test_server_scan_servers_api.py`,
+`tests/repo/test_chart_env_contract.py` (the optional admin key),
+`apps/web/lib/server-scan/*.test.ts` (server-scan's cases) and
+`apps/web/e2e/tests/server-scan-servers.spec.ts`.
