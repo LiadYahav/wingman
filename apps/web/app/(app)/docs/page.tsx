@@ -413,7 +413,7 @@ export default function DocsPage() {
               {
                 term: "Destination",
                 color: "bg-cyan-500/10 text-cyan-500",
-                description: "Anywhere Day2 deploys charts: the hub, an MCE, a hosted cluster or a UPI cluster. Each has an id that says where it is. A hosted cluster's charts are on its page (Addons); an add-on's page lists each destination its defaults reach.",
+                description: "Anywhere Day2 deploys charts: the hub, an MCE, a hosted cluster or a UPI cluster. Each has an id that says where it is. A hosted cluster's charts are on its page (Addons); an add-on's page lists each destination its defaults reach, each name a link to its charts.",
                 example: "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1 — a hosted cluster's id",
               },
               {
@@ -995,9 +995,9 @@ cluster               …/{cluster}/{chart}/values.yaml
           <h3 className="text-base font-semibold mt-6 mb-4">Installing a chart</h3>
           <div className="space-y-3 mb-5">
             <Step n={1} title="Open the destination's charts">
-              From a cluster&apos;s page (<strong>Addons</strong>), or a destination a finding names on the{" "}
-              <strong>Lints</strong> page. The charts page lists what is <strong>Installed</strong> and what is{" "}
-              <strong>Available</strong>.
+              From a cluster&apos;s page (<strong>Addons</strong>), a destination&apos;s name on an add-on&apos;s page, or a
+              destination a finding names on the <strong>Lints</strong> page. The charts page lists what is{" "}
+              <strong>Installed</strong> and what is <strong>Available</strong>.
             </Step>
             <Step n={2} title="Pick a chart under Available">
               Click <strong>Install</strong>, or select several and use <strong>Install selected</strong>: one MR per

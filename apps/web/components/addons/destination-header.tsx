@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpCircle, CheckCircle2, Info } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { KIND_LABEL, day2Api, day2Keys } from "@/lib/day2";
+import { KIND_LABEL, chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
@@ -30,6 +31,15 @@ export function KindBadge({ kind, className }: { kind: DestinationKind | string;
     >
       {known ? KIND_LABEL[kind as DestinationKind] : kind}
     </span>
+  );
+}
+
+/** A destination's name where a list names it: the link to its charts page. */
+export function DestinationLink({ id, name, className }: { id: string; name: string; className?: string }) {
+  return (
+    <Link href={chartsHref(id)} className={cn("font-semibold transition-colors hover:text-primary hover:underline", className)}>
+      {name}
+    </Link>
   );
 }
 

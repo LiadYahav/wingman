@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import type { OpenedChanges } from "@/components/addons/change-result";
 import { EditFleetDefaultDialog, MakeDefaultDialog } from "@/components/addons/default-dialogs";
 import { DestinationValuesDialog, EnvValuesDialog } from "@/components/addons/destination-values-dialog";
+import { DestinationLink } from "@/components/addons/destination-header";
 import { groupDestinations, stateStyle } from "@/components/addons/destinations";
 import { DeployOnMces } from "@/components/addons/mce-installs";
 import { RepoFileView } from "@/components/addons/repo-file";
@@ -92,7 +93,7 @@ function DestinationRow({
     >
       <div className="min-w-0 flex-1 basis-56 space-y-0.5">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="font-semibold">{d.name}</span>
+          <DestinationLink id={d.id} name={d.name} />
           <span className={cn("rounded-full px-2 py-px text-[10px] font-medium", style.tone)} title={style.description}>
             {style.label}
           </span>
@@ -347,7 +348,7 @@ export function ScopePanelCard({ detail, panel, writes }: { detail: AddonDetail;
           <ul className="space-y-0.5">
             {panel.unregistered.map((u) => (
               <li key={u.id} className="text-muted-foreground">
-                <span className="font-medium text-foreground">{u.name}</span>
+                <DestinationLink id={u.id} name={u.name} className="font-medium text-foreground" />
                 {u.site && ` · ${u.site}`}
                 {u.env && ` · ${u.env}`}: not registered with {detail.team}, a default does not reach it.
               </li>
