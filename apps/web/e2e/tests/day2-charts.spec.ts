@@ -1,5 +1,5 @@
 /**
- * The day2 pages against the service's shapes (types/day2.ts): a destination's
+ * The day2 pages against the service's shapes (types/day2/): a destination's
  * charts, the values preview with provenance, install/update/remove/bulk, the
  * lints list, and the catalog. Every API call is mocked (e2e/fixtures/day2.ts).
  */

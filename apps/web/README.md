@@ -165,8 +165,8 @@ lib/
 types/
 ├── index.ts            # Shared types (auth, MRs, audit) and re-exports
 ├── problem.ts          # RFC 9457 problem bodies and error codes
-├── day1.ts             # day1 service shapes (clusters, specs, MCEs, drift)
-└── day2.ts             # The day2 service's bodies (from its Pydantic schemas)
+├── day1/               # day1 service shapes, a file per section (clusters, specs, drift, nodes…)
+└── day2/               # The day2 service's bodies, a file per section (from its Pydantic schemas)
 ```
 
 ## UI conventions

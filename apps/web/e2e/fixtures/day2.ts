@@ -17,7 +17,7 @@ import type {
 } from "../../types/day2";
 
 /**
- * A day2 world shaped like the service's responses (types/day2.ts, from the
+ * A day2 world shaped like the service's responses (types/day2/, from the
  * Pydantic schemas): one hosted cluster with its own charts, a fleet default
  * and an emergency pin; an MCE, the hub, a UPI cluster; a name two
  * destinations share; and lint findings.
