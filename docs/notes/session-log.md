@@ -4,6 +4,40 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-13 — 3.12.2 to 3.13.1: Wingman always picks the MCE, add-ons in one place, Wingman made lighter.**
+- 3.12.2 (#39, ADR-0050's amendment): the create form asks the site, prod or
+  prep and the version, never the MCE; placement always runs, and with live
+  MCE reads off it decides on Git and server-scan and says what it did not check.
+- 3.13.0 (#38, ADR-0053's amendments): the Operators pages are folded into
+  Addons (the user: "operators is addons"; `operators/` is only the folder);
+  no exclusions (production has none, only per-env and per-cluster values);
+  values per env and per MCE, hosted or UPI cluster; Deploy on specific MCEs,
+  one install MR per MCE.
+- 3.13.1 (#40; the user: "we have put many many loads into the wingman"):
+  Quick Links lists links and never calls them, no status dots or ArgoCD
+  counts (ADR-0052's amendment, ~2,250 lines fewer); the Destinations page is
+  removed, a destination's name on an add-on's page opens its charts
+  (ADR-0020's amendment); `/health/ready` asks GitLab only until it has
+  answered once (ADR-0054; it made hundreds of calls an hour on the sandbox).
+  **Side features stay thin from now on**: config and links, no live calls,
+  no new adapter or Secret, unless the user asks for more.
+
+The team's sandbox runs Wingman in namespace `wingman` with its own GitLab
+(addresses and Secrets in the git-ignored `CLAUDE.local.md`). Its GitLab now
+also has four real charts for trying New add-on: `helm-charts/cert-manager`,
+`external-secrets`, `reloader`, `podinfo`, two version branches each.
+
+**Next:** the user's report that New add-on is very slow on the sandbox
+(retry on 3.13.x and read day2's and GitLab's logs for that request); a
+flaky E2E in `addon-defaults.spec.ts` (the edit form can open before its
+repo URL is filled: "Give the chart repo URL"). Then the plan's order in
+`docs/ideas/single-pane.md`: the single pane proven on Segments (ADR-0047),
+Servers (ADR-0048), RBAC with Keycloak federating LDAP (ADR-0051),
+cluster-navigator's data (ADR-0049). Before building any of it, ask what the
+thin version is. Waiting on the user and the team: the real pod cost of a
+control plane, server-scan's MCE names in production, the shared Git store,
+ADR-0042's open questions.
+
 **2026-11-12 — 3.8.0 to 3.12.0: the one-place plan, teams author operators, per-cluster rollout, MCE placement, Quick Links.**
 The architect's vision is the plan in `docs/ideas/single-pane.md` (#31,
 3.9.1): decisions 1–21, workstreams with fixed ADR numbers, open questions.

@@ -7,13 +7,14 @@ import { api } from "@/lib/api-client";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RepoBadge } from "@/components/common/repo-badge";
+import { ApprovalLink, WorkflowBadge } from "@/components/common/workflow-mr";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { cn, formatDate } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
-import { approvalHref, mrKey } from "@/lib/approvals";
+import { mrKey } from "@/lib/approvals";
 import type { ClusterStatus, DriftSummaryItem, MRDetail, SpecEntry } from "@/types";
 
 function StatCard({
@@ -229,7 +230,7 @@ export default function DashboardPage() {
           ) : recentApprovals.length > 0 ? (
             <div className="space-y-1">
               {recentApprovals.map((mr) => (
-                <Link key={mrKey(mr)} href={approvalHref(mr)}
+                <ApprovalLink key={mrKey(mr)} mr={mr}
                   className="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-muted/50 transition-colors group">
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{mr.title}</p>
@@ -237,8 +238,11 @@ export default function DashboardPage() {
                       by {mr.author.username} · {formatDate(mr.created_at)}
                     </p>
                   </div>
-                  <RepoBadge repo={mr.repo} className="ml-3 shrink-0" />
-                </Link>
+                  <div className="ml-3 flex shrink-0 items-center gap-1.5">
+                    <WorkflowBadge mr={mr} />
+                    <RepoBadge repo={mr.repo} />
+                  </div>
+                </ApprovalLink>
               ))}
             </div>
           ) : unavailableApprovals.length > 0 ? null : (

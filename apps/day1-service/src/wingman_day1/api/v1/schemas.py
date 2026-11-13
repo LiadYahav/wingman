@@ -57,7 +57,7 @@ from wingman_day1.domain.servers import ServerRow
 from wingman_day1.domain.specs import ClusterSpec, SpecBody, SpecMetadata, rule_problems
 from wingman_day1.domain.status import LiveStatus
 from wingman_day1.domain.value_drift import ValueDrift
-from wingman_day1.domain.workflows import ProvisionRun, WorkflowRun
+from wingman_day1.domain.workflows import ProvisionRun, WorkflowName, WorkflowRun
 
 MAX_FILE_BYTES = 256 * 1024
 
@@ -154,6 +154,8 @@ class MRDetailOut(BaseModel):
     has_conflicts: bool | None
     sha: str
     """The source branch head: pass it back to approve exactly what was reviewed."""
+    opened_by_workflow: WorkflowName | None = None
+    """The platform workflow that opened it (review it in GitLab); ``None`` for Wingman's."""
 
     @classmethod
     def of(cls, change: Change) -> MRDetailOut:
@@ -178,6 +180,7 @@ class MRDetailOut(BaseModel):
             repo=change.repo.value,
             has_conflicts=mr.has_conflicts,
             sha=mr.sha,
+            opened_by_workflow=change.opened_by_workflow,
         )
 
 

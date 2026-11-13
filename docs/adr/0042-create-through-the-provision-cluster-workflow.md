@@ -1,7 +1,7 @@
 # ADR-0042: A new cluster can be created by starting the provision-cluster workflow, behind a setting
 
 Date: 2026-11-12
-Status: Accepted; extends ADR-0017 (the provisioner's switch to a workflow)
+Status: Accepted; extends ADR-0017 (the provisioner's switch to a workflow); amended 2026-11-13: Wingman sees the workflow's merge request (see the amendment)
 
 ## Context
 
@@ -73,7 +73,9 @@ the file through Wingman's merge requests.
 - In `workflow` mode, the merge request is the workflow's. Wingman's
   approvals page, the pending rows and the name suggestion's "taken" set
   don't see it until it is merged (the API note's open questions). The
-  workflow's own 409 stops a second start for the same cluster.
+  workflow's own 409 stops a second start for the same cluster. (Since the
+  2026-11-13 amendment, the approvals page, the "taken" set, the "already
+  being created" check and MCE placement find it by its branch.)
 - The orchestrator has no auth and records no user. Day1 starts runs only
   for `AdminUser` and logs who did.
 - A new metrics operation, `start_provision`, on the `workflows` dependency
@@ -91,3 +93,60 @@ the file through Wingman's merge requests.
 - `apps/web/e2e/tests/provision-workflow.spec.ts`: after Create, the run
   with its phase, merge request link and error; the merge-request mode
   unchanged.
+
+## Amendment (2026-11-13): Wingman sees the workflow's merge request
+
+**Wingman sees the workflow's merge request by its branch; it is still
+reviewed and merged in GitLab.**
+
+The user: "see inside the wingman also the MR that being created by the
+workflow — count open MRs on provision-cluster/<stem>". The workflow's
+source (team-redbull/workflows, `shared/cluster_names.py`) names the
+merge request's source branch `provision-cluster/<file stem>`
+(`provision-cluster/ocp4-prod-rcs-site1-a`), targets `main`, and gives it
+no label and the title `Provision hosted cluster <stem> on <mce folder>`;
+a re-run reuses the branch and the merge request. Its author is the
+workflow's GitLab account.
+
+1. **One rule, in the day1 domain.** `provision_branch_stem` in
+   `wingman_day1.domain.workflows` gives the file stem for a branch that is
+   `provision-cluster/<stem>`, else `None`. Nothing else reads that branch.
+2. **It counts as an open create, in either mode.** A run may be started
+   outside Wingman, so day1 lists the day1 project's open merge requests
+   without a label filter (one more cached read, cleared like the others
+   by a write or a merge request webhook) and keeps those on the
+   workflow's branch. They are taken names for the name suggestion, a
+   create of the same name is refused with the merge request's URL, and
+   MCE placement counts each on its MCE and for its owner, read from its
+   diff as for Wingman's own. An unlabelled merge request on any other
+   branch is not counted. Wingman's labelled lists keep their meaning.
+3. **Approvals lists it, view only.** `GET /api/day1/approvals` adds the
+   workflow's open merge requests; `MRDetail.opened_by_workflow` is
+   `"provision-cluster"` for them and `null` for Wingman's, so the web
+   never reads branch names. The page marks the row with a
+   `provision-cluster workflow` badge and opens it in GitLab, not on
+   Wingman's review page.
+
+**Why approval stays in GitLab.** Wingman's rule is that nobody approves
+their own change, and it knows the requester from its own description
+footer (ADR-0007). The workflow's merge request has no footer and the
+orchestrator records no user (the API note's open question 5), so Wingman
+cannot tell whether the person approving started the run. `Approvals` in
+`wingman-core` still refuses any merge request without the `wingman`
+label: approving, rejecting or editing the workflow's answers 404.
+
+**Rejected:** listing provision runs from the orchestrator
+(`GET /workflows/runs?workflow_type=…`) instead. That depends on the run's
+class name (open question 4) and on the orchestrator answering, and a run
+is not the merge request: GitLab is where the merge request is, and day1
+already reads it.
+
+**Verification:**
+`apps/day1-service/tests/unit/domain/test_workflows.py` (the branch rule);
+`apps/day1-service/tests/api/test_provision_merge_requests_api.py` (listed
+with `opened_by_workflow`, a taken name, a refused create with its URL,
+404 for detail, approve, reject and edit, a webhook shows a new one, an
+unlabelled MR on another branch ignored);
+`apps/day1-service/tests/api/test_placement_api.py`
+(`test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_owner`);
+`apps/web/e2e/tests/approvals.spec.ts` (the badge and the GitLab link).

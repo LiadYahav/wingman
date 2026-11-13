@@ -56,6 +56,47 @@ test.describe("Approvals list", () => {
     await expect(page.getByText("day2 · redbull")).toBeVisible();
   });
 
+  test("the provision-cluster workflow's MR is marked and opens in GitLab", async ({ page }) => {
+    // ADR-0042's amendment: listed to be seen, reviewed and merged in GitLab
+    const WORKFLOW_MR = mockMR({
+      iid: 43, title: "Provision hosted cluster ocp4-prod-lynx-site1-a on ocp4-prod-mce-site1-a",
+      source_branch: "provision-cluster/ocp4-prod-lynx-site1-a", labels: [], opened_by_workflow: "provision-cluster",
+      author: { username: "workflows-bot", name: "workflows-bot", avatar_url: "" },
+      web_url: "https://gitlab.example.com/gitops-day1/platform-config/-/merge_requests/43",
+    });
+    await open(page);
+    await page.route("**/api/day1/approvals", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([WORKFLOW_MR, DAY1_MR, SPECS_MR]) })
+    );
+    await go(page, "/approvals");
+
+    const link = page.getByRole("link", { name: WORKFLOW_MR.title });
+    await expect(link).toHaveAttribute("href", WORKFLOW_MR.web_url);
+    await expect(link).toHaveAttribute("target", "_blank");
+    const row = page.getByRole("row").filter({ has: link });
+    await expect(row.getByTestId("workflow-badge")).toHaveText("provision-cluster workflow");
+    await expect(row.getByText("Review and merge it in GitLab.")).toBeVisible();
+    // Wingman's own MRs keep their review page and no badge
+    await expect(page.getByRole("link", { name: DAY1_MR.title })).toHaveAttribute("href", "/approvals/day1-42");
+    await expect(page.getByTestId("workflow-badge")).toHaveCount(1);
+    await expect(page.getByText("4 merge requests awaiting review")).toBeVisible();
+
+    // It is a day1 MR: the repo filter and the search keep it
+    await page.getByRole("button", { name: "day1", exact: true }).click();
+    await expect(page.getByText("2 of 4 merge requests awaiting review")).toBeVisible();
+    await expect(link).toBeVisible();
+    await page.getByPlaceholder("Search by title or author...").fill("lynx");
+    await expect(page.getByText("1 of 4 merge requests awaiting review")).toBeVisible();
+    await expect(link).toBeVisible();
+
+    // The overview's pending approvals card links it to GitLab too
+    await go(page, "/");
+    const card = page.getByRole("link", { name: new RegExp(WORKFLOW_MR.title) });
+    await expect(card).toHaveAttribute("href", WORKFLOW_MR.web_url);
+    await expect(card).toHaveAttribute("target", "_blank");
+    await expect(card.getByTestId("workflow-badge")).toBeVisible();
+  });
+
   test("a failing service is reported, not shown as 'all caught up'", async ({ page }) => {
     await open(page);
     await page.route("**/api/day2/approvals", (r: Route) => fulfillProblem(r, 503, "GIT_UNAVAILABLE", "GitLab could not be reached"));

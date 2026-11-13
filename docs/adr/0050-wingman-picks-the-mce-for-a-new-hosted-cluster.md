@@ -191,7 +191,9 @@ source.
   chosen MCE, so a type the pick lacks takes it out, and the pick moves to an
   MCE that has it.
 - A cluster on its way through the provision workflow's own MR is not
-  counted until it is merged (ADR-0042's consequence).
+  counted until it is merged (ADR-0042's consequence). (Since ADR-0042's
+  2026-11-13 amendment it is: day1 finds that MR by its branch,
+  `provision-cluster/<stem>`, and counts it on its MCE and for its owner.)
 - The form shows the numbers it decided on; the MR keeps them, so a reviewer
   sees why this MCE.
 
