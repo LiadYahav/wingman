@@ -3,7 +3,9 @@
 Reads dominate: every page lists clusters or addons, and each list is many
 GitLab calls. The cache keeps a value for a short TTL, and concurrent misses
 for one key share a single fetch, so a burst of page loads costs one GitLab
-round trip instead of one per request. A failed fetch is never cached.
+round trip instead of one per request. A failed fetch is never cached. The
+fetch runs in a task of its own that every reader awaits shielded, the first
+one too, so a reader whose request is dropped never cancels the others' fetch.
 
 A read may also accept a stale value (``stale``): once the TTL is over, the
 value is still answered for ``stale`` more seconds while one fetch refreshes
@@ -22,6 +24,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from functools import partial
 from typing import Final, cast
 
 logger = logging.getLogger(__name__)
@@ -52,9 +55,9 @@ class TtlCache:
         self._clock = clock
         self._max_entries = max_entries
         self._entries: dict[str, _Entry] = {}
-        self._inflight: dict[str, asyncio.Future[object]] = {}
+        self._inflight: dict[str, asyncio.Task[object]] = {}
         self._generation: dict[str, int] = {}
-        self._refreshing: set[asyncio.Task[object]] = set()
+        self._tasks: set[asyncio.Task[object]] = set()
 
     async def get_or_fetch[T](
         self,
@@ -79,66 +82,42 @@ class TtlCache:
             if entry.stale_until > now:
                 self._refresh(key, fetch, ttl, stale)
                 return cast("T", entry.value)
-        pending = self._inflight.get(key)
-        if pending is not None:
-            return cast("T", await asyncio.shield(pending))
-        return await self._fetch(key, fetch, ttl, stale)
+        task = self._inflight.get(key)
+        if task is None:
+            task = self._start(key, fetch, ttl, stale)
+        return cast("T", await asyncio.shield(task))
 
-    async def _fetch[T](
+    def _start[T](
         self, key: str, fetch: Callable[[], Awaitable[T]], ttl: float, stale: float
-    ) -> T:
-        future, generation = self._start(key)
-        return await self._run(key, future, generation, fetch, ttl, stale)
-
-    def _start(self, key: str) -> tuple[asyncio.Future[object], int]:
-        """Mark ``key`` as being fetched, so other readers wait for this fetch."""
-        future: asyncio.Future[object] = asyncio.get_running_loop().create_future()
-        self._inflight[key] = future
-        return future, self._generation.get(key, 0)
+    ) -> asyncio.Task[object]:
+        """Fetch ``key`` in a task of its own, which every reader of ``key`` waits for."""
+        task = asyncio.ensure_future(
+            self._run(key, self._generation.get(key, 0), fetch, ttl, stale)
+        )
+        self._inflight[key] = task
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return task
 
     async def _run[T](
-        self,
-        key: str,
-        future: asyncio.Future[object],
-        generation: int,
-        fetch: Callable[[], Awaitable[T]],
-        ttl: float,
-        stale: float,
+        self, key: str, generation: int, fetch: Callable[[], Awaitable[T]], ttl: float, stale: float
     ) -> T:
         try:
             value = await fetch()
-        except BaseException as exc:
-            future.set_exception(exc)
-            future.exception()  # mark retrieved; waiters re-raise it themselves
-            raise
-        else:
-            future.set_result(value)
-            # An invalidation during the fetch means the value may predate a write: don't keep it.
-            if self._generation.get(key, 0) == generation:
-                self._store(key, value, ttl, stale)
-            return value
         finally:
-            if self._inflight.get(key) is future:
+            if self._inflight.get(key) is asyncio.current_task():
                 del self._inflight[key]
+        # An invalidation during the fetch means the value may predate a write: don't keep it.
+        if self._generation.get(key, 0) == generation:
+            self._store(key, value, ttl, stale)
+        return value
 
     def _refresh[T](
         self, key: str, fetch: Callable[[], Awaitable[T]], ttl: float, stale: float
     ) -> None:
         """Start one background fetch of ``key``, unless one is already running."""
-        if key in self._inflight:
-            return
-        future, generation = self._start(key)
-
-        async def run() -> object:
-            try:
-                return await self._run(key, future, generation, fetch, ttl, stale)
-            except Exception as exc:  # noqa: BLE001 - a failed refresh keeps the stale value
-                logger.warning("refreshing %s failed: %s: %s", key, type(exc).__name__, exc)
-                return None
-
-        task = asyncio.ensure_future(run())
-        self._refreshing.add(task)
-        task.add_done_callback(self._refreshing.discard)
+        if key not in self._inflight:
+            self._start(key, fetch, ttl, stale).add_done_callback(partial(_log_failed_refresh, key))
 
     def invalidate(self, key: str) -> None:
         """Forget ``key``, and any fetch of it already running.
@@ -164,3 +143,9 @@ class TtlCache:
             del self._entries[oldest]
         now = self._clock()
         self._entries[key] = _Entry(value, now + ttl, now + ttl + stale)
+
+
+def _log_failed_refresh(key: str, task: asyncio.Task[object]) -> None:
+    """A failed refresh keeps the stale value (``get_or_fetch``); it is only logged."""
+    if not task.cancelled() and (exc := task.exception()) is not None:
+        logger.warning("refreshing %s failed: %s: %s", key, type(exc).__name__, exc)

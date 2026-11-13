@@ -50,6 +50,53 @@ async def test_concurrent_misses_share_one_fetch() -> None:
     assert calls == 1
 
 
+async def test_a_cancelled_first_reader_does_not_cancel_the_shared_fetch() -> None:
+    """The first reader's request is dropped: the others still get the value, and it is kept."""
+    cache = TtlCache()
+    calls = 0
+    release = asyncio.Event()
+
+    async def fetch() -> str:
+        nonlocal calls
+        calls += 1
+        await release.wait()
+        return "v"
+
+    first = asyncio.create_task(cache.get_or_fetch("k", fetch, ttl=10))
+    second = asyncio.create_task(cache.get_or_fetch("k", fetch, ttl=10))
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+    release.set()
+    assert await second == "v"
+    assert await cache.get_or_fetch("k", fetch, ttl=10) == "v"
+    assert calls == 1
+
+
+async def test_a_fetch_whose_only_reader_is_cancelled_still_keeps_its_value() -> None:
+    cache = TtlCache()
+    calls = 0
+    release = asyncio.Event()
+
+    async def fetch() -> str:
+        nonlocal calls
+        calls += 1
+        await release.wait()
+        return "v"
+
+    only = asyncio.create_task(cache.get_or_fetch("k", fetch, ttl=10))
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    only.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await only
+    release.set()
+    assert await asyncio.wait_for(cache.get_or_fetch("k", fetch, ttl=10), 1) == "v"
+    assert calls == 1
+
+
 async def test_failures_are_shared_but_never_cached() -> None:
     cache = TtlCache()
     attempts = 0

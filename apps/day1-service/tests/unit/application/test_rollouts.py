@@ -293,6 +293,9 @@ async def test_once_gitlab_stops_answering_a_run_starts_no_more_mrs(
         raise GitUnavailableError("connection refused")
 
     monkeypatch.setattr(gitlab, "commit", down)
+    # One at a time, so the second starts after GitLab stopped answering; with more at once,
+    # those already started are sent, as they are against a real GitLab
+    monkeypatch.setattr(context.rollouts, "_concurrency", 1)
     run = await context.rollouts.run(FLAVOR, RolloutTrigger.MERGE)
     assert (run.opened, run.failed) == (0, 2)
     assert len(sent) == 1
