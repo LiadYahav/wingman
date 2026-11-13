@@ -146,7 +146,7 @@ async def test_team_default_edit_sends_only_what_changed(jane: httpx.AsyncClient
     assert change["action"] == "update-default" and change["files"] == [
         {"action": "update", "path": "operators/bmhgen/bmhgen.yaml"}
     ]
-    assert change["title"] == "[Wingman/Day2] Update addon redbull/bmhgen team default"
+    assert change["title"] == "[Wingman/Day2] Update addon redbull/bmhgen Sig values"
 
 
 async def test_make_default_dry_run_shows_the_moves_and_the_confirmation(

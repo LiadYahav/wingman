@@ -8,8 +8,14 @@ from functools import partial
 import pytest
 import yaml
 
-from wingman_core.domain.git import AccessLevel, ChangeKind
-from wingman_core.domain.mr_conventions import Verb, parse_mr_description, parse_mr_title
+from wingman_core.domain.git import AccessLevel, ChangeKind, FileChange, RepoPath
+from wingman_core.domain.merge_request import MRState, NewMergeRequest
+from wingman_core.domain.mr_conventions import (
+    Verb,
+    mr_description,
+    parse_mr_description,
+    parse_mr_title,
+)
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day2.application.authoring import (
@@ -299,9 +305,53 @@ async def test_editing_the_team_default_rewrites_only_what_changes(
         "targetRevision: 1.1.0\n"
     )
     assert result.merge_request is not None
-    assert result.merge_request.title == "[Wingman/Day2] Update addon redbull/bmhgen team default"
+    assert result.merge_request.title == "[Wingman/Day2] Update addon redbull/bmhgen Sig values"
     assert {r.id for r in result.plan.reach} >= {"mce:site1:prod:ocp4-prod-mce-site1-a"}
     assert "targetRevision moves to 1.1.0" in result.plan.notes[0]
+
+
+async def test_an_add_on_edit_says_sig_values_and_one_opened_saying_team_default_still_reads(
+    services: Day2Services, gitlab: InMemoryGitLab, jane_user: User, bob_user: User
+) -> None:
+    # ADR-0043's amendment: the title, commit and description say Sig values since 3.19.1.
+    edit = TeamDefaultEdit(values={"replicas": 3})
+    write = partial(services.authoring.update_team_default, "redbull", "bmhgen", edit, jane_user)
+    mr = (await confirmed(write)).merge_request
+    assert mr is not None and mr.title.endswith(" redbull/bmhgen Sig values")
+    [commit] = await gitlab.list_commits(mr.ref.project_id, ref=mr.source_branch, limit=1)
+    assert commit.title == "Update addon redbull/bmhgen Sig values"
+    assert mr.description.startswith("Update addon redbull/bmhgen Sig values (team **redbull**)")
+    assert "team default" not in f"{mr.title}\n{commit.message}\n{mr.description}"
+    # An MR opened before 3.19.1 keeps its title, and reads as the same change.
+    footer = parse_mr_description(mr.description)
+    assert footer is not None and footer.action == "update-default"
+    project = await gitlab.get_project("sigs/redbull")
+    await gitlab.commit(
+        project.id,
+        branch="platform/jane/update-default-bmhgen-20261112T090000",
+        start_branch="main",
+        message="Update addon redbull/bmhgen team default",
+        changes=[FileChange.create(RepoPath("operators/bmhgen/values-old.yaml"), "a: 1\n")],
+    )
+    old = await gitlab.create_merge_request(
+        project.id,
+        NewMergeRequest(
+            "platform/jane/update-default-bmhgen-20261112T090000",
+            "main",
+            "[Wingman/Day2] Update addon redbull/bmhgen team default",
+            mr_description("Update addon redbull/bmhgen team default (team **redbull**).", footer),
+            labels=mr.labels,
+        ),
+    )
+    pending = {c.change.merge_request.ref.iid: c.change for c in await services.approvals.pending()}
+    assert pending[old.ref.iid].merge_request.title.endswith(" redbull/bmhgen team default")
+    assert pending[old.ref.iid].title == pending[mr.ref.iid].title == parse_mr_title(mr.title)
+    assert pending[old.ref.iid].metadata == pending[mr.ref.iid].metadata
+    assert pending[old.ref.iid].requested_by == "jane"
+    merged = await services.approvals.approve(
+        "redbull", old.ref.iid, sha=old.sha, approver=bob_user
+    )
+    assert merged.state is MRState.MERGED
 
 
 async def test_setting_repourl_fixes_a_miscased_one_in_place(

@@ -226,7 +226,7 @@ export function planFor(method: string, url: URL, body: Record<string, unknown>)
     action: "update-team-default",
     chart,
     scope: null,
-    title: `[Wingman/Day2] Update addon ${teamName}/${chart} team default`,
+    title: `[Wingman/Day2] Update addon ${teamName}/${chart} Sig values`,
     files: [
       file(
         "update",

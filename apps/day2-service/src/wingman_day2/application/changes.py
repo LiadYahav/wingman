@@ -386,7 +386,7 @@ class ChangeService:
                 warning(
                     Rule.EMERGENCY_PIN,
                     f"pins {app.chart} to {spec.version} on {app.ref.name} only: an emergency pin; "
-                    "remove it once the team default or an ocp-versions/ pin catches up",
+                    "remove it once the add-on's own version or an ocp-versions/ pin catches up",
                     team=app.team,
                     cluster=app.ref.id,
                     chart=app.chart,

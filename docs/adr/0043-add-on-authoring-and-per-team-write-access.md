@@ -1,7 +1,7 @@
 # ADR-0043: Teams opt in to day2 writes per project; Wingman creates add-ons, edits team and fleet defaults, and a new fleet default takes over the clusters that already have the chart
 
 Date: 2026-11-12
-Status: Accepted; superseded in part by ADR-0053 (every write is confirmed against its preview's digest; a stale exclusion of an adopted cluster goes in the same commit; the review of 3.8.0); amended 2026-11-13 (the UI says sig values and the add-on, not team default; the API names stay)
+Status: Accepted; superseded in part by ADR-0053 (every write is confirmed against its preview's digest; a stale exclusion of an adopted cluster goes in the same commit; the review of 3.8.0); amended 2026-11-13 (the UI says sig values and the add-on, not team default; the API names stay; since 3.19.1 the MR titles say Sig values too)
 
 ## Context
 
@@ -181,3 +181,17 @@ create, a flavor, its charts page). "Team default" is no longer a UI word;
 teams stay teams. The API names are unchanged: `PUT /api/day2/addons/{team}/{addon}`,
 the action `update-team-default`, the layer role `team` (shown as *sig values*),
 and day2's own MR titles and messages.
+
+Since 3.19.1 day2's MR text says it too: an edit of the add-on is titled
+`[Wingman/Day2] Update addon <team>/<chart> Sig values` (commit subject and
+description alike), its note says the destinations inherit "these Sig values
+and deploy config", and an emergency pin's warning waits for "the add-on's own
+version". Only the words people read changed: the label and footer action stay
+`update-default`, the branch `update-default-<chart>-…`. MRs opened before
+3.19.1 keep `... team default` and still read the same: `parse_mr_title`
+stops at the resource name (ADR-0007), so both titles parse to `Update addon
+<team>/<chart>`, and approvals, the audit view and day1's reads of day2 titles
+treat them alike (`test_an_add_on_edit_titled_team_default_reads_as_one_titled_sig_values`,
+`test_an_add_on_edit_says_sig_values_and_one_opened_saying_team_default_still_reads`).
+The API's errors and the platform lints still say team default where they
+describe the API's model.

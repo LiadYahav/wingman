@@ -528,8 +528,8 @@ class AuthoringService(PlanWriter):
         plan.reach = sorted({a.ref for a in apps}, key=lambda r: r.id)
         changed = sum(1 for i in plan.impact if i.effect is Effect.CHANGED)
         plan.notes.append(
-            f"Every destination that gets {chart} from {team} inherits this team default unless "
-            "an OCP-version pin, a fleet default or its own folder sets the same key: "
+            f"Destinations that get {chart} from {team} inherit these Sig values and deploy config "
+            "unless an OCP-version pin, a fleet default or their own folder sets the same key: "
             f"{len(plan.reach)} destination(s) get {chart} today, and what {changed} of them "
             "deploy changes (listed key by key). "
             + (
@@ -541,7 +541,7 @@ class AuthoringService(PlanWriter):
             + "Leaves that are manual-sync deploy the change only when someone syncs them."
         )
         plan.title = mr_title(
-            Repo.DAY2, Verb.UPDATE, ResourceType.ADDON, f"{team}/{chart}", "team default"
+            Repo.DAY2, Verb.UPDATE, ResourceType.ADDON, f"{team}/{chart}", "Sig values"
         )
         self.confirm(plan, confirm_changes, expected_digest, dry_run=dry_run)
         return await self.finish(plan, user, message, dry_run=dry_run)

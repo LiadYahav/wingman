@@ -12,7 +12,12 @@ Rollout:      ``platform/rollout/{flavor}/v{version}/{cluster}``: one branch per
               or a second pod finds it instead of opening another MR (ADR-0044).
               A user branch has three segments, a rollout branch five, so a
               user named ``rollout`` never makes one.
-Title:        ``[Wingman/{repo}] {Verb} {resource_type} {resource_name}[ {extra}]``
+Title:        ``[Wingman/{repo}] {Verb} {resource_type} {resource_name}[ {extra}]``.
+              The parser stops at the resource name. Day1 reads two extras
+              (a day2 install's ``on <cluster>``, a sync's ``to spec``); the
+              others are for people, so their wording may change: day2's edit
+              of an add-on said ``team default`` before 3.19.1 and says
+              ``Sig values`` since (ADR-0043's amendment), parsed the same.
 Description:  the human text, then a ``---`` line, then ``Author:``,
               ``Action:``, ``Resource: {type}/{name}`` and ``Repo:`` lines.
 Label:        ``wingman`` on every MR Wingman opens; approvals act only on MRs

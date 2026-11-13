@@ -237,7 +237,7 @@ test.describe("Edit add-on", () => {
     await expect(review).toContainText("operators/prometheus/prometheus.yaml");
     await review.getByRole("button", { name: /Create MR/ }).click();
 
-    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("team default");
+    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("Sig values");
     const real = realWrites()[0];
     expect(real.method).toBe("PUT");
     expect(real.path).toBe("/api/day2/addons/observability/prometheus");
@@ -323,7 +323,7 @@ test.describe("The Addons page", () => {
     await review.getByRole("checkbox", { name: /changes as listed/ }).first().click();
     await review.getByRole("button", { name: /Create MR/ }).click();
 
-    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("team default");
+    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("Sig values");
     expect(page.url()).toMatch(/\/addons$/);
     const real = realWrites()[0];
     expect(real.method).toBe("PUT");

@@ -189,7 +189,7 @@ test.describe("An add-on's page", () => {
     await plan.getByRole("checkbox", { name: `I understand the app on ${MCE_A_NAME} changes as listed` }).click();
     await confirm.click();
 
-    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("team default");
+    await expect(page.getByRole("region", { name: "Opened merge requests" })).toContainText("Sig values");
     expect(dryRuns()).toHaveLength(1);
     const real = realWrites()[0];
     expect(real.method).toBe("PUT");

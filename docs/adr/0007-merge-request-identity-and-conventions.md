@@ -42,6 +42,17 @@ it instead of opening another: `platform/rollout/<flavor>/v<version>/<cluster>`
 test). Its title is a sync's, `Sync cluster <name> to spec <flavor>
 v<version>`, and it carries the `rollout` label.
 
+## Note (2026-11-13, 3.19.1, ADR-0043's amendment)
+
+`parse_mr_title` reads up to the resource name. Day1 reads two extras
+beyond it: a day2 install's `on <cluster>` (`install_title_charts`) and a
+sync's `to spec <flavor> v<version>` (`sync_target`); those stay as they are.
+Every other extra is for people, and its wording may change without breaking
+the contract: day2's edit of an add-on said `team default` until 3.19.1 and
+says `Sig values` since, and both titles parse to the same `Update addon
+<team>/<chart>`. A reader that starts using an extra must accept every
+wording already in GitLab.
+
 ## Consequences
 
 - API routes for approvals carry the project (or a key that maps to exactly
