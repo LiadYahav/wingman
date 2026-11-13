@@ -10,8 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, status
 
 from wingman_core.web.auth import AdminUser, CurrentUser
-from wingman_day2.api.v1.dependencies import Services
-from wingman_day2.api.v1.schemas import (
+from wingman_day2.api.v1.clusters_schemas import (
     BulkBody,
     BulkFailureOut,
     BulkOut,
@@ -24,8 +23,9 @@ from wingman_day2.api.v1.schemas import (
     UpdateBody,
     UpgradeCheckOut,
     ValuesPreviewOut,
-    findings,
 )
+from wingman_day2.api.v1.dependencies import Services
+from wingman_day2.api.v1.schemas import findings
 from wingman_day2.application.changes import InstallSpec
 from wingman_day2.domain.clusters import ClusterKind
 

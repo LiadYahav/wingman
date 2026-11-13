@@ -5,15 +5,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 
 from wingman_core.web.auth import AdminUser, CurrentUser
-from wingman_day2.api.v1.dependencies import Services
-from wingman_day2.api.v1.schemas import (
+from wingman_core.web.schemas import FileDiffOut
+from wingman_day2.api.v1.approvals_schemas import (
     ApprovalDetailOut,
     ApproveBody,
     CommitRecordOut,
     EditMergeRequestBody,
-    FileDiffOut,
-    MRDetailOut,
 )
+from wingman_day2.api.v1.dependencies import Services
+from wingman_day2.api.v1.schemas import MRDetailOut
 from wingman_day2.application.approvals import FileEdit
 
 router = APIRouter(prefix="/api/day2", tags=["approvals"])

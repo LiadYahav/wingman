@@ -15,8 +15,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Response, status
 
 from wingman_core.web.auth import AdminUser, CurrentUser
-from wingman_day2.api.v1.dependencies import Services
-from wingman_day2.api.v1.schemas import (
+from wingman_day2.api.v1.authoring_schemas import (
     AddonTemplateOut,
     AuthoringChangeOut,
     AuthoringPlanOut,
@@ -29,6 +28,7 @@ from wingman_day2.api.v1.schemas import (
     UpdateFleetDefaultBody,
     UpdateTeamDefaultBody,
 )
+from wingman_day2.api.v1.dependencies import Services
 from wingman_day2.application.authoring import UNSET, AuthoringResult
 from wingman_day2.domain.clusters import DefaultsScope
 

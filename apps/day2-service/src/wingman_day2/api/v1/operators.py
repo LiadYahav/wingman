@@ -15,7 +15,7 @@ from fastapi import APIRouter
 
 from wingman_core.web.auth import CurrentUser
 from wingman_day2.api.v1.dependencies import Services
-from wingman_day2.api.v1.schemas import OperatorOut, OperatorSummaryOut
+from wingman_day2.api.v1.operators_schemas import OperatorOut, OperatorSummaryOut
 
 router = APIRouter(prefix="/api/day2", tags=["addons"])
 
