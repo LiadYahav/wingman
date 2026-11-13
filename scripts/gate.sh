@@ -121,7 +121,7 @@ fi
 
 if [[ $scope == all || $scope == e2e ]]; then
   $web_built || step "web build" npm run build --workspace=web --silent
-  # CI=1 as in CI: the production server (`next start`), one worker, retries.
+  # CI=1 as in CI: the production server (`next start`), four workers, retries.
   step "playwright (mocked suite)" env CI=1 npm run test:e2e:mocked --workspace=web
 fi
 

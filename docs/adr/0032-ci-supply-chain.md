@@ -1,7 +1,7 @@
 # ADR-0032: CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; amended 2026-11-13 (the mocked E2E suite runs four workers; a flaky test is annotated)
 
 ## Context
 
@@ -69,3 +69,36 @@ critical.
   the wrong version fails with `unpinned-uses` and `ref-version-mismatch`.
 - `tests/repo/test_ci_scripts.py::TestNpmAudit` pins the allowlist rules;
   `python3 scripts/npm-audit.py` reports 64 advisories, every one allowlisted.
+
+## Amendment (2026-11-13): the mocked E2E suite runs four workers, and a flaky test shows
+
+Measured on the 20 CI runs of 2026-11-12/13: a run took 8.5-11.6 minutes,
+and the mocked Playwright job was its whole critical path, 8-10 minutes, of
+which 484-538 s was the suite: 403 tests on one worker. One worker was
+Playwright's scaffold default (the config's first commit), never a decision.
+server-scan runs one because its E2E shares a live database; Wingman's
+mocked tests share nothing (each page intercepts its own API calls, and
+`next start` keeps no state). The next-longest job, Python, took 2.3-3.9
+minutes (pytest, 2,724 tests in 122-164 s); main adds 1.3-1.7 minutes after
+the checks (tag, publish, notes). The supply-chain rules above are unchanged.
+
+- Under CI the suite runs **four workers**, one per vCPU of a public
+  repository's runner, as server-scan's `pytest -n 4`. `scripts/gate.sh e2e`
+  sets `CI=1`, so it runs the same way.
+- **Retries stay at two**, so one flaky test cannot fail a run (4 of the 40
+  runs before this had one, each passing on its retry). It still shows: the
+  list reporter's summary names it, and on GitHub Playwright's `github`
+  reporter puts it on the run as an annotation.
+
+Rejected:
+
+- **One build shared by the Web and E2E jobs**: it saves about 16 s and makes
+  E2E wait for Web (1.5-2 minutes).
+- **Caching `.next/cache`**: the Turbopack build compiles in about 8 s.
+- **pytest-xdist** for the Python job, the critical path once E2E is fast:
+  locally `-n 4` took 26 s against 106 s, but coverage under xdist trips
+  `filterwarnings = error` (a `module-not-measured` CoverageWarning crashes a
+  worker). A new dependency and a change to the Python stage: its own unit
+  of work.
+- **A faster publish without the SBOM or the provenance**: they are the point
+  of ADR-0030's publish.
