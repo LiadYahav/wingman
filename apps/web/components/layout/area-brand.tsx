@@ -35,23 +35,37 @@ function WingmanBrand({ href }: { href: string }) {
   );
 }
 
-/** Every mark but Wingman's own logo, as an icon. */
-const MARKS: Record<Exclude<BrandMark, "wingman-logo">, LucideIcon> = { server: Server };
+/** Every mark that is an icon: an area with no simple mark of its own. */
+const ICON_MARKS: Record<Exclude<BrandMark, "wingman-logo" | "server-scan-icon">, LucideIcon> = { server: Server };
+
+/** server-scan's own app icon (its `frontend/public/icons/app-icon.svg`, ADR-0048). */
+const IMAGE_MARKS: Record<"server-scan-icon", string> = { "server-scan-icon": "/server-scan-icon.svg" };
+
+/** An area's mark, the size of Wingman's logo: its own image, or an icon on a tile. */
+function Mark({ mark }: { mark: Exclude<BrandMark, "wingman-logo"> }) {
+  if (mark === "server-scan-icon") {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={IMAGE_MARKS[mark]} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg ring-1 ring-sidebar-foreground/15" />;
+  }
+  const Icon = ICON_MARKS[mark];
+  return (
+    <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+      <Icon className="h-[18px] w-[18px]" />
+    </span>
+  );
+}
 
 /**
  * The top left: the platform you are in, its mark and name, linking to its
- * home. Wingman wears its logo; any other area its icon on a tile the size
- * of the logo.
+ * home. Wingman wears its logo; any other area its own mark, or an icon on a
+ * tile the size of the logo.
  */
 export function AreaBrand({ area }: { area: AreaId }) {
   const { href, brand } = areaById(area);
   if (brand.mark === "wingman-logo") return <WingmanBrand href={href} />;
-  const Mark = MARKS[brand.mark];
   return (
     <Link href={href} data-testid="brand" data-area={area} className="flex h-14 min-w-0 items-center gap-2.5 px-4">
-      <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-        <Mark className="h-[18px] w-[18px]" />
-      </span>
+      <Mark mark={brand.mark} />
       <span className="truncate text-[15px] font-semibold tracking-tight text-foreground">{brand.name}</span>
     </Link>
   );

@@ -2,6 +2,7 @@
 
 import { Suspense, type ComponentType } from "react";
 import { SegmentsSidebar } from "@/components/segments/segments-sidebar";
+import { ServerScanSidebar } from "@/components/server-scan/server-scan-sidebar";
 import type { AreaId } from "@/lib/areas";
 import { SidebarNav } from "./sidebar-nav";
 
@@ -13,6 +14,7 @@ import { SidebarNav } from "./sidebar-nav";
 const SIDEBARS: Record<AreaId, ComponentType> = {
   wingman: SidebarNav,
   segments: SegmentsSidebar,
+  "server-scan": ServerScanSidebar,
 };
 
 /** The area's sidebar; below Suspense because an area's may read the URL. */
