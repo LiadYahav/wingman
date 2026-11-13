@@ -4,6 +4,51 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-13 — 3.14.1 to 3.18.x: code organisation, Segments, cluster upgrade, Inventory Management.**
+- **Code organisation** (ADR-0056, convention 16): file-size and complexity
+  guards whose baselines only shrink (3.14.2). Mechanical splits so far, no
+  behaviour change:
+  - day2's and day1's API schemas, one module per router; the OpenAPI
+    document is byte-identical (3.14.1, 3.18.1);
+  - the web's type files by section (3.18.2);
+  - the docs page, one file per section (3.18.3);
+  - the web calls day1 through `lib/api/day1/` (`day1Api`, `day1Keys`,
+    3.18.5).
+
+  34 files are left in `scripts/file-size-baseline.txt`.
+- **Segments area** (ADR-0047, 3.15.0): segments-manager's page in Wingman,
+  read-only, admins only, from the top bar's area switch, on a shared
+  TanStack table (`components/data-table/`) with Vitest for pure logic. In
+  3.17.0 each area got its own sidebar and brand ("Segments Manager").
+- **Option C** (single-pane decision 22, 3.15.1): segments-manager and
+  server-scan fully integrated, every feature and their look, each a top-bar
+  platform. **Planned only: build it on the user's go.**
+- **Cluster upgrade** (ADR-0055, 3.16.0): start, show and decide the
+  platform's `upgrade-cluster` workflow on the cluster page, behind
+  `DAY1_UPGRADES`. While it is on, `mastertag`/`workertag` change only through
+  it. It is off on the sandbox, which has no upgrade workflow deployed.
+- **Inventory Management** (ADR-0057, 3.18.0): a Wingman sidebar page for the
+  orchestrator's server workflows:
+  - available Agents per MCE pool, from server-scan;
+  - the `add-server-to-mce` runs, herzi's (fake data) and people's;
+  - adding servers by count or by name, with server-scan's locks respected
+    (admins, `DAY1_ADD_SERVERS`, off on the sandbox).
+
+  Everyone signed in reads it. It is not a fleet view: a server's record
+  belongs to the future Server Scan area. The cluster page and MCE placement
+  are unchanged ("the cluster page is perfect").
+- In production, server-scan's MCE and site names equal day1's (the user).
+
+**Next:**
+- option C on the user's go;
+- the next code-organisation steps (the audit is the plan):
+  - a typed day1 API module for the web;
+  - helpers out of `.tsx` files;
+  - then the design splits: the new-cluster page, the big services, day1's
+    infrastructure by system;
+- the team's questions in the upgrade and provision notes, and herzi's
+  InfraEnv annotations (one more MCE read).
+
 **2026-11-13 — 3.13.2 to 3.14.0: Sig values, speed, cleanup, CI, the cache fix, the workflow's MR seen.**
 - 3.13.2 (#41, ADR-0043's amendment): the UI says **Sig values** (chart
   values → Sig values → cluster values) and Edit add-on; the create form's MCE

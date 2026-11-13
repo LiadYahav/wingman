@@ -134,7 +134,7 @@ class CommitOut(BaseModel):
 
 
 class AddonDriftOut(BaseModel):
-    """A spec addon the cluster does not have; install it at the team default."""
+    """A spec addon the cluster does not have; install it with its Sig values."""
 
     addon_name: str
     team: str
