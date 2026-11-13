@@ -2,12 +2,14 @@
 
 Read through the one ``ServerInventory`` the Nodes tab, placement and
 Inventory Management share (its cache in front). Each page adds its reads
-here; today the Sites page. server-scan failing is
-``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused token).
+here: the Sites page, and the Servers page's fleet rows. server-scan failing
+is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
+token).
 """
 
 from __future__ import annotations
 
+from wingman_day1.domain.server_scan_servers import FleetRows
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.ports import ServerInventory
 
@@ -22,3 +24,7 @@ class ServerScanService:
     async def sites(self) -> FleetSites:
         """The Sites page: every configured site and the fleet, as server-scan counts them."""
         return await self._inventory.sites()
+
+    async def servers(self) -> FleetRows:
+        """The Servers page: every server as server-scan's rows, from the shared cached read."""
+        return await self._inventory.fleet()

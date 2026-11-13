@@ -78,6 +78,11 @@ Operations of the other dependencies (day1):
   (`SERVER_SCAN_TOKEN`); `unavailable` means it could not be reached or
   answered with an error. The nodes are still listed, without their servers,
   and the answer's `server_scan_error` says why; an uninstall answers 502.
+- `server_scan` `list_server_rows` is the fleet's rows: the Nodes tab,
+  placement, Inventory Management and the Server Scan area's Servers page
+  read them from one cache entry, at most once per replica per
+  `DAY1_CACHE_TTL_SECONDS` however many pages poll, each a `304` from
+  server-scan while nothing changed (ADR-0048's 3.23.0 amendment).
 - `server_scan` `list_sites` is the Server Scan area's Sites page
   (server-scan's per-site counts, ADR-0048), also read by an admin's top bar to know
   the area is on: at most one call per replica per 10 seconds (its cache),

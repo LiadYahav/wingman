@@ -1,15 +1,17 @@
 """CachedServerInventory: server-scan's fleet rows and sites, cached for a few seconds per replica.
 
 A list page that shows many clusters' nodes reads the fleet once per TTL
-(ADR-0011, ADR-0038); the Server Scan area's Sites page reads server-scan's
-counts once per ``sites_ttl`` (ADR-0048). One server is never cached: the
-uninstall's check reads it fresh, so it acts on what server-scan says now. A
-failure is not cached.
+(ADR-0011, ADR-0038), and so does the Server Scan area's Servers page,
+however many are open: the rows and the fleet are one entry (ADR-0048). The
+Sites page reads server-scan's counts once per ``sites_ttl``. One server is
+never cached: the uninstall's check reads it fresh, so it acts on what
+server-scan says now. A failure is not cached.
 """
 
 from __future__ import annotations
 
 from wingman_core.infrastructure.cache import TtlCache
+from wingman_day1.domain.server_scan_servers import FleetRows
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure import cache_keys as keys
@@ -30,8 +32,12 @@ class CachedServerInventory:
 
     async def rows(self) -> list[ServerRow]:
         """See ServerInventory.rows."""
-        return list(
-            await self._cache.get_or_fetch(keys.server_scan_rows(), self._inner.rows, ttl=self._ttl)
+        return list((await self.fleet()).rows)
+
+    async def fleet(self) -> FleetRows:
+        """See ServerInventory.fleet."""
+        return await self._cache.get_or_fetch(
+            keys.server_scan_rows(), self._inner.fleet, ttl=self._ttl
         )
 
     async def server(self, server_id: str) -> ServerDetail:

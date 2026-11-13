@@ -35,6 +35,7 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
     WorkflowsUnavailableError,
 )
+from wingman_day1.domain.server_scan_servers import FleetRows
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import (
     UNINSTALL_HOLDER,
@@ -45,7 +46,7 @@ from wingman_day1.domain.servers import (
 )
 from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.infrastructure.fake_server_scan_sites import SiteName, catalog_of, count_sites
-from wingman_day1.infrastructure.server_scan import server_row
+from wingman_day1.infrastructure.server_scan_parse import server_row
 
 DEMO_PHASES: Final = (
     "checking-inventory",
@@ -98,8 +99,14 @@ class FakeServerInventory:
 
     async def rows(self) -> list[ServerRow]:
         """See ServerInventory.rows."""
+        return list((await self.fleet()).rows)
+
+    async def fleet(self) -> FleetRows:
+        """See ServerInventory.fleet: by name; changed when the newest row was last seen."""
         self._read()
-        return sorted(self._rows.values(), key=lambda row: row.name)
+        rows = tuple(sorted(self._rows.values(), key=lambda row: row.name))
+        seen = [row.last_seen_at for row in rows if row.last_seen_at is not None]
+        return FleetRows(rows=rows, generated_at=max(seen, default=None))
 
     async def server(self, server_id: str) -> ServerDetail:
         """See ServerInventory.server."""

@@ -118,7 +118,10 @@ def test_locked_maintenance_and_contested_servers_are_not_offered_with_why() -> 
     locked = row("l", "AVAILABLE", reserved_by="uninstall-server-from-hc", reserved_until=UNTIL)
     assert why_not(locked) == "locked by uninstall-server-from-hc until 2026-11-13T18:00:00+00:00"
     assert why_not(row("m", "AVAILABLE", maintenance=True)) == "in maintenance"
-    assert why_not(row("c", "AVAILABLE", contested=True)) == "contested: two clusters claim it"
+    assert (
+        why_not(row("c", "AVAILABLE", contested_with="ocp4-prod-other-site1"))
+        == "contested: two clusters claim it"
+    )
     assert why_not(row("w", "AVAILABLE", health="WARNING")) is None, "health is shown, not refused"
 
 

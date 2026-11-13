@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from wingman_day1.domain.server_scan_servers import FleetRows
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 
@@ -21,7 +22,11 @@ class ServerInventory(Protocol):
     """
 
     async def rows(self) -> list[ServerRow]:
-        """Every server in the fleet, as flat rows."""
+        """Every server in the fleet, as flat rows (``fleet()``'s rows)."""
+        ...
+
+    async def fleet(self) -> FleetRows:
+        """The whole fleet and when it last changed: the Server Scan area's Servers page."""
         ...
 
     async def server(self, server_id: str) -> ServerDetail:
