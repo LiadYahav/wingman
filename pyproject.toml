@@ -56,7 +56,9 @@ exclude_also = [
 ]
 
 # ── ruff ────────────────────────────────────────────────────────────────────
-# The rule set is server-scan's, plus BLE001 (no blind `except Exception`).
+# The rule set is server-scan's, plus BLE001 (no blind `except Exception`),
+# C901 at 12 and PLR0915 (functions stay small, ADR-0056: an existing offender
+# carries `# noqa: C901 - baseline: <why>`; RUF100 fails a noqa no longer needed).
 [tool.ruff]
 line-length = 100
 target-version = "py313"
@@ -67,8 +69,12 @@ select = [
     "E", "F", "I", "UP", "B", "C4", "SIM", "RUF", "ASYNC", "S", "W605",
     "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "ANN204", "ANN205", "ANN206",
     "PTH", "LOG", "RET", "PERF", "FURB", "TRY004", "TRY300", "TRY400", "D", "BLE001",
+    "C90", "PLR0915",
 ]
 ignore = ["D203", "D212"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

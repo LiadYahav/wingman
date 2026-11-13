@@ -134,6 +134,7 @@ function RemoveInstallDialog({
  * opens the planned ones. Where it is installed is listed per MCE, with the
  * usual remove (which orphans the workload).
  */
+// eslint-disable-next-line max-lines-per-function -- size baseline (ADR-0056)
 export function DeployOnMces({ detail, panel, writes }: { detail: AddonDetail; panel: ScopePanel; writes: InstallWrites }) {
   const installed = panel.destinations.filter((d) => d.state === "own-folder");
   const candidates: Candidate[] = [

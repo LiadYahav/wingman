@@ -132,6 +132,7 @@ function CandidatePicker({ name, candidates }: { name: string; candidates: strin
   );
 }
 
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 function ClusterCharts() {
   const params = useParams<{ name: string }>();
   const searchParams = useSearchParams();

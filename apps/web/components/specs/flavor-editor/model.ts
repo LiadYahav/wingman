@@ -505,6 +505,7 @@ export interface Issue {
  * of the field it belongs to. Config entries are checked by the config list
  * editor where they are shown; they are counted here, at their list's path.
  */
+// eslint-disable-next-line complexity -- size baseline (ADR-0056)
 export function draftIssues(
   draft: FlavorDraft,
   catalog: MachineConfigs | undefined,
@@ -750,6 +751,7 @@ export interface PreviewPlan {
  * saved locks: a changed locked value is sent as saved (and listed), since
  * sending another would be refused. Inputs each cluster sets get examples.
  */
+// eslint-disable-next-line complexity -- size baseline (ADR-0056)
 export function previewPlan(args: {
   draft: FlavorDraft;
   saved: ClusterSpec;

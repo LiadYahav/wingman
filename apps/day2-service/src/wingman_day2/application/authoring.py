@@ -547,7 +547,7 @@ class AuthoringService(PlanWriter):
         return await self.finish(plan, user, message, dry_run=dry_run)
 
     @staticmethod
-    def _edited_deploy(
+    def _edited_deploy(  # noqa: C901 - baseline: one rule per editable key
         doc: Mapping[str, object], edit: TeamDefaultEdit
     ) -> tuple[dict[str, object], dict[str, str]]:
         """The deploy config after ``edit``, and the miscased keys renamed to ``repourl``."""

@@ -193,7 +193,7 @@ async def approve(api: httpx.AsyncClient, iid: int, approver: dict[str, str]) ->
     return merged.json()
 
 
-async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str, str]) -> str:
+async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str, str]) -> str:  # noqa: PLR0915 - baseline: a scripted walk, step by step
     """Walk the cluster's life (module docstring, step 2); return the merged cluster file."""
     alice, bob = await login(api, "alice"), await login(api, "bob")
 
@@ -368,7 +368,7 @@ async def push_main(admin: httpx.AsyncClient, project: str, path: str, content: 
     pushed.raise_for_status()
 
 
-async def flavor_flow(
+async def flavor_flow(  # noqa: PLR0915 - baseline: a scripted walk, step by step
     api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str, str]
 ) -> None:
     """Import two hand-written clusters into a flavor, then sync one (ADR-0037)."""

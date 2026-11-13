@@ -466,7 +466,7 @@ class ChangeService:
             raise failed[0][1]
         return BulkResult(tuple(results), tuple(failed))
 
-    async def install_on_mces(
+    async def install_on_mces(  # noqa: C901 - baseline: plan, check and open per MCE
         self,
         team: str,
         chart: str,

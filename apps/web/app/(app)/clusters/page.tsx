@@ -172,6 +172,7 @@ function ClusterStatusCell({
   );
 }
 
+// eslint-disable-next-line max-lines-per-function -- size baseline (ADR-0056)
 export default function ClustersPage() {
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();

@@ -342,6 +342,7 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
+                {/* eslint-disable-next-line complexity -- size baseline (ADR-0056) */}
                 {rows.map((row) => {
                   const isOpen = open.has(row.key);
                   const panelId = `nodepool-nodes-${row.key}`;

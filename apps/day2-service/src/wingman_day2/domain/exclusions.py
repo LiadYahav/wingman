@@ -155,7 +155,7 @@ class _ChartList:
         return [n for _, n in self.items]
 
 
-def set_excluded(text: str | None, chart: str, names: Sequence[str], *, path: str) -> str | None:
+def set_excluded(text: str | None, chart: str, names: Sequence[str], *, path: str) -> str | None:  # noqa: C901 - baseline: a hand-kept file, edited case by case
     """``text`` (an exclusions file, ``None`` if absent) with ``chart`` excluding just ``names``.
 
     Names already listed keep their line and their place; new ones go after
@@ -210,7 +210,7 @@ def set_excluded(text: str | None, chart: str, names: Sequence[str], *, path: st
     return result
 
 
-def _edit(
+def _edit(  # noqa: C901 - baseline: a hand-kept file, edited case by case
     lines: list[str], chart: str, wanted: list[str], *, path: str, has_keys: bool
 ) -> list[str]:
     top = mapping_entries(lines, 0, len(lines), 0, path=path, rule=LAYOUT_RULE) if has_keys else []

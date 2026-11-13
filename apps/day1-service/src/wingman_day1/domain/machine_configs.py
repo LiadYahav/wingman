@@ -170,7 +170,7 @@ class MachineConfigCatalog:
     """Files that cannot be offered, and why (a name a template captures, a duplicate)."""
 
     @classmethod
-    def from_files(
+    def from_files(  # noqa: C901 - baseline: the CI's file rules, in its order
         cls, files: Iterable[RepoPath], *, root: RepoPath = MC_FILES
     ) -> MachineConfigCatalog:
         """The catalogue of every file under ``root``, resolved in the CI's order."""

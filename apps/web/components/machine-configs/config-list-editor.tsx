@@ -47,6 +47,7 @@ function nameOptions(catalog: MachineConfigs | undefined, entries: ConfigEntry[]
  * `problems` are day1's, by entry index; the catalogue's own checks show
  * beside them so a typo is caught before the request.
  */
+// eslint-disable-next-line max-lines-per-function -- size baseline (ADR-0056)
 export function ConfigListEditor({
   entries,
   onChange,

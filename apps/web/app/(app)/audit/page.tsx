@@ -231,6 +231,7 @@ function MRRow({ mr }: { mr: MRDetail }) {
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export default function AuditPage() {
   const [activeTab, setActiveTab] = useState<"commits" | "mrs">("commits");
   const queryClient = useQueryClient();

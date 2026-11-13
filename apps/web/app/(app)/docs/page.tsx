@@ -258,6 +258,7 @@ const REFUSALS = [
   },
 ] as const;
 
+// eslint-disable-next-line max-lines-per-function -- size baseline (ADR-0056)
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState<string>("overview");
 

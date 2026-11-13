@@ -75,6 +75,12 @@ Explicit user instructions; violating one is a real mistake, not style.
 14. **Site and MCE are read-only in Wingman** (user decision 2026-11-07).
     Wingman never creates them; MCE onboarding happens elsewhere.
 15. **Don't add network policies** — they cause connectivity issues.
+16. **Files and functions stay small** (ADR-0056): a source file ≤ 500 lines
+    (a test ≤ 800), Python complexity ≤ 12, a web function ≤ 200 lines and
+    complexity ≤ 30. `scripts/file-size-baseline.txt` and the per-function
+    `noqa`/`eslint-disable` exemptions may only shrink: never add one, split
+    the code. The ADR says where a router's schemas, a page's logic and pure
+    helpers go.
 
 ## Current status
 
@@ -175,7 +181,7 @@ Explicit user instructions; violating one is a real mistake, not style.
 uv sync --locked --all-packages --all-groups --all-extras
 scripts/gate.sh                    # everything CI runs, in CI's order
 scripts/gate.sh ci                 # actionlint, zizmor, shellcheck (pinned tools, scripts/ci-tools.sh)
-scripts/gate.sh python             # the Python half, incl. the requirement-export drift check
+scripts/gate.sh python             # the Python half, incl. the requirement-export drift check and file sizes
 scripts/gate.sh web                # npm ci, npm audit (allowlist), lint, typecheck, build
 scripts/gate.sh e2e                # the mocked Playwright suite on a production build
 PLAYWRIGHT_CHANNEL=chrome scripts/gate.sh e2e   # on installed Chrome (Playwright's download hangs here)

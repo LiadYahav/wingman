@@ -68,7 +68,7 @@ async def test_read_views_list_the_fixture_repo(
     assert lab["follows_convention"] is False
 
 
-async def test_create_approve_edit_delete(
+async def test_create_approve_edit_delete(  # noqa: PLR0915 - baseline: one cluster's whole life, step by step
     client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
 ) -> None:
     alice, bob = auth(support.ALICE), auth(support.BOB)

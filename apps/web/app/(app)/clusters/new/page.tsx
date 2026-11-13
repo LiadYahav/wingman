@@ -588,6 +588,7 @@ function describeFailure(error: unknown, what: "preview" | "create"): FormError 
 
 type OverrideMode = "fields" | "yaml";
 
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export default function NewClusterPage() {
   const isAdmin = useIsAdmin();
   const router = useRouter();

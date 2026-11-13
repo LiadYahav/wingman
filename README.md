@@ -619,13 +619,15 @@ A configuration a service refuses (ADR-0009) is logged at start-up, naming the v
    `ports.py`), `infrastructure/` (adapters and fakes), `api/v1/` (routers); `uv run lint-imports` holds the
    layers. GitLab only through `GitLabPort` (ADR-0002). DEVELOPMENT.md walks through a new endpoint.
 2. Shared code goes in `packages/wingman-core`
-3. Frontend pages go in `app/(app)/`, components in `components/`
+3. Frontend routes go in `app/(app)/` and stay thin; the feature they render goes in `components/<area>/`
+   (ADR-0056 says where its state and pure helpers go). Files stay within 500 lines and functions small:
+   CI checks both (ADR-0056)
 4. Add API types to `types/day1.ts`, `types/day2.ts` or `types/problem.ts` (`types/index.ts` re-exports them)
 
 ### Testing Locally
 
 ```bash
-scripts/gate.sh python   # ruff, ty, import-linter, pytest, pip-audit, deptry
+scripts/gate.sh python   # file sizes, ruff, ty, import-linter, pytest, pip-audit, deptry
 scripts/gate.sh web      # npm ci, npm audit, lint, typecheck, build
 scripts/gate.sh          # everything CI runs, in CI's order
 ```

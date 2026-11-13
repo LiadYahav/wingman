@@ -6,7 +6,7 @@
 # shellcheck disable=SC2034  # the arrays are read by the scripts that source this file
 
 # ruff check, ruff format --check and ty.
-STRICT=(packages/wingman-core apps/day1-service apps/day2-service tests/repo scripts/release.py scripts/npm-audit.py scripts/assert-junit.py scripts/dev)
+STRICT=(packages/wingman-core apps/day1-service apps/day2-service tests/repo scripts/release.py scripts/npm-audit.py scripts/assert-junit.py scripts/check-file-size.py scripts/dev)
 
 # deptry, per package, run from the package directory: "<dir>:<first-party import name>".
 DEPTRY=(packages/wingman-core:wingman_core apps/day1-service:wingman_day1 apps/day2-service:wingman_day2)

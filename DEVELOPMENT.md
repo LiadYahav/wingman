@@ -156,7 +156,7 @@ settings list. Metric names and labels are a contract (ADR-0010, `docs/ops/metri
 
 ```bash
 uv run pytest -q              # every Python test; the live GitLab ones skip without their variables
-scripts/gate.sh python        # ruff, ty, import-linter, pytest with coverage, pip-audit, deptry
+scripts/gate.sh python        # file sizes, ruff, ty, import-linter, pytest with coverage, pip-audit, deptry
 scripts/gate.sh web           # npm ci, npm audit, lint, typecheck, build
 scripts/gate.sh e2e           # the mocked Playwright suite on a production build
 scripts/gate.sh               # everything CI runs, in CI's order
