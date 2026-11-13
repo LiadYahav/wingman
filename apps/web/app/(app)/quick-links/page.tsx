@@ -3,17 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link2, Lock, Search, TriangleAlert, X } from "lucide-react";
 import { isApiError } from "@/lib/api-client";
+import { isTyping } from "@/lib/keyboard";
 import { countCards, filterSections, useQuickLinks } from "@/lib/quick-links";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { LinkSection, LinkSectionSkeleton } from "@/components/quick-links/link-section";
 import type { QuickLinks } from "@/types";
-
-/** Typing in a field: `/` is a character there, not the shortcut. */
-function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
-}
 
 /** What could not be shown, in one panel: what Wingman could not generate, then the links file's problems. */
 function Problems({ data }: { data: QuickLinks }) {

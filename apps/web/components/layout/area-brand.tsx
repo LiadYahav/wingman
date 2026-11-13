@@ -6,6 +6,9 @@ import { Server, type LucideIcon } from "lucide-react";
 import { triggerEasterEgg } from "./easter-egg";
 import { areaById, type AreaId, type BrandMark } from "@/lib/areas";
 
+/** The brand fills the row beside the sidebar's toggle; in the rail it is the mark alone, centred above it. */
+const BRAND_LINK = "flex h-14 min-w-0 flex-1 items-center gap-2.5 px-4 rail:h-12 rail:w-full rail:flex-none rail:justify-center rail:px-0";
+
 const CLICKS_TO_TRIGGER = 5;
 const RESET_MS = 2000;
 
@@ -25,10 +28,10 @@ function WingmanBrand({ href }: { href: string }) {
   }, []);
 
   return (
-    <Link href={href} data-testid="brand" data-area="wingman" className="flex h-14 items-center gap-2.5 px-4" onClick={handleLogoClick}>
+    <Link href={href} data-testid="brand" data-area="wingman" className={BRAND_LINK} onClick={handleLogoClick}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/wingman-logo.svg" alt="Wingman" width={32} height={32} className="rounded-lg" />
-      <span className="text-[17px] font-semibold tracking-tight text-foreground">
+      <img src="/wingman-logo.svg" alt="Wingman" width={32} height={32} className="shrink-0 rounded-lg" />
+      <span className="whitespace-nowrap text-[17px] font-semibold tracking-tight text-foreground rail:hidden">
         Wing<span className="text-primary">man</span>
       </span>
     </Link>
@@ -58,15 +61,16 @@ function Mark({ mark }: { mark: Exclude<BrandMark, "wingman-logo"> }) {
 /**
  * The top left: the platform you are in, its mark and name, linking to its
  * home. Wingman wears its logo; any other area its own mark, or an icon on a
- * tile the size of the logo.
+ * tile the size of the logo. In the icon rail, the mark alone (the name stays
+ * the link's accessible name).
  */
 export function AreaBrand({ area }: { area: AreaId }) {
   const { href, brand } = areaById(area);
   if (brand.mark === "wingman-logo") return <WingmanBrand href={href} />;
   return (
-    <Link href={href} data-testid="brand" data-area={area} className="flex h-14 min-w-0 items-center gap-2.5 px-4">
+    <Link href={href} data-testid="brand" data-area={area} className={BRAND_LINK}>
       <Mark mark={brand.mark} />
-      <span className="truncate text-[15px] font-semibold tracking-tight text-foreground">{brand.name}</span>
+      <span className="truncate text-[15px] font-semibold tracking-tight text-foreground rail:sr-only">{brand.name}</span>
     </Link>
   );
 }

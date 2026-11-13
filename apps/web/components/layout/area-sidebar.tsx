@@ -8,8 +8,9 @@ import { SidebarNav } from "./sidebar-nav";
 
 /**
  * Each area's sidebar (ADR-0047's amendment). Wingman's is its own list
- * (sidebar-nav.tsx, unchanged); every other area's is built from data
- * (`lib/areas.ts`'s sections, rendered by `AreaNav`).
+ * (sidebar-nav.tsx); every other area's is built from data (`lib/areas.ts`'s
+ * sections, rendered by `AreaNav`). Both are made of the same parts
+ * (sidebar-parts.tsx), so each collapses to the icon rail the same way.
  */
 const SIDEBARS: Record<AreaId, ComponentType> = {
   wingman: SidebarNav,
