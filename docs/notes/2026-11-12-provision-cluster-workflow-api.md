@@ -139,6 +139,19 @@ will do before it is pressed.
    the workflow's MR carry Wingman's labels or title, or should Wingman list
    provision runs (`GET /workflows/runs?workflow_type=ProvisionClusterWorkflow`)
    alongside its MRs?
+
+   **Answered (2026-11-13, ADR-0042's amendment): neither; Wingman finds it
+   by its branch.** The workflow's source branch is always
+   `provision-cluster/<file stem>` (its `provision_cluster_branch`), and
+   nothing changes on the workflow's side. In either mode, day1 counts each
+   open MR on that branch as an open create: a taken name for the
+   suggestion, a refused create (`409 ALREADY_EXISTS` with the MR's URL),
+   and a cluster on its MCE for placement. `GET /api/day1/approvals` lists
+   it with `"opened_by_workflow": "provision-cluster"` (`null` on Wingman's
+   own MRs). It is reviewed and
+   merged there: the workflow records no requester, so Wingman's "nobody
+   approves their own change" can't hold, and approving, rejecting or
+   editing it through Wingman answers `404`.
 3. **Add-ons.** The workflow registers the cluster in the day2 sigs its
    value layers list. The flavor's add-ons are recorded in the header, as
    today, and still installed by day2 afterwards. Is that the intended

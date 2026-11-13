@@ -478,6 +478,18 @@ async def test_an_open_create_counts_on_its_mce_and_for_its_owner(
     assert found[A]["behind_on"] == "clusters"
 
 
+async def test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_owner(
+    placed: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    # The workflow's MR has no label and its own title: its branch says it creates a cluster
+    await support.open_provision_mr(gitlab, "ocp4-prod-falcon-site1", mce=B, mador="7")
+    await support.open_provision_mr(gitlab, "ocp4-prod-orca-site1", mce=B, branch="someone/orca")
+    body = await get_placement(placed, auth(support.VIEWER), version=VERSION, owner="7")
+    found = by_mce(body)
+    assert (found[B]["clusters"], found[B]["open_creates"], found[B]["owner_clusters"]) == (1, 1, 1)
+    assert body["problems"] == []
+
+
 async def test_the_chosen_mce_goes_to_the_provision_workflow(
     support: Any,
     gitlab: InMemoryGitLab,

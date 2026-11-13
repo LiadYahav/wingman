@@ -5,8 +5,9 @@ needs:
 
 - the candidates and the versions each hosts, from the day1 repo (ADR-0034);
 - each candidate's clusters and this owner's, from its cluster files and the
-  open Wingman merge requests that create a cluster there (each MR's diff
-  says where, and its file says the owner);
+  open merge requests that create a cluster there, Wingman's and the
+  provision-cluster workflow's (each MR's diff says where, and its file says
+  the owner);
 - each candidate's free pods, from its own nodes and pods, read when asked
   (a cache of seconds, shared; never the minutes another source would be);
 - each candidate's healthy free servers of every node type the new cluster
@@ -45,6 +46,7 @@ from wingman_core.domain.mr_conventions import (
     Verb,
     parse_mr_title,
 )
+from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import Day1Tree, read_tree
@@ -99,7 +101,7 @@ Need = tuple[str, int]
 
 @dataclass(frozen=True, slots=True)
 class OpenCreate:
-    """An open Wingman merge request that creates a cluster: where, and whose."""
+    """An open merge request that creates a cluster (Wingman's or the workflow's): where, whose."""
 
     ref: ClusterRef
     owner: str | None
@@ -422,9 +424,18 @@ class PlacementService:
         return found
 
     async def _open_creates(self) -> tuple[list[OpenCreate], list[str]]:
-        """Every open Wingman MR that creates a cluster, where its file goes, and whose it is."""
-        opened = await self._day1.merge_requests(state=MRState.OPENED, labels=(WINGMAN_LABEL,))
+        """Every open MR that creates a cluster, where its file goes, and whose it is.
+
+        Wingman's own, by their title, and the provision-cluster workflow's, by
+        their branch (ADR-0042's amendment); one MR is counted once.
+        """
+        opened, provisions = await asyncio.gather(
+            self._day1.merge_requests(state=MRState.OPENED, labels=(WINGMAN_LABEL,)),
+            provision_merge_requests(self._day1),
+        )
         creates = [mr for mr in opened if _creates_a_cluster(mr)]
+        counted = {mr.ref for mr in creates}
+        creates += [p.merge_request for p in provisions if p.merge_request.ref not in counted]
         found = await asyncio.gather(*(self._open_create(mr) for mr in creates))
         return (
             [o for o, _ in found if o is not None],

@@ -19,6 +19,7 @@ from pydantic import SecretStr
 
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import FileChange, RepoPath
+from wingman_core.domain.merge_request import MergeRequest, NewMergeRequest
 from wingman_core.domain.users import Role, User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.infrastructure.session_tokens import SessionTokens
@@ -289,6 +290,42 @@ async def push(gitlab: InMemoryGitLab, path: str, *, branch: str, file: str, con
     await gitlab.commit(pid, branch=branch, message="outside push [skip ci]", changes=[change])
 
 
+async def open_provision_mr(
+    gitlab: InMemoryGitLab,
+    stem: str,
+    *,
+    mce: str = PROD_MCE,
+    site: str = PROD_SITE,
+    mador: str = "7",
+    branch: str | None = None,
+    title: str | None = None,
+    labels: tuple[str, ...] = (),
+) -> MergeRequest:
+    """An MR as the provision-cluster workflow opens it (ADR-0042): its branch and title, no label.
+
+    It adds ``<stem>.yaml`` under ``site``/``mce`` with the allocation, on
+    ``provision-cluster/<stem>`` unless ``branch`` names another.
+    """
+    branch = branch or f"provision-cluster/{stem}"
+    pid = await project_id(gitlab, DAY1)
+    await gitlab.create_branch(pid, branch, "main")
+    content = (
+        f'owner:\n  merkaz: "1234"\n  anaf: "56"\n  mador: "{mador}"\n'
+        "mastertag: 4.18.56-x86_64\nvlanId: 1234\n"
+    )
+    file = f"sites/{site}/mces/{mce}/hostedClusters/{stem}.yaml"
+    await push(gitlab, DAY1, branch=branch, file=file, content=content)
+    return await gitlab.create_merge_request(
+        pid,
+        NewMergeRequest(
+            source_branch=branch,
+            target_branch="main",
+            title=title or f"Provision hosted cluster {stem} on {mce}",
+            labels=labels,
+        ),
+    )
+
+
 class Support:
     """Helpers for tests, as one fixture (``--import-mode=importlib`` cannot import conftest)."""
 
@@ -309,6 +346,7 @@ class Support:
     seeded = staticmethod(seeded)
     project_id = staticmethod(project_id)
     push = staticmethod(push)
+    open_provision_mr = staticmethod(open_provision_mr)
 
 
 @pytest.fixture

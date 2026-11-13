@@ -26,10 +26,17 @@ from typing import Final
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, FileContent
 from wingman_core.domain.merge_request import MRState
-from wingman_core.domain.mr_conventions import Repo, ResourceType, Verb, parse_mr_title
+from wingman_core.domain.mr_conventions import (
+    WINGMAN_LABEL,
+    Repo,
+    ResourceType,
+    Verb,
+    parse_mr_title,
+)
 from wingman_core.domain.users import User
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.placement import PlacementService
+from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import read_tree
@@ -254,8 +261,9 @@ class ClusterService:
     async def suggest_name(self, *, site: str, mce: str, flavor: str) -> NameSuggestion:
         """A free name for a new cluster from ``flavor`` under ``site``/``mce`` (ADR-0040).
 
-        Taken are every cluster file under any site and every open create MR.
-        Raises ``ResourceNotFoundError`` for an unknown site, MCE or flavor.
+        Taken are every cluster file under any site and every open create MR,
+        the provision-cluster workflow's included. Raises
+        ``ResourceNotFoundError`` for an unknown site, MCE or flavor.
         """
         await self._sites.require_mce(site, mce)
         spec = await self._specs.get(flavor)
@@ -528,11 +536,17 @@ class ClusterService:
                 )
 
     async def _open_creates(self) -> list[tuple[str, str]]:
-        """``(cluster name, MR URL)`` of every open Wingman MR that creates a cluster."""
+        """``(cluster name, MR URL)`` of every open MR that creates a cluster.
+
+        Wingman's own, by their title, and the provision-cluster workflow's, by
+        their branch, whoever started the run (ADR-0042's amendment).
+        """
+        labelled, provisions = await asyncio.gather(
+            self._day1.merge_requests(state=MRState.OPENED, labels=(WINGMAN_LABEL,)),
+            provision_merge_requests(self._day1),
+        )
         creates: list[tuple[str, str]] = []
-        for merge_request in await self._day1.merge_requests(
-            state=MRState.OPENED, labels=("wingman",)
-        ):
+        for merge_request in labelled:
             title = parse_mr_title(merge_request.title)
             if title is not None and (title.repo, title.verb, title.resource_type) == (
                 Repo.DAY1,
@@ -540,6 +554,7 @@ class ClusterService:
                 ResourceType.CLUSTER,
             ):
                 creates.append((title.resource_name, merge_request.web_url))
+        creates += [(p.stem, p.merge_request.web_url) for p in provisions]
         return creates
 
     async def _read(self, ref: ClusterRef) -> FileContent:

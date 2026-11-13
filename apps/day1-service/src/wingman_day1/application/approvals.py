@@ -8,6 +8,12 @@ the merge is refused rather than merging what nobody saw (ADR-0006).
 Editing an MR's files adds a commit on top of its branch, never a force-push,
 guarded per file by the revision the reviewer saw. A cluster file edited this
 way must keep every automation-owned key as the branch has it.
+
+The list also shows the provision-cluster workflow's open day1 MRs, marked
+as the workflow's; they are reviewed and merged in GitLab, never here: the
+workflow records no requester, so "nobody approves their own change" could
+not hold, and ``Approvals`` refuses an MR without the ``wingman`` label
+(ADR-0042's amendment).
 """
 
 from __future__ import annotations
@@ -20,14 +26,20 @@ from enum import StrEnum
 from wingman_core.application.approvals import Approvals, PendingChange, describe
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import FileChange, FileDiff, RepoPath, commit_author
-from wingman_core.domain.merge_request import MergeRequestRef, MRState
+from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef, MRState
 from wingman_core.domain.mr_conventions import WINGMAN_LABEL
 from wingman_core.domain.users import User
 from wingman_core.ports.gitlab import GitLabPort
+from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.domain import paths
 from wingman_day1.domain.cluster_file import edit_problems
 from wingman_day1.domain.errors import InvalidInputError, InvalidSpecError, StaleError
 from wingman_day1.domain.specs import parse_spec
+from wingman_day1.domain.workflows import (
+    PROVISION_WORKFLOW,
+    WorkflowName,
+    provision_branch_stem,
+)
 from wingman_day1.ports import RepoReads
 
 
@@ -45,6 +57,14 @@ class Change:
     repo: RepoKey
     pending: PendingChange
 
+    @property
+    def opened_by_workflow(self) -> WorkflowName | None:
+        """``provision-cluster`` for that workflow's day1 MR; ``None`` for Wingman's own."""
+        branch = self.pending.merge_request.source_branch
+        if self.repo is RepoKey.DAY1 and provision_branch_stem(branch) is not None:
+            return PROVISION_WORKFLOW
+        return None
+
 
 class ApprovalService:
     """List, show, edit, approve and reject Wingman MRs in the day1 and specs projects."""
@@ -56,18 +76,27 @@ class ApprovalService:
         self._repos = dict(repos)
 
     async def pending(self) -> list[Change]:
-        """Open Wingman MRs in both projects, newest first, whatever branch they target."""
-        lists = await asyncio.gather(
-            *(
-                reads.merge_requests(state=MRState.OPENED, labels=(WINGMAN_LABEL,))
-                for reads in self._repos.values()
-            )
+        """Open Wingman MRs in both projects, newest first, whatever branch they target.
+
+        The provision-cluster workflow's open day1 MRs are listed too, to be
+        seen (``Change.opened_by_workflow``); approving one here is refused.
+        """
+        lists, provisions = await asyncio.gather(
+            asyncio.gather(
+                *(
+                    reads.merge_requests(state=MRState.OPENED, labels=(WINGMAN_LABEL,))
+                    for reads in self._repos.values()
+                )
+            ),
+            self._provision_merge_requests(),
         )
         changes = [
             Change(repo, describe(mr))
             for repo, mrs in zip(self._repos, lists, strict=True)
             for mr in mrs
         ]
+        listed = {c.pending.merge_request.ref for c in changes}
+        changes += [Change(RepoKey.DAY1, describe(mr)) for mr in provisions if mr.ref not in listed]
         return sorted(
             changes,
             key=lambda c: (c.pending.merge_request.created_at, c.pending.merge_request.ref),
@@ -150,6 +179,12 @@ class ApprovalService:
         return await self.get(repo, iid)
 
     # ── Internals ───────────────────────────────────────────────────────────
+
+    async def _provision_merge_requests(self) -> list[MergeRequest]:
+        day1 = self._repos.get(RepoKey.DAY1)
+        if day1 is None:
+            return []
+        return [p.merge_request for p in await provision_merge_requests(day1)]
 
     async def _ref(self, repo: RepoKey, iid: int) -> MergeRequestRef:
         return MergeRequestRef((await self._repos[repo].project()).id, iid)

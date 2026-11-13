@@ -33,11 +33,12 @@ async def test_the_list_has_the_legacy_mr_shape_plus_project_and_sha(
     assert set(listed) == {
         "iid", "project_id", "title", "description", "author", "state", "created_at",
         "updated_at", "merged_at", "web_url", "source_branch", "target_branch", "labels",
-        "repo", "has_conflicts", "sha",
+        "repo", "has_conflicts", "sha", "opened_by_workflow",
     }  # fmt: skip
     assert listed["iid"] == mr["iid"]
     assert listed["author"] == {"username": "alice", "name": "alice", "avatar_url": ""}
     assert listed["state"] == "opened"
+    assert listed["opened_by_workflow"] is None
 
 
 async def test_expanding_an_mr_without_repo_reaches_the_day1_project(
