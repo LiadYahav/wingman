@@ -133,6 +133,40 @@ export const CHECK_NAMES: Record<PlacementCheck["check"], string> = {
   readable: "the MCE's API",
 };
 
+/**
+ * Why a candidate cannot be chosen, in a few words for its row ("no 4.18.22",
+ * "40 free pods", "1 of 2 servers"): its first failed check, else what is
+ * unknown. `null` for a candidate that can be chosen. The full reasons are the
+ * checks' own sentences.
+ */
+export function shortReason(candidate: PlacementCandidate, version: string | null): string | null {
+  if (candidate.eligible) return null;
+  const unmet = unmetChecks(candidate);
+  const failed = unmet.find((check) => check.status === "fail");
+  switch (failed?.check) {
+    case "version":
+      return version ? `no ${version}` : "not this version";
+    case "free_pods":
+      return candidate.pods ? `${candidate.pods.free} free pods` : "too few free pods";
+    case "servers": {
+      const type = candidate.node_types.find((t) => t.status === "fail");
+      const free = type ? (type.healthy ?? type.free_agents) : null;
+      return type && free !== null ? `${free} of ${type.needed} servers` : "too few servers";
+    }
+    case "readable":
+      return "not readable";
+  }
+  if (unmet.some((check) => check.check === "readable")) return "not readable";
+  return unmet.length > 0 ? `${SHORT_NAMES[unmet[0].check]} unknown` : null;
+}
+
+const SHORT_NAMES: Record<PlacementCheck["check"], string> = {
+  version: "version",
+  free_pods: "free pods",
+  servers: "servers",
+  readable: "API",
+};
+
 /** What a ranking step is called where a person reads it. */
 export const BEHIND_ON: Record<NonNullable<PlacementCandidate["behind_on"]>, string> = {
   owner_clusters: "more clusters of this owner",

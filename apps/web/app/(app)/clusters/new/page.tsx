@@ -28,7 +28,7 @@ import type {
   ProvisionRun, SpecEntry, TemplateField,
 } from "@/types";
 import { ProvisionRunPanel } from "@/components/clusters/provision-run";
-import { MCEPlacementPanel } from "@/components/clusters/mce-placement";
+import { MCEPlacementPanel, PlacementRule } from "@/components/clusters/mce-placement";
 import { isProvisionRun, useProvisioner } from "@/lib/provision";
 import {
   PLACEMENT_ENVS, REASON_MAX, changedPick, cleanReason, placementNeeds, placementOwner, useDebounced, usePlacement,
@@ -1304,29 +1304,27 @@ export default function NewClusterPage() {
   ].filter((part): part is string => Boolean(part));
   const placementField = (
     <div className="space-y-2 border-t pt-4" data-testid="mce-placement">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span id={mceLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          MCE
+      <div className="flex flex-wrap items-center justify-between gap-x-3">
+        <span className="flex items-center gap-0.5">
+          <span id={mceLabelId} className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            MCE
+          </span>
+          <PlacementRule placement={placement} owner={mador} ranked={Boolean(mador) && placement?.owner === mador} />
         </span>
-        <span className="text-[11px] text-muted-foreground" data-testid="placement-owner">
-          {mador && placement?.owner === mador ? (
-            <>Ranked for owner <span className="font-mono text-foreground">{mador}</span></>
-          ) : mador ? (
-            <>Ranking for owner <span className="font-mono text-foreground">{mador}</span>…</>
-          ) : (
-            <>
-              <button type="button" onClick={focusOwner} className="text-primary hover:underline">
-                Enter the owner&apos;s mador
-              </button>{" "}
-              to spread this owner&apos;s clusters
-            </>
-          )}
-        </span>
+        {!mador && (
+          <button
+            type="button"
+            onClick={focusOwner}
+            data-testid="placement-owner-prompt"
+            className="inline-flex min-h-6 items-center text-[11px] text-primary hover:underline"
+          >
+            Enter the owner&apos;s mador
+          </button>
+        )}
       </div>
       {placementMissing.length > 0 ? (
         <p data-testid="placement-waiting" className="rounded-lg border border-dashed px-4 py-3 text-xs text-muted-foreground">
-          Wingman picks the best MCE once {joinWords(placementMissing)} {placementMissing.length === 1 ? "is" : "are"}{" "}
-          chosen. The owner and the nodepools below refine the pick; they are not needed to see one.
+          Wingman picks the MCE once {joinWords(placementMissing)} {placementMissing.length === 1 ? "is" : "are"} chosen.
         </p>
       ) : (
         <div

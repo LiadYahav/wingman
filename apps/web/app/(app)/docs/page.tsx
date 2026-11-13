@@ -709,15 +709,19 @@ spec:
                 <InlineCode>mastertag</InlineCode>.
               </p>
               <p className="mt-2">
-                The pick shows as soon as those three are chosen: the best MCE and why, and every candidate&apos;s
-                numbers. A candidate must host the version, have enough free pods for a control plane on its workers,
-                have enough healthy free servers of each node type (InfraEnv) the nodepools use, and answer Wingman;
-                among those, the pick has the fewest clusters of this owner, then the fewest clusters, then the most
-                usable spare servers. The owner&apos;s mador and the nodepools below refine the pick; they are not
-                needed to see one. Where this deployment does not read the MCEs live, free pods and servers are shown
-                as not checked, and the pick rests on the rest. An MCE that fails a check says why and cannot be
-                chosen. An admin may choose another MCE that passes, with a reason; the merge request records the
-                numbers, the pick and the reason.
+                As soon as those three are chosen, the MCE section lists every candidate, one row each with its
+                numbers, and the pick&apos;s row is marked <strong>Wingman&apos;s pick</strong> and chosen. The details
+                wait in tooltips, which open on hover, on keyboard focus or on a tap: the ⓘ beside MCE gives the rule,
+                the pick&apos;s mark says why it won, each row&apos;s check mark (passes, fails, or passes with some
+                checks not made) gives its reasons and numbers, and a dash says why a number is missing. A candidate
+                must host the version, have enough free pods for a control plane on its workers, have enough healthy
+                free servers of each node type (InfraEnv) the nodepools use, and answer Wingman; among those, the pick
+                has the fewest clusters of this owner, then the fewest clusters, then the most usable spare servers.
+                The owner&apos;s mador and the nodepools below refine the pick; they are not needed to see one. Where
+                this deployment does not read the MCEs live, one line under the table says free pods and servers were
+                not checked, and the pick rests on the rest. An MCE that fails a check says why in a few words
+                (<InlineCode>no 4.18.56</InlineCode>) and cannot be chosen. An admin may choose another MCE that
+                passes, with a reason; the merge request records the numbers, the pick and the reason.
               </p>
               <p className="mt-2">
                 Sites and MCEs are the day1 repo&apos;s folders and are read-only: Wingman never creates them, and an
