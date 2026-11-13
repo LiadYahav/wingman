@@ -4,7 +4,9 @@ Tests seed them directly; ``DAY1_FAKE_FLEET=true`` (development only) seeds
 them from ``dev/fleet-fixtures/servers.yaml``, written in server-scan's own
 row shape and read by the HTTP adapter's parser. They raise the same domain
 errors as the real adapters. The fake's sites are its rows counted by
-server-scan's rules over a site catalog (``fake_server_scan_sites``, ADR-0048).
+server-scan's rules over a site catalog (``fake_server_scan_sites``, ADR-0048);
+its maintenance writes change the row as a server-scan with auth off does,
+recording ``dev`` as who.
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which
@@ -35,7 +37,7 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
     WorkflowsUnavailableError,
 )
-from wingman_day1.domain.server_scan_servers import FleetRows
+from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import (
     UNINSTALL_HOLDER,
@@ -56,6 +58,8 @@ DEMO_PHASES: Final = (
 )
 """A few of the real workflow's steps, for the demo only."""
 PHASE_SECONDS: Final = 8.0
+FAKE_ACTOR: Final = "dev"
+"""Who a server-scan with auth off records for every write."""
 FLEET_FILE: Final = Path("dev/fleet-fixtures/servers.yaml")
 
 
@@ -75,6 +79,8 @@ class FakeServerInventory:
         self._sites = tuple(sites)
         self.server_reads = 0
         """How many times ``server`` was called (the uninstall's fresh read)."""
+        self.maintenance_starts: list[tuple[str, MaintenanceStart]] = []
+        """Every ``start_maintenance`` that reached a server, in order."""
         self._before_read: list[Callable[[], None]] = []
 
     def before_read(self, hook: Callable[[], None]) -> None:
@@ -122,6 +128,43 @@ class FakeServerInventory:
         self._read()
         rows = list(self._rows.values())
         return count_sites(rows, self._sites or catalog_of(rows))
+
+    async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
+        """See ServerInventory.start_maintenance: who stays the first one's, as in server-scan."""
+        row = self._writable(server_id)
+        self.maintenance_starts.append((server_id, start))
+        who = row.maintenance_by if row.maintenance else FAKE_ACTOR
+        return self._change(
+            dataclasses.replace(
+                row, maintenance=True, maintenance_reason=start.reason, maintenance_by=who
+            )
+        )
+
+    async def end_maintenance(self, server_id: str) -> ServerMaintenance:
+        """See ServerInventory.end_maintenance."""
+        row = self._writable(server_id)
+        return self._change(
+            dataclasses.replace(
+                row, maintenance=False, maintenance_reason=None, maintenance_by=None
+            )
+        )
+
+    def _writable(self, server_id: str) -> ServerRow:
+        self._read()
+        row = self._rows.get(server_id)
+        if row is None:
+            raise ServerNotFoundError(f"server-scan has no server {server_id!r} (fake)")
+        return row
+
+    def _change(self, row: ServerRow) -> ServerMaintenance:
+        self._rows[row.id] = row
+        return ServerMaintenance(
+            server_id=row.id,
+            server_name=row.name,
+            enabled=row.maintenance,
+            reason=row.maintenance_reason,
+            created_by=row.maintenance_by,
+        )
 
     def _read(self) -> None:
         if self.unavailable:

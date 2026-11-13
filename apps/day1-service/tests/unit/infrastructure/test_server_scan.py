@@ -18,7 +18,7 @@ from wingman_day1.domain.errors import (
     ServerScanDeniedError,
     ServerScanUnavailableError,
 )
-from wingman_day1.domain.server_scan_servers import FleetRows
+from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
@@ -333,6 +333,12 @@ class CountingInventory:
         if self.fail:
             raise ServerScanUnavailableError("down")
         return count_sites([PARSED], [("bat-yam", "Bat Yam")])
+
+    async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
+        raise AssertionError("not written here")
+
+    async def end_maintenance(self, server_id: str) -> ServerMaintenance:
+        raise AssertionError("not written here")
 
 
 async def test_the_cache_reads_the_fleet_once_per_ttl_and_one_server_every_time() -> None:

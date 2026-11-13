@@ -1,7 +1,9 @@
-"""HttpServerInventory: server-scan's fleet, one server and its sites, over httpx.
+"""HttpServerInventory: server-scan's fleet, one server, its sites and maintenance, over httpx.
 
-Read only (ADR-0038, ADR-0048). Day1 presents a viewer token
-(``Authorization: Bearer``), or none for an instance that runs with auth off.
+Read only (ADR-0038, ADR-0048) but for a server's maintenance, the Server Scan
+area's one write (``server_scan_writes``, ADR-0048's 3.23.0 amendment). Day1
+presents a viewer token (``Authorization: Bearer``) on every read and the
+admin token on the writes only, or none for an instance that runs with auth off.
 The fleet is one read, ``GET /api/v1/servers/rows`` (about 250 KB gzipped for
 3,000 servers); its weak ``ETag`` goes back as ``If-None-Match``, so an
 unchanged fleet costs a 304 and no download. One server is
@@ -30,13 +32,14 @@ from wingman_day1.domain.errors import (
     ServerScanDeniedError,
     ServerScanUnavailableError,
 )
-from wingman_day1.domain.server_scan_servers import FleetRows
+from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.http import json_client
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
 from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_detail
 from wingman_day1.infrastructure.server_scan_sites import fleet_sites
+from wingman_day1.infrastructure.server_scan_writes import send_maintenance, start_body
 
 ROWS_PATH: Final = "/api/v1/servers/rows"
 SERVER_PATH: Final = "/api/v1/servers/{id}"
@@ -51,6 +54,7 @@ class HttpServerInventory:
         *,
         base_url: str,
         token: str = "",
+        admin_token: str = "",
         verify: bool | str = True,
         timeout_seconds: float = 10.0,
         metrics: WingmanMetrics | None = None,
@@ -59,12 +63,15 @@ class HttpServerInventory:
     ) -> None:
         """Read server-scan at ``base_url``; an empty ``token`` sends no Authorization header.
 
-        ``verify`` is ``True``/``False`` or a CA bundle path (read now, so a
-        missing bundle stops start-up); ``transport`` is for tests.
+        ``admin_token`` replaces it on the maintenance writes only (empty: the
+        writes carry ``token``'s header, or none). ``verify`` is
+        ``True``/``False`` or a CA bundle path (read now, so a missing bundle
+        stops start-up); ``transport`` is for tests.
         """
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        self._write_headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
         self._observer = Observer(Dependency.SERVER_SCAN, metrics, timer=timer)
         self._client = json_client(
             base_url=base_url,
@@ -96,6 +103,18 @@ class HttpServerInventory:
     async def sites(self) -> FleetSites:
         """See ServerInventory.sites."""
         return await self._observer.call(ServerScanOperation.LIST_SITES, self._sites())
+
+    async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
+        """See ServerInventory.start_maintenance."""
+        write = send_maintenance(
+            self._client, "PUT", server_id, headers=self._write_headers, body=start_body(start)
+        )
+        return await self._observer.call(ServerScanOperation.ENABLE_MAINTENANCE, write)
+
+    async def end_maintenance(self, server_id: str) -> ServerMaintenance:
+        """See ServerInventory.end_maintenance."""
+        write = send_maintenance(self._client, "DELETE", server_id, headers=self._write_headers)
+        return await self._observer.call(ServerScanOperation.DISABLE_MAINTENANCE, write)
 
     async def _read_fleet(self) -> FleetRows:
         what = "listing servers"

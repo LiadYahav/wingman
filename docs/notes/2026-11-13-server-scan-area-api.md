@@ -364,7 +364,7 @@ shape, plus whether the maintenance toggle works here:
 **`PUT /api/day1/server-scan/servers/{server_id}/maintenance`**, body
 `{"reason": "Replacing PSU 2 — INC-4417", "expected_end": "2026-11-14T16:00:00Z"}`
 (both optional; `reason` at most 500 characters, `expected_end` an ISO 8601
-date and time), and **`DELETE`** on the same path, answer the server's new
+date and time with its offset, `Z` or `+02:00`), and **`DELETE`** on the same path, answer the server's new
 maintenance:
 
 ```json
@@ -431,7 +431,7 @@ maintenance:
 | 401 | `UNAUTHORIZED` | No session |
 | 403 | `FORBIDDEN` | Not one of Wingman's admins |
 | 404 | `NOT_FOUND` | A write to a server server-scan does not have |
-| 422 | `VALIDATION_FAILED` | A reason over 500 characters or an `expected_end` that is not a date and time; or server-scan refused the body (its `422`) |
+| 422 | `VALIDATION_ERROR` | A reason over 500 characters or an `expected_end` that is not a date and time with its offset; or server-scan refused the body (its `422`, its words in `details.problems`) |
 | 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty; on a write also: a viewer token without an admin token (§8.4) |
 | 502 | `DEPENDENCY_UNAVAILABLE` | server-scan unreachable, answering an error, or refusing the token: the viewer token on a read (check `SERVER_SCAN_TOKEN`), the admin token on a write (check `SERVER_SCAN_ADMIN_TOKEN`) |
 | 504 | `AMBIGUOUS_WRITE` | A write sent and not answered (§8.5) |

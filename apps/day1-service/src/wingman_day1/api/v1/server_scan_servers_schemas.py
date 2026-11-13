@@ -11,9 +11,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import AwareDatetime, BaseModel, Field
 
-from wingman_day1.domain.server_scan_servers import FleetRows
+from wingman_day1.domain.server_scan_servers import (
+    REASON_MAX_LENGTH,
+    FleetRows,
+    MaintenanceStart,
+    ServerMaintenance,
+)
 from wingman_day1.domain.servers import ServerRow
 
 
@@ -101,14 +106,53 @@ class ServerRowOut(BaseModel):
 
 
 class ServerRowsOut(BaseModel):
-    """``GET /api/day1/server-scan/servers``: server-scan's ``GET /api/v1/servers/rows``, typed."""
+    """``GET /api/day1/server-scan/servers``: server-scan's ``GET /api/v1/servers/rows``, typed.
+
+    Plus whether the maintenance toggle works in this deployment, and why not.
+    """
 
     items: list[ServerRowOut]
     generated_at: datetime | None
+    maintenance_available: bool
+    maintenance_detail: str | None
 
     @classmethod
-    def of(cls, fleet: FleetRows) -> ServerRowsOut:
+    def of(cls, fleet: FleetRows, maintenance_detail: str | None) -> ServerRowsOut:
         """From the domain, in server-scan's order."""
         return cls(
-            items=[ServerRowOut.of(row) for row in fleet.rows], generated_at=fleet.generated_at
+            items=[ServerRowOut.of(row) for row in fleet.rows],
+            generated_at=fleet.generated_at,
+            maintenance_available=maintenance_detail is None,
+            maintenance_detail=maintenance_detail,
+        )
+
+
+class MaintenanceIn(BaseModel):
+    """``PUT …/maintenance``: server-scan's ``MaintenanceEnableRequest``, both optional."""
+
+    reason: str | None = Field(default=None, max_length=REASON_MAX_LENGTH)
+    expected_end: AwareDatetime | None = None
+
+    def start(self) -> MaintenanceStart:
+        """To the domain; a blank reason is none, as server-scan's UI sends it."""
+        reason = (self.reason or "").strip()
+        return MaintenanceStart(reason=reason or None, expected_end=self.expected_end)
+
+
+class ServerMaintenanceOut(BaseModel):
+    """A maintenance write's answer: the server and its maintenance now, as a row has it."""
+
+    id: str
+    name: str
+    maintenance: MaintenanceFlagOut
+
+    @classmethod
+    def of(cls, change: ServerMaintenance) -> ServerMaintenanceOut:
+        """From the domain."""
+        return cls(
+            id=change.server_id,
+            name=change.server_name,
+            maintenance=MaintenanceFlagOut(
+                enabled=change.enabled, reason=change.reason, created_by=change.created_by
+            ),
         )

@@ -71,7 +71,8 @@ division of the work. Two of them change, and its first question is answered:
 - **server-scan: "read-only"** stays true for the first version of the
   Servers area. server-scan's own UI has two writes, maintenance on/off and
   "run a collector job now"; whether Wingman offers them is an open question
-  (below).
+  (below). Decided by decision 14: both, behind the admin check; maintenance
+  on/off came with the Servers page (3.23.0, ADR-0048's amendment).
 - Convention 14 (site and MCE are read-only in Wingman) is unchanged.
 
 ## Workstreams
@@ -88,7 +89,7 @@ tag exists.
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
 | 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0046 | M | 1 for a place to show it |
 | 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand (3.17.0); full parity (decision 22) built for 3.21.0 |
-| 4 | Server Scan area | 0048 | L–XL | Sites built (ADR-0048); the other pages follow, one PR each; the auditor and admin tokens with the pages that need them |
+| 4 | Server Scan area | 0048 | L–XL | Sites and Servers built (ADR-0048 and its 3.23.0 amendment), with maintenance on/off and the admin token; the other pages follow, one PR each; the auditor token with the pages that need it |
 | 5 | Hosted clusters and MCEs from cluster-navigator | 0049 | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
@@ -276,10 +277,13 @@ Never its `/api/logs` endpoints (open, unauthenticated: a finding for the team).
 
 ### 4. Server Scan area (ADR-0048)
 
-**Status (2026-11-13): Sites built; the other pages follow**, page by page,
-one PR each (the user: "page over page, not all together"). The contract is
-`docs/notes/2026-11-13-server-scan-area-api.md`; its §8 lists what each
-later page needs.
+**Status (2026-11-13): Sites (3.22.0) and Servers (3.23.0) built; the other
+pages follow**, page by page, one PR each (the user: "page over page, not all
+together"). Servers brought the area's first write, a server's maintenance on
+and off, with server-scan's admin token (an optional key of the same Secret)
+and logged with the person's name. The contract is
+`docs/notes/2026-11-13-server-scan-area-api.md`; its §9 lists what each later
+page needs.
 
 **Option C (decision 22).** A top-bar
 platform, "Server Scan", with server-scan's own sidebar (its pages below)

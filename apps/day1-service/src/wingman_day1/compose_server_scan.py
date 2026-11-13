@@ -12,8 +12,10 @@ from typing import Final
 
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.application.server_scan import ServerScanService
+from wingman_day1.domain.server_scan_servers import maintenance_detail
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.ports import ServerInventory
+from wingman_day1.settings import Day1Settings
 
 SITES_TTL_SECONDS: Final = 10.0
 """The longest day1 keeps server-scan's sites: server-scan caches them 30 seconds itself."""
@@ -28,6 +30,19 @@ def cached_inventory(
     return CachedServerInventory(inventory, cache, ttl=ttl, sites_ttl=min(ttl, SITES_TTL_SECONDS))
 
 
-def server_scan_service(inventory: ServerInventory | None) -> ServerScanService | None:
-    """The Server Scan area over the cached ``inventory``; ``None`` without one (501)."""
-    return ServerScanService(inventory) if inventory is not None else None
+def server_scan_service(
+    inventory: ServerInventory | None, settings: Day1Settings
+) -> ServerScanService | None:
+    """The Server Scan area over the cached ``inventory``; ``None`` without one (501).
+
+    Its maintenance toggle works with server-scan's admin token, or with no
+    token at all (a server-scan with auth off); a viewer token alone turns it
+    off (ADR-0048's 3.23.0 amendment).
+    """
+    if inventory is None:
+        return None
+    detail = maintenance_detail(
+        viewer_token=bool(settings.server_scan_token.get_secret_value()),
+        admin_token=bool(settings.server_scan_admin_token.get_secret_value()),
+    )
+    return ServerScanService(inventory, maintenance_detail=detail)

@@ -2,7 +2,8 @@
 
 Admins only for now (decision 13 of ``docs/ideas/single-pane.md``, until
 RBAC). With ``SERVER_SCAN_URL`` empty every route answers 501; server-scan
-failing or refusing the token is 502. The contract:
+failing or refusing the token is 502. The one write, a server's maintenance,
+is never retried: unanswered, it is 504 ``AMBIGUOUS_WRITE``. The contract:
 ``docs/notes/2026-11-13-server-scan-area-api.md``.
 """
 
@@ -14,7 +15,11 @@ from wingman_core.web.auth import AdminUser
 from wingman_day1.api.conditional import conditional_json, weak_etag
 from wingman_day1.api.deps import ServerScan
 from wingman_day1.api.v1.server_scan_schemas import SitesOut
-from wingman_day1.api.v1.server_scan_servers_schemas import ServerRowsOut
+from wingman_day1.api.v1.server_scan_servers_schemas import (
+    MaintenanceIn,
+    ServerMaintenanceOut,
+    ServerRowsOut,
+)
 from wingman_day1.domain.server_scan_servers import FleetRows
 
 router = APIRouter(prefix="/api/day1/server-scan", tags=["server-scan"])
@@ -37,15 +42,17 @@ class EncodedFleet:
     def __init__(self) -> None:
         """Nothing encoded yet."""
         self._fleet: FleetRows | None = None
+        self._detail: str | None = None
         self._body = b""
         self._etag = ""
 
-    def of(self, fleet: FleetRows) -> tuple[bytes, str]:
+    def of(self, fleet: FleetRows, maintenance_detail: str | None) -> tuple[bytes, str]:
         """``fleet``'s answer and its weak ETag."""
-        if fleet is not self._fleet:
-            self._body = ServerRowsOut.of(fleet).model_dump_json().encode()
+        if fleet is not self._fleet or maintenance_detail != self._detail:
+            answer = ServerRowsOut.of(fleet, maintenance_detail)
+            self._body = answer.model_dump_json().encode()
             self._etag = weak_etag(self._body)
-            self._fleet = fleet
+            self._fleet, self._detail = fleet, maintenance_detail
         return self._body, self._etag
 
 
@@ -55,5 +62,23 @@ _ENCODED = EncodedFleet()
 @router.get("/servers", response_model=ServerRowsOut)
 async def server_scan_servers(request: Request, service: ServerScan, user: AdminUser) -> Response:
     """The fleet as server-scan's rows; ``304`` when the ``If-None-Match`` is current."""
-    body, etag = _ENCODED.of(await service.servers())
+    body, etag = _ENCODED.of(await service.servers(), service.maintenance_detail)
     return conditional_json(request, body, etag)
+
+
+@router.put("/servers/{server_id}/maintenance")
+async def start_server_maintenance(
+    server_id: str, body: MaintenanceIn, service: ServerScan, user: AdminUser
+) -> ServerMaintenanceOut:
+    """Put a server into maintenance, as server-scan's UI does; logged with the person's name."""
+    return ServerMaintenanceOut.of(
+        await service.start_maintenance(server_id, body.start(), user=user)
+    )
+
+
+@router.delete("/servers/{server_id}/maintenance")
+async def end_server_maintenance(
+    server_id: str, service: ServerScan, user: AdminUser
+) -> ServerMaintenanceOut:
+    """End a server's maintenance in one call, as server-scan's UI does."""
+    return ServerMaintenanceOut.of(await service.end_maintenance(server_id, user=user))

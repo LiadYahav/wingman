@@ -268,9 +268,15 @@ serverScan:
   #   oc create secret generic server-scan-viewer -n <ns> --from-literal=token=<token>
   # Empty name: no token, for a server-scan with auth off. Never put the token
   # itself in values. day1 reads it at start: restart day1 after rotating it.
+  # adminKey: an optional second key of the same Secret, server-scan's admin
+  # token, sent only when an admin turns a server's maintenance on or off on
+  # the Server Scan area's Servers page (ADR-0048). Without it, the toggle is
+  # greyed out (with no Secret at all, server-scan runs with auth off and it works):
+  #   oc -n <ns> set data secret/server-scan-viewer admin-token=<admin token>
   tokenSecret:
     name: ""
     key: "token"
+    adminKey: "admin-token"
 
 # ── Node uninstall through the workflows orchestrator (ADR-0038) ──────────────
 # Off by default. With a url, day1 starts the platform's uninstall-server-from-hc
