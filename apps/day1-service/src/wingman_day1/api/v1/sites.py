@@ -12,7 +12,7 @@ from fastapi import APIRouter, Path, Query
 
 from wingman_core.web.auth import CurrentUser
 from wingman_day1.api.deps import Context, Status
-from wingman_day1.api.v1.schemas import MceOut, OpenShiftVersionsOut
+from wingman_day1.api.v1.sites_schemas import MceOut, OpenShiftVersionsOut
 
 sites_router = APIRouter(prefix="/api/day1/sites", tags=["sites"])
 mces_router = APIRouter(prefix="/api/day1/mces", tags=["mces"])

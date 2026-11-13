@@ -2,7 +2,7 @@
  * Mocked spec pages against the rewritten day1 service: specs that do not
  * load, real spec drift, writes that keep what the page does not edit, and
  * RFC 9457 problems shown in full. Shapes follow
- * apps/day1-service/src/wingman_day1/api/v1/schemas.py.
+ * apps/day1-service/src/wingman_day1/api/v1/*schemas.py.
  */
 
 import { test, expect, type Page, type Route } from "@playwright/test";

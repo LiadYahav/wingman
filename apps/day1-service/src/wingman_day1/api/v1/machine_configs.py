@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from wingman_core.web.auth import CurrentUser
 from wingman_day1.api.deps import Context
-from wingman_day1.api.v1.schemas import MachineConfigsOut
+from wingman_day1.api.v1.machine_configs_schemas import MachineConfigsOut
 
 router = APIRouter(prefix="/api/day1/machine-configs", tags=["machine-configs"])
 

@@ -129,7 +129,7 @@ export async function mockPlacement(
 }
 import type { Team } from "../../types/day2";
 
-// Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/schemas.py,
+// Shapes follow the services' Pydantic schemas (apps/day1-service/.../api/v1/*schemas.py,
 // apps/day2-service/.../api/v1/*schemas.py), typed so a shape change fails `tsc`.
 
 /** The fixtures' teams, each with Wingman's account a Developer on its project. */

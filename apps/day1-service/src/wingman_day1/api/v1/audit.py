@@ -7,8 +7,10 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query
 
 from wingman_core.web.auth import CurrentUser
+from wingman_core.web.schemas import FileDiffOut
 from wingman_day1.api.deps import Context
-from wingman_day1.api.v1.schemas import CommitRecordOut, FileDiffOut, MRDetailOut
+from wingman_day1.api.v1.audit_schemas import CommitRecordOut
+from wingman_day1.api.v1.schemas import MRDetailOut
 from wingman_day1.application.approvals import Change, RepoKey
 
 router = APIRouter(prefix="/api/day1/audit", tags=["audit"])

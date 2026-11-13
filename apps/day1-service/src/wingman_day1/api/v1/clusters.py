@@ -17,32 +17,32 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from wingman_core.domain.errors import GitError
 from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_day1.api.deps import Context, DeleteWorkflow, Nodes, Status
-from wingman_day1.api.v1.schemas import (
-    BulkStatusIn,
-    ClusterDetailOut,
-    ClusterDriftOut,
-    ClusterLiveStatusOut,
-    ClusterNetworkOut,
-    ClusterNodesOut,
-    ClusterStatusOut,
-    CommitOut,
-    CreateClusterIn,
+from wingman_day1.api.v1.cluster_network_schemas import ClusterNetworkOut
+from wingman_day1.api.v1.cluster_nodes_schemas import ClusterNodesOut, UninstallNodeIn
+from wingman_day1.api.v1.cluster_status_schemas import BulkStatusIn, ClusterLiveStatusOut
+from wingman_day1.api.v1.cluster_sync_schemas import SyncIn, SyncPreviewIn, SyncPreviewOut
+from wingman_day1.api.v1.cluster_workflows_schemas import (
     DeleteWorkflowOut,
-    DriftSummaryItemOut,
-    ModifyClusterIn,
-    MRDetailOut,
-    NameSuggestionOut,
-    PreviewOut,
     ProvisionerOut,
     ProvisionRunOut,
     StartDeleteWorkflowIn,
-    SyncIn,
-    SyncPreviewIn,
-    SyncPreviewOut,
-    UninstallNodeIn,
+)
+from wingman_day1.api.v1.clusters_schemas import (
+    ClusterDetailOut,
+    ClusterStatusOut,
+    CreateClusterIn,
+    DriftSummaryItemOut,
+    ModifyClusterIn,
+    NameSuggestionOut,
+    PreviewOut,
+    cluster_detail,
+)
+from wingman_day1.api.v1.schemas import (
+    ClusterDriftOut,
+    CommitOut,
+    MRDetailOut,
     WorkflowRunOut,
     change_out,
-    cluster_detail,
 )
 from wingman_day1.application.approvals import RepoKey
 from wingman_day1.application.clusters import CreateCluster
