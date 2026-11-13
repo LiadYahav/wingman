@@ -37,6 +37,7 @@ already have.
 | 3.13.1 | 3.13.2: the add-on's values are called **Sig values** (chart values → Sig values → cluster values) and Edit team default is **Edit add-on** (ADR-0043's amendment; the API and the merge request titles keep their names); the create form's MCE section is shorter: one row per MCE with its reasons in tooltips, the pick marked on its row, the rule behind an ⓘ | Generic |
 | 3.13.2 | 3.13.3: the Addons page answers from cache: day2's chart repo lookups (project, version branches, values) answer stale while one read refreshes them, like every other read (ADR-0041's amendment), so `/addons` stops waiting on GitLab after the first load; links in lists prefetch on hover or focus, not on render, so a page load no longer queues its API calls behind them | Generic |
 | 3.13.3 | 3.13.4: a code cleanup with no change in behaviour: unused code and leftovers removed, duplicated helpers merged (one HTTP client builder in day1, one place that opens a day2 merge request, one pagination in the web), turbo removed from the root, and knip in the web lint so unused files, exports and dependencies fail the build | Generic. Building the web image from source needs knip 6.45.1 and its native `oxc` packages in the npm mirror (the build stage installs dev dependencies); the running images are unchanged |
+| 3.13.4 | 3.13.5: CI only: the mocked E2E suite runs on two runners with four workers each (a run takes ~3.5 min instead of ~9.5), and a test that passed only on retry is annotated on the run | Generic: the images are unchanged |
 
 ### Skipping versions
 
