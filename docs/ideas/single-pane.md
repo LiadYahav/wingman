@@ -232,7 +232,9 @@ groundwork (only what this page needs). Its cuts (no Excel, no connection
 dot, no `/api/logs`, a Type filter row instead of column filters) are
 listed in `docs/notes/2026-11-13-segments-area-api.md` §7. Since 3.17.0
 the area has its own sidebar and brand (ADR-0047's amendment), the first
-piece of workstream 2's "each area has its own sidebar".
+piece of workstream 2's "each area has its own sidebar". Full parity
+(decision 22) is being built for 3.21.0 (ADR-0047's second amendment):
+the column filters are in, on the shared table.
 
 segments-manager's UI is one read-only page today (it lost its writes in
 July); its reads need no token.
@@ -260,7 +262,7 @@ July); its reads need no token.
 **Option C (decision 22): full parity, planned, waits on the user's go.**
 The alpha's cuts come back, so the area does everything segments-manager's
 UI does, in Wingman's look:
-- per-column filter popovers on every column (the shared table supports them);
+- per-column filter popovers on every column (the shared table supports them); *built, 3.21.0*;
 - the Excel export beside the CSV one;
 - the connection state;
 - its own sidebar (Segments: All, Available, Allocated, Disagrees with Git;

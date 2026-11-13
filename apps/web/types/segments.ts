@@ -4,9 +4,6 @@
  * `501 FEATURE_DISABLED` when segments-manager is not configured.
  */
 
-/** segments-manager's types, in its order. Only an Allocated segment has one. */
-export const SEGMENT_TYPES = ["HC", "MCE", "INVENTORY", "PXE", "UPI", "HUB"] as const;
-
 // ── GET /api/day1/segments/sites ──────────────────────────────────────────────
 
 export interface SegmentSites {

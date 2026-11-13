@@ -14,14 +14,15 @@ import { ProblemList } from "@/components/common/problem-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessages, isApiError } from "@/lib/api-client";
 import { useRefreshSegments, useSegmentList, useSegmentSites, useSegmentStats } from "@/lib/api/segments";
-import { COLUMN_IDS, isColumnId } from "@/lib/segments/columns";
+import { COLUMN_IDS, COLUMN_LABELS, isColumnId } from "@/lib/segments/columns";
 import { segmentsCsv } from "@/lib/segments/csv";
-import { shownSegments, statusCounts } from "@/lib/segments/filter";
-import { clearFilters, isFiltered, nextSort, orderTypes, toggleType, type SegmentsView } from "@/lib/segments/view";
-import { SEGMENT_TYPES, type Segment, type SegmentList } from "@/types/segments";
+import { baseSegments, shownSegments, statusCounts } from "@/lib/segments/filter";
+import { clearFilters, isFiltered, nextSort, type SegmentsView } from "@/lib/segments/view";
+import { describeFilter, setColumnFilter } from "@/lib/table/column-filters";
+import type { Segment, SegmentList } from "@/types/segments";
 import { SEGMENT_COLUMNS } from "./segment-columns";
 import { SegmentsHeader } from "./segments-header";
-import { FilterChip, MismatchToggle, SegmentSearch, SiteFilter, StatusTabs, TypeFilter } from "./segments-toolbar";
+import { FilterChip, MismatchToggle, SegmentSearch, SiteFilter, StatusTabs } from "./segments-toolbar";
 import { SiteCards, SiteCardsSkeleton } from "./site-cards";
 import { useSearchDraft, useSegmentsView } from "./use-segments-view";
 
@@ -91,6 +92,8 @@ function TableSkeleton() {
 
 interface TableProps {
   data: SegmentList;
+  /** The rows before the column filters: the header popovers list their values from them. */
+  base: Segment[];
   /** The rows the view shows, in its order. */
   shown: Segment[];
   view: SegmentsView;
@@ -101,11 +104,10 @@ interface TableProps {
 }
 
 /** The table and everything that filters it. */
-function SegmentsTable({ data, shown, view, setView, sites, visibility, onVisibility }: TableProps) {
+function SegmentsTable({ data, base, shown, view, setView, sites, visibility, onVisibility }: TableProps) {
   const search = useSearchDraft(view.q, (q) => setView({ ...view, q }));
   const counts = useMemo(() => statusCounts(data.segments, view), [data.segments, view]);
   const disagreeing = useMemo(() => data.segments.filter((s) => s.mismatches.length > 0).length, [data.segments]);
-  const types = useMemo(() => orderTypes([...SEGMENT_TYPES, ...data.segments.flatMap((s) => (s.type ? [s.type] : []))]), [data.segments]);
   const table = useDataTable<Segment>({
     data: shown,
     columns: SEGMENT_COLUMNS,
@@ -127,15 +129,24 @@ function SegmentsTable({ data, shown, view, setView, sites, visibility, onVisibi
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <SiteFilter sites={sites} value={view.site} onChange={(site) => setView({ ...view, site })} />
-        <TypeFilter types={types} value={view.types} onToggle={(type) => setView(toggleType(view, type))} />
         <MismatchToggle count={disagreeing} value={view.mismatch} onChange={(mismatch) => setView({ ...view, mismatch })} />
         {view.cluster && <FilterChip label="Cluster" value={view.cluster} onRemove={() => setView({ ...view, cluster: null })} />}
+        {COLUMN_IDS.filter((id) => view.filters[id]).map((id) => (
+          <FilterChip
+            key={id}
+            label={COLUMN_LABELS[id]}
+            value={describeFilter(view.filters[id])}
+            column
+            onRemove={() => setView({ ...view, filters: setColumnFilter(view.filters, id, null, []) })}
+          />
+        ))}
       </div>
       <DataTable
         table={table}
         label="Segments"
         sort={view.sort}
         onSort={(id) => isColumnId(id) && setView({ ...view, sort: nextSort(view.sort, id) })}
+        filters={{ rows: base, value: view.filters, onChange: (filters) => setView({ ...view, filters }) }}
         rowProps={(s) => ({
           "data-testid": "segment-row",
           "data-segment": s.segment,
@@ -164,6 +175,7 @@ export function SegmentsPage() {
   const [visibility, setVisibility] = useStoredVisibility(COLUMNS_KEY);
   const blocked = isApiError(list.error, "FORBIDDEN") || isApiError(list.error, "FEATURE_DISABLED");
   const data = list.data;
+  const base = useMemo(() => (data ? baseSegments(data.segments, view) : []), [data, view]);
   const shown = useMemo(() => (data ? shownSegments(data.segments, view) : []), [data, view]);
   const siteNames = sites.data?.sites ?? stats.data?.sites.map((s) => s.site) ?? [];
 
@@ -217,6 +229,7 @@ export function SegmentsPage() {
           <Notices data={data} error={list.error} />
           <SegmentsTable
             data={data}
+            base={base}
             shown={shown}
             view={view}
             setView={setView}

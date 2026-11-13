@@ -4,8 +4,9 @@
  * is exactly what is shown.
  */
 
+import { applyColumnFilters, type ColumnFilters } from "@/lib/table/column-filters";
 import type { Segment } from "@/types/segments";
-import { cellText, isAllocated, type ColumnId } from "./columns";
+import { cellText, isAllocated, isColumnId, type ColumnId } from "./columns";
 import type { SegmentsView, SortState, StatusTab } from "./view";
 
 /** The original's quick search: site, VLAN ID, EPG name, segment or cluster, without case. */
@@ -25,28 +26,38 @@ function matchesSite(segment: Segment, site: string | null): boolean {
   return site === null || (segment.site ?? "").toLowerCase() === site.toLowerCase();
 }
 
-/** As segments-manager filters: a type never matches a segment without one (an Available one). */
-function matchesTypes(segment: Segment, types: string[]): boolean {
-  return types.length === 0 || (segment.type !== null && types.includes(segment.type.toUpperCase()));
-}
-
 function matchesCluster(segment: Segment, cluster: string | null): boolean {
   return cluster === null || segment.holders.some((holder) => holder.name === cluster);
 }
 
 const matchesMismatch = (segment: Segment, only: boolean) => !only || segment.mismatches.length > 0;
 
-/** The segments `view` shows, in segments-manager's order; `ignoreStatus` for the tabs' counts. */
-export function filterSegments(segments: Segment[], view: SegmentsView, { ignoreStatus = false } = {}): Segment[] {
+/**
+ * The rows before the column filters, in segments-manager's order: the status
+ * tab, the site, the holder, "Disagrees with Git" and the search. Each column's
+ * filter popover lists its values from these, as the original's do (its
+ * `lastBaseSegments`). `ignoreStatus` for the tabs' counts.
+ */
+export function baseSegments(segments: Segment[], view: SegmentsView, { ignoreStatus = false } = {}): Segment[] {
   return segments.filter(
     (s) =>
       (ignoreStatus || matchesStatus(s, view.status)) &&
       matchesSite(s, view.site) &&
-      matchesTypes(s, view.types) &&
       matchesCluster(s, view.cluster) &&
       matchesMismatch(s, view.mismatch) &&
       matchesSearch(s, view.q)
   );
+}
+
+/** A segment's cell as the column filters hold it: the cell's text, as the table, the search and the exports read it. */
+const filterText = (segment: Segment, column: string): string => (isColumnId(column) ? cellText(segment, column) : "");
+
+const withColumnFilters = (segments: Segment[], filters: ColumnFilters): Segment[] =>
+  applyColumnFilters(segments, filters, filterText);
+
+/** The segments `view` shows, in segments-manager's order: the base rows, then the column filters. */
+export function filterSegments(segments: Segment[], view: SegmentsView, { ignoreStatus = false } = {}): Segment[] {
+  return withColumnFilters(baseSegments(segments, view, { ignoreStatus }), view.filters);
 }
 
 /** Each status tab's count under the view's other filters. */

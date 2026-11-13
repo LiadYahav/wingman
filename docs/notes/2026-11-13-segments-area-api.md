@@ -175,10 +175,21 @@ the area and the page says it is not set up.
   Wingman's cluster page; any other holder is plain text; a UPI list shows
   each name. A row with mismatches is marked, and its marker lists them.
 - **Above it**: status tabs (All, Available, Allocated, each with its count
-  under the other filters), the site filter, a Type filter row, the search
-  (cluster, EPG, VLAN ID, segment or site, as the original), the column picker
-  (kept per browser), and **CSV of N shown**: exactly the rows shown, after
-  every filter and the search, in the shown order and columns.
+  under the other filters), the site filter, the search (cluster, EPG, VLAN
+  ID, segment or site, as the original), the column picker (kept per
+  browser), and **CSV of N shown**: exactly the rows shown, after every
+  filter and the search, in the shown order and columns.
+- **A filter on every column** (Excel-style, as the original's headers; since
+  3.21.0): each header's funnel opens the column's distinct values, from the
+  rows left after the status tab, the site, the holder, "Disagrees with Git"
+  and the search (the original's `lastBaseSegments`), each a checkbox, with a
+  search among them, select all or none, Apply and Clear. A value is the
+  cell's text as shown (DHCP `On`/`Off`, a UPI list's names joined with
+  `, `, a record without a status `Available`); an empty cell is `(Blank)`.
+  Keeping every value is no filter. Columns combine (a row must pass each),
+  an active one marks its funnel and shows a chip that removes it (so a
+  filter on a hidden column stays in sight), and the tabs' counts follow.
+  Since 3.21.0 the Type column's filter replaces the alpha's Type row.
 - **Fresh data**: the page re-reads every 30 seconds while it is open
   (`fresh=false`), and Refresh reads fresh (`fresh=true`, then the cards).
 - **Every filter lives in the URL**, so a view can be shared and linked:
@@ -187,7 +198,8 @@ the area and the page says it is not set up.
 |---|---|
 | `status` | `available` or `allocated`; absent: All |
 | `site` | One site |
-| `type` | Types, comma-separated (`HC,UPI`); absent: every type, and Available rows |
+| `f.<column>` | A column's filter, one parameter per value kept (`f.type=HC&f.type=UPI`); an empty value is the blank (`f.dhcp=`). `<column>` is a column id (listed under `sort`). Absent: every value |
+| `type` | Before 3.21.0, the Type row: types comma-separated (`HC,UPI`). Still read, as the Type column's filter (unless the link has `f.type`); never written |
 | `q` | The search |
 | `cluster` | Exactly one holder (a UPI list matches if it has it). Shown as a removable chip. The cluster page's link opens `/segments?cluster=<file stem>` |
 | `mismatch` | `1`: only rows with a mismatch |
@@ -216,9 +228,9 @@ cached.
   read shows the problem, and the next 30-second re-read clears it.
 - **Never the original's `/api/logs` endpoints** (the raw application log,
   served without a token).
-- **No per-column filter popovers.** A Type filter row instead. The shared
-  table (`apps/web/components/data-table/`) takes TanStack Table's column
-  filters, so they can be added per column later.
+- **No per-column filter popovers.** A Type filter row instead.
+  *Built in 3.21.0 (ADR-0047's second amendment): a filter on every column,
+  in the URL (§5); the Type row is gone.*
 - **No segment detail panel** (the mock's side sheet).
 - **Files whose segment segments-manager does not list** are not listed here
   (§4); the cluster page shows them.

@@ -1,7 +1,7 @@
 # ADR-0047: The Segments area is Wingman's own read-only page over segments-manager's open reads, for admins, built as an alpha
 
 Date: 2026-11-13
-Status: Accepted; amended 2026-11-13 (each area has its own sidebar and brand)
+Status: Accepted; amended 2026-11-13 (each area has its own sidebar and brand), and 2026-11-13 for 3.21.0 (full parity)
 
 ## Context
 
@@ -125,6 +125,40 @@ not Wingman's, and the top left should say which platform you are in.
 Verification: `apps/web/lib/areas.test.ts` and
 `apps/web/lib/segments/sidebar.test.ts` (Vitest), and
 `apps/web/e2e/tests/area-chrome.spec.ts`.
+
+**2026-11-13, 3.21.0: full parity (decision 22).** The user chose Option C:
+every feature of segments-manager's page, in Wingman's look. The alpha's
+cuts are built; the original's `/api/logs` never is.
+
+- **A filter on every column, in the shared table.** A column opts in with
+  `meta.filterValue` (its cell as text). With `DataTable`'s `filters` prop
+  (`rows`, `value`, `onChange`), its header gets a funnel. The funnel opens
+  the column's distinct values with checkboxes, a search among them, select
+  all or none, Apply and Clear, and stays marked while the column filters.
+  The table only draws. The caller keeps the `ColumnFilters` (a column id
+  to the values it keeps) and filters with `applyColumnFilters` from
+  `apps/web/lib/table/column-filters.ts`, which also reads and writes them
+  as URL parameters (`f.<column>`, once per value). The Server Scan area
+  reuses it as is.
+  - As in the original: the values come from the rows before any column
+    filter (its `lastBaseSegments`: after the status, the site and the
+    search; here also the holder and "Disagrees with Git"). A value is the
+    cell's text, and keeping every value is no filter.
+  - Unlike the original: the filters live in the URL, and the status tabs
+    count under them. An active filter is also a chip, so a filter on a
+    hidden column stays in sight. Apply is disabled with nothing kept, so a
+    filter never empties the table by accident.
+  - The Type row (the alpha's stand-in) is gone. A `type=HC,UPI` link from
+    3.15 to 3.20 still opens with the Type column filtered.
+- **Rejected: TanStack Table's own column filtering** (`getFilteredRowModel`
+  and faceted values). Its faceted values come from the rows the other
+  columns' filters keep, not the original's base rows. And the page's
+  counts and exports would read the table's model instead of the pure
+  functions the page already filters with.
+
+Verification: `apps/web/lib/table/column-filters.test.ts`,
+`apps/web/lib/segments/{view,filter}.test.ts` (Vitest), and
+`apps/web/e2e/tests/segments-columns.spec.ts`.
 
 ## Verification
 

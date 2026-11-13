@@ -2,10 +2,11 @@
  * The Segments area (mocked; docs/notes/2026-11-13-segments-area-api.md,
  * ADR-0047): segments-manager's read-only page in Wingman's design. Site
  * cards, then every segment with the original's columns and words; status
- * tabs, site and type filters, a search and the sort, all in the URL; a
- * column picker kept per browser; copy on click; the CSV of exactly what is
- * shown; Refresh and a re-read every 30 seconds. Admins only, through the
- * top bar's area switch; off without segments-manager.
+ * tabs, the site filter, a search and the sort, all in the URL; a column
+ * picker kept per browser; copy on click; the CSV of exactly what is shown;
+ * Refresh and a re-read every 30 seconds. Admins only, through the top bar's
+ * area switch; off without segments-manager. The column filters, the Excel
+ * export and the connection dot: segments-columns.spec.ts.
  */
 
 import { readFile } from "node:fs/promises";
@@ -19,7 +20,8 @@ const cidrs = (page: Page) => rows(page).evaluateAll((trs) => trs.map((tr) => tr
 const search = (page: Page) => page.getByRole("searchbox", { name: "Search segments" });
 /** Wingman's problem panels (Next's route announcer is an alert too). */
 const problem = (page: Page, text: string) => page.getByRole("alert").filter({ hasText: text });
-const header = (page: Page, name: string) => page.getByRole("columnheader", { name, exact: true });
+/** A column's header by its words (its accessible name also has its filter button's). */
+const header = (page: Page, name: string) => page.locator("thead th").filter({ hasText: new RegExp(`^${name}$`) });
 
 test.describe("The area switch", () => {
   test("an admin switches between Wingman and Segments from the top bar", async ({ page }) => {
@@ -104,11 +106,8 @@ test.describe("The Segments page", () => {
     await expect(rows(page)).toHaveCount(5);
 
     await page.getByRole("group", { name: "Site" }).getByRole("button", { name: "site1" }).click();
-    await page.getByRole("group", { name: "Type" }).getByRole("button", { name: "UPI" }).click();
-    await page.getByRole("group", { name: "Type" }).getByRole("button", { name: "HC" }).click();
     await expect(page).toHaveURL(/site=site1/);
-    await expect(page).toHaveURL(/type=HC%2CUPI/);
-    await expect.poll(() => cidrs(page)).toEqual(["10.20.42.0/24", "10.20.44.0/24", "10.20.60.0/24"]);
+    await expect.poll(() => cidrs(page)).toEqual(["10.20.42.0/24", "10.20.44.0/24", "10.20.60.0/24", "10.20.11.0/24"]);
 
     await search(page).fill("herzi");
     await expect(page).toHaveURL(/q=herzi/);
@@ -143,18 +142,26 @@ test.describe("The Segments page", () => {
     await expect(page).toHaveURL(/\/segments$/);
   });
 
+  test("a link from before the column filters (type=HC,UPI) opens with the Type column filtered", async ({ page }) => {
+    await setUpSegments(page);
+    await go(page, "/segments?type=HC,UPI");
+    await expect.poll(() => cidrs(page)).toEqual(["10.20.42.0/24", "10.20.44.0/24", "10.20.60.0/24", "10.20.50.0/24"]);
+    await expect(page.getByRole("button", { name: /^Filter Type/ })).toHaveAttribute("data-filtered", "true");
+  });
+
   test("every column sorts: ascending, descending, then segments-manager's order", async ({ page }) => {
     await setUpSegments(page);
     await go(page, "/segments");
     const vlan = header(page, "VLAN ID");
-    await vlan.getByRole("button").click();
+    const sortVlan = vlan.getByRole("button", { name: "VLAN ID", exact: true });
+    await sortVlan.click();
     await expect(page).toHaveURL(/sort=vlan_id/);
     await expect(vlan).toHaveAttribute("aria-sort", "ascending");
     await expect.poll(async () => (await cidrs(page))[0]).toBe("10.20.11.0/24");
-    await vlan.getByRole("button").click();
+    await sortVlan.click();
     await expect(vlan).toHaveAttribute("aria-sort", "descending");
     await expect.poll(async () => (await cidrs(page))[0]).toBe("10.20.53.0/24");
-    await vlan.getByRole("button").click();
+    await sortVlan.click();
     await expect(vlan).not.toHaveAttribute("aria-sort");
     await expect.poll(() => cidrs(page)).toEqual(SEGMENTS.map((s) => s.segment));
   });
