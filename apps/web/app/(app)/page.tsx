@@ -10,7 +10,7 @@ import { RepoBadge } from "@/components/common/repo-badge";
 import { ApprovalLink, WorkflowBadge } from "@/components/common/workflow-mr";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, newestFirst, plural } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
@@ -107,10 +107,8 @@ export default function DashboardPage() {
     withUpdate > 0 && `${withUpdate} with an update`,
   ].filter(Boolean).join(" · ");
 
-  const allApprovals = [...(approvalsDay1 ?? []), ...(approvalsDay2 ?? [])];
-  const recentApprovals = [...allApprovals]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 6);
+  const allApprovals = newestFirst([approvalsDay1, approvalsDay2], (mr) => mr.created_at);
+  const recentApprovals = allApprovals.slice(0, 6);
   // Until both sources answered (or failed), a count or "all caught up" would be one source's.
   const approvalsLoading = day1ApprovalsPending || day2ApprovalsPending;
   const unavailableApprovals = [day1ApprovalsError && "day1", day2ApprovalsError && "day2"].filter(Boolean);
@@ -134,7 +132,7 @@ export default function DashboardPage() {
         <StatCard
           title="Total Clusters"
           value={clusters?.length}
-          hint={clustersError ? "Could not be loaded" : specs ? `${specs.length} spec${specs.length !== 1 ? "s" : ""}` : undefined}
+          hint={clustersError ? "Could not be loaded" : specs ? plural(specs.length, "spec") : undefined}
           icon={Server} href="/clusters" loading={clustersLoading} color="blue"
         />
         <StatCard

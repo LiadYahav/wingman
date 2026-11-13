@@ -25,7 +25,11 @@ function useMounted(): boolean {
 
 function useBuild(service: (typeof SERVICES)[number]) {
   // staleTime 0: a restored cache entry must not hide a redeploy.
-  return useQuery<ServiceBuild>({ queryKey: day1Keys.build(service), queryFn: () => day1Api.build(service), staleTime: 0 });
+  return useQuery<ServiceBuild>({
+    queryKey: day1Keys.build(service),
+    queryFn: () => day1Api.build(service),
+    staleTime: 0,
+  });
 }
 
 function BuildValue({ name, build, isPending, isError }: { name: string; build?: ServiceBuild; isPending: boolean; isError: boolean }) {
