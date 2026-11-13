@@ -266,4 +266,28 @@ test.describe("Upgrade a cluster through the upgrade-cluster workflow", () => {
     await expect(page.getByTestId("upgrade-decisions")).toHaveCount(0);
     await expect(page.getByTestId("upgrade-action")).toHaveCount(0);
   });
+
+  test("a finished run's panel can be dismissed in this browser; the next run shows again", async ({ page }) => {
+    const done = run({
+      status: "completed", phase: null, waiting_for: null, outcome: "done", steps_completed: 2, control_plane_version: "4.18.56",
+    });
+    const upgrades: Upgrades = { run: done, writes: [] };
+    await openCluster(page, upgrades);
+    const panel = page.getByTestId("upgrade-panel");
+    await expect(panel.getByTestId("upgrade-phase")).toHaveText("Done");
+    await panel.getByTestId("upgrade-dismiss").click();
+    await expect(panel).toHaveCount(0);
+    await expect(page.getByTestId("upgrade-action")).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("upgrade-action")).toBeVisible();
+    await expect(page.getByTestId("upgrade-panel")).toHaveCount(0);
+    expect(upgrades.writes).toEqual([]);
+
+    upgrades.run = run({ log: [{ at: "2026-11-14T09:00:00Z", event: "planned", by: "test-admin", detail: "2 steps" }] });
+    // The query cache is kept in the browser too: drop it, so the reload reads the new run
+    await page.evaluate(() => window.localStorage.removeItem("wingman-query-cache"));
+    await page.reload();
+    await expect(page.getByTestId("upgrade-panel")).toBeVisible();
+    await expect(page.getByTestId("upgrade-dismiss")).toHaveCount(0);
+  });
 });

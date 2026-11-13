@@ -35,7 +35,8 @@ export function ClusterWorkflowsDocs() {
         and its log. Admins press what it waits for (<strong>Approve</strong>, <strong>Day2 is ready</strong>,{" "}
         <strong>Continue</strong> before each NodePool, <strong>Retry</strong>), and <strong>Pause</strong> or{" "}
         <strong>Abort</strong> (with a reason) while it is open; the run judges each, and a refusal is shown in its
-        words. The workflow commits each step to day1 itself, so the History tab shows its commits.
+        words. The workflow commits each step to day1 itself, so the History tab shows its commits. A finished
+        run&apos;s panel can be dismissed (×) in this browser; the next upgrade shows again.
       </p>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
         The Clusters page&apos;s <strong>Upgrades</strong> view (<InlineCode>/clusters#upgrades</InlineCode>) lists

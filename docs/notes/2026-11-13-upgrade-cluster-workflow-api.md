@@ -445,6 +445,9 @@ list is `list_runs`, its reads `get_run`.
   - the log (newest first), the error, the run id and the MCE.
   - A refused decision's 409 is shown in the workflow's own words.
   - Read again every 10 s while the run is open.
+  - A finished run's panel has a Dismiss (×): it hides that run in this
+    browser (`localStorage`, by the run's id, outcome, target and last log
+    line), and the cluster's next upgrade, under the same id, shows again.
 - **Which decision buttons:** `decisions` when the run carries it. Until
   then one small map, phase → decisions, the orchestrator page's own:
   `awaiting-approval` → approve; `awaiting-day2-confirm` → confirm-day2;

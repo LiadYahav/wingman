@@ -177,6 +177,10 @@ clusters list, later") is now built, as a view of the Clusters page.
 - **Off, admins learn it exists**: no tab and no badge for anyone, and on the
   cluster page an admin sees Upgrade greyed out, its tooltip "Upgrades are
   off on this Wingman (DAY1_UPGRADES=false)."; a viewer sees nothing.
+- **A finished run's panel can be dismissed**, in this browser only (a
+  per-viewer convenience, as the tables keep their hidden columns). What is kept
+  is the run's fingerprint (its id, outcome, target and last log line), so
+  the cluster's next upgrade, under the same id, shows again.
 - **The fake fleet** starts three demo runs (`demo:` in
   `dev/fleet-fixtures/upgrade.yaml`): one waiting for approval, one for the
   day2 confirm, one cancelled.
@@ -198,8 +202,9 @@ Verification: `tests/unit/domain/test_fleet_upgrades.py` (the fold);
 and answers) and `test_fake_upgrade.py` (the fake's list and demo runs);
 `tests/api/test_fleet_upgrades_api.py` (off 501, a session, an empty list,
 the rows with phase and place, a cluster day1 lacks, the cache dropped by a
-start and a decision, 502); `apps/web/lib/fleet-upgrades.test.ts` (Vitest); `apps/web/e2e/tests/clusters-upgrades.spec.ts`
+start and a decision, 502); `apps/web/lib/fleet-upgrades.test.ts` and
+`upgrade-dismiss.test.ts` (Vitest); `apps/web/e2e/tests/clusters-upgrades.spec.ts`
 (the view, the badge, empty, unreachable, Back) and `cluster-upgrade.spec.ts`
-(greyed out when off). 2026-11-13: the stack with
+(greyed out when off, dismiss). 2026-11-13: the stack with
 `DAY1_FAKE_FLEET=true DAY1_UPGRADES=true` and live status off lists the
 fake's runs on `/clusters#upgrades`.

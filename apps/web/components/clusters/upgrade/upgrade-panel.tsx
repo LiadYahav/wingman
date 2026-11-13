@@ -1,10 +1,13 @@
 "use client";
 
-import { CircleCheck, CircleX, Loader2 } from "lucide-react";
+import { CircleCheck, CircleX, Loader2, X } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ProblemList } from "@/components/common/problem-list";
 import { AgentProposals } from "@/components/clusters/upgrade/agent-proposals";
 import { DecisionBar } from "@/components/clusters/upgrade/decision-bar";
 import { PlanSteps } from "@/components/clusters/upgrade/plan-steps";
+import { useDismissedRun } from "@/components/clusters/upgrade/use-dismissed-run";
 import { useUpgradeRun } from "@/lib/api/upgrades";
 import { humanize } from "@/lib/nodes";
 import { isOpen } from "@/lib/upgrade";
@@ -75,7 +78,25 @@ function Log({ run }: { run: UpgradeRun }) {
   );
 }
 
-function Heading({ run }: { run: UpgradeRun }) {
+/** A finished run's panel can be put away, in this browser; the cluster's next run shows again. */
+function Dismiss({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<button type="button" />}
+        data-testid="upgrade-dismiss"
+        onClick={onDismiss}
+        aria-label="Dismiss this finished upgrade"
+        className={cn(buttonVariants({ variant: "ghost", size: "icon-xs" }), "ml-auto")}
+      >
+        <X aria-hidden />
+      </TooltipTrigger>
+      <TooltipContent>Hide this finished run in this browser. The next upgrade shows here again.</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function Heading({ run, onDismiss }: { run: UpgradeRun; onDismiss: () => void }) {
   const open = isOpen(run);
   const done = run.outcome === "done";
   return (
@@ -98,6 +119,7 @@ function Heading({ run }: { run: UpgradeRun }) {
       <span data-testid="upgrade-phase" title={run.phase ?? undefined} className="text-sm font-medium text-muted-foreground">
         {stateWord(run)}
       </span>
+      {!open && <Dismiss onDismiss={onDismiss} />}
     </div>
   );
 }
@@ -128,7 +150,26 @@ export function UpgradePanel({
       </div>
     ) : null;
   }
-  const run = data.run;
+  return <RunPanel name={name} where={where} run={data.run} error={error} isAdmin={isAdmin} onOpenNodesTab={onOpenNodesTab} />;
+}
+
+function RunPanel({
+  name,
+  where,
+  run,
+  error,
+  isAdmin,
+  onOpenNodesTab,
+}: {
+  name: string;
+  where: string;
+  run: UpgradeRun;
+  error: unknown;
+  isAdmin: boolean;
+  onOpenNodesTab: () => void;
+}) {
+  const [dismissed, dismiss] = useDismissedRun(run);
+  if (dismissed) return null;
   const open = isOpen(run);
   return (
     <section
@@ -141,7 +182,7 @@ export function UpgradePanel({
         !open && run.outcome !== "done" && "border-status-error/30 bg-status-error/5"
       )}
     >
-      <Heading run={run} />
+      <Heading run={run} onDismiss={dismiss} />
       {run.waiting_for && (
         <p data-testid="upgrade-waiting-for" className="rounded-md bg-background/60 px-3 py-2 text-sm break-words">
           {run.waiting_for}
@@ -158,7 +199,7 @@ export function UpgradePanel({
       <AgentProposals name={name} where={where} run={run} isAdmin={isAdmin} />
       <Facts run={run} />
       <Log run={run} />
-      {error && <ProblemList error={error} title="The run could not be read again" />}
+      {Boolean(error) && <ProblemList error={error} title="The run could not be read again" />}
     </section>
   );
 }
