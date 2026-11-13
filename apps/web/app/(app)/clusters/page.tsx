@@ -13,6 +13,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { ProblemList } from "@/components/common/problem-list";
+import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
@@ -341,7 +342,6 @@ export default function ClustersPage() {
     return sizes;
   }, [filtered, groupBy]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
   const flaggedCount = (clusters ?? []).filter((c) => c.problems.length > 0 || !c.naming.follows_convention).length;
 
@@ -520,25 +520,7 @@ export default function ClustersPage() {
           </button>
         )}
 
-        {filtered.length > 10 && (
-          <div className="flex items-center gap-1.5 ml-auto">
-            <span className="text-xs text-muted-foreground">Rows:</span>
-            <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  onClick={() => { setPageSize(n); setPage(1); }}
-                  className={cn(
-                    "rounded-md px-2 py-0.5 text-xs font-medium transition-all",
-                    pageSize === n
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >{n}</button>
-              ))}
-            </div>
-          </div>
-        )}
+        <PageSizePicker total={filtered.length} sizes={PAGE_SIZE_OPTIONS} pageSize={pageSize} onPageSize={(n) => { setPageSize(n); setPage(1); }} />
       </div>
 
       {error ? (
@@ -681,51 +663,7 @@ export default function ClustersPage() {
             </table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm">
-              <p className="text-xs text-muted-foreground">
-                Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} of {filtered.length}
-              </p>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "px-2 py-1 h-7 text-xs disabled:opacity-40")}
-                >
-                  ← Prev
-                </button>
-                {(() => {
-                  const allPages = Array.from({ length: totalPages }, (_, x) => x + 1);
-                  const visible = allPages.filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1);
-                  const withGaps: (number | "...")[] = [];
-                  let prev = 0;
-                  for (const p of visible) {
-                    if (p - prev > 1) withGaps.push("...");
-                    withGaps.push(p);
-                    prev = p;
-                  }
-                  return withGaps.map((p, i) =>
-                    p === "..." ? (
-                      <span key={`ellipsis-${i}`} className="px-1 text-muted-foreground text-xs">…</span>
-                    ) : (
-                      <button
-                        key={p}
-                        onClick={() => setPage(p as number)}
-                        className={cn(buttonVariants({ variant: p === page ? "default" : "outline", size: "sm" }), "px-2.5 py-1 h-7 text-xs min-w-[28px]")}
-                      >{p}</button>
-                    )
-                  );
-                })()}
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "px-2 py-1 h-7 text-xs disabled:opacity-40")}
-                >
-                  Next →
-                </button>
-              </div>
-            </div>
-          )}
+          <Pagination page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} />
         </>
       )}
     </div>
