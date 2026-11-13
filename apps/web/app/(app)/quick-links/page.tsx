@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link2, Lock, Search, TriangleAlert, X } from "lucide-react";
 import { isApiError } from "@/lib/api-client";
-import { countCards, filterSections, indexStatus, useQuickLinks, useQuickLinksStatus } from "@/lib/quick-links";
+import { countCards, filterSections, useQuickLinks } from "@/lib/quick-links";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { LinkSection, LinkSectionSkeleton } from "@/components/quick-links/link-section";
@@ -58,16 +58,13 @@ function Problems({ data }: { data: QuickLinks }) {
 /**
  * Quick Links (ADR-0052): the hub Wingman runs on and every MCE, each with
  * its ArgoCD and console, then the team's own links from the links file.
- * day1 checks every link and reads each ArgoCD that has a token; the browser
- * only opens links. Admins only, for now.
+ * A launcher: each card opens what it links to, which shows its own state.
+ * Admins only, for now.
  */
 export default function QuickLinksPage() {
   const [search, setSearch] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const { data, isLoading, error } = useQuickLinks();
-  const hasCards = Boolean(data && countCards(data.sections) > 0);
-  const status = useQuickLinksStatus(hasCards);
-  const index = useMemo(() => indexStatus(status.data), [status.data]);
 
   // `/` focuses the search from anywhere on the page, as on the team's dashboard
   useEffect(() => {
@@ -97,7 +94,7 @@ export default function QuickLinksPage() {
             {data
               ? filtering
                 ? `${shown} of ${total} link${total === 1 ? "" : "s"} match`
-                : `${total} link${total === 1 ? "" : "s"} in ${data.sections.length} section${data.sections.length === 1 ? "" : "s"}. Wingman checks each one; your browser never does.`
+                : `${total} link${total === 1 ? "" : "s"} in ${data.sections.length} section${data.sections.length === 1 ? "" : "s"}.`
               : "The hub, every MCE, and the team's links"}
           </p>
         </div>
@@ -173,7 +170,7 @@ export default function QuickLinksPage() {
           ) : (
             <div className="space-y-8">
               {sections.map((section) => (
-                <LinkSection key={section.id} section={section} status={index} statusLoading={status.isLoading} />
+                <LinkSection key={section.id} section={section} />
               ))}
             </div>
           )}
