@@ -4,9 +4,9 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Package, Edit2, Eye, X, ExternalLink, RotateCcw, Lock } from "lucide-react";
+import { ArrowLeft, Trash2, Package, Edit2, Eye, X, ExternalLink, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { api, errorMessages, getToken, isApiError } from "@/lib/api-client";
+import { api, errorMessages, isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { StaleAlert } from "@/components/common/stale-alert";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { ClusterDriftPanel, updateOf } from "@/components/clusters/cluster-drift";
 import { SyncDialog } from "@/components/clusters/sync-dialog";
@@ -29,11 +30,11 @@ import { FileProblems, NamingNotice } from "@/components/clusters/cluster-notice
 import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
 import { chartsHref, day2Api, day2Keys } from "@/lib/day2";
-import { fetchLiveStatus } from "@/lib/live-status";
+import { useClusterLiveStatus } from "@/lib/live-status";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
 import type {
-  AddonDrift, CatalogEntry, ChangeResult, ClusterDetail, ClusterDrift, ClusterLiveStatus, DestinationCharts,
+  AddonDrift, CatalogEntry, ChangeResult, ClusterDetail, ClusterDrift, DestinationCharts,
   ModifyClusterRequest,
 } from "@/types";
 
@@ -67,13 +68,7 @@ function ClusterDetailContent() {
   const where = clusterQuery(site, mce);
 
   // `null` is status off (501 FEATURE_DISABLED); any other failure is an error to show.
-  const { data: liveStatus, isLoading: liveStatusLoading, error: liveStatusError } = useQuery<ClusterLiveStatus | null>({
-    queryKey: day1Keys.clusters.liveStatus(name, mce),
-    queryFn: () => fetchLiveStatus(name, mce),
-    enabled: Boolean(mce),
-    staleTime: 30_000,
-    retry: false,
-  });
+  const { data: liveStatus, isLoading: liveStatusLoading, error: liveStatusError } = useClusterLiveStatus(name, mce);
   const statusOn = liveStatus !== null && liveStatus !== undefined;
 
   const { data: drift, isLoading: driftLoading, error: driftError } = useQuery<ClusterDrift>({
@@ -107,56 +102,6 @@ function ClusterDetailContent() {
       staleTime: 120_000,
     });
   }, [queryClient, chartsQuery, mce]);
-
-  // Server-sent status updates, once the first read shows status is on. fetch()
-  // instead of EventSource so the Authorization header can be sent.
-  useEffect(() => {
-    if (!mce || !statusOn) return;
-    const controller = new AbortController();
-    const key = day1Keys.clusters.liveStatus(name, mce);
-    const MAX_RETRIES = 5;
-    let retries = 0;
-    const startStream = async () => {
-      try {
-        const token = getToken();
-        const res = await fetch(day1Api.clusters.statusStreamPath(name, mce), {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          signal: controller.signal,
-        });
-        if (!res.ok || !res.body) return;
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const chunks = buffer.split("\n\n");
-          buffer = chunks.pop() ?? "";
-          for (const chunk of chunks) {
-            const dataLine = chunk.split("\n").find((l) => l.startsWith("data: "));
-            if (!dataLine) continue;
-            try {
-              const frame = JSON.parse(dataLine.slice(6)) as Partial<ClusterLiveStatus>;
-              if (frame.cluster_name) {
-                queryClient.setQueryData(key, frame as ClusterLiveStatus);
-              } else if (frame.error) {
-                // An error frame ends the stream; keep the last status and say why.
-                queryClient.setQueryData<ClusterLiveStatus | null>(key, (prev) => prev && { ...prev, error: frame.error ?? null });
-              }
-            } catch { /* ignore malformed frames */ }
-          }
-        }
-      } catch (e) {
-        if ((e as Error).name !== "AbortError" && retries < MAX_RETRIES) {
-          retries++;
-          setTimeout(startStream, Math.min(5_000 * retries, 30_000));
-        }
-      }
-    };
-    startStream();
-    return () => controller.abort();
-  }, [name, mce, statusOn, queryClient]);
 
   // `?tab=drift` opens a tab (the flavor's rollout links a cluster that needs a decision to its drift)
   const [activeTab, setActiveTab] = useState(() => {
@@ -375,12 +320,7 @@ function ClusterDetailContent() {
 
       {Boolean(writeError) && (
         isApiError(writeError, "REVISION_CONFLICT") ? (
-          <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm">
-            <p className="text-status-warning-fg">{STALE_FILE}</p>
-            <button onClick={reloadAfterConflict} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload
-            </button>
-          </div>
+          <StaleAlert message={STALE_FILE} onReload={reloadAfterConflict} />
         ) : (
           <ProblemList error={writeError} title={writeErrorTitle(writeError)} />
         )

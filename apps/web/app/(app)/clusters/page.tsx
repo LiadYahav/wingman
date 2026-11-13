@@ -3,7 +3,7 @@
 import { Fragment, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, FileWarning, Server, TriangleAlert } from "lucide-react";
+import { Plus, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, FileWarning, Server, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { api } from "@/lib/api-client";
@@ -15,57 +15,22 @@ import { StatusBadge } from "@/components/clusters/status-badge";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { IntentLink } from "@/components/common/intent-link";
 import { ProblemList } from "@/components/common/problem-list";
+import { RefreshButton } from "@/components/common/refresh-button";
 import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
 import { clusterHref, OWNER_KEYS, type OwnerKey } from "@/lib/clusters";
-import { flavorDisplayState, type FlavorDisplayState } from "@/lib/flavor-state";
+import { flavorDisplayState } from "@/lib/flavor-state";
+import {
+  ANY_OWNER, compareBy, compareOwner, countBy, DRIFT_FILTERS, filterOf, matchesSearch, NO_OWNER, OWNER_LABEL, ownerOf,
+  type DriftFilter, type GroupBy, type SortDir, type SortField,
+} from "@/components/clusters/list/model";
 import { day2Api, day2Keys } from "@/lib/day2";
 import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftSummaryItem } from "@/types";
 
-type SortField = "name" | "site" | "spec" | "mastertag" | "created_at";
-type SortDir = "asc" | "desc";
-/** A display state (lib/flavor-state), with both update states under `update`. */
-type DriftFilter = "all" | "in_sync" | "update" | "drifted" | "unknown" | "not_linked";
-
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
-
-const DRIFT_FILTERS: { value: DriftFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "in_sync", label: "In sync" },
-  { value: "update", label: "Update" },
-  { value: "drifted", label: "Drifted" },
-  { value: "unknown", label: "Unknown" },
-  { value: "not_linked", label: "No flavor" },
-];
-
-/** The filter a display state counts under: an open update MR and an update both are an update. */
-function filterOf(state: FlavorDisplayState): Exclude<DriftFilter, "all"> {
-  return state === "update_available" || state === "update_mr_open" ? "update" : state;
-}
-
-type GroupBy = "none" | OwnerKey;
-
-const OWNER_LABEL: Record<OwnerKey, string> = { merkaz: "Merkaz", anaf: "Anaf", mador: "Mador" };
-
-/** An owner filter's choice for clusters whose file does not set that number. */
-const NO_OWNER = "\u0000none";
-/** The filter option that clears it. */
-const ANY_OWNER = "\u0000any";
-
-/** One owner number of a row; `""` when the file has none (an old day1 sends no `owner`). */
-function ownerOf(c: ClusterStatus, key: OwnerKey): string {
-  return c.owner?.[key] ?? "";
-}
-
-function compareOwner(a: string, b: string): number {
-  if (a === b) return 0;
-  if (!a) return 1; // clusters without the number come last
-  if (!b) return -1;
-  return a.localeCompare(b, undefined, { numeric: true });
-}
 
 function OwnerCell({ cluster }: { cluster: ClusterStatus }) {
   const parts = OWNER_KEYS.map((k) => ownerOf(cluster, k));
@@ -89,6 +54,19 @@ function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: 
     : <ChevronDown className="h-3 w-3 text-primary" />;
 }
 
+/** A flag whose tooltip lists why: its trigger takes the remaining props. */
+function FlagTooltip({ title, problems, ...trigger }: { title: string; problems: string[] } & React.ComponentProps<typeof TooltipTrigger>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger {...trigger} />
+      <TooltipContent className="max-w-sm">
+        <p className="font-medium mb-1">{title}</p>
+        <ul className="list-disc pl-4 space-y-0.5">{problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** Off-convention names and unreadable files are flagged in place, never hidden. */
 function ClusterFlags({ cluster }: { cluster: ClusterStatus }) {
   const offConvention = !cluster.naming.follows_convention;
@@ -97,33 +75,25 @@ function ClusterFlags({ cluster }: { cluster: ClusterStatus }) {
   return (
     <TooltipProvider>
       {unreadable && (
-        <Tooltip>
-          <TooltipTrigger
-            data-testid="cluster-unreadable"
-            className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium bg-status-error/10 text-status-error-fg cursor-default"
-          >
-            <FileWarning className="h-3 w-3" />Unreadable
-          </TooltipTrigger>
-          <TooltipContent className="max-w-sm">
-            <p className="font-medium mb-1">The cluster file does not parse</p>
-            <ul className="list-disc pl-4 space-y-0.5">{cluster.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
-          </TooltipContent>
-        </Tooltip>
+        <FlagTooltip
+          title="The cluster file does not parse"
+          problems={cluster.problems}
+          data-testid="cluster-unreadable"
+          className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium bg-status-error/10 text-status-error-fg cursor-default"
+        >
+          <FileWarning className="h-3 w-3" />Unreadable
+        </FlagTooltip>
       )}
       {offConvention && (
-        <Tooltip>
-          <TooltipTrigger
-            data-testid="cluster-off-convention"
-            aria-label="Name does not follow the naming convention"
-            className="inline-flex items-center text-status-warning cursor-default"
-          >
-            <TriangleAlert className="h-3.5 w-3.5" />
-          </TooltipTrigger>
-          <TooltipContent className="max-w-sm">
-            <p className="font-medium mb-1">Off the naming convention</p>
-            <ul className="list-disc pl-4 space-y-0.5">{cluster.naming.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
-          </TooltipContent>
-        </Tooltip>
+        <FlagTooltip
+          title="Off the naming convention"
+          problems={cluster.naming.problems}
+          data-testid="cluster-off-convention"
+          aria-label="Name does not follow the naming convention"
+          className="inline-flex items-center text-status-warning cursor-default"
+        >
+          <TriangleAlert className="h-3.5 w-3.5" />
+        </FlagTooltip>
       )}
     </TooltipProvider>
   );
@@ -278,8 +248,7 @@ export default function ClustersPage() {
   const ownerOptions = useMemo(() => {
     const options = {} as Record<OwnerKey, ComboboxOption[]>;
     for (const key of OWNER_KEYS) {
-      const counts = new Map<string, number>();
-      for (const c of clusters ?? []) counts.set(ownerOf(c, key), (counts.get(ownerOf(c, key)) ?? 0) + 1);
+      const counts = countBy(clusters ?? [], (c) => ownerOf(c, key));
       const numbers = [...counts.keys()].filter(Boolean).sort(compareOwner);
       const count = (n: number) => `${n} cluster${n !== 1 ? "s" : ""}`;
       options[key] = [
@@ -293,18 +262,7 @@ export default function ClustersPage() {
 
   const filtered = useMemo(() => {
     let list = clusters ?? [];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) ||
-          c.site.toLowerCase().includes(q) ||
-          c.mce.toLowerCase().includes(q) ||
-          (c.spec_name ?? "").toLowerCase().includes(q) ||
-          (c.mastertag ?? "").toLowerCase().includes(q) ||
-          OWNER_KEYS.some((k) => ownerOf(c, k).includes(q))
-      );
-    }
+    if (search.trim()) list = list.filter((c) => matchesSearch(c, search.toLowerCase()));
     if (siteFilter !== "all") list = list.filter((c) => c.site === siteFilter);
     if (driftFilter !== "all") {
       list = list.filter((c) => {
@@ -323,23 +281,16 @@ export default function ClustersPage() {
         const group = compareOwner(ownerOf(a, groupBy), ownerOf(b, groupBy));
         if (group !== 0) return group;
       }
-      let cmp = 0;
-      if (sortField === "name") cmp = a.name.localeCompare(b.name);
-      else if (sortField === "site") cmp = `${a.site}/${a.mce}`.localeCompare(`${b.site}/${b.mce}`);
-      else if (sortField === "spec") cmp = (a.spec_name ?? "").localeCompare(b.spec_name ?? "");
-      else if (sortField === "mastertag") cmp = (a.mastertag ?? "").localeCompare(b.mastertag ?? "", undefined, { numeric: true });
-      else if (sortField === "created_at") cmp = (a.created_at ?? "").localeCompare(b.created_at ?? "");
+      const cmp = compareBy(sortField, a, b);
       return sortDir === "asc" ? cmp : -cmp;
     });
   }, [clusters, search, siteFilter, driftFilter, ownerFilter, groupBy, sortField, sortDir, driftOf]);
 
   /** How many filtered clusters each group has, for its heading (a group can span pages). */
-  const groupSizes = useMemo(() => {
-    const sizes = new Map<string, number>();
-    if (groupBy === "none") return sizes;
-    for (const c of filtered) sizes.set(ownerOf(c, groupBy), (sizes.get(ownerOf(c, groupBy)) ?? 0) + 1);
-    return sizes;
-  }, [filtered, groupBy]);
+  const groupSizes = useMemo(
+    () => (groupBy === "none" ? new Map<string, number>() : countBy(filtered, (c) => ownerOf(c, groupBy))),
+    [filtered, groupBy]
+  );
 
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
   const flaggedCount = (clusters ?? []).filter((c) => c.problems.length > 0 || !c.naming.follows_convention).length;
@@ -397,15 +348,7 @@ export default function ClustersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => queryClient.invalidateQueries({ queryKey: day1Keys.clusters.all })}
-            disabled={isFetching}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-            title="Refresh clusters"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-            Refresh
-          </button>
+          <RefreshButton queryKey={day1Keys.clusters.all} fetching={isFetching} title="Refresh clusters" />
           {isAdmin && (
             <Link href="/clusters/new" className={buttonVariants({ size: "sm" })}>
               <Plus className="h-4 w-4 mr-1.5" />New Cluster
