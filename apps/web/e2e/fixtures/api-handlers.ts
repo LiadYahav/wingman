@@ -602,6 +602,10 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/*/network**", (route: Route) =>
     json(route, { vlan_id: null, segment: null, epg: null, ledger: null, problems: [], ledger_error: null })
   );
+  // The Segments area is off unless a test turns it on (e2e/fixtures/segments.ts): no area switch
+  await page.route("**/api/day1/segments/**", (route: Route) =>
+    fulfillProblem(route, 501, "FEATURE_DISABLED", "Segments is not set up in this deployment: SEGMENTS_MANAGER_URL is empty.")
+  );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));
