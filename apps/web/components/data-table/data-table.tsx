@@ -28,7 +28,8 @@ export interface DataTableSort {
 
 /**
  * Wingman's one data table, on TanStack Table (ADR-0047): dense rows, sticky
- * headers, every column sortable by a header button, columns hidden through
+ * headers, every column sortable by a header button (unless it sets
+ * `enableSorting: false`), columns hidden through
  * the table's visibility state (`ColumnPicker`). The caller owns the rows'
  * order and filtering (pure functions, unit-tested) and the sort state, so
  * the state can live in the URL; the table renders what it is given.
@@ -139,7 +140,7 @@ function HeaderCell<T>({
       className={cn("whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-muted-foreground", meta?.className)}
     >
       <span className="inline-flex items-center gap-1">
-        {onSort ? (
+        {onSort && header.column.getCanSort() ? (
           <button
             type="button"
             onClick={() => onSort(header.column.id)}

@@ -10,6 +10,7 @@ import { api, isApiError } from "@/lib/api-client";
 import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { SiteStatsList } from "@/types/server-scan";
+import type { ServerRowsAnswer } from "@/types/server-scan-servers";
 
 /**
  * As server-scan's own UI (its query client's `staleTime`): the Sites page is
@@ -19,13 +20,22 @@ import type { SiteStatsList } from "@/types/server-scan";
 const SITES_STALE_MS = 30_000;
 /** How long the top bar trusts that the area is on before asking again. */
 const AREA_STALE_MS = 5 * 60_000;
+/**
+ * As server-scan's Servers page: the fleet is read every 30 seconds, in the
+ * background too. An unchanged fleet is a bodiless 304 (day1's ETag, answered
+ * by the browser's own cache), and structural sharing keeps every row.
+ */
+const SERVERS_POLL_MS = 30_000;
 
 const serverScanKeys = {
   sites: ["server-scan", "sites"] as const,
+  /** Never persisted to localStorage (`components/layout/providers.tsx`): 2 MB, polled. */
+  servers: ["server-scan", "servers"] as const,
 };
 
 const serverScanApi = {
   sites: () => api.get<SiteStatsList>("/api/day1/server-scan/sites"),
+  servers: () => api.get<ServerRowsAnswer>("/api/day1/server-scan/servers"),
 };
 
 /** A problem is day1's answer (403 for a viewer, 501 when off, 502 when server-scan fails): show it. Else once more, as server-scan's UI. */
@@ -55,4 +65,16 @@ export function useServerScanArea(): boolean | undefined {
   if (!admin) return false;
   if (sites.isPending) return undefined;
   return !(isApiError(sites.error, "FEATURE_DISABLED") || isApiError(sites.error, "FORBIDDEN"));
+}
+
+/** server-scan's whole fleet, as rows, for the Servers page (§8.3); polled every 30 seconds. */
+export function useServerScanServers() {
+  return useQuery<ServerRowsAnswer>({
+    queryKey: serverScanKeys.servers,
+    queryFn: serverScanApi.servers,
+    refetchInterval: SERVERS_POLL_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+    retry: retryUnlessProblem,
+  });
 }

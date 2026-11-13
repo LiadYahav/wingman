@@ -10,6 +10,12 @@ import { Toaster } from "sonner";
 
 /** Queries never restored from localStorage: what they show must be read now. */
 const NOT_PERSISTED = new Set(["approvals", "placement"]);
+/**
+ * Never kept in localStorage at all: server-scan's fleet rows (2 MB for ~3,100
+ * servers, polled every 30 s) would not fit, and the browser's HTTP cache
+ * already makes re-reading an unchanged fleet a bodiless 304.
+ */
+const TOO_BIG = (key: readonly unknown[]) => key[0] === "server-scan" && key[1] === "servers";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once - must be stable across renders
@@ -47,7 +53,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // branch as it is now, not a diff cached minutes ago. An MCE placement
         // is the MCEs' free pods now (ADR-0050), never minutes-old numbers.
         shouldDehydrateQuery: (query) =>
-          query.state.status === "success" && !NOT_PERSISTED.has(String(query.queryKey[0])),
+          query.state.status === "success" && !NOT_PERSISTED.has(String(query.queryKey[0])) && !TOO_BIG(query.queryKey),
       },
     });
   }, [queryClient]);

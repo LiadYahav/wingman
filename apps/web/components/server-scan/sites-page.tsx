@@ -1,39 +1,15 @@
 "use client";
 
-import { Lock, ServerOff, Unplug } from "lucide-react";
+import { ServerOff } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
-import { isApiError } from "@/lib/api-client";
 import { useServerScanSites } from "@/lib/api/server-scan";
 import { fleetCards, siteCards, sitesSummary } from "@/lib/server-scan/sites";
 import type { SiteStatsList } from "@/types/server-scan";
+import { Blocked, isBlocked } from "./blocked";
 import { SiteCardSkeleton, SiteCardView } from "./site-card";
 
 const GRID = "grid gap-4 sm:grid-cols-2 lg:grid-cols-3";
-
-/** Why the page cannot show the sites at all: not an admin, or server-scan not configured. */
-function Blocked({ error }: { error: unknown }) {
-  if (isApiError(error, "FORBIDDEN")) {
-    return (
-      <EmptyState
-        icon={Lock}
-        bordered
-        title="For admins"
-        description="Server Scan is for Wingman's admins for now, until Wingman has finer roles."
-        data-testid="ss-forbidden"
-      />
-    );
-  }
-  return (
-    <EmptyState
-      icon={Unplug}
-      bordered
-      title="Server Scan is not set up"
-      description="Wingman shows server-scan's pages once day1 knows where it is: set serverScan.url in the chart (SERVER_SCAN_URL)."
-      data-testid="ss-off"
-    />
-  );
-}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -106,7 +82,7 @@ function Cards({ data }: { data: SiteStatsList }) {
  */
 export function SitesPage() {
   const sites = useServerScanSites();
-  const blocked = isApiError(sites.error, "FORBIDDEN") || isApiError(sites.error, "FEATURE_DISABLED");
+  const blocked = isBlocked(sites.error);
   const data = blocked ? undefined : sites.data;
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">

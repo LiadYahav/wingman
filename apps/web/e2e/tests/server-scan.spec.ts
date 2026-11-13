@@ -1,10 +1,10 @@
 /**
  * The Server Scan area (mocked; docs/notes/2026-11-13-server-scan-area-api.md,
- * ADR-0048): server-scan's UI in Wingman, page by page; today its Sites page.
- * A platform in the top bar for admins with server-scan configured, with
- * server-scan's own mark and a sidebar of only the pages built. The cards,
- * counts and words are server-scan's; the counts are not links until the
- * Servers page exists, and carry the filter they will open.
+ * ADR-0048): server-scan's UI in Wingman, page by page; here its Sites page
+ * (the Servers page has its own spec). A platform in the top bar for admins
+ * with server-scan configured, with server-scan's own mark and a sidebar of
+ * only the pages built. The cards, counts and words are server-scan's; each
+ * card and count links to the Servers page with its filter.
  */
 
 import { test, expect, type Locator, type Page } from "@playwright/test";
@@ -77,7 +77,7 @@ test.describe("The Server Scan chrome", () => {
     await expect(brand(page)).toHaveAttribute("href", "/server-scan");
     await expect(brand(page).locator("img")).toHaveAttribute("src", "/server-scan-icon.svg");
     await expect(wingmanNav(page)).toHaveCount(0);
-    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites"]);
+    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers"]);
     await expect(scanNav(page).getByTestId("area-nav-sites")).toHaveAttribute("aria-current", "page");
     await expect(scanNav(page).getByTestId("area-nav-sites")).toHaveAttribute("href", "/server-scan");
   });
@@ -136,12 +136,14 @@ test.describe("The Sites page", () => {
     await expect(unassigned.getByTestId("ss-card-state")).toHaveText(["2 available"]);
   });
 
-  test("the counts are not links yet; each carries the Servers filter it will open", async ({ page }) => {
+  test("every card and count links to the Servers page with its filter", async ({ page }) => {
     await setUpServerScan(page);
     await go(page, "/server-scan");
     await expect(page.getByTestId("ss-card")).toHaveCount(10);
-    await expect(page.locator("main").getByRole("link")).toHaveCount(0);
     await expect(card(page, "UPI")).toHaveAttribute("data-filter", "installation_type=UPI");
+    await expect(card(page, "UPI").getByTestId("ss-card-link")).toHaveAttribute("href", "/server-scan/servers?installation_type=UPI");
+    await expect(card(page, "Across all sites").getByTestId("ss-card-link")).toHaveAttribute("href", "/server-scan/servers");
+    await expect(counts(card(page, "Site 1")).first()).toHaveAttribute("href", "/server-scan/servers?site_id=site1&health_overall=CRITICAL");
     const site1 = card(page, "Site 1");
     await expect(site1).toHaveAttribute("data-filter", "site_id=site1");
     await expect(counts(site1).first()).toHaveAttribute("data-filter", "site_id=site1&health_overall=CRITICAL");

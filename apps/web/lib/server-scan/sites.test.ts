@@ -8,7 +8,6 @@
 import { describe, expect, it } from "vitest";
 import type { Breakdown, SiteStats, SiteStatsList } from "@/types/server-scan";
 import {
-  UNASSIGNED_SITE_ID,
   cardCounts,
   cardVerdict,
   fleetCards,
@@ -16,9 +15,9 @@ import {
   siteCards,
   sitesSummary,
   vendorBars,
-  vendorLabel,
   withFilter,
 } from "./sites";
+import { UNASSIGNED_SITE_ID, vendorLabel } from "./vocabulary";
 
 function breakdown(overrides: Partial<Breakdown> = {}): Breakdown {
   return {

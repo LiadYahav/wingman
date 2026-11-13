@@ -25,7 +25,8 @@ import { SEGMENT_COLUMNS } from "./segment-columns";
 import { SegmentsHeader } from "./segments-header";
 import { FilterChip, MismatchToggle, SegmentSearch, SiteFilter, StatusTabs } from "./segments-toolbar";
 import { SiteCards, SiteCardsSkeleton } from "./site-cards";
-import { useSearchDraft, useSegmentsView } from "./use-segments-view";
+import { useSearchDraft } from "@/hooks/use-search-draft";
+import { useSegmentsView } from "./use-segments-view";
 
 const COLUMNS_KEY = "wingman-segments-columns";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, CircleDashed, CircleDot, Layers, MapPin, TriangleAlert, type LucideIcon } from "lucide-react";
+import { BookOpen, CircleDashed, CircleDot, Layers, MapPin, Server, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { NavIcon, NavSection } from "@/lib/areas";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   allocated: CircleDot,
   mismatch: TriangleAlert,
   site: MapPin,
+  servers: Server,
   docs: BookOpen,
 };
 
