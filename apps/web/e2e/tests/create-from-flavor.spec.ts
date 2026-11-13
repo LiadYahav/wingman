@@ -151,7 +151,14 @@ test.describe("Create from a flavor: the suggested name", () => {
     await form.place({ site: "site1", env: "prod", version: "4.16.27" });
     await expect(form.placementPickName).toHaveText("ocp4-prod-mce-site1-a");
     await expect(form.nameInput).toHaveValue("ocp4-prod-rcs-site1-b");
-    await expect(page.getByTestId("name-suggested")).toContainText("Suggested from flavor rcs");
+    // A short mark; how the name was made is its tooltip and the input's description
+    await expect(page.getByTestId("name-suggested")).toHaveText("Suggested · type to change", { useInnerText: true });
+    await expect(page.getByTestId("name-suggested-why")).toHaveText(
+      "Suggested from flavor rcs, site1 and the MCE's env, with the next free letter."
+    );
+    await expect(form.nameInput).toHaveAccessibleDescription(/^Suggested from flavor rcs, site1/);
+    await page.getByTestId("name-suggested").getByRole("button", { name: "Suggested" }).hover();
+    await expect(form.tooltip).toContainText("Suggested from flavor rcs");
     await expect(form.namingHint).toContainText("Follows the naming convention");
     const asked = calls.suggestions.at(-1)!;
     expect([asked.get("site"), asked.get("mce"), asked.get("flavor")]).toEqual(["site1", "ocp4-prod-mce-site1-a", "rcs"]);

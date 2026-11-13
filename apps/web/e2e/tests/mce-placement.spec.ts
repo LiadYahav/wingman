@@ -2,7 +2,9 @@
  * MCE placement on the create form (docs/notes/2026-11-12-mce-placement-api.md,
  * ADR-0050): the person chooses site, prod or prep, version and owner; Wingman
  * picks the MCE and says why; an admin may choose another MCE that passes every
- * check, with a reason; a failing MCE says why and cannot be chosen; a pick
+ * check, with a reason; a failing MCE says why and cannot be chosen; each row
+ * is one mark and its numbers, the reasons in tooltips that open on hover,
+ * keyboard focus and a tap, and in the radios' descriptions; a pick
  * that changed under the form is a 409; and without placement (501) the form
  * keeps its MCE select. Every API is mocked.
  */
@@ -288,27 +290,60 @@ test.describe("MCE placement: Wingman's pick", () => {
     expect(lastPlacement(calls).toString()).toBe(
       `site=site1&env=prod&version=4.18.22&owner=7&flavor=rcs&need=${DELL}%3A2`
     );
-    await expect(page.getByTestId("placement-owner")).toContainText("Ranked for owner 7");
-    await expect(page.getByTestId("placement-needs")).toHaveText(`Servers counted for the nodepools: 2 × ${DELL}.`);
-    // Each candidate's healthy free servers of the type, against the need
+    // Who it ranked for, the rule and the servers counted: behind the ⓘ beside the label
+    const rule = form.placement.getByTestId("placement-rule-text");
+    await expect(rule.getByTestId("placement-owner")).toHaveText("Ranked for owner 7.");
+    await expect(rule.getByTestId("placement-needs")).toHaveText(`Servers counted for the nodepools: 2 × ${DELL}.`);
+    await expect(rule).toContainText("have at least 70 free pods");
+    await expect(form.placement.getByRole("button", { name: "How Wingman picks the MCE" })).toHaveAccessibleDescription(
+      /^Ranked for owner 7\.\s*An MCE must host the version/
+    );
+    // Each candidate's healthy free servers of the type, against the need, in its row's reasons
     await expect(form.candidate(B).getByTestId(`placement-node-type-${DELL}`)).toHaveText(
       `${DELL}: 4 healthy free of 2 needed`
     );
     await expect(form.candidate(A).getByTestId(`placement-node-type-${DELL}`)).toHaveAttribute("data-status", "pass");
 
-    await expect(form.placementPick).toContainText("Wingman's pick");
+    // One place for the pick: its row, marked, with why in the mark's tooltip
+    await expect(form.placementPick).toHaveCount(1);
+    await expect(form.candidate(B).getByTestId("placement-pick")).toHaveText("Wingman's pick");
     await expect(page.getByTestId("placement-pick-name")).toHaveText(B);
     await expect(page.getByTestId("placement-why")).toHaveText(`${B} has the fewest clusters of owner 7: 0, against 2 on ${A}.`);
     await expect(form.candidateRadio(B)).toBeChecked();
+    await expect(form.candidateRadio(B)).toHaveAccessibleDescription(new RegExp(`^${B} has the fewest clusters of owner 7`));
 
+    // A row is one line of marks and numbers: no sentence shows until asked for
     const runnerUp = form.candidate(A);
-    await expect(runnerUp).toContainText("Passes every check");
-    await expect(runnerUp).toContainText("behind the pick: more clusters of this owner");
+    await expect(runnerUp).toHaveAttribute("data-state", "pass");
+    await expect(runnerUp.getByTestId("placement-short")).toHaveCount(0);
+    await expect(form.candidateState(A)).toHaveAccessibleName("Passes every check");
+    await expect(runnerUp).not.toContainText("behind the pick", { useInnerText: true });
+    await expect(runnerUp.getByTestId("placement-behind")).toContainText("behind the pick: more clusters of this owner");
+    await expect(form.candidateRadio(A)).toHaveAccessibleDescription(/^Passes every check · behind the pick: more clusters/);
     await expect(runnerUp.getByTestId("placement-cell-owner")).toContainText("2");
     await expect(runnerUp.getByTestId("placement-cell-clusters")).toContainText("6");
-    await expect(runnerUp.getByTestId("placement-cell-spare")).toContainText(/1\s*of 3/);
+    await expect(runnerUp.getByTestId("placement-cell-spare")).toContainText("1");
+    await expect(runnerUp.getByTestId("placement-cell-spare")).toHaveAttribute("title", "1 usable of 3 spare");
     await expect(runnerUp.getByTestId("placement-cell-pods")).toContainText("140");
-    await expect(form.candidate(B).getByTestId("placement-cell-clusters")).toContainText("1 in an open MR");
+    const pick = form.candidate(B).getByTestId("placement-cell-clusters");
+    await expect(pick).toHaveAttribute("title", "1 of its 2 clusters in an open merge request.");
+
+    // The reasons open on hover and on keyboard focus, and close on Escape
+    await form.candidateState(A).hover();
+    await expect(form.tooltip).toContainText("Passes every check · behind the pick: more clusters of this owner");
+    await expect(form.tooltip).toContainText("1 usable of 3 spare servers.");
+    await expect(form.tooltip).toContainText("Free pods: 750 allocatable less 610 in use, on 3 workers");
+    await page.mouse.move(0, 0);
+    await expect(form.tooltip).toHaveCount(0);
+    await form.candidateRadio(A).focus();
+    await page.keyboard.press("Tab");
+    await expect(form.candidateState(A)).toBeFocused();
+    await expect(form.tooltip).toContainText("Passes every check");
+    await page.keyboard.press("Escape");
+    await expect(form.tooltip).toHaveCount(0);
+    // The marks are at least 24px square
+    const mark = await form.candidateState(A).boundingBox();
+    expect(Math.min(mark!.width, mark!.height)).toBeGreaterThanOrEqual(24);
 
     // The name, the InfraEnvs and the request follow the pick
     await expect(form.nameInput).toHaveValue("ocp4-prod-rcs-site1-a");
@@ -338,8 +373,14 @@ test.describe("MCE placement: Wingman's pick", () => {
     await expect(page.getByRole("option")).toHaveText(VERSIONS);
     await page.keyboard.press("Escape");
     expect(calls.placements.every((q) => !q.get("version"))).toBe(true);
-    await expect(page.getByTestId("placement-waiting")).toContainText("once the OpenShift version is chosen");
-    await expect(page.getByTestId("placement-owner")).toContainText("Enter the owner's mador");
+    await expect(page.getByTestId("placement-waiting")).toHaveText("Wingman picks the MCE once the OpenShift version is chosen.");
+    // No owner yet: one short prompt that leads to the field; why it matters is behind the ⓘ
+    await expect(page.getByTestId("placement-owner-prompt")).toHaveText("Enter the owner's mador");
+    await expect(page.getByTestId("placement-owner")).toHaveText(
+      "Not ranked by owner yet: the owner's mador spreads this owner's clusters."
+    );
+    await page.getByTestId("placement-owner-prompt").click();
+    await expect(form.templateInput("7")).toBeFocused();
   });
 
   test("a failing MCE says why in plain words and cannot be chosen", async ({ page }) => {
@@ -349,6 +390,18 @@ test.describe("MCE placement: Wingman's pick", () => {
 
     const failing = form.candidate(C);
     await expect(failing).toHaveAttribute("data-eligible", "false");
+    // On the row: a fail mark and the first reason in a few words
+    await expect(failing).toHaveAttribute("data-state", "fail");
+    await expect(form.candidateState(C)).toHaveAccessibleName("Fails a check");
+    await expect(failing.getByTestId("placement-short")).toHaveText("no 4.18.22");
+    await expect(failing).not.toContainText("Hosts 4.16 to 4.17 only", { useInnerText: true });
+    // Every reason in day1's words: in the mark's tooltip, and the radio's description
+    await expect(form.candidateRadio(C)).toHaveAccessibleDescription(/^Fails a check\s*Hosts 4\.16 to 4\.17 only/);
+    await form.candidateState(C).hover();
+    await expect(form.tooltip).toContainText("Hosts 4.16 to 4.17 only (4.17.30, 4.16.27), not 4.18.22.");
+    await expect(form.tooltip).toContainText("40 free pods; a new cluster needs 70.");
+    await expect(form.tooltip).toContainText(`${DELL}: 1 healthy free of 2 needed`);
+    await page.mouse.move(0, 0);
     await expect(failing.getByTestId("placement-check-version")).toHaveText("Hosts 4.16 to 4.17 only (4.17.30, 4.16.27), not 4.18.22.");
     await expect(failing.getByTestId("placement-check-free_pods")).toHaveText("40 free pods; a new cluster needs 70.");
     await expect(failing.getByTestId("placement-check-readable")).toHaveCount(0);
@@ -356,8 +409,16 @@ test.describe("MCE placement: Wingman's pick", () => {
     await expect(failing.getByTestId("placement-check-servers")).toHaveCount(0);
     await expect(failing.getByTestId(`placement-node-type-${DELL}`)).toHaveText(`${DELL}: 1 healthy free of 2 needed`);
     await expect(failing.getByTestId(`placement-node-type-${DELL}`)).toHaveAttribute("data-status", "fail");
-    await expect(failing.getByTestId("placement-cell-spare")).toContainText("unknown");
-    await expect(failing).toContainText(`server-scan names no server for ${C}`);
+    // A number Wingman does not have is a dash; why is its tooltip
+    const spare = failing.getByTestId("placement-cell-spare");
+    await expect(spare.getByRole("button", { name: "Spare servers unknown" })).toHaveText("—");
+    await expect(spare.getByRole("button", { name: "Spare servers unknown" })).toHaveAccessibleDescription(
+      `server-scan names no server for ${C}, so its spare servers are unknown.`
+    );
+    await expect(failing).not.toContainText("server-scan", { useInnerText: true });
+    await spare.getByRole("button").hover();
+    await expect(form.tooltip).toHaveText(`server-scan names no server for ${C}, so its spare servers are unknown.`);
+    await page.mouse.move(0, 0);
     await expect(form.candidateRadio(C)).toBeDisabled();
     await failing.click({ force: true });
     await expect(form.candidateRadio(B)).toBeChecked();
@@ -384,6 +445,8 @@ test.describe("MCE placement: Wingman's pick", () => {
     await expect(short.getByTestId(`placement-node-type-${DELL}`)).toHaveText(`${DELL}: 1 healthy free of 2 needed`);
     await expect(short.getByTestId(`placement-node-type-${DELL}`)).toHaveAttribute("data-status", "fail");
     await expect(short).not.toContainText("Passes every check");
+    await expect(short).toHaveAttribute("data-state", "fail");
+    await expect(short.getByTestId("placement-short")).toHaveText("1 of 2 servers");
     await expect(form.candidateRadio(A)).toBeDisabled();
     await expect(form.candidateRadio(B)).toBeChecked();
   });
@@ -407,6 +470,10 @@ test.describe("MCE placement: Wingman's pick", () => {
       `Unknown: ${DELL}: 5 free Agents for 2 needed; server-scan did not answer, so their health is unknown`
     );
     await expect(form.candidate(A)).toHaveAttribute("data-eligible", "false");
+    // Unknown is its own mark, and says what is unknown in a few words
+    await expect(form.candidate(A)).toHaveAttribute("data-state", "unknown");
+    await expect(form.candidateState(A)).toHaveAccessibleName("A check is unknown");
+    await expect(form.candidate(A).getByTestId("placement-short")).toHaveText("servers unknown");
     await expect(form.candidateRadio(A)).toBeDisabled();
   });
 
@@ -421,7 +488,9 @@ test.describe("MCE placement: Wingman's pick", () => {
 
     // No InfraEnv yet: nothing to count, said calmly; the pick may change once there is one
     await expect(page.getByTestId("placement-pick-name")).toHaveText(B);
-    await expect(page.getByTestId("placement-no-needs")).toContainText("No nodepool names a node type yet");
+    await expect(page.getByTestId("placement-no-needs")).toHaveText(
+      "Servers not checked until a nodepool names its node type; the pick may change then."
+    );
     expect(calls.placements.every((q) => q.getAll("need").join("") === "")).toBe(true);
     expect(lastPlacement(calls).getAll("need")).toEqual([""]);
     await expect(form.candidate(B).getByTestId("placement-node-types")).toHaveCount(0);
@@ -542,6 +611,30 @@ test.describe("MCE placement: an admin's other choice", () => {
   });
 });
 
+test.describe("MCE placement: on a touch screen", () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+  test("a tap on a row's mark opens its reasons without choosing the row; a tap elsewhere closes them", async ({ page }) => {
+    await setup(page);
+    const form = new ClusterNewPage(page);
+    await fillForm(form);
+    await expect(form.candidateRadio(B)).toBeChecked();
+    await expect(page.getByTestId("placement-why")).toContainText("owner 7");
+
+    await form.candidateState(A).tap();
+    await expect(form.tooltip).toContainText("Passes every check · behind the pick: more clusters of this owner");
+    await expect(form.candidateRadio(B)).toBeChecked();
+    await expect(form.placementReason).toHaveCount(0);
+
+    await page.getByRole("heading", { name: "New Cluster" }).tap();
+    await expect(form.tooltip).toHaveCount(0);
+
+    // The pick's mark says why it won
+    await form.placementPick.tap();
+    await expect(form.tooltip).toHaveText(`${B} has the fewest clusters of owner 7: 0, against 2 on ${A}.`);
+  });
+});
+
 test.describe("MCE placement: what day1 says on review", () => {
   test("a pick that changed since the form showed it is a 409: the form says so and reads the numbers again", async ({ page }) => {
     let changed = false;
@@ -633,18 +726,37 @@ test.describe("MCE placement: always", () => {
     await fillForm(form);
 
     await expect(form.placementPickName).toHaveText(A);
-    // One quiet note says what was not checked and why; no per-type lines, no "servers counted"
-    await expect(page.getByTestId("placement-live-reads-off")).toContainText(
-      "Free pods and servers were not checked: this deployment does not read the MCEs live"
-    );
+    // One quiet line says what was not checked and why; no per-type lines, no "servers counted"
+    await expect(page.getByTestId("placement-live-reads-off")).toHaveText("Free pods and servers not checked (live status off).");
     await expect(page.getByTestId("placement-needs")).toHaveCount(0);
     await expect(page.getByTestId("placement-node-types")).toHaveCount(0);
+    // server-scan's error is the spare dashes' tooltip, not a second line
+    await expect(page.getByTestId("placement-server-scan")).toHaveCount(0);
+    await expect(
+      form.candidate(A).getByTestId("placement-cell-spare").getByRole("button", { name: "Spare servers unknown" })
+    ).toHaveAccessibleDescription("server-scan is not configured, so spare servers are unknown.");
 
-    // Not checked is muted, never a problem: the MCE stays choosable
+    // Not checked is its own mark, never a problem: the MCE stays choosable
     const picked = form.candidate(A);
-    await expect(picked).toContainText("Passes the checks made");
-    await expect(picked.getByTestId("placement-not-checked")).toHaveText("free pods and servers: not checked");
-    await expect(picked.getByTestId("placement-cell-pods")).toContainText("not checked");
+    await expect(picked).toHaveAttribute("data-state", "partly");
+    await expect(form.candidateState(A)).toHaveAccessibleName("Passes the checks made");
+    await expect(picked.getByTestId("placement-not-checked")).toHaveText("Free pods and servers: not checked (live status off).");
+    const pods = picked.getByTestId("placement-cell-pods").getByRole("button", { name: "Free pods not checked" });
+    await expect(pods).toHaveText("—");
+    await expect(pods).toHaveAccessibleDescription("Not checked: live status is off, so Wingman does not read the MCEs.");
+    // From one dash to the next by keyboard, each tooltip opens as its dash takes focus
+    await pods.focus();
+    await page.keyboard.press("Shift+Tab");
+    await expect(form.tooltip.filter({ hasText: "server-scan is not configured, so spare servers are unknown." })).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(pods).toBeFocused();
+    // For a moment both are open (the next opens before the last closes): wait for the one
+    await expect(
+      form.tooltip.filter({ hasText: "Not checked: live status is off, so Wingman does not read the MCEs." })
+    ).toBeVisible();
+    await expect(form.tooltip).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(form.tooltip).toHaveCount(0);
     await expect(picked.locator("[data-testid^='placement-check-']")).toHaveCount(0);
 
     // C fails only the version: that is what it says, beside what was not checked
