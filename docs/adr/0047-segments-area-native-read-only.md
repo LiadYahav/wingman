@@ -150,6 +150,31 @@ cuts are built; the original's `/api/logs` never is.
     filter never empties the table by accident.
   - The Type row (the alpha's stand-in) is gone. A `type=HC,UPI` link from
     3.15 to 3.20 still opens with the Type column filtered.
+- **The Excel export, written in the browser** from the rows shown, beside
+  the CSV: one `ExportTable` (`apps/web/lib/table/export.ts`) that both
+  write, so the files hold the same rows and columns (a VLAN ID stays a
+  number in Excel). The header row is bold and frozen, and each column is
+  as wide as its longest value, at most 50 characters, as the original's
+  export. The library is **write-excel-file 4.1.1** (MIT, one dependency:
+  fflate 0.8.3, MIT), pinned exactly (ADR-0003), and loaded only when Excel
+  is pressed (its own chunk of the web's bundle). Text is always written as
+  text, never as a formula. Building the web image from source needs both
+  packages in the npm mirror.
+  - **Rejected: proxying segments-manager's `GET
+    /api/export/segments/excel` through day1.** It would match the
+    original's file byte for byte, but it applies only `status` and
+    `site`. It would export rows the page does not show (the search, the
+    column filters and the holder are ignored), in other columns (it adds
+    Allocated At, writes DHCP as Yes/No and an Available holder as
+    "Available") and not the shown order, beside a CSV that is exactly
+    what is shown. It would also need a binary read on the `SegmentLedger`
+    port, its fake and a route. (The original's page shows only a CSV
+    button: its `exportData('excel')` has no button.)
+  - **Rejected libraries:** SheetJS's npm package (`xlsx`) is frozen at
+    0.18.5 (2022) with known advisories; its fixed versions are published
+    only on its own CDN, outside the npm registry and so outside the
+    air-gapped mirror. ExcelJS (4.4.0, 2023) brings nine dependencies and
+    21 MB for a one-sheet file.
 - **Rejected: TanStack Table's own column filtering** (`getFilteredRowModel`
   and faceted values). Its faceted values come from the rows the other
   columns' filters keep, not the original's base rows. And the page's
@@ -157,8 +182,10 @@ cuts are built; the original's `/api/logs` never is.
   functions the page already filters with.
 
 Verification: `apps/web/lib/table/column-filters.test.ts`,
-`apps/web/lib/segments/{view,filter}.test.ts` (Vitest), and
-`apps/web/e2e/tests/segments-columns.spec.ts`.
+`apps/web/lib/table/export.test.ts`,
+`apps/web/lib/segments/{view,filter,csv}.test.ts` (Vitest), and
+`apps/web/e2e/tests/segments-columns.spec.ts` (it reads the downloaded
+`.xlsx` back and compares it with the CSV).
 
 ## Verification
 

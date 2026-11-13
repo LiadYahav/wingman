@@ -1,16 +1,23 @@
 /**
  * The Segments area at full parity with segments-manager's UI (mocked;
  * ADR-0047's 3.21.0 amendment, docs/notes/2026-11-13-segments-area-api.md):
- * an Excel-style filter on every column, in the URL, and the CSV after it.
- * The page's other behaviour: segments.spec.ts.
+ * an Excel-style filter on every column, in the URL, and the CSV after it;
+ * the Excel export of the same rows and columns. The page's other
+ * behaviour: segments.spec.ts.
  */
 
 import { readFile } from "node:fs/promises";
 import { test, expect, type Page } from "@playwright/test";
 import { go } from "../fixtures/api-handlers";
 import { setUpSegments } from "../fixtures/segments";
+import { readXlsx } from "../fixtures/xlsx";
 
 const rows = (page: Page) => page.getByTestId("segment-row");
+/** Press an export button and hand back the file the browser saved. */
+async function download(page: Page, name: string) {
+  const [file] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name }).click()]);
+  return { name: file.suggestedFilename(), path: await file.path() };
+}
 const cidrs = (page: Page) => rows(page).evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-segment")));
 /** A column's filter button: "Filter Type", "Filter Type (filtered: HC)". */
 const filterButton = (page: Page, label: string) => page.getByRole("button", { name: new RegExp(`^Filter ${label}( \\(filtered|$)`) });
@@ -141,8 +148,9 @@ test.describe("Column filters", () => {
   test("the CSV holds the rows the column filters keep, in the shown order", async ({ page }) => {
     await setUpSegments(page);
     await go(page, "/segments?f.type=HC&f.type=UPI&sort=vlan_id");
-    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "CSV of 4 shown" }).click()]);
-    const text = (await readFile(await download.path(), "utf-8")).replace(/^\uFEFF/, "");
+    const csv = await download(page, "CSV of 4 shown");
+    expect(csv.name).toBe("segments.csv");
+    const text = (await readFile(csv.path, "utf-8")).replace(/^\uFEFF/, "");
     expect(text.split("\r\n")).toEqual([
       "Type,Site,VLAN ID,EPG Name,Network Segment,DHCP,Cluster,Status",
       "HC,site1,1408,EPG_site1_HC_1408,10.20.42.0/24,On,ocp4-prep-eyal-site1,Allocated",
@@ -151,5 +159,38 @@ test.describe("Column filters", () => {
       "HC,site2,2450,EPG_site2_HC_2450,10.20.50.0/24,On,ocp4-prep-ghost-site2,Allocated",
       "",
     ]);
+  });
+});
+
+test.describe("The Excel export", () => {
+  test("holds the CSV's rows and columns: what is shown, after every filter, in the shown order", async ({ page }) => {
+    await setUpSegments(page);
+    await go(page, "/segments?site=site2&f.status=Available&sort=-vlan_id");
+    await page.getByRole("button", { name: "Show or hide columns" }).click();
+    await page.getByRole("checkbox", { name: "Cluster" }).click();
+    await page.keyboard.press("Escape");
+    await expect(rows(page)).toHaveCount(2);
+
+    const xlsx = await download(page, "Excel of 2 shown");
+    expect(xlsx.name).toBe("segments.xlsx");
+    const book = await readXlsx(xlsx.path);
+    expect(book.sheets).toEqual(["Segments"]);
+    expect(book.rows).toEqual([
+      ["Type", "Site", "VLAN ID", "EPG Name", "Network Segment", "DHCP", "Status"],
+      ["", "site2", 2453, "", "10.20.53.0/24", "", "Available"],
+      ["", "site2", 2452, "EPG_site2_HC_2452", "10.20.52.0/24", "On", "Available"],
+    ]);
+
+    // The same rows and columns as the CSV of the same view, a VLAN ID kept as a number
+    const csv = (await readFile((await download(page, "CSV of 2 shown")).path, "utf-8")).replace(/^\uFEFF/, "");
+    expect(csv.split("\r\n").slice(0, -1)).toEqual(book.rows.map((row) => row.join(",")));
+  });
+
+  test("is off with nothing shown", async ({ page }) => {
+    await setUpSegments(page);
+    await go(page, "/segments?q=nothing-matches-this");
+    await expect(page.getByTestId("segments-no-matches")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Excel of 0 shown" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "CSV of 0 shown" })).toBeDisabled();
   });
 });

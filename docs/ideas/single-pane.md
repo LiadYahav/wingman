@@ -234,7 +234,7 @@ listed in `docs/notes/2026-11-13-segments-area-api.md` §7. Since 3.17.0
 the area has its own sidebar and brand (ADR-0047's amendment), the first
 piece of workstream 2's "each area has its own sidebar". Full parity
 (decision 22) is being built for 3.21.0 (ADR-0047's second amendment):
-the column filters are in, on the shared table.
+the column filters are in, on the shared table, and the Excel export.
 
 segments-manager's UI is one read-only page today (it lost its writes in
 July); its reads need no token.
@@ -263,7 +263,7 @@ July); its reads need no token.
 The alpha's cuts come back, so the area does everything segments-manager's
 UI does, in Wingman's look:
 - per-column filter popovers on every column (the shared table supports them); *built, 3.21.0*;
-- the Excel export beside the CSV one;
+- the Excel export beside the CSV one; *built, 3.21.0*;
 - the connection state;
 - its own sidebar (Segments: All, Available, Allocated, Disagrees with Git;
   Sites with their counts) and brand (in progress, 3.17.0);

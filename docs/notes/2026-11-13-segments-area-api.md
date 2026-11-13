@@ -177,8 +177,14 @@ the area and the page says it is not set up.
 - **Above it**: status tabs (All, Available, Allocated, each with its count
   under the other filters), the site filter, the search (cluster, EPG, VLAN
   ID, segment or site, as the original), the column picker (kept per
-  browser), and **CSV of N shown**: exactly the rows shown, after every
-  filter and the search, in the shown order and columns.
+  browser), and **Download N shown as CSV | Excel**: exactly the rows shown,
+  after every filter and the search, in the shown order and columns. The
+  Excel file (`segments.xlsx`, one sheet "Segments", since 3.21.0) is
+  written in the browser from the same table as the CSV: the same rows and
+  columns, a VLAN ID as a number, the header row bold and frozen, each
+  column as wide as its longest value (at most 50 characters, as the
+  original's export). segments-manager's own export endpoints are not
+  called: they apply only the status and site, with other columns.
 - **A filter on every column** (Excel-style, as the original's headers; since
   3.21.0): each header's funnel opens the column's distinct values, from the
   rows left after the status tab, the site, the holder, "Disagrees with Git"
@@ -224,6 +230,8 @@ cached.
 ## 7. Left for after the alpha
 
 - **No Excel export.** The CSV opens in Excel.
+  *Built in 3.21.0: an Excel file of the rows shown, written in the browser
+  (§5, ADR-0047's second amendment).*
 - **No connection-status dot.** Wingman's error state replaces it: a failed
   read shows the problem, and the next 30-second re-read clears it.
 - **Never the original's `/api/logs` endpoints** (the raw application log,

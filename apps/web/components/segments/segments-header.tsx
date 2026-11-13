@@ -22,8 +22,39 @@ function Updated({ at }: { at: number }) {
 }
 
 /**
- * The title, what is shown, and the page's two actions: Refresh (read
- * segments-manager's database now) and the CSV of exactly the rows shown.
+ * The exports of exactly the rows shown, in the shown columns: a CSV, or an
+ * Excel file of the same rows and columns, written in the browser.
+ */
+function Exports({ shown, exporting, onCsv, onExcel }: { shown: number; exporting: boolean; onCsv: () => void; onExcel: () => void }) {
+  const what = `the ${shown} segment${shown === 1 ? "" : "s"} shown`;
+  const joined = (side: "left" | "right") =>
+    cn(buttonVariants({ variant: "outline", size: "sm" }), side === "left" ? "gap-1.5 rounded-r-none" : "-ml-px rounded-l-none");
+  return (
+    <div role="group" aria-label={`Download ${what}`} className="inline-flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">Download {shown} shown as</span>
+      <span className="inline-flex">
+        <button type="button" onClick={onCsv} disabled={shown === 0} aria-label={`CSV of ${shown} shown`} title={`Download ${what}, as CSV`} className={joined("left")}>
+          <Download aria-hidden className="h-3.5 w-3.5" />
+          CSV
+        </button>
+        <button
+          type="button"
+          onClick={onExcel}
+          disabled={shown === 0 || exporting}
+          aria-label={`Excel of ${shown} shown`}
+          title={`Download ${what}, as an Excel file (.xlsx)`}
+          className={joined("right")}
+        >
+          Excel
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The title, what is shown, and the page's actions: Refresh (read
+ * segments-manager's database now) and the exports of exactly the rows shown.
  */
 export function SegmentsHeader({
   summary,
@@ -31,16 +62,21 @@ export function SegmentsHeader({
   shown,
   refreshing,
   onRefresh,
+  exporting,
   onCsv,
+  onExcel,
 }: {
   summary: string;
   /** When the list was last read; `null` before the first read. */
   updatedAt: number | null;
-  /** How many rows the CSV holds; `null` hides both actions (nothing to act on). */
+  /** How many rows the exports hold; `null` hides the actions (nothing to act on). */
   shown: number | null;
   refreshing: boolean;
   onRefresh: () => void;
+  /** An Excel file is being written. */
+  exporting: boolean;
   onCsv: () => void;
+  onExcel: () => void;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
@@ -65,16 +101,7 @@ export function SegmentsHeader({
             <RefreshCw aria-hidden className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
             Refresh
           </button>
-          <button
-            type="button"
-            onClick={onCsv}
-            disabled={shown === 0}
-            title={`Download the ${shown} segment${shown === 1 ? "" : "s"} shown, as CSV`}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-          >
-            <Download aria-hidden className="h-3.5 w-3.5" />
-            CSV of {shown} shown
-          </button>
+          <Exports shown={shown} exporting={exporting} onCsv={onCsv} onExcel={onExcel} />
         </div>
       )}
     </div>

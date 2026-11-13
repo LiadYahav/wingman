@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { VisibilityState } from "@tanstack/react-table";
 import { Info, Lock, Network, TriangleAlert, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnPicker } from "@/components/data-table/column-picker";
 import { DataTable } from "@/components/data-table/data-table";
-import { downloadCsv } from "@/components/data-table/download";
+import { downloadCsv, downloadXlsx } from "@/components/data-table/download";
 import { useDataTable } from "@/components/data-table/use-data-table";
 import { useStoredVisibility } from "@/components/data-table/use-stored-visibility";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessages, isApiError } from "@/lib/api-client";
 import { useRefreshSegments, useSegmentList, useSegmentSites, useSegmentStats } from "@/lib/api/segments";
 import { COLUMN_IDS, COLUMN_LABELS, isColumnId } from "@/lib/segments/columns";
-import { segmentsCsv } from "@/lib/segments/csv";
+import { segmentsCsv, segmentsTable } from "@/lib/segments/csv";
 import { baseSegments, shownSegments, statusCounts } from "@/lib/segments/filter";
 import { clearFilters, isFiltered, nextSort, type SegmentsView } from "@/lib/segments/view";
 import { describeFilter, setColumnFilter } from "@/lib/table/column-filters";
@@ -173,6 +173,7 @@ export function SegmentsPage() {
   const sites = useSegmentSites();
   const { refresh, refreshing } = useRefreshSegments();
   const [visibility, setVisibility] = useStoredVisibility(COLUMNS_KEY);
+  const [exporting, setExporting] = useState(false);
   const blocked = isApiError(list.error, "FORBIDDEN") || isApiError(list.error, "FEATURE_DISABLED");
   const data = list.data;
   const base = useMemo(() => (data ? baseSegments(data.segments, view) : []), [data, view]);
@@ -187,10 +188,18 @@ export function SegmentsPage() {
       toast.error(`Refresh failed: ${errorMessages(error)[0]}`);
     }
   };
-  const onCsv = () => {
-    // What is shown: the rows after every filter and the search, in the shown order and columns
-    const columns = COLUMN_IDS.filter((id) => visibility[id] !== false);
-    downloadCsv("segments.csv", segmentsCsv(shown, columns));
+  // The exports hold what is shown: the rows after every filter and the search, in the shown order and columns
+  const shownColumns = () => COLUMN_IDS.filter((id) => visibility[id] !== false);
+  const onCsv = () => downloadCsv("segments.csv", segmentsCsv(shown, shownColumns()));
+  const onExcel = async () => {
+    setExporting(true);
+    try {
+      await downloadXlsx("segments.xlsx", segmentsTable(shown, shownColumns()), "Segments");
+    } catch (error) {
+      toast.error(`Excel export failed: ${errorMessages(error)[0]}`);
+    } finally {
+      setExporting(false);
+    }
   };
   const summary = !data
     ? "segments-manager's segments, per site"
@@ -206,7 +215,9 @@ export function SegmentsPage() {
         shown={data && !blocked ? shown.length : null}
         refreshing={refreshing}
         onRefresh={() => void onRefresh()}
+        exporting={exporting}
         onCsv={onCsv}
+        onExcel={() => void onExcel()}
       />
       {blocked ? (
         <Blocked error={list.error} />
