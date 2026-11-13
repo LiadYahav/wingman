@@ -131,7 +131,7 @@ app/
 │   ├── lints/          # Day2 lint findings
 │   ├── approvals/      # MR approval workflow
 │   ├── audit/          # Audit trail
-│   ├── docs/           # In-app platform documentation
+│   ├── docs/           # In-app platform documentation: the page (nav, order), a file per section, shared pieces in docs-parts.tsx
 │   └── settings/       # User settings
 ├── login/              # Authentication
 └── layout.tsx          # Root layout

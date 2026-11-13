@@ -49,6 +49,7 @@ already have.
 | 3.17.0 | 3.18.0: **Inventory Management** (ADR-0057), a sidebar page everyone signed in reads, for the orchestrator's server workflows: each MCE's available Agents by InfraEnv pool and hardware, as server-scan counts them; the add-server-to-mce runs, herzi's included (a named install is a person's, a pool draw "herzi or a person"); and, when turned on, admins add servers to a pool by count or by name, never a server server-scan has locked | Generic: no new grant, Secret or required value. The page needs `serverScan.url`, its runs `workflows.url`, its pools' InfraEnvs `clusterStatus.enabled` (the MCE token already lists InfraEnvs). To let admins add servers: `--set day1.addServers.enabled=true` (needs `workflows.url`; the chart refuses it otherwise). A pool draw sent twice installs twice: nothing retries it |
 | 3.18.0 | 3.18.1: a code reorganisation with no change in behaviour: day1's API models are split into one module per router (the OpenAPI document is byte-identical) | Generic |
 | 3.18.1 | 3.18.2: a code reorganisation with no change in behaviour: the web's type files split by section | Generic |
+| 3.18.2 | 3.18.3: a code reorganisation with no change in behaviour: the docs page split into one file per section | Generic |
 
 ### Skipping versions
 

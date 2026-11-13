@@ -32,7 +32,6 @@
   628  apps/web/app/(app)/clusters/[name]/page.tsx
  1894  apps/web/app/(app)/clusters/new/page.tsx
   670  apps/web/app/(app)/clusters/page.tsx
- 1645  apps/web/app/(app)/docs/page.tsx
   673  apps/web/app/(app)/specs/[name]/page.tsx
   603  apps/web/components/addons/authoring-flow.tsx
   722  apps/web/components/clusters/dynamic-variable-form.tsx
