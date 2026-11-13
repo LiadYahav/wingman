@@ -41,11 +41,6 @@ NODEPOOL_DEFAULTS_FILE: Final = RepoPath("nodepool-defaults.yaml")
 SPEC_SUFFIX: Final = ".yaml"
 
 
-def site_dir(site: str) -> RepoPath:
-    """``sites/<site>``."""
-    return RepoPath.of("sites", site)
-
-
 def mce_dir(site: str, mce: str) -> RepoPath:
     """``sites/<site>/mces/<mce>``."""
     return RepoPath.of("sites", site, "mces", mce)

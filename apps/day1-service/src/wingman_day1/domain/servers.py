@@ -84,16 +84,6 @@ def node_cluster_names(hosted: HostedClusterRef) -> frozenset[str]:
     return frozenset({hosted.name, hosted.cluster_name})
 
 
-def nodes_of(rows: Iterable[ServerRow], hosted: HostedClusterRef) -> list[ServerRow]:
-    """The cluster's servers, one per server id, sorted by name."""
-    names = node_cluster_names(hosted)
-    by_id: dict[str, ServerRow] = {}
-    for row in rows:
-        if row.cluster_name in names:
-            by_id.setdefault(row.id, row)
-    return sorted(by_id.values(), key=lambda row: (row.name, row.id))
-
-
 def is_node_of(server: ServerDetail, hosted: HostedClusterRef) -> bool:
     """Whether server-scan places ``server`` in this cluster."""
     return server.cluster_name in node_cluster_names(hosted)

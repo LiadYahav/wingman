@@ -42,8 +42,6 @@ INFRA_ROLE: Final = "node-role.kubernetes.io/infra"
 """The node label of an infra node (the MCE's HAProxy), whatever its value."""
 BLOCKING_TAINTS: Final = frozenset({"NoSchedule", "NoExecute"})
 """Taint effects that keep pods off a node (``PreferNoSchedule`` only discourages)."""
-TERMINAL_PHASES: Final = ("Succeeded", "Failed")
-"""Pod phases that no longer take a slot on their node."""
 SPARE_STATE: Final = "INSTALLED_TO_INVENTORY"
 """server-scan's ``openshift_state`` of a server registered to an MCE and in no cluster."""
 UNUSABLE_HEALTH: Final = frozenset({"CRITICAL", "UNKNOWN"})

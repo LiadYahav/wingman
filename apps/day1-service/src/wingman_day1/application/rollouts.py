@@ -47,7 +47,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -718,8 +718,3 @@ def _preface(cluster: ClusterFile, spec: ClusterSpec) -> list[str]:
         f"shown before v{version} was merged. Closing it unmerged declines v{version} for this "
         "cluster: Wingman does not open it again, and a person can still sync it by hand.",
     ]
-
-
-def counts_by_state(clusters: Sequence[ClusterRollout]) -> Mapping[RolloutState, int]:
-    """How many of ``clusters`` are in each state."""
-    return {s: sum(1 for c in clusters if c.state is s) for s in RolloutState}
