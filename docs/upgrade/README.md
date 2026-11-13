@@ -51,6 +51,7 @@ already have.
 | 3.18.1 | 3.18.2: a code reorganisation with no change in behaviour: the web's type files split by section | Generic |
 | 3.18.2 | 3.18.3: a code reorganisation with no change in behaviour: the docs page split into one file per section | Generic |
 | 3.18.3 | 3.18.4: docs only: CLAUDE.md's "Where to continue" for 3.14.1 to 3.18.3, and the plan records that production's server-scan MCE and site names equal day1's | Generic: the images are unchanged |
+| 3.18.4 | 3.18.5: a code reorganisation with no change in behaviour: the web calls day1 through one typed module and query-key factory | Generic |
 
 ### Skipping versions
 

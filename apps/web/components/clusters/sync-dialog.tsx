@@ -11,7 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MRCreationProgress } from "@/components/common/mr-creation-progress";
 import { ProblemList } from "@/components/common/problem-list";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { defaultHardware, hardwareOptions as hardwareOptionsOf, useMachineConfigs } from "@/lib/machine-configs";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
@@ -126,7 +127,6 @@ export function SyncDialog({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const path = `/api/day1/clusters/${encodeURIComponent(name)}`;
   const { data: catalog, isLoading: catalogLoading, error: catalogError } = useMachineConfigs();
 
   const [choices, setChoices] = useState<Record<number, Choice>>({});
@@ -147,8 +147,8 @@ export function SyncDialog({
   );
 
   const preview = useQuery<SyncPreview>({
-    queryKey: ["clusters", name, "sync-preview", where, hardware],
-    queryFn: () => api.post<SyncPreview>(`${path}/sync/preview${where}`, { hardware } satisfies SyncPreviewRequest),
+    queryKey: day1Keys.clusters.syncPreview(name, where, hardware),
+    queryFn: () => day1Api.clusters.syncPreview(name, where, { hardware } satisfies SyncPreviewRequest),
     placeholderData: keepPreviousData,
     staleTime: 0,
     gcTime: 0,
@@ -161,7 +161,7 @@ export function SyncDialog({
 
   const sync = useMutation({
     mutationFn: (p: SyncPreview) =>
-      api.post<MRDetail>(`${path}/sync${where}`, {
+      day1Api.clusters.sync(name, where, {
         last_commit_id: p.last_commit_id,
         spec_version: p.spec_version,
         hardware,
@@ -169,7 +169,7 @@ export function SyncDialog({
       } satisfies SyncRequest),
     onSuccess: (mr, p) => {
       toastMrOpened(mr, router.push, "Sync MR");
-      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all });
       if (p.addons_to_install.length > 0 || p.addons_error) setOpened({ mr, preview: p });
       else onClose();
     },
@@ -182,7 +182,7 @@ export function SyncDialog({
       }
       // An open MR already syncs the cluster to this version (a rollout's, ADR-0044): the
       // detail names it, and the drift tab links it once read again
-      if (isApiError(e, "ALREADY_EXISTS")) void queryClient.invalidateQueries({ queryKey: ["clusters", name, "drift"] });
+      if (isApiError(e, "ALREADY_EXISTS")) void queryClient.invalidateQueries({ queryKey: day1Keys.clusters.drift(name) });
     },
   });
 

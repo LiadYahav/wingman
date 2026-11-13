@@ -9,8 +9,9 @@ import {
   FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, Files,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api, isApiError } from "@/lib/api-client";
-import { approvalApiPath, parseApprovalId, type MRRef } from "@/lib/approvals";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
+import { parseApprovalId, type MRRef } from "@/lib/approvals";
 import { useAuthStore, useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -117,7 +118,7 @@ function EditMRPanel({
         .filter((d) => fileContents[d.new_path] !== newFileContent(d))
         .map((d) => ({ path: d.new_path, content: fileContents[d.new_path] ?? "" }));
       // Both services refuse the commit if the branch moved past the head reviewed here (ADR-0006)
-      return api.put<ApprovalDetail>(approvalApiPath(mrRef), { files, message, sha: mr.sha });
+      return day1Api.approvals.update(mrRef, { files, message, sha: mr.sha });
     },
     onSuccess: (detail) => {
       toast.success("Changes committed to the MR branch — review them again before approving");
@@ -261,15 +262,14 @@ function MRDetailContent() {
   const [actionError, setActionError] = useState<unknown>(null);
 
   const ref = parseApprovalId(id);
-  const queryKey = ["approvals", "detail", id];
 
   // Fetched fresh every time the page opens (never from a cache, see
   // providers.tsx), then never in the background: an approval names the head
   // shown here, so the diff must not change under the reviewer. A branch that
   // moved since is a 409 and a reload.
   const { data, isLoading, error, refetch } = useQuery<ApprovalDetail>({
-    queryKey,
-    queryFn: () => api.get<ApprovalDetail>(approvalApiPath(ref!)),
+    queryKey: day1Keys.approvals.detail(id),
+    queryFn: () => day1Api.approvals.detail(ref!),
     enabled: ref !== null,
     staleTime: Infinity,
     gcTime: 0,
@@ -285,12 +285,12 @@ function MRDetailContent() {
 
   /** Refresh the lists; this page's own detail is set or refetched by the caller. */
   const afterChange = () => {
-    queryClient.invalidateQueries({ queryKey: ["approvals"], predicate: (q) => q.queryKey[1] !== "detail" });
-    queryClient.invalidateQueries({ queryKey: ["audit"] });
+    queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all, predicate: (q) => q.queryKey[1] !== "detail" });
+    queryClient.invalidateQueries({ queryKey: day1Keys.audit.all });
   };
 
   const approveMutation = useMutation({
-    mutationFn: (sha: string) => api.post<MRDetail>(approvalApiPath(ref!, "approve"), { sha }),
+    mutationFn: (sha: string) => day1Api.approvals.approve(ref!, sha),
     onSuccess: (mr) => {
       const flavor = rolloutApplies ? rollout.data?.spec_name : null;
       toast.success(
@@ -305,7 +305,7 @@ function MRDetailContent() {
       setApproveOpen(false);
       afterChange();
       // What the merge changed
-      queryClient.invalidateQueries({ queryKey: ref?.service === "day2" ? ["clusters"] : ref?.repo === "specs" ? ["specs"] : ["clusters"] });
+      queryClient.invalidateQueries({ queryKey: ref?.service === "day2" ? day1Keys.clusters.all : ref?.repo === "specs" ? day1Keys.specs.all : day1Keys.clusters.all });
       refetch();
     },
     onError: (e) => {
@@ -315,7 +315,7 @@ function MRDetailContent() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: () => api.post<MRDetail>(approvalApiPath(ref!, "reject")),
+    mutationFn: () => day1Api.approvals.reject(ref!),
     onSuccess: (mr) => {
       toast.success(`!${mr.iid} rejected`);
       setRejectReviewOpen(false);
@@ -520,7 +520,7 @@ function MRDetailContent() {
                 mr={mr}
                 mrRef={ref}
                 diffs={diffs}
-                onSaved={(detail) => { queryClient.setQueryData(queryKey, detail); setEditing(false); afterChange(); }}
+                onSaved={(detail) => { queryClient.setQueryData(day1Keys.approvals.detail(id), detail); setEditing(false); afterChange(); }}
                 onCancel={() => setEditing(false)}
               />
             </div>

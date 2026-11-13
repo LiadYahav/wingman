@@ -11,14 +11,14 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { approvalHref } from "@/lib/approvals";
 import { clusterHref } from "@/lib/clusters";
-import { ROLLOUT_LABEL, ROLLOUT_ORDER, rolloutKey, rolloutPath, useRollout } from "@/lib/rollout";
+import { ROLLOUT_LABEL, ROLLOUT_ORDER, useRollout } from "@/lib/rollout";
 import { cn, formatDateTime } from "@/lib/utils";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { useIsAdmin } from "@/stores/auth-store";
-import type { RolloutCluster, RolloutRun, RolloutState, RolloutStatus } from "@/types";
+import type { RolloutCluster, RolloutRun, RolloutState } from "@/types";
 
 const LOOK: Record<RolloutState, { Icon: typeof CheckCircle2; className: string }> = {
   needs_decision: { Icon: TriangleAlert, className: "bg-status-warning/10 text-status-warning-fg" },
@@ -209,9 +209,9 @@ export function RolloutPanel({ flavor }: { flavor: string }) {
   const { data, isLoading, error } = useRollout(flavor);
 
   const reconcile = useMutation({
-    mutationFn: () => api.post<RolloutStatus>(rolloutPath(flavor)),
+    mutationFn: () => day1Api.specs.reconcileRollout(flavor),
     onSuccess: (status) => {
-      queryClient.setQueryData(rolloutKey(flavor), status);
+      queryClient.setQueryData(day1Keys.specs.rollout(flavor), status);
       toast.success(status.running ? "Reconciling: opening the merge requests that are due" : "Nothing to open: every cluster has its merge request");
     },
   });
@@ -221,8 +221,8 @@ export function RolloutPanel({ flavor }: { flavor: string }) {
   useEffect(() => {
     if (!data) return;
     if (wasRunning.current && !data.running) {
-      void queryClient.invalidateQueries({ queryKey: ["specs", flavor, "clusters"] });
-      void queryClient.invalidateQueries({ queryKey: ["specs", flavor, "drift"] });
+      void queryClient.invalidateQueries({ queryKey: day1Keys.specs.clusters(flavor) });
+      void queryClient.invalidateQueries({ queryKey: day1Keys.specs.drift(flavor) });
     }
     wasRunning.current = data.running;
   }, [data, flavor, queryClient]);

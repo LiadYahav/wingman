@@ -7,6 +7,7 @@ import { Plus, RefreshCw, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, Fil
 import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { useIsAdmin } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
@@ -189,16 +190,16 @@ export default function ClustersPage() {
   const [pageSize, setPageSize] = useState(20);
 
   const { data: clusters, isLoading, isFetching, error } = useQuery<ClusterStatus[]>({
-    queryKey: ["clusters"],
-    queryFn: () => api.get<ClusterStatus[]>("/api/day1/clusters"),
+    queryKey: day1Keys.clusters.all,
+    queryFn: day1Api.clusters.list,
     staleTime: 30_000,
   });
 
   const { data: liveStatuses, isLoading: statusLoading, isError: statusFailed } = useBulkStatus(clusters);
 
   const { data: driftSummary, isError: driftFailed } = useQuery<DriftSummaryItem[]>({
-    queryKey: ["clusters", "drift-summary"],
-    queryFn: () => api.get<DriftSummaryItem[]>("/api/day1/clusters/drift-summary"),
+    queryKey: day1Keys.clusters.driftSummary,
+    queryFn: day1Api.clusters.driftSummary,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
@@ -226,17 +227,16 @@ export default function ClustersPage() {
   const prefetchCluster = useCallback((c: ClusterStatus) => {
     if (prefetchTimeoutRef.current) clearTimeout(prefetchTimeoutRef.current);
     prefetchTimeoutRef.current = setTimeout(() => {
-      const query = `site=${encodeURIComponent(c.site)}&mce=${encodeURIComponent(c.mce)}`;
-      const name = encodeURIComponent(c.name);
+      const where = `?site=${encodeURIComponent(c.site)}&mce=${encodeURIComponent(c.mce)}`;
       const doPrefetch = () => {
         queryClient.prefetchQuery({
-          queryKey: ["clusters", c.name, "detail"],
-          queryFn: () => api.get(`/api/day1/clusters/${name}?${query}`),
+          queryKey: day1Keys.clusters.detail(c.name),
+          queryFn: () => day1Api.clusters.detail(c.name, where),
           staleTime: 60_000,
         });
         queryClient.prefetchQuery({
-          queryKey: ["clusters", c.name, "drift"],
-          queryFn: () => api.get(`/api/day1/clusters/${name}/drift?${query}`),
+          queryKey: day1Keys.clusters.drift(c.name),
+          queryFn: () => day1Api.clusters.drift(c.name, where),
           staleTime: 60_000,
         });
         // The entries the cluster's charts page reads (a bare name, narrowed by its MCE)
@@ -398,7 +398,7 @@ export default function ClustersPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => queryClient.invalidateQueries({ queryKey: ["clusters"] })}
+            onClick={() => queryClient.invalidateQueries({ queryKey: day1Keys.clusters.all })}
             disabled={isFetching}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
             title="Refresh clusters"

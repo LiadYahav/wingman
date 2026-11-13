@@ -39,15 +39,6 @@ export function parseApprovalId(id: string): MRRef | null {
   return null;
 }
 
-/** The service route for an MR, optionally one of its actions. */
-export function approvalApiPath(ref: MRRef, action?: "approve" | "reject"): string {
-  const suffix = action ? `/${action}` : "";
-  if (ref.service === "day2") {
-    return `/api/day2/approvals/${encodeURIComponent(ref.team)}/${ref.iid}${suffix}`;
-  }
-  return `/api/day1/approvals/${ref.iid}${suffix}?repo=${ref.repo}`;
-}
-
 /** A stable key for lists and query caches. */
 export function mrKey(mr: Pick<MRDetail, "repo" | "iid" | "team">): string {
   return approvalId(mrRef(mr));

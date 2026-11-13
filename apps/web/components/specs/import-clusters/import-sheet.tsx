@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { ArrowLeft, Loader2, RotateCcw } from "lucide-react";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -21,10 +22,8 @@ import { cn } from "@/lib/utils";
 import type {
   ClusterPick,
   ClusterStatus,
-  ImportPreview,
   ImportPreviewRequest,
   ImportRequest,
-  ImportResult,
 } from "@/types";
 
 type Step = "pick" | "review" | "result";
@@ -76,19 +75,18 @@ function ImportFlow({ flavor }: { flavor: string }) {
   const [filters, setFilters] = useState<PickFilters>(NO_FILTERS);
   const [picked, setPicked] = useState<Map<string, ClusterStatus>>(new Map());
   const [moved, setMoved] = useState<Set<string>>(new Set());
-  const base = `/api/day1/specs/${encodeURIComponent(flavor)}/import`;
 
   const preview = useMutation({
     mutationFn: (clusters: ClusterPick[]) =>
-      api.post<ImportPreview>(`${base}/preview`, { clusters } satisfies ImportPreviewRequest),
+      day1Api.specs.importPreview(flavor, { clusters } satisfies ImportPreviewRequest),
   });
 
   // One MR per cluster (ADR-0044): the result step lists each, and each that did not open.
   // When none opened the answer is a problem; an unconfirmed write may still have opened one.
   const importer = useMutation({
-    mutationFn: (body: ImportRequest) => api.post<ImportResult>(base, body),
+    mutationFn: (body: ImportRequest) => day1Api.specs.importClusters(flavor, body),
     onSuccess: () => setStep("result"),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all }),
   });
 
   const runPreview = () => {

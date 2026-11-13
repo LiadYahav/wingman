@@ -6,7 +6,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import type { ConfigEntry, MachineConfigs } from "@/types";
 
 /** The entry name that stands for the cluster's own network config. */
@@ -19,13 +19,11 @@ export const NETWORK_CONFIG = "nm-conf";
  */
 const GENERIC_HARDWARE = "generic";
 
-const machineConfigsKey = ["machine-configs"] as const;
-
 /** The catalogue and the nodepool defaults; cached a minute, like day1's own read. */
 export function useMachineConfigs(enabled = true) {
   return useQuery<MachineConfigs>({
-    queryKey: machineConfigsKey,
-    queryFn: () => api.get<MachineConfigs>("/api/day1/machine-configs"),
+    queryKey: day1Keys.fleet.machineConfigs,
+    queryFn: day1Api.fleet.machineConfigs,
     staleTime: 60_000,
     enabled,
   });

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, CheckCircle2, RefreshCw, Search, X } from "lucide-react";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
@@ -29,14 +29,14 @@ export default function ApprovalsPage() {
 
   // day1 lists the day1 and specs repos (each MR says which); day2 lists every team repo.
   const { data: day1Mrs, isLoading: loadingDay1, isFetching: fetchingDay1, error: day1Error } = useQuery<MRDetail[]>({
-    queryKey: ["approvals", "day1"],
-    queryFn: () => api.get<MRDetail[]>("/api/day1/approvals"),
+    queryKey: day1Keys.approvals.list("day1"),
+    queryFn: () => day1Api.approvals.list("day1"),
     staleTime: 15_000,
   });
 
   const { data: day2Mrs, isLoading: loadingDay2, isFetching: fetchingDay2, error: day2Error } = useQuery<MRDetail[]>({
-    queryKey: ["approvals", "day2"],
-    queryFn: () => api.get<MRDetail[]>("/api/day2/approvals"),
+    queryKey: day1Keys.approvals.list("day2"),
+    queryFn: () => day1Api.approvals.list("day2"),
     staleTime: 15_000,
   });
 
@@ -95,7 +95,7 @@ export default function ApprovalsPage() {
           )}
         </div>
         <button
-          onClick={() => queryClient.invalidateQueries({ queryKey: ["approvals"] })}
+          onClick={() => queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all })}
           disabled={isFetching}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
           title="Refresh approvals"

@@ -4,8 +4,8 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, GitCommitHorizontal, GitPullRequest, ChevronDown, ChevronRight, FilePlus, FileX, FileEdit, RefreshCw, Search, X, Eye } from "lucide-react";
-import { api } from "@/lib/api-client";
-import { approvalApiPath, approvalHref, mrKey, mrRef } from "@/lib/approvals";
+import { day1Api, day1Keys } from "@/lib/api/day1";
+import { approvalHref, mrKey, mrRef } from "@/lib/approvals";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -17,13 +17,6 @@ import { RepoBadge } from "@/components/common/repo-badge";
 import type { ApprovalDetail, CommitRecord, MRDetail, FileDiff } from "@/types";
 
 type RepoFilter = "all" | CommitRecord["repo"];
-
-/** day1 serves the day1 and specs repos (by repo); day2 finds the team repo, hinted by team. */
-function commitDiffPath(commit: CommitRecord): string {
-  return commit.repo === "day2"
-    ? `/api/day2/audit/commits/${commit.id}/diff${commit.team ? `?team=${encodeURIComponent(commit.team)}` : ""}`
-    : `/api/day1/audit/commits/${commit.repo}/${commit.id}/diff`;
-}
 
 function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
   const [openFiles, setOpenFiles] = useState<Set<number>>(new Set());
@@ -108,8 +101,8 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
   const [expanded, setExpanded] = useState(false);
 
   const { data: diffs, isLoading: diffsLoading, error: diffsError } = useQuery<FileDiff[]>({
-    queryKey: ["audit", commit.repo, "commit-diff", commit.id],
-    queryFn: () => api.get<FileDiff[]>(commitDiffPath(commit)),
+    queryKey: day1Keys.audit.commitDiff(commit.repo, commit.id),
+    queryFn: () => day1Api.audit.commitDiff(commit),
     enabled: expanded,
     staleTime: 300_000,
     retry: 1,
@@ -170,8 +163,8 @@ function MRRow({ mr }: { mr: MRDetail }) {
     : "bg-status-ready/15";
 
   const { data: detail, isLoading: detailLoading, error: detailError } = useQuery<ApprovalDetail>({
-    queryKey: ["audit", "mr-diff", mrKey(mr)],
-    queryFn: () => api.get<ApprovalDetail>(approvalApiPath(mrRef(mr))),
+    queryKey: day1Keys.audit.mrDiff(mrKey(mr)),
+    queryFn: () => day1Api.approvals.detail(mrRef(mr)),
     enabled: expanded,
     staleTime: 300_000,
     retry: 1,
@@ -245,26 +238,26 @@ export default function AuditPage() {
 
   // Every item says which repo it is from: day1 serves day1 and specs, day2 every team repo.
   const { data: day1Commits, isLoading: loadingD1C, isFetching: fetchingD1C, error: day1CommitsError } = useQuery<CommitRecord[]>({
-    queryKey: ["audit", "day1", "commits"],
-    queryFn: () => api.get<CommitRecord[]>("/api/day1/audit/commits"),
+    queryKey: day1Keys.audit.commits("day1"),
+    queryFn: () => day1Api.audit.commits("day1"),
     staleTime: 30_000,
   });
 
   const { data: day2Commits, isLoading: loadingD2C, isFetching: fetchingD2C, error: day2CommitsError } = useQuery<CommitRecord[]>({
-    queryKey: ["audit", "day2", "commits"],
-    queryFn: () => api.get<CommitRecord[]>("/api/day2/audit/commits"),
+    queryKey: day1Keys.audit.commits("day2"),
+    queryFn: () => day1Api.audit.commits("day2"),
     staleTime: 30_000,
   });
 
   const { data: day1Mrs, isLoading: loadingD1M, isFetching: fetchingD1M, error: day1MrsError } = useQuery<MRDetail[]>({
-    queryKey: ["audit", "day1", "mrs"],
-    queryFn: () => api.get<MRDetail[]>("/api/day1/audit/merge-requests"),
+    queryKey: day1Keys.audit.mergeRequests("day1"),
+    queryFn: () => day1Api.audit.mergeRequests("day1"),
     staleTime: 30_000,
   });
 
   const { data: day2Mrs, isLoading: loadingD2M, isFetching: fetchingD2M, error: day2MrsError } = useQuery<MRDetail[]>({
-    queryKey: ["audit", "day2", "mrs"],
-    queryFn: () => api.get<MRDetail[]>("/api/day2/audit/merge-requests"),
+    queryKey: day1Keys.audit.mergeRequests("day2"),
+    queryFn: () => day1Api.audit.mergeRequests("day2"),
     staleTime: 30_000,
   });
 
@@ -350,7 +343,7 @@ export default function AuditPage() {
           </p>
         </div>
         <button
-          onClick={() => queryClient.invalidateQueries({ queryKey: ["audit"] })}
+          onClick={() => queryClient.invalidateQueries({ queryKey: day1Keys.audit.all })}
           disabled={isFetching}
           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
           title="Refresh audit log"

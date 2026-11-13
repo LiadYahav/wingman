@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { day1Keys } from "@/lib/api/day1";
 import { fetchBulkStatus, type LiveStatuses } from "@/lib/live-status";
 import type { ClusterStatus } from "@/types";
 
@@ -13,7 +14,7 @@ export function useBulkStatus(clusters: ClusterStatus[] | undefined) {
     [clusters]
   );
   return useQuery<LiveStatuses>({
-    queryKey: ["clusters", "bulk-status", input],
+    queryKey: day1Keys.clusters.bulkStatus(input),
     queryFn: () => fetchBulkStatus(input),
     enabled: input.length > 0,
     staleTime: 2 * 60_000,

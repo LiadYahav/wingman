@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Server, GitPullRequest, AlertTriangle, CheckCircle2, Clock, ArrowRight, Plus, CircleHelp, Activity } from "lucide-react";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RepoBadge } from "@/components/common/repo-badge";
@@ -56,33 +56,33 @@ export default function DashboardPage() {
   const isAdmin = useIsAdmin();
 
   const { data: clusters, isLoading: clustersLoading, error: clustersError } = useQuery<ClusterStatus[]>({
-    queryKey: ["clusters"],
-    queryFn: () => api.get<ClusterStatus[]>("/api/day1/clusters"),
+    queryKey: day1Keys.clusters.all,
+    queryFn: day1Api.clusters.list,
   });
 
   // Same cache entries as the specs and approvals pages
   const { data: specs } = useQuery<SpecEntry[]>({
-    queryKey: ["specs"],
-    queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
+    queryKey: day1Keys.specs.all,
+    queryFn: day1Api.specs.list,
   });
 
   const { data: approvalsDay1, isPending: day1ApprovalsPending, error: day1ApprovalsError } = useQuery<MRDetail[]>({
-    queryKey: ["approvals", "day1"],
-    queryFn: () => api.get<MRDetail[]>("/api/day1/approvals"),
+    queryKey: day1Keys.approvals.list("day1"),
+    queryFn: () => day1Api.approvals.list("day1"),
     staleTime: 60_000,
   });
 
   const { data: approvalsDay2, isPending: day2ApprovalsPending, error: day2ApprovalsError } = useQuery<MRDetail[]>({
-    queryKey: ["approvals", "day2"],
-    queryFn: () => api.get<MRDetail[]>("/api/day2/approvals"),
+    queryKey: day1Keys.approvals.list("day2"),
+    queryFn: () => day1Api.approvals.list("day2"),
     staleTime: 60_000,
   });
 
   const { data: liveStatuses, isLoading: statusLoading, error: statusError } = useBulkStatus(clusters);
 
   const { data: driftSummary, isLoading: driftLoading, isError: driftFailed } = useQuery<DriftSummaryItem[]>({
-    queryKey: ["clusters", "drift-summary"],
-    queryFn: () => api.get<DriftSummaryItem[]>("/api/day1/clusters/drift-summary"),
+    queryKey: day1Keys.clusters.driftSummary,
+    queryFn: day1Api.clusters.driftSummary,
     staleTime: 60_000, // drift asks day2 about every linked cluster
     gcTime: 5 * 60_000,
   });

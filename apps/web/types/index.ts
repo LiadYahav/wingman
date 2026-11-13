@@ -10,6 +10,32 @@ export interface UserInfo {
   role: "admin" | "viewer";
 }
 
+/** `GET /api/auth/config`. */
+export interface AuthConfigResponse {
+  authorize_url: string;
+  dev_auth_enabled?: boolean;
+}
+
+/** `POST /api/auth/callback` and `POST /api/auth/dev-login`. */
+export interface AuthCallbackResponse {
+  access_token: string;
+  token_type: string;
+  user: UserInfo;
+}
+
+/** `POST /api/auth/dev-login` (DEV_AUTH_ENABLED only). */
+export interface DevLoginRequest {
+  username: string;
+  role: UserInfo["role"];
+  secret: string;
+}
+
+/** `GET /api/day{1,2}/build`: the `WINGMAN_VERSION` and `WINGMAN_COMMIT` a service runs. */
+export interface ServiceBuild {
+  version: string;
+  commit: string;
+}
+
 // ── MR / Approval (both services) ─────────────────────────────────────────────
 
 export interface MRAuthor {

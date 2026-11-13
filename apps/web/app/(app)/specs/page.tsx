@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Layers, Server, RefreshCw, Search, X, ChevronsUpDown, FileWarning, SlidersHorizontal } from "lucide-react";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -93,8 +93,8 @@ export default function SpecsPage() {
   const [sort, setSort] = useState<SortOption>("name-asc");
 
   const { data: specs, isLoading, isFetching, error } = useQuery<SpecEntry[]>({
-    queryKey: ["specs"],
-    queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
+    queryKey: day1Keys.specs.all,
+    queryFn: day1Api.specs.list,
     staleTime: 60_000,
   });
 
@@ -154,7 +154,7 @@ export default function SpecsPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => queryClient.invalidateQueries({ queryKey: ["specs"] })}
+            onClick={() => queryClient.invalidateQueries({ queryKey: day1Keys.specs.all })}
             disabled={isFetching}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
             title="Refresh flavors"

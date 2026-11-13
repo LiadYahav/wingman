@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Workflow } from "lucide-react";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buttonVariants } from "@/components/ui/button";
 import { ProblemList } from "@/components/common/problem-list";
-import type { DeleteWorkflowState, WorkflowRun } from "@/types";
+import type { WorkflowRun } from "@/types";
 
 /** What the delete-cluster workflow does, in its order (docs/ideas/architecture-fit.md). */
 const STEPS = [
@@ -41,15 +42,14 @@ export function DeleteWorkflowPanel({
   isAdmin: boolean;
 }) {
   const queryClient = useQueryClient();
-  const path = `/api/day1/clusters/${encodeURIComponent(name)}/delete-workflow${where}`;
-  const queryKey = ["clusters", name, "delete-workflow"];
+  const queryKey = day1Keys.clusters.deleteWorkflow(name);
   const [typed, setTyped] = useState("");
 
   const { data, isLoading, error } = useQuery<Availability>({
     queryKey,
     queryFn: async () => {
       try {
-        const state = await api.get<DeleteWorkflowState>(path);
+        const state = await day1Api.clusters.deleteWorkflow(name, where);
         return { available: true, run: state.run };
       } catch (e) {
         if (isApiError(e, "FEATURE_DISABLED")) return { available: false, detail: e.message };
@@ -60,7 +60,7 @@ export function DeleteWorkflowPanel({
   });
 
   const start = useMutation({
-    mutationFn: () => api.post<WorkflowRun>(path, { confirm: true }),
+    mutationFn: () => day1Api.clusters.startDeleteWorkflow(name, where),
     onSuccess: (run) => {
       toast.success(`Delete workflow started: ${run.workflow_id}`);
       queryClient.invalidateQueries({ queryKey });

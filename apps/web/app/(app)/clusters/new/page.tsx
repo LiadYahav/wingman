@@ -10,6 +10,7 @@ import {
 import jsYaml from "js-yaml";
 import { toast } from "sonner";
 import { api, isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { approvalHref } from "@/lib/approvals";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,7 +26,7 @@ import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog";
 import { useIsAdmin } from "@/stores/auth-store";
 import type {
-  CatalogEntry, ClusterPreview, CreateClusterRequest, MRDetail, Mce, NameSuggestion, OverrideableField,
+  CatalogEntry, ClusterPreview, CreateClusterRequest, Mce, NameSuggestion, OverrideableField,
   ProvisionRun, SpecEntry, TemplateField,
 } from "@/types";
 import { ProvisionRunPanel } from "@/components/clusters/provision-run";
@@ -630,15 +631,15 @@ export default function NewClusterPage() {
   const submitted = useRef<FormValues | null>(null);
 
   const { data: specs, isLoading: specsLoading, error: specsError } = useQuery<SpecEntry[]>({
-    queryKey: ["specs"],
-    queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
+    queryKey: day1Keys.specs.all,
+    queryFn: day1Api.specs.list,
     staleTime: 60_000,
   });
 
   // Template schema — parsed server-side from the Jinja2 AST; drives the dynamic form
   const { data: templateSchema, isLoading: schemaLoading, error: schemaError } = useQuery<TemplateField[]>({
-    queryKey: ["specs", "template-schema"],
-    queryFn: () => api.get<TemplateField[]>("/api/day1/specs/template/schema"),
+    queryKey: day1Keys.specs.templateSchema,
+    queryFn: day1Api.specs.templateSchema,
     staleTime: 300_000,
   });
   const schema = useMemo(() => templateSchema ?? [], [templateSchema]);
@@ -652,8 +653,8 @@ export default function NewClusterPage() {
   });
 
   const { data: sites = [], isLoading: sitesLoading, error: sitesError } = useQuery<string[]>({
-    queryKey: ["sites"],
-    queryFn: () => api.get<string[]>("/api/day1/sites"),
+    queryKey: day1Keys.fleet.sites,
+    queryFn: day1Api.fleet.sites,
     staleTime: 60_000,
     enabled: step === "vars",
   });
@@ -664,8 +665,8 @@ export default function NewClusterPage() {
   const site = siteChoice ?? detectedSite ?? "";
 
   const { data: mces = [], isLoading: mcesLoading, error: mcesError } = useQuery<Mce[]>({
-    queryKey: ["mces", site],
-    queryFn: () => api.get<Mce[]>(`/api/day1/mces?site=${encodeURIComponent(site)}`),
+    queryKey: day1Keys.fleet.mcesAt(site),
+    queryFn: () => day1Api.fleet.mcesAt(site),
     enabled: Boolean(site),
     staleTime: 60_000,
   });
@@ -771,9 +772,8 @@ export default function NewClusterPage() {
     ? { site: siteChoice, mce: placedMce, flavor: selectedSpec.metadata.name }
     : null;
   const { data: suggestion } = useQuery<NameSuggestion>({
-    queryKey: ["name-suggestion", suggestFor],
-    queryFn: () =>
-      api.get<NameSuggestion>(`/api/day1/clusters/name-suggestion?${new URLSearchParams(suggestFor ?? {}).toString()}`),
+    queryKey: day1Keys.nameSuggestion(suggestFor),
+    queryFn: () => day1Api.clusters.nameSuggestion(suggestFor ?? {}),
     enabled: suggestFor !== null,
     staleTime: 10_000,
     retry: false,
@@ -784,10 +784,10 @@ export default function NewClusterPage() {
 
   // InfraEnvs on the MCE hub; `null` when live status is off (then the field is free text).
   const { data: infraEnvs, isLoading: infraEnvsLoading, error: infraEnvsError } = useQuery<string[] | null>({
-    queryKey: ["mce-infraenvs", mce],
+    queryKey: day1Keys.fleet.infraEnvs(mce),
     queryFn: async () => {
       try {
-        return await api.get<string[]>(`/api/day1/mces/${encodeURIComponent(mce)}/infraenvs`);
+        return await day1Api.fleet.infraEnvs(mce);
       } catch (error) {
         if (isApiError(error, "FEATURE_DISABLED")) return null;
         throw error;
@@ -862,11 +862,11 @@ export default function NewClusterPage() {
     const placed = placeFailure(error, schema, submitted.current ?? formValues);
     showError({ ...describeFailure(error, what), ...(placed ? { placed } : {}) });
     // Day1 checked the MCE against numbers read now: show the person those numbers too (ADR-0050)
-    queryClient.invalidateQueries({ queryKey: ["placement"] });
+    queryClient.invalidateQueries({ queryKey: day1Keys.placement.all });
   };
 
   const previewMutation = useMutation({
-    mutationFn: (request: CreateClusterRequest) => api.post<ClusterPreview>("/api/day1/clusters/preview", request),
+    mutationFn: (request: CreateClusterRequest) => day1Api.clusters.preview(request),
     onSuccess: (preview, request) => setReviewed({ request, preview }),
     onError: (error) => showFailure(error, "preview"),
   });
@@ -877,7 +877,7 @@ export default function NewClusterPage() {
   const [startedRun, setStartedRun] = useState<ProvisionRun | null>(null);
 
   const createMutation = useMutation({
-    mutationFn: (request: CreateClusterRequest) => api.post<MRDetail | ProvisionRun>("/api/day1/clusters", request),
+    mutationFn: (request: CreateClusterRequest) => day1Api.clusters.create(request),
     onSuccess: (result) => {
       setReviewed(null);
       if (isProvisionRun(result)) {
@@ -892,7 +892,7 @@ export default function NewClusterPage() {
         description: "CI and the allocate-segment workflow add their keys to its branch; another admin approves it after.",
       });
       setReviewed(null);
-      queryClient.invalidateQueries({ queryKey: ["approvals"] });
+      queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all });
       router.push(approvalHref(mr));
     },
     onError: (error) => {
@@ -1038,7 +1038,7 @@ export default function NewClusterPage() {
   };
 
   const reloadSpecs = () => {
-    queryClient.invalidateQueries({ queryKey: ["specs"] });
+    queryClient.invalidateQueries({ queryKey: day1Keys.specs.all });
     setFormError(null);
     setSelectedSpec(null);
     setStep("spec");

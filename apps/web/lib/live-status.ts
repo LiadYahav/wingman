@@ -4,7 +4,8 @@
  * 501 FEATURE_DISABLED, which the app shows as "status is off", not an error.
  */
 
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api } from "@/lib/api/day1";
 import type { ClusterLiveStatus, ClusterPhase } from "@/types";
 
 /** `null` when live status is off in this deployment. */
@@ -13,7 +14,7 @@ export type LiveStatuses = Record<string, ClusterLiveStatus> | null;
 /** `bulk-status`: every requested cluster answers, with `error` set when its read failed. */
 export async function fetchBulkStatus(clusters: { name: string; mce: string }[]): Promise<LiveStatuses> {
   try {
-    return await api.post<Record<string, ClusterLiveStatus>>("/api/day1/clusters/bulk-status", { clusters });
+    return await day1Api.clusters.bulkStatus(clusters);
   } catch (error) {
     if (isApiError(error, "FEATURE_DISABLED")) return null;
     throw error;
@@ -23,9 +24,7 @@ export async function fetchBulkStatus(clusters: { name: string; mce: string }[])
 /** One cluster's status; `null` when live status is off. */
 export async function fetchLiveStatus(name: string, mce: string): Promise<ClusterLiveStatus | null> {
   try {
-    return await api.get<ClusterLiveStatus>(
-      `/api/day1/clusters/${encodeURIComponent(name)}/status?mce=${encodeURIComponent(mce)}`
-    );
+    return await day1Api.clusters.status(name, mce);
   } catch (error) {
     if (isApiError(error, "FEATURE_DISABLED")) return null;
     throw error;

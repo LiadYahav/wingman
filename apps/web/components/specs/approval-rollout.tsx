@@ -6,7 +6,7 @@ import { GitPullRequestArrow, Package, RotateCw, TriangleAlert, Unplug } from "l
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
 import { rollText } from "@/components/clusters/sync-dialog";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { clusterHref } from "@/lib/clusters";
 import { cn } from "@/lib/utils";
 import type { ApprovalRollout, RolloutClusterRef } from "@/types";
@@ -26,8 +26,8 @@ export function opensText(r: ApprovalRollout): string {
 export function useApprovalRollout(id: string, iid: number, sha: string | undefined, enabled: boolean) {
   return useQuery<ApprovalRollout>({
     // Under the detail's key: a change elsewhere does not read it again, a reload of the MR does
-    queryKey: ["approvals", "detail", id, "rollout", sha],
-    queryFn: () => api.get<ApprovalRollout>(`/api/day1/approvals/${iid}/rollout?repo=specs`),
+    queryKey: day1Keys.approvals.rollout(id, sha),
+    queryFn: () => day1Api.approvals.rollout(iid),
     enabled: enabled && Boolean(sha),
     staleTime: Infinity,
     gcTime: 0,

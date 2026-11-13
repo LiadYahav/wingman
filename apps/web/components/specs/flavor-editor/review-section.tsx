@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { FileCode2, Info, Loader2, Lock } from "lucide-react";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProblemList } from "@/components/common/problem-list";
@@ -94,16 +95,16 @@ function ClusterFilePreview({
   const [nameChoice, setNameChoice] = useState<string | null>(null);
 
   const { data: mces = [], error: mcesError } = useQuery<Mce[]>({
-    queryKey: ["mces", "all"],
-    queryFn: () => api.get<Mce[]>("/api/day1/mces"),
+    queryKey: day1Keys.fleet.allMces,
+    queryFn: day1Api.fleet.allMces,
     staleTime: 60_000,
     enabled: Boolean(saved) && seen,
   });
   const usable = mces.filter((m) => m.follows_convention && m.env);
   const mce = usable.find((m) => m.name === mceChoice) ?? usable[0];
   const { data: offered, error: versionsError } = useQuery<OpenShiftVersions>({
-    queryKey: ["mce-openshift-versions", mce?.name],
-    queryFn: () => api.get<OpenShiftVersions>(`/api/day1/mces/${encodeURIComponent(mce!.name)}/openshift-versions`),
+    queryKey: day1Keys.fleet.openshiftVersions(mce?.name),
+    queryFn: () => day1Api.fleet.openshiftVersions(mce!.name),
     staleTime: 60_000,
     enabled: Boolean(saved && mce) && seen,
   });
@@ -120,8 +121,8 @@ function ClusterFilePreview({
       : null;
   const body = useSettled(plan ? JSON.stringify(plan.request) : "", 600);
   const preview = useQuery<ClusterPreview>({
-    queryKey: ["flavor-cluster-preview", body],
-    queryFn: () => api.post<ClusterPreview>("/api/day1/clusters/preview", JSON.parse(body)),
+    queryKey: day1Keys.flavorClusterPreview(body),
+    queryFn: () => day1Api.clusters.preview(JSON.parse(body)),
     enabled: Boolean(body) && seen,
     retry: false,
     staleTime: 60_000,

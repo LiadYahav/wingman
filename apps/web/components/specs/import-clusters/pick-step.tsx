@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FileWarning, Link2, Search, X } from "lucide-react";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { OWNER_KEYS, type OwnerKey } from "@/lib/clusters";
 import { Combobox } from "@/components/ui/combobox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -121,8 +121,8 @@ export function PickStep({
   onPickedChange: (picked: Map<string, ClusterStatus>) => void;
 }) {
   const { data: clusters, isLoading, error } = useQuery<ClusterStatus[]>({
-    queryKey: ["clusters"],
-    queryFn: () => api.get<ClusterStatus[]>("/api/day1/clusters"),
+    queryKey: day1Keys.clusters.all,
+    queryFn: day1Api.clusters.list,
     staleTime: 30_000,
   });
 

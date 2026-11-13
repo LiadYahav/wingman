@@ -5,19 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { Sun, Moon, Monitor, Shield, Eye, Users, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { cn } from "@/lib/utils";
+import type { ServiceBuild } from "@/types";
 
-/** What `GET /api/day{1,2}/build` returns: the `WINGMAN_VERSION` and `WINGMAN_COMMIT` a service runs. */
-interface Build {
-  version: string;
-  commit: string;
-}
-
-const SERVICES = [
-  { name: "day1", path: "/api/day1/build" },
-  { name: "day2", path: "/api/day2/build" },
-] as const;
+const SERVICES = ["day1", "day2"] as const;
 
 const noSubscription = () => () => {};
 
@@ -31,12 +23,12 @@ function useMounted(): boolean {
   return useSyncExternalStore(noSubscription, () => true, () => false);
 }
 
-function useBuild(path: string) {
+function useBuild(service: (typeof SERVICES)[number]) {
   // staleTime 0: a restored cache entry must not hide a redeploy.
-  return useQuery<Build>({ queryKey: ["build", path], queryFn: () => api.get<Build>(path), staleTime: 0 });
+  return useQuery<ServiceBuild>({ queryKey: day1Keys.build(service), queryFn: () => day1Api.build(service), staleTime: 0 });
 }
 
-function BuildValue({ name, build, isPending, isError }: { name: string; build?: Build; isPending: boolean; isError: boolean }) {
+function BuildValue({ name, build, isPending, isError }: { name: string; build?: ServiceBuild; isPending: boolean; isError: boolean }) {
   if (isPending) return <span className="text-muted-foreground" data-testid={`build-${name}`}>…</span>;
   if (isError || !build) return <span className="text-muted-foreground" data-testid={`build-${name}`}>Could not be read</span>;
   return (
@@ -90,8 +82,8 @@ export default function SettingsPage() {
   const mounted = useMounted();
   const current = mounted ? theme : undefined;
   const { user } = useAuthStore();
-  const day1 = useBuild(SERVICES[0].path);
-  const day2 = useBuild(SERVICES[1].path);
+  const day1 = useBuild(SERVICES[0]);
+  const day2 = useBuild(SERVICES[1]);
   const builds = [day1, day2];
   const skew = day1.data && day2.data && day1.data.version !== day2.data.version;
 
@@ -166,7 +158,7 @@ export default function SettingsPage() {
       {/* Platform info: what each service reports it runs */}
       <SectionCard title="Platform">
         <div className="space-y-3 text-sm">
-          {SERVICES.map(({ name }, i) => (
+          {SERVICES.map((name, i) => (
             <div key={name} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
               <span className="text-muted-foreground">{name} version</span>
               <BuildValue name={name} build={builds[i].data} isPending={builds[i].isPending} isError={builds[i].isError} />
