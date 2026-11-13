@@ -43,8 +43,6 @@
   866  apps/web/components/specs/flavor-editor/model.ts
   551  apps/web/components/specs/flavor-editor/nodepools-section.tsx
   818  apps/web/e2e/tests/mce-placement.spec.ts
- 1092  apps/web/types/day1.ts
-  813  apps/web/types/day2.ts
   771  packages/wingman-core/src/wingman_core/infrastructure/fake_gitlab/gitlab.py
   665  packages/wingman-core/src/wingman_core/infrastructure/gitlab/adapter.py
   716  packages/wingman-core/src/wingman_core/testing/gitlab_contract.py

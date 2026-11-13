@@ -654,7 +654,8 @@ A configuration a service refuses (ADR-0009) is logged at start-up, naming the v
 3. Frontend routes go in `app/(app)/` and stay thin; the feature they render goes in `components/<area>/`
    (ADR-0056 says where its state and pure helpers go). Files stay within 500 lines and functions small:
    CI checks both (ADR-0056)
-4. Add API types to `types/day1.ts`, `types/day2.ts` or `types/problem.ts` (`types/index.ts` re-exports them)
+4. Add API types to the section's file in `types/day1/` or `types/day2/`, or to `types/problem.ts`
+   (`types/index.ts` re-exports them; import from `@/types`)
 
 ### Testing Locally
 
