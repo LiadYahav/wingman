@@ -42,7 +42,7 @@ Operations of the other dependencies (day1):
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
 | `server_scan` | `list_server_rows`, `get_server` |
-| `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade` |
+| `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
 ## Reading the GitLab outcomes
@@ -99,6 +99,14 @@ Operations of the other dependencies (day1):
   refusing one (the person sees its words), `ambiguous` a decision sent
   whose answer was lost (it may have landed; never retried). `start_upgrade`
   `conflict`: the cluster already has an open run.
+- `workflows` `start_add_server` is an admin adding servers to an MCE's
+  InfraEnv pool from Inventory Management (`DAY1_ADD_SERVERS`, ADR-0057).
+  `ambiguous`: sent, answer lost; some runs may have started, so look at the
+  pool's runs before asking again (never retried: a pool draw sent twice
+  installs twice). `conflict`: a named server already installing, or every
+  slot of the pool busy. `rejected`: a body the orchestrator refused (its
+  422). Inventory's run list is `list_runs` and `get_run` (the 20 newest
+  runs, each kept 10 seconds).
 - `segments_manager` `get_segment` is one cluster's segment, read for its
   EPG (ADR-0039). A segment segments-manager does not have is `ok`: that is
   an answer, shown as a warning. `unavailable` means it could not be reached

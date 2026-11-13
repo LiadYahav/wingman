@@ -84,10 +84,15 @@ hubs, server-scan, the workflows orchestrator and segments-manager with fakes se
   the files except for `ocp4-prod-herzi-site1`, whose VLAN differs on purpose (1418 against the
   file's 1410), so the card's warning can be seen. `ocp4-prod-hawk-site1` has no segment yet:
   its VLAN and segment are pending.
+- `inventory.yaml` adds servers in no MCE to the fleet (one locked by another add-server run,
+  one in maintenance), the add-server runs' sample phases, past runs, and a fake herzi that
+  starts a pool draw on `ocp4-prod-lark-site1`'s short pool now and then (ADR-0057).
 
 The fake MCE also serves live status and InfraEnvs, as if `CLUSTER_STATUS_ENABLED` were on. An
 uninstall walks a few sample phases, about 8 s each, then frees the server and removes its
-Machine; the NodePool's replacement Machine then waits for a free Agent. The fake fleet is
+Machine; the NodePool's replacement Machine then waits for a free Agent. On Inventory Management
+(`/inventory`), add `DAY1_ADD_SERVERS=true` to add servers: a run walks a few sample phases,
+about 8 s each, takes a server and leaves it in the MCE's inventory; herzi's runs show beside it. The fake fleet is
 refused unless `WINGMAN_ENVIRONMENT=development`, and it works with either Git backend.
 
 With `DAY1_FAKE_FLEET`, the card's links to segments-manager point at

@@ -54,6 +54,7 @@ from wingman_day1.api.v1 import approvals as approvals_api
 from wingman_day1.api.v1 import audit as audit_api
 from wingman_day1.api.v1 import auth as auth_api
 from wingman_day1.api.v1 import clusters as clusters_api
+from wingman_day1.api.v1 import inventory as inventory_api
 from wingman_day1.api.v1 import machine_configs as machine_configs_api
 from wingman_day1.api.v1 import placement as placement_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
@@ -72,15 +73,15 @@ from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.placement import PlacementService
-from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.rollouts import ROLLOUT_USER, RolloutService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
+from wingman_day1.compose_inventory import add_server_workflow, inventory_service
+from wingman_day1.compose_quick_links import quick_links_service
 from wingman_day1.compose_segments import segment_ledger, segments_service
 from wingman_day1.domain.names import HostedClusterNaming
-from wingman_day1.domain.quick_links import GeneratedLinks, UrlTemplates
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
 from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
@@ -88,7 +89,6 @@ from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons, HttpDay2Installs
 from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_access
-from wingman_day1.infrastructure.links_file import FileLinksSource
 from wingman_day1.infrastructure.merge_requests import (
     GitClusterProvisioner,
     GitRolloutMergeRequests,
@@ -100,6 +100,7 @@ from wingman_day1.infrastructure.repositories import CachedRepository
 from wingman_day1.infrastructure.rollout_events import MetricRolloutEvents
 from wingman_day1.platform_adapters import Close
 from wingman_day1.ports import (
+    AddServerWorkflow,
     ClusterDeleteWorkflow,
     Day2Addons,
     Day2Installs,
@@ -136,6 +137,7 @@ ROUTERS: Final = (
     machine_configs_api.router,
     placement_api.router,
     quick_links_api.router,
+    inventory_api.router,
     segments_api.router,
     upgrades_api.router,
     approvals_api.router,
@@ -165,6 +167,8 @@ class Adapters:
     provision: ProvisionWorkflow | None = None
     """The provision-cluster workflow; ``None`` unless ``DAY1_PROVISIONER=workflow`` (ADR-0042)."""
     day2_installs: Day2Installs | None = None
+    add_server: AddServerWorkflow | None = None
+    """The add-server-to-mce workflow wherever the orchestrator is (ADR-0057)."""
     """Day2 opening a rollout's add-on MRs (ADR-0044); ``None``: listed for a person instead."""
     upgrade: UpgradeWorkflow | None = None
     """The upgrade-cluster workflow; ``None`` unless ``DAY1_UPGRADES`` (ADR-0055)."""
@@ -260,18 +264,12 @@ def build_adapters(
             settings, metrics=metrics, clock=clock, closers=closers
         ),
         upgrade=platform.upgrade_workflow(settings, metrics=metrics, clock=clock, closers=closers),
+        add_server=add_server_workflow(
+            settings, inventory=inventory, metrics=metrics, clock=clock, closers=closers
+        ),
         day2_installs=day2_installs,
         closers=tuple(closers),
     )
-
-
-def _links_file(settings: Day1Settings) -> FileLinksSource:
-    """The links file; with the fake fleet and no file there, the demo's (ADR-0052)."""
-    if settings.day1_fake_fleet and not settings.quick_links_file.exists():
-        from wingman_day1.infrastructure.fake_quick_links import default_demo_links_file
-
-        return FileLinksSource(default_demo_links_file())
-    return FileLinksSource(settings.quick_links_file)
 
 
 def build_context(
@@ -319,7 +317,7 @@ def build_context(
     day1_writer = MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
     provisioner = GitClusterProvisioner(day1_writer)
     rollout_writer = GitRolloutMergeRequests(gitlab, day1, day1_writer)
-    # server-scan's fleet rows, one cache for the nodes view and placement (ADR-0038)
+    # server-scan's fleet rows, one cache for the nodes view, placement and Inventory
     inventory = (
         CachedServerInventory(adapters.inventory, cache, ttl=ttl)
         if adapters.inventory is not None
@@ -409,19 +407,7 @@ def build_context(
         clock=clock,
     )
     fake_ui = FAKE_SEGMENTS_MANAGER_UI if settings.day1_fake_fleet else ""
-    quick_links = QuickLinksService(
-        site_catalog,
-        generated=GeneratedLinks(
-            hub=settings.quick_links_hub_name or None,
-            hub_domain=settings.quick_links_hub_base_domain,
-            domain=settings.quick_links_mce_domain,
-            templates=UrlTemplates(
-                argocd=settings.quick_links_argocd_url_template,
-                console=settings.quick_links_console_url_template,
-            ),
-        ),
-        links=_links_file(settings),
-    )
+    quick_links = quick_links_service(settings, site_catalog)
     dev_secret = settings.dev_auth_secret.get_secret_value() if settings.dev_auth_enabled else None
     return Day1Context(
         clusters=cluster_service,
@@ -463,6 +449,14 @@ def build_context(
         quick_links=quick_links,
         segments=segments_service(adapters.ledger, cache, cluster_service, ttl=ttl),
         upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service),
+        inventory=inventory_service(
+            settings,
+            site_catalog,
+            inventory=inventory,
+            infra_envs=infra_env_hub,
+            workflows=adapters.add_server,
+            cache=cache,
+        ),
     )
 
 

@@ -189,6 +189,14 @@ class AmbiguousDecisionError(WorkflowsError):
     """A decision was sent but its outcome is unknown: it may have landed. Never retried."""
 
 
+class AddServerAlreadyRunningError(WorkflowsError):
+    """The orchestrator's 409 to adding servers: a named one installing, or every slot busy."""
+
+
+class AddServerRefusedError(InvalidInputError):
+    """The orchestrator refused a request to add servers (its 422); nothing started (ADR-0057)."""
+
+
 # ── segments-manager (a cluster's EPG, checked against Git; ADR-0039) ────────
 
 

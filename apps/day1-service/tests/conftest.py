@@ -35,6 +35,7 @@ from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
 from wingman_day1.main import Adapters, create_app
 from wingman_day1.ports import (
+    AddServerWorkflow,
     HubApi,
     ProvisionWorkflow,
     SegmentLedger,
@@ -221,6 +222,7 @@ def build_app(
     ledger: SegmentLedger | None = None,
     provision: ProvisionWorkflow | None = None,
     upgrade: UpgradeWorkflow | None = None,
+    add_server: AddServerWorkflow | None = None,
     **settings: object,
 ) -> FastAPI:
     return create_app(
@@ -238,6 +240,7 @@ def build_app(
             provision=provision,
             upgrade=upgrade,
             day2_installs=day2,
+            add_server=add_server,
         ),
         clock=clock,
     )

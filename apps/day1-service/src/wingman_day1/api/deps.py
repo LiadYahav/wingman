@@ -19,6 +19,7 @@ from wingman_day1.application.auth import AuthService
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.drift import DriftService
 from wingman_day1.application.imports import ImportService
+from wingman_day1.application.inventory import InventoryService
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.network import NetworkService
 from wingman_day1.application.nodes import NodeService
@@ -74,6 +75,8 @@ class Day1Context:
     """The Segments area (ADR-0047); ``None`` when ``SEGMENTS_MANAGER_URL`` is empty: 501."""
     upgrades: UpgradeService | None = None
     """``None`` when ``DAY1_UPGRADES`` is off: the upgrade routes answer 501 (ADR-0055)."""
+    inventory: InventoryService | None = None
+    """Inventory Management (ADR-0057); ``None`` when ``SERVER_SCAN_URL`` is empty: 501."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -160,8 +163,24 @@ def upgrade_service(context: Annotated[Day1Context, Depends(day1_context)]) -> U
     return context.upgrades
 
 
+INVENTORY_NOT_AVAILABLE = (
+    "Inventory Management is not set up in this deployment: it counts server-scan's servers, "
+    "and SERVER_SCAN_URL is empty."
+)
+
+
+def inventory_service(
+    context: Annotated[Day1Context, Depends(day1_context)],
+) -> InventoryService:
+    """Inventory Management's use case, or 501 when server-scan is not configured (ADR-0057)."""
+    if context.inventory is None:
+        raise FeatureDisabled(INVENTORY_NOT_AVAILABLE)
+    return context.inventory
+
+
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
+Inventory = Annotated[InventoryService, Depends(inventory_service)]
 Nodes = Annotated[NodeService, Depends(node_service)]
 Placements = Annotated[PlacementService, Depends(placement_service)]
 QuickLinks = Annotated[QuickLinksService, Depends(quick_links_service)]

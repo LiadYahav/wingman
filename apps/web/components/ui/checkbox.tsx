@@ -9,14 +9,17 @@ interface CheckboxProps {
   onCheckedChange: (checked: boolean) => void;
   className?: string;
   disabled?: boolean;
+  /** Its name, when no visible label names it. */
+  "aria-label"?: string;
 }
 
-export function Checkbox({ checked, onCheckedChange, className, disabled }: CheckboxProps) {
+export function Checkbox({ checked, onCheckedChange, className, disabled, "aria-label": label }: CheckboxProps) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={checked}
+      aria-label={label}
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();

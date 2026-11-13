@@ -144,7 +144,13 @@ async def test_without_a_token_no_authorization_header_is_sent() -> None:
 async def test_maintenance_a_held_reservation_and_a_contested_claim_are_read() -> None:
     busy = copy.deepcopy(ROW)
     busy["maintenance"]["enabled"] = True
-    busy["reservation"].update(held=True, holder="uninstall-server-from-hc")
+    busy["reservation"].update(
+        held=True,
+        holder="uninstall-server-from-hc",
+        mce_cluster="ocp4-prod-mce-site1-a",
+        infra_env="cisco-m6-bat-yam-128c-128gb",
+        expires_at="2026-11-13T18:00:00Z",
+    )
     busy["contested_with"] = "hc-bat-yam-02"
     busy["stale"], busy["reachable"] = True, False
     expired = copy.deepcopy(ROW)
@@ -158,7 +164,13 @@ async def test_maintenance_a_held_reservation_and_a_contested_claim_are_read() -
         True,
     )
     assert (first.stale, first.reachable) == (True, False)
+    assert (first.reserved_for_mce, first.reserved_for_infra_env) == (
+        "ocp4-prod-mce-site1-a",
+        "cisco-m6-bat-yam-128c-128gb",
+    )
+    assert first.reserved_until is not None and first.reserved_until.hour == 18
     assert second.reserved_by is None, "an expired lock is not held"
+    assert (second.reserved_for_mce, second.reserved_until) == (None, None)
     assert (third.maintenance, third.serial, third.last_seen_at) == (False, None, None)
 
 

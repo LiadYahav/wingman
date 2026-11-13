@@ -31,7 +31,9 @@ export type ErrorCode =
   /** 409: the upgrade run was not waiting for that decision; the detail is the run's own words. */
   | "UPGRADE_DECISION_REFUSED"
   /** 409: the upgrade workflow cannot use the cluster file or its rules for targets. */
-  | "UPGRADE_TARGETS_REFUSED";
+  | "UPGRADE_TARGETS_REFUSED"
+  /** 409: a named server is already being added, or every slot of the pool is busy (ADR-0057). */
+  | "ADD_SERVER_ALREADY_RUNNING";
 
 /** One entry of FastAPI's own request validation (`details.errors`). */
 export interface RequestFieldError {

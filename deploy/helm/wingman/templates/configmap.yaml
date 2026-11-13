@@ -42,6 +42,12 @@ data:
   {{- fail "day1.upgrades.enabled needs workflows.url: upgrades start the upgrade-cluster workflow there" }}
   {{- end }}
   DAY1_UPGRADES: {{ if .Values.day1.upgrades }}{{ .Values.day1.upgrades.enabled | default false | quote }}{{ else }}"false"{{ end }}
+  # Inventory Management (ADR-0057): adding servers starts add-server-to-mce
+  # (needs workflows.url). Off for values kept from a release before it.
+  {{- if and .Values.day1.addServers .Values.day1.addServers.enabled (not (and .Values.workflows .Values.workflows.url)) }}
+  {{- fail "day1.addServers.enabled needs workflows.url: adding servers starts the add-server-to-mce workflow there" }}
+  {{- end }}
+  DAY1_ADD_SERVERS: {{ if and .Values.day1.addServers .Values.day1.addServers.enabled }}"true"{{ else }}"false"{{ end }}
   DAY2_SERVICE_URL: "http://wingman-day2:8002"
 
   # ── day2 ─────────────────────────────────────────────────────────────────────

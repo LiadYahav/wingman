@@ -64,6 +64,7 @@ class ErrorCode(StrEnum):
     UPGRADE_ALREADY_RUNNING = "UPGRADE_ALREADY_RUNNING"
     UPGRADE_DECISION_REFUSED = "UPGRADE_DECISION_REFUSED"
     UPGRADE_TARGETS_REFUSED = "UPGRADE_TARGETS_REFUSED"
+    ADD_SERVER_ALREADY_RUNNING = "ADD_SERVER_ALREADY_RUNNING"
 
     @property
     def slug(self) -> str:
@@ -227,6 +228,13 @@ class UpgradeTargetsRefused(AppError):
 
     status = 409
     code = ErrorCode.UPGRADE_TARGETS_REFUSED
+
+
+class AddServerAlreadyRunning(AppError):
+    """The orchestrator already adds that named server, or every slot of the pool is busy."""
+
+    status = 409
+    code = ErrorCode.ADD_SERVER_ALREADY_RUNNING
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (

@@ -16,6 +16,8 @@ from enum import StrEnum
 
 from wingman_core.observability.metrics import Dependency, Outcome, WingmanMetrics
 from wingman_day1.domain.errors import (
+    AddServerAlreadyRunningError,
+    AddServerRefusedError,
     AmbiguousDecisionError,
     AmbiguousStartError,
     Day2UnavailableError,
@@ -106,6 +108,8 @@ class WorkflowsOperation(StrEnum):
     START_UPGRADE = "start_upgrade"
     DECIDE_UPGRADE = "decide_upgrade"
     """Every decision on an upgrade run, and on its agent's proposals (no decision label)."""
+    START_ADD_SERVER = "start_add_server"
+    """Adding servers to an MCE's InfraEnv pool (ADR-0057), by count or by name."""
 
 
 _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
@@ -127,6 +131,8 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (UpgradeRefusedError, Outcome.REJECTED),
     (UpgradeTargetsRefusedError, Outcome.REJECTED),
     (ResourceNotFoundError, Outcome.NOT_FOUND),
+    (AddServerAlreadyRunningError, Outcome.CONFLICT),
+    (AddServerRefusedError, Outcome.REJECTED),
     (AmbiguousStartError, Outcome.AMBIGUOUS),
     (AmbiguousDecisionError, Outcome.AMBIGUOUS),
     (WorkflowRefusedError, Outcome.REJECTED),
