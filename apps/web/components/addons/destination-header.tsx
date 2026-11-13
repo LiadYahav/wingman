@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpCircle, CheckCircle2, Info } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { KIND_LABEL, chartsHref, day2Api, day2Keys } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IntentLink } from "@/components/common/intent-link";
 import { ProblemList } from "@/components/common/problem-list";
 import { FindingsList } from "@/components/addons/findings";
 import type { Destination, DestinationCharts, DestinationKind, UpgradeCheck } from "@/types/day2";
@@ -37,9 +37,9 @@ export function KindBadge({ kind, className }: { kind: DestinationKind | string;
 /** A destination's name where a list names it: the link to its charts page. */
 export function DestinationLink({ id, name, className }: { id: string; name: string; className?: string }) {
   return (
-    <Link href={chartsHref(id)} className={cn("font-semibold transition-colors hover:text-primary hover:underline", className)}>
+    <IntentLink href={chartsHref(id)} className={cn("font-semibold transition-colors hover:text-primary hover:underline", className)}>
       {name}
-    </Link>
+    </IntentLink>
   );
 }
 

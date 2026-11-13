@@ -83,6 +83,29 @@ test.describe("Navigation", () => {
     await expect(page.getByTestId("new-addon-form")).toBeVisible();
   });
 
+  test("the Addons page prefetches no add-on page as it loads, and its links still navigate on the client", async ({ page }) => {
+    await go(page, "/");
+    const prefetched: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (url.searchParams.has("_rsc") && url.pathname.startsWith("/addons/")) prefetched.push(url.pathname + url.search);
+    });
+    await page.goto("/addons");
+    const team = page.getByTestId("team-platform");
+    const manage = team.getByRole("link", { name: "Manage the defaults of external-secrets" });
+    await expect(team.getByRole("link", { name: "New add-on in platform" })).toBeVisible();
+    await expect(manage).toBeVisible();
+    // Next.js prefetches a bare <Link> as soon as it is on screen; give it the time it would take.
+    await page.waitForTimeout(1_000);
+    expect(prefetched).toEqual([]);
+
+    await page.evaluate(() => Object.assign(window, { stayedOnPage: true }));
+    await manage.click();
+    await expect(page).toHaveURL(/\/addons\/platform\/external-secrets$/);
+    await expect(page.getByRole("heading", { level: 1, name: "external-secrets" })).toBeVisible();
+    expect(await page.evaluate(() => "stayedOnPage" in window)).toBe(true); // no full page load
+  });
+
   test("an unknown add-on says so", async ({ page }) => {
     await go(page, "/addons/platform/nope");
     await expect(page.getByTestId("addon-not-found")).toContainText("platform has no add-on nope");

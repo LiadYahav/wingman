@@ -17,6 +17,7 @@ import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
 import { FleetDefaultsList } from "@/components/addons/fleet-defaults";
+import { IntentLink } from "@/components/common/intent-link";
 import { ChangeResultPanel, type OpenedChanges } from "@/components/addons/change-result";
 import { EditAddonDialog } from "@/components/addons/default-dialogs";
 import { useAddonAccess } from "@/components/addons/page-header";
@@ -40,10 +41,10 @@ interface TeamWrites {
 /** An add-on's page: its fleet defaults, which destinations they reach and each one's overrides (ADR-0053). */
 function DefaultsLink({ team, name, className }: { team: string; name: string; className?: string }) {
   return (
-    <Link href={addonHref(team, name)} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5", className)}>
+    <IntentLink href={addonHref(team, name)} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5", className)}>
       Defaults &amp; overrides
       <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-    </Link>
+    </IntentLink>
   );
 }
 
@@ -56,10 +57,10 @@ function NewAddonButton({ team, writes }: { team: string; writes: TeamWrites }) 
       New add-on
     </button>
   ) : (
-    <Link href={newAddonHref(team)} className={className} aria-label={`New add-on in ${team}`}>
+    <IntentLink href={newAddonHref(team)} className={className} aria-label={`New add-on in ${team}`}>
       <Plus className="h-3.5 w-3.5" aria-hidden />
       New add-on
-    </Link>
+    </IntentLink>
   );
 }
 
