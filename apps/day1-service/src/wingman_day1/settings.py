@@ -140,21 +140,14 @@ class Day1Settings(BaseSettings):
     # day1 repo, at the URL templates in their domain (QUICK_LINKS_DOMAIN, else
     # MCE_API_DOMAIN; the hub's: QUICK_LINKS_HUB_DOMAIN, else that). The team's
     # links, and the addresses of a cluster that does not follow the templates,
-    # are the links file (a ConfigMap; re-read on every page load). day1 checks
-    # each link (no credential sent) and caches the answer; an ArgoCD with a
-    # read-only token in the tokens file also shows its applications' counts.
+    # are the links file (a ConfigMap; re-read on every page load). Wingman
+    # only lists the links: it never calls them.
     quick_links_file: Path = Path("/etc/wingman/quick-links/links.yaml")
     quick_links_hub_name: str = ""
     quick_links_hub_domain: str = ""
     quick_links_domain: str = ""
     quick_links_argocd_url_template: str = DEFAULT_ARGOCD_TEMPLATE
     quick_links_console_url_template: str = DEFAULT_CONSOLE_TEMPLATE
-    quick_links_status_enabled: bool = True
-    quick_links_status_ttl_seconds: float = Field(default=60.0, ge=10, le=600)
-    quick_links_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
-    quick_links_concurrency: int = Field(default=8, ge=1, le=64)
-    quick_links_ssl_verify: str = "true"
-    quick_links_argocd_tokens_file: Path = Path("/etc/wingman/argocd-tokens/tokens")
 
     @field_validator("specs_root_path")
     @classmethod
@@ -297,11 +290,6 @@ class Day1Settings(BaseSettings):
     def segments_manager_ui_base(self) -> str:
         """Where the cluster page's links point: ``SEGMENTS_MANAGER_UI_URL``, else the API's URL."""
         return self.segments_manager_ui_url or self.segments_manager_url
-
-    @property
-    def quick_links_tls_verify(self) -> bool | str:
-        """``QUICK_LINKS_SSL_VERIFY`` parsed."""
-        return tls_verify(self.quick_links_ssl_verify)
 
     @property
     def quick_links_mce_domain(self) -> str:

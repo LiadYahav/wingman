@@ -31,7 +31,6 @@ from wingman_day1.domain.machines import (
 from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
-from wingman_day1.domain.quick_links import ArgoCdReading, LinkReading
 from wingman_day1.domain.rollout import RolloutOutcome, RolloutTrigger
 from wingman_day1.domain.servers import RunSummary, ServerDetail, ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
@@ -359,26 +358,6 @@ class ProvisionWorkflow(Protocol):
 
     async def run(self, workflow_id: str) -> ProvisionRun | None:
         """One run's status, phase, merge request and error; ``None`` when there is none."""
-        ...
-
-
-class LinkProbe(Protocol):
-    """Checks whether something answers at a URL, for Quick Links' status dots (ADR-0052)."""
-
-    async def check(self, url: str) -> LinkReading:
-        """What asking ``url`` found; never raises (a failure is a down or unknown reading)."""
-        ...
-
-
-class ArgoCdApi(Protocol):
-    """ArgoCD instances' application lists, with a read-only token each (ADR-0052)."""
-
-    def has_token(self, instance: str) -> bool:
-        """Whether a token for ``instance`` is configured; without one it is never called."""
-        ...
-
-    async def application_counts(self, instance: str, url: str) -> ArgoCdReading:
-        """The applications at ``url`` (the ArgoCD's base URL), counted. Never raises."""
         ...
 
 

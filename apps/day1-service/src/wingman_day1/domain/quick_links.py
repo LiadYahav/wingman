@@ -1,4 +1,4 @@
-"""Quick Links: the launcher's sections and cards, and what a check found (ADR-0052).
+"""Quick Links: the launcher's sections and cards (ADR-0052).
 
 Wingman generates a card for the hub it runs on and one for every MCE of the
 day1 repo, by site: each opens the cluster's ArgoCD
@@ -9,19 +9,16 @@ links file's ``clusters`` map. The team's other links are the links file's
 ``sections`` (:func:`parse_links_file`), in the style of the team's homepage
 dashboard.
 
-Pure: the file's text comes in, the cards go out; checking a URL and reading
-an ArgoCD are the ports' (:class:`LinkReading`, :class:`ArgoCdReading` are
-what they answer). A bad link or section is skipped and reported, never
-fatal: a launcher with one typo still launches.
+Pure: the file's text comes in, the cards go out. A bad link or section is
+skipped and reported, never fatal: a launcher with one typo still launches.
 """
 
 from __future__ import annotations
 
 import re
 import string
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
-from datetime import datetime
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
 from urllib.parse import urlsplit
@@ -48,116 +45,12 @@ DEFAULT_CONSOLE_TEMPLATE: Final = "https://console-openshift-console.apps.{clust
 PLACEHOLDERS: Final = frozenset({"cluster", "domain"})
 
 _ICON_KEY: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
-_INSTANCE_KEY: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$")
-"""An ArgoCD instance: a key of the tokens Secret (a cluster name for the generated cards)."""
 _SLUG_JUNK: Final = re.compile(r"[^a-z0-9]+")
 
 _SECTION_KEYS: Final = frozenset({"name", "description", "columns", "links"})
-_LINK_KEYS: Final = frozenset({"name", "url", "description", "icon", "ping", "argocd"})
+_LINK_KEYS: Final = frozenset({"name", "url", "description", "icon"})
 _FILE_KEYS: Final = frozenset({"sections", "clusters"})
 _CLUSTER_KEYS: Final = frozenset({"argocd", "console"})
-
-
-# ── What a check and an ArgoCD read answer ────────────────────────────────────
-
-
-class LinkState(StrEnum):
-    """A link's status dot."""
-
-    UP = "up"
-    """It answered 2xx, 3xx, 401 or 403: something is serving there."""
-    DOWN = "down"
-    """Any other answer, no answer in time, or no connection."""
-    UNKNOWN = "unknown"
-    """It could not be told: TLS could not be verified, or the URL cannot be asked."""
-
-
-UP_STATUSES: Final = frozenset({401, 403})
-"""Answers that are "up" outside 2xx and 3xx: a login in front of a running service."""
-
-
-def state_of(http_status: int) -> LinkState:
-    """Up for 2xx, 3xx (redirects are not followed), 401 and 403; down for anything else."""
-    if 200 <= http_status < 400 or http_status in UP_STATUSES:
-        return LinkState.UP
-    return LinkState.DOWN
-
-
-@dataclass(frozen=True, slots=True)
-class LinkReading:
-    """What checking one URL found."""
-
-    url: str
-    state: LinkState
-    reason: str
-    """Short and lower-case: ``answered 200``, ``no answer within 3 s``."""
-    checked_at: datetime
-    http_status: int | None = None
-    latency_ms: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class SyncCounts:
-    """Applications by ``status.sync.status``."""
-
-    synced: int = 0
-    out_of_sync: int = 0
-    unknown: int = 0
-
-
-@dataclass(frozen=True, slots=True)
-class HealthCounts:
-    """Applications by ``status.health.status``."""
-
-    healthy: int = 0
-    progressing: int = 0
-    degraded: int = 0
-    missing: int = 0
-    suspended: int = 0
-    unknown: int = 0
-
-
-@dataclass(frozen=True, slots=True)
-class AppCounts:
-    """An ArgoCD's applications, counted."""
-
-    applications: int
-    sync: SyncCounts
-    health: HealthCounts
-
-
-_SYNC_FIELDS: Final = {"Synced": "synced", "OutOfSync": "out_of_sync"}
-_HEALTH_FIELDS: Final = {
-    "Healthy": "healthy",
-    "Progressing": "progressing",
-    "Degraded": "degraded",
-    "Missing": "missing",
-    "Suspended": "suspended",
-}
-
-
-def count_applications(statuses: Iterable[tuple[str | None, str | None]]) -> AppCounts:
-    """Count ``(sync status, health status)`` pairs; anything else is ``unknown``."""
-    sync = dict.fromkeys(("synced", "out_of_sync", "unknown"), 0)
-    health = dict.fromkeys(
-        ("healthy", "progressing", "degraded", "missing", "suspended", "unknown"), 0
-    )
-    total = 0
-    for sync_status, health_status in statuses:
-        total += 1
-        sync[_SYNC_FIELDS.get(sync_status or "", "unknown")] += 1
-        health[_HEALTH_FIELDS.get(health_status or "", "unknown")] += 1
-    return AppCounts(total, SyncCounts(**sync), HealthCounts(**health))
-
-
-@dataclass(frozen=True, slots=True)
-class ArgoCdReading:
-    """What reading one ArgoCD's applications found: the counts, or why not."""
-
-    instance: str
-    checked_at: datetime
-    counts: AppCounts | None = None
-    error: str | None = None
 
 
 # ── The cards ─────────────────────────────────────────────────────────────────
@@ -165,18 +58,9 @@ class ArgoCdReading:
 
 @dataclass(frozen=True, slots=True)
 class CardLink:
-    """One link of a card; ``ping`` is the URL whose answer is its dot (``None``: no dot)."""
+    """One link of a card: a generated card's are labelled, a file card's one is not."""
 
     label: str | None
-    url: str
-    ping: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class ArgoCdTarget:
-    """An ArgoCD whose applications a card counts: the token's key and the API's base URL."""
-
-    instance: str
     url: str
 
 
@@ -189,8 +73,6 @@ class Card:
     description: str | None
     icon: str
     links: tuple[CardLink, ...]
-    argocd: ArgoCdTarget | None = None
-    """Set only for an ArgoCD that has a token (the service drops it otherwise)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,17 +85,6 @@ class Section:
     columns: int
     generated: bool
     cards: tuple[Card, ...]
-
-
-def without_pings(section: Section) -> Section:
-    """The section with every dot off (status checks are off)."""
-    return replace(
-        section,
-        cards=tuple(
-            replace(card, links=tuple(replace(link, ping=None) for link in card.links))
-            for card in section.cards
-        ),
-    )
 
 
 def slug(text: str) -> str:
@@ -316,7 +187,7 @@ def _cluster_links(
             else None
         )
         if url is not None:
-            links.append(CardLink(label, url, url))
+            links.append(CardLink(label, url))
     return tuple(links)
 
 
@@ -326,14 +197,13 @@ def _cluster_card(
     description: str | None,
     links: tuple[CardLink, ...],
 ) -> Card:
-    argocd = next((link for link in links if link.label == ARGOCD_LABEL), None)
+    has_argocd = any(link.label == ARGOCD_LABEL for link in links)
     return Card(
         id=card_id,
         name=name,
         description=description,
-        icon=ARGOCD_ICON if argocd else "openshift",
+        icon=ARGOCD_ICON if has_argocd else "openshift",
         links=links,
-        argocd=ArgoCdTarget(name, argocd.url) if argocd else None,
     )
 
 
@@ -603,33 +473,13 @@ def _card(
     if not isinstance(icon, str) or not _ICON_KEY.match(icon):
         problems.add(where, f"icon must be a key such as 'gitlab' (using {DEFAULT_ICON!r})")
         icon = DEFAULT_ICON
-    argocd: ArgoCdTarget | None = None
-    instance = raw.get("argocd")
-    if instance is not None:
-        if isinstance(instance, str) and _INSTANCE_KEY.match(instance):
-            argocd = ArgoCdTarget(instance, url)
-        else:
-            problems.add(where, "argocd must name a key of the ArgoCD tokens (ignored)")
     return Card(
         id=f"file:{section_slug}:{slug(name) or f'link-{index}'}",
         name=name,
         description=_description(raw.get("description"), where, problems),
         icon=icon,
-        links=(CardLink(None, url, _ping(raw.get("ping", True), url, where, problems)),),
-        argocd=argocd,
+        links=(CardLink(None, url),),
     )
-
-
-def _ping(raw: object, url: str, where: str, problems: _Problems) -> str | None:
-    """``ping``: a URL to check, ``true`` (the link's own), or ``false`` (no dot)."""
-    if raw is True:
-        return url
-    if raw is False:
-        return None
-    if isinstance(raw, str) and is_http_url(raw.strip()):
-        return raw.strip()
-    problems.add(where, "ping must be an http(s) URL, true or false (checking the url)")
-    return url
 
 
 def _clusters(raw: object, problems: _Problems) -> dict[str, ClusterOverride]:
@@ -667,32 +517,9 @@ def _clusters(raw: object, problems: _Problems) -> dict[str, ClusterOverride]:
 
 @dataclass(frozen=True, slots=True)
 class Board:
-    """Everything the page shows before the status checks answer."""
+    """Everything the page shows."""
 
     sections: tuple[Section, ...]
     problems: tuple[str, ...]
     links_file: LinksFile
     links_path: str
-
-    def pings(self) -> list[str]:
-        """Every distinct URL a dot needs, sorted."""
-        return sorted(
-            {link.ping for s in self.sections for c in s.cards for link in c.links if link.ping}
-        )
-
-    def argocd_targets(self) -> list[ArgoCdTarget]:
-        """Every ArgoCD a card counts, once per instance (the first card's URL wins)."""
-        seen: dict[str, ArgoCdTarget] = {}
-        for section in self.sections:
-            for card in section.cards:
-                if card.argocd is not None:
-                    seen.setdefault(card.argocd.instance, card.argocd)
-        return [seen[instance] for instance in sorted(seen)]
-
-
-@dataclass(frozen=True, slots=True)
-class StatusBoard:
-    """The dots and the ArgoCD counts."""
-
-    checks: tuple[LinkReading, ...]
-    argocd: tuple[ArgoCdReading, ...]

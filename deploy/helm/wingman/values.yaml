@@ -282,29 +282,17 @@ segmentsManager:
 # ── Quick Links: the launcher page (ADR-0052; admins only) ────────────────────
 # A card for the hub Wingman runs on and one for every MCE of the day1 repo, by
 # site: each opens the cluster's ArgoCD, with its console beside it. Then the
-# team's own links (`sections`). day1 checks every link (no credential sent)
-# and caches the answer; an ArgoCD with a read-only token also shows its
-# applications' sync and health counts. `sections` and `clusters` are rendered
-# into the ConfigMap wingman-quick-links, which day1 re-reads on every page
-# load: an edit shows within about a minute, without a restart.
+# team's own links (`sections`). Wingman only lists the links: it never calls
+# them (no status dots or ArgoCD counts since 3.13.1). `sections` and
+# `clusters` are rendered into the ConfigMap wingman-quick-links, which day1
+# re-reads on every page load: an edit shows within about a minute, without a
+# restart.
 quickLinks:
   hubName: ""             # the hub's cluster name, as in apps.<hubName>.<domain>; empty: no hub card
   hubDomain: ""           # the hub's domain; empty: `domain`
   domain: ""              # the MCEs' domain; empty: clusterStatus.mceDomain
   argocdUrlTemplate: "https://openshift-gitops-server-openshift-gitops.apps.{cluster}.{domain}"
   consoleUrlTemplate: "https://console-openshift-console.apps.{cluster}.{domain}"
-  status:
-    enabled: true         # false: no status dots, and day1 calls none of the links
-    ttlSeconds: 60        # how long a check is kept (10 to 600); answered for as long again while it refreshes
-    timeoutSeconds: 3     # per check and per ArgoCD read, at most 30
-    concurrency: 8        # checks at once, 1 to 64
-  sslVerify: "true"       # "true", "false" or a CA bundle path (an internal CA: tls.caBundle)
-  # An existing Secret whose key `tokens` is a YAML map of ArgoCD instance to a
-  # read-only token: an instance is a cluster's name (the hub, an MCE) or the
-  # `argocd:` key of a card below. Empty: no counts. Never put tokens in values:
-  #   oc create secret generic wingman-argocd-tokens -n <ns> --from-file=tokens=tokens.yaml
-  # day1 reads it at start: restart day1 after rotating it.
-  argocdTokensSecret: ""
   # A cluster whose addresses don't follow the templates:
   #   clusters:
   #     hub-prod:
@@ -320,11 +308,9 @@ quickLinks:
   #           url: https://gitlab.example.internal/platform/gitops
   #           description: Main GitOps repository
   #           icon: gitlab              # a key: argocd, gitlab, openshift, grafana, confluence, cisco, dell, ...
-  #           ping: https://gitlab.example.internal   # the URL to check; false: no dot
   #         - name: ArgoCD Main
   #           url: https://argocd.example.internal
   #           icon: argocd
-  #           argocd: main              # its token's key in argocdTokensSecret: the card shows the counts
   sections: []
 
 # ── Namespace ──────────────────────────────────────────────────────────────────

@@ -48,10 +48,6 @@ class Dependency(StrEnum):
     SERVER_SCAN = "server_scan"
     WORKFLOWS = "workflows"
     SEGMENTS_MANAGER = "segments_manager"
-    LINK_CHECK = "link_check"
-    """Quick Links' status checks: any URL on the page, never a label (ADR-0052)."""
-    ARGOCD = "argocd"
-    """An ArgoCD's applications, for Quick Links' counts (ADR-0052)."""
 
 
 class PlacementDecision(StrEnum):
