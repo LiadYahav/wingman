@@ -9,22 +9,13 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProblemList } from "@/components/common/problem-list";
 import { cn } from "@/lib/utils";
+import { useDebounced } from "@/hooks/use-debounced";
 import type { ClusterPreview, ClusterSpec, Mce, OpenShiftVersions, TemplateField } from "@/types";
 import { inputCls } from "./controls";
 import { pathLabel, previewPlan, previewRelease, sampleClusterName, type FlavorDraft, type ValueLine } from "./model";
 
 const codeCls =
   "max-h-[32rem] overflow-auto rounded-lg border bg-muted/40 p-4 font-mono text-xs leading-5 text-foreground/90 dark:bg-black/30";
-
-/** `value` once it has stopped changing for `ms`. */
-function useSettled<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return settled;
-}
 
 /** Whether `ref`'s element has been on screen (once seen, it stays true). */
 function useSeen(ref: React.RefObject<HTMLElement | null>): boolean {
@@ -119,7 +110,7 @@ function ClusterFilePreview({
     saved && schema && mce && version && clusterName
       ? previewPlan({ draft, saved, schema, mce, openshiftVersion: version, clusterName })
       : null;
-  const body = useSettled(plan ? JSON.stringify(plan.request) : "", 600);
+  const body = useDebounced(plan ? JSON.stringify(plan.request) : "", 600);
   const preview = useQuery<ClusterPreview>({
     queryKey: day1Keys.flavorClusterPreview(body),
     queryFn: () => day1Api.clusters.preview(JSON.parse(body)),

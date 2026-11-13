@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Edit2, Server, CheckCircle2, ExternalLink, GitCommitHorizontal, Import, RotateCcw } from "lucide-react";
+import { ArrowLeft, Trash2, Edit2, Server, CheckCircle2, ExternalLink, GitCommitHorizontal, Import } from "lucide-react";
 import { toast } from "sonner";
 import { isApiError, errorMessages } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
@@ -12,9 +12,10 @@ import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, plural } from "@/lib/utils";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { StaleAlert } from "@/components/common/stale-alert";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { FlavorStateBadge, FlavorStateLegend } from "@/components/clusters/drift-badge";
 import { FlavorInputsCard, WarningPanel } from "@/components/specs/flavor-inputs";
@@ -39,8 +40,6 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 /** A 409 REVISION_CONFLICT: the flavor's file moved since this page read it. */
 const STALE_SPEC =
   "The flavor changed since you opened it, so the delete was refused and nothing was changed. Reload to see the current flavor, then delete it again if you still want to.";
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** The header's Delete: refused while clusters follow the flavor, with the reason on hover and for screen readers. */
 function DeleteButton({ blocked, pending, onClick }: { blocked: string | null; pending: boolean; onClick: () => void }) {
@@ -152,12 +151,13 @@ export default function SpecDetailPage() {
   };
 
   const followers = clusters?.length ?? 0;
+  const follow = `${plural(followers, "cluster")} follow${followers === 1 ? "s" : ""}`;
   // A flavor in use is not deleted: its clusters would follow a flavor that is gone. When the
   // check fails, the review says it could not be made.
   const deleteBlocked = clustersLoading
     ? "Checking which clusters follow this flavor…"
     : followers > 0
-      ? `${plural(followers, "cluster")} follow${followers === 1 ? "s" : ""} this flavor, so it can't be deleted. ` +
+      ? `${follow} this flavor, so it can't be deleted. ` +
         "Move them to another flavor (Add existing clusters on that flavor's page) or delete them first."
       : null;
 
@@ -225,14 +225,7 @@ export default function SpecDetailPage() {
         )}
       </div>
 
-      {deleteConflict && (
-        <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm">
-          <p className="text-status-warning-fg">{STALE_SPEC}</p>
-          <button onClick={reloadAfterConflict} className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload
-          </button>
-        </div>
-      )}
+      {deleteConflict && <StaleAlert message={STALE_SPEC} onReload={reloadAfterConflict} />}
 
       {specError && (
         <ProblemList
@@ -308,7 +301,7 @@ export default function SpecDetailPage() {
                         className="hover:text-primary transition-colors"
                         data-testid="flavor-followers"
                       >
-                        {followers === 0 ? "None follow it yet" : `${plural(followers, "cluster")} follow${followers === 1 ? "s" : ""} it`}
+                        {followers === 0 ? "None follow it yet" : `${follow} it`}
                       </button>
                     )
                   }

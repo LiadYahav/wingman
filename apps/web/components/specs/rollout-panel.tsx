@@ -15,7 +15,7 @@ import { day1Api, day1Keys } from "@/lib/api/day1";
 import { approvalHref } from "@/lib/approvals";
 import { clusterHref } from "@/lib/clusters";
 import { ROLLOUT_LABEL, ROLLOUT_ORDER, useRollout } from "@/lib/rollout";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime, plural } from "@/lib/utils";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { RolloutCluster, RolloutRun, RolloutState } from "@/types";
@@ -56,8 +56,6 @@ const TRIGGER: Record<RolloutRun["trigger"], string> = {
   reconcile: "on Reconcile now",
   read: "when the rollout was read with work pending",
 };
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 function Count({ state, count }: { state: RolloutState; count: number }) {
   const { Icon, className } = LOOK[state];

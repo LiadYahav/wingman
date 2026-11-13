@@ -8,10 +8,8 @@ import { ProblemList } from "@/components/common/problem-list";
 import { rollText } from "@/components/clusters/sync-dialog";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { clusterHref } from "@/lib/clusters";
-import { cn } from "@/lib/utils";
+import { cn, plural } from "@/lib/utils";
 import type { ApprovalRollout, RolloutClusterRef } from "@/types";
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** "Merging opens 12 cluster merge requests". */
 export function opensText(r: ApprovalRollout): string {

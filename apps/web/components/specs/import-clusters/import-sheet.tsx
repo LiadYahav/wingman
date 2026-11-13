@@ -68,7 +68,6 @@ function Steps({ step }: { step: Step }) {
 }
 
 /** The flow inside the sheet; it mounts when the sheet opens, so each opening starts fresh. */
-// eslint-disable-next-line complexity -- size baseline (ADR-0056)
 function ImportFlow({ flavor }: { flavor: string }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>("pick");
@@ -162,7 +161,7 @@ function ImportFlow({ flavor }: { flavor: string }) {
       </div>
 
       {/* What the import did, next to the actions */}
-      {step === "review" && (stale || (importer.error && !stale)) && (
+      {step === "review" && importer.error && (
         <div className="border-t px-5 py-3">
           {stale ? (
             <div
