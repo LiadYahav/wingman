@@ -424,7 +424,7 @@ test.describe("Cluster detail", () => {
     // Addressed by the id day2 resolved the name to, not by name and ?mce=
     const request = await install;
     expect(new URL(request.url()).pathname).toBe(`/api/day2/clusters/${encodeURIComponent(HOSTED_ID)}/addons/redbull/cluster-roles`);
-    // At the team default: day2 refuses another version unless it is an emergency pin (ADR-0025)
+    // At the add-on's revision: day2 refuses another version unless it is an emergency pin (ADR-0025)
     expect(request.postDataJSON()).toEqual({ override_values: { replicas: 2 } });
     await expect(page.getByText("Fix MR !9 opened")).toBeVisible();
   });

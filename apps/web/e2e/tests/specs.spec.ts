@@ -526,7 +526,7 @@ test.describe("Spec create", () => {
     expect(sent).toMatchObject({ metadata: { name: "new-spec", version: "2.0.0", description: "For test clusters" } });
   });
 
-  test("a chart is added at its team default, HEAD when the team sets none", async ({ page }) => {
+  test("a chart is added at the add-on's revision, HEAD when the add-on sets none", async ({ page }) => {
     let sent: SpecEntry | null = null;
     const spec = await openNew(
       page,

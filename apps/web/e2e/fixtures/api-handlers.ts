@@ -680,8 +680,8 @@ async function mockDay2Api(page: Page) {
       const [, team, name, values] = match;
       const addon = mockAddons.find((a) => a.team === team && a.name === name);
       if (values) {
-        // Helm chart defaults; the configure dialog deep-merges the team's
-        // default_values on top, so an empty chart means "team values only".
+        // Helm chart defaults; the configure dialog deep-merges the Sig
+        // values (default_values) on top, so an empty chart means "Sig values only".
         await json(route, {});
         return;
       }
