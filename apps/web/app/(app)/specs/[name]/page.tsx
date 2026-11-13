@@ -151,7 +151,7 @@ export default function SpecDetailPage() {
   };
 
   const followers = clusters?.length ?? 0;
-  const follow = `${plural(followers, "cluster")} follow${followers === 1 ? "s" : ""}`;
+  const follow = plural(followers, "cluster follows", "clusters follow");
   // A flavor in use is not deleted: its clusters would follow a flavor that is gone. When the
   // check fails, the review says it could not be made.
   const deleteBlocked = clustersLoading
@@ -648,7 +648,7 @@ export default function SpecDetailPage() {
             <div className="flex gap-3">
               <span className="text-muted-foreground w-24 shrink-0">Used by</span>
               <span className="font-medium">
-                {followers === 0 ? "No cluster follows this flavor" : `${plural(followers, "cluster")} follow it`}
+                {followers === 0 ? "No cluster follows this flavor" : `${follow} it`}
               </span>
             </div>
           )}
