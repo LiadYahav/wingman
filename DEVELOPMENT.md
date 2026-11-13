@@ -73,7 +73,10 @@ Add `DAY1_FAKE_FLEET=true` to day1's line for the cluster page's Nodes tab and n
 (ADR-0038), and the EPG on its **HostedCluster & network** card (ADR-0039). It replaces the MCE
 hubs, server-scan, the workflows orchestrator and segments-manager with fakes seeded from
 `dev/fleet-fixtures/`:
-- `servers.yaml` is a made-up fleet in server-scan's own row shape;
+- `servers.yaml` is a made-up fleet in server-scan's own row shape, and its `sites` catalog
+  (server-scan's configured sites): the Server Scan area's Sites page (`/server-scan`,
+  ADR-0048) counts these rows by server-scan's rules over it; `site3` has no server, so its
+  card shows 0;
 - `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update
   half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
   approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace

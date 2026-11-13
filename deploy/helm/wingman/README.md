@@ -106,11 +106,11 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `clusterStatus.mceDomain` | `MCE_API_DOMAIN` | `""` | A hub is `https://api.{mce}.{mceDomain}:6443`, unless the tokens Secret gives it its own `url` (ADR-0045) |
 | `clusterStatus.sslVerify` | `MCE_SSL_VERIFY` | `"false"` | `"true"`, `"false"` or a CA bundle path |
 | `clusterStatus.tokensSecretName` | | `mce-sa-tokens` | The Secret whose key `tokens` (a YAML map of MCE name to token, or to `{token, url}`) is mounted as `MCE_TOKENS_FILE` |
-| `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. Empty: nodes are listed without their servers ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)) |
+| `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. The nodes' servers, Inventory Management, and the **Server Scan** area for admins ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)). Empty: nodes are listed without their servers, no Inventory Management, no Server Scan area |
 | `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the node links point. Empty: `serverScan.url` |
 | `serverScan.sslVerify` | `SERVER_SCAN_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
-| `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token. Empty: no token, for a server-scan with auth off |
+| `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token (every read, the Server Scan area's Sites included). Empty: no token, for a server-scan with auth off |
 | `serverScan.tokenSecret.key` | `SERVER_SCAN_TOKEN` (day1 only) | `token` | The token's key in that Secret |
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
@@ -318,6 +318,14 @@ workflows:
 
 day1 reads the token at start: restart it (`oc rollout restart deploy/wingman-day1`) after
 replacing the Secret.
+
+The same `serverScan.url` turns on the **Server Scan** area for Wingman's admins
+(`/server-scan`, from the top bar's area switch; ADR-0048): server-scan's UI rebuilt in
+Wingman, one page at a time. Its first page, **Sites**, reads server-scan's own per-site
+counts with the same viewer token (no new Secret or key), kept 10 seconds per day1 replica. day1 makes the calls; the browser never calls server-scan. Viewers have no
+Server Scan area, for now. The pages still to come that read server-scan's event history
+(auditor) or write (admin) will each bring their own Secret key
+(`docs/notes/2026-11-13-server-scan-area-api.md` §8).
 
 ### segments-manager
 
