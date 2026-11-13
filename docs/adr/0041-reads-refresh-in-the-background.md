@@ -1,7 +1,7 @@
 # ADR-0041: Reads refresh in the background, a merge costs what it changed, and a new replica warms itself
 
 Date: 2026-11-12
-Status: Accepted
+Status: Accepted; amended 2026-11-13 (day2's chart repo lookups were missed: they too answer stale while one read refreshes them)
 
 ## Context
 
@@ -131,3 +131,33 @@ that parse queues requests behind each other. The JSON went out uncompressed:
 - `scripts/dev/bench_day1_reads.py --clusters 300 --latency 0.2`: the
   numbers above.
 - `docs/ops/performance.md`: how to see the same in a deployment.
+
+## Amendment (2026-11-13): the chart repo lookups
+
+The decision missed day2's chart repo lookups (`GitLabChartRepository`:
+`resolve`, `branches`, `values`). They kept a plain TTL, and the add-on list
+looks up every chart repo's project and branches, so any load more than a TTL
+after the last one waited on GitLab for each chart repo's `get_project`
+(about 0.18 s) and `list_branches` (about 0.1 s). On the team's sandbox every
+warm `GET /api/day2/addons` took 0.5 to 1.0 s; the team list and fleet
+defaults, mostly under 0.1 s.
+
+They now answer stale while one read refreshes them, as the rest do: within
+the minute (`MAX_AGE`), a failed refresh keeps the last answer and is logged;
+after it, a read fetches inline and an unreachable GitLab fails the page.
+"No such project" is an answer and is refreshed the same way, and a moved or
+renamed chart repo (`repourl-moved`) is seen on the first read after the
+refresh. A version (a branch) made in the chart repo shows within the same
+minute.
+
+Pinned by `apps/day2-service/tests/unit/infrastructure/test_chart_repository.py`:
+past the TTL the add-on list answers with no GitLab call awaited, and three
+lists share one refresh of each lookup; a values file the same; a moved repo,
+a repo that appears, and an unreachable GitLab after the minute.
+
+Left with a plain TTL, on purpose: the MR lists (they decide duplicate
+creates and placement), audit history, day1's commit and MR diffs (one read
+when a page opens), day2's day1 index (keyed by commit and rebuilt from the
+held archive without a GitLab call), and other systems' live state
+(server-scan rows, segments-manager, the uninstall runs, the MCE hub, day1's
+call to day2's installed list).

@@ -1,8 +1,10 @@
 """The day2 repositories: GitLabPort reads, cached per replica (ADR-0011, ADR-0035).
 
 The team repos and the day1 repo are read through ``RepoSnapshots``: one
-head check per TTL, one archive per commit. Merge requests, history and chart
-repos are read call by call and kept for the TTL.
+head check per TTL, one archive per commit. Merge requests and history are
+read call by call and kept for the TTL. Chart repos are read call by call
+too, and like the team list they are answered stale while one read refreshes
+them (ADR-0041): the add-on list looks up every chart repo.
 
 A missing file is a normal answer (``None``); every other GitLab error
 propagates, so a page never shows "nothing here" when the truth is "GitLab
@@ -206,7 +208,14 @@ class GitLabDay1Repository:
 
 
 class GitLabChartRepository:
-    """Chart repos on the same GitLab, found from a deploy config's ``repourl``."""
+    """Chart repos on the same GitLab, found from a deploy config's ``repourl``.
+
+    Every lookup is kept for the TTL and then answered stale while one read
+    refreshes it (ADR-0041), so the add-on list never waits on a chart repo's
+    project and branches. A failed refresh keeps the old answer until the
+    minute is over (``MAX_AGE``); then a read fetches inline and reports the
+    error, so an unreachable GitLab still fails the page (ADR-0004).
+    """
 
     def __init__(self, gitlab: GitLabPort, cache: TtlCache, *, base_url: str, ttl: float) -> None:
         """``base_url`` is the GitLab's own URL; a ``repourl`` elsewhere is not resolved."""
@@ -234,8 +243,15 @@ class GitLabChartRepository:
         """See ChartRepository.on_this_gitlab."""
         return self.project_path(repo_url) is not None
 
+    def _kept[T](self, key: str, fetch: Callable[[], Awaitable[T]]) -> Awaitable[T]:
+        return self._cache.get_or_fetch(key, fetch, ttl=self._ttl, stale=stale_for(self._ttl))
+
     async def resolve(self, repo_url: str) -> Project | None:
-        """See ChartRepository.resolve."""
+        """See ChartRepository.resolve.
+
+        No such project (``None``) is an answer, kept and refreshed like a
+        project; a moved project is seen once the refresh has read it.
+        """
         path = self.project_path(repo_url)
         if path is None:
             return None
@@ -246,7 +262,7 @@ class GitLabChartRepository:
             except NotFoundError:
                 return None
 
-        return await self._cache.get_or_fetch(cache_keys.chart_project(path), fetch, ttl=self._ttl)
+        return await self._kept(cache_keys.chart_project(path), fetch)
 
     async def branches(self, project: Project) -> list[str]:
         """See ChartRepository.branches."""
@@ -254,16 +270,13 @@ class GitLabChartRepository:
         async def fetch() -> list[str]:
             return [b.name for b in await self._gitlab.list_branches(project.id)]
 
-        return await self._cache.get_or_fetch(
-            cache_keys.chart_branches(project.id), fetch, ttl=self._ttl
-        )
+        return await self._kept(cache_keys.chart_branches(project.id), fetch)
 
     async def values(self, project: Project, revision: str, path: RepoPath) -> FileContent | None:
         """See ChartRepository.values."""
         ref = project.default_branch if revision == DEFAULT_REVISION else revision
         file = path.child("values.yaml")
-        return await self._cache.get_or_fetch(
+        return await self._kept(
             cache_keys.chart_values(project.id, ref, file),
             lambda: _read_or_none(self._gitlab, project.id, file, ref),
-            ttl=self._ttl,
         )

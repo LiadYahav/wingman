@@ -9,7 +9,7 @@ deployment. The decisions are in ADR-0011, ADR-0035 and ADR-0041. Throughout,
 | Layer | Shared by | Kept | Cold cost |
 |---|---|---|---|
 | The browser's query cache (`wingman-query-cache`, localStorage) | one person in one browser | 10 min; a new build drops it | each person's first visit pays the server's answer |
-| day1/day2 `TtlCache` and repo snapshots | everyone on one replica | a branch head 30 s (day1) / 15 s (day2), answered stale up to a minute while it refreshes; a commit's files until the branch moves | a new pod: one archive per repo and one history lookup per cluster (the warm-up pays it at start-up) |
+| day1/day2 `TtlCache` and repo snapshots | everyone on one replica | a branch head 30 s (day1) / 15 s (day2), answered stale up to a minute while it refreshes; a commit's files until the branch moves; day2's chart repo lookups (project, branches, `values.yaml`) 15 s, answered stale the same way | a new pod: one archive per repo and one history lookup per cluster (the warm-up pays it at start-up); the first add-on list, one project and one branch list per chart repo |
 | MCE reads (live status, nodes) | everyone on one replica | 10 s | two hub calls per cluster on the list |
 
 Nothing on the server is per user: GitLab is read with the service's token,
