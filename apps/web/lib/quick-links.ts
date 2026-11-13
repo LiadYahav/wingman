@@ -5,22 +5,15 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import type { QuickLinkCard, QuickLinkSection, QuickLinks } from "@/types";
-
-const quickLinksKeys = {
-  board: ["quick-links"] as const,
-};
-
-const quickLinksApi = {
-  board: () => "/api/day1/quick-links",
-};
 
 /** The sections and cards: fast (the day1 repo's tree, cached, and the links file). */
 export function useQuickLinks() {
   return useQuery<QuickLinks>({
-    queryKey: quickLinksKeys.board,
-    queryFn: () => api.get<QuickLinks>(quickLinksApi.board()),
+    queryKey: day1Keys.fleet.quickLinks,
+    queryFn: day1Api.fleet.quickLinks,
     staleTime: 30_000,
     // A problem is day1's answer (403 for a viewer): show it, don't ask again
     retry: (count, error) => !isApiError(error) && count < 2,

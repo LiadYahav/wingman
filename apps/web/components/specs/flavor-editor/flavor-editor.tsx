@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, AlertTriangle, ArrowLeft, Eye, RotateCcw, X } from "lucide-react";
 import jsYaml from "js-yaml";
-import { api, ApiError, errorMessages, isApiError } from "@/lib/api-client";
+import { ApiError, errorMessages, isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
@@ -14,10 +15,10 @@ import { configProblems } from "@/components/machine-configs/config-list-editor"
 import { asNewFile, computeLineDiff } from "@/lib/diff";
 import { defaultConfigs, useMachineConfigs } from "@/lib/machine-configs";
 import { toastMrOpened } from "@/lib/mr-toast";
-import { editVersionProblem, specApiPath, specNameProblem, specVersionProblem } from "@/lib/specs";
+import { editVersionProblem, specNameProblem, specVersionProblem } from "@/lib/specs";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { cn } from "@/lib/utils";
-import type { ClusterSpec, MRDetail, SpecDetail, TemplateField } from "@/types";
+import type { ClusterSpec, SpecDetail, TemplateField } from "@/types";
 import { AddonsSection } from "./addons-section";
 import { BasicsSection } from "./basics-section";
 import { fieldId, SectionHeader } from "./controls";
@@ -139,13 +140,13 @@ export function FlavorEditor({
   const { data: catalog, isLoading: catalogLoading, error: catalogError } = useMachineConfigs();
   const defaults = useMemo(() => defaultConfigs(catalog), [catalog]);
   const { data: schema, error: schemaError } = useQuery<TemplateField[]>({
-    queryKey: ["specs", "template-schema"],
-    queryFn: () => api.get<TemplateField[]>("/api/day1/specs/template/schema"),
+    queryKey: day1Keys.specs.templateSchema,
+    queryFn: day1Api.specs.templateSchema,
     staleTime: 300_000,
   });
   const { data: sharedTemplate = "" } = useQuery<string>({
-    queryKey: ["specs", "shared-template"],
-    queryFn: () => api.get<string>("/api/day1/specs/template"),
+    queryKey: day1Keys.specs.sharedTemplate,
+    queryFn: day1Api.specs.sharedTemplate,
     staleTime: 300_000,
     enabled: isNew,
   });
@@ -169,14 +170,11 @@ export function FlavorEditor({
   );
 
   const save = useMutation({
-    mutationFn: () =>
-      isNew
-        ? api.post<MRDetail>("/api/day1/specs", document)
-        : // Guarded by the commit the flavor was read at; a stale one is a 409 (ADR-0006)
-          api.put<MRDetail>(specApiPath(spec.metadata.name, spec.last_commit_id), document),
+    // An update is guarded by the commit the flavor was read at; a stale one is a 409 (ADR-0006)
+    mutationFn: () => (isNew ? day1Api.specs.create(document) : day1Api.specs.update(spec.metadata.name, spec.last_commit_id, document)),
     onSuccess: (mr) => {
       setReviewOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["specs"] });
+      queryClient.invalidateQueries({ queryKey: day1Keys.specs.all });
       if (isNew) {
         toastMrOpened(mr, router.push, "Flavor MR");
         router.push("/specs");

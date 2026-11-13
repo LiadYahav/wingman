@@ -2,15 +2,16 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, GitCommitHorizontal, GitPullRequest, ChevronDown, ChevronRight, FilePlus, FileX, FileEdit, RefreshCw, Search, X, Eye } from "lucide-react";
-import { api } from "@/lib/api-client";
-import { approvalApiPath, approvalHref, mrKey, mrRef } from "@/lib/approvals";
-import { buttonVariants } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { ExternalLink, GitCommitHorizontal, GitPullRequest, ChevronDown, ChevronRight, FilePlus, FileX, FileEdit, Search, X, Eye } from "lucide-react";
+import { day1Api, day1Keys } from "@/lib/api/day1";
+import { approvalHref, mrKey, mrRef } from "@/lib/approvals";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime, newestFirst } from "@/lib/utils";
+import { diffLabel } from "@/lib/diff";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ProblemList } from "@/components/common/problem-list";
+import { RefreshButton } from "@/components/common/refresh-button";
 import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
@@ -18,24 +19,14 @@ import type { ApprovalDetail, CommitRecord, MRDetail, FileDiff } from "@/types";
 
 type RepoFilter = "all" | CommitRecord["repo"];
 
-/** day1 serves the day1 and specs repos (by repo); day2 finds the team repo, hinted by team. */
-function commitDiffPath(commit: CommitRecord): string {
-  return commit.repo === "day2"
-    ? `/api/day2/audit/commits/${commit.id}/diff${commit.team ? `?team=${encodeURIComponent(commit.team)}` : ""}`
-    : `/api/day1/audit/commits/${commit.repo}/${commit.id}/diff`;
-}
-
 function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
   const [openFiles, setOpenFiles] = useState<Set<number>>(new Set());
-  const toggle = (i: number) => setOpenFiles((s) => {
-    const n = new Set(s);
-    if (n.has(i)) {
-      n.delete(i);
-    } else {
-      n.add(i);
-    }
-    return n;
-  });
+  const toggle = (i: number) =>
+    setOpenFiles((s) => {
+      const next = new Set(s);
+      if (!next.delete(i)) next.add(i);
+      return next;
+    });
 
   if (diffs.length === 0) {
     return <p className="text-xs text-muted-foreground italic px-6 pb-3">No file changes</p>;
@@ -50,9 +41,7 @@ function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
           : diff.deleted_file
           ? { label: "deleted", cls: "bg-status-error/10 text-status-error", Icon: FileX }
           : { label: null, cls: "", Icon: FileEdit };
-        const filePath = diff.renamed_file
-          ? `${diff.old_path} → ${diff.new_path}`
-          : diff.new_path || diff.old_path;
+        const filePath = diffLabel(diff);
 
         return (
           <div key={i}>
@@ -108,8 +97,8 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
   const [expanded, setExpanded] = useState(false);
 
   const { data: diffs, isLoading: diffsLoading, error: diffsError } = useQuery<FileDiff[]>({
-    queryKey: ["audit", commit.repo, "commit-diff", commit.id],
-    queryFn: () => api.get<FileDiff[]>(commitDiffPath(commit)),
+    queryKey: day1Keys.audit.commitDiff(commit.repo, commit.id),
+    queryFn: () => day1Api.audit.commitDiff(commit),
     enabled: expanded,
     staleTime: 300_000,
     retry: 1,
@@ -154,24 +143,21 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
   );
 }
 
+/** An MR's state colours: merged purple, closed red, opened (or locked) green. */
+function stateTone(state: MRDetail["state"]): { text: string; bg: string } {
+  if (state === "merged") return { text: "text-chart-5 dark:text-[#c084fc]", bg: "bg-chart-5/15" };
+  if (state === "closed") return { text: "text-status-error dark:text-[#f87171]", bg: "bg-status-error/15" };
+  return { text: "text-status-ready", bg: "bg-status-ready/15" };
+}
+
 function MRRow({ mr }: { mr: MRDetail }) {
   const [expanded, setExpanded] = useState(false);
 
-  const stateColor = mr.state === "merged"
-    ? "text-chart-5 dark:text-[#c084fc]"
-    : mr.state === "closed"
-    ? "text-status-error dark:text-[#f87171]"
-    : "text-status-ready";
-
-  const stateBg = mr.state === "merged"
-    ? "bg-chart-5/15"
-    : mr.state === "closed"
-    ? "bg-status-error/15"
-    : "bg-status-ready/15";
+  const { text: stateColor, bg: stateBg } = stateTone(mr.state);
 
   const { data: detail, isLoading: detailLoading, error: detailError } = useQuery<ApprovalDetail>({
-    queryKey: ["audit", "mr-diff", mrKey(mr)],
-    queryFn: () => api.get<ApprovalDetail>(approvalApiPath(mrRef(mr))),
+    queryKey: day1Keys.audit.mrDiff(mrKey(mr)),
+    queryFn: () => day1Api.approvals.detail(mrRef(mr)),
     enabled: expanded,
     staleTime: 300_000,
     retry: 1,
@@ -234,7 +220,6 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 // eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export default function AuditPage() {
   const [activeTab, setActiveTab] = useState<"commits" | "mrs">("commits");
-  const queryClient = useQueryClient();
 
   // Filter/pagination state
   const [search, setSearch] = useState("");
@@ -245,40 +230,34 @@ export default function AuditPage() {
 
   // Every item says which repo it is from: day1 serves day1 and specs, day2 every team repo.
   const { data: day1Commits, isLoading: loadingD1C, isFetching: fetchingD1C, error: day1CommitsError } = useQuery<CommitRecord[]>({
-    queryKey: ["audit", "day1", "commits"],
-    queryFn: () => api.get<CommitRecord[]>("/api/day1/audit/commits"),
+    queryKey: day1Keys.audit.commits("day1"),
+    queryFn: () => day1Api.audit.commits("day1"),
     staleTime: 30_000,
   });
 
   const { data: day2Commits, isLoading: loadingD2C, isFetching: fetchingD2C, error: day2CommitsError } = useQuery<CommitRecord[]>({
-    queryKey: ["audit", "day2", "commits"],
-    queryFn: () => api.get<CommitRecord[]>("/api/day2/audit/commits"),
+    queryKey: day1Keys.audit.commits("day2"),
+    queryFn: () => day1Api.audit.commits("day2"),
     staleTime: 30_000,
   });
 
   const { data: day1Mrs, isLoading: loadingD1M, isFetching: fetchingD1M, error: day1MrsError } = useQuery<MRDetail[]>({
-    queryKey: ["audit", "day1", "mrs"],
-    queryFn: () => api.get<MRDetail[]>("/api/day1/audit/merge-requests"),
+    queryKey: day1Keys.audit.mergeRequests("day1"),
+    queryFn: () => day1Api.audit.mergeRequests("day1"),
     staleTime: 30_000,
   });
 
   const { data: day2Mrs, isLoading: loadingD2M, isFetching: fetchingD2M, error: day2MrsError } = useQuery<MRDetail[]>({
-    queryKey: ["audit", "day2", "mrs"],
-    queryFn: () => api.get<MRDetail[]>("/api/day2/audit/merge-requests"),
+    queryKey: day1Keys.audit.mergeRequests("day2"),
+    queryFn: () => day1Api.audit.mergeRequests("day2"),
     staleTime: 30_000,
   });
 
   const isFetching = fetchingD1C || fetchingD2C || fetchingD1M || fetchingD2M;
 
-  const allCommits = useMemo(() => [
-    ...(day1Commits ?? []),
-    ...(day2Commits ?? []),
-  ].sort((a, b) => new Date(b.authored_date).getTime() - new Date(a.authored_date).getTime()), [day1Commits, day2Commits]);
+  const allCommits = useMemo(() => newestFirst([day1Commits, day2Commits], (c) => c.authored_date), [day1Commits, day2Commits]);
 
-  const allMrs = useMemo(() => [
-    ...(day1Mrs ?? []),
-    ...(day2Mrs ?? []),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [day1Mrs, day2Mrs]);
+  const allMrs = useMemo(() => newestFirst([day1Mrs, day2Mrs], (mr) => mr.created_at), [day1Mrs, day2Mrs]);
 
   const commitsLoading = loadingD1C || loadingD2C;
   const mrsLoading = loadingD1M || loadingD2M;
@@ -349,15 +328,7 @@ export default function AuditPage() {
             Changes across the day1, specs and day2 team repos — click any entry to view its diff
           </p>
         </div>
-        <button
-          onClick={() => queryClient.invalidateQueries({ queryKey: ["audit"] })}
-          disabled={isFetching}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-          title="Refresh audit log"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-          Refresh
-        </button>
+        <RefreshButton queryKey={day1Keys.audit.all} fetching={isFetching} title="Refresh audit log" />
       </div>
 
       {/* Monday.com-style line tabs */}

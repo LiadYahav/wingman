@@ -3,27 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { FileCode2, Info, Loader2, Lock } from "lucide-react";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProblemList } from "@/components/common/problem-list";
 import { cn } from "@/lib/utils";
+import { useDebounced } from "@/hooks/use-debounced";
 import type { ClusterPreview, ClusterSpec, Mce, OpenShiftVersions, TemplateField } from "@/types";
 import { inputCls } from "./controls";
 import { pathLabel, previewPlan, previewRelease, sampleClusterName, type FlavorDraft, type ValueLine } from "./model";
 
 const codeCls =
   "max-h-[32rem] overflow-auto rounded-lg border bg-muted/40 p-4 font-mono text-xs leading-5 text-foreground/90 dark:bg-black/30";
-
-/** `value` once it has stopped changing for `ms`. */
-function useSettled<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return settled;
-}
 
 /** Whether `ref`'s element has been on screen (once seen, it stays true). */
 function useSeen(ref: React.RefObject<HTMLElement | null>): boolean {
@@ -94,16 +86,16 @@ function ClusterFilePreview({
   const [nameChoice, setNameChoice] = useState<string | null>(null);
 
   const { data: mces = [], error: mcesError } = useQuery<Mce[]>({
-    queryKey: ["mces", "all"],
-    queryFn: () => api.get<Mce[]>("/api/day1/mces"),
+    queryKey: day1Keys.fleet.allMces,
+    queryFn: day1Api.fleet.allMces,
     staleTime: 60_000,
     enabled: Boolean(saved) && seen,
   });
   const usable = mces.filter((m) => m.follows_convention && m.env);
   const mce = usable.find((m) => m.name === mceChoice) ?? usable[0];
   const { data: offered, error: versionsError } = useQuery<OpenShiftVersions>({
-    queryKey: ["mce-openshift-versions", mce?.name],
-    queryFn: () => api.get<OpenShiftVersions>(`/api/day1/mces/${encodeURIComponent(mce!.name)}/openshift-versions`),
+    queryKey: day1Keys.fleet.openshiftVersions(mce?.name),
+    queryFn: () => day1Api.fleet.openshiftVersions(mce!.name),
     staleTime: 60_000,
     enabled: Boolean(saved && mce) && seen,
   });
@@ -118,10 +110,10 @@ function ClusterFilePreview({
     saved && schema && mce && version && clusterName
       ? previewPlan({ draft, saved, schema, mce, openshiftVersion: version, clusterName })
       : null;
-  const body = useSettled(plan ? JSON.stringify(plan.request) : "", 600);
+  const body = useDebounced(plan ? JSON.stringify(plan.request) : "", 600);
   const preview = useQuery<ClusterPreview>({
-    queryKey: ["flavor-cluster-preview", body],
-    queryFn: () => api.post<ClusterPreview>("/api/day1/clusters/preview", JSON.parse(body)),
+    queryKey: day1Keys.flavorClusterPreview(body),
+    queryFn: () => day1Api.clusters.preview(JSON.parse(body)),
     enabled: Boolean(body) && seen,
     retry: false,
     staleTime: 60_000,

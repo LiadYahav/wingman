@@ -6,11 +6,12 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ExternalLink, GitMerge, GitPullRequest, X, ChevronDown, ChevronRight,
-  FilePlus, FileX, FileEdit, Edit2, Eye, RotateCcw, UserX, Files,
+  FilePlus, FileX, FileEdit, Edit2, Eye, UserX, Files,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api, isApiError } from "@/lib/api-client";
-import { approvalApiPath, parseApprovalId, type MRRef } from "@/lib/approvals";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
+import { parseApprovalId, type MRRef } from "@/lib/approvals";
 import { useAuthStore, useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,10 +19,11 @@ import { cn, formatDate } from "@/lib/utils";
 import { YamlDiffViewer } from "@/components/common/yaml-diff-viewer";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { StaleAlert } from "@/components/common/stale-alert";
 import { EmptyState } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { ApprovalRolloutPanel, opensText, useApprovalRollout } from "@/components/specs/approval-rollout";
-import { computeLineDiff } from "@/lib/diff";
+import { computeLineDiff, diffLabel } from "@/lib/diff";
 import { writeErrorTitle } from "@/lib/write-errors";
 import type { ApprovalDetail, FileDiff, MRDetail, UpdateMRFile } from "@/types";
 
@@ -43,9 +45,7 @@ function FileDiffCard({ diff }: { diff: FileDiff }) {
     : null;
 
   const Icon = diff.new_file ? FilePlus : diff.deleted_file ? FileX : FileEdit;
-  const filePath = diff.renamed_file
-    ? `${diff.old_path} → ${diff.new_path}`
-    : diff.new_path || diff.old_path;
+  const filePath = diffLabel(diff);
 
   return (
     <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
@@ -117,7 +117,7 @@ function EditMRPanel({
         .filter((d) => fileContents[d.new_path] !== newFileContent(d))
         .map((d) => ({ path: d.new_path, content: fileContents[d.new_path] ?? "" }));
       // Both services refuse the commit if the branch moved past the head reviewed here (ADR-0006)
-      return api.put<ApprovalDetail>(approvalApiPath(mrRef), { files, message, sha: mr.sha });
+      return day1Api.approvals.update(mrRef, { files, message, sha: mr.sha });
     },
     onSuccess: (detail) => {
       toast.success("Changes committed to the MR branch — review them again before approving");
@@ -225,16 +225,61 @@ function EditMRPanel({
 
 // ── MR detail page ────────────────────────────────────────────────────────────
 
+/** One fact of the MR card, its label over its value; `clip` lets a long value truncate. */
+function Fact({ label, clip = false, ...value }: { label: string; clip?: boolean } & React.ComponentProps<"p">) {
+  return (
+    <div className={clip ? "min-w-0" : undefined}>
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <p {...value} />
+    </div>
+  );
+}
+
+/** The page while the MR loads: its meta card, then two changed files. */
+function ApprovalSkeleton() {
+  return (
+    <div className="space-y-6" data-testid="approval-loading">
+      {/* The MR meta card: badges, then the five facts */}
+      <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-6 w-16 rounded-full" />
+          <Skeleton className="h-5 w-14 rounded-full" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="space-y-1.5">
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="h-4 w-24 max-w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Changed files: each a path bar over a few diff lines */}
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-32" />
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3">
+              <Skeleton className="h-3.5 w-3.5 shrink-0" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+            <div className="border-t px-4 py-3 space-y-2">
+              {["w-1/2", "w-3/4", "w-2/5", "w-3/5"].map((w) => (
+                <Skeleton key={w} className={cn("h-3", w)} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function ActionError({ error, onReload }: { error: unknown; onReload: () => void }) {
   if (isApiError(error, "REVISION_CONFLICT")) {
-    return (
-      <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm">
-        <p className="text-status-warning-fg">{BRANCH_MOVED}</p>
-        <button onClick={onReload} className={buttonVariants({ variant: "outline", size: "sm" })}>
-          <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload
-        </button>
-      </div>
-    );
+    return <StaleAlert message={BRANCH_MOVED} onReload={onReload} />;
   }
   if (isApiError(error, "SELF_APPROVAL")) {
     return <ProblemList error={error} title="You requested this change, so another admin must approve it." />;
@@ -261,15 +306,14 @@ function MRDetailContent() {
   const [actionError, setActionError] = useState<unknown>(null);
 
   const ref = parseApprovalId(id);
-  const queryKey = ["approvals", "detail", id];
 
   // Fetched fresh every time the page opens (never from a cache, see
   // providers.tsx), then never in the background: an approval names the head
   // shown here, so the diff must not change under the reviewer. A branch that
   // moved since is a 409 and a reload.
   const { data, isLoading, error, refetch } = useQuery<ApprovalDetail>({
-    queryKey,
-    queryFn: () => api.get<ApprovalDetail>(approvalApiPath(ref!)),
+    queryKey: day1Keys.approvals.detail(id),
+    queryFn: () => day1Api.approvals.detail(ref!),
     enabled: ref !== null,
     staleTime: Infinity,
     gcTime: 0,
@@ -285,12 +329,12 @@ function MRDetailContent() {
 
   /** Refresh the lists; this page's own detail is set or refetched by the caller. */
   const afterChange = () => {
-    queryClient.invalidateQueries({ queryKey: ["approvals"], predicate: (q) => q.queryKey[1] !== "detail" });
-    queryClient.invalidateQueries({ queryKey: ["audit"] });
+    queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all, predicate: (q) => q.queryKey[1] !== "detail" });
+    queryClient.invalidateQueries({ queryKey: day1Keys.audit.all });
   };
 
   const approveMutation = useMutation({
-    mutationFn: (sha: string) => api.post<MRDetail>(approvalApiPath(ref!, "approve"), { sha }),
+    mutationFn: (sha: string) => day1Api.approvals.approve(ref!, sha),
     onSuccess: (mr) => {
       const flavor = rolloutApplies ? rollout.data?.spec_name : null;
       toast.success(
@@ -305,7 +349,7 @@ function MRDetailContent() {
       setApproveOpen(false);
       afterChange();
       // What the merge changed
-      queryClient.invalidateQueries({ queryKey: ref?.service === "day2" ? ["clusters"] : ref?.repo === "specs" ? ["specs"] : ["clusters"] });
+      queryClient.invalidateQueries({ queryKey: ref?.service === "day2" ? day1Keys.clusters.all : ref?.repo === "specs" ? day1Keys.specs.all : day1Keys.clusters.all });
       refetch();
     },
     onError: (e) => {
@@ -315,7 +359,7 @@ function MRDetailContent() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: () => api.post<MRDetail>(approvalApiPath(ref!, "reject")),
+    mutationFn: () => day1Api.approvals.reject(ref!),
     onSuccess: (mr) => {
       toast.success(`!${mr.iid} rejected`);
       setRejectReviewOpen(false);
@@ -395,41 +439,7 @@ function MRDetailContent() {
       {error ? (
         <ProblemList error={error} title={isApiError(error, 404) ? "This merge request does not exist or is not a Wingman MR" : "The merge request could not be loaded"} />
       ) : isLoading ? (
-        <div className="space-y-6" data-testid="approval-loading">
-          {/* The MR meta card: badges, then the five facts */}
-          <div className="bg-card rounded-xl border shadow-sm p-5 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Skeleton className="h-6 w-20 rounded-full" />
-              <Skeleton className="h-6 w-16 rounded-full" />
-              <Skeleton className="h-5 w-14 rounded-full" />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="space-y-1.5">
-                  <Skeleton className="h-3 w-14" />
-                  <Skeleton className="h-4 w-24 max-w-full" />
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Changed files: each a path bar over a few diff lines */}
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-32" />
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="rounded-xl border bg-card shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3">
-                  <Skeleton className="h-3.5 w-3.5 shrink-0" />
-                  <Skeleton className="h-4 w-2/3" />
-                </div>
-                <div className="border-t px-4 py-3 space-y-2">
-                  {["w-1/2", "w-3/4", "w-2/5", "w-3/5"].map((w) => (
-                    <Skeleton key={w} className={cn("h-3", w)} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ApprovalSkeleton />
       ) : mr ? (
         <>
           {/* MR Meta card */}
@@ -453,26 +463,11 @@ function MRDetailContent() {
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Author</p>
-                <p className="font-medium truncate">{mr.author.username}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">{mr.merged_at ? "Merged" : "Created"}</p>
-                <p className="font-medium">{formatDate(mr.merged_at ?? mr.created_at)}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Source branch</p>
-                <p className="font-mono text-xs font-medium truncate" title={mr.source_branch}>{mr.source_branch}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground mb-0.5">Target branch</p>
-                <p className="font-mono text-xs font-medium truncate">{mr.target_branch}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Head</p>
-                <p className="font-mono text-xs font-medium" title={mr.sha}>{mr.sha.slice(0, 8)}</p>
-              </div>
+              <Fact clip label="Author" className="font-medium truncate">{mr.author.username}</Fact>
+              <Fact label={mr.merged_at ? "Merged" : "Created"} className="font-medium">{formatDate(mr.merged_at ?? mr.created_at)}</Fact>
+              <Fact clip label="Source branch" className="font-mono text-xs font-medium truncate" title={mr.source_branch}>{mr.source_branch}</Fact>
+              <Fact clip label="Target branch" className="font-mono text-xs font-medium truncate">{mr.target_branch}</Fact>
+              <Fact label="Head" className="font-mono text-xs font-medium" title={mr.sha}>{mr.sha.slice(0, 8)}</Fact>
             </div>
 
             {mr.description && (
@@ -520,7 +515,7 @@ function MRDetailContent() {
                 mr={mr}
                 mrRef={ref}
                 diffs={diffs}
-                onSaved={(detail) => { queryClient.setQueryData(queryKey, detail); setEditing(false); afterChange(); }}
+                onSaved={(detail) => { queryClient.setQueryData(day1Keys.approvals.detail(id), detail); setEditing(false); afterChange(); }}
                 onCancel={() => setEditing(false)}
               />
             </div>

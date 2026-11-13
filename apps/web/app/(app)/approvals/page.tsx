@@ -1,26 +1,25 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, CheckCircle2, RefreshCw, Search, X } from "lucide-react";
-import { api } from "@/lib/api-client";
-import { buttonVariants } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
+import { ExternalLink, CheckCircle2, Search, X } from "lucide-react";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
+import { RefreshButton } from "@/components/common/refresh-button";
 import { Pagination, PageSizePicker } from "@/components/common/pagination";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { RepoBadge } from "@/components/common/repo-badge";
 import { ApprovalLink, WorkflowBadge } from "@/components/common/workflow-mr";
 import { mrKey } from "@/lib/approvals";
 import { useAuthStore } from "@/stores/auth-store";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, newestFirst } from "@/lib/utils";
 import type { MRDetail } from "@/types";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 // eslint-disable-next-line max-lines-per-function -- size baseline (ADR-0056)
 export default function ApprovalsPage() {
-  const queryClient = useQueryClient();
   const username = useAuthStore((s) => s.user?.username);
   const [search, setSearch] = useState("");
   const [repoFilter, setRepoFilter] = useState<"all" | "day1" | "day2" | "specs">("all");
@@ -29,25 +28,21 @@ export default function ApprovalsPage() {
 
   // day1 lists the day1 and specs repos (each MR says which); day2 lists every team repo.
   const { data: day1Mrs, isLoading: loadingDay1, isFetching: fetchingDay1, error: day1Error } = useQuery<MRDetail[]>({
-    queryKey: ["approvals", "day1"],
-    queryFn: () => api.get<MRDetail[]>("/api/day1/approvals"),
+    queryKey: day1Keys.approvals.list("day1"),
+    queryFn: () => day1Api.approvals.list("day1"),
     staleTime: 15_000,
   });
 
   const { data: day2Mrs, isLoading: loadingDay2, isFetching: fetchingDay2, error: day2Error } = useQuery<MRDetail[]>({
-    queryKey: ["approvals", "day2"],
-    queryFn: () => api.get<MRDetail[]>("/api/day2/approvals"),
+    queryKey: day1Keys.approvals.list("day2"),
+    queryFn: () => day1Api.approvals.list("day2"),
     staleTime: 15_000,
   });
 
   const isLoading = loadingDay1 || loadingDay2;
   const isFetching = fetchingDay1 || fetchingDay2;
 
-  const allMrs: MRDetail[] = useMemo(() => [
-    ...(day1Mrs ?? []),
-    ...(day2Mrs ?? []),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-  [day1Mrs, day2Mrs]);
+  const allMrs = useMemo(() => newestFirst([day1Mrs, day2Mrs], (mr) => mr.created_at), [day1Mrs, day2Mrs]);
 
   const filtered = useMemo(() => {
     let list = allMrs;
@@ -94,15 +89,7 @@ export default function ApprovalsPage() {
             </p>
           )}
         </div>
-        <button
-          onClick={() => queryClient.invalidateQueries({ queryKey: ["approvals"] })}
-          disabled={isFetching}
-          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-          title="Refresh approvals"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-          Refresh
-        </button>
+        <RefreshButton queryKey={day1Keys.approvals.all} fetching={isFetching} title="Refresh approvals" />
       </div>
 
       {/* Filter bar */}

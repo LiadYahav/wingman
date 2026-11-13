@@ -85,7 +85,10 @@ time.
    ≤ 150 lines). No `useQuery`, `useMutation` or `api.*` in a route file,
    and no file in `app/` other than Next's file conventions.
 2. API paths and query keys are named in one module per service:
-   `lib/day2.ts` (`day2Api`, `day2Keys`) and, when it lands, `lib/day1.ts`.
+   `lib/day2.ts` (`day2Api`, `day2Keys`) and `lib/api/day1/` (`day1Api`,
+   `day1Keys`, one file per area; since 3.18.5). The review and audit routes
+   of both services are in the day1 module, since their keys share one
+   namespace.
    Query and mutation hooks sit beside it or in the feature folder;
    components never call `api.get` themselves.
 3. `components/<area>/` holds the UI. A flow over ~300 lines gets a folder,

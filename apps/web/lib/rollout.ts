@@ -7,23 +7,17 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import type { RolloutState, RolloutStatus } from "@/types";
 
 /** How often a rollout that is opening MRs is read again. */
 const ROLLOUT_POLL_MS = 3_000;
 
-export function rolloutPath(spec: string): string {
-  return `/api/day1/specs/${encodeURIComponent(spec)}/rollout`;
-}
-
-export const rolloutKey = (spec: string) => ["specs", spec, "rollout"] as const;
-
 /** `GET /specs/{name}/rollout`, read again every 3 s while day1 is opening MRs, not otherwise. */
 export function useRollout(spec: string, enabled = true) {
   return useQuery<RolloutStatus>({
-    queryKey: rolloutKey(spec),
-    queryFn: () => api.get<RolloutStatus>(rolloutPath(spec)),
+    queryKey: day1Keys.specs.rollout(spec),
+    queryFn: () => day1Api.specs.rollout(spec),
     enabled,
     staleTime: 15_000,
     refetchInterval: (query) => (query.state.data?.running ? ROLLOUT_POLL_MS : false),

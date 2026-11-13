@@ -6,7 +6,7 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { isRunning } from "@/lib/nodes";
 import type { MRDetail, ProvisionRun, Provisioner } from "@/types";
 
@@ -16,8 +16,8 @@ const PROVISION_POLL_MS = 10_000;
 /** What Create does here; `merge-request` until day1 says otherwise. */
 export function useProvisioner() {
   return useQuery<Provisioner>({
-    queryKey: ["clusters", "provisioner"],
-    queryFn: () => api.get<Provisioner>("/api/day1/clusters/provisioner"),
+    queryKey: day1Keys.clusters.provisioner,
+    queryFn: day1Api.clusters.provisioner,
     staleTime: 5 * 60_000,
   });
 }
@@ -30,8 +30,8 @@ export function isProvisionRun(result: MRDetail | ProvisionRun): result is Provi
 /** `GET /clusters/{name}/provision-run`, read again every 10 s while it runs. */
 export function useProvisionRun(name: string, initial?: ProvisionRun) {
   return useQuery<ProvisionRun>({
-    queryKey: ["clusters", name, "provision-run"],
-    queryFn: () => api.get<ProvisionRun>(`/api/day1/clusters/${encodeURIComponent(name)}/provision-run`),
+    queryKey: day1Keys.clusters.provisionRun(name),
+    queryFn: () => day1Api.clusters.provisionRun(name),
     initialData: initial,
     initialDataUpdatedAt: 0,
     refetchInterval: (query) => (isRunning(query.state.data) ? PROVISION_POLL_MS : false),

@@ -3,7 +3,14 @@
  * Used for review dialogs to show what will change before creating an MR.
  */
 
+import type { FileDiff } from "@/types";
+
 type Op = { t: " " | "+" | "-"; s: string };
+
+/** The path a file's diff is listed under: `old → new` for a rename. */
+export function diffLabel(diff: FileDiff): string {
+  return diff.renamed_file ? `${diff.old_path} → ${diff.new_path}` : diff.new_path || diff.old_path;
+}
 
 /** The line edit script from `A` to `B`, in order: a longest common subsequence, backtracked. */
 function editScript(A: string[], B: string[]): Op[] {

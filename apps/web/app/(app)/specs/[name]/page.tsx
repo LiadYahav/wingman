@@ -4,16 +4,18 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Edit2, Server, CheckCircle2, ExternalLink, GitCommitHorizontal, Import, RotateCcw } from "lucide-react";
+import { ArrowLeft, Trash2, Edit2, Server, CheckCircle2, ExternalLink, GitCommitHorizontal, Import } from "lucide-react";
 import { toast } from "sonner";
-import { api, isApiError, errorMessages } from "@/lib/api-client";
+import { isApiError, errorMessages } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, plural } from "@/lib/utils";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
+import { StaleAlert } from "@/components/common/stale-alert";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { FlavorStateBadge, FlavorStateLegend } from "@/components/clusters/drift-badge";
 import { FlavorInputsCard, WarningPanel } from "@/components/specs/flavor-inputs";
@@ -22,10 +24,9 @@ import { RolloutPanel } from "@/components/specs/rollout-panel";
 import { clusterHref } from "@/lib/clusters";
 import { DISPLAY_ORDER, flavorDisplayState } from "@/lib/flavor-state";
 import { rolloutSummary, useRollout } from "@/lib/rollout";
-import { specApiPath } from "@/lib/specs";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
-import type { MRDetail, SpecCluster, SpecCommit, SpecDetail, SpecDrift } from "@/types";
+import type { SpecCluster, SpecCommit, SpecDetail, SpecDrift } from "@/types";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -39,8 +40,6 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 /** A 409 REVISION_CONFLICT: the flavor's file moved since this page read it. */
 const STALE_SPEC =
   "The flavor changed since you opened it, so the delete was refused and nothing was changed. Reload to see the current flavor, then delete it again if you still want to.";
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** The header's Delete: refused while clusters follow the flavor, with the reason on hover and for screen readers. */
 function DeleteButton({ blocked, pending, onClick }: { blocked: string | null; pending: boolean; onClick: () => void }) {
@@ -81,8 +80,8 @@ export default function SpecDetailPage() {
   const [selectedSha, setSelectedSha] = useState<string | null>(null);
 
   const { data: spec, isLoading, error: specError, refetch: refetchSpec } = useQuery<SpecDetail>({
-    queryKey: ["specs", specName],
-    queryFn: () => api.get<SpecDetail>(specApiPath(specName)),
+    queryKey: day1Keys.specs.one(specName),
+    queryFn: () => day1Api.specs.get(specName),
     staleTime: 60_000,
     // A delete sends this read's last_commit_id: re-read on every visit (a
     // cached copy renders meanwhile), so a change merged since is seen.
@@ -94,15 +93,15 @@ export default function SpecDetailPage() {
 
   // Read on every tab: the count is in the tab, and a flavor clusters follow can't be deleted.
   const { data: clusters, isLoading: clustersLoading, error: clustersError } = useQuery<SpecCluster[]>({
-    queryKey: ["specs", specName, "clusters"],
-    queryFn: () => api.get<SpecCluster[]>(`/api/day1/specs/${encodeURIComponent(specName)}/clusters`),
+    queryKey: day1Keys.specs.clusters(specName),
+    queryFn: () => day1Api.specs.clusters(specName),
     staleTime: 30_000,
     gcTime: 2 * 60_000,
   });
 
   const { data: driftResults, isLoading: driftLoading, error: driftError } = useQuery<SpecDrift[]>({
-    queryKey: ["specs", specName, "drift"],
-    queryFn: () => api.get<SpecDrift[]>(`/api/day1/specs/${encodeURIComponent(specName)}/drift`),
+    queryKey: day1Keys.specs.drift(specName),
+    queryFn: () => day1Api.specs.drift(specName),
     enabled: activeTab === "drift",
     staleTime: 60_000,
   });
@@ -111,26 +110,26 @@ export default function SpecDetailPage() {
   const { data: rollout } = useRollout(specName, activeTab === "overview" || activeTab === "clusters");
 
   const { data: history, isLoading: historyLoading, error: historyError } = useQuery<SpecCommit[]>({
-    queryKey: ["spec-history", specName],
-    queryFn: () => api.get<SpecCommit[]>(`/api/day1/specs/${encodeURIComponent(specName)}/history`),
+    queryKey: day1Keys.specs.history(specName),
+    queryFn: () => day1Api.specs.history(specName),
     enabled: activeTab === "history",
     staleTime: 60_000,
   });
 
   const { data: specAtSha, isLoading: specAtShaLoading, error: specAtShaError } = useQuery<string>({
-    queryKey: ["spec-at-sha", specName, selectedSha],
-    queryFn: () => api.getText(`/api/day1/specs/${encodeURIComponent(specName)}/at/${selectedSha}`),
+    queryKey: day1Keys.specs.atSha(specName, selectedSha),
+    queryFn: () => day1Api.specs.atSha(specName, selectedSha),
     enabled: !!selectedSha && activeTab === "history",
     staleTime: Infinity,
   });
 
   const deleteMutation = useMutation({
     // Guarded by the commit the flavor was read at (a flavor that does not load has none)
-    mutationFn: () => api.del<MRDetail>(specApiPath(specName, spec?.last_commit_id)),
+    mutationFn: () => day1Api.specs.remove(specName, spec?.last_commit_id),
     onSuccess: (mr) => {
       toastMrOpened(mr, router.push, "Delete MR");
       setDeleteReviewOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["specs"] });
+      queryClient.invalidateQueries({ queryKey: day1Keys.specs.all });
       router.push("/specs");
     },
     onError: (err) => {
@@ -148,16 +147,17 @@ export default function SpecDetailPage() {
   const reloadAfterConflict = async () => {
     deleteMutation.reset();
     await refetchSpec();
-    queryClient.invalidateQueries({ queryKey: ["spec-history", specName] });
+    queryClient.invalidateQueries({ queryKey: day1Keys.specs.history(specName) });
   };
 
   const followers = clusters?.length ?? 0;
+  const follow = `${plural(followers, "cluster")} follow${followers === 1 ? "s" : ""}`;
   // A flavor in use is not deleted: its clusters would follow a flavor that is gone. When the
   // check fails, the review says it could not be made.
   const deleteBlocked = clustersLoading
     ? "Checking which clusters follow this flavor…"
     : followers > 0
-      ? `${plural(followers, "cluster")} follow${followers === 1 ? "s" : ""} this flavor, so it can't be deleted. ` +
+      ? `${follow} this flavor, so it can't be deleted. ` +
         "Move them to another flavor (Add existing clusters on that flavor's page) or delete them first."
       : null;
 
@@ -225,14 +225,7 @@ export default function SpecDetailPage() {
         )}
       </div>
 
-      {deleteConflict && (
-        <div role="alert" className="flex items-start justify-between gap-3 rounded-xl border border-status-warning/30 bg-status-warning/5 p-4 text-sm">
-          <p className="text-status-warning-fg">{STALE_SPEC}</p>
-          <button onClick={reloadAfterConflict} className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />Reload
-          </button>
-        </div>
-      )}
+      {deleteConflict && <StaleAlert message={STALE_SPEC} onReload={reloadAfterConflict} />}
 
       {specError && (
         <ProblemList
@@ -308,7 +301,7 @@ export default function SpecDetailPage() {
                         className="hover:text-primary transition-colors"
                         data-testid="flavor-followers"
                       >
-                        {followers === 0 ? "None follow it yet" : `${plural(followers, "cluster")} follow${followers === 1 ? "s" : ""} it`}
+                        {followers === 0 ? "None follow it yet" : `${follow} it`}
                       </button>
                     )
                   }

@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
 import { FlavorEditor } from "@/components/specs/flavor-editor/flavor-editor";
 import { draftFromSpec } from "@/components/specs/flavor-editor/model";
-import { specApiPath } from "@/lib/specs";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { SpecDetail } from "@/types";
 
@@ -28,8 +28,8 @@ export default function EditSpecPage() {
   const [generation, setGeneration] = useState(0);
 
   const { data: spec, error, isFetchedAfterMount, refetch } = useQuery<SpecDetail>({
-    queryKey: ["specs", name],
-    queryFn: () => api.get<SpecDetail>(specApiPath(name)),
+    queryKey: day1Keys.specs.one(name),
+    queryFn: () => day1Api.specs.get(name),
     staleTime: 60_000,
     refetchOnMount: "always",
     retry: (count, e) => !isApiError(e, "VALIDATION_ERROR") && !isApiError(e, "NOT_FOUND") && count < 2,

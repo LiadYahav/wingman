@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api } from "@/lib/api/day1";
 import { useAuthStore } from "@/stores/auth-store";
-import type { UserInfo } from "@/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type DevRole = "admin" | "viewer";
@@ -37,17 +37,6 @@ function devLoginError(err: unknown): string {
   return "Dev login failed. Is the day1 service running?";
 }
 
-interface AuthCallbackResponse {
-  access_token: string;
-  token_type: string;
-  user: UserInfo;
-}
-
-interface AuthConfigResponse {
-  authorize_url: string;
-  dev_auth_enabled?: boolean;
-}
-
 function Spinner() {
   return (
     <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -77,11 +66,7 @@ function LoginContent() {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await api.post<AuthCallbackResponse>(
-          "/api/auth/callback",
-          { code },
-          { redirectOnUnauthorized: false }
-        );
+        const data = await day1Api.auth.callback(code);
         login(data.access_token, data.user);
         router.replace(safeRedirect(searchParams.get("redirect")));
       } catch (err) {
@@ -101,7 +86,7 @@ function LoginContent() {
   }, [isAuthenticated, searchParams, router]);
 
   useEffect(() => {
-    api.get<AuthConfigResponse>("/api/auth/config")
+    day1Api.auth.config()
       .then((cfg) => { if (cfg.dev_auth_enabled) setDevAuthEnabled(true); })
       .catch(() => {});
   }, []);
@@ -110,7 +95,7 @@ function LoginContent() {
     setIsLoading(true);
     setError(null);
     try {
-      const config = await api.get<AuthConfigResponse>("/api/auth/config");
+      const config = await day1Api.auth.config();
       window.location.href = config.authorize_url;
     } catch {
       setError("Could not reach the authentication server. Please try again.");
@@ -128,11 +113,7 @@ function LoginContent() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await api.post<AuthCallbackResponse>(
-        "/api/auth/dev-login",
-        { username, role: devRole, secret: devSecret },
-        { redirectOnUnauthorized: false }
-      );
+      const data = await day1Api.auth.devLogin({ username, role: devRole, secret: devSecret });
       // The isAuthenticated effect above navigates once the store updates.
       login(data.access_token, data.user);
     } catch (err) {

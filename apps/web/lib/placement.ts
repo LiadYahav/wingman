@@ -11,7 +11,8 @@
  */
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import type { Placement, PlacementCandidate, PlacementCheck } from "@/types";
 
 /** The environments a new cluster can be created in. */
@@ -68,27 +69,14 @@ export function placementNeeds(nodepools: unknown): string[] {
 }
 
 /**
- * `GET /api/day1/placement?...` for `query`; empty parameters are left out, each
- * need is one `need`. With no need, an empty `need=` tells day1 the nodepools
- * name no node type yet, so it does not fall back to the flavor's presets.
- */
-function placementPath(query: PlacementQuery): string {
-  const params = new URLSearchParams();
-  const { needs = [], ...single } = query;
-  for (const [key, value] of Object.entries(single)) if (value) params.set(key, value);
-  for (const need of needs.length > 0 ? needs : [""]) params.append("need", need);
-  return `/api/day1/placement?${params.toString()}`;
-}
-
-/**
  * The placement for `query`, read now (a few seconds' cache, never restored
  * from storage). While another query loads, the last answer stays as
  * placeholder data (`isPlaceholderData`), so the numbers do not flash away.
  */
 export function usePlacement(query: PlacementQuery | null) {
   return useQuery<Placement>({
-    queryKey: ["placement", query],
-    queryFn: () => api.get<Placement>(placementPath(query!)),
+    queryKey: day1Keys.placement.query(query),
+    queryFn: () => day1Api.fleet.placement(query!),
     placeholderData: keepPreviousData,
     enabled: query !== null,
     staleTime: 5_000,

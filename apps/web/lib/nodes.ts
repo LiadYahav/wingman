@@ -8,13 +8,12 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import type { ClusterNodes, NodeState, ServerRecord, UninstallNodeRequest, WorkflowRun } from "@/types";
 
 /** The nodes, or "off": day1 answers 501 FEATURE_DISABLED when it cannot read the MCE (live status is off). */
 export type NodesRead = { off: false; data: ClusterNodes } | { off: true; detail: string };
-
-const nodesKey = (name: string) => ["clusters", name, "nodes"] as const;
 
 /** How often the nodes are read again while something moves (an update, a Machine coming or going, a run), and otherwise. */
 const BUSY_POLL_MS = 10_000;
@@ -22,8 +21,6 @@ const IDLE_POLL_MS = 60_000;
 
 /** A Machine on its way somewhere: worth watching. A `waiting` one can wait for hours, so it is not. */
 const MOVING: ReadonlySet<NodeState> = new Set(["deleting", "installing", "joining"]);
-
-const nodesPath = (name: string) => `/api/day1/clusters/${encodeURIComponent(name)}/nodes`;
 
 export const isRunning = (run: WorkflowRun | null | undefined): boolean => run?.status === "running";
 
@@ -64,10 +61,10 @@ export function useClusterNodes(
   { enabled = true, watching = false }: { enabled?: boolean; watching?: boolean } = {}
 ) {
   return useQuery<NodesRead>({
-    queryKey: nodesKey(name),
+    queryKey: day1Keys.clusters.nodes(name),
     queryFn: async () => {
       try {
-        return { off: false, data: await api.get<ClusterNodes>(`${nodesPath(name)}${where}`) };
+        return { off: false, data: await day1Api.clusters.nodes(name, where) };
       } catch (e) {
         if (isApiError(e, "FEATURE_DISABLED")) return { off: true, detail: e.message };
         throw e;
@@ -92,13 +89,10 @@ export function useClusterNodes(
  */
 export function useUninstallNode(name: string, where: string) {
   const queryClient = useQueryClient();
-  const refresh = () => queryClient.invalidateQueries({ queryKey: nodesKey(name) });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: day1Keys.clusters.nodes(name) });
   return useMutation({
     mutationFn: ({ server, typed }: { server: ServerRecord; typed: string }) =>
-      api.post<WorkflowRun>(
-        `${nodesPath(name)}/${encodeURIComponent(server.id)}/uninstall${where}`,
-        { server_name: typed } satisfies UninstallNodeRequest
-      ),
+      day1Api.clusters.uninstallNode(name, server.id, where, { server_name: typed } satisfies UninstallNodeRequest),
     onSuccess: () => void refresh(),
     onError: (error) => {
       if (STALE_LIST_CODES.some((code) => isApiError(error, code))) void refresh();

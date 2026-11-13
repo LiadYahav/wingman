@@ -8,14 +8,14 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { isOpen } from "@/lib/upgrade";
 import type {
   ErrorCode,
   StartUpgradeRequest,
   UpgradeDecision,
   UpgradeDecisionRequest,
-  UpgradeDecisionResult,
   UpgradeRun,
   UpgradeTargets,
 } from "@/types";
@@ -34,9 +34,7 @@ const STALE_RUN_CODES: readonly ErrorCode[] = [
   "NOT_FOUND",
 ];
 
-const runKey = (name: string) => ["clusters", name, "upgrade-run"] as const;
-const targetsKey = (name: string) => ["clusters", name, "upgrade-targets"] as const;
-const clusterPath = (name: string) => `/api/day1/clusters/${encodeURIComponent(name)}`;
+const runKey = day1Keys.clusters.upgradeRun;
 
 /** Whether a failed write leaves the page's run out of date. */
 export const staleRun = (error: unknown): boolean => STALE_RUN_CODES.some((code) => isApiError(error, code));
@@ -50,7 +48,7 @@ export function useUpgradeRun(name: string, where: string, { enabled = true }: {
     queryKey: runKey(name),
     queryFn: async () => {
       try {
-        return { state: "run", run: await api.get<UpgradeRun>(`${clusterPath(name)}/upgrade-run${where}`) };
+        return { state: "run", run: await day1Api.clusters.upgradeRun(name, where) };
       } catch (e) {
         if (isApiError(e, "FEATURE_DISABLED")) return { state: "off" };
         if (isApiError(e, "NOT_FOUND")) return { state: "none" };
@@ -74,8 +72,8 @@ export function useUpgradeRun(name: string, where: string, { enabled = true }: {
  */
 export function useUpgradeTargets(name: string, where: string, enabled: boolean) {
   return useQuery<UpgradeTargets>({
-    queryKey: targetsKey(name),
-    queryFn: () => api.get<UpgradeTargets>(`${clusterPath(name)}/upgrade-targets${where}`),
+    queryKey: day1Keys.clusters.upgradeTargets(name),
+    queryFn: () => day1Api.clusters.upgradeTargets(name, where),
     enabled,
     staleTime: 30_000,
     retry: false,
@@ -100,7 +98,7 @@ function useRunUpdates(name: string) {
 export function useStartUpgrade(name: string, where: string) {
   const updates = useRunUpdates(name);
   return useMutation({
-    mutationFn: (body: StartUpgradeRequest) => api.post<UpgradeRun>(`${clusterPath(name)}/upgrade${where}`, body),
+    mutationFn: (body: StartUpgradeRequest) => day1Api.clusters.startUpgrade(name, where, body),
     onSuccess: (run) => updates.show(run),
     onError: updates.refreshIfStale,
   });
@@ -111,7 +109,7 @@ export function useUpgradeDecision(name: string, where: string) {
   const updates = useRunUpdates(name);
   return useMutation({
     mutationFn: ({ decision, body }: { decision: UpgradeDecision; body: UpgradeDecisionRequest }) =>
-      api.post<UpgradeDecisionResult>(`${clusterPath(name)}/upgrade-run/${decision}${where}`, body),
+      day1Api.clusters.decideUpgrade(name, where, decision, body),
     onSuccess: (result) => updates.show(result.run),
     onError: updates.refreshIfStale,
   });
@@ -122,9 +120,7 @@ export function useUpgradeActionDecision(name: string, where: string) {
   const updates = useRunUpdates(name);
   return useMutation({
     mutationFn: ({ actionId, approve }: { actionId: string; approve: boolean }) =>
-      api.post<UpgradeDecisionResult>(
-        `${clusterPath(name)}/upgrade-run/actions/${encodeURIComponent(actionId)}/${approve ? "approve" : "reject"}${where}`
-      ),
+      day1Api.clusters.decideUpgradeAction(name, where, actionId, approve),
     onSuccess: (result) => updates.show(result.run),
     onError: updates.refreshIfStale,
   });

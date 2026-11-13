@@ -9,15 +9,6 @@ const SPEC_NAME = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
 const SPEC_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
 const MAX_NAME = 63;
 
-/**
- * `/api/day1/specs/{name}`; for a write, guarded by the `last_commit_id` the
- * spec was read at, when the read gave one (ADR-0006).
- */
-export function specApiPath(name: string, lastCommitId?: string | null): string {
-  const path = `/api/day1/specs/${encodeURIComponent(name)}`;
-  return lastCommitId ? `${path}?last_commit_id=${encodeURIComponent(lastCommitId)}` : path;
-}
-
 /** Why a spec name would be refused (a DNS-1123 label); `null` when it is fine. */
 export function specNameProblem(name: string): string | null {
   if (!name) return "A spec name is required";

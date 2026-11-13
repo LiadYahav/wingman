@@ -296,9 +296,11 @@ and write yours here.
   - day2's and day1's API schemas, one module per router; the OpenAPI
     document is byte-identical (3.14.1, 3.18.1);
   - the web's type files by section (3.18.2);
-  - the docs page, one file per section (3.18.3).
+  - the docs page, one file per section (3.18.3);
+  - the web calls day1 through `lib/api/day1/` (`day1Api`, `day1Keys`,
+    3.18.5).
 
-  36 files are left in `scripts/file-size-baseline.txt`.
+  34 files are left in `scripts/file-size-baseline.txt`.
 - **Segments area** (ADR-0047, 3.15.0): segments-manager's page in Wingman,
   read-only, admins only, from the top bar's area switch, on a shared
   TanStack table (`components/data-table/`) with Vitest for pure logic. In

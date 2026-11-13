@@ -2,14 +2,15 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Layers, Server, RefreshCw, Search, X, ChevronsUpDown, FileWarning, SlidersHorizontal } from "lucide-react";
-import { api } from "@/lib/api-client";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Layers, Server, Search, X, ChevronsUpDown, FileWarning, SlidersHorizontal } from "lucide-react";
+import { day1Api, day1Keys } from "@/lib/api/day1";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, plural } from "@/lib/utils";
 import { useIsAdmin } from "@/stores/auth-store";
 import { ProblemList } from "@/components/common/problem-list";
+import { RefreshButton } from "@/components/common/refresh-button";
 import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty-state";
 import { structureSummary } from "@/lib/specs";
 import type { SpecEntry } from "@/types";
@@ -67,11 +68,11 @@ function SpecCard({ spec }: { spec: SpecEntry }) {
           )}
           {presets > 0 && (
             <span className="flex items-center gap-1">
-              <SlidersHorizontal className="h-3 w-3" />{presets} preset{presets !== 1 ? "s" : ""}
+              <SlidersHorizontal className="h-3 w-3" />{plural(presets, "preset")}
             </span>
           )}
           <span className="flex items-center gap-1">
-            <Server className="h-3 w-3" />{addons > 0 ? `${addons} addon${addons !== 1 ? "s" : ""}` : "No addons"}
+            <Server className="h-3 w-3" />{addons > 0 ? plural(addons, "addon") : "No addons"}
           </span>
         </div>
         {spec.metadata.labels && Object.keys(spec.metadata.labels).length > 0 && (
@@ -87,14 +88,13 @@ function SpecCard({ spec }: { spec: SpecEntry }) {
 }
 
 export default function SpecsPage() {
-  const queryClient = useQueryClient();
   const isAdmin = useIsAdmin();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("name-asc");
 
   const { data: specs, isLoading, isFetching, error } = useQuery<SpecEntry[]>({
-    queryKey: ["specs"],
-    queryFn: () => api.get<SpecEntry[]>("/api/day1/specs"),
+    queryKey: day1Keys.specs.all,
+    queryFn: day1Api.specs.list,
     staleTime: 60_000,
   });
 
@@ -153,15 +153,7 @@ export default function SpecsPage() {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => queryClient.invalidateQueries({ queryKey: ["specs"] })}
-            disabled={isFetching}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
-            title="Refresh flavors"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-            Refresh
-          </button>
+          <RefreshButton queryKey={day1Keys.specs.all} fetching={isFetching} title="Refresh flavors" />
           {isAdmin && (
             <Link href="/specs/new" className={buttonVariants({ size: "sm" })}>
               <Plus className="h-4 w-4 mr-1.5" />New Flavor
