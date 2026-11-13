@@ -84,6 +84,26 @@ function DiffFileList({ diffs }: { diffs: FileDiff[] }) {
   );
 }
 
+/** An expanded row's diff: loading, why it could not be read, or its files. */
+function RowDiffs({ loading, error, problemTitle, diffs }: { loading: boolean; error: unknown; problemTitle: string; diffs: FileDiff[] }) {
+  return (
+    <div className="mb-2 -mx-4">
+      {loading ? (
+        <div className="px-6 pb-3 space-y-1">
+          <Skeleton className="h-3 w-48" />
+          <Skeleton className="h-3 w-64" />
+        </div>
+      ) : error ? (
+        <div className="px-6 pb-3">
+          <ProblemList error={error} title={problemTitle} />
+        </div>
+      ) : (
+        <DiffFileList diffs={diffs} />
+      )}
+    </div>
+  );
+}
+
 function CommitRow({ commit }: { commit: CommitRecord }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -128,20 +148,7 @@ function CommitRow({ commit }: { commit: CommitRecord }) {
         </div>
       </button>
       {expanded && (
-        <div className="mb-2 -mx-4">
-          {diffsLoading ? (
-            <div className="px-6 pb-3 space-y-1">
-              <Skeleton className="h-3 w-48" />
-              <Skeleton className="h-3 w-64" />
-            </div>
-          ) : diffsError ? (
-            <div className="px-6 pb-3">
-              <ProblemList error={diffsError} title="The commit's diff could not be loaded" />
-            </div>
-          ) : (
-            <DiffFileList diffs={diffs ?? []} />
-          )}
-        </div>
+        <RowDiffs loading={diffsLoading} error={diffsError} problemTitle="The commit's diff could not be loaded" diffs={diffs ?? []} />
       )}
     </div>
   );
@@ -216,20 +223,7 @@ function MRRow({ mr }: { mr: MRDetail }) {
         </div>
       </button>
       {expanded && (
-        <div className="mb-2 -mx-4">
-          {detailLoading ? (
-            <div className="px-6 pb-3 space-y-1">
-              <Skeleton className="h-3 w-48" />
-              <Skeleton className="h-3 w-64" />
-            </div>
-          ) : detailError ? (
-            <div className="px-6 pb-3">
-              <ProblemList error={detailError} title="The merge request's diff could not be loaded" />
-            </div>
-          ) : (
-            <DiffFileList diffs={detail?.diffs ?? []} />
-          )}
-        </div>
+        <RowDiffs loading={detailLoading} error={detailError} problemTitle="The merge request's diff could not be loaded" diffs={detail?.diffs ?? []} />
       )}
     </div>
   );
