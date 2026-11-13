@@ -1,48 +1,24 @@
 "use client";
 
-import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
-import { SidebarNav } from "./sidebar-nav";
+import { useState } from "react";
 import { UserMenu } from "./user-menu";
+import { AreaBrand } from "./area-brand";
+import { AreaSidebar } from "./area-sidebar";
 import { AreaSwitch } from "./area-switch";
-import { EasterEgg, triggerEasterEgg } from "./easter-egg";
+import { EasterEgg } from "./easter-egg";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { useSegmentsArea } from "@/lib/api/segments";
+import { chromeArea, type AreaId } from "@/lib/areas";
 
-const CLICKS_TO_TRIGGER = 5;
-const RESET_MS = 2000;
-
-function SidebarLogo() {
-  const clickCount = useRef(0);
-  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleLogoClick = useCallback(() => {
-    clickCount.current += 1;
-    if (resetTimer.current) clearTimeout(resetTimer.current);
-    resetTimer.current = setTimeout(() => { clickCount.current = 0; }, RESET_MS);
-    if (clickCount.current >= CLICKS_TO_TRIGGER) {
-      clickCount.current = 0;
-      triggerEasterEgg();
-    }
-  }, []);
-
+/** The current area's brand and sidebar: each platform wears its own (ADR-0047's amendment). */
+function SidebarContent({ area }: { area: AreaId }) {
   return (
-    <Link href="/" className="flex h-14 items-center gap-2.5 px-4" onClick={handleLogoClick}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/wingman-logo.svg" alt="Wingman" width={32} height={32} className="rounded-lg" />
-      <span className="text-[17px] font-semibold tracking-tight text-foreground">
-        Wing<span className="text-primary">man</span>
-      </span>
-    </Link>
-  );
-}
-
-function SidebarContent() {
-  return (
-    <div className="flex h-full w-full flex-col border-r border-sidebar-border bg-sidebar">
-      <SidebarLogo />
+    <div className="flex h-full w-full flex-col border-r border-sidebar-border bg-sidebar" data-area={area}>
+      <AreaBrand area={area} />
       <div className="flex-1 overflow-y-auto pt-2">
-        <SidebarNav />
+        <AreaSidebar area={area} />
       </div>
     </div>
   );
@@ -50,18 +26,19 @@ function SidebarContent() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const area = chromeArea(usePathname(), { segments: useSegmentsArea() });
 
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden md:flex md:w-[220px] md:shrink-0">
-        <SidebarContent />
+        <SidebarContent area={area} />
       </div>
 
       {/* Mobile sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="p-0 w-[220px] border-0">
-          <SidebarContent />
+          <SidebarContent area={area} />
         </SheetContent>
       </Sheet>
 

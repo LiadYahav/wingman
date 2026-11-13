@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Network, Plane, type LucideIcon } from "lucide-react";
+import { Plane, Server, type LucideIcon } from "lucide-react";
 import { useSegmentsArea } from "@/lib/api/segments";
 import { areaOf, areasFor, type AreaId } from "@/lib/areas";
 import { cn } from "@/lib/utils";
 
-const ICONS: Record<AreaId, LucideIcon> = { wingman: Plane, segments: Network };
+const ICONS: Record<AreaId, LucideIcon> = { wingman: Plane, segments: Server };
 
 /**
  * The top bar's area switch: plain links, one per area this person has, the
@@ -19,7 +19,7 @@ export function AreaSwitch() {
   const areas = areasFor({ segments: useSegmentsArea() === true });
   if (areas.length < 2) return null;
   return (
-    <nav aria-label="Areas" className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+    <nav aria-label="Platform" className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
       {areas.map((area) => {
         const active = area.id === current;
         const Icon = ICONS[area.id];

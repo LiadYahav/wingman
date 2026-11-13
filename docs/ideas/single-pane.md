@@ -230,7 +230,9 @@ at and decide what stays: the API below, the page at `/segments` from the
 top bar's area switch, the shared table and Vitest from workstream 2's
 groundwork (only what this page needs). Its cuts (no Excel, no connection
 dot, no `/api/logs`, a Type filter row instead of column filters) are
-listed in `docs/notes/2026-11-13-segments-area-api.md` §7.
+listed in `docs/notes/2026-11-13-segments-area-api.md` §7. Since 3.17.0
+the area has its own sidebar and brand (ADR-0047's amendment), the first
+piece of workstream 2's "each area has its own sidebar".
 
 segments-manager's UI is one read-only page today (it lost its writes in
 July); its reads need no token.

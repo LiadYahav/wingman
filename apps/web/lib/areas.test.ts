@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { areaOf, areasFor } from "./areas";
+import { areaById, areaOf, areasFor, chromeArea } from "./areas";
 
 describe("the areas", () => {
   it("puts /segments and below in Segments, everything else in Wingman", () => {
@@ -16,5 +16,18 @@ describe("the areas", () => {
       ["Segments", "/segments"],
     ]);
     expect(areasFor({ segments: false }).map((a) => a.id)).toEqual(["wingman"]);
+  });
+
+  it("gives each area its brand: Wingman's logo, segments-manager's rack and name", () => {
+    expect(areaById("wingman").brand).toEqual({ name: "Wingman", mark: "wingman-logo" });
+    expect(areaById("segments").brand).toEqual({ name: "Segments Manager", mark: "server" });
+    expect(areaById("segments").href).toBe("/segments");
+  });
+
+  it("dresses a page in its area's chrome only for someone who has the area", () => {
+    expect(chromeArea("/segments", { segments: true })).toBe("segments");
+    expect(chromeArea("/segments", { segments: undefined })).toBe("segments");
+    expect(chromeArea("/segments", { segments: false })).toBe("wingman");
+    expect(chromeArea("/clusters", { segments: true })).toBe("wingman");
   });
 });
