@@ -125,7 +125,7 @@ export interface FleetDefault {
   /** `defaults/<scope>/<chart>/values.yaml`. */
   values: Record<string, unknown>;
   values_exists: boolean;
-  /** Effective: the team default with the fleet layer on top. */
+  /** Effective: the add-on's with the fleet layer on top. */
   sync: SyncSettings;
   /** The fleet layer (`defaults/<scope>/<chart>/<chart>.yaml`) sets `syncPolicy`. */
   sync_overridden: boolean;
@@ -149,10 +149,10 @@ export interface GitLabInfo {
 
 // ── Catalog (ADR-0024) ───────────────────────────────────────────────────────
 
-/** The team default deploy config (`operators/<chart>/<chart>.yaml`), legacy spelling. */
+/** The add-on's deploy config (`operators/<chart>/<chart>.yaml`), legacy spelling. */
 export interface ArgoMetadata {
   projectNamespace: string;
-  /** "" when the team default only has the miscased `repoUrl` (see `warnings`). */
+  /** "" when the add-on only has the miscased `repoUrl` (see `warnings`). */
   repourl: string;
   /** Defaults to `HEAD`: the chart repo's default branch. */
   targetRevision: string;
@@ -172,9 +172,9 @@ export interface CatalogEntry {
   name: string;
   /** The chart repo's branches: default branch first, then newest release first. */
   available_versions: string[];
-  /** The team default `targetRevision`, else `HEAD`. */
+  /** The add-on's `targetRevision`, else `HEAD`. */
   current_version: string;
-  /** The team's `values.yaml`, verbatim. */
+  /** The Sig values, `operators/<chart>/values.yaml`, verbatim. */
   default_values: Record<string, unknown>;
   argocd_metadata: ArgoMetadata;
   /** Always empty: day2 has no dependency concept. Kept for the legacy shape. */
@@ -455,7 +455,8 @@ export interface CreateAddonBody {
 }
 
 /**
- * `PUT /api/day2/addons/{team}/{addon}`: an absent field is unchanged; `null`
+ * `PUT /api/day2/addons/{team}/{addon}`, Edit add-on (the API's team default,
+ * hence the name): an absent field is unchanged; `null`
  * for `target_revision`, `path`, `project_namespace` or `ignore_differences`
  * removes that key.
  */
@@ -476,7 +477,7 @@ export interface UpdateTeamDefaultBody {
 /** `POST /api/day2/addons/{team}/{addon}/defaults/{scope}`. */
 export interface MakeDefaultBody {
   values: Record<string, unknown>;
-  /** `null`: inherit the team default's. */
+  /** `null`: inherit the add-on's. */
   sync: SyncSettings | null;
   /** Cluster ids, from a dry run's `needs_confirmation`. */
   confirm_changes: string[];
@@ -739,7 +740,7 @@ export interface ScopePanel {
   values_file: RepoFile;
   /** `defaults/<scope>/<op>/<chart>.yaml`: the sync override. */
   deploy_config: RepoFile;
-  /** Effective, over the team default. */
+  /** Effective, over the add-on's. */
   sync: SyncSettings;
   sync_overridden: boolean;
   /** The `values-<env>.yaml` files that exist (read-only). */

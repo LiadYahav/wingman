@@ -510,7 +510,7 @@ export interface ClusterLiveStatus {
 /** `unknown`: day2 did not answer or the spec is gone (`error` says which). */
 export type DriftState = "in_sync" | "drifted" | "unknown" | "not_linked";
 
-/** A spec addon the cluster does not have: the drift. The fix installs it at the team default. */
+/** A spec addon the cluster does not have: the drift. The fix installs it at the add-on's revision. */
 export interface AddonDrift {
   addon_name: string;
   team: string;

@@ -917,8 +917,9 @@ nodepool:
           <SectionHeader id="addons" icon={Package} title="Day2 Addons" subtitle="Install, configure, and manage charts on the hub, MCEs, hosted and UPI clusters" />
           <p className="text-sm text-muted-foreground leading-relaxed mb-5">
             Addons are Helm charts the platform&apos;s ArgoCD deploys. Each belongs to a <strong>team</strong>,
-            whose GitLab project under the sigs group holds the chart&apos;s team default
-            (<InlineCode>operators/{"{chart}"}/</InlineCode>) and a folder per destination that gets it. A
+            whose GitLab project under the sigs group holds the add-on itself
+            (<InlineCode>operators/{"{chart}"}/</InlineCode>: its deploy config and Sig values) and a folder per
+            destination that gets it. A
             folder existing is the registration: Wingman installs a chart by opening an MR that adds the folder.
             There are four kinds of destination:
           </p>
@@ -930,20 +931,25 @@ upi      sites/{site}/{env}/upi/{cluster}/{chart}/`}
           </CodeBlock>
           <p className="text-sm text-muted-foreground leading-relaxed mt-3 mb-5">
             The <strong>Addons</strong> page (<strong>Addon Catalog</strong>) lists every team&apos;s add-ons with their
-            team values, deploy config, versions and fleet defaults; a hosted cluster&apos;s charts are on its page.
+            Sig values, deploy config, versions and fleet defaults; a hosted cluster&apos;s charts are on its page.
           </p>
 
           <h3 className="text-base font-semibold mt-6 mb-3">A team&apos;s add-ons and their defaults</h3>
           <p className="text-sm text-muted-foreground leading-relaxed mb-3">
             An add-on is a chart in a team&apos;s catalog: <InlineCode>operators/{"{chart}"}/</InlineCode> in the team&apos;s
-            repo, with its deploy config and team values, and the fleet defaults built from it
+            repo, with its deploy config and Sig values, and the fleet defaults built from it
             (<InlineCode>defaults/{"{scope}"}/{"{chart}"}/</InlineCode>). Everything about it is on the{" "}
             <strong>Addons</strong> page:
           </p>
+          <CodeBlock language="An add-on's values (lowest → highest)">
+{`Chart values    the chart's own values.yaml
+Sig values      operators/{chart}/values.yaml in the team's repo
+Cluster values  what a cluster gets where the add-on is used: create, a flavor, its charts page`}
+          </CodeBlock>
           <ul className="text-sm text-muted-foreground leading-relaxed mb-3 list-disc space-y-1 pl-5">
             <li>
               <strong>New add-on</strong>, on a team, adds one to the team&apos;s catalog; an add-on&apos;s{" "}
-              <strong>Edit team default</strong> changes its deploy config, sync options and team values.
+              <strong>Edit add-on</strong> (the same fields) changes its deploy config, sync options and Sig values.
             </li>
             <li>
               Its <strong>Defaults &amp; overrides</strong> page has one panel per scope (hosted clusters, MCEs, the hub,
@@ -972,8 +978,8 @@ upi      sites/{site}/{env}/upi/{cluster}/{chart}/`}
           </p>
           <CodeBlock language="Hosted-cluster value stack (lowest → highest)">
 {`chart                 the chart's own values.yaml, at the resolved revision
-team                  operators/{chart}/values.yaml
-team · ocp            operators/{chart}/ocp-versions/{ocp}/values.yaml
+sig values            operators/{chart}/values.yaml
+sig values · ocp      operators/{chart}/ocp-versions/{ocp}/values.yaml
 site                  sites/{site}/values.yaml
 site · env            sites/{site}/{env}/values.yaml
 fleet                 defaults/hosted-clusters/{chart}/values.yaml
@@ -1006,7 +1012,7 @@ cluster               …/{cluster}/{chart}/values.yaml
             </Step>
             <Step n={3} title="Set only what differs">
               The form shows the values the chart would get; change only what this destination needs. The revision is
-              inherited (the team default, its OCP-version pin, or a fleet default; else <InlineCode>HEAD</InlineCode>,
+              inherited (the add-on&apos;s, its OCP-version pin, or a fleet default; else <InlineCode>HEAD</InlineCode>,
               the chart repo&apos;s default branch).
             </Step>
             <Step n={4} title="Review and open the MR">
@@ -1024,7 +1030,7 @@ cluster               …/{cluster}/{chart}/values.yaml
             <p className="text-xs text-muted-foreground leading-relaxed min-w-0">
               Choosing a <strong>Revision</strong> other than the inherited one writes a{" "}
               <InlineCode>targetRevision</InlineCode> into the destination&apos;s folder: an{" "}
-              <strong>emergency pin</strong>. The destination then stops following the team default and its
+              <strong>emergency pin</strong>. The destination then stops following the add-on&apos;s revision and its
               OCP-version pins until someone removes the pin, so you must tick <strong>Pin … anyway</strong> first.
               On every destination but the hub, a pinned chart shows a <strong>pinned</strong> badge; choosing the
               inherited revision again removes the pin. This is the only way Wingman holds one cluster at a version.
@@ -1109,11 +1115,11 @@ cluster               …/{cluster}/{chart}/values.yaml
           </div>
 
           <Callout type="tip" title="Addon override example">
-            Say the redbull team&apos;s <InlineCode>cluster-roles</InlineCode> chart has a team default of{" "}
+            Say the Sig values of the redbull team&apos;s <InlineCode>cluster-roles</InlineCode> chart set{" "}
             <InlineCode>aggregateToView: true</InlineCode>. For <InlineCode>ocp4-prod-herzi-site1</InlineCode> you set{" "}
             <InlineCode>aggregateToView: false</InlineCode>. Only that value is written, to{" "}
             <InlineCode>sites/site1/prod/mces/ocp4-prod-mce-site1-a/ocp4-prod-herzi-site1/cluster-roles/values.yaml</InlineCode>{" "}
-            in the redbull repository; the team default is unaffected.
+            in the redbull repository; the Sig values are unaffected.
           </Callout>
         </section>
 
@@ -1549,7 +1555,7 @@ maxConcurrentControlPlanes: 1`}
                 </div>
               </div>
               <div className="divide-y">
-                <FileRow file="operators/{chart}/{chart}.yaml, values.yaml" where="per-team project root" desc="The team default: where the chart comes from (repourl, targetRevision, path) and its values. Maintained by the owning team; operators/{chart}/ocp-versions/{ocp}/ holds per-OCP-version pins." />
+                <FileRow file="operators/{chart}/{chart}.yaml, values.yaml" where="per-team project root" desc="The add-on: where the chart comes from (repourl, targetRevision, path) and its Sig values (values.yaml). Maintained by the owning team; operators/{chart}/ocp-versions/{ocp}/ holds per-OCP-version pins." />
                 <FileRow file="sites/{site}/{env}/mces/{mce}/{cluster}/{chart}/values.yaml" where="per-team project root" desc="A hosted cluster's values for the chart, written by Wingman on install and update. MCEs use …/mces/{mce}/in-cluster/{chart}/, UPI clusters sites/{site}/{env}/upi/{cluster}/{chart}/, the hub defaults/hub/{chart}/." />
                 <FileRow file="…/{chart}/{chart}.yaml" where="per-team project root" desc="Written only when the destination needs a deploy-config key it does not inherit: a repourl (when no layer sets a lowercase one) or an emergency targetRevision pin. Choosing the inherited revision again removes the pin, and deletes the file if nothing else is left in it." />
                 <FileRow file="defaults/{scope}/{chart}/values-{cluster}.yaml" where="per-team project root" desc="A fleet default's values for one cluster, written when you edit a fleet default there." />
@@ -1611,7 +1617,7 @@ maxConcurrentControlPlanes: 1`}
               },
               {
                 q: "An install asks me to confirm an emergency pin",
-                a: "You chose a revision other than the inherited one. Pick the inherited revision to follow the team default, or confirm the pin if this destination really must stay on that version.",
+                a: "You chose a revision other than the inherited one. Pick the inherited revision to follow the add-on, or confirm the pin if this destination really must stay on that version.",
               },
               {
                 q: "I cannot see Create / Install / Remove / Approve buttons",

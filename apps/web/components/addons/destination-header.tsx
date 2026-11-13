@@ -80,7 +80,7 @@ export function ArgoNote({ note }: { note: string }) {
 }
 
 /**
- * Which version-pinned charts would silently fall back to their team default
+ * Which version-pinned charts would silently fall back to the add-on's revision
  * if the destination moved to another OCP version (no `ocp-versions/<to>/`).
  */
 export function UpgradeCheckPanel({ clusterId, from }: { clusterId: string; from: string | null }) {
@@ -140,7 +140,7 @@ export function UpgradeCheckPanel({ clusterId, from }: { clusterId: string; from
       ) : (
         <p className="text-xs text-muted-foreground">
           Lists the charts pinned per OCP version that have no <code>ocp-versions/&lt;to&gt;/</code> folder and would
-          fall back to the team default.
+          fall back to the add-on&apos;s revision.
         </p>
       )}
     </section>

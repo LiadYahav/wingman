@@ -17,7 +17,7 @@ import type {
   UpdateTeamDefaultBody,
 } from "@/types/day2";
 
-/** The team default's `targetRevision` as typed: blank for `HEAD`, which writes no key. */
+/** The add-on's `targetRevision` as typed: blank for `HEAD`, which writes no key. */
 function revisionText(entry: CatalogEntry): string {
   const revision = entry.argocd_metadata.targetRevision;
   return revision === "HEAD" ? "" : revision;
@@ -29,13 +29,14 @@ function pathText(entry: CatalogEntry): string {
 }
 
 /**
- * The add-on's team default (ADR-0043): `operators/<chart>/<chart>.yaml`,
- * edited in place, and its `values.yaml`. Only the fields that change are
+ * Edit add-on (ADR-0043): `operators/<chart>/<chart>.yaml`, edited in place,
+ * and its Sig values, `values.yaml` (the API's team default): the fields of
+ * New add-on. Only the fields that change are
  * sent; a blank optional field removes its key. Guarded by the commit the
  * entry was read at (ADR-0006); the plan says which destinations change, and
  * they are confirmed before the MR opens (ADR-0053).
  */
-export function EditTeamDefaultDialog({
+export function EditAddonDialog({
   entry,
   open,
   onOpenChange,
@@ -89,13 +90,13 @@ export function EditTeamDefaultDialog({
     <AuthoringDialogs
       open={open}
       onOpenChange={onOpenChange}
-      title={`Edit the team default of ${entry.team}/${entry.name}`}
+      title={`Edit add-on ${entry.team}/${entry.name}`}
       description={`Changes operators/${entry.name}/ through one merge request: every destination that gets ${entry.name} from ${entry.team} and does not override what changes. The preview lists each one.`}
       blocker={blocker}
       readOnlyReason={readOnlyReason}
       body={body}
       method="put"
-      url={(dryRun) => day2Api.teamDefault(entry.team, entry.name, dryRun)}
+      url={(dryRun) => day2Api.editAddon(entry.team, entry.name, dryRun)}
       onOpened={onOpened}
     >
       <p className="text-xs text-muted-foreground">
@@ -123,7 +124,7 @@ export function EditTeamDefaultDialog({
       <SyncOptionsControl value={sync} onChange={setSync} known={template.data?.known_sync_options ?? DEFAULT_SYNC.sync_options} />
       <IgnoreDifferencesField path={`operators/${entry.name}/${entry.name}.yaml`} text={ignoreText} onTextChange={setIgnoreText} />
       <YamlValuesField
-        label="Team values"
+        label="Sig values"
         path={`operators/${entry.name}/values.yaml`}
         initial={entry.default_values}
         onChange={setValues}
@@ -132,7 +133,7 @@ export function EditTeamDefaultDialog({
   );
 }
 
-/** Inherit the team default's sync options, or set the fleet layer's own. */
+/** Inherit the add-on's sync options, or set the fleet layer's own. */
 function SyncInheritance({
   inherit,
   onInheritChange,
@@ -156,7 +157,7 @@ function SyncInheritance({
       <div role="radiogroup" aria-label={name} className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
         <label className="flex items-center gap-2">
           <input type="radio" name={name} checked={inherit} onChange={() => onInheritChange(true)} />
-          Inherit the team default&apos;s <span className="text-muted-foreground">({inherited})</span>
+          Inherit the add-on&apos;s <span className="text-muted-foreground">({inherited})</span>
         </label>
         <label className="flex items-center gap-2">
           <input type="radio" name={name} checked={!inherit} onChange={() => onInheritChange(false)} />
@@ -233,7 +234,7 @@ export function MakeDefaultDialog({
         path={`${panel.folder}/values.yaml`}
         initial={{}}
         onChange={setValues}
-        placeholder="# Empty: the team values apply on every destination."
+        placeholder="# Empty: the Sig values apply on every destination."
       />
       <p className="text-xs text-muted-foreground">
         {ownFolders.length > 0
@@ -306,7 +307,7 @@ export function EditFleetDefaultDialog({
         <SyncInheritance
           inherit={inherit}
           onInheritChange={setInherit}
-          inherited={inCatalog ? "the team default" : "no team default"}
+          inherited={inCatalog ? `operators/${chart}/${chart}.yaml` : `none: no operators/${chart}/`}
           sync={sync}
           onSyncChange={setSync}
           known={template.data?.known_sync_options ?? DEFAULT_SYNC.sync_options}

@@ -14,12 +14,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { ChangeResultPanel, type OpenedChanges } from "@/components/addons/change-result";
-import { EditTeamDefaultDialog } from "@/components/addons/default-dialogs";
+import { EditAddonDialog } from "@/components/addons/default-dialogs";
 import { FindingsList } from "@/components/addons/findings";
 import { ReadOnlyBadge, ReadOnlyNote } from "@/components/addons/team-access";
 import { Breadcrumbs, PageTitle, useAddonAccess } from "@/components/addons/page-header";
 import { RepoFileView } from "@/components/addons/repo-file";
 import { ScopePanelCard, type AddonWrites } from "@/components/addons/scope-panel";
+import { ValuesLevels } from "@/components/addons/values-levels";
 import type { AuthoringChange, CatalogEntry, AddonDetail, ScopePanel } from "@/types/day2";
 
 const VERB: Record<string, OpenedChanges["verb"]> = { "create-addon": "Create", "make-default": "Promote" };
@@ -58,15 +59,16 @@ function revisionLabel(entry: CatalogEntry): string {
   return entry.current_version === "HEAD" && head ? `HEAD (${head})` : entry.current_version;
 }
 
-function TeamDefault({ detail, writes }: { detail: AddonDetail; writes: AddonWrites }) {
+/** The add-on itself, `operators/<chart>/`: where it deploys from and how, and its Sig values. */
+function AddonFiles({ detail, writes }: { detail: AddonDetail; writes: AddonWrites }) {
   const [editing, setEditing] = useState(false);
   const entry = detail.catalog;
   const meta = entry?.argocd_metadata;
   return (
     <Card
-      title="Team default"
+      title="Add-on"
       icon={Boxes}
-      label="Team default"
+      label="Add-on"
       action={
         entry &&
         writes.isAdmin && (
@@ -78,7 +80,7 @@ function TeamDefault({ detail, writes }: { detail: AddonDetail; writes: AddonWri
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-7 gap-1.5")}
           >
             <Pencil className="h-3 w-3" />
-            Edit team default
+            Edit add-on
           </button>
         )
       }
@@ -91,8 +93,7 @@ function TeamDefault({ detail, writes }: { detail: AddonDetail; writes: AddonWri
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
-            <code>operators/{detail.name}/</code>: where the chart comes from, how ArgoCD syncs it, and the values every destination
-            starts from, above the chart&apos;s own.
+            <code>operators/{detail.name}/</code>: where the chart comes from, how ArgoCD syncs it, and its Sig values.
           </p>
           <DefinitionList
             items={[
@@ -127,17 +128,18 @@ function TeamDefault({ detail, writes }: { detail: AddonDetail; writes: AddonWri
       <Tabs defaultValue="deploy">
         <TabsList>
           <TabsTrigger value="deploy">{detail.name}.yaml</TabsTrigger>
-          <TabsTrigger value="values">values.yaml</TabsTrigger>
+          <TabsTrigger value="values">Sig values</TabsTrigger>
         </TabsList>
         <TabsContent value="deploy" className="pt-2">
           <RepoFileView file={detail.deploy_config} absent={`No operators/${detail.name}/${detail.name}.yaml.`} />
         </TabsContent>
-        <TabsContent value="values" className="pt-2">
+        <TabsContent value="values" className="space-y-2 pt-2">
+          <ValuesLevels current="Sig values" />
           <RepoFileView file={detail.values_file} absent="No values.yaml: the chart's own values apply." />
         </TabsContent>
       </Tabs>
       {editing && entry && (
-        <EditTeamDefaultDialog
+        <EditAddonDialog
           entry={entry}
           open
           onOpenChange={setEditing}
@@ -154,7 +156,7 @@ function OcpVersions({ detail }: { detail: AddonDetail }) {
     <Card title="OCP-version pins" icon={GitBranch} label="OCP-version pins">
       {detail.ocp_versions.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          None: every OCP version gets the team default&apos;s revision. A pin is <code>operators/{detail.name}/ocp-versions/&lt;version&gt;/</code>,
+          None: every OCP version gets the add-on&apos;s revision. A pin is <code>operators/{detail.name}/ocp-versions/&lt;version&gt;/</code>,
           edited in the repo.
         </p>
       ) : (
@@ -169,7 +171,7 @@ function OcpVersions({ detail }: { detail: AddonDetail }) {
                   </span>
                 </summary>
                 <div className="mt-2 grid gap-3 lg:grid-cols-2">
-                  <RepoFileView file={pin.deploy_config} absent="No deploy config: the team default's revision." />
+                  <RepoFileView file={pin.deploy_config} absent="No deploy config: the add-on's revision." />
                   <RepoFileView file={pin.values_file} absent="No values.yaml for this version." />
                 </div>
               </details>
@@ -201,8 +203,9 @@ function PageSkeleton() {
 }
 
 /**
- * One add-on of a team, reached from the Addons page (ADR-0053): its team
- * default (`operators/<chart>/` in the team repo), its OCP-version pins, and
+ * One add-on of a team, reached from the Addons page (ADR-0053): the add-on
+ * itself (`operators/<chart>/` in the team repo: its deploy config and Sig
+ * values), its OCP-version pins, and
  * one panel per fleet scope: whether it is a default there, which destinations
  * get it, and each destination's overrides. Every write is previewed first and
  * confirmed against the previewed plan. One cluster's add-ons stay on that
@@ -244,8 +247,8 @@ export default function AddonPage() {
               {access.showReason && <ReadOnlyBadge />}
             </div>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              An add-on of <strong>{team}</strong>: its team default, the fleet defaults built from it, which destinations they
-              reach and each one&apos;s overrides. Its install on one cluster is on that cluster&apos;s page.
+              An add-on of <strong>{team}</strong>: its deploy config and Sig values, the fleet defaults built from it, which
+              destinations they reach and each one&apos;s overrides. Its install on one cluster is on that cluster&apos;s page.
             </p>
           </div>
           <button
@@ -279,7 +282,7 @@ export default function AddonPage() {
         <>
           <FindingsList findings={detail.warnings} showContext />
           <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-            <TeamDefault detail={detail} writes={writes} />
+            <AddonFiles detail={detail} writes={writes} />
             <OcpVersions detail={detail} />
           </div>
           <section className="space-y-3" aria-label="Defaults">

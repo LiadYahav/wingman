@@ -20,7 +20,7 @@ function Notice({ icon: Icon, tone, children }: { icon: typeof CheckCircle2; ton
 
 /**
  * Spec addons installed at another version than the spec names. Information
- * only (ADR-0025): day2 keeps a cluster on its team's default unless someone
+ * only (ADR-0025): day2 keeps a cluster on the add-on's revision unless someone
  * pins it on purpose, so there is nothing here to fix.
  */
 function VersionDifferences({ differences }: { differences: VersionDifference[] }) {
