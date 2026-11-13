@@ -87,6 +87,7 @@ from wingman_day2.domain.platform import (
     scope_exclusions,
 )
 from wingman_day2.domain.stacks import Layer, LayerRole
+from wingman_day2.domain.teams import Team
 from wingman_day2.domain.tree import RepoTree
 from wingman_day2.domain.yaml_values import dump_values, parse_values
 from wingman_day2.ports import SigsRepository
@@ -813,27 +814,18 @@ class ChangeService:
             f"{verb} {', '.join(charts)} {'from' if verb is Verb.REMOVE else 'on'} {ref.name}\n\n"
             f"Team: {team.name}\nCluster: {ref.id}\nRequested by {user.username} via Wingman"
         )
-        try:
-            await self._gitlab.commit(
-                team.project.id,
-                branch=branch,
-                start_branch=self._sigs.branch,
-                message=commit_message,
-                changes=plan.changes,
-                author=commit_author(user),
-            )
-            merge_request = await self._gitlab.create_merge_request(
-                team.project.id,
-                NewMergeRequest(
-                    source_branch=branch,
-                    target_branch=self._sigs.branch,
-                    title=title,
-                    description=mr_description(human, metadata),
-                    labels=(WINGMAN_LABEL, "day2", action),
-                ),
-            )
-        finally:
-            self._sigs.invalidate(team)
+        merge_request = await open_team_mr(
+            self._gitlab,
+            self._sigs,
+            team,
+            user,
+            branch=branch,
+            action=action,
+            message=commit_message,
+            changes=plan.changes,
+            title=title,
+            description=mr_description(human, metadata),
+        )
         return ChangeResult(
             team.name,
             plan.summary,
@@ -843,6 +835,46 @@ class ChangeService:
             tuple(plan.findings),
             tuple(notes),
         )
+
+
+async def open_team_mr(
+    gitlab: GitLabPort,
+    sigs: SigsRepository,
+    team: Team,
+    user: User,
+    *,
+    branch: str,
+    action: str,
+    message: str,
+    changes: Sequence[FileChange],
+    title: str,
+    description: str,
+) -> MergeRequest:
+    """One commit of ``changes`` on a new ``branch`` of ``team``'s repo, and its MR.
+
+    The team's reads are dropped whatever happens: a write that failed may still have landed.
+    """
+    try:
+        await gitlab.commit(
+            team.project.id,
+            branch=branch,
+            start_branch=sigs.branch,
+            message=message,
+            changes=changes,
+            author=commit_author(user),
+        )
+        return await gitlab.create_merge_request(
+            team.project.id,
+            NewMergeRequest(
+                source_branch=branch,
+                target_branch=sigs.branch,
+                title=title,
+                description=description,
+                labels=(WINGMAN_LABEL, "day2", action),
+            ),
+        )
+    finally:
+        sigs.invalidate(team)
 
 
 def _description(plan: _Plan, verb: Verb, notes: Sequence[str], message: str | None) -> str:
