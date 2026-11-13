@@ -207,12 +207,20 @@ jobs:
       - name: build
         run: npm run build --workspace=web
 
+  # The longest check: on one runner it was the whole critical path (8-10 min
+  # of every 9-11 min run). Two runners, four workers each
+  # (playwright.config.ts); Playwright splits by test, not by file
+  # (fullyParallel), so the halves are even. The gate runs the suite whole.
   e2e:
-    name: Web E2E (mocked Playwright)
+    name: Web E2E (mocked Playwright, ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -253,14 +261,18 @@ jobs:
 
       # The `mocked` project: every spec except live-*.spec.ts, which need a
       # running backend. playwright.config.ts starts the production server.
-      - name: Playwright (mocked suite)
-        run: npm run test:e2e:mocked --workspace=web
+      - name: Playwright (mocked suite, this shard)
+        env:
+          SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+        run: npm run test:e2e:mocked --workspace=web -- --shard="$SHARD"
 
+      # On failure, and when a test passed only on a retry (flaky): that
+      # retry's trace (trace: on-first-retry) is the only .zip a report holds.
       - name: Upload the Playwright report
-        if: failure()
+        if: failure() || hashFiles('apps/web/playwright-report/data/*.zip') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: apps/web/playwright-report/
           retention-days: 14
 

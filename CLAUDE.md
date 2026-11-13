@@ -203,7 +203,9 @@ it); the `live` project is `live-day1-flows.spec.ts`, `live-day2.spec.ts` and `l
 against a running stack on a disposable GitLab (`PLAYWRIGHT_BASE_URL`, the dev
 login secret; commands in `apps/web/README.md`). Playwright traps: route mocks match LIFO; SSE
 keeps the network busy, so wait on `domcontentloaded`, never `networkidle`;
-any unmocked endpoint's 401 redirects to `/login`.
+any unmocked endpoint's 401 redirects to `/login`; with `PLAYWRIGHT_CHANNEL=chrome` on macOS a run
+can hang after its last test (GoogleUpdater holds Chrome's pipes): `pkill -f GoogleUpdater.app`.
+CI runs the mocked suite on four workers in two shards (ADR-0032's amendment).
 
 The live GitLab contract runs nightly in CI (`.github/workflows/live-gitlab.yml`)
 and fails unless every live test ran. Only GitHub can run the publish jobs

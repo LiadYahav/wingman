@@ -10,7 +10,10 @@
 #   scripts/gate.sh e2e      # the mocked Playwright suite against a production build
 #
 # e2e needs Playwright's browser (`cd apps/web && npx playwright install chromium --only-shell`);
-# PLAYWRIGHT_CHANNEL=chrome runs it on an installed Google Chrome instead.
+# PLAYWRIGHT_CHANNEL=chrome runs it on an installed Google Chrome instead. On macOS
+# that Chrome can wake Google's updater, which inherits the browser's output: the
+# run then waits forever after its last test (each browser's exit is never seen).
+# `pkill -f GoogleUpdater.app` lets it finish. CI's headless shell has no updater.
 # Not here: image builds (CI's `images` job; locally `podman build -f apps/web/Dockerfile .`)
 # and the live GitLab contract suite (nightly in CI, .github/workflows/live-gitlab.yml).
 #
@@ -121,7 +124,7 @@ fi
 
 if [[ $scope == all || $scope == e2e ]]; then
   $web_built || step "web build" npm run build --workspace=web --silent
-  # CI=1 as in CI: the production server (`next start`), one worker, retries.
+  # CI=1 as in CI: the production server (`next start`), four workers, retries.
   step "playwright (mocked suite)" env CI=1 npm run test:e2e:mocked --workspace=web
 fi
 
