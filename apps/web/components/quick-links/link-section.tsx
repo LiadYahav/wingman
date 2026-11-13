@@ -1,6 +1,5 @@
 import { LinkCard } from "./link-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { StatusIndex } from "@/lib/quick-links";
 import { cn } from "@/lib/utils";
 import type { QuickLinkSection } from "@/types";
 
@@ -19,15 +18,7 @@ const GRID: Record<number, string> = {
 
 export const gridFor = (columns: number): string => GRID[Math.min(6, Math.max(1, Math.round(columns)))] ?? GRID[4];
 
-export function LinkSection({
-  section,
-  status,
-  statusLoading,
-}: {
-  section: QuickLinkSection;
-  status: StatusIndex;
-  statusLoading: boolean;
-}) {
+export function LinkSection({ section }: { section: QuickLinkSection }) {
   const headingId = `quick-links-${section.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
   return (
     <section aria-labelledby={headingId} data-testid="quick-link-section" data-section={section.id} data-columns={section.columns}>
@@ -40,7 +31,7 @@ export function LinkSection({
       </div>
       <div className={cn("grid gap-3", gridFor(section.columns))}>
         {section.cards.map((card) => (
-          <LinkCard key={card.id} card={card} status={status} statusLoading={statusLoading} />
+          <LinkCard key={card.id} card={card} />
         ))}
       </div>
     </section>
