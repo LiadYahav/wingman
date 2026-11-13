@@ -4,6 +4,39 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-13 — 3.13.2 to 3.14.0: Sig values, speed, cleanup, CI, the cache fix, the workflow's MR seen.**
+- 3.13.2 (#41, ADR-0043's amendment): the UI says **Sig values** (chart
+  values → Sig values → cluster values) and Edit add-on; the create form's MCE
+  section is one row per MCE with its reasons in tooltips.
+- 3.13.3 (#43, ADR-0041's amendment): day2's chart lookups answer stale while
+  one read refreshes them, so `/addons` stops waiting on GitLab; list links
+  prefetch on hover, not on render (`IntentLink`).
+- 3.13.4 (#42): a cleanup with no behaviour change; knip in the web lint.
+  3.13.5 (#44, ADR-0032's amendment): the mocked E2E suite on two runners.
+- 3.13.6 (#45, ADR-0011's amendment): `TtlCache` runs each fetch in its own
+  task that every reader awaits shielded, so a dropped request never cancels
+  the read the others share.
+- 3.14.0 (ADR-0042's amendment): Wingman sees the provision-cluster
+  workflow's day1 MR by its branch `provision-cluster/<stem>`: counted as an
+  open create (taken names, duplicate creates, placement) and listed on
+  Approvals as the workflow's (`opened_by_workflow`), reviewed and merged in
+  GitLab, never in Wingman (the workflow records no requester).
+
+The user's decisions today, for the work in flight on their own branches:
+- **Cluster upgrade** through the platform's `upgrade-cluster` workflow
+  (ADR-0055): start, show and decide on the cluster page, behind
+  `DAY1_UPGRADES`; while on, `mastertag`/`workertag` change only through it.
+- **Code organisation** (ADR-0056): file-size and complexity guards with
+  allowlists that only shrink, then the mechanical splits (schemas per
+  router, web types, a typed day1 API module), then the design splits one PR
+  at a time. The audit is the plan.
+- **Segments area** (ADR-0047): planned, waiting for the user's OK on the plan.
+- **Install server** (`add-server-to-mce`, MCE-wide, not per cluster): where
+  it lives is still being decided with the user.
+
+**Next:** merge and deploy each branch in turn (one release at a time); the
+open questions for the team in the upgrade note and ADR-0042.
+
 **2026-11-13 — 3.12.2 to 3.13.1: Wingman always picks the MCE, add-ons in one place, Wingman made lighter.**
 - 3.12.2 (#39, ADR-0050's amendment): the create form asks the site, prod or
   prep and the version, never the MCE; placement always runs, and with live
