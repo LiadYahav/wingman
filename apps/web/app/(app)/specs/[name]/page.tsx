@@ -68,6 +68,7 @@ function DeleteButton({ blocked, pending, onClick }: { blocked: string | null; p
   );
 }
 
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export default function SpecDetailPage() {
   const params = useParams();
   const specName = params.name as string;

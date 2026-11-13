@@ -1,8 +1,8 @@
-"""The decisions CI's own scripts make: the release plan, release notes, the npm audit gate.
+"""The decisions CI's own scripts make: release plan and notes, the npm audit and file sizes.
 
 They run only in CI or the gate, where a wrong answer publishes the wrong
-image or lets a vulnerability through, so the rules are pinned here
-(ADR-0030, ADR-0031, ADR-0032).
+image or lets a vulnerability or an oversized file through, so the rules are
+pinned here (ADR-0030, ADR-0031, ADR-0032, ADR-0056).
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ def _load(name: str, file: str) -> ModuleType:
 release = _load("wingman_ci_release", "release.py")
 npm_audit = _load("wingman_ci_npm_audit", "npm-audit.py")
 assert_junit = _load("wingman_ci_assert_junit", "assert-junit.py")
+file_size = _load("wingman_ci_file_size", "check-file-size.py")
 
 HEAD = "a" * 40
 OTHER = "b" * 40
@@ -200,6 +201,112 @@ class TestNpmAudit:
     def test_the_committed_allowlist_parses(self) -> None:
         text = (ROOT / "scripts/npm-audit-allowlist.txt").read_text(encoding="utf-8")
         assert npm_audit.allowed(text)
+
+
+class TestFileSize:
+    """The size ratchet (ADR-0056): limits per kind, and a baseline that only shrinks."""
+
+    PAGE = "apps/web/app/(app)/clusters/new/page.tsx"
+
+    @pytest.mark.parametrize(
+        ("path", "limit"),
+        [
+            ("apps/day2-service/src/wingman_day2/api/v1/schemas.py", 500),
+            ("apps/web/app/(app)/clusters/[name]/page.tsx", 500),
+            ("apps/web/lib/day2.ts", 500),
+            ("scripts/release.py", 500),
+            ("packages/wingman-core/src/wingman_core/testing/gitlab_contract.py", 500),
+            ("apps/day1-service/tests/api/test_placement_api.py", 800),
+            ("tests/repo/test_web_docs_contract.py", 800),
+            ("apps/web/e2e/tests/mce-placement.spec.ts", 800),
+            ("apps/web/e2e/fixtures/api-handlers.ts", 800),
+        ],
+    )
+    def test_source_and_tests_have_their_own_limits(self, path: str, limit: int) -> None:
+        assert file_size.limit_for(path) == limit
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "apps/web/components/ui/select.tsx",  # shadcn's generated components
+            "apps/day2-service/tests/oracle/render_chain.py",  # vendored
+            "apps/web/next-env.d.ts",
+            "dev/gitlab-fixtures/wingman/cluster-specs/x.py",
+            "apps/web/eslint.config.mjs",
+            "docs/adr/README.md",
+        ],
+    )
+    def test_generated_vendored_and_other_files_are_not_checked(self, path: str) -> None:
+        assert file_size.limit_for(path) is None
+
+    @pytest.mark.parametrize(("data", "lines"), [(b"", 0), (b"a\n", 1), (b"a\nb", 2), (b"\n\n", 2)])
+    def test_lines_are_counted_as_wc_l_does_plus_an_unterminated_last(
+        self, data: bytes, lines: int
+    ) -> None:
+        assert file_size.count_lines(data) == lines
+
+    def test_a_new_file_over_the_limit_fails_and_the_baseline_takes_no_new_files(self) -> None:
+        errors, _ = file_size.compare({"apps/web/lib/new.ts": 501}, {})
+        assert errors == [
+            "apps/web/lib/new.ts: 501 lines, over the 500-line limit: split it (ADR-0056); "
+            "the baseline takes no new files"
+        ]
+
+    def test_files_within_their_limit_pass(self) -> None:
+        sizes = {"apps/web/lib/a.ts": 500, "apps/day1-service/tests/test_a.py": 800}
+        assert file_size.compare(sizes, {}) == ([], [])
+
+    def test_a_listed_file_may_not_grow_past_its_ceiling(self) -> None:
+        errors, _ = file_size.compare({self.PAGE: 1895}, {self.PAGE: 1894})
+        assert errors == [
+            f"{self.PAGE}: 1895 lines, past its ceiling of 1894: move code out before adding "
+            "to it (ADR-0056); a ceiling is never raised"
+        ]
+
+    def test_a_listed_file_may_shrink_and_is_told_to_lower_its_ceiling(self) -> None:
+        assert file_size.compare({self.PAGE: 1894}, {self.PAGE: 1894}) == ([], [])
+        errors, notes = file_size.compare({self.PAGE: 1200}, {self.PAGE: 1894})
+        assert errors == []
+        assert notes == [f"{self.PAGE}: 1200 lines, below its ceiling of 1894: lower it"]
+
+    def test_a_listed_file_back_within_the_limit_must_leave_the_baseline(self) -> None:
+        errors, _ = file_size.compare({self.PAGE: 500}, {self.PAGE: 1894})
+        assert errors == [
+            f"{self.PAGE}: 500 lines, within the 500-line limit now: "
+            "remove it from file-size-baseline.txt"
+        ]
+
+    def test_an_entry_for_a_file_that_is_gone_or_unchecked_fails(self) -> None:
+        errors, _ = file_size.compare(
+            {}, {self.PAGE: 1894, "apps/web/components/ui/select.tsx": 900}
+        )
+        assert errors == [
+            f"{self.PAGE}: listed in file-size-baseline.txt but no longer exists: remove its line",
+            "apps/web/components/ui/select.tsx: listed in file-size-baseline.txt but is not "
+            "a checked file: remove its line",
+        ]
+
+    def test_the_baseline_reads_ceiling_then_path_and_skips_comments(self) -> None:
+        text = f"# header\n\n 1894  {self.PAGE}  # why\n  # indented\n"
+        assert file_size.parse_baseline(text) == {self.PAGE: 1894}
+
+    @pytest.mark.parametrize("line", [f"{PAGE}  1894", "1894", "many  apps/web/lib/a.ts"])
+    def test_a_malformed_baseline_line_is_refused(self, line: str) -> None:
+        with pytest.raises(SystemExit, match="not '<ceiling>  <path>'"):
+            file_size.parse_baseline(line)
+
+    def test_a_path_listed_twice_is_refused(self) -> None:
+        with pytest.raises(SystemExit, match="listed twice"):
+            file_size.parse_baseline(f"1894  {self.PAGE}\n1000  {self.PAGE}\n")
+
+    def test_every_committed_entry_is_over_its_limit(self) -> None:
+        text = (ROOT / "scripts/file-size-baseline.txt").read_text(encoding="utf-8")
+        ceilings = file_size.parse_baseline(text)
+        assert ceilings
+        for path, ceiling in ceilings.items():
+            limit = file_size.limit_for(path)
+            assert limit is not None, path
+            assert ceiling > limit, path
 
 
 class TestAssertJunit:

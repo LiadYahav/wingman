@@ -302,6 +302,7 @@ function RatioChoice({ draft, update }: { draft: FlavorDraft; update: Update }) 
   );
 }
 
+// eslint-disable-next-line max-lines-per-function -- size baseline (ADR-0056)
 function NodepoolCard({
   index,
   draft,

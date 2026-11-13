@@ -535,6 +535,7 @@ function ObjectListEditor({
 
 // ── Field editor ──────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity -- size baseline (ADR-0056)
 function FieldEditor({
   field, value, onChange, mode, path, immutablePaths, onToggleImmutable,
   infraEnvOptions, infraEnvsLoading,

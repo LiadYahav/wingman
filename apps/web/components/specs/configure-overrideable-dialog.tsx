@@ -148,6 +148,7 @@ interface ConfigureOverrideableDialogProps {
   isLoadingValues?: boolean;
 }
 
+// eslint-disable-next-line max-lines-per-function -- size baseline (ADR-0056)
 export function ConfigureOverrideableDialog({
   open,
   onOpenChange,

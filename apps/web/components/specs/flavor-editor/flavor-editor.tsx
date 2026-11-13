@@ -111,6 +111,7 @@ function useActiveSection(): SectionId {
  * proposes and, for a saved flavor, the cluster file day1 renders from it.
  * A save opens an MR; day1's problems are shown at their fields.
  */
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export function FlavorEditor({
   spec: given,
   initial: start,

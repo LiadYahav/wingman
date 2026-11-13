@@ -5,6 +5,7 @@
 #   scripts/gate.sh          # everything below, in this order
 #   scripts/gate.sh ci       # workflows and scripts: actionlint, zizmor, shellcheck (pinned, scripts/ci-tools.sh)
 #   scripts/gate.sh python   # only the Python checks, including the requirement-export drift check
+#                            # and the file-size limits (of every language: ADR-0056)
 #   scripts/gate.sh chart    # only the Helm chart and alert-rule checks (needs helm, promtool)
 #   scripts/gate.sh web      # only the web checks, including npm audit
 #   scripts/gate.sh e2e      # the mocked Playwright suite against a production build
@@ -94,6 +95,7 @@ fi
 if [[ $scope == all || $scope == python ]]; then
   step "uv sync --locked" uv sync --locked --all-packages --all-groups --all-extras --quiet
   step "requirement exports match uv.lock" scripts/export-requirements.sh --check
+  step "file sizes (baseline may only shrink)" python3 scripts/check-file-size.py
   step "ruff check" uv run ruff check "${STRICT[@]}"
   step "ruff format --check" uv run ruff format --check "${STRICT[@]}"
   step "ty" uv run ty check "${STRICT[@]}"

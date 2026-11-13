@@ -215,6 +215,7 @@ function MissingAddons({
  * moves the cluster to it. A sync fixes the values in one day1 MR; day2
  * installs the add-ons. Another add-on version is information, never drift.
  */
+// eslint-disable-next-line complexity -- size baseline (ADR-0056)
 export function ClusterDriftPanel({
   drift,
   isLoading,

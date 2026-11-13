@@ -127,7 +127,7 @@ class TopologyService:
         return build_topology(tuple(states), day1)
 
 
-def build_topology(states: tuple[TeamState, ...], day1: Day1Index) -> Topology:
+def build_topology(states: tuple[TeamState, ...], day1: Day1Index) -> Topology:  # noqa: C901 - baseline: joins team plans and day1 in one pass
     """Join the team plans with day1 into one list of clusters."""
     registered: dict[ClusterRef, list[Destination]] = defaultdict(list)
     teams_of: dict[ClusterRef, set[str]] = defaultdict(set)

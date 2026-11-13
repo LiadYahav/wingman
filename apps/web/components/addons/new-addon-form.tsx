@@ -42,6 +42,7 @@ function Section({ title, description, children }: { title: string; description?
  * already has a chart of that name in its own folder and changes; they are
  * confirmed before the MR opens, against the previewed plan's digest.
  */
+// eslint-disable-next-line complexity -- size baseline (ADR-0056)
 export function NewAddonForm({
   team,
   existing,

@@ -51,6 +51,7 @@ function StatCard({
   );
 }
 
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export default function DashboardPage() {
   const isAdmin = useIsAdmin();
 

@@ -110,6 +110,7 @@ function PreviewSkeleton() {
  *
  * Mount it while open: its state is one sync's.
  */
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export function SyncDialog({
   name,
   where,

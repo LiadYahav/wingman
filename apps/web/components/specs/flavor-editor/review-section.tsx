@@ -76,6 +76,7 @@ function ValueList({ title, icon, lines, empty, testId }: { title: string; icon?
  * person picks. Day1 renders only a flavor that is in the specs repo, so a
  * new flavor has no preview until its MR merges.
  */
+// eslint-disable-next-line complexity -- size baseline (ADR-0056)
 function ClusterFilePreview({
   draft,
   saved,

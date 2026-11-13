@@ -96,6 +96,12 @@ jobs:
       - name: requirement exports match uv.lock
         run: scripts/export-requirements.sh --check
 
+      # Python and TypeScript alike (ADR-0056); here because it is a Python
+      # script. A file over its limit or past its baseline ceiling fails, and
+      # so does an entry that no longer applies.
+      - name: file sizes (baseline may only shrink)
+        run: python3 scripts/check-file-size.py
+
       # The package lists are in scripts/python-packages.sh, shared with the gate.
       - name: ruff check
         run: |

@@ -107,6 +107,7 @@ function CommitList({
 const STALE_FILE =
   "The cluster file changed since you opened it (CI or the allocate-segment workflow may have committed to it). Reload to see the current file, then make your change again.";
 
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 function ClusterDetailContent() {
   const params = useParams();
   const searchParams = useSearchParams();

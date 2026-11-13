@@ -56,6 +56,7 @@ interface EditSession {
  * values come from, and (for admins) an editor for the one file Wingman
  * writes for it, `override_path`.
  */
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 export function InstalledChartCard({
   chart,
   destination,

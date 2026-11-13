@@ -232,7 +232,7 @@ def lint_exclusions(repo: TeamRepo) -> list[Finding]:
     return found
 
 
-def _lint_exclusion_file(
+def _lint_exclusion_file(  # noqa: C901 - baseline: one check per exclusions-file rule
     team: str,
     tree: RepoTree,
     scope: DefaultsScope,

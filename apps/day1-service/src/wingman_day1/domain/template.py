@@ -197,7 +197,7 @@ class _Walker:
     def _top(self, name: str) -> _Input:
         return self.top.setdefault(name, _Input(name))
 
-    def expr(
+    def expr(  # noqa: C901 - baseline: one branch per Jinja node type
         self, node: nodes.Node | None, loops: Mapping[str, _Input], internal: set[str]
     ) -> None:
         if node is None:

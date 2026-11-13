@@ -1,0 +1,53 @@
+# Files over their line limit today, each with the most lines it may have.
+# This list may only shrink (ADR-0056): scripts/check-file-size.py fails on a
+# file over 500 lines (800 for tests) that is not listed, on a listed file
+# that grows past its ceiling, and on an entry whose file is back within the
+# limit or gone, so the change that splits a file removes its line. A ceiling
+# is never raised and no file is ever added: move code out first. When a
+# listed file shrinks, lower its ceiling (the check prints a note).
+# Regenerate the lines with `python3 scripts/check-file-size.py --list`.
+#
+# Recorded 2026-11-13 from the code-organisation audit: 21 Python and 19
+# TypeScript source files, and one test.
+
+ 2073  apps/day1-service/src/wingman_day1/api/v1/schemas.py
+  621  apps/day1-service/src/wingman_day1/application/clusters.py
+  720  apps/day1-service/src/wingman_day1/application/rollouts.py
+  507  apps/day1-service/src/wingman_day1/application/sync.py
+  706  apps/day1-service/src/wingman_day1/domain/cluster_text.py
+  596  apps/day1-service/src/wingman_day1/domain/locks.py
+  540  apps/day1-service/src/wingman_day1/domain/machine_configs.py
+  668  apps/day1-service/src/wingman_day1/domain/node_pools.py
+  590  apps/day1-service/src/wingman_day1/domain/placement.py
+  525  apps/day1-service/src/wingman_day1/domain/quick_links.py
+  551  apps/day1-service/src/wingman_day1/domain/template.py
+  537  apps/day1-service/src/wingman_day1/infrastructure/fake_mce.py
+  787  apps/day1-service/src/wingman_day1/infrastructure/hub_api.py
+  644  apps/day1-service/src/wingman_day1/main.py
+  856  apps/day2-service/src/wingman_day2/application/authoring.py
+  895  apps/day2-service/src/wingman_day2/application/changes.py
+  776  apps/day2-service/src/wingman_day2/application/plan_writer.py
+  541  apps/web/app/(app)/addons/page.tsx
+  631  apps/web/app/(app)/approvals/[id]/page.tsx
+  511  apps/web/app/(app)/audit/page.tsx
+  694  apps/web/app/(app)/clusters/[name]/page.tsx
+ 1894  apps/web/app/(app)/clusters/new/page.tsx
+  670  apps/web/app/(app)/clusters/page.tsx
+ 1685  apps/web/app/(app)/docs/page.tsx
+  673  apps/web/app/(app)/specs/[name]/page.tsx
+  603  apps/web/components/addons/authoring-flow.tsx
+  507  apps/web/components/clusters/cluster-facts.tsx
+  722  apps/web/components/clusters/dynamic-variable-form.tsx
+  529  apps/web/components/clusters/mce-placement.tsx
+  556  apps/web/components/clusters/node-pools.tsx
+  554  apps/web/components/clusters/sync-dialog.tsx
+  502  apps/web/components/specs/flavor-editor/flavor-editor.tsx
+  866  apps/web/components/specs/flavor-editor/model.ts
+  551  apps/web/components/specs/flavor-editor/nodepools-section.tsx
+  818  apps/web/e2e/tests/mce-placement.spec.ts
+ 1092  apps/web/types/day1.ts
+  813  apps/web/types/day2.ts
+  771  packages/wingman-core/src/wingman_core/infrastructure/fake_gitlab/gitlab.py
+  665  packages/wingman-core/src/wingman_core/infrastructure/gitlab/adapter.py
+  716  packages/wingman-core/src/wingman_core/testing/gitlab_contract.py
+  633  scripts/dev/day1_live_e2e.py

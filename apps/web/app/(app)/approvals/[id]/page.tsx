@@ -245,6 +245,7 @@ function ActionError({ error, onReload }: { error: unknown; onReload: () => void
   return <ProblemList error={error} title={writeErrorTitle(error, "The action failed")} />;
 }
 
+// eslint-disable-next-line max-lines-per-function, complexity -- size baseline (ADR-0056)
 function MRDetailContent() {
   const params = useParams();
   const id = params.id as string;
