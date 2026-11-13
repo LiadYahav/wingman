@@ -40,6 +40,7 @@ already have.
 | 3.13.4 | 3.13.5: CI only: the mocked E2E suite runs on two runners with four workers each (a run takes ~3.5 min instead of ~9.5), and a test that passed only on retry is annotated on the run | Generic: the images are unchanged |
 | 3.13.5 | 3.13.6: a fix in the read cache: when the first request for a value was cancelled (a page left mid-load, a client timeout), the requests waiting on the same GitLab read failed with it and the read was thrown away; now the read finishes, they get its value and it is kept (ADR-0011's amendment) | Generic |
 | 3.13.6 | 3.14.0: Wingman sees the `provision-cluster` workflow's merge request by its branch, `provision-cluster/<stem>` (ADR-0042's amendment), in either provisioner mode: it holds its cluster's name for the name suggestion and the "already being created" check, counts on its MCE for placement, and is listed on Approvals, marked as the workflow's, to review and merge in GitLab (`opened_by_workflow` on `GET /api/day1/approvals`) | Generic: no new value, Secret or grant; Wingman's GitLab token already lists the day1 project's merge requests |
+| 3.14.0 | 3.14.1: a code reorganisation with no change in behaviour: day2's API models are split into one module per router (the OpenAPI document is byte-identical) | Generic |
 
 ### Skipping versions
 

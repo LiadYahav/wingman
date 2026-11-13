@@ -1,5 +1,5 @@
 // The day2 service's response and request bodies, field for field with
-// apps/day2-service/src/wingman_day2/api/v1/schemas.py (the truth when this
+// apps/day2-service/src/wingman_day2/api/v1/*schemas.py (the truth when this
 // file and the service disagree). What changed for the web app, and why, is in
 // docs/notes/2026-11-07-day2-api-changes.md and ADRs 0020-0024.
 
