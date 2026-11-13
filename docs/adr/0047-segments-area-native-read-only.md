@@ -90,7 +90,7 @@ alpha to look at before deciding what stays.
 ## Consequences
 
 - A deployment with `segmentsManager.url` set gets the area for its admins on
-  upgrade; nothing else to set (`docs/upgrade/README.md`, 3.16.0).
+  upgrade; nothing else to set (`docs/upgrade/README.md`, 3.15.0).
 - Building the web image from source needs Vitest and its dependencies in the
   npm mirror, as with knip; the running image is unchanged (Vitest is a dev
   dependency, kept out of the Next build).
