@@ -19,6 +19,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { GitLabFileList } from "@/components/common/gitlab-file-list";
+import { Hint } from "@/components/common/hint";
 import { ProblemList } from "@/components/common/problem-list";
 import { EmptyState, EmptyStateLink } from "@/components/common/empty-state";
 import { getValueAtPath } from "@/components/specs/configure-overrideable-dialog";
@@ -594,6 +595,7 @@ export default function NewClusterPage() {
   // The visible labels name the site, MCE and version controls
   const siteLabelId = useId();
   const mceLabelId = useId();
+  const suggestedWhyId = useId();
   const envLabelId = useId();
   const versionLabelId = useId();
 
@@ -1179,14 +1181,22 @@ export default function NewClusterPage() {
         }}
         autoComplete="off"
         spellCheck={false}
-        aria-describedby="cluster-name-hint"
+        aria-describedby={!nameEdited && suggestedName ? `${suggestedWhyId} cluster-name-hint` : "cluster-name-hint"}
         aria-invalid={namingIssues.length > 0}
       />
       {!nameEdited && suggestedName && (
-        <p data-testid="name-suggested" className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Sparkles className="h-3 w-3 shrink-0" aria-hidden />
-          Suggested from flavor {selectedSpec?.metadata.name}, {siteChoice} and the MCE&apos;s env, with the next free
-          letter. Type to change it.
+        <p data-testid="name-suggested" className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Hint
+            descriptionId={suggestedWhyId}
+            descriptionTestId="name-suggested-why"
+            className="gap-1 hover:text-foreground"
+            hint={`Suggested from flavor ${selectedSpec?.metadata.name}, ${siteChoice} and the MCE's env, with the next free letter.`}
+          >
+            <Sparkles className="h-3 w-3 shrink-0" aria-hidden />
+            Suggested
+          </Hint>
+          <span aria-hidden>·</span>
+          <span>type to change</span>
         </p>
       )}
       {nameEdited && suggestedName && trimmedName !== suggestedName && (

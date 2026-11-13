@@ -729,9 +729,9 @@ spec:
                 <InlineCode>{"ocp4-<env>-<name>-<site>[-<seq>]"}</InlineCode>, with the environment and the site you
                 chose, and a sequence of one letter, <InlineCode>a</InlineCode> to <InlineCode>z</InlineCode>, never a
                 number. Once Wingman picks the MCE, the form suggests{" "}
-                <InlineCode>{"ocp4-<env>-<flavor>-<site>-<letter>"}</InlineCode> with the first letter no cluster has;
-                type over it to use your own. The form lists every problem with a name as you type, and fills in the
-                site and the environment when it can read them from the name.
+                <InlineCode>{"ocp4-<env>-<flavor>-<site>-<letter>"}</InlineCode> with the first letter no cluster has
+                (marked <strong>Suggested</strong>); type over it to use your own. The form lists every problem with a
+                name as you type, and fills in the site and the environment when it can read them from the name.
               </p>
             </Step>
             <Step n={3} title="Cluster configuration">
