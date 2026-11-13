@@ -23,6 +23,9 @@ export const R650 = "dell-r650-site1-96c-768gb";
 export const FREE = `ocp-${R650}-DLFAKE0811`;
 export const LOCKED = `ocp-${R650}-DLFAKE0812`;
 export const DONOR = `ocp-${R650}-DLFAKE0813`;
+export const SITE1_B = "ocp4-prod-mce-site1-b";
+/** The one InfraEnv site1-b's cluster files name: its own list could not be read. */
+export const SITE1_B_POOL = "dell-r760-site1-64c-512gb-20tb";
 
 export const OVERVIEW: InventoryOverview = {
   mces: [
@@ -36,15 +39,17 @@ export const OVERVIEW: InventoryOverview = {
           hardware: [{ vendor: "dell", model: "PowerEdge R760", available: 4, usable: 4 }] },
       ],
       infra_envs: [R650, "hp-gen12-site1-64c-512gb"],
-      infra_envs_error: null,
+      infra_envs_error: null, infra_envs_from: "mce",
     },
     {
       site: "site1", mce: "ocp4-prod-mce-site1-b", known: true, servers: 4, in_clusters: 0, available: 4, usable: 4,
-      pools: [], infra_envs: [], infra_envs_error: "HubUnavailable: MCE 'ocp4-prod-mce-site1-b' hub API unreachable",
+      pools: [{ infra_env: SITE1_B_POOL, available: 0, usable: 0, drawable: 2, hardware: [] }],
+      infra_envs: [SITE1_B_POOL], infra_envs_from: "day1",
+      infra_envs_error: "HubUnavailable: MCE 'ocp4-prod-mce-site1-b' hub API unreachable",
     },
     {
       site: "site1", mce: "ocp4-prod-mce-site1-c", known: false, servers: 0, in_clusters: 0, available: 0, usable: 0,
-      pools: [], infra_envs: [], infra_envs_error: null,
+      pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce",
     },
   ],
   add_servers: { available: true, detail: null },
@@ -100,9 +105,10 @@ type Answer<T> = T | Handler;
 const answer = <T>(body: Answer<T>, status = 200) => (route: Route) =>
   typeof body === "function" ? (body as Handler)(route) : json(route, body, status);
 
-/** What the page sent: every add-servers body, in order. */
+/** What the page sent: every add-servers body and the path it went to, in order. */
 export interface InventoryCalls {
   starts: AddServersRequest[];
+  paths: string[];
 }
 
 /**
@@ -125,7 +131,7 @@ export async function setUpInventory(
     viewer?: boolean;
   } = {}
 ): Promise<InventoryCalls> {
-  const calls: InventoryCalls = { starts: [] };
+  const calls: InventoryCalls = { starts: [], paths: [] };
   await injectAdminAuth(page);
   if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
@@ -134,6 +140,7 @@ export async function setUpInventory(
   await page.route("**/api/day1/inventory/mces/*/infra-envs/*/candidates", answer(candidates));
   await page.route("**/api/day1/inventory/mces/*/infra-envs/*/add-servers", (route) => {
     calls.starts.push(route.request().postDataJSON() as AddServersRequest);
+    calls.paths.push(new URL(route.request().url()).pathname);
     return answer(start, 202)(route);
   });
   return calls;

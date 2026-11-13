@@ -6,14 +6,18 @@ or the orchestrator:
 
 1. How many Agents does each MCE have available, by InfraEnv pool and
    hardware, as server-scan reports them?
-2. Add servers to a pool myself: let the pool pick N, or name them.
+2. Install servers into a pool myself: let the pool pick N, or name them.
 3. What are the add-server runs doing, herzi's included?
 
 Every route is under `/api/day1/inventory`. The reads (§1, §2, §4) take
-`CurrentUser`; adding (§5) takes `AdminUser`, and the page shows no Add to
-a viewer. Errors are RFC 9457 problems (ADR-0004). The browser never calls server-scan,
+`CurrentUser`; installing (§5) takes `AdminUser`, and the page shows no
+Install servers to a viewer. Errors are RFC 9457 problems (ADR-0004). The browser never calls server-scan,
 herzi or the orchestrator. `<mce>` is a day1 MCE folder
-(`ocp4-<env>-mce-<site>-<x>`), `<infra_env>` an InfraEnv on that MCE.
+(`ocp4-<env>-mce-<site>-<x>`), `<infra_env>` an InfraEnv name (a DNS
+label). Since 3.19.0 day1 does not check the InfraEnv against the MCE's
+list: the workflow's first phase (`validating-infraenv`) does, as on the
+orchestrator's own "Install servers" form, so nothing here needs live
+status (ADR-0057's amendment).
 
 ## 0. Where the numbers come from
 
@@ -23,14 +27,17 @@ herzi or the orchestrator. `<mce>` is a day1 MCE folder
 | In clusters | the same rows | `openshift_state` `INSTALLED` |
 | **Available** (Agents in the MCE's inventory, in no cluster) | the same rows | `openshift_state` `INSTALLED_TO_INVENTORY` |
 | Usable | the same rows | available, out of maintenance, reachable, not stale, neither `CRITICAL` nor `UNKNOWN`, not contested: placement's rule (`mce_capacity.usable`), shared |
-| A server's InfraEnv | the MCE's InfraEnv list (hub, cached as for the create form) | the InfraEnv `<e>` for which the server's name starts with `ocp-<e>` (the add-server workflow draws a pool with `^ocp-<infraEnv>`), the longest when several do; else the InfraEnv of a live lock on this MCE; else none (`infra_env: null`) |
+| The pools (InfraEnvs) | the MCE's InfraEnv list (hub, cached as for the create form); without it (live status off, or the hub unreadable), the InfraEnvs the MCE's day1 cluster files name (`nodepool[].infraEnvName`) | `infra_envs_from` says which: `mce` or `day1` |
+| A server's InfraEnv | the pools above | the InfraEnv `<e>` for which the server's name starts with `ocp-<e>` (the add-server workflow draws a pool with `^ocp-<infraEnv>`), the longest when several do; else the InfraEnv of a live lock on this MCE; else none (`infra_env: null`) |
 | Hardware | the rows | `vendor` and `model` |
 | Drawable (the page's **Free**) | the rows | `AVAILABLE` servers named `ocp-<infraEnv>…`, healthy, reachable, unlocked, out of maintenance: "servers in server-scan, not yet in this pool, that Add could pick". server-scan's count; the workflow decides |
 
 An MCE that no row names is **unknown** (`known: false`), never zero.
-server-scan unreadable: the route answers 502. The MCE's InfraEnvs
-unreadable (or live status off): its rows are still counted, under
-`infra_env: null`, and `infra_envs_error` says why.
+server-scan unreadable: the route answers 502. The MCE's own InfraEnv list
+unreadable (or live status off): its pools are the InfraEnvs its day1
+cluster files name (`infra_envs_from: "day1"`), its rows are counted against
+them, and `infra_envs_error` says why its own list is unknown. When the
+MCE's list is read, it is the only source (no union).
 
 **Not shown in the alpha: herzi's InfraEnv annotations**
 (`herzi.redbull.io/blocked-until`, `herzi.redbull.io/state`). Day1's MCE
@@ -68,7 +75,8 @@ run) are in its metrics and logs only, which Wingman cannot read.
         }
       ],
       "infra_envs": ["dell-r650-site1-96c-768gb", "dell-r760-site1-64c-512gb-20tb"],
-      "infra_envs_error": null
+      "infra_envs_error": null,
+      "infra_envs_from": "mce"
     }
   ],
   "add_servers": {"available": true, "detail": null},
@@ -81,9 +89,12 @@ run) are in its metrics and logs only, which Wingman cannot read.
 - `pools`: one per InfraEnv on the MCE, even with nothing available (so it
   can be filled), then `infra_env: null` for available servers matched to
   none; sorted by name, `null` last. `hardware` sorted by vendor, model.
-- `add_servers.available` is `false`, with `detail`, when `DAY1_ADD_SERVERS`
-  is off, there is no orchestrator, or live status is off (the InfraEnvs
-  come from the MCE).
+- `infra_envs_from`: `mce` (the MCE's own list) or `day1` (the InfraEnvs its
+  day1 cluster files name, while its own list is unknown; `infra_envs_error`
+  says why).
+- `add_servers.available` is `false`, with `detail` (one line, the web's
+  tooltip on its disabled Install servers), when `DAY1_ADD_SERVERS` is off
+  or there is no orchestrator. Live status is not needed (3.19.0).
 - `runs.available` is `false`, with `detail`, without the orchestrator.
 
 | Status | `code` | When |
@@ -136,9 +147,13 @@ server's full record belongs to the future Server Scan area.
 
 | Status | `code` | When |
 |---|---|---|
-| 404 | `NOT_FOUND` | No such MCE in the day1 repo, or no such InfraEnv on it |
-| 501 | `FEATURE_DISABLED` | server-scan not configured, or live status off (the InfraEnvs come from the MCE) |
-| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan or the MCE could not be read |
+| 404 | `NOT_FOUND` | No such MCE in the day1 repo |
+| 422 | `VALIDATION_ERROR` | The InfraEnv is not a DNS label (`details.problems` says why) |
+| 501 | `FEATURE_DISABLED` | server-scan not configured |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan could not be read |
+
+No MCE read: an InfraEnv the MCE lacks lists the servers named for it all
+the same; an install into it fails in the workflow's `validating-infraenv`.
 
 ## 3. server-scan's lock, and what the workflow does with it
 
@@ -213,8 +228,11 @@ Read 2026-11-13 from team-redbull's public repositories.
 Body: `{"count": N}` (1-20, let the pool pick) or `{"server_names": [..]}`
 (1-20 distinct names from §2's offered candidates); exactly one.
 
-Day1 checks that the MCE is a day1 MCE, the InfraEnv is on its list and
-every named server is offered (§2); then it starts
+Day1 checks that the MCE is a day1 MCE, the InfraEnv is a DNS label and
+every named server is offered (§2); it does not read the MCE (since 3.19.0:
+the workflow's `validating-infraenv` checks the MCE has the InfraEnv, a
+FAILED run naming it otherwise, as on the orchestrator's own form). Then it
+starts
 `POST <orchestrator>/workflows/server-lifecycle/add-server-to-mce` with
 `{infra_env, mce_cluster: <mce>, namespace?: MCE_INFRAENV_NAMESPACE,
 count | server_names}`, logs `servers_add_started` (who, MCE, InfraEnv,
@@ -237,18 +255,18 @@ start is never retried (ADR-0006).
 | Status | `code` | When |
 |---|---|---|
 | 403 | `FORBIDDEN` | Not an admin |
-| 404 | `NOT_FOUND` | No such MCE in the day1 repo, or no such InfraEnv on it |
+| 404 | `NOT_FOUND` | No such MCE in the day1 repo |
 | 409 | `ADD_SERVER_ALREADY_RUNNING` | The orchestrator's 409: a named server already installing, or every slot of the pool busy |
-| 422 | `VALIDATION_ERROR` | Neither or both of `count` and `server_names`; a named server not offered (each in `details.problems`); the orchestrator's 422 |
-| 501 | `FEATURE_DISABLED` | `DAY1_ADD_SERVERS` off, no orchestrator, or live status off |
-| 502 | `DEPENDENCY_UNAVAILABLE` | Nothing was started: the orchestrator was not reached, refused, or the InfraEnvs could not be read |
+| 422 | `VALIDATION_ERROR` | Neither or both of `count` and `server_names`; the InfraEnv not a DNS label; a named server not offered (each in `details.problems`); the orchestrator's 422 |
+| 501 | `FEATURE_DISABLED` | `DAY1_ADD_SERVERS` off, or no orchestrator |
+| 502 | `DEPENDENCY_UNAVAILABLE` | Nothing was started: the orchestrator was not reached, or refused |
 | 504 | `AMBIGUOUS_WRITE` | Sent, no answer: some may have started. Look at the runs before sending again |
 
 ## 6. Settings (day1)
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `DAY1_ADD_SERVERS` | `false` | Offers adding servers. Needs `WORKFLOWS_API_URL` (refused at start otherwise, ADR-0009) and, at run time, live status for the InfraEnvs |
+| `DAY1_ADD_SERVERS` | `false` | Offers installing servers. Needs `WORKFLOWS_API_URL` (refused at start otherwise, ADR-0009); not live status (3.19.0). Off, admins see Install servers disabled with the reason |
 | `SERVER_SCAN_URL` | (exists) | Inventory's counts; empty: the page answers 501 |
 | `WORKFLOWS_API_URL` | (exists) | The runs; empty: no runs, no install |
 | `MCE_INFRAENV_NAMESPACE` | (exists) | Sent as `namespace`, and where InfraEnvs are listed |

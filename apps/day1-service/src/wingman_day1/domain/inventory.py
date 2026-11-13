@@ -8,8 +8,10 @@ never disagree.
 
 A server's InfraEnv is the one whose ``ocp-<infraEnv>`` starts its name: the
 add-server workflow draws a pool's servers with ``^ocp-<infraEnv>``, case as
-given. When the MCE's InfraEnvs are unknown, a held lock on this MCE names
-it; otherwise it has none, and is counted under none.
+given. The InfraEnvs are the MCE's own list when it is read; without it
+(live status off, or the hub unreadable) they are the ones the MCE's day1
+cluster files name (``nodepool[].infraEnvName``). When none matches, a held
+lock on this MCE names it; otherwise it has none, and is counted under none.
 
 A named install may pick an ``AVAILABLE`` server named ``ocp-<infraEnv>…``.
 The workflow fails a named run on a server that is locked, in maintenance or
@@ -35,6 +37,10 @@ NAME_PREFIX: Final = "ocp-"
 """A pool's servers are named ``ocp-<infraEnv>…`` (the workflow's draw pattern)."""
 DRAW_HEALTH: Final = "HEALTHY"
 """The only health a pool draw asks server-scan for."""
+FROM_MCE: Final = "mce"
+"""The pools are the MCE's own InfraEnv list (live status)."""
+FROM_DAY1: Final = "day1"
+"""The pools are the InfraEnvs the MCE's day1 cluster files name: its own list is unknown."""
 
 
 def named_for(name: str, infra_env: str) -> bool:
@@ -111,7 +117,9 @@ class MceInventory:
     pools: tuple[PoolCount, ...]
     infra_envs: tuple[str, ...]
     infra_envs_error: str | None = None
-    """Why the MCE's InfraEnvs are unknown, when they are."""
+    """Why the MCE's own InfraEnv list is unknown, when it is."""
+    infra_envs_from: str = FROM_MCE
+    """Where ``infra_envs`` come from: ``mce`` (its own list) or ``day1`` (its cluster files)."""
 
 
 def _hardware(rows: Sequence[ServerRow]) -> tuple[HardwareCount, ...]:
@@ -142,6 +150,7 @@ def mce_inventory(
     *,
     infra_envs: Sequence[str],
     infra_envs_error: str | None = None,
+    infra_envs_from: str = FROM_MCE,
 ) -> MceInventory:
     """``mce``'s counts from the whole fleet's ``rows`` and its InfraEnvs (empty when unknown)."""
     on_mce = [row for row in rows if row.mce == mce]
@@ -165,6 +174,7 @@ def mce_inventory(
         pools=tuple(pools),
         infra_envs=tuple(sorted(infra_envs)),
         infra_envs_error=infra_envs_error,
+        infra_envs_from=infra_envs_from,
     )
 
 

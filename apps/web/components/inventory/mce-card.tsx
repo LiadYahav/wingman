@@ -1,21 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Info, Plus, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Info, Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Hint } from "@/components/common/hint";
 import { useCandidates } from "@/lib/api/inventory";
 import { hardwareLabel } from "@/lib/inventory/pools";
 import { cn } from "@/lib/utils";
+import type { InstallTarget } from "@/lib/inventory/install";
 import type { MceInventory, PoolCount } from "@/types/inventory";
 import { CandidateList } from "./candidate-list";
-
-/** Which pool's Add was pressed: the page opens the dialog for it. */
-export interface PoolTarget {
-  mce: string;
-  infraEnv: string;
-  drawable: number | null;
-}
 
 function HeaderHint({ label, hint }: { label: string; hint: string }) {
   return (
@@ -51,7 +45,7 @@ function PoolServers({ mce, infraEnv }: { mce: string; infraEnv: string }) {
   return <CandidateList infraEnv={infraEnv} candidates={read.data?.candidates} isLoading={read.isLoading} error={read.error} />;
 }
 
-function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolCount; canAdd: boolean; onAdd: (t: PoolTarget) => void }) {
+function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolCount; canAdd: boolean; onAdd: (t: InstallTarget) => void }) {
   const [open, setOpen] = useState(false);
   const infraEnv = pool.infra_env;
   const Chevron = open ? ChevronDown : ChevronRight;
@@ -92,11 +86,11 @@ function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolCount; c
           {canAdd && infraEnv !== null && (
             <button
               type="button"
-              onClick={() => onAdd({ mce, infraEnv, drawable: pool.drawable })}
+              onClick={() => onAdd({ mce, infraEnv })}
               className={buttonVariants({ variant: "outline", size: "xs" })}
-              aria-label={`Add servers to ${infraEnv}`}
+              aria-label={`Install servers into ${infraEnv}`}
             >
-              <Plus aria-hidden className="h-3 w-3" /> Add
+              <Plus aria-hidden className="h-3 w-3" /> Install
             </button>
           )}
         </td>
@@ -112,8 +106,29 @@ function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolCount; c
   );
 }
 
+/**
+ * Where the pools come from when the MCE's own InfraEnv list is unknown (live
+ * status off, or its hub unreadable): the InfraEnvs its cluster files name.
+ */
+function PoolsFromDay1({ mce }: { mce: MceInventory }) {
+  if (mce.infra_envs_from !== "day1") return null;
+  const why = mce.infra_envs_error ?? "The MCE's own InfraEnv list is not read here.";
+  return (
+    <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground" data-testid="mce-pools-from-day1">
+      <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
+      Pools named by this MCE&apos;s cluster files
+      <Hint
+        hint={`${why} The pools are the InfraEnvs its cluster files name. Install servers takes any other InfraEnv too; the workflow checks the MCE has it.`}
+        label="Why these pools"
+      >
+        <Info aria-hidden className="h-3 w-3" />
+      </Hint>
+    </p>
+  );
+}
+
 /** One MCE: its available Agents, then a row per InfraEnv pool. */
-export function MceCard({ mce, canAdd, onAdd }: { mce: MceInventory; canAdd: boolean; onAdd: (t: PoolTarget) => void }) {
+export function MceCard({ mce, canAdd, onAdd }: { mce: MceInventory; canAdd: boolean; onAdd: (t: InstallTarget) => void }) {
   return (
     <section data-testid="mce-card" data-mce={mce.mce} aria-label={mce.mce} className="rounded-xl border bg-card px-4 py-3">
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -133,12 +148,7 @@ export function MceCard({ mce, canAdd, onAdd }: { mce: MceInventory; canAdd: boo
           )}
         </p>
       </header>
-      {mce.infra_envs_error && (
-        <p className="mt-1 flex items-center gap-1.5 text-xs text-status-warning-fg" data-testid="mce-infra-envs-error">
-          <TriangleAlert aria-hidden className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate" title={mce.infra_envs_error}>InfraEnvs unknown: {mce.infra_envs_error}</span>
-        </p>
-      )}
+      <PoolsFromDay1 mce={mce} />
       {mce.pools.length > 0 && (
         <table className="mt-2 w-full text-sm" aria-label={`Pools on ${mce.mce}`}>
           <thead>
@@ -149,9 +159,9 @@ export function MceCard({ mce, canAdd, onAdd }: { mce: MceInventory; canAdd: boo
               </th>
               <th className="pb-1 pr-3 font-medium">Hardware</th>
               <th className="pb-1 pr-3 font-medium">
-                <HeaderHint label="Free" hint="Servers in server-scan, not yet in this pool, that Add could pick." />
+                <HeaderHint label="Free" hint="Servers in server-scan, not yet in this pool, that an install could pick." />
               </th>
-              <th className={cn("pb-1", !canAdd && "w-0")}><span className="sr-only">Add</span></th>
+              <th className={cn("pb-1", !canAdd && "w-0")}><span className="sr-only">Install</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">

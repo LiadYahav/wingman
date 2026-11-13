@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -16,7 +16,13 @@ from wingman_day1.domain.add_server import (
     RunTarget,
     StartedRun,
 )
-from wingman_day1.domain.inventory import Candidate, HardwareCount, MceInventory, PoolCount
+from wingman_day1.domain.inventory import (
+    FROM_DAY1,
+    Candidate,
+    HardwareCount,
+    MceInventory,
+    PoolCount,
+)
 from wingman_day1.domain.servers import ServerRow
 
 
@@ -86,6 +92,9 @@ class MceInventoryOut(BaseModel):
     pools: list[PoolOut]
     infra_envs: list[str]
     infra_envs_error: str | None
+    """Why the MCE's own InfraEnv list is unknown (live status off, the hub unreadable)."""
+    infra_envs_from: Literal["mce", "day1"]
+    """``mce``: its own list. ``day1``: the InfraEnvs its day1 cluster files name."""
 
     @classmethod
     def of(cls, mce: MceInventory) -> MceInventoryOut:
@@ -101,6 +110,7 @@ class MceInventoryOut(BaseModel):
             pools=[PoolOut.of(pool) for pool in mce.pools],
             infra_envs=list(mce.infra_envs),
             infra_envs_error=mce.infra_envs_error,
+            infra_envs_from="day1" if mce.infra_envs_from == FROM_DAY1 else "mce",
         )
 
 
