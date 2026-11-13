@@ -23,7 +23,7 @@
   551  apps/day1-service/src/wingman_day1/domain/template.py
   537  apps/day1-service/src/wingman_day1/infrastructure/fake_mce.py
   787  apps/day1-service/src/wingman_day1/infrastructure/hub_api.py
-  644  apps/day1-service/src/wingman_day1/main.py
+  623  apps/day1-service/src/wingman_day1/main.py
   856  apps/day2-service/src/wingman_day2/application/authoring.py
   895  apps/day2-service/src/wingman_day2/application/changes.py
   776  apps/day2-service/src/wingman_day2/application/plan_writer.py

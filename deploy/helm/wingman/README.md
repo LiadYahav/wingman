@@ -113,7 +113,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
-| `segmentsManager.url` | `SEGMENTS_MANAGER_URL` | `""` | segments-manager's API, e.g. `http://segments-manager.<ns>.svc:8000`. The cluster page shows its EPG for the cluster's segment and where it disagrees with the file ([segments-manager](#segments-manager)). Empty: no EPG |
+| `segmentsManager.url` | `SEGMENTS_MANAGER_URL` | `""` | segments-manager's API, e.g. `http://segments-manager.<ns>.svc:8000`. The cluster page shows its EPG for the cluster's segment and where it disagrees with the file, and admins get the **Segments** area ([segments-manager](#segments-manager)). Empty: no EPG, no Segments area |
 | `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The cluster page links to it and to its search for the cluster's segment. Empty: `segmentsManager.url`; both empty: no link |
 | `segmentsManager.sslVerify` | `SEGMENTS_MANAGER_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `segmentsManager.timeoutSeconds` | `SEGMENTS_MANAGER_TIMEOUT_SECONDS` | `5` | Per request, at most 60 |
@@ -325,6 +325,12 @@ reads are open: no token) and shows its EPG, with a warning where
 segments-manager disagrees with the file (another VLAN, another cluster, a segment not
 Allocated, or none). day1 never writes to segments-manager, and segments-manager down only
 hides the EPG.
+
+The same setting turns on the **Segments** area for Wingman's admins (`/segments`, from the top
+bar's area switch; ADR-0047): segments-manager's page rebuilt in Wingman, read only, from its
+open reads of the sites, the per-site statistics and the segments (and a fresh read for
+Refresh, at most once per 5 seconds per replica). day1 makes the calls, so only day1 needs to
+reach `url`; the browser never calls segments-manager. Viewers have no Segments area, for now.
 
 The card also links to segments-manager's UI, names the cluster to search for there (its UI
 opens no single cluster), and links to its open search API for the cluster's segment as JSON.

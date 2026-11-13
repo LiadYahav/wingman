@@ -43,7 +43,7 @@ Operations of the other dependencies (day1):
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
 | `server_scan` | `list_server_rows`, `get_server` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision` |
-| `segments_manager` | `get_segment` |
+| `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
 ## Reading the GitLab outcomes
 
@@ -92,3 +92,11 @@ Operations of the other dependencies (day1):
   an answer, shown as a warning. `unavailable` means it could not be reached
   or answered with an error; the cluster's VLAN and segment are still shown
   (they are the file's), and the answer's `ledger_error` says why.
+- `segments_manager` `list_sites`, `get_stats` and `list_segments` are the
+  Segments area's reads (ADR-0047). An open page re-reads every 30 seconds,
+  and the pages a replica serves share one read of each per 10 seconds (its
+  cache); none while nobody has the page open.
+  `refresh_segments` is its Refresh button (`fresh=true`: segments-manager
+  reads its database, not its cache), at most one per replica per 5 seconds.
+  `unavailable` on them is the area's `502`; the cluster pages are not
+  affected.
