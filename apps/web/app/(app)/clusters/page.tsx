@@ -18,7 +18,7 @@ import { EmptyState, EmptyStateLink, NoMatches } from "@/components/common/empty
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
-import { clusterHref } from "@/lib/clusters";
+import { clusterHref, OWNER_KEYS, type OwnerKey } from "@/lib/clusters";
 import { flavorDisplayState, type FlavorDisplayState } from "@/lib/flavor-state";
 import { day2Api, day2Keys } from "@/lib/day2";
 import type { CatalogEntry, ClusterLiveStatus, ClusterStatus, DestinationCharts, DriftSummaryItem } from "@/types";
@@ -44,9 +44,6 @@ function filterOf(state: FlavorDisplayState): Exclude<DriftFilter, "all"> {
   return state === "update_available" || state === "update_mr_open" ? "update" : state;
 }
 
-/** The owner numbers a cluster file carries (§13 of the flavors v2 API note), in the file's order. */
-const OWNER_KEYS = ["merkaz", "anaf", "mador"] as const;
-type OwnerKey = (typeof OWNER_KEYS)[number];
 type GroupBy = "none" | OwnerKey;
 
 const OWNER_LABEL: Record<OwnerKey, string> = { merkaz: "Merkaz", anaf: "Anaf", mador: "Mador" };

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FileWarning, Link2, Search, X } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { OWNER_KEYS, type OwnerKey } from "@/lib/clusters";
 import { Combobox } from "@/components/ui/combobox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
@@ -16,9 +17,6 @@ import type { ClusterStatus } from "@/types";
 export const MAX_IMPORT = 50;
 /** Rows listed at once; a narrower search shows the rest. */
 const MAX_SHOWN = 200;
-
-const OWNER_KEYS = ["merkaz", "anaf", "mador"] as const;
-type OwnerKey = (typeof OWNER_KEYS)[number];
 
 export interface PickFilters {
   search: string;

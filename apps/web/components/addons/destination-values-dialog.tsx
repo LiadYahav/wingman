@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Share2 } from "lucide-react";
+import { useDebounced } from "@/hooks/use-debounced";
 import { api } from "@/lib/api-client";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { cn } from "@/lib/utils";
@@ -12,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProblemList } from "@/components/common/problem-list";
 import { AuthoringDialogs } from "@/components/addons/authoring-flow";
 import { RoleChip } from "@/components/addons/role-chip";
-import { useDebounced } from "@/components/addons/use-values-preview";
 import { ValueLayers } from "@/components/addons/value-layers";
 import { ValuesEditor } from "@/components/addons/values-editor";
 import type { AuthoringChange, DestinationValuesBody, MergePreviewBody, RepoFile, ScopeDestination, ScopePanel, ValuesPreview } from "@/types/day2";

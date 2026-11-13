@@ -10,7 +10,6 @@
  * with a retry.
  */
 
-import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, isApiError } from "@/lib/api-client";
 import type { Placement, PlacementCandidate, PlacementCheck } from "@/types";
@@ -96,16 +95,6 @@ export function usePlacement(query: PlacementQuery | null) {
     refetchOnWindowFocus: true,
     retry: false,
   });
-}
-
-/** `value`, once it has stayed the same for `ms`. */
-export function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return debounced;
 }
 
 /** A 409 from preview or create because Wingman's pick changed since the form showed it: the new pick. */
