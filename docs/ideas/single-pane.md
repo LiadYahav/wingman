@@ -49,6 +49,7 @@ Wingman becomes the platform team's one place to work from:
 | 19 | MCE placement is built first, after the day2 and import PRs | With the per-MCE API address it needs |
 | 21 | **Small blast radius: a change reaches each cluster through its own MR, and the customer takes it when ready.** One concept, not two features | A new flavor version opens one MR per linked cluster, **automatically**, and each customer merges theirs when comfortable. A cluster is measured against its own flavor version, so a newer version is "update available", never "out of sync". Import uses the same engine |
 | 20 | A **Quick Links** page in the sidebar: a launcher in the style of the team's homepage dashboard | Every ArgoCD (the hub's, each MCE's at `openshift-gitops-server-openshift-gitops.apps.<cluster>.<domain>`), each cluster's console, and the team's other links, with their status (the status: dropped 2026-11-13, ADR-0052's amendment) |
+| 22 | **Option C (2026-11-13): segments-manager and server-scan are fully integrated into Wingman**: every feature of their UIs and their look, not only native tables | Each is a platform in the top bar (Wingman · Segments Manager · Server Scan) with its own sidebar and brand; their APIs stay as they are (decision 10). Inventory Management is not one of them: it is a Wingman sidebar page for the orchestrator's server workflows (ADR-0057). Planned only: the user's go comes first ("just put it in the plan") |
 
 ## What this changes in Wingman's rules
 
@@ -86,13 +87,14 @@ tag exists.
 | 0b | Changes reach each cluster through its own MR: import, and every flavor version rolled out per cluster | 0044 | L | In progress (PR #32) |
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
 | 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0046 | M | 1 for a place to show it |
-| 3 | Segments area | 0047 | M + M | Built as an alpha (3.15.0): the user decides what stays |
-| 4 | Servers area | 0048 | L–XL | 2; the team's tokens and an OK on code reuse |
+| 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand next; full parity (decision 22) waits on the user's go |
+| 4 | Server Scan area | 0048 | L–XL | The user's go (decision 22); the team's tokens |
 | 5 | Hosted clusters and MCEs from cluster-navigator | 0049 | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
 | 8 | RBAC with Keycloak: permissions per group, scoped visibility | 0051 | L | Its design before code; 2 for the areas it guards |
 | 9 | Quick Links page | 0052 | M | Nothing; built alongside 6 |
+| 10 | Inventory Management: MCE pools, adding servers, herzi's runs (a Wingman sidebar page) | 0057 | M | In progress |
 
 ### 0a. Day2: teams author add-ons (ADR-0043, in progress)
 
@@ -253,7 +255,28 @@ July); its reads need no token.
   segments-manager disagrees with the cluster file (ADR-0039's checks).
 - **No writes.** Allocation and release stay with the workflows.
 
-### 4. Servers area (ADR-0048)
+**Option C (decision 22): full parity, planned, waits on the user's go.**
+The alpha's cuts come back, so the area does everything segments-manager's
+UI does, in Wingman's look:
+- per-column filter popovers on every column (the shared table supports them);
+- the Excel export beside the CSV one;
+- the connection state;
+- its own sidebar (Segments: All, Available, Allocated, Disagrees with Git;
+  Sites with their counts) and brand (in progress, 3.17.0);
+- anything segments-manager's UI gains back (it lost its writes in July):
+  a write would need its API token in a Wingman Secret, behind the admin
+  check and Wingman's audit, decided then.
+
+Never its `/api/logs` endpoints (open, unauthenticated: a finding for the team).
+
+### 4. Server Scan area (ADR-0048)
+
+**Option C (decision 22), planned, waits on the user's go.** A top-bar
+platform, "Server Scan", with server-scan's own sidebar (its pages below)
+and brand: every page, feature and button of server-scan's UI, writes
+included (decision 14). It is the one view of the server fleet in Wingman:
+Inventory Management (ADR-0057) shows the MCE pools and the add-server
+workflow, and links here for a server's record instead of repeating it.
 
 server-scan's UI is about 9,700 lines over eight pages.
 
@@ -495,6 +518,9 @@ Also:
 4. **After**: build 4 (Servers), page by page in the order above.
 5. **When the team is ready**: build 5 (cluster-navigator), once collectors
    report and Wingman has a token.
+6. **Option C (decision 22), on the user's go**: Segments Manager to full
+   parity, then Server Scan page by page; each area with its own sidebar
+   and brand.
 
 Parallel work runs in separate worktrees and branches, with ADR numbers fixed
 as above. I rotate CLAUDE.md's "Where to continue" when merging, so parallel
