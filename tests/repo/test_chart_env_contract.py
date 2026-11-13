@@ -130,12 +130,12 @@ def test_the_server_scan_token_comes_from_its_secret_to_day1_only() -> None:
     assert "SERVER_SCAN_TOKEN" not in chart_variables(), "the token is set with server-scan off"
 
 
-def test_the_server_scan_area_reads_with_the_one_viewer_token() -> None:
-    """The Server Scan area's Sites page (ADR-0048) needs no Secret of its own.
+def test_the_server_scan_area_reads_with_the_viewer_token_and_writes_with_the_admin_key() -> None:
+    """The Server Scan area (ADR-0048) reads with the viewer token; its maintenance
+    toggle (3.23.0) writes with the admin token, an optional key of the same Secret.
 
-    day1 holds one server-scan token, the viewer's. A later page that needs the
-    auditor or the admin token adds its own key here
-    (docs/notes/2026-11-13-server-scan-area-api.md §4, §8).
+    A later page that needs the auditor token adds its own key here
+    (docs/notes/2026-11-13-server-scan-area-api.md §4, §8.4).
     """
     day1 = service_env(*ALL_ON)["wingman-day1"]
     secret_refs = {
@@ -144,7 +144,31 @@ def test_the_server_scan_area_reads_with_the_one_viewer_token() -> None:
         if "secretKeyRef" in (entry.get("valueFrom") or {})
     }
     server_scan = {name for name in secret_refs if name.startswith("SERVER_SCAN_")}
-    assert server_scan == {"SERVER_SCAN_TOKEN"}
+    assert server_scan == {"SERVER_SCAN_TOKEN", "SERVER_SCAN_ADMIN_TOKEN"}
+    assert "SERVER_SCAN_ADMIN_TOKEN" in env_names(Day1Settings)
+    assert secret_refs["SERVER_SCAN_ADMIN_TOKEN"] == {
+        "name": "server-scan-viewer",
+        "key": "admin-token",
+        "optional": True,
+    }, "a Secret without the admin key still starts day1"
+    assert "optional" not in secret_refs["SERVER_SCAN_TOKEN"]
+    assert "SERVER_SCAN_ADMIN_TOKEN" not in service_env(*ALL_ON)["wingman-day2"]
+
+
+def test_the_admin_key_can_be_left_out() -> None:
+    no_key = service_env(*ALL_ON, "--set", "serverScan.tokenSecret.adminKey=")["wingman-day1"]
+    assert "SERVER_SCAN_ADMIN_TOKEN" not in no_key
+    assert "SERVER_SCAN_TOKEN" in no_key
+    pairs = [ALL_ON[i : i + 2] for i in range(0, len(ALL_ON), 2)]
+    auth_off = [
+        arg
+        for pair in pairs
+        if pair[1] != "serverScan.tokenSecret.name=server-scan-viewer"
+        for arg in pair
+    ]
+    assert not {"SERVER_SCAN_TOKEN", "SERVER_SCAN_ADMIN_TOKEN"} & set(
+        service_env(*auth_off).get("wingman-day1", {})
+    ), "a server-scan with auth off gets no token at all"
 
 
 def test_values_kept_from_a_release_before_3_4_still_render() -> None:

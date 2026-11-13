@@ -41,7 +41,7 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
-| `server_scan` | `list_server_rows`, `get_server`, `list_sites` |
+| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
@@ -78,12 +78,26 @@ Operations of the other dependencies (day1):
   (`SERVER_SCAN_TOKEN`); `unavailable` means it could not be reached or
   answered with an error. The nodes are still listed, without their servers,
   and the answer's `server_scan_error` says why; an uninstall answers 502.
+- `server_scan` `list_server_rows` is the fleet's rows: the Nodes tab,
+  placement, Inventory Management and the Server Scan area's Servers page
+  read them from one cache entry, at most once per replica per
+  `DAY1_CACHE_TTL_SECONDS` however many pages poll, each a `304` from
+  server-scan while nothing changed (ADR-0048's 3.23.0 amendment).
 - `server_scan` `list_sites` is the Server Scan area's Sites page
   (server-scan's per-site counts, ADR-0048), also read by an admin's top bar to know
   the area is on: at most one call per replica per 10 seconds (its cache),
   whoever asks, and none while no admin is signed in. `denied` (the viewer
   token refused) and `unavailable` on it are the area's `502`; the Nodes
   tab, placement and Inventory Management are not affected.
+- `server_scan` `enable_maintenance` and `disable_maintenance` are the Server
+  Scan area's one write, a server's maintenance on and off by an admin
+  (ADR-0048's 3.23.0 amendment), each logged with the person
+  (`server_maintenance_started`, `_ended`). `denied` means server-scan
+  refused **its admin token** (`SERVER_SCAN_ADMIN_TOKEN`); `not_found` a
+  server it does not have; `rejected` a body it refused (its `422`);
+  `ambiguous` a write sent whose answer was lost (logged as
+  `server_maintenance_unconfirmed`): never retried, look at the server's row
+  before trying again.
 - `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the

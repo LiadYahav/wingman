@@ -5,18 +5,16 @@
  * server-scan's own model, ported without its JSX from team-redbull/server-scan
  * at 92146d3 (decision 18): `fleetCards`, `siteCards`, the filters, the
  * "all healthy" rule and the vendor bars from
- * `frontend/src/features/sites/SitesOverviewPage.tsx`, the vendor labels from
- * `frontend/src/api/sites.ts`, the glyphs from `frontend/src/components/severity.ts`.
+ * `frontend/src/features/sites/SitesOverviewPage.tsx`; the vendor labels and
+ * glyphs are in `./vocabulary`.
  *
- * Each card and count carries the Servers filter it opens in server-scan
- * (`site_id`, `installation_type`, `openshift_state`, `health_overall`,
- * `maintenance`). The counts are not links until Wingman's Servers page exists.
+ * Each card and count is a link to the Servers page with the filter it opens
+ * in server-scan (`site_id`, `installation_type`, `openshift_state`,
+ * `health_overall`, `maintenance`), in server-scan's parameter names.
  */
 
 import type { Breakdown, FleetSummary, HealthSeverity, OpenShiftState, SiteStats, SiteStatsList } from "@/types/server-scan";
-
-/** server-scan's bucket for servers whose name carries no site. */
-export const UNASSIGNED_SITE_ID = "unassigned";
+import { SEVERITY_GLYPH as GLYPH, UNASSIGNED_SITE_ID, vendorLabel } from "./vocabulary";
 
 /** What one card shows; every card on the page is the same shape. */
 export interface SiteCard {
@@ -79,15 +77,6 @@ export function withFilter(filter: string, key: string, value: string): string {
   params.append(key, value);
   return params.toString();
 }
-
-/** server-scan's glyph per severity: shape, then word, then colour tell them apart. */
-const GLYPH: Record<HealthSeverity, string> = {
-  CRITICAL: "◆",
-  MAJOR: "⬟",
-  WARNING: "▲",
-  HEALTHY: "●",
-  UNKNOWN: "○",
-};
 
 export type CountKind = "critical" | "major" | "warning" | "maintenance" | "unknown";
 
@@ -155,19 +144,6 @@ export function installedAvailable(card: SiteCard): StateCount[] {
     filter: withFilter(card.filter, "openshift_state", state),
   });
   return [count("INSTALLED", "installed"), count("AVAILABLE", "available")].filter((s) => s.count > 0);
-}
-
-const VENDOR_LABELS: Record<string, string> = {
-  dell: "Dell",
-  cisco: "Cisco",
-  hp: "HPE",
-  standalone: "Standalone",
-  kubevirt: "KubeVirt",
-};
-
-/** A vendor server-scan names later is shown under its own name, never dropped. */
-export function vendorLabel(vendor: string): string {
-  return VENDOR_LABELS[vendor] ?? vendor;
 }
 
 export interface VendorBar {

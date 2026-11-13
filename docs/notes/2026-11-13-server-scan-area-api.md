@@ -2,12 +2,14 @@
 
 The **Server Scan** area (`/server-scan`) is server-scan's UI rebuilt in
 Wingman, one page at a time (workstream 4 of `docs/ideas/single-pane.md`,
-decision 22, ADR-0048). This note covers the area and its first page,
-**Sites**. Each later page adds its section here (§8 lists them).
+decision 22, ADR-0048). This note covers the area, its first page,
+**Sites** (§1 to §7), and its second, **Servers** (§8, 3.23.0). Each later
+page adds its section here (§9 lists them).
 
-- **server-scan's API does not change, and nothing is written to it.** day1
-  reads server-scan's `GET /api/v1/sites` with the viewer token it already
-  holds (§4).
+- **server-scan's API does not change.** day1 reads server-scan with the
+  viewer token it already holds (§4). The one write is a server's
+  maintenance on and off, with server-scan's admin token, behind Wingman's
+  admin check (§8.5).
 - **The browser never calls server-scan.** It reads day1's routes below.
 - **Admins only** (decision 13 of the single-pane plan, until RBAC): every
   route takes `AdminUser`, so a viewer gets `403 FORBIDDEN` and an anonymous
@@ -174,8 +176,9 @@ rules ported, so the demo's cards agree with its servers.
 - **Later pages**: History and Events need the auditor token; Jobs and the
   writes (maintenance on/off, "run a job now") need the admin token, used only
   behind Wingman's admin check and recorded in Wingman's audit with the
-  person's name. Each is its own Secret key, read by day1 only, added with
-  the page that needs it (§8).
+  person's name. Each is its own key in the same Secret, read by day1 only,
+  added with the page that needs it: the admin token came with Servers'
+  maintenance toggle (§8.4).
 
 ## 5. Errors
 
@@ -213,13 +216,15 @@ rules ported, so the demo's cards agree with its servers.
   instead: a third-party trademark and not server-scan's mark, so it is not
   copied.
 - **The sidebar**: server-scan's pages, in its navigation's order, only those
-  Wingman has built, so no entry leads nowhere: today **Sites**.
+  Wingman has built, so no entry leads nowhere: **Sites**, and since 3.23.0
+  **Servers**.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the
   Servers page they open does not exist. Each card and count carries the
   filter it will open, in server-scan's parameter names (`data-filter`), so
-  the Servers PR turns them into links in one place.
+  the Servers PR turns them into links in one place. Since 3.23.0 they are links to the
+  Servers page (§8.8).
 - **States**: skeleton cards while loading; "For admins" on `403`; "Server Scan
   is not set up" on `501`; the problem on `502`; a failed re-read keeps the
   last answer with a notice; zero servers: "No servers yet" instead of the
@@ -231,13 +236,260 @@ rules ported, so the demo's cards agree with its servers.
   card and count opens), the vendor labels, the severity glyphs, and its Sites
   page tests' cases as Vitest cases.
 
-## 8. Left for later pages
+## 8. The Servers page (3.23.0)
+
+`/server-scan/servers`: server-scan's Servers page, the fleet one row per
+server (ADR-0048's 3.23.0 amendment). Inventory Management stays the view of
+the MCE pools; this is the view of the fleet.
+
+### 8.1 What server-scan's Servers page shows and does
+
+Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/inventory/`
+(`InventoryPage.tsx`, `InventoryTable.tsx`, `rows.ts`, `sorting.ts`,
+`ClusterSidebar.tsx`, `MultiSelect.tsx`, `MaintenanceToggle.tsx`,
+`xlsxExport.ts`, `hooks.ts`), its badges in `frontend/src/components/`, and
+`frontend/src/lib/donor.ts`. Second in its navigation, at `/servers`.
+
+- **Header**: "Servers", then "N servers" (what the filters keep) and
+  "Updated <generated_at>".
+- **Search** ("Name, serial, BMC…", its tooltip the three syntaxes): plain
+  text matches anywhere, `"text"` in quotes must equal a whole field,
+  `/pattern/` is a case-insensitive regular expression of at most 64
+  characters; an unusable one is shown under the box and keeps every row.
+  It looks at the name, model, serial, vendor, site, installation type, BMC
+  host, a held reservation's MCE and the MACs (a hex-looking query also
+  matches a MAC without its separators).
+- **Six dropdowns** of checkboxes, each option with how many servers ticking
+  it would show (its count over what every *other* filter keeps): Vendor,
+  Source (the collector: UCS Central, Intersight, OpenManage (Dell), OneView
+  (HPE), Standalone (Redfish), KubeVirt (VMs)), Site (server-scan's sites,
+  from `/sites`), Classification (`installation_type`), Installation
+  (Installed, In inventory, Available) and Health (the five severities, then
+  Maintenance, which keeps only servers in maintenance). Several values of one
+  dropdown are OR, the dropdowns AND.
+- **Toggles**, each with a tooltip and, while on, its count: Stale, Duplicate
+  Name (the name is another server's too), Duplicate Server (claimed by two
+  clusters), Name mismatch (OpenShift reports another hostname) and Donor (in
+  maintenance with "donor" in the reason).
+- **"Filtered by:"** a chip per active filter that removes it, and "Clear
+  filters".
+- **Cluster sidebar**, left of the table: **MCE**, **Hosted clusters** and
+  **UPI clusters**, each a list of checkboxes with counts over what every
+  other filter keeps, largest first. The lists are read off the fleet itself
+  (a cluster with an MCE on any row is hosted, one with none is UPI), so a
+  new cluster appears with the next read. A find box narrows all three when
+  they hold more than 8 entries; the sidebar folds away ("‹ Hide filters",
+  "Clusters (n) ›").
+- **Table**: Name (a link to the server's page, a copy button on hover), BMC
+  (opens `https://<bmc_host>` in a new tab; nothing without one),
+  Installation (Available, Installed or In inventory, and "→ <MCE>" under it
+  while an install holds the server), MCE (only when a row on the page has
+  one), Cluster (and "Contested with <cluster>"), Model, State (the severity
+  with its glyph; a Maint or Donor chip whose tooltip is the reason and who;
+  Stale with its age; Name mismatch), Maintenance (the toggle, §8.5). Name,
+  Installation, MCE, Cluster, Model and State sort, naturally and with blanks
+  last; State by severity. A left edge marks critical, major and warning rows.
+- **Paging**: 50 rows a page, Previous, "Page X of Y", Next.
+- **Everything in the URL**, so a link or a refresh lands on the same view:
+  `search`, `vendor`, `site_id`, `source_provider`, `installation_type`,
+  `openshift_state`, `health_overall` (each repeated for several values),
+  `maintenance` (`true`: only those; `exclude`: hide them), `stale`,
+  `duplicate`, `contested`, `name_mismatch`, `donor` (`true`), `mce`,
+  `cluster` (repeated), `sort`, `sort_desc`, `page`. A filter change goes back
+  to page 1. The Sites page's cards and counts open it with these.
+- **Export Excel**: every row the filters keep, not only the page, in the
+  order shown, as `inventory-<date>.xlsx`, sheet "Servers": Name, Vendor, BMC
+  address, Model, Serial, SPT, Installation, MCE, Cluster, State.
+- **Fresh**: the rows are read every 30 seconds, in the background too; an
+  unchanged fleet is a `304`.
+- **States**: "Loading servers…"; the problem's detail; "No servers match:
+  <filters>." with filters, "No servers match the current filters." without.
+
+### 8.2 What server-scan serves
+
+| Call | Token | Answer |
+|---|---|---|
+| `GET /api/v1/servers/rows` | any (viewer) | `{items: ServerRow[], generated_at}`: every server, 22 fields each (`id`, `name`, `vendor`, `model`, `site_id`, `source_provider`, `installation_type`, `health`, `maintenance` {`enabled`, `reason`, `created_by`}, `reservation` {`held`, `holder`, `mce_cluster`, `infra_env`, `expires_at`}, `openshift_state`, `cluster_name`, `mce_name`, `openshift_reported_name`, `contested_with`, `profile_template_name`, `last_seen_at`, `stale`, `reachable`, `serial`, `bmc_host`, `macs`). A weak `ETag` over the body and `Cache-Control: no-cache`; `If-None-Match` with it is a bodiless `304`. Cached by server-scan, cleared by its writes |
+| `GET /api/v1/sites` | any (viewer) | The Site dropdown's options: names and order (§2) |
+| `PUT /api/v1/servers/{id}/maintenance` | admin | Body `{reason?, expected_end?}`. Puts the server into maintenance, or updates the reason of one already in it; answers the server (`ServerDetail`). Its event and `created_by` name the caller: for a static token, `api-token-admin` |
+| `DELETE /api/v1/servers/{id}/maintenance` | admin | Ends it; answers the server |
+
+Both writes answer `404` for an unknown id, `401`/`403` for a token that is
+not an admin's, `422` for a malformed body.
+
+### 8.3 day1's routes
+
+**`GET /api/day1/server-scan/servers`**: server-scan's answer in its own
+shape, plus whether the maintenance toggle works here:
+
+```json
+{
+  "items": [
+    {
+      "id": "srv_…", "name": "ocp-dell-r660-site1-…", "vendor": "dell",
+      "model": "PowerEdge R660", "site_id": "site1", "source_provider": "OPENMANAGE",
+      "installation_type": "HOSTED_CLUSTER", "health": "HEALTHY",
+      "maintenance": {"enabled": false, "reason": null, "created_by": null},
+      "reservation": {"held": false, "holder": null, "mce_cluster": null, "infra_env": null, "expires_at": null},
+      "openshift_state": "INSTALLED", "cluster_name": "ocp4-prod-lark-site1",
+      "mce_name": "ocp4-prod-mce-site1-a", "openshift_reported_name": null,
+      "contested_with": null, "profile_template_name": "R660-Standard",
+      "last_seen_at": "2026-11-11T08:00:03Z", "stale": false, "reachable": true,
+      "serial": "DLFAKE0101", "bmc_host": "192.0.2.101", "macs": ["02:00:00:00:01:01"]
+    }
+  ],
+  "generated_at": "2026-11-11T08:00:03Z",
+  "maintenance_available": true,
+  "maintenance_detail": null
+}
+```
+
+- **Every field server-scan sends** (day1 read 18 of 22 before; it now reads
+  `source_provider`, `openshift_reported_name`, `profile_template_name`,
+  `bmc_host`, the maintenance's `reason` and `created_by`, and
+  `contested_with`'s value). The rows keep server-scan's order. A
+  reservation is `held` as server-scan judged it when day1 read it; one not
+  held has every other field null.
+- **`maintenance_available`** is whether the toggle works in this deployment
+  (§8.4); `maintenance_detail` says why not, in one line, else `null`.
+- **One cache, two `304`s.** The rows come from the cache the Nodes tab,
+  placement and Inventory Management share (`server-scan:rows`, for
+  `DAY1_CACHE_TTL_SECONDS`, 30 s by default), which asks server-scan with
+  its `ETag`: an unchanged fleet costs server-scan a `304` and no download,
+  however many pages are open. day1 sends its own weak `ETag` over its own
+  answer and `Cache-Control: no-cache`; the browser's `If-None-Match` that
+  matches gets a bodiless `304`, so a page polling an unchanged fleet
+  downloads nothing (nginx keeps a weak `ETag` when it gzips).
+
+**`PUT /api/day1/server-scan/servers/{server_id}/maintenance`**, body
+`{"reason": "Replacing PSU 2 — INC-4417", "expected_end": "2026-11-14T16:00:00Z"}`
+(both optional; `reason` at most 500 characters, `expected_end` an ISO 8601
+date and time with its offset, `Z` or `+02:00`), and **`DELETE`** on the same path, answer the server's new
+maintenance:
+
+```json
+{"id": "srv_…", "name": "ocp-dell-r660-site1-…", "maintenance": {"enabled": true, "reason": "Replacing PSU 2 — INC-4417", "created_by": "api-token-admin"}}
+```
+
+### 8.4 The tokens
+
+- **Reads** use the viewer token, `SERVER_SCAN_TOKEN`, as Sites (§4).
+- **The writes use server-scan's admin token**, a new optional key in the
+  same Secret: `serverScan.tokenSecret.adminKey` (default `admin-token`) is
+  read into `SERVER_SCAN_ADMIN_TOKEN`, by day1 only, through a
+  `secretKeyRef` marked `optional`, so a Secret without the key still starts
+  day1. Add it with
+  `oc -n <ns> set data secret/<serverScan.tokenSecret.name> admin-token=<INVENTORY_API_TOKEN_ADMIN>`
+  and restart day1. It is sent only on the two writes, never on a read.
+- **Whether the toggle works**:
+
+  | Viewer token | Admin token | Writes |
+  |---|---|---|
+  | any | set | sent with the admin token |
+  | none | none | sent with no token: server-scan runs with auth off (the sandbox), where every caller is an admin |
+  | set | none | off: the toggle is greyed out, its tooltip the one line below, and the routes answer `501 FEATURE_DISABLED` |
+
+  The line: "Maintenance needs server-scan's admin token: add the key
+  admin-token to the server-scan Secret and restart day1
+  (SERVER_SCAN_ADMIN_TOKEN)."
+
+### 8.5 The write: maintenance on and off
+
+- **As server-scan's UI does it.** The toggle is the row's last cell. A
+  server not in maintenance opens a dialog: "Put into maintenance", the
+  server's name, "Why is it going into maintenance?", "Include the word
+  “donor” to mark it as a parts donor.", the placeholder "Replacing PSU 2 —
+  INC-4417", then Cancel and Start maintenance ("Starting…" while sent). A
+  server in maintenance ends it in one click, as the original (the operators'
+  asked-for asymmetry). The reason may be empty, as there.
+- **Expected end**: server-scan's API takes one and its plan (decision 14)
+  lists it, but its own dialog does not ask. Wingman's dialog adds it as one
+  optional field, sent as `expected_end`.
+- **Behind Wingman's admin check** (`AdminUser`), as the whole area.
+- **Recorded with the person's name.** server-scan records the token as the
+  actor (`api-token-admin`), so its own history cannot say who. day1 logs
+  each write with the person, as node uninstall does (`node_uninstall_started`,
+  ADR-0038): `server_maintenance_started` and `server_maintenance_ended` (info)
+  with `user`, `server_id`, `server_name`, `reason` and `expected_end`, and
+  `server_maintenance_unconfirmed` (warning) when the answer did not come
+  back. Wingman has no audit store besides Git; these log lines are its
+  record. (Until 3.23.0 none of Wingman's INFO records reached the pod's log:
+  uvicorn configures only its own loggers. `create_base_app` now writes them
+  to stderr, node uninstall's too.)
+- **Never retried** (ADR-0006). Not sent (server-scan unreachable before the
+  request left) is `502`, nothing changed. Sent but unanswered (a timeout or a
+  connection lost after sending, or a gateway's `504`), or answered `200` in a
+  shape day1 cannot read, is `504 AMBIGUOUS_WRITE`: it may have changed, and
+  the page says to look at the row before trying again.
+- **Seen at once.** After a write day1 drops its cached rows and sites, so the
+  next read is server-scan's new answer. The page patches the row from the
+  answer, then reads the rows and the Sites counts again (server-scan's own
+  hook does the same).
+
+### 8.6 Errors
+
+| Status | `code` | When |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | No session |
+| 403 | `FORBIDDEN` | Not one of Wingman's admins |
+| 404 | `NOT_FOUND` | A write to a server server-scan does not have |
+| 422 | `VALIDATION_ERROR` | A reason over 500 characters or an `expected_end` that is not a date and time with its offset; or server-scan refused the body (its `422`, its words in `details.problems`) |
+| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty; on a write also: a viewer token without an admin token (§8.4) |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan unreachable, answering an error, or refusing the token: the viewer token on a read (check `SERVER_SCAN_TOKEN`), the admin token on a write (check `SERVER_SCAN_ADMIN_TOKEN`) |
+| 504 | `AMBIGUOUS_WRITE` | A write sent and not answered (§8.5) |
+
+### 8.7 Metrics and the fake
+
+- **Metrics**: the rows are the existing `list_server_rows`. Two new
+  operations on `dependency="server_scan"`: `enable_maintenance` and
+  `disable_maintenance`, with `ok`, `denied` (the admin token refused),
+  `not_found`, `rejected` (its `422`), `unavailable` and `ambiguous`.
+- **The fake** (`DAY1_FAKE_FLEET=true`): its rows are read from
+  `dev/fleet-fixtures/servers.yaml` with all 22 fields; its writes change the
+  row (by `dev`, as server-scan with auth off records it), and no token is
+  needed, as on the sandbox.
+
+### 8.8 The web
+
+- **`/server-scan/servers`**, "Servers" in the area's sidebar after Sites,
+  as server-scan's navigation orders them.
+- **§8.1 in Wingman's design**: the shared table (`components/data-table/`),
+  Wingman's colour tokens, light and dark, the explanations in tooltips.
+- **Reused from server-scan** (decision 18, credited in the code): its row
+  type, `rows.ts` (filter, search, sort, facets, dropdown facets, the cluster
+  lists, paging), `sorting.ts`, `donor.ts`, the vendor, source and severity
+  words and glyphs, the export's columns, and the cases of `rows.test.ts` and
+  `xlsxExport.test.ts` as Vitest cases.
+- **Wingman's column filter** (`f.model`) on Model, the one column
+  server-scan offers no filter for; the dropdowns, toggles and the cluster
+  sidebar stay server-scan's.
+- **The cluster sidebar sits inside the page**, left of the table, as in
+  server-scan: it filters this page and its counts follow the page's other
+  filters, while the area's sidebar is navigation between pages, shown on
+  every page.
+- **Speed**: about 3,100 rows. The page shows them 50 at a time, as
+  server-scan pages them, through the shared table, so the DOM holds 50 rows
+  whatever the fleet; filtering, the facet counts and the cluster lists run
+  in memory over the whole fleet when a filter changes (a few milliseconds),
+  and the search waits for typing to pause. Not virtualised: paging is the
+  original's, and a page of 50 needs nothing more. The rows are never kept in
+  the browser's storage (the query cache persists other answers; 2 MB of
+  rows polled every 30 seconds would not fit).
+- **Export**: the Excel file of §8.1 (the shared `write-excel-file` export)
+  and a CSV of the same rows and columns.
+- **The Sites page's cards and counts are links** to
+  `/server-scan/servers?<their filter>`.
+- **States**: skeleton rows while loading; "For admins" on `403`; "Server
+  Scan is not set up" on `501`; the problem on `502`; a failed re-read keeps
+  the last rows with a notice; no server at all: "No servers yet"; nothing
+  matching: "No servers match: <filters>." with Clear filters.
+
+## 9. Left for later pages
 
 In single-pane §4's order; each is its own PR, with its section in this note.
 
 | Page | server-scan reads (token) | What Wingman adds |
 |---|---|---|
-| Servers | `GET /api/v1/servers/rows` (viewer), `GET /api/v1/sites` for the site filter | The shared fleet-rows cache and its `ETag`, served to the page as it is; every row field (day1 parses 18 of 22 today); filters, facets, search and paging in the browser from server-scan's pure TS and its tests, in the URL in server-scan's parameter names; the shared table; a sidebar of MCEs, hosted clusters and UPI clusters; the Excel export; the maintenance toggle (admin token, Wingman's audit). The Sites counts become links |
 | Server detail | `GET /api/v1/servers/{id}`, `/vm-host` (viewer); History: `/servers/{id}/events` (auditor) | The full detail (day1 parses 3 fields today), five tabs; the auditor token |
 | Confs | `GET /api/v1/confs` (viewer) | Read only |
 | Rules & Policies | `GET /api/v1/classification-rules`, `/health-policies` (viewer) | Read only |

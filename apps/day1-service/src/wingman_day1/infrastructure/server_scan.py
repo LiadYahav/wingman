@@ -1,7 +1,9 @@
-"""HttpServerInventory: server-scan's fleet, one server and its sites, over httpx.
+"""HttpServerInventory: server-scan's fleet, one server, its sites and maintenance, over httpx.
 
-Read only (ADR-0038, ADR-0048). Day1 presents a viewer token
-(``Authorization: Bearer``), or none for an instance that runs with auth off.
+Read only (ADR-0038, ADR-0048) but for a server's maintenance, the Server Scan
+area's one write (``server_scan_writes``, ADR-0048's 3.23.0 amendment). Day1
+presents a viewer token (``Authorization: Bearer``) on every read and the
+admin token on the writes only, or none for an instance that runs with auth off.
 The fleet is one read, ``GET /api/v1/servers/rows`` (about 250 KB gzipped for
 3,000 servers); its weak ``ETag`` goes back as ``If-None-Match``, so an
 unchanged fleet costs a 304 and no download. One server is
@@ -11,15 +13,14 @@ Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
-(ADR-0004). ``server_row`` is also how the fake fleet reads its fixture, so
-the fixture has server-scan's own shape.
+(ADR-0004). The answers are read by ``server_scan_parse`` (rows and one
+server) and ``server_scan_sites``.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Mapping
-from datetime import datetime
 from typing import Final
 from urllib.parse import quote
 
@@ -31,11 +32,14 @@ from wingman_day1.domain.errors import (
     ServerScanDeniedError,
     ServerScanUnavailableError,
 )
+from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
-from wingman_day1.infrastructure.http import JSON, json_client, optional_text, required_text
+from wingman_day1.infrastructure.http import json_client
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
+from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_detail
 from wingman_day1.infrastructure.server_scan_sites import fleet_sites
+from wingman_day1.infrastructure.server_scan_writes import send_maintenance, start_body
 
 ROWS_PATH: Final = "/api/v1/servers/rows"
 SERVER_PATH: Final = "/api/v1/servers/{id}"
@@ -50,6 +54,7 @@ class HttpServerInventory:
         *,
         base_url: str,
         token: str = "",
+        admin_token: str = "",
         verify: bool | str = True,
         timeout_seconds: float = 10.0,
         metrics: WingmanMetrics | None = None,
@@ -58,12 +63,15 @@ class HttpServerInventory:
     ) -> None:
         """Read server-scan at ``base_url``; an empty ``token`` sends no Authorization header.
 
-        ``verify`` is ``True``/``False`` or a CA bundle path (read now, so a
-        missing bundle stops start-up); ``transport`` is for tests.
+        ``admin_token`` replaces it on the maintenance writes only (empty: the
+        writes carry ``token``'s header, or none). ``verify`` is
+        ``True``/``False`` or a CA bundle path (read now, so a missing bundle
+        stops start-up); ``transport`` is for tests.
         """
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        self._write_headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
         self._observer = Observer(Dependency.SERVER_SCAN, metrics, timer=timer)
         self._client = json_client(
             base_url=base_url,
@@ -73,7 +81,8 @@ class HttpServerInventory:
             headers=headers,
         )
         self._etag: str | None = None
-        self._rows: tuple[ServerRow, ...] | None = None
+        self._fleet: FleetRows | None = None
+        """The last fleet read, answered again (the same object) when server-scan says ``304``."""
 
     async def aclose(self) -> None:
         """Close the HTTP client."""
@@ -81,7 +90,11 @@ class HttpServerInventory:
 
     async def rows(self) -> list[ServerRow]:
         """See ServerInventory.rows."""
-        return await self._observer.call(ServerScanOperation.LIST_SERVER_ROWS, self._fleet())
+        return list((await self.fleet()).rows)
+
+    async def fleet(self) -> FleetRows:
+        """See ServerInventory.fleet."""
+        return await self._observer.call(ServerScanOperation.LIST_SERVER_ROWS, self._read_fleet())
 
     async def server(self, server_id: str) -> ServerDetail:
         """See ServerInventory.server."""
@@ -91,20 +104,33 @@ class HttpServerInventory:
         """See ServerInventory.sites."""
         return await self._observer.call(ServerScanOperation.LIST_SITES, self._sites())
 
-    async def _fleet(self) -> list[ServerRow]:
+    async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
+        """See ServerInventory.start_maintenance."""
+        write = send_maintenance(
+            self._client, "PUT", server_id, headers=self._write_headers, body=start_body(start)
+        )
+        return await self._observer.call(ServerScanOperation.ENABLE_MAINTENANCE, write)
+
+    async def end_maintenance(self, server_id: str) -> ServerMaintenance:
+        """See ServerInventory.end_maintenance."""
+        write = send_maintenance(self._client, "DELETE", server_id, headers=self._write_headers)
+        return await self._observer.call(ServerScanOperation.DISABLE_MAINTENANCE, write)
+
+    async def _read_fleet(self) -> FleetRows:
         what = "listing servers"
-        headers = {"If-None-Match": self._etag} if self._etag and self._rows is not None else {}
+        last = self._fleet
+        headers = {"If-None-Match": self._etag} if self._etag and last is not None else {}
         response = await self._get(ROWS_PATH, what=what, headers=headers)
-        if response.status_code == 304 and self._rows is not None:
-            return list(self._rows)
+        if response.status_code == 304 and last is not None:
+            return last
         _check(response, what=what)
         try:
-            rows = tuple(_rows(response.json()))
+            fleet = fleet_rows(response.json())
         except (ValueError, KeyError, TypeError) as exc:
             raise ServerScanUnavailableError("server-scan returned malformed server rows") from exc
         self._etag = response.headers.get("etag")
-        self._rows = rows
-        return list(rows)
+        self._fleet = fleet
+        return fleet
 
     async def _server(self, server_id: str) -> ServerDetail:
         what = f"reading server {server_id}"
@@ -147,86 +173,3 @@ def _check(response: httpx.Response, *, what: str) -> None:
         )
     if status != 200:
         raise ServerScanUnavailableError(f"server-scan answered {status} {what}")
-
-
-def _rows(raw: JSON) -> list[ServerRow]:
-    if not isinstance(raw, dict):
-        raise TypeError("the response is not an object")
-    items = raw["items"]
-    if not isinstance(items, list):
-        raise TypeError("items is not a list")
-    return [server_row(item) for item in items]
-
-
-def server_row(raw: JSON) -> ServerRow:
-    """One item of ``GET /api/v1/servers/rows``; a malformed one raises Type/Key/ValueError."""
-    if not isinstance(raw, dict):
-        raise TypeError("a server row is not an object")
-    maintenance = _object(raw, "maintenance")
-    reservation = _object(raw, "reservation")
-    held = _flag(reservation, "held", default=False)
-    return ServerRow(
-        id=required_text(raw, "id"),
-        name=required_text(raw, "name"),
-        state=required_text(raw, "openshift_state"),
-        health=required_text(raw, "health"),
-        serial=optional_text(raw, "serial"),
-        vendor=optional_text(raw, "vendor"),
-        model=optional_text(raw, "model"),
-        site=optional_text(raw, "site_id"),
-        cluster_name=optional_text(raw, "cluster_name"),
-        mce=optional_text(raw, "mce_name"),
-        maintenance=_flag(maintenance, "enabled", default=False),
-        reachable=_flag(raw, "reachable"),
-        stale=_flag(raw, "stale"),
-        contested=optional_text(raw, "contested_with") is not None,
-        last_seen_at=_timestamp(raw, "last_seen_at"),
-        reserved_by=optional_text(reservation, "holder") if held else None,
-        reserved_for_mce=optional_text(reservation, "mce_cluster") if held else None,
-        reserved_for_infra_env=optional_text(reservation, "infra_env") if held else None,
-        reserved_until=_timestamp(reservation, "expires_at") if held else None,
-        macs=_macs(raw),
-        installation_type=optional_text(raw, "installation_type"),
-    )
-
-
-def server_detail(raw: JSON) -> ServerDetail:
-    """``GET /api/v1/servers/{id}``: only what the uninstall's check reads."""
-    if not isinstance(raw, dict):
-        raise TypeError("the server is not an object")
-    openshift = _object(raw, "openshift")
-    return ServerDetail(
-        id=required_text(raw, "id"),
-        name=required_text(raw, "name"),
-        cluster_name=optional_text(openshift, "cluster_name"),
-    )
-
-
-def _object(raw: Mapping[str, JSON], key: str) -> Mapping[str, JSON]:
-    value = raw.get(key)
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise TypeError(f"{key} is not an object")
-    return value
-
-
-def _flag(raw: Mapping[str, JSON], key: str, *, default: bool | None = None) -> bool:
-    value = raw.get(key, default)
-    if value is None and default is not None:
-        return default
-    if not isinstance(value, bool):
-        raise TypeError(f"{key} is not a boolean")
-    return value
-
-
-def _macs(raw: Mapping[str, JSON]) -> tuple[str, ...]:
-    value = raw.get("macs") or []
-    if not isinstance(value, list) or not all(isinstance(mac, str) for mac in value):
-        raise TypeError("macs is not a list of strings")
-    return tuple(mac.lower() for mac in value)
-
-
-def _timestamp(raw: Mapping[str, JSON], key: str) -> datetime | None:
-    value = optional_text(raw, key)
-    return datetime.fromisoformat(value) if value is not None else None

@@ -112,6 +112,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token (every read, the Server Scan area's Sites included). Empty: no token, for a server-scan with auth off |
 | `serverScan.tokenSecret.key` | `SERVER_SCAN_TOKEN` (day1 only) | `token` | The token's key in that Secret |
+| `serverScan.tokenSecret.adminKey` | `SERVER_SCAN_ADMIN_TOKEN` (day1 only) | `admin-token` | An optional key of the same Secret with server-scan's **admin** token, sent only when an admin turns a server's maintenance on or off on the Server Scan area's Servers page. A Secret without the key still starts day1: the toggle is greyed out with why. Empty: never read. With no Secret at all (auth off) the toggle works without it |
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
@@ -322,10 +323,26 @@ replacing the Secret.
 The same `serverScan.url` turns on the **Server Scan** area for Wingman's admins
 (`/server-scan`, from the top bar's area switch; ADR-0048): server-scan's UI rebuilt in
 Wingman, one page at a time. Its first page, **Sites**, reads server-scan's own per-site
-counts with the same viewer token (no new Secret or key), kept 10 seconds per day1 replica. day1 makes the calls; the browser never calls server-scan. Viewers have no
-Server Scan area, for now. The pages still to come that read server-scan's event history
-(auditor) or write (admin) will each bring their own Secret key
-(`docs/notes/2026-11-13-server-scan-area-api.md` §8).
+counts with the same viewer token (no new Secret or key), kept 10 seconds per day1 replica.
+Its second, **Servers**, reads the fleet's rows from the cache the Nodes tab already keeps
+(`DAY1_CACHE_TTL_SECONDS`), revalidated against server-scan's `ETag`, however many pages
+poll. day1 makes the calls; the browser never calls server-scan. Viewers have no
+Server Scan area, for now.
+
+The Servers page's **maintenance toggle** is the area's one write, for Wingman's admins
+only and logged with the person's name (server-scan records only its token). It needs
+server-scan's admin token as a second key of the same Secret
+(`serverScan.tokenSecret.adminKey`, default `admin-token`), then a restart of day1:
+
+```bash
+oc -n <ns> set data secret/server-scan-viewer admin-token=<server-scan admin token>
+oc -n <ns> rollout restart deploy/wingman-day1
+```
+
+Without the key the toggle is greyed out and says so; against a server-scan with auth off
+(no Secret at all) it works without one. The pages still to come that read server-scan's
+event history (auditor) will bring their own key
+(`docs/notes/2026-11-13-server-scan-area-api.md` §8, §9).
 
 ### segments-manager
 

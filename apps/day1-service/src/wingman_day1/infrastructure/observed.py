@@ -19,6 +19,7 @@ from wingman_day1.domain.errors import (
     AddServerAlreadyRunningError,
     AddServerRefusedError,
     AmbiguousDecisionError,
+    AmbiguousServerScanWriteError,
     AmbiguousStartError,
     Day2UnavailableError,
     HubDeniedError,
@@ -33,6 +34,7 @@ from wingman_day1.domain.errors import (
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanDeniedError,
+    ServerScanRefusedError,
     ServerScanUnavailableError,
     UninstallAlreadyRunningError,
     UpgradeAlreadyRunningError,
@@ -85,6 +87,10 @@ class ServerScanOperation(StrEnum):
     GET_SERVER = "get_server"
     LIST_SITES = "list_sites"
     """``GET /api/v1/sites``: the Server Scan area's Sites page (ADR-0048)."""
+    ENABLE_MAINTENANCE = "enable_maintenance"
+    """``PUT /api/v1/servers/{id}/maintenance``: the Servers page's toggle (admin token)."""
+    DISABLE_MAINTENANCE = "disable_maintenance"
+    """``DELETE /api/v1/servers/{id}/maintenance``."""
 
 
 class SegmentsManagerOperation(StrEnum):
@@ -125,6 +131,8 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (ServerNotFoundError, Outcome.NOT_FOUND),
     (ServerScanDeniedError, Outcome.DENIED),
     (ServerScanUnavailableError, Outcome.UNAVAILABLE),
+    (ServerScanRefusedError, Outcome.REJECTED),
+    (AmbiguousServerScanWriteError, Outcome.AMBIGUOUS),
     (UninstallAlreadyRunningError, Outcome.CONFLICT),
     (ProvisionAlreadyRunningError, Outcome.CONFLICT),
     (ProvisionRefusedError, Outcome.REJECTED),

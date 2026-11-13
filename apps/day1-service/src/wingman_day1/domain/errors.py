@@ -114,7 +114,7 @@ class Day2UnavailableError(Day1Error):
 
 
 class ServerScanError(Day1Error):
-    """Base class for errors reading server-scan."""
+    """Base class for errors reading server-scan, or writing a server's maintenance to it."""
 
 
 class ServerScanUnavailableError(ServerScanError):
@@ -122,7 +122,10 @@ class ServerScanUnavailableError(ServerScanError):
 
 
 class ServerScanDeniedError(ServerScanUnavailableError):
-    """server-scan refused Wingman's viewer token (401 or 403): a deployment problem."""
+    """server-scan refused Wingman's token (401 or 403): a deployment problem.
+
+    The viewer token on a read, the admin token on a maintenance write.
+    """
 
 
 class ServerScanNotConfiguredError(ServerScanError):
@@ -131,6 +134,18 @@ class ServerScanNotConfiguredError(ServerScanError):
 
 class ServerNotFoundError(ServerScanError):
     """server-scan has no server with this id."""
+
+
+class ServerScanWritesOffError(ServerScanError):
+    """Maintenance writes are off here: a viewer token without server-scan's admin token."""
+
+
+class ServerScanRefusedError(InvalidInputError):
+    """server-scan refused a maintenance write's body (its 422); nothing changed."""
+
+
+class AmbiguousServerScanWriteError(ServerScanError):
+    """A maintenance write was sent but its outcome is unknown. Never retried (ADR-0006)."""
 
 
 class NodeNotInClusterError(Day1Error):

@@ -83,7 +83,7 @@ def test_spare_servers_are_registered_to_the_mce_and_in_no_cluster() -> None:
         row("s4", stale=True),
         row("s5", health="CRITICAL"),
         row("s6", health="UNKNOWN"),
-        row("s7", contested=True),
+        row("s7", contested_with="ocp4-prod-other-site1"),
         row("s8", health="WARNING"),
         row("n1", state="INSTALLED", cluster_name="ocp4-prod-x-site1"),
         row("a1", state="AVAILABLE", mce=None),
@@ -108,7 +108,7 @@ def test_an_mce_server_scan_never_names_is_unknown_not_zero() -> None:
         ({"health": "MAJOR"}, True),
         ({"maintenance": True}, False),
         ({"health": "UNKNOWN"}, False),
-        ({"contested": True}, False),
+        ({"contested_with": "ocp4-prod-other-site1"}, False),
     ],
 )
 def test_usable(changes: dict[str, object], expected: bool) -> None:

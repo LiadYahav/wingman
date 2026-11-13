@@ -76,7 +76,9 @@ hubs, server-scan, the workflows orchestrator and segments-manager with fakes se
 - `servers.yaml` is a made-up fleet in server-scan's own row shape, and its `sites` catalog
   (server-scan's configured sites): the Server Scan area's Sites page (`/server-scan`,
   ADR-0048) counts these rows by server-scan's rules over it; `site3` has no server, so its
-  card shows 0;
+  card shows 0. The Servers page (`/server-scan/servers`) lists them, and its maintenance
+  toggle changes them in memory, recorded as by `dev` (no token, as on a server-scan with
+  auth off);
 - `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update
   half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
   approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace

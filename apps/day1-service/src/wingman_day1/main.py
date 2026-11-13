@@ -455,7 +455,7 @@ def build_context(
             workflows=adapters.add_server,
             cache=cache,
         ),
-        server_scan=server_scan_service(inventory),
+        server_scan=server_scan_service(inventory, settings),
     )
 
 

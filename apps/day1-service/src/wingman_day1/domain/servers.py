@@ -46,8 +46,8 @@ class ServerRow:
     maintenance: bool = False
     reachable: bool = True
     stale: bool = False
-    contested: bool = False
-    """Two clusters' jobs claim it (``contested_with``). Shown only: the workflow refuses it."""
+    contested_with: str | None = None
+    """The other cluster or MCE also claiming it; ``None`` when uncontested."""
     last_seen_at: datetime | None = None
     reserved_by: str | None = None
     """The reservation's holder while the reservation is held, else ``None``."""
@@ -61,6 +61,21 @@ class ServerRow:
     """Its NICs' MAC addresses, lowercase."""
     installation_type: str | None = None
     """What the server was named to be: ``HOSTED_CLUSTER``, ``MCE``, ``UPI`` or ``UNCLASSIFIED``."""
+    source_provider: str | None = None
+    """The collector that reads it (``OPENMANAGE``, ``UCS_CENTRAL``, …)."""
+    reported_name: str | None = None
+    """``openshift_reported_name``: set only when OpenShift reports another hostname."""
+    profile_template: str | None = None
+    """``profile_template_name``: its server profile template (SPT)."""
+    bmc_host: str | None = None
+    maintenance_reason: str | None = None
+    maintenance_by: str | None = None
+    """Who put it into maintenance, as server-scan records it (an actor id)."""
+
+    @property
+    def contested(self) -> bool:
+        """Two clusters' jobs claim it. Shown only: the workflow refuses it."""
+        return self.contested_with is not None
 
 
 @dataclass(frozen=True, slots=True)

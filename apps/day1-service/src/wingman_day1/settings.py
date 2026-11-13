@@ -104,6 +104,10 @@ class Day1Settings(BaseSettings):
     server_scan_url: str = ""
     server_scan_ui_url: str = ""
     server_scan_token: SecretStr = SecretStr("")
+    # server-scan's admin token, for the Server Scan area's maintenance toggle
+    # only (ADR-0048's 3.23.0 amendment). Empty with a viewer token: the toggle is
+    # off; empty with none: server-scan runs with auth off and takes writes as is.
+    server_scan_admin_token: SecretStr = SecretStr("")
     server_scan_ssl_verify: str = "true"
     server_scan_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     workflows_api_url: str = ""

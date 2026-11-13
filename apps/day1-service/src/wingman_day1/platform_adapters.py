@@ -87,6 +87,7 @@ def fleet_adapters(
         scan = HttpServerInventory(
             base_url=settings.server_scan_url,
             token=settings.server_scan_token.get_secret_value(),
+            admin_token=settings.server_scan_admin_token.get_secret_value(),
             verify=settings.server_scan_tls_verify,
             timeout_seconds=settings.server_scan_timeout_seconds,
             metrics=metrics,
