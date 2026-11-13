@@ -145,7 +145,7 @@ already reads it.
 `apps/day1-service/tests/unit/domain/test_workflows.py` (the branch rule);
 `apps/day1-service/tests/api/test_provision_merge_requests_api.py` (listed
 with `opened_by_workflow`, a taken name, a refused create with its URL,
-404 for approve, reject and detail, a webhook shows a new one, an
+404 for detail, approve, reject and edit, a webhook shows a new one, an
 unlabelled MR on another branch ignored);
 `apps/day1-service/tests/api/test_placement_api.py`
 (`test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_owner`);

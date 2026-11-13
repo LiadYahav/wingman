@@ -91,9 +91,16 @@ async def test_it_is_reviewed_in_gitlab_never_through_wingman(
         f"/api/day1/approvals/{iid}/approve", json={"sha": workflow.sha}, headers=admin
     )
     reject = await client.post(f"/api/day1/approvals/{iid}/reject", headers=admin)
-    for response in (detail, approve, reject):
+    file = f"sites/{support.PROD_SITE}/mces/{support.PROD_MCE}/hostedClusters/{NEW}.yaml"
+    edit = await client.put(
+        f"/api/day1/approvals/{iid}",
+        json={"files": [{"path": file, "content": "x: 1\n"}], "sha": workflow.sha},
+        headers=admin,
+    )
+    for response in (detail, approve, reject, edit):
         assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
-    assert (await gitlab.get_merge_request(workflow.ref)).state is MRState.OPENED
+    after = await gitlab.get_merge_request(workflow.ref)
+    assert (after.state, after.sha) == (MRState.OPENED, workflow.sha)
 
 
 async def test_one_mr_that_is_both_wingmans_and_on_the_workflows_branch_is_listed_once(
