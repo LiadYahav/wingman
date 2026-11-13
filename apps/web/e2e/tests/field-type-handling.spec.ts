@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { SpecNewPage } from "../pages/spec-new.page";
-import { ConfigureDialogPage } from "../pages/configure-dialog.page";
+import { openConfigureDialog } from "../pages/configure-dialog.page";
 import { mockAllApis } from "../fixtures/api-handlers";
 
 test.describe("Field Type Handling", () => {
@@ -9,14 +8,7 @@ test.describe("Field Type Handling", () => {
   });
 
   test("correctly detects array type for arrays", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "external-secrets");
-    await specPage.openConfigureDialog("platform", "external-secrets");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "external-secrets");
 
     const secretStoresRow = configDialog.getFieldRow("secretStores");
     // exact: the value summary ("Empty array") also contains "array"
@@ -24,14 +16,7 @@ test.describe("Field Type Handling", () => {
   });
 
   test("flattens nested objects into leaf fields", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
 
     // Objects are not offered as a whole; each leaf becomes its own dotted path
     await expect(configDialog.getFieldRow("resources.requests")).toHaveCount(0);
@@ -41,84 +26,42 @@ test.describe("Field Type Handling", () => {
   });
 
   test("shows correct value summary for arrays", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("observability", "grafana");
-    await specPage.openConfigureDialog("observability", "grafana");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "observability", "grafana");
 
     const dashboardsRow = configDialog.getFieldRow("dashboards");
     await expect(dashboardsRow.getByText(/empty array/i)).toBeVisible();
   });
 
   test("shows value summaries for nested object leaves", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("observability", "grafana");
-    await specPage.openConfigureDialog("observability", "grafana");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "observability", "grafana");
 
     await expect(configDialog.getFieldRow("persistence.enabled").getByText("false")).toBeVisible();
     await expect(configDialog.getFieldRow("persistence.size").getByText('"10Gi"')).toBeVisible();
   });
 
   test("shows correct value summary for booleans", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
 
     const installCRDsRow = configDialog.getFieldRow("installCRDs");
     await expect(installCRDsRow.getByText("true")).toBeVisible();
   });
 
   test("shows correct value summary for integers", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
 
     const replicasRow = configDialog.getFieldRow("replicas");
     await expect(replicasRow.getByText("1")).toBeVisible();
   });
 
   test("shows correct value summary for strings", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
 
     const namespaceRow = configDialog.getFieldRow("namespace");
     await expect(namespaceRow.getByText('"cert-manager"')).toBeVisible();
   });
 
   test("type badge has correct color for each type", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
 
     const integerBadge = configDialog.getFieldRow("replicas").locator("span:has-text('integer')");
     await expect(integerBadge).toHaveClass(/text-amber/);

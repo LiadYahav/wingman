@@ -10,7 +10,7 @@
  */
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
-import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis, mockMachineConfigsWithGeneric, mockMR } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis, mockMachineConfigsWithGeneric, mockMR } from "../fixtures/api-handlers";
 import type {
   AddonDrift, ClusterDetail, ClusterDrift, ClusterStatus, DestinationCharts, DriftSummaryItem, MachineConfigs, Rebooting,
   SyncPreview, ValueDrift,
@@ -159,12 +159,7 @@ async function openDetail(
   { viewer = false, catalog }: { viewer?: boolean; catalog?: MachineConfigs } = {}
 ) {
   await injectAdminAuth(page);
-  if (viewer) {
-    await page.addInitScript(() => {
-      const state = { state: { user: { username: "vera", groups: ["wingman-viewers"], uid: "vera", full_name: "Vera Viewer", role: "viewer" }, isAuthenticated: true }, version: 0 };
-      localStorage.setItem("wingman-auth", JSON.stringify(state));
-    });
-  }
+  if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
   if (catalog) await page.route("**/api/day1/machine-configs", (r) => json(r, catalog));
   await page.route("**/api/day1/clusters/bulk-status", (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));

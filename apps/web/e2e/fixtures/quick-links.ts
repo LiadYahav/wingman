@@ -5,7 +5,7 @@
  */
 
 import type { Page, Route } from "@playwright/test";
-import { fulfillProblem, injectAdminAuth, json, mockDashboardApis } from "./api-handlers";
+import { fulfillProblem, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "./api-handlers";
 import type { QuickLinkCard, QuickLinks, QuickLinkSection } from "../../types";
 
 const DOMAIN = "example.internal";
@@ -123,12 +123,7 @@ export async function setUpQuickLinks(
   { board = mockQuickLinks(), viewer = false }: { board?: QuickLinks | Handler; viewer?: boolean } = {}
 ) {
   await injectAdminAuth(page);
-  if (viewer) {
-    await page.addInitScript(() => {
-      const state = { state: { user: { username: "vera", groups: ["wingman-viewers"], uid: "vera", full_name: "Vera Viewer", role: "viewer" }, isAuthenticated: true }, version: 0 };
-      localStorage.setItem("wingman-auth", JSON.stringify(state));
-    });
-  }
+  if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
   await page.route("**/api/day1/quick-links", answer(board));
 }

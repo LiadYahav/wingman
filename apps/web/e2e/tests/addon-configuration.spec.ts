@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { SpecNewPage } from "../pages/spec-new.page";
-import { ConfigureDialogPage } from "../pages/configure-dialog.page";
+import { openConfigureDialog } from "../pages/configure-dialog.page";
 import { mockAllApis } from "../fixtures/api-handlers";
 import { catalogEntry } from "../fixtures/addons";
 
@@ -10,27 +9,13 @@ test.describe("Addon Configuration", () => {
   });
 
   test("can open configure dialog for addon", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
     await expect(configDialog.dialog).toBeVisible();
     await expect(page.getByText("Configure Overrideable Fields")).toBeVisible();
   });
 
   test("shows available fields from addon default values", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
 
     await expect(configDialog.getFieldRow("replicas")).toBeVisible();
     await expect(configDialog.getFieldRow("namespace")).toBeVisible();
@@ -38,14 +23,7 @@ test.describe("Addon Configuration", () => {
   });
 
   test("can select field to make overrideable", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
     await configDialog.toggleField("replicas");
 
     await expect(configDialog.getFieldCheckbox("replicas")).toBeChecked();
@@ -53,14 +31,7 @@ test.describe("Addon Configuration", () => {
   });
 
   test("shows expanded options when field selected", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
     await configDialog.toggleField("replicas");
 
     await expect(configDialog.getFieldTypeSelect("replicas")).toBeVisible();
@@ -68,14 +39,7 @@ test.describe("Addon Configuration", () => {
   });
 
   test("can set help text for field", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
     await configDialog.toggleField("replicas");
     await configDialog.setFieldHelp("replicas", "Number of cert-manager pods to run");
 
@@ -85,28 +49,14 @@ test.describe("Addon Configuration", () => {
   });
 
   test("correctly detects integer type", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
 
     const replicasRow = configDialog.getFieldRow("replicas");
     await expect(replicasRow.getByText("integer")).toBeVisible();
   });
 
   test("correctly detects boolean type", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
 
     const installCRDsRow = configDialog.getFieldRow("installCRDs");
     await expect(installCRDsRow.getByText("boolean")).toBeVisible();
@@ -130,26 +80,12 @@ test.describe("Addon Configuration", () => {
       });
     });
 
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("empty", "test");
-    await specPage.openConfigureDialog("empty", "test");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "empty", "test");
     await expect(configDialog.noFieldsMessage).toBeVisible();
   });
 
   test("can save configuration", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
     await configDialog.configureField("replicas", {
       help: "Number of replicas",
     });
@@ -159,14 +95,7 @@ test.describe("Addon Configuration", () => {
   });
 
   test("can cancel configuration", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
     await configDialog.toggleField("replicas");
     await configDialog.cancel();
 
@@ -174,14 +103,7 @@ test.describe("Addon Configuration", () => {
   });
 
   test("preserves configured fields count on selected addon", async ({ page }) => {
-    const specPage = new SpecNewPage(page);
-    const configDialog = new ConfigureDialogPage(page);
-
-    await specPage.goto();
-    await specPage.selectAddon("platform", "cert-manager");
-    await specPage.openConfigureDialog("platform", "cert-manager");
-
-    await configDialog.waitForOpen();
+    const { specPage, configDialog } = await openConfigureDialog(page, "platform", "cert-manager");
     await configDialog.toggleField("replicas");
     await configDialog.toggleField("namespace");
     await configDialog.save();

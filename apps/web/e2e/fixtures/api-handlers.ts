@@ -564,6 +564,17 @@ export async function injectAdminAuth(page: Page, username = "test-admin") {
 }
 
 /**
+ * Sign in as the viewer Vera instead. Call it after `injectAdminAuth`: init
+ * scripts run in order, so this user replaces the admin it seeds.
+ */
+export async function injectViewerAuth(page: Page) {
+  await page.addInitScript(() => {
+    const state = { state: { user: { username: "vera", groups: ["wingman-viewers"], uid: "vera", full_name: "Vera Viewer", role: "viewer" }, isAuthenticated: true }, version: 0 };
+    localStorage.setItem("wingman-auth", JSON.stringify(state));
+  });
+}
+
+/**
  * Mock every API the dashboard calls so that navigating to "/" doesn't cause
  * 401s that would redirect to login during auth establishment.
  */
