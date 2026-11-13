@@ -4,6 +4,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * The desktop sidebar as an icon rail: <html data-sidebar-collapsed>, set
+ * before the first paint (lib/sidebar-rail.ts). Only inside the desktop
+ * sidebar, so the mobile sheet's copy stays whole.
+ */
+@custom-variant rail (&:where([data-sidebar-collapsed] [data-desktop-sidebar], [data-sidebar-collapsed] [data-desktop-sidebar] *));
+
 /* Fonts are system stacks: no webfont download, no FOUT, safe for air-gapped builds. */
 @theme static {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -204,6 +211,14 @@
     radial-gradient(1100px 520px at 100% -8%, oklch(0.24 0.04 262 / 55%), transparent 60%),
     radial-gradient(800px 420px at -8% 0%, oklch(0.2 0.02 262 / 50%), transparent 55%);
   background-attachment: fixed;
+}
+
+/* The desktop sidebar's width: full, or the icon rail's (app-shell.tsx). */
+:root {
+  --app-sidebar-width: 220px;
+}
+:root[data-sidebar-collapsed] {
+  --app-sidebar-width: 3.5rem;
 }
 
 /* Numeric columns align digit-for-digit. */

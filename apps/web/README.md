@@ -23,6 +23,7 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Approval Workflow**: Aggregated view of open MRs from the day1, specs and team repos; an approval names the commit the reviewer saw, so a branch that moved since is refused, and nobody approves their own change
 - **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
 - **In-App Documentation**: Full platform guide at `/docs`
+- **Sidebar icon rail**: on a desktop, the button beside the brand or **Ctrl+B / ⌘B** (not while typing in a field) collapses every area's sidebar to a 56 px rail of icons, each with its label (and a site's count) in a tooltip, and expands it again. The choice is kept in this browser (`localStorage` key `wingman-sidebar`) and applied by an inline script in `<head>` before the first paint (`lib/sidebar-rail.ts`), so the page never opens at the wrong width. Phones keep the slide-out menu
 
 ## Getting Started
 
@@ -139,7 +140,7 @@ app/
 components/
 ├── ui/                 # Base UI components (shadcn/ui)
 ├── common/             # Shared components (empty states, problems, diffs, review dialog)
-├── layout/             # The app shell, sidebar, user menu, providers
+├── layout/             # The app shell, the sidebars (their shared parts and icon rail), user menu, providers
 ├── clusters/           # Cluster facts, drift, live status, the template-driven form
 ├── addons/             # A destination's charts (values editor, cards, bulk install), the authoring flow (sync options, dry-run plans, confirmations), and an add-on's scope panels (per-destination values, deploy on specific MCEs)
 └── specs/              # Spec-specific components

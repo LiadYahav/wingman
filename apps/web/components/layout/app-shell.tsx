@@ -8,16 +8,28 @@ import { AreaBrand } from "./area-brand";
 import { AreaSidebar } from "./area-sidebar";
 import { AreaSwitch } from "./area-switch";
 import { EasterEgg } from "./easter-egg";
+import { SidebarToggle } from "./sidebar-toggle";
 import { useAreaAccess } from "./use-area-access";
+import { SidebarRailContext, useSidebarRailState } from "./use-sidebar-rail";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { chromeArea, type AreaId } from "@/lib/areas";
 
-/** The current area's brand and sidebar: each platform wears its own (ADR-0047's amendment). */
-function SidebarContent({ area }: { area: AreaId }) {
+/** The desktop sidebar's element: the toggle names it as what it controls. */
+const DESKTOP_SIDEBAR_ID = "app-sidebar";
+
+/**
+ * The current area's brand and sidebar: each platform wears its own
+ * (ADR-0047's amendment). The desktop copy has the toggle to the icon rail;
+ * the mobile sheet's has none and is never a rail.
+ */
+function SidebarContent({ area, desktop = false }: { area: AreaId; desktop?: boolean }) {
   return (
     <div className="flex h-full w-full flex-col border-r border-sidebar-border bg-sidebar" data-area={area}>
-      <AreaBrand area={area} />
-      <div className="flex-1 overflow-y-auto pt-2">
+      <div className="flex shrink-0 items-center pr-3 rail:flex-col rail:pb-1 rail:pr-0">
+        <AreaBrand area={area} />
+        {desktop && <SidebarToggle controls={DESKTOP_SIDEBAR_ID} />}
+      </div>
+      <div className="flex-1 overflow-x-hidden overflow-y-auto pt-2">
         <AreaSidebar area={area} />
       </div>
     </div>
@@ -27,12 +39,19 @@ function SidebarContent({ area }: { area: AreaId }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const area = chromeArea(usePathname(), useAreaAccess());
+  const rail = useSidebarRailState();
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Desktop sidebar */}
-      <div className="hidden md:flex md:w-[220px] md:shrink-0">
-        <SidebarContent area={area} />
+      {/* Desktop sidebar: --app-sidebar-width is the rail's or the full width (globals.css), set before the first paint */}
+      <div
+        id={DESKTOP_SIDEBAR_ID}
+        data-desktop-sidebar
+        className="hidden overflow-hidden md:flex md:w-(--app-sidebar-width) md:shrink-0 motion-safe:transition-[width] motion-safe:duration-200 motion-safe:ease-out"
+      >
+        <SidebarRailContext value={rail}>
+          <SidebarContent area={area} desktop />
+        </SidebarRailContext>
       </div>
 
       {/* Mobile sidebar */}

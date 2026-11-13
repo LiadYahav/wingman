@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Server, Package, GitPullRequest, ClipboardList, Settings, Layers, BookOpen, ShieldAlert, Link2, Boxes, type LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
+import { SidebarHeading, SidebarLink, SidebarNavList } from "./sidebar-parts";
 
 interface NavItem {
   label: string;
@@ -45,50 +44,26 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   },
 ];
 
+/** Dashboard is marked on itself only; every other entry on itself and below. */
+function isActive(pathname: string, item: NavItem): boolean {
+  return item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/");
+}
+
 export function SidebarNav() {
   const pathname = usePathname();
   const isAdmin = useIsAdmin();
   const mounted = useMounted();
   const showAdmin = isAdmin && mounted;
   return (
-    <nav className="flex flex-col gap-5 px-3 py-3" aria-label="Main">
-      {navGroups.map((group) => (
+    <SidebarNavList label="Main">
+      {navGroups.map((group, index) => (
         <div key={group.label} className="flex flex-col gap-0.5">
-          <p className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
-            {group.label}
-          </p>
-          {group.items.filter((item) => !item.adminOnly || showAdmin).map((item) => {
-            const isActive = item.exact
-              ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(item.href + "/");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={isActive ? "page" : undefined}
-                className={cn(
-                  "group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors duration-150",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-                )}
-              >
-                {/* A bar, not just a colour change, so "where am I" doesn't rely on telling two greys apart. */}
-                {isActive && (
-                  <span aria-hidden className="absolute inset-y-1.5 -left-3 w-0.5 rounded-full bg-sidebar-primary" />
-                )}
-                <item.icon
-                  className={cn(
-                    "h-4 w-4 shrink-0 transition-colors",
-                    isActive ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:text-sidebar-foreground"
-                  )}
-                />
-                {item.label}
-              </Link>
-            );
-          })}
+          <SidebarHeading label={group.label} first={index === 0} />
+          {group.items.filter((item) => !item.adminOnly || showAdmin).map((item) => (
+            <SidebarLink key={item.href} href={item.href} label={item.label} icon={item.icon} active={isActive(pathname, item)} />
+          ))}
         </div>
       ))}
-    </nav>
+    </SidebarNavList>
   );
 }
