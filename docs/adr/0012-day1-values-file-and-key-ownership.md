@@ -1,7 +1,7 @@
 # ADR-0012: A cluster file is a chart values file; people and automation own disjoint keys
 
 Date: 2026-11-07
-Status: Accepted
+Status: Accepted; amended by ADR-0055 (with `DAY1_UPGRADES` on, `mastertag`, every `workertag` and `pausedUntil` belong to the upgrade-cluster workflow: an edit may not change them, except to remove `pausedUntil`)
 
 ## Context
 
