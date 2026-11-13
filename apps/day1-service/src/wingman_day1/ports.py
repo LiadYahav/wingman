@@ -427,6 +427,10 @@ class UpgradeWorkflow(Protocol):
         """The run as the orchestrator reports it; ``None`` when it has none."""
         ...
 
+    async def runs(self) -> list[ListedRun]:
+        """The fleet's newest upgrade runs, newest first: status and times only."""
+        ...
+
     async def decide(
         self,
         workflow_id: str,

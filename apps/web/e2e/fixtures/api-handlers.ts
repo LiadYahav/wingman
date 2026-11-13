@@ -594,6 +594,9 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/*/upgrade-run**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Upgrades are off in this deployment (DAY1_UPGRADES=false).")
   );
+  await page.route("**/api/day1/upgrades", (route: Route) =>
+    fulfillProblem(route, 501, "FEATURE_DISABLED", "Upgrades are off in this deployment (DAY1_UPGRADES=false).")
+  );
   // No name to suggest unless a test says otherwise (ADR-0040): the create form's name stays as typed
   await page.route("**/api/day1/clusters/name-suggestion**", (route: Route) =>
     json(route, { name: null, env: null, short_name: "", sequence: null, problems: [] })

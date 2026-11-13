@@ -448,7 +448,7 @@ def build_context(
         placement=placement,
         quick_links=quick_links,
         segments=segments_service(adapters.ledger, cache, cluster_service, ttl=ttl),
-        upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service),
+        upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service, cache),
         inventory=inventory_service(
             settings,
             site_catalog,

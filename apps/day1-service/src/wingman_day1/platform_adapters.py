@@ -10,12 +10,15 @@ is ``compose_segments``.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import Final
 
+from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.upgrades import UpgradeService
 from wingman_day1.domain.names import HostedClusterNaming
+from wingman_day1.infrastructure.cached_workflows import CachedUpgradeWorkflow
 from wingman_day1.infrastructure.provision_workflow import HttpProvisionWorkflow
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.infrastructure.upgrade_workflow import HttpUpgradeWorkflow
@@ -30,6 +33,8 @@ from wingman_day1.ports import (
 from wingman_day1.settings import Day1Settings
 
 Close = Callable[[], Awaitable[None]]
+FLEET_RUNS_TTL_SECONDS: Final = 10.0
+"""The longest the fleet's upgrade runs are kept: the Upgrades view reads them every 15 s."""
 
 
 def provision_workflow(
@@ -107,13 +112,13 @@ def upgrade_workflow(
     if not settings.day1_upgrades:
         return None
     if settings.day1_fake_fleet:
-        from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow
+        from wingman_day1.infrastructure.fake_upgrade import demo_upgrades
         from wingman_day1.infrastructure.fake_upgrade_script import (
             default_upgrade_file,
             load_upgrade_script,
         )
 
-        return FakeUpgradeWorkflow(load_upgrade_script(default_upgrade_file()), clock=clock)
+        return demo_upgrades(load_upgrade_script(default_upgrade_file()), clock=clock)
     workflow = HttpUpgradeWorkflow(
         base_url=settings.workflows_api_url,
         verify=settings.workflows_tls_verify,
@@ -126,9 +131,19 @@ def upgrade_workflow(
 
 
 def upgrade_service(
-    settings: Day1Settings, workflow: UpgradeWorkflow | None, clusters: ClusterService
+    settings: Day1Settings,
+    workflow: UpgradeWorkflow | None,
+    clusters: ClusterService,
+    cache: TtlCache,
 ) -> UpgradeService | None:
-    """The upgrade use case while ``DAY1_UPGRADES`` is on; ``None`` (the routes' 501) otherwise."""
+    """The upgrade use case while ``DAY1_UPGRADES`` is on; ``None`` (the routes' 501) otherwise.
+
+    The fleet's list reads through a short cache (as Inventory's runs); a
+    cluster's own run is read uncached.
+    """
     if not settings.day1_upgrades or workflow is None:
         return None
-    return UpgradeService(workflow, clusters)
+    ttl = min(settings.day1_cache_ttl_seconds, FLEET_RUNS_TTL_SECONDS)
+    return UpgradeService(
+        workflow, clusters, cached=CachedUpgradeWorkflow(workflow, cache, ttl=ttl)
+    )

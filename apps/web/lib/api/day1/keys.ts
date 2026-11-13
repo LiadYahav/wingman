@@ -13,8 +13,9 @@
  *   both are here); the approval page leaves its own detail out by predicate.
  * - `placement.all`: every placement read.
  *
- * `drift-summary`, `bulk-status` and `provisioner` sit where a cluster's name
- * does; cluster names follow `ocp4-<env>-<name>-<site>`, so none collides.
+ * `drift-summary`, `bulk-status`, `provisioner` and `upgrades` sit where a
+ * cluster's name does; cluster names follow `ocp4-<env>-<name>-<site>`, so
+ * none collides.
  */
 
 import type { PlacementQuery } from "@/lib/placement";
@@ -26,6 +27,8 @@ const clusters = {
   driftSummary: ["clusters", "drift-summary"] as const,
   bulkStatus: (input: { name: string; mce: string }[]) => ["clusters", "bulk-status", input] as const,
   provisioner: ["clusters", "provisioner"] as const,
+  /** Every cluster's newest upgrade run: under `clusters.all`, so the list's Refresh reads it too. */
+  upgrades: ["clusters", "upgrades"] as const,
   one: (name: string) => ["clusters", name] as const,
   detail: (name: string) => ["clusters", name, "detail"] as const,
   liveStatus: (name: string, mce: string) => ["clusters", name, "live-status", mce] as const,

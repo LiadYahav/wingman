@@ -179,9 +179,11 @@ Behind `DAY1_UPGRADES` (default `false`). It needs `WORKFLOWS_API_URL`, and
 day1 refuses to start without it (ADR-0009). `WORKFLOWS_TARGETS_TIMEOUT_SECONDS`
 (default 65) is the targets read's own timeout: the orchestrator waits up to
 60 s. Off: every route below answers `501 FEATURE_DISABLED`, and the web
-shows nothing. `DAY1_FAKE_FLEET` fakes the workflow for a local demo.
+shows nothing but, to an admin, a greyed-out Upgrade saying why (§4).
+`DAY1_FAKE_FLEET` fakes the workflow for a local demo, with three demo runs.
 
-Every route is under `/api/day1/clusters/{name}`, with the optional
+`GET /api/day1/upgrades` lists every cluster's run (below). Every other route
+is under `/api/day1/clusters/{name}`, with the optional
 `?site=&mce=` of the other cluster routes. `{name}` is the cluster file's
 stem, which is the workflow's `cluster`; the run's id is
 `upgrade-cluster-<name>`. A cluster the day1 repo does not have is
@@ -342,6 +344,52 @@ Errors of both decision routes:
 | 502 | `DEPENDENCY_UNAVAILABLE` | Not sent, or the orchestrator's 500 (the Update failed) |
 | 504 | `AMBIGUOUS_WRITE` | Sent, no answer, or the orchestrator's 504 (15 s; the Update may have landed): read the run before deciding again |
 
+### `GET /api/day1/upgrades` (any signed-in user; since 3.19.0)
+
+Every cluster's newest upgrade run, for the Clusters page's Upgrades view and
+its "Upgrading" badges (ADR-0055's amendment). One read of the orchestrator's
+`GET /workflows/runs?workflow_type=UpgradeClusterWorkflow&limit=200` (status
+and times only), folded to one row per run id, so one per cluster: its
+newest upgrade, the `continued_as_new` segments of that upgrade joined,
+`started_at` when the first of them started. Open runs first, then the
+newest. The first 25 rows are read by id (`GET /workflows/runs/{id}`) for
+`phase`, `waiting_for`, `paused` and `outcome`; the rest have them `null`
+and `false`, with the list's status. Both reads are kept 10 s per replica; a
+start or a decision through day1 drops them. Never every run by id.
+
+```json
+{
+  "runs": [
+    {
+      "workflow_id": "upgrade-cluster-ocp4-prod-lark-site1",
+      "cluster": "ocp4-prod-lark-site1",
+      "site": "site1",
+      "mce": "ocp4-prod-mce-site1-a",
+      "status": "running",
+      "started_at": "2026-11-13T09:01:00+00:00",
+      "closed_at": null,
+      "phase": "awaiting-approval",
+      "waiting_for": "approve: 4.18.22 → 4.18.56 in 2 steps (control plane, then 2 NodePools)",
+      "paused": false,
+      "outcome": null
+    }
+  ]
+}
+```
+
+- `cluster` is the file stem from the run id; `site` and `mce` are where the
+  day1 repo has that file, `null` when it has none (an orchestrator shared
+  with another day1) or several.
+- `status` is the read's when the run was read, else the list's, lowercase:
+  `running` while the upgrade is open. `outcome` (`done`, `cancelled`,
+  `aborted`) once completed and read.
+- An empty `runs` is an answer: the orchestrator lists no upgrade run.
+
+| Status | Code | When |
+|---|---|---|
+| 501 | `FEATURE_DISABLED` | `DAY1_UPGRADES` is off |
+| 502 | `DEPENDENCY_UNAVAILABLE` | The orchestrator did not answer the list or a read: the runs are unknown, not "none" |
+
 ### Versions belong to the workflow while `DAY1_UPGRADES` is on
 
 A modify (`PATCH /clusters/{name}`) or an MR review edit
@@ -359,12 +407,15 @@ yet. With the setting off, nothing changes (ADR-0055, amending ADR-0012).
 
 New `workflows` operations (`docs/ops/metrics.md`): `upgrade_targets`,
 `start_upgrade`, `decide_upgrade` (every decision and proposal; no decision
-name and no cluster in the labels). The run read is `get_run`.
+name and no cluster in the labels). The run read is `get_run`; the fleet's
+list is `list_runs`, its reads `get_run`.
 
-## 4. The web (the cluster page; no new page)
+## 4. The web (the cluster page, and since 3.19.0 the Clusters page's Upgrades view)
 
 - **Overview, the Mastertag row:** an "Upgrade" button for admins, when
-  upgrades are on and the cluster has no open run. It opens a dialog fed by
+  upgrades are on and the cluster has no open run. With upgrades off an
+  admin sees it greyed out, its tooltip "Upgrades are off on this Wingman
+  (DAY1_UPGRADES=false)."; a viewer sees nothing. It opens a dialog fed by
   `upgrade-targets`, with a clear loading state (the read can take up to a
   minute):
   - the targets (version, minor, control-plane steps and steps in all,
@@ -404,8 +455,19 @@ name and no cluster in the labels). The run read is `get_run`.
   validators judge every decision.
 - **History tab:** nothing to build. The workflow's commits to the file
   appear there (`upgrade(<cluster>): ... [upgrade-cluster-<cluster>]`).
-- Not in this version: a clusters-list badge, a list of runs waiting for a
-  person on the approvals page.
+- **The Clusters page (3.19.0):** two views as tabs under its heading,
+  Clusters and Upgrades (`/clusters#upgrades`), shown only while upgrades
+  are on. The Upgrades view lists `GET /api/day1/upgrades`, read every 15 s:
+  each cluster (linked to its page, its MCE under it, or "not in this day1
+  repo"), the status, the phase humanized (or the outcome once closed),
+  `waiting_for` cut at a word with the whole text in a tooltip, and when it
+  started. No decisions there: they are the panel's. The Upgrades tab counts
+  the open runs.
+- **The clusters list (3.19.0):** an "Upgrading" badge beside the mastertag
+  of each cluster whose run is open, from the same query; its tooltip is the
+  phase and `waiting_for`, and it opens the cluster.
+- Not in this version: a list of runs waiting for a person on the approvals
+  page.
 
 ## 5. Open questions for the team
 

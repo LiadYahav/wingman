@@ -3,7 +3,7 @@
 import { Fragment, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, ChevronsUpDown, ChevronUp, ChevronDown, X, FileWarning, Server, TriangleAlert } from "lucide-react";
+import { Plus, Search, X, FileWarning, Server, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { api } from "@/lib/api-client";
@@ -12,6 +12,8 @@ import { useIsAdmin } from "@/stores/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/clusters/status-badge";
+import { ClustersViewTabs, UpgradesView, UpgradingBadge, useClustersView } from "@/components/clusters/fleet-upgrades";
+import { SortIcon } from "@/components/clusters/list/sort-icon";
 import { FlavorStateBadge } from "@/components/clusters/drift-badge";
 import { IntentLink } from "@/components/common/intent-link";
 import { ProblemList } from "@/components/common/problem-list";
@@ -45,13 +47,6 @@ function OwnerCell({ cluster }: { cluster: ClusterStatus }) {
       ))}
     </span>
   );
-}
-
-function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
-  if (sortField !== field) return <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />;
-  return sortDir === "asc"
-    ? <ChevronUp className="h-3 w-3 text-primary" />
-    : <ChevronDown className="h-3 w-3 text-primary" />;
 }
 
 /** A flag whose tooltip lists why: its trigger takes the remaining props. */
@@ -147,6 +142,7 @@ function ClusterStatusCell({
 export default function ClustersPage() {
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+  const view = useClustersView();
 
   // Filter / sort / pagination state
   const [search, setSearch] = useState("");
@@ -325,6 +321,7 @@ export default function ClustersPage() {
     </button>
   );
 
+  if (view === "upgrades") return <UpgradesView />;
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-4 animate-in fade-in duration-300">
       {/* Header */}
@@ -356,6 +353,7 @@ export default function ClustersPage() {
           )}
         </div>
       </div>
+      <ClustersViewTabs />
 
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -548,7 +546,7 @@ export default function ClustersPage() {
                               <OwnerCell cluster={cluster} />
                             </td>
                             <td className="px-3 py-3 whitespace-nowrap font-mono text-xs text-muted-foreground">
-                              {cluster.mastertag ?? "—"}
+                              {cluster.mastertag ?? "—"}<UpgradingBadge name={cluster.name} />
                             </td>
                             <td className="px-3 py-3">
                               {cluster.spec_name ? (

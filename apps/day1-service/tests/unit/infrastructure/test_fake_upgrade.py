@@ -23,7 +23,7 @@ from wingman_day1.domain.upgrades import (
     UpgradeRun,
     upgrade_workflow_id,
 )
-from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow
+from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow, demo_upgrades
 from wingman_day1.infrastructure.fake_upgrade_script import (
     default_upgrade_file,
     load_upgrade_script,
@@ -212,3 +212,36 @@ async def test_an_unavailable_fake_fails_every_call(fake: FakeUpgradeWorkflow) -
         await fake.targets(LARK)
     with pytest.raises(WorkflowsUnavailableError):
         await fake.run(RUN)
+
+
+# ── The run list, and the demo's runs ────────────────────────────────────────
+
+
+async def test_the_run_list_has_each_run_with_its_start_and_close(
+    fake: FakeUpgradeWorkflow, clock: Clock
+) -> None:
+    assert await fake.runs() == []
+    await fake.start(start())
+    clock.advance(60)
+    herzi = UpgradeRequest(cluster="ocp4-prod-herzi-site1", requested_by="b", target_minor="4.17")
+    await fake.start(herzi)
+    await fake.decide(upgrade_workflow_id(herzi.cluster), UpgradeDecision.ABORT, by="b", reason="x")
+    newest, older = await fake.runs()
+    assert (newest.workflow_id, newest.status) == (upgrade_workflow_id(herzi.cluster), "completed")
+    assert newest.closed_at == clock.now
+    assert (older.workflow_id, older.status, older.closed_at) == (RUN, "running", None)
+    assert older.started_at == clock.now - timedelta(seconds=60)
+
+
+async def test_the_demo_starts_the_fixtures_runs_and_sends_their_decisions(clock: Clock) -> None:
+    fake = demo_upgrades(load_upgrade_script(default_upgrade_file()), clock=clock)
+    clock.advance(30)
+    runs = {run.workflow_id: run for run in await fake.runs()}
+    herzi = await fake.run(upgrade_workflow_id("ocp4-prod-herzi-site1"))
+    lark = await fake.run(RUN)
+    hawk = await fake.run(upgrade_workflow_id("ocp4-prod-hawk-site1"))
+    assert herzi is not None and herzi.phase == "awaiting-approval"
+    assert lark is not None and lark.phase == "awaiting-day2-confirm"
+    assert hawk is not None and (hawk.status, hawk.outcome) == ("completed", "cancelled")
+    started = runs[RUN].started_at
+    assert started is not None and started < clock.now

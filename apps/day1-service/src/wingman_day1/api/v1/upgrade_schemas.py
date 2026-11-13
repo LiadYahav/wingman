@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
-from wingman_day1.application.upgrades import Decided, StartUpgrade
+from wingman_day1.application.upgrades import Decided, FleetUpgrade, StartUpgrade
 from wingman_day1.domain.upgrades import (
     AgentVerdict,
     LogLine,
@@ -317,3 +317,50 @@ class UpgradeDecisionOut(BaseModel):
             decision=decided.decision,
             run=UpgradeRunOut.of(decided.run) if decided.run else None,
         )
+
+
+# ── The fleet's list ─────────────────────────────────────────────────────────
+
+
+class FleetUpgradeOut(BaseModel):
+    """One cluster's newest upgrade run, for the Clusters page's Upgrades view."""
+
+    workflow_id: str
+    cluster: str
+    """The cluster file's stem."""
+    site: str | None
+    mce: str | None
+    """Where day1 has the file; ``null`` when it has none (or several)."""
+    status: str
+    started_at: str | None
+    """When the upgrade's first segment started."""
+    closed_at: str | None
+    phase: str | None
+    """The workflow's own word; ``null`` when closed, or not read (only the first rows are)."""
+    waiting_for: str | None
+    paused: bool
+    outcome: str | None
+
+    @classmethod
+    def of(cls, upgrade: FleetUpgrade) -> FleetUpgradeOut:
+        """From the use case: the run's own read where made, else the list's entry."""
+        row, run, ref = upgrade.row, upgrade.run, upgrade.ref
+        return cls(
+            workflow_id=row.workflow_id,
+            cluster=row.cluster,
+            site=ref.site if ref else None,
+            mce=ref.mce if ref else None,
+            status=run.status if run else row.status,
+            started_at=row.started_at.isoformat() if row.started_at else None,
+            closed_at=row.closed_at.isoformat() if row.closed_at else None,
+            phase=run.phase if run else None,
+            waiting_for=run.waiting_for if run else None,
+            paused=run.paused if run else False,
+            outcome=run.outcome if run else None,
+        )
+
+
+class FleetUpgradesOut(BaseModel):
+    """``GET /api/day1/upgrades``: every cluster's newest upgrade run, open ones first."""
+
+    runs: list[FleetUpgradeOut]

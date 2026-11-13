@@ -1,8 +1,9 @@
 """The upgrade fake's fixture, ``dev/fleet-fixtures/upgrade.yaml`` (ADR-0055).
 
 Targets by cluster, in the orchestrator's own shape and read with the real
-parser (``default`` for a cluster not listed), and the steps a fake run
-walks: phases and texts as data, never a list in code.
+parser (``default`` for a cluster not listed), the steps a fake run walks
+(phases and texts as data, never a list in code), and the demo's runs,
+started when day1 starts so the fleet's list has something to show.
 """
 
 from __future__ import annotations
@@ -40,6 +41,17 @@ class UpgradeScript:
 
     targets: Mapping[str, UpgradeTargets]
     steps: Mapping[str, tuple[ScriptStep, ...]]
+    demo: tuple[DemoRun, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class DemoRun:
+    """A run the demo starts toward ``target``, then sends ``decisions`` as it waits for each."""
+
+    cluster: str
+    target: str
+    by: str
+    decisions: tuple[UpgradeDecision, ...] = ()
 
 
 def default_upgrade_file() -> Path:
@@ -64,7 +76,21 @@ def load_upgrade_script(path: Path) -> UpgradeScript:
     if not isinstance(run, dict) or set(run) - set(SECTIONS):
         raise TypeError(f"{path}: 'run' has the sections {', '.join(SECTIONS)}")
     steps = {name: tuple(_script_step(item) for item in run.get(name) or ()) for name in SECTIONS}
-    return UpgradeScript(targets=targets, steps=steps)
+    demo = tuple(_demo_run(item) for item in raw.get("demo") or ())
+    return UpgradeScript(targets=targets, steps=steps, demo=demo)
+
+
+def _demo_run(raw: object) -> DemoRun:
+    if not isinstance(raw, dict) or not all(
+        isinstance(raw.get(k), str) for k in ("cluster", "target")
+    ):
+        raise TypeError(f"a demo run needs a cluster and a target: {raw!r}")
+    return DemoRun(
+        cluster=raw["cluster"],
+        target=raw["target"],
+        by=str(raw.get("by") or "demo"),
+        decisions=tuple(UpgradeDecision(str(d)) for d in raw.get("decisions") or ()),
+    )
 
 
 def _script_step(raw: object) -> ScriptStep:

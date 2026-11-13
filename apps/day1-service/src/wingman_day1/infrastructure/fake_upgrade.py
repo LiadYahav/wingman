@@ -8,7 +8,8 @@ fixture's steps on the injected clock: a step with ``seconds`` moves on by
 itself, one with ``waits_for`` waits for that decision, and any other
 decision is refused as the run's validator would (a 409, in words). The
 steps and their texts are fixture data, a sample for the demo: day1 passes
-the real workflow's phases through and keeps no list of them.
+the real workflow's phases through and keeps no list of them. ``seed``
+starts the fixture's demo runs, so the fleet's list has something to show.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from datetime import datetime, timedelta
 from typing import Final
 
 from wingman_core.ports.clock import Clock, system_clock
+from wingman_day1.domain.add_server import ListedRun
 from wingman_day1.domain.errors import (
     ResourceNotFoundError,
     UpgradeAlreadyRunningError,
@@ -55,6 +57,8 @@ class _Run:
     target: str
     steps: list[_Step]
     since: datetime
+    """When the current step began (once closed: when it closed)."""
+    started: datetime
     position: int = 0
     approved: bool = False
     paused_by: str | None = None
@@ -87,6 +91,31 @@ class FakeUpgradeWorkflow:
         """See UpgradeWorkflow.start."""
         self._check()
         self.starts.append(request)
+        return self._begin(request)
+
+    async def runs(self) -> list[ListedRun]:
+        """See UpgradeWorkflow.runs: one entry per run, newest first."""
+        self._check()
+        listed = []
+        for workflow_id, run in self._runs.items():
+            self._tick(run)
+            closed = run.since if run.outcome is not None else None
+            status = "running" if closed is None else "completed"
+            listed.append(ListedRun(workflow_id, status, started_at=run.started, closed_at=closed))
+        return sorted(
+            listed, key=lambda r: r.started_at.timestamp() if r.started_at else 0.0, reverse=True
+        )
+
+    def seed(self, request: UpgradeRequest, decisions: Sequence[UpgradeDecision] = ()) -> None:
+        """Start a demo run now, and send it ``decisions`` as soon as it waits for each."""
+        workflow_id = self._begin(request).workflow_id
+        run = self._runs[workflow_id]
+        for decision in decisions:
+            run.since -= timedelta(minutes=1)  # the timed steps before it are over
+            self._decide(workflow_id, decision, by=request.requested_by, reason="demo")
+        run.started = self._clock() - timedelta(minutes=len(decisions) + 1)
+
+    def _begin(self, request: UpgradeRequest) -> UpgradeRun:
         workflow_id = upgrade_workflow_id(request.cluster)
         if (open_run := self._runs.get(workflow_id)) is not None and open_run.outcome is None:
             raise UpgradeAlreadyRunningError(f"{request.cluster} already has an upgrade run")
@@ -103,6 +132,7 @@ class FakeUpgradeWorkflow:
             target=target,
             steps=self._flatten(order),
             since=self._clock(),
+            started=self._clock(),
             control_plane=targets.control_plane_version or "",
             nodepools=dict.fromkeys(order, targets.control_plane_version or ""),
         )
@@ -127,10 +157,22 @@ class FakeUpgradeWorkflow:
     ) -> None:
         """See UpgradeWorkflow.decide: the run takes what it waits for, and pause, resume, abort."""
         self._check()
+        self._decide(workflow_id, decision, by=by, reason=reason, nodepool=nodepool)
+
+    def _decide(
+        self,
+        workflow_id: str,
+        decision: UpgradeDecision,
+        *,
+        by: str,
+        reason: str | None = None,
+        nodepool: str | None = None,
+    ) -> None:
         run = self._open(workflow_id)
         self.decisions.append((workflow_id, decision.value, by, reason))
         if decision is UpgradeDecision.ABORT:
             run.outcome = "aborted" if run.approved else "cancelled"
+            run.since = self._clock()
         elif decision in (UpgradeDecision.PAUSE, UpgradeDecision.RESUME):
             self._pause(run, decision, by)
         elif run.paused_by is None and decision is run.steps[run.position].script.waits_for:
@@ -309,3 +351,14 @@ def _plan(run: _Run) -> UpgradePlan:
     if pools:
         steps.append(PlanStep("workers", run.target, "final", pools))
     return UpgradePlan(start, run.target, 2, dict.fromkeys(pools, start), tuple(steps))
+
+
+def demo_upgrades(script: UpgradeScript, *, clock: Clock = system_clock) -> FakeUpgradeWorkflow:
+    """The fake with the fixture's demo runs started (``DAY1_FAKE_FLEET``, development only)."""
+    fake = FakeUpgradeWorkflow(script, clock=clock)
+    for demo in script.demo:
+        request = UpgradeRequest(
+            cluster=demo.cluster, requested_by=demo.by, target_version=demo.target
+        )
+        fake.seed(request, demo.decisions)
+    return fake

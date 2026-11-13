@@ -159,3 +159,32 @@ export interface UpgradeDecisionResult {
   decision: string;
   run: UpgradeRun | null;
 }
+
+/**
+ * One cluster's newest upgrade run, for the Clusters page's Upgrades view
+ * (`GET /api/day1/upgrades`, open runs first). Strings are the workflow's.
+ */
+export interface FleetUpgrade {
+  workflow_id: string;
+  /** The cluster file's stem. */
+  cluster: string;
+  /** Where day1 has the file; `null` when it has none (or several). */
+  site: string | null;
+  mce: string | null;
+  /** Lowercase: `running` while the upgrade is open. */
+  status: string;
+  /** When the upgrade's first segment started. */
+  started_at: string | null;
+  closed_at: string | null;
+  /** The workflow's own word; `null` once closed, or when day1 did not read the run (only the first rows are). */
+  phase: string | null;
+  waiting_for: string | null;
+  paused: boolean;
+  /** Once completed: `done`, `cancelled` or `aborted`. */
+  outcome: string | null;
+}
+
+/** `GET /api/day1/upgrades`. */
+export interface FleetUpgrades {
+  runs: FleetUpgrade[];
+}

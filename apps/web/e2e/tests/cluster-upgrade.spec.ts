@@ -126,11 +126,22 @@ async function mockUpgradeRun(page: Page, upgrades: Upgrades, decide?: (route: R
 }
 
 test.describe("Upgrade a cluster through the upgrade-cluster workflow", () => {
-  test("upgrades off: no Upgrade on the Mastertag row and no panel", async ({ page }) => {
+  test("upgrades off: an admin sees Upgrade greyed out with why, and no panel", async ({ page }) => {
     await openCluster(page, null);
     await expect(page.getByText("4.18.22-x86_64").first()).toBeVisible();
     await expect(page.getByTestId("upgrade-action")).toHaveCount(0);
+    const off = page.getByTestId("upgrade-action-off");
+    await expect(off).toHaveAccessibleName("Upgrade is off: why");
+    await off.hover();
+    await expect(page.locator("[data-slot=tooltip-content][data-open]")).toHaveText("Upgrades are off on this Wingman (DAY1_UPGRADES=false).");
     await expect(page.getByTestId("upgrade-panel")).toHaveCount(0);
+  });
+
+  test("upgrades off: a viewer sees no Upgrade at all", async ({ page }) => {
+    await openCluster(page, null, { viewer: true });
+    await expect(page.getByText("4.18.22-x86_64").first()).toBeVisible();
+    await expect(page.getByTestId("upgrade-action-off")).toHaveCount(0);
+    await expect(page.getByTestId("upgrade-action")).toHaveCount(0);
   });
 
   test("the dialog lists the workflow's targets, and Start sends only the target", async ({ page }) => {

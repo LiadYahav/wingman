@@ -8,23 +8,31 @@ only what makes a request well-formed for the workflow (a reason where it
 requires one, a NodePool only for ``continue``) and that the cluster is in
 the day1 repo. Who asked is the signed-in user, never the request, and day1
 logs who did what. Nothing is retried (ADR-0006).
+
+The fleet's list (the Clusters page's Upgrades view) is one cached read of
+the orchestrator's run list, one row per cluster, and the first rows read by
+id for their phase; a cluster's own panel reads its run uncached.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Mapping
 from dataclasses import dataclass
+from typing import Final
 
 from wingman_core.domain.users import User
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.domain.errors import (
     AmbiguousDecisionError,
+    AmbiguousNameError,
     AmbiguousStartError,
     InvalidInputError,
     ResourceNotFoundError,
     WorkflowsError,
 )
+from wingman_day1.domain.fleet_upgrades import FleetRun, newest_upgrades
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.upgrades import (
     UpgradeDecision,
@@ -36,6 +44,9 @@ from wingman_day1.domain.upgrades import (
 from wingman_day1.ports import UpgradeWorkflow
 
 logger = logging.getLogger(__name__)
+
+READ_RUNS: Final = 25
+"""The fleet list's first rows (open first) read by id for their phase: the orchestrator page's."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,13 +71,44 @@ class Decided:
     run: UpgradeRun | None
 
 
-class UpgradeService:
-    """Targets, start, run and decisions of one cluster's upgrade."""
+@dataclass(frozen=True, slots=True)
+class FleetUpgrade:
+    """One cluster's newest upgrade in the fleet's list."""
 
-    def __init__(self, workflow: UpgradeWorkflow, clusters: ClusterService) -> None:
-        """Talk to the workflow; ``clusters`` says whether the day1 repo has the cluster."""
+    row: FleetRun
+    run: UpgradeRun | None
+    """The run read by its id (its phase, ``waiting_for``, outcome); ``None`` when not read."""
+    ref: ClusterRef | None
+    """Where day1 has the cluster's file; ``None`` when it has none, or several."""
+
+
+class UpgradeService:
+    """Targets, start, run and decisions of one cluster's upgrade, and the fleet's list."""
+
+    def __init__(
+        self,
+        workflow: UpgradeWorkflow,
+        clusters: ClusterService,
+        *,
+        cached: UpgradeWorkflow | None = None,
+    ) -> None:
+        """Talk to the workflow; ``clusters`` says whether the day1 repo has the cluster.
+
+        ``cached`` is the same workflow with its reads kept a few seconds, for
+        the fleet's list; writes go through it so it forgets them.
+        """
         self._workflow = workflow
         self._clusters = clusters
+        self._cached = cached or workflow
+
+    async def fleet(self) -> list[FleetUpgrade]:
+        """Every cluster's newest upgrade, open ones first; the first rows read by id."""
+        rows = newest_upgrades(await self._cached.runs())
+        runs = await asyncio.gather(*(self._cached.run(r.workflow_id) for r in rows[:READ_RUNS]))
+        read = dict(zip((r.workflow_id for r in rows), runs, strict=False))
+        return [
+            FleetUpgrade(r, read.get(r.workflow_id), await self._place(r.cluster)) for r in rows
+        ]
 
     async def targets(self, ref: ClusterRef) -> UpgradeTargets:
         """What the workflow offers to upgrade the cluster to (an empty list is an answer)."""
@@ -93,7 +135,7 @@ class UpgradeService:
         )
         event = {**_where(ref, user), "target": request.target}
         try:
-            run = await self._workflow.start(request)
+            run = await self._cached.start(request)
         except AmbiguousStartError:
             _log(logging.WARNING, "upgrade start unconfirmed", "upgrade_start_unconfirmed", event)
             raise
@@ -127,7 +169,7 @@ class UpgradeService:
         if nodepool:
             event["nodepool"] = nodepool
         await self._send(
-            self._workflow.decide(
+            self._cached.decide(
                 workflow_id, decision, by=user.username, reason=reason, nodepool=nodepool
             ),
             event,
@@ -148,7 +190,7 @@ class UpgradeService:
             "run": workflow_id,
         }
         await self._send(
-            self._workflow.decide_action(workflow_id, action_id, approve=approve, by=user.username),
+            self._cached.decide_action(workflow_id, action_id, approve=approve, by=user.username),
             event,
         )
         return Decided(workflow_id, decision, await self._reread(workflow_id))
@@ -158,6 +200,13 @@ class UpgradeService:
     async def _require(self, ref: ClusterRef) -> None:
         """The day1 repo has the cluster's file (``ResourceNotFoundError`` otherwise)."""
         await self._clusters.hosted_cluster(ref)
+
+    async def _place(self, name: str) -> ClusterRef | None:
+        """Where day1 has ``name``'s file: absent and ambiguous are answers, not failures."""
+        try:
+            return await self._clusters.locate(name)
+        except (ResourceNotFoundError, AmbiguousNameError):
+            return None
 
     async def _send(self, call: Awaitable[None], event: Mapping[str, str]) -> None:
         try:
