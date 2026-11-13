@@ -21,9 +21,8 @@ is ``AmbiguousStartError``: the run may exist.
 
 from __future__ import annotations
 
-import ssl
 import time
-from typing import Any, Final
+from typing import Final
 from urllib.parse import quote
 
 import httpx
@@ -37,10 +36,8 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.servers import RunSummary, run_status
 from wingman_day1.domain.workflows import WorkflowRun
+from wingman_day1.infrastructure.http import JSON, NOT_SENT, json_client
 from wingman_day1.infrastructure.observed import Observer, Timer, WorkflowsOperation
-
-JSON = Any
-"""A decoded JSON value; narrowed where it is read."""
 
 START_PATH: Final = "/workflows/server-lifecycle/uninstall-server-from-hc"
 RUNS_PATH: Final = "/workflows/runs"
@@ -48,8 +45,6 @@ WORKFLOW_TYPE: Final = "UninstallServerFromHcWorkflow"
 """The Temporal class name the run list filters on (it answers ``[]`` for any other name)."""
 RUNS_LIMIT: Final = 200
 """The most the run list returns; it has no cursor."""
-NOT_SENT: Final = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
-"""Transport errors that happen before a request leaves: nothing reached the orchestrator."""
 MAX_DETAIL: Final = 300
 CHECK_FIRST: Final = "Look at the node's uninstall run before trying again."
 
@@ -69,14 +64,11 @@ class HttpUninstallWorkflow:
     ) -> None:
         """Call the orchestrator at ``base_url``; ``verify`` is ``True``/``False`` or a CA path."""
         self._observer = Observer(Dependency.WORKFLOWS, metrics, timer=timer)
-        self._client = httpx.AsyncClient(
-            base_url=base_url.rstrip("/"),
-            timeout=httpx.Timeout(timeout_seconds),
-            verify=verify
-            if isinstance(verify, bool)
-            else ssl.create_default_context(cafile=verify),
+        self._client = json_client(
+            base_url=base_url,
+            verify=verify,
+            timeout_seconds=timeout_seconds,
             transport=transport,
-            headers={"Accept": "application/json"},
         )
 
     async def aclose(self) -> None:

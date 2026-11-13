@@ -26,12 +26,11 @@ line: messages name the MCE and the resource path only.
 from __future__ import annotations
 
 import re
-import ssl
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Final, Protocol
+from typing import Final, Protocol
 from urllib.parse import urlsplit
 
 import httpx
@@ -71,6 +70,7 @@ from wingman_day1.domain.status import (
     HostedClusterObservation,
     NodePoolObservation,
 )
+from wingman_day1.infrastructure.http import JSON, tls_verify
 from wingman_day1.infrastructure.observed import HubOperation, Observer, Timer
 
 _HYPERSHIFT: Final = "/apis/hypershift.openshift.io/v1beta1"
@@ -91,9 +91,6 @@ NO_NODE: Final = "<none>"
 """The Table's Node cell of a pod not bound to a node yet."""
 _QUANTITY = re.compile(r"^([0-9]+)(k|M)?$")
 _QUANTITY_SCALE: Final = {None: 1, "k": 1000, "M": 1_000_000}
-
-JSON = Any
-"""A decoded Kubernetes JSON value; narrowed by the parsers below."""
 
 
 class Named(Protocol):
@@ -183,16 +180,6 @@ def hub_url(value: object, *, what: str) -> str:
     return text
 
 
-def _ssl_context(verify: bool | str) -> ssl.SSLContext | bool:
-    """``True``/``False``, or a context trusting the CA bundle at ``verify``.
-
-    Built eagerly so a CA bundle path that does not exist stops start-up.
-    """
-    if isinstance(verify, bool):
-        return verify
-    return ssl.create_default_context(cafile=verify)
-
-
 class HttpHubApi:
     """A ``HubApi`` for every MCE that has a token, one lazily built client per MCE."""
 
@@ -215,7 +202,7 @@ class HttpHubApi:
         self._tokens = dict(tokens)
         self._urls = dict(urls or {})
         self._domain = domain.strip().strip(".")
-        self._verify = _ssl_context(verify)
+        self._verify = tls_verify(verify)
         self._timeout = httpx.Timeout(timeout_seconds)
         self._transport = transport
         self._clients: dict[str, httpx.AsyncClient] = {}

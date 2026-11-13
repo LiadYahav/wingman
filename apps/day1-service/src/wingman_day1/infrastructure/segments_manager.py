@@ -12,20 +12,17 @@ fixture has segments-manager's own shape.
 
 from __future__ import annotations
 
-import ssl
 import time
 from collections.abc import Mapping
-from typing import Any, Final
+from typing import Final
 
 import httpx
 
 from wingman_core.observability.metrics import Dependency, WingmanMetrics
 from wingman_day1.domain.errors import SegmentsManagerUnavailableError
 from wingman_day1.domain.network import SegmentRecord
+from wingman_day1.infrastructure.http import JSON, json_client, optional_text, required_text
 from wingman_day1.infrastructure.observed import Observer, SegmentsManagerOperation, Timer
-
-JSON = Any
-"""A decoded JSON value; narrowed where it is read."""
 
 BY_SEGMENT_PATH: Final = "/api/segments/by-segment"
 
@@ -49,14 +46,11 @@ class HttpSegmentLedger:
         missing bundle stops start-up); ``transport`` is for tests.
         """
         self._observer = Observer(Dependency.SEGMENTS_MANAGER, metrics, timer=timer)
-        self._client = httpx.AsyncClient(
-            base_url=base_url.rstrip("/"),
-            timeout=httpx.Timeout(timeout_seconds),
-            verify=verify
-            if isinstance(verify, bool)
-            else ssl.create_default_context(cafile=verify),
+        self._client = json_client(
+            base_url=base_url,
+            verify=verify,
+            timeout_seconds=timeout_seconds,
             transport=transport,
-            headers={"Accept": "application/json"},
         )
 
     async def aclose(self) -> None:
@@ -102,30 +96,14 @@ def segment_record(raw: JSON) -> SegmentRecord:
     if not isinstance(raw, dict):
         raise TypeError("a segment is not an object")
     return SegmentRecord(
-        segment=_text(raw, "segment"),
+        segment=required_text(raw, "segment"),
         vlan_id=_vlan(raw),
-        epg_name=_optional_text(raw, "epg_name"),
+        epg_name=optional_text(raw, "epg_name"),
         cluster_name=_holder(raw),
-        status=_optional_text(raw, "status"),
-        type=_optional_text(raw, "type"),
-        site=_optional_text(raw, "site"),
+        status=optional_text(raw, "status"),
+        type=optional_text(raw, "type"),
+        site=optional_text(raw, "site"),
     )
-
-
-def _text(raw: Mapping[str, JSON], key: str) -> str:
-    value = raw[key]
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"{key} is not a non-empty string")
-    return value
-
-
-def _optional_text(raw: Mapping[str, JSON], key: str) -> str | None:
-    value = raw.get(key)
-    if value is None or value == "":
-        return None
-    if not isinstance(value, str):
-        raise TypeError(f"{key} is not a string")
-    return value
 
 
 def _vlan(raw: Mapping[str, JSON]) -> int | None:
