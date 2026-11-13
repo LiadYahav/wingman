@@ -164,6 +164,9 @@ def server_row(raw: JSON) -> ServerRow:
         contested=optional_text(raw, "contested_with") is not None,
         last_seen_at=_timestamp(raw, "last_seen_at"),
         reserved_by=optional_text(reservation, "holder") if held else None,
+        reserved_for_mce=optional_text(reservation, "mce_cluster") if held else None,
+        reserved_for_infra_env=optional_text(reservation, "infra_env") if held else None,
+        reserved_until=_timestamp(reservation, "expires_at") if held else None,
         macs=_macs(raw),
     )
 

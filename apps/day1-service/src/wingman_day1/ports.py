@@ -14,6 +14,12 @@ from typing import Protocol
 from wingman_core.domain.git import Commit, FileContent, FileDiff, Project, RepoPath, TreeEntry
 from wingman_core.domain.merge_request import MergeRequest, MergeRequestRef, MRState
 from wingman_core.domain.users import User
+from wingman_day1.domain.add_server import (
+    AddServerRequest,
+    AddServerRun,
+    AddServerStart,
+    ListedRun,
+)
 from wingman_day1.domain.addons import (
     Day2InstallRequest,
     Day2InstallResult,
@@ -335,6 +341,33 @@ class UninstallWorkflow(Protocol):
         Raises ``UninstallAlreadyRunningError`` while one runs for the server,
         ``WorkflowsUnavailableError`` when nothing was started, and
         ``AmbiguousStartError`` when it was sent but the answer was lost.
+        """
+        ...
+
+
+class AddServerWorkflow(Protocol):
+    """The orchestrator's ``add-server-to-mce`` workflow (ADR-0057).
+
+    It makes servers Agents in an MCE's InfraEnv pool; herzi starts it too.
+    The workflow owns the procedure and its checks; Wingman starts runs and
+    reads them. Reads raise ``WorkflowsUnavailableError``.
+    """
+
+    async def runs(self) -> list[ListedRun]:
+        """The newest add-server runs of the fleet, newest first."""
+        ...
+
+    async def run(self, workflow_id: str) -> AddServerRun | None:
+        """One run's phase, server and error; ``None`` when the orchestrator has no such run."""
+        ...
+
+    async def start(self, request: AddServerRequest) -> AddServerStart:
+        """Start one run per server. Never retried (ADR-0006): sent twice, it installs twice.
+
+        Raises ``AddServerAlreadyRunningError`` for the orchestrator's 409,
+        ``AddServerRefusedError`` for its 422, ``WorkflowsUnavailableError``
+        when nothing was started, and ``AmbiguousStartError`` when it was
+        sent but the answer was lost.
         """
         ...
 

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from wingman_core.domain.errors import AmbiguousWriteError, NotFoundError, RevisionConflictError
 from wingman_core.web.errors import (
+    AddServerAlreadyRunning,
     AppError,
     DependencyUnavailable,
     ErrorCode,
@@ -131,6 +132,7 @@ async def test_unexpected_errors_hide_internals_and_mint_a_request_id(
         (UpgradeAlreadyRunning("running"), 409, "UPGRADE_ALREADY_RUNNING"),
         (UpgradeDecisionRefused("not now"), 409, "UPGRADE_DECISION_REFUSED"),
         (UpgradeTargetsRefused("no rules"), 409, "UPGRADE_TARGETS_REFUSED"),
+        (AddServerAlreadyRunning("running"), 409, "ADD_SERVER_ALREADY_RUNNING"),
     ],
 )
 async def test_non_git_errors_have_their_own_codes(error: AppError, status: int, code: str) -> None:

@@ -17,6 +17,8 @@ from wingman_core.observability.instrumented_gitlab import InstrumentedGitLab
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.settings import AuthSettings, Environment, GitBackend, RuntimeSettings
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects
+from wingman_day1.infrastructure.add_server_workflow import HttpAddServerWorkflow
+from wingman_day1.infrastructure.fake_add_server import FakeAddServerWorkflow
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory, FakeUninstallWorkflow
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
@@ -119,7 +121,8 @@ async def test_server_scan_and_the_orchestrator_get_real_adapters_when_configure
     try:
         assert isinstance(adapters.inventory, HttpServerInventory)
         assert isinstance(adapters.uninstall, HttpUninstallWorkflow)
-        assert len(adapters.closers) == 3
+        assert isinstance(adapters.add_server, HttpAddServerWorkflow), "its runs, even when off"
+        assert len(adapters.closers) == 4
     finally:
         await close(adapters)
 
@@ -148,7 +151,7 @@ async def test_upgrades_get_the_orchestrators_adapter_only_when_turned_on() -> N
     try:
         assert isinstance(adapters.upgrade, HttpUpgradeWorkflow)
         assert adapters.upgrade._targets_timeout.read == 70
-        assert len(adapters.closers) == 4
+        assert len(adapters.closers) == 5, "day2, server-scan, uninstall, add-server, upgrade"
     finally:
         await close(adapters)
 
@@ -185,6 +188,9 @@ async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -
     try:
         assert isinstance(adapters.inventory, FakeServerInventory)
         assert isinstance(adapters.uninstall, FakeUninstallWorkflow)
+        assert isinstance(adapters.add_server, FakeAddServerWorkflow)
+        demo = adapters.inventory.by_name("ocp-dell-r650-site1-96c-768gb-DLFAKE0811")
+        assert demo is not None, "Inventory's demo servers join the fake fleet"
         assert len(await adapters.inventory.rows()) > 10
         assert isinstance(adapters.hub, FakeHubApi), "the fake MCE, not the tokens file"
         lark = await adapters.hub.hosted_cluster(

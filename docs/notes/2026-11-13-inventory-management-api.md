@@ -190,7 +190,10 @@ Read 2026-11-13 from team-redbull's public repositories.
 - The orchestrator's `GET /workflows/runs?workflow_type=AddServerToMceWorkflow&limit=200`,
   newest first; the 50 newest are shown, and the 20 newest are each read
   (`GET /workflows/runs/{id}`) for `phase`, `server_name` and `error`.
-  Both reads are kept 10 s; a start drops them.
+  Both reads are kept 10 s; a start drops them. A pool's slots are reused,
+  so several runs may share an id, and a read by id answers for the newest
+  of them: only the newest entry of an id gets `phase`, `server_name` and
+  `error`; an older one keeps the list's `status`.
 - Run ids: a pool draw is `add-server-to-mce-<mce>_<infraEnv>_<slot>` (slot
   1-100), a named install `add-server-to-mce-<mce>_<server, lowercased>`;
   the orchestrator adds `ocp4-` to the MCE. An id that is neither is shown

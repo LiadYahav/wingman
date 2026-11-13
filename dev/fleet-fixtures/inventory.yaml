@@ -1,0 +1,210 @@
+# Inventory Management's demo for DAY1_FAKE_FLEET=true (development only, ADR-0057).
+#
+# `items` adds servers to servers.yaml's fake server-scan fleet, in the exact
+# row shape of server-scan's `GET /api/v1/servers/rows` (read with the same
+# parser). They are AVAILABLE: in no MCE yet, so nothing else in the demo
+# (the Nodes tab, placement) sees them. Nothing here is real: the ids,
+# serials and MACs are invented, and the BMC addresses are in the
+# documentation range 192.0.2.0/24.
+#
+# - dell-r760-site1-64c-512gb-20tb: three servers for the fake herzi's pool
+#   (ocp4-prod-lark-site1's short NodePool on ocp4-prod-mce-site1-a).
+# - dell-r650-site1-96c-768gb: one a named install may pick, one locked by
+#   another add-server run, one in maintenance (a donor).
+# - hp-gen12-site1-64c-512gb: one in WARNING health (shown, still offered).
+#
+# `phases` are a sample of the real workflow's steps, each `phase_seconds`
+# long; day1 passes the real ones through and keeps no list of them.
+#
+# `herzi`: the fake herzi starts a pool draw on that pool `first_after`
+# seconds after start-up, then every `every_seconds`; after a run of its finds
+# no server, it waits `probe_seconds` (herzi's probe mode).
+#
+# `runs`: past runs, kept as they are. `pool: [mce, infra_env, slot]` or
+# `named: [mce, server]`; `minutes_ago` is when it started.
+
+phases: [validating-infraenv, acquiring-server, reserving-server, registering-bmh, waiting-for-agent]
+phase_seconds: 8
+
+herzi:
+  mce: ocp4-prod-mce-site1-a
+  infra_env: dell-r760-site1-64c-512gb-20tb
+  first_after_seconds: 15
+  every_seconds: 90
+  probe_seconds: 600
+
+runs:
+  - pool: [ocp4-prod-mce-site1-a, dell-r650-site1-96c-768gb, 1]
+    status: COMPLETED
+    phase: completed
+    server: ocp-dell-r650-site1-96c-768gb-DLFAKE0701
+    minutes_ago: 190
+  - named: [ocp4-prod-mce-site1-b, ocp-dell-r650-site1-96c-768gb-DLFAKE0812]
+    status: FAILED
+    phase: reserving-server
+    error: "ServerReservedError: ocp-dell-r650-site1-96c-768gb-DLFAKE0812 is held by another add-server-to-mce run (fake)"
+    minutes_ago: 40
+
+x-free: &free {held: false, holder: null, mce_cluster: null, infra_env: null, expires_at: null}
+x-no-maintenance: &no-maintenance {enabled: false, reason: null, created_by: null}
+
+items:
+  - id: srv_00000000000000000000000000000801
+    name: ocp-dell-r760-site1-64c-512gb-20tb-DLFAKE0801
+    vendor: dell
+    model: PowerEdge R760
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R760-Storage
+    last_seen_at: "2026-11-13T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0801
+    bmc_host: 192.0.2.81
+    macs: ["02:00:00:00:08:01", "02:00:00:00:08:02"]
+  - id: srv_00000000000000000000000000000802
+    name: ocp-dell-r760-site1-64c-512gb-20tb-DLFAKE0802
+    vendor: dell
+    model: PowerEdge R760
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R760-Storage
+    last_seen_at: "2026-11-13T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0802
+    bmc_host: 192.0.2.82
+    macs: ["02:00:00:00:08:03", "02:00:00:00:08:04"]
+  - id: srv_00000000000000000000000000000803
+    name: ocp-dell-r760-site1-64c-512gb-20tb-DLFAKE0803
+    vendor: dell
+    model: PowerEdge R760
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R760-Storage
+    last_seen_at: "2026-11-13T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0803
+    bmc_host: 192.0.2.83
+    macs: ["02:00:00:00:08:05", "02:00:00:00:08:06"]
+  - id: srv_00000000000000000000000000000811
+    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0811
+    vendor: dell
+    model: PowerEdge R650
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R650-Standard
+    last_seen_at: "2026-11-13T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0811
+    bmc_host: 192.0.2.91
+    macs: ["02:00:00:00:08:11", "02:00:00:00:08:12"]
+  - id: srv_00000000000000000000000000000812
+    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0812
+    vendor: dell
+    model: PowerEdge R650
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation:
+      held: true
+      holder: add-server-to-mce
+      mce_cluster: ocp4-prod-mce-site1-b
+      infra_env: dell-r650-site1-96c-768gb
+      expires_at: "2026-11-13T18:00:00Z"
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R650-Standard
+    last_seen_at: "2026-11-13T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0812
+    bmc_host: 192.0.2.92
+    macs: ["02:00:00:00:08:13", "02:00:00:00:08:14"]
+  - id: srv_00000000000000000000000000000813
+    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0813
+    vendor: dell
+    model: PowerEdge R650
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: {enabled: true, reason: donor for site1 repairs, created_by: dev}
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R650-Standard
+    last_seen_at: "2026-11-13T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0813
+    bmc_host: 192.0.2.93
+    macs: ["02:00:00:00:08:15", "02:00:00:00:08:16"]
+  - id: srv_00000000000000000000000000000814
+    name: ocp-hp-gen12-site1-64c-512gb-HPFAKE0814
+    vendor: hp
+    model: ProLiant DL360 Gen12
+    site_id: site1
+    source_provider: ONEVIEW
+    installation_type: HOSTED_CLUSTER
+    health: WARNING
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: DL360-Standard
+    last_seen_at: "2026-11-13T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: HPFAKE0814
+    bmc_host: 192.0.2.94
+    macs: ["02:00:00:00:08:17", "02:00:00:00:08:18"]

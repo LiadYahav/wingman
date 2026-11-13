@@ -19,6 +19,7 @@ Families:
 - ``segments-manager:{sites,stats}``       its sites and per-site statistics (ADR-0047)
 - ``segments-manager:segments:...``        its segments for one query
 - ``workflows:uninstall:...``              the orchestrator's uninstall runs: the list, one run
+- ``workflows:add-server:...``             the orchestrator's add-server runs: the list, one run
 """
 
 from __future__ import annotations
@@ -113,6 +114,21 @@ def uninstall_runs() -> str:
 def uninstall_run(workflow_id: str) -> str:
     """One uninstall run's status, step and error."""
     return f"{uninstall_runs_prefix()}run:{workflow_id}"
+
+
+def add_server_runs_prefix() -> str:
+    """Every cached add-server read; cleared when day1 starts one (ADR-0057)."""
+    return "workflows:add-server:"
+
+
+def add_server_runs() -> str:
+    """The newest add-server runs of the fleet."""
+    return f"{add_server_runs_prefix()}runs"
+
+
+def add_server_run(workflow_id: str) -> str:
+    """One add-server run's phase, server and error."""
+    return f"{add_server_runs_prefix()}run:{workflow_id}"
 
 
 def merge_requests_prefix(repo: str) -> str:

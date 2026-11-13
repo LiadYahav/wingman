@@ -225,3 +225,22 @@ def test_upgrades_are_off_unless_turned_on_also_for_values_kept_from_3_15() -> N
     )
     assert refused.returncode != 0
     assert "day1.upgrades.enabled needs workflows.url" in refused.stderr
+
+
+def test_adding_servers_is_off_unless_enabled_and_needs_the_orchestrator() -> None:
+    """ADR-0057: ``day1.addServers.enabled`` sets DAY1_ADD_SERVERS, also off for values kept
+    from 3.17 that have no such key; on, it needs ``workflows.url``."""
+    assert render()["wingman-config"]["data"]["DAY1_ADD_SERVERS"] == "false"
+    kept = render("--set", "day1.addServers=null")["wingman-config"]["data"]
+    assert kept["DAY1_ADD_SERVERS"] == "false"
+    on = render(*ALL_ON, "--set", "day1.addServers.enabled=true")["wingman-config"]["data"]
+    assert on["DAY1_ADD_SERVERS"] == "true"
+    assert HELM is not None
+    refused = subprocess.run(  # noqa: S603 - a fixed argv, no shell
+        [HELM, "template", "wingman", str(CHART), "--set", "day1.addServers.enabled=true"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode != 0
+    assert "day1.addServers.enabled needs workflows.url" in refused.stderr

@@ -376,3 +376,13 @@ def test_the_segments_manager_link_needs_nothing_else(monkeypatch: pytest.Monkey
     loaded = Day1Settings()
     assert loaded.segments_manager_ui_url == SEGMENTS_MANAGER
     assert (loaded.server_scan_url, loaded.workflows_api_url) == ("", "")
+
+
+def test_adding_servers_is_off_by_default_and_needs_an_orchestrator() -> None:
+    """ADR-0057: DAY1_ADD_SERVERS starts add-server-to-mce, which needs WORKFLOWS_API_URL."""
+    assert dev().day1_add_servers is False
+    with pytest.raises(ValidationError, match="DAY1_ADD_SERVERS=true needs WORKFLOWS_API_URL"):
+        dev(day1_add_servers=True)
+    on = dev(day1_add_servers=True, workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN)
+    assert on.day1_add_servers is True
+    assert dev(day1_add_servers=True, day1_fake_fleet=True).day1_add_servers is True

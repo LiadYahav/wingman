@@ -51,6 +51,12 @@ class ServerRow:
     last_seen_at: datetime | None = None
     reserved_by: str | None = None
     """The reservation's holder while the reservation is held, else ``None``."""
+    reserved_for_mce: str | None = None
+    """While held: the MCE the reservation names (``mce_cluster``)."""
+    reserved_for_infra_env: str | None = None
+    """While held: the InfraEnv the reservation names."""
+    reserved_until: datetime | None = None
+    """While held: when the reservation expires; ``None`` for no expiry."""
     macs: tuple[str, ...] = ()
     """Its NICs' MAC addresses, lowercase."""
 

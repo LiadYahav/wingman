@@ -82,6 +82,10 @@ class FakeServerInventory:
         """Put ``row`` in place of the server with its id."""
         self._rows[row.id] = row
 
+    def snapshot(self) -> list[ServerRow]:
+        """Every server now, by name, without running the read hooks (a fake workflow's look)."""
+        return sorted(self._rows.values(), key=lambda row: row.name)
+
     async def rows(self) -> list[ServerRow]:
         """See ServerInventory.rows."""
         self._read()

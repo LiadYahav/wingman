@@ -126,6 +126,12 @@ class Day1Settings(BaseSettings):
     day1_upgrades: bool = False
     workflows_targets_timeout_seconds: float = Field(default=65.0, gt=0, le=120)
 
+    # ── Inventory Management: adding servers (ADR-0057; off by default) ──────
+    # true: admins add servers to an MCE's InfraEnv pool by starting the
+    # platform's add-server-to-mce workflow; needs WORKFLOWS_API_URL (or
+    # DAY1_FAKE_FLEET in development). The page itself needs SERVER_SCAN_URL.
+    day1_add_servers: bool = False
+
     # ── MCE placement (ADR-0050): always on; this needs the hubs ─────────────
     # The cost of one hosted control plane: with CLUSTER_STATUS_ENABLED, an MCE
     # is offered for a new cluster only with at least this many free pods
@@ -241,6 +247,16 @@ class Day1Settings(BaseSettings):
             raise ValueError(
                 "DAY1_UPGRADES=true needs WORKFLOWS_API_URL: upgrades start the "
                 "upgrade-cluster workflow there"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _adding_servers_has_an_orchestrator(self) -> Self:
+        """Adding servers starts add-server-to-mce; without the orchestrator none could start."""
+        if self.day1_add_servers and not self.workflows_api_url and not self.day1_fake_fleet:
+            raise ValueError(
+                "DAY1_ADD_SERVERS=true needs WORKFLOWS_API_URL: adding servers starts the "
+                "add-server-to-mce workflow there"
             )
         return self
 

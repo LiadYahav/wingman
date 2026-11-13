@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from wingman_core.domain.errors import InvalidRepoPathError
 from wingman_core.web.errors import (
+    AddServerAlreadyRunning,
     AlreadyExists,
     AmbiguousWrite,
     AppError,
@@ -32,6 +33,7 @@ from wingman_core.web.errors import (
 )
 from wingman_core.web.exception_handlers import app_error_response, register_domain_errors
 from wingman_day1.domain.errors import (
+    AddServerAlreadyRunningError,
     AlreadyInUseError,
     AmbiguousDecisionError,
     AmbiguousNameError,
@@ -86,6 +88,7 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (UpgradeAlreadyRunningError, UpgradeAlreadyRunning),
     (UpgradeDecisionRefusedError, UpgradeDecisionRefused),
     (UpgradeTargetsRefusedError, UpgradeTargetsRefused),
+    (AddServerAlreadyRunningError, AddServerAlreadyRunning),
     (AmbiguousStartError, AmbiguousWrite),
     (AmbiguousDecisionError, AmbiguousWrite),
     (SegmentsManagerUnavailableError, DependencyUnavailable),
