@@ -1,7 +1,7 @@
 # ADR-0032: CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks
 
 Date: 2026-11-07
-Status: Accepted; amended 2026-11-13 (the mocked E2E suite runs four workers; a flaky test is annotated)
+Status: Accepted; amended 2026-11-13 (the mocked E2E suite runs on two runners of four workers; a flaky test is annotated and its trace kept)
 
 ## Context
 
@@ -70,7 +70,7 @@ critical.
 - `tests/repo/test_ci_scripts.py::TestNpmAudit` pins the allowlist rules;
   `python3 scripts/npm-audit.py` reports 64 advisories, every one allowlisted.
 
-## Amendment (2026-11-13): the mocked E2E suite runs four workers, and a flaky test shows
+## Amendment (2026-11-13): the mocked E2E suite runs on two runners of four workers, and a flaky test shows
 
 Measured on the 20 CI runs of 2026-11-12/13: a run took 8.5-11.6 minutes,
 and the mocked Playwright job was its whole critical path, 8-10 minutes, of
@@ -89,6 +89,15 @@ the checks (tag, publish, notes). The supply-chain rules above are unchanged.
   runs before this had one, each passing on its retry). It still shows: the
   list reporter's summary names it, and on GitHub Playwright's `github`
   reporter puts it on the run as an annotation.
+- **Two runners**: CI splits the suite with `--shard`, a matrix of two, four
+  workers each; Playwright splits by test (fullyParallel), so the halves are
+  even. Four workers are not four times one: locally half the suite took
+  1.1-1.7 minutes on four against 2.6 on one, so on one runner the suite
+  would still be the longest check. Each shard pays about 45 s of setup
+  (checkout, `npm ci`, build). The gate runs the suite whole.
+- Each shard uploads its HTML report **on failure, and when a test passed
+  only on a retry**: that retry's trace (`trace: on-first-retry`) is the only
+  `.zip` a report holds, so a flaky test can be debugged, not only seen.
 
 Rejected:
 

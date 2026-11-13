@@ -52,7 +52,7 @@ Status: Proposed | Accepted | Superseded by ADR-NNNN | Superseded in part by ADR
 | [0029](0029-a-configs-rule-locks-every-nodepool.md) | A flavor can lock every nodepool's configs as one rule (`nodepools[*].configs`), compared exactly by name, in any order |
 | [0030](0030-releases-from-version-forward-only.md) | A release is a VERSION bump that only moves forward; images build on every PR and publish from main (superseded in part by 0031) |
 | [0031](0031-commit-derived-versions.md) | Every merge to main is a release whose version comes from Conventional Commits, as in server-scan |
-| [0032](0032-ci-supply-chain.md) | CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks (amended 2026-11-13: the mocked E2E suite runs four workers; a flaky test is annotated) |
+| [0032](0032-ci-supply-chain.md) | CI checks its own supply chain: zizmor-enforced SHA pins, checksum-verified tools, an npm audit that only shrinks (amended 2026-11-13: the mocked E2E suite runs on two runners of four workers; a flaky test is annotated and its trace kept) |
 | [0033](0033-delete-cluster-workflow-contract.md) | The delete-cluster workflow has a contract and a ready web panel; both say "not available yet" until it exists |
 | [0034](0034-openshift-versions-from-the-upgrade-ladder.md) | A new cluster's OpenShift versions come from the upgrade ladder, per MCE; an MCE without its file offers none |
 | [0035](0035-read-each-repo-once-per-commit.md) | The day1, specs and team repos are read once per commit, from GitLab's archive; a read's `last_commit_id` is the commit read at |
