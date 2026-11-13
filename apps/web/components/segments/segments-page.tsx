@@ -1,27 +1,29 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { VisibilityState } from "@tanstack/react-table";
 import { Info, Lock, Network, TriangleAlert, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { ColumnPicker } from "@/components/data-table/column-picker";
 import { DataTable } from "@/components/data-table/data-table";
-import { downloadCsv } from "@/components/data-table/download";
+import { downloadCsv, downloadXlsx } from "@/components/data-table/download";
 import { useDataTable } from "@/components/data-table/use-data-table";
 import { useStoredVisibility } from "@/components/data-table/use-stored-visibility";
 import { EmptyState, NoMatches } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessages, isApiError } from "@/lib/api-client";
-import { useRefreshSegments, useSegmentList, useSegmentSites, useSegmentStats } from "@/lib/api/segments";
-import { COLUMN_IDS, isColumnId } from "@/lib/segments/columns";
-import { segmentsCsv } from "@/lib/segments/csv";
-import { shownSegments, statusCounts } from "@/lib/segments/filter";
-import { clearFilters, isFiltered, nextSort, orderTypes, toggleType, type SegmentsView } from "@/lib/segments/view";
-import { SEGMENT_TYPES, type Segment, type SegmentList } from "@/types/segments";
+import { useRefreshSegments, useSegmentList, useSegmentSites, useSegmentStats, type RefreshFailure } from "@/lib/api/segments";
+import { COLUMN_IDS, COLUMN_LABELS, isColumnId } from "@/lib/segments/columns";
+import { connection, type Attempt } from "@/lib/segments/connection";
+import { segmentsCsv, segmentsTable } from "@/lib/segments/csv";
+import { baseSegments, shownSegments, statusCounts } from "@/lib/segments/filter";
+import { clearFilters, isFiltered, nextSort, type SegmentsView } from "@/lib/segments/view";
+import { describeFilter, setColumnFilter } from "@/lib/table/column-filters";
+import type { Segment, SegmentList } from "@/types/segments";
 import { SEGMENT_COLUMNS } from "./segment-columns";
 import { SegmentsHeader } from "./segments-header";
-import { FilterChip, MismatchToggle, SegmentSearch, SiteFilter, StatusTabs, TypeFilter } from "./segments-toolbar";
+import { FilterChip, MismatchToggle, SegmentSearch, SiteFilter, StatusTabs } from "./segments-toolbar";
 import { SiteCards, SiteCardsSkeleton } from "./site-cards";
 import { useSearchDraft, useSegmentsView } from "./use-segments-view";
 
@@ -81,6 +83,20 @@ function Notices({ data, error }: { data: SegmentList; error: unknown }) {
   );
 }
 
+/**
+ * The page's refreshes so far: the list's last good read, its last failed one
+ * (TanStack Query keeps that error beside the last good data until a read
+ * succeeds), and a failed Refresh.
+ */
+function attempts(list: ReturnType<typeof useSegmentList>, failed: RefreshFailure | null): Attempt[] {
+  const failure = (error: unknown) => errorMessages(error)[0];
+  return [
+    { at: list.dataUpdatedAt, failure: null },
+    ...(list.error ? [{ at: list.errorUpdatedAt, failure: failure(list.error) }] : []),
+    ...(failed ? [{ at: failed.at, failure: failure(failed.error) }] : []),
+  ];
+}
+
 function TableSkeleton() {
   return (
     <div className="space-y-2 rounded-xl border bg-card p-3" aria-busy="true">
@@ -91,6 +107,8 @@ function TableSkeleton() {
 
 interface TableProps {
   data: SegmentList;
+  /** The rows before the column filters: the header popovers list their values from them. */
+  base: Segment[];
   /** The rows the view shows, in its order. */
   shown: Segment[];
   view: SegmentsView;
@@ -101,11 +119,10 @@ interface TableProps {
 }
 
 /** The table and everything that filters it. */
-function SegmentsTable({ data, shown, view, setView, sites, visibility, onVisibility }: TableProps) {
+function SegmentsTable({ data, base, shown, view, setView, sites, visibility, onVisibility }: TableProps) {
   const search = useSearchDraft(view.q, (q) => setView({ ...view, q }));
   const counts = useMemo(() => statusCounts(data.segments, view), [data.segments, view]);
   const disagreeing = useMemo(() => data.segments.filter((s) => s.mismatches.length > 0).length, [data.segments]);
-  const types = useMemo(() => orderTypes([...SEGMENT_TYPES, ...data.segments.flatMap((s) => (s.type ? [s.type] : []))]), [data.segments]);
   const table = useDataTable<Segment>({
     data: shown,
     columns: SEGMENT_COLUMNS,
@@ -127,15 +144,24 @@ function SegmentsTable({ data, shown, view, setView, sites, visibility, onVisibi
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <SiteFilter sites={sites} value={view.site} onChange={(site) => setView({ ...view, site })} />
-        <TypeFilter types={types} value={view.types} onToggle={(type) => setView(toggleType(view, type))} />
         <MismatchToggle count={disagreeing} value={view.mismatch} onChange={(mismatch) => setView({ ...view, mismatch })} />
         {view.cluster && <FilterChip label="Cluster" value={view.cluster} onRemove={() => setView({ ...view, cluster: null })} />}
+        {COLUMN_IDS.filter((id) => view.filters[id]).map((id) => (
+          <FilterChip
+            key={id}
+            label={COLUMN_LABELS[id]}
+            value={describeFilter(view.filters[id])}
+            column
+            onRemove={() => setView({ ...view, filters: setColumnFilter(view.filters, id, null, []) })}
+          />
+        ))}
       </div>
       <DataTable
         table={table}
         label="Segments"
         sort={view.sort}
         onSort={(id) => isColumnId(id) && setView({ ...view, sort: nextSort(view.sort, id) })}
+        filters={{ rows: base, value: view.filters, onChange: (filters) => setView({ ...view, filters }) }}
         rowProps={(s) => ({
           "data-testid": "segment-row",
           "data-segment": s.segment,
@@ -160,10 +186,12 @@ export function SegmentsPage() {
   const list = useSegmentList();
   const stats = useSegmentStats();
   const sites = useSegmentSites();
-  const { refresh, refreshing } = useRefreshSegments();
+  const { refresh, refreshing, failed } = useRefreshSegments();
   const [visibility, setVisibility] = useStoredVisibility(COLUMNS_KEY);
+  const [exporting, setExporting] = useState(false);
   const blocked = isApiError(list.error, "FORBIDDEN") || isApiError(list.error, "FEATURE_DISABLED");
   const data = list.data;
+  const base = useMemo(() => (data ? baseSegments(data.segments, view) : []), [data, view]);
   const shown = useMemo(() => (data ? shownSegments(data.segments, view) : []), [data, view]);
   const siteNames = sites.data?.sites ?? stats.data?.sites.map((s) => s.site) ?? [];
 
@@ -175,10 +203,18 @@ export function SegmentsPage() {
       toast.error(`Refresh failed: ${errorMessages(error)[0]}`);
     }
   };
-  const onCsv = () => {
-    // What is shown: the rows after every filter and the search, in the shown order and columns
-    const columns = COLUMN_IDS.filter((id) => visibility[id] !== false);
-    downloadCsv("segments.csv", segmentsCsv(shown, columns));
+  // The exports hold what is shown: the rows after every filter and the search, in the shown order and columns
+  const shownColumns = () => COLUMN_IDS.filter((id) => visibility[id] !== false);
+  const onCsv = () => downloadCsv("segments.csv", segmentsCsv(shown, shownColumns()));
+  const onExcel = async () => {
+    setExporting(true);
+    try {
+      await downloadXlsx("segments.xlsx", segmentsTable(shown, shownColumns()), "Segments");
+    } catch (error) {
+      toast.error(`Excel export failed: ${errorMessages(error)[0]}`);
+    } finally {
+      setExporting(false);
+    }
   };
   const summary = !data
     ? "segments-manager's segments, per site"
@@ -191,10 +227,13 @@ export function SegmentsPage() {
       <SegmentsHeader
         summary={summary}
         updatedAt={data ? list.dataUpdatedAt : null}
+        connection={connection(attempts(list, failed))}
         shown={data && !blocked ? shown.length : null}
         refreshing={refreshing}
         onRefresh={() => void onRefresh()}
+        exporting={exporting}
         onCsv={onCsv}
+        onExcel={() => void onExcel()}
       />
       {blocked ? (
         <Blocked error={list.error} />
@@ -217,6 +256,7 @@ export function SegmentsPage() {
           <Notices data={data} error={list.error} />
           <SegmentsTable
             data={data}
+            base={base}
             shown={shown}
             view={view}
             setView={setView}

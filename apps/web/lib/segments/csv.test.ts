@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COLUMN_IDS } from "./columns";
-import { csvCell, segmentsCsv, toCsv } from "./csv";
+import { csvCell, segmentsCsv, segmentsTable, toCsv } from "./csv";
 import { free, segment } from "./testing";
 
 describe("a CSV cell", () => {
@@ -46,5 +46,20 @@ describe("the CSV", () => {
       ].join("\r\n")
     );
     expect(segmentsCsv(rows.slice(0, 1), ["vlan_id", "segment"])).toBe("VLAN ID,Network Segment\r\n1408,10.20.42.0/24\r\n");
+  });
+
+  it("is the same table the Excel file writes, a VLAN ID kept as a number", () => {
+    const rows = [segment(), free({ segment: "10.20.48.0/24", vlan_id: null, epg_name: null, dhcp: null })];
+    const table = segmentsTable(rows, ["vlan_id", "segment", "dhcp", "status"]);
+    expect(table).toEqual({
+      header: ["VLAN ID", "Network Segment", "DHCP", "Status"],
+      rows: [
+        [1408, "10.20.42.0/24", "On", "Allocated"],
+        ["", "10.20.48.0/24", "", "Available"],
+      ],
+    });
+    expect(segmentsCsv(rows, ["vlan_id", "segment", "dhcp", "status"])).toBe(
+      "VLAN ID,Network Segment,DHCP,Status\r\n1408,10.20.42.0/24,On,Allocated\r\n,10.20.48.0/24,,Available\r\n"
+    );
   });
 });

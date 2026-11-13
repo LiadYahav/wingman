@@ -5,7 +5,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { CopyCell } from "@/components/data-table/copy-cell";
 import { MismatchMarker } from "./mismatch-marker";
 import { clusterHref } from "@/lib/clusters";
-import { COLUMN_LABELS, dhcpLabel, isAllocated, statusLabel, type ColumnId } from "@/lib/segments/columns";
+import { COLUMN_LABELS, cellText, dhcpLabel, isAllocated, statusLabel, type ColumnId } from "@/lib/segments/columns";
 import { cn } from "@/lib/utils";
 import type { Segment } from "@/types/segments";
 
@@ -79,9 +79,14 @@ function Status({ segment }: { segment: Segment }) {
 }
 
 const column = createColumnHelper<Segment>();
-const meta = (id: ColumnId, className?: string) => ({ label: COLUMN_LABELS[id], className });
+/** Every column filters by its cell's text, as the original's header filters do (and as the page's filtering reads it). */
+const meta = (id: ColumnId, className?: string) => ({
+  label: COLUMN_LABELS[id],
+  className,
+  filterValue: (segment: Segment) => cellText(segment, id),
+});
 
-/** The table's columns, in the original's order, with its headers. */
+/** The table's columns, in the original's order, with its headers and their value filters. */
 export const SEGMENT_COLUMNS = [
   column.accessor("type", { header: COLUMN_LABELS.type, meta: meta("type"), cell: (c) => <TypeBadge type={c.getValue()} /> }),
   column.accessor("site", { header: COLUMN_LABELS.site, meta: meta("site"), cell: (c) => <SiteChip site={c.getValue()} /> }),

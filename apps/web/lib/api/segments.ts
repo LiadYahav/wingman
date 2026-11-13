@@ -75,18 +75,30 @@ export function useSegmentList() {
   });
 }
 
+/** A Refresh whose fresh read failed: when, and what. */
+export interface RefreshFailure {
+  at: number;
+  error: unknown;
+}
+
 /**
  * The Refresh button: the list read fresh from segments-manager's database
  * (day1 allows one such read per few seconds per replica, and says so in
- * `fresh`), then the cards. Resolves to the fresh list; throws what failed.
+ * `fresh`), then the cards. Resolves to the fresh list; throws what failed,
+ * and keeps it as `failed` (for the connection dot) until a Refresh succeeds.
  */
 export function useRefreshSegments() {
   const client = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const [failed, setFailed] = useState<RefreshFailure | null>(null);
   const refresh = useCallback(async (): Promise<SegmentList> => {
     setRefreshing(true);
     try {
-      const list = await segmentsApi.list({ fresh: true });
+      const list = await segmentsApi.list({ fresh: true }).catch((error: unknown) => {
+        setFailed({ at: Date.now(), error });
+        throw error;
+      });
+      setFailed(null);
       client.setQueryData(segmentsKeys.list, list);
       await client.refetchQueries({ queryKey: segmentsKeys.stats, exact: true });
       return list;
@@ -94,5 +106,5 @@ export function useRefreshSegments() {
       setRefreshing(false);
     }
   }, [client]);
-  return { refresh, refreshing };
+  return { refresh, refreshing, failed };
 }

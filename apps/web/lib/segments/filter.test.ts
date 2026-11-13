@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareSegments, filterSegments, matchesSearch, shownSegments, sortSegments, statusCounts } from "./filter";
+import { baseSegments, compareSegments, filterSegments, matchesSearch, shownSegments, sortSegments, statusCounts } from "./filter";
 import { free, segment } from "./testing";
 import { DEFAULT_VIEW, type SegmentsView } from "./view";
 
@@ -68,9 +68,22 @@ describe("the filters", () => {
     expect(cidrs(filterSegments(ALL, view({ site: "site2" })))).toEqual(["10.20.52.0/24", "10.20.70.0/24"]);
   });
 
-  it("never matches a type on a segment that has none", () => {
-    expect(cidrs(filterSegments(ALL, view({ types: ["HC"] })))).toEqual(["10.20.44.0/24"]);
-    expect(cidrs(filterSegments(ALL, view({ types: ["HC", "UPI"] })))).toEqual(["10.20.44.0/24", "10.20.60.0/24"]);
+  it("keeps a column filter's values; a type never matches a segment that has none unless the blank is kept", () => {
+    expect(cidrs(filterSegments(ALL, view({ filters: { type: ["HC"] } })))).toEqual(["10.20.44.0/24"]);
+    expect(cidrs(filterSegments(ALL, view({ filters: { type: ["HC", "UPI"] } })))).toEqual(["10.20.44.0/24", "10.20.60.0/24"]);
+    expect(cidrs(filterSegments(ALL, view({ filters: { type: [""] } })))).toEqual(["10.20.52.0/24", "10.20.80.0/24"]);
+  });
+
+  it("matches a column filter on the cell as shown: DHCP On/Off, a UPI list's joined names, a missing status as Available", () => {
+    expect(cidrs(filterSegments(ALL, view({ filters: { dhcp: ["Off"] } })))).toEqual(["10.20.60.0/24"]);
+    expect(cidrs(filterSegments(ALL, view({ filters: { cluster: ["ocp4-upi-a, ocp4-upi-b"] } })))).toEqual(["10.20.60.0/24"]);
+    expect(cidrs(filterSegments(ALL, view({ filters: { status: ["Available"] } })))).toEqual(["10.20.52.0/24", "10.20.80.0/24"]);
+  });
+
+  it("lists the popovers' values from the rows before the column filters, as the original's lastBaseSegments", () => {
+    const filtered = view({ site: "site2", q: "10.20", filters: { type: ["MCE"] } });
+    expect(cidrs(baseSegments(ALL, filtered))).toEqual(["10.20.52.0/24", "10.20.70.0/24"]);
+    expect(cidrs(filterSegments(ALL, filtered))).toEqual(["10.20.70.0/24"]);
   });
 
   it("matches one holder exactly, a shared list too, never a substring", () => {
@@ -87,9 +100,10 @@ describe("the filters", () => {
     expect(cidrs(filterSegments(ALL, view({ status: "allocated", site: "site1", q: "upi" })))).toEqual(["10.20.60.0/24"]);
   });
 
-  it("counts each tab under the other filters", () => {
+  it("counts each tab under the other filters, the column filters too", () => {
     expect(statusCounts(ALL, DEFAULT_VIEW)).toEqual({ all: 5, available: 2, allocated: 3 });
     expect(statusCounts(ALL, view({ status: "available", site: "site2" }))).toEqual({ all: 2, available: 1, allocated: 1 });
+    expect(statusCounts(ALL, view({ status: "available", filters: { type: ["HC", "UPI"] } }))).toEqual({ all: 2, available: 0, allocated: 2 });
   });
 });
 
@@ -126,6 +140,9 @@ describe("the sort", () => {
   it("filters, then sorts", () => {
     expect(cidrs(shownSegments(ALL, view({ status: "allocated", sort: { id: "vlan_id", desc: true } })))).toEqual([
       "10.20.60.0/24", "10.20.44.0/24", "10.20.70.0/24",
+    ]);
+    expect(cidrs(shownSegments(ALL, view({ filters: { type: ["HC", "MCE"] }, sort: { id: "vlan_id", desc: false } })))).toEqual([
+      "10.20.70.0/24", "10.20.44.0/24",
     ]);
   });
 });

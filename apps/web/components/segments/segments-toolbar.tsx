@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Search, X } from "lucide-react";
+import { Funnel, Search, X } from "lucide-react";
 import { STATUS_TABS, type StatusTab } from "@/lib/segments/view";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ const pill = (active: boolean) =>
       : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
   );
 
-/** A labelled row of toggles: Status, Site, Type. */
+/** A labelled row of toggles: Status, Site. */
 function PillRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1.5">
@@ -103,19 +103,6 @@ export function SiteFilter({ sites, value, onChange }: { sites: string[]; value:
   );
 }
 
-/** The Type filter row (the alpha's stand-in for per-column filters): none pressed is every type. */
-export function TypeFilter({ types, value, onToggle }: { types: string[]; value: string[]; onToggle: (type: string) => void }) {
-  return (
-    <PillRow label="Type">
-      {types.map((type) => (
-        <button key={type} type="button" aria-pressed={value.includes(type)} onClick={() => onToggle(type)} className={cn(pill(value.includes(type)), "font-mono")}>
-          {type}
-        </button>
-      ))}
-    </PillRow>
-  );
-}
-
 /** Only the rows where segments-manager disagrees with a cluster file; shown while any does, or while on. */
 export function MismatchToggle({ count, value, onChange }: { count: number; value: boolean; onChange: (on: boolean) => void }) {
   if (count === 0 && !value) return null;
@@ -135,16 +122,33 @@ export function MismatchToggle({ count, value, onChange }: { count: number; valu
   );
 }
 
-/** A filter the toolbar has no control for (the cluster page's link), as a chip that removes it. */
-export function FilterChip({ label, value, onRemove }: { label: string; value: string; onRemove: () => void }) {
+/**
+ * A filter shown as a chip that removes it: one the toolbar has no control
+ * for (the cluster page's link), or a column's filter, so it stays in sight
+ * when its column is hidden.
+ */
+export function FilterChip({
+  label,
+  value,
+  column = false,
+  onRemove,
+}: {
+  label: string;
+  value: string;
+  /** A column's filter: marked with the header's funnel. */
+  column?: boolean;
+  onRemove: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onRemove}
-      aria-label={`Remove the ${label.toLowerCase()} filter ${value}`}
+      aria-label={column ? `Remove the ${label} column filter: ${value}` : `Remove the ${label.toLowerCase()} filter ${value}`}
+      data-testid={column ? "column-filter-chip" : undefined}
       className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
     >
-      {label}: <span className="font-mono">{value}</span>
+      {column && <Funnel aria-hidden className="h-3 w-3 fill-current" />}
+      {label}: <span className={column ? undefined : "font-mono"}>{value}</span>
       <X aria-hidden className="h-3 w-3" />
     </button>
   );

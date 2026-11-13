@@ -87,7 +87,7 @@ tag exists.
 | 0b | Changes reach each cluster through its own MR: import, and every flavor version rolled out per cluster | 0044 | L | In progress (PR #32) |
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
 | 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0046 | M | 1 for a place to show it |
-| 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand next; full parity (decision 22) waits on the user's go |
+| 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand (3.17.0); full parity (decision 22) built for 3.21.0 |
 | 4 | Server Scan area | 0048 | L–XL | The user's go (decision 22); the team's tokens |
 | 5 | Hosted clusters and MCEs from cluster-navigator | 0049 | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
@@ -232,7 +232,10 @@ groundwork (only what this page needs). Its cuts (no Excel, no connection
 dot, no `/api/logs`, a Type filter row instead of column filters) are
 listed in `docs/notes/2026-11-13-segments-area-api.md` §7. Since 3.17.0
 the area has its own sidebar and brand (ADR-0047's amendment), the first
-piece of workstream 2's "each area has its own sidebar".
+piece of workstream 2's "each area has its own sidebar". **Since 3.21.0
+the area is at full parity** (decision 22, ADR-0047's second amendment):
+a filter on every column (on the shared table, for Server Scan to reuse),
+the Excel export and the connection dot; the alpha's Type row is gone.
 
 segments-manager's UI is one read-only page today (it lost its writes in
 July); its reads need no token.
@@ -257,14 +260,14 @@ July); its reads need no token.
   segments-manager disagrees with the cluster file (ADR-0039's checks).
 - **No writes.** Allocation and release stay with the workflows.
 
-**Option C (decision 22): full parity, planned, waits on the user's go.**
-The alpha's cuts come back, so the area does everything segments-manager's
-UI does, in Wingman's look:
-- per-column filter popovers on every column (the shared table supports them);
-- the Excel export beside the CSV one;
-- the connection state;
+**Option C (decision 22): full parity, built (3.21.0).** The alpha's cuts
+came back, so the area does everything segments-manager's UI does, in
+Wingman's look:
+- a filter popover on every column, on the shared table (built, 3.21.0);
+- the Excel export beside the CSV one (built, 3.21.0);
+- the connection state, a dot beside "Updated" (built, 3.21.0);
 - its own sidebar (Segments: All, Available, Allocated, Disagrees with Git;
-  Sites with their counts) and brand (in progress, 3.17.0);
+  Sites with their counts) and brand (built, 3.17.0);
 - anything segments-manager's UI gains back (it lost its writes in July):
   a write would need its API token in a Wingman Secret, behind the admin
   check and Wingman's audit, decided then.

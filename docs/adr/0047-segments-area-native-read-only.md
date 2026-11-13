@@ -1,7 +1,7 @@
 # ADR-0047: The Segments area is Wingman's own read-only page over segments-manager's open reads, for admins, built as an alpha
 
 Date: 2026-11-13
-Status: Accepted; amended 2026-11-13 (each area has its own sidebar and brand)
+Status: Accepted; amended 2026-11-13 (each area has its own sidebar and brand), and 2026-11-13 for 3.21.0 (full parity)
 
 ## Context
 
@@ -125,6 +125,77 @@ not Wingman's, and the top left should say which platform you are in.
 Verification: `apps/web/lib/areas.test.ts` and
 `apps/web/lib/segments/sidebar.test.ts` (Vitest), and
 `apps/web/e2e/tests/area-chrome.spec.ts`.
+
+**2026-11-13, 3.21.0: full parity (decision 22).** The user chose Option C:
+every feature of segments-manager's page, in Wingman's look. The alpha's
+cuts are built; the original's `/api/logs` never is.
+
+- **A filter on every column, in the shared table.** A column opts in with
+  `meta.filterValue` (its cell as text). With `DataTable`'s `filters` prop
+  (`rows`, `value`, `onChange`), its header gets a funnel. The funnel opens
+  the column's distinct values with checkboxes, a search among them, select
+  all or none, Apply and Clear, and stays marked while the column filters.
+  The table only draws. The caller keeps the `ColumnFilters` (a column id
+  to the values it keeps) and filters with `applyColumnFilters` from
+  `apps/web/lib/table/column-filters.ts`, which also reads and writes them
+  as URL parameters (`f.<column>`, once per value). The Server Scan area
+  reuses it as is.
+  - As in the original: the values come from the rows before any column
+    filter (its `lastBaseSegments`: after the status, the site and the
+    search; here also the holder and "Disagrees with Git"). A value is the
+    cell's text, and keeping every value is no filter.
+  - Unlike the original: the filters live in the URL, and the status tabs
+    count under them. An active filter is also a chip, so a filter on a
+    hidden column stays in sight. Apply is disabled with nothing kept, so a
+    filter never empties the table by accident.
+  - The Type row (the alpha's stand-in) is gone. A `type=HC,UPI` link from
+    3.15 to 3.20 still opens with the Type column filtered.
+- **The Excel export, written in the browser** from the rows shown, beside
+  the CSV: one `ExportTable` (`apps/web/lib/table/export.ts`) that both
+  write, so the files hold the same rows and columns (a VLAN ID stays a
+  number in Excel). The header row is bold and frozen, and each column is
+  as wide as its longest value, at most 50 characters, as the original's
+  export. The library is **write-excel-file 4.1.1** (MIT, one dependency:
+  fflate 0.8.3, MIT), pinned exactly (ADR-0003), and loaded only when Excel
+  is pressed (its own chunk of the web's bundle). Text is always written as
+  text, never as a formula. Building the web image from source needs both
+  packages in the npm mirror.
+  - **Rejected: proxying segments-manager's `GET
+    /api/export/segments/excel` through day1.** It would match the
+    original's file byte for byte, but it applies only `status` and
+    `site`. It would export rows the page does not show (the search, the
+    column filters and the holder are ignored), in other columns (it adds
+    Allocated At, writes DHCP as Yes/No and an Available holder as
+    "Available") and not the shown order, beside a CSV that is exactly
+    what is shown. It would also need a binary read on the `SegmentLedger`
+    port, its fake and a route. (The original's page shows only a CSV
+    button: its `exportData('excel')` has no button.)
+  - **Rejected libraries:** SheetJS's npm package (`xlsx`) is frozen at
+    0.18.5 (2022) with known advisories; its fixed versions are published
+    only on its own CDN, outside the npm registry and so outside the
+    air-gapped mirror. ExcelJS (4.4.0, 2023) brings nine dependencies and
+    21 MB for a one-sheet file.
+- **The connection dot** beside "Updated … · every 30 s": green while
+  segments-manager answered the last refresh, red with the reason in its
+  tooltip when it did not. The last refresh is the 30-second re-read or
+  the Refresh button, whichever ended last (`lib/segments/connection.ts`).
+  The page keeps the last good rows (TanStack Query keeps them beside the
+  error) and the failed re-read's problem above them. The original tracks
+  this state silently, pauses its re-reads while offline, and asks
+  `/api/health` every 10 seconds to find out. Wingman shows it, adds no
+  call, and keeps re-reading, so the next good read turns it green.
+- **Rejected: TanStack Table's own column filtering** (`getFilteredRowModel`
+  and faceted values). Its faceted values come from the rows the other
+  columns' filters keep, not the original's base rows. And the page's
+  counts and exports would read the table's model instead of the pure
+  functions the page already filters with.
+
+Verification: `apps/web/lib/table/column-filters.test.ts`,
+`apps/web/lib/table/export.test.ts`,
+`apps/web/lib/segments/{view,filter,csv,connection}.test.ts` (Vitest),
+`apps/web/e2e/tests/segments-columns.spec.ts` (it reads the downloaded
+`.xlsx` back and compares it with the CSV), and the dot's tests in
+`apps/web/e2e/tests/segments.spec.ts`.
 
 ## Verification
 
