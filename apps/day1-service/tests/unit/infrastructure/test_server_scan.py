@@ -20,7 +20,7 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
-from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -323,6 +323,7 @@ class CountingInventory:
         self.server_reads = 0
         self.site_reads = 0
         self.conf_reads = 0
+        self.event_reads = 0
         self.fail = False
 
     async def rows(self) -> list[ServerRow]:
@@ -364,6 +365,16 @@ class CountingInventory:
         self, server_id: str, *, cursor: str | None, page_size: int
     ) -> EventPage:
         raise AssertionError("not read here")
+
+    async def events(self, query: EventQuery) -> EventPage:
+        self.event_reads += 1
+        return EventPage.model_validate_json(
+            '{"items": [], "page": {"next_cursor": null, "has_more": false, "page_size": 50}}'
+        )
+
+    async def event_actors(self) -> EventActorList:
+        self.event_reads += 1
+        return EventActorList(items=())
 
     async def skill(self) -> Skill:
         raise AssertionError("not read here")
@@ -453,3 +464,12 @@ async def test_the_confs_are_read_through_every_time() -> None:
     await cached.confs()
     await cached.confs()
     assert inner.conf_reads == 2
+
+
+async def test_the_events_and_their_actors_are_read_through_every_time() -> None:
+    inner = CountingInventory()
+    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
+    for _ in range(2):
+        await cached.events(EventQuery())
+        await cached.event_actors()
+    assert inner.event_reads == 4

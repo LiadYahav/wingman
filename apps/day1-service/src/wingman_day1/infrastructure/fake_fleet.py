@@ -13,7 +13,10 @@ fake server is a VM unless the records fixture says so. Its Claude skill is
 a folder, read and zipped as server-scan does (``fake_server_scan_skill``,
 3.27.0); without one it carries none. Its architecture diagrams are
 ``fake_server_scan_architecture``'s (3.28.0). Its hardware catalog (the Confs
-page) is the fixture's, as loaded (``fake_server_scan_confs``, 3.29.0).
+page) is the fixture's, as loaded (``fake_server_scan_confs``, 3.29.0). Its
+audit trail is every server's History and the seeded ``events``, filtered and
+paged as server-scan does, for the Events page and a server's History alike
+(``fake_server_scan_events``, 3.31.0).
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which
@@ -47,7 +50,7 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
-from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer, VmHostServer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -63,6 +66,7 @@ from wingman_day1.domain.servers import (
 from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.infrastructure.fake_server_records import FakeRecords
 from wingman_day1.infrastructure.fake_server_scan_architecture import FakeDiagrams
+from wingman_day1.infrastructure.fake_server_scan_events import JSONish, event_actors, event_page
 from wingman_day1.infrastructure.fake_server_scan_rules import FakeRules
 from wingman_day1.infrastructure.fake_server_scan_sites import SiteName, catalog_of, count_sites
 from wingman_day1.infrastructure.fake_server_scan_skill import zip_skill
@@ -79,7 +83,6 @@ PHASE_SECONDS: Final = 8.0
 FAKE_ACTOR: Final = "dev"
 """Who a server-scan with auth off records for every write."""
 FLEET_FILE: Final = Path("dev/fleet-fixtures/servers.yaml")
-_EMPTY_PAGE: Final = {"next_cursor": None, "has_more": False, "total": 0}
 
 
 class FakeServerInventory:
@@ -96,6 +99,7 @@ class FakeServerInventory:
         skill: Skill | None = None,
         diagrams: FakeDiagrams | None = None,
         confs: ConfList | None = None,
+        events: Sequence[JSONish] = (),
         clock: Clock = system_clock,
     ) -> None:
         """Seed the fleet; ``sites`` is server-scan's site catalog (none: the rows' own sites).
@@ -105,6 +109,7 @@ class FakeServerInventory:
         ``diagrams`` are the UI's architecture diagrams (none: it serves none).
         ``confs`` is the hardware catalog (none: empty).
         ``rules`` are its classification rules and health policies (none: none).
+        ``events`` join the servers' History in its audit trail (``load_events``).
         """
         self._rows = {row.id: row for row in rows}
         self.unavailable = unavailable
@@ -114,6 +119,7 @@ class FakeServerInventory:
         self._skill = skill
         self._diagrams = diagrams or FakeDiagrams()
         self._confs = confs or ConfList(items=())
+        self._events = tuple(events)
         self._clock = clock
         self.server_reads = 0
         """How many times ``server`` was called (the uninstall's fresh read)."""
@@ -183,14 +189,17 @@ class FakeServerInventory:
     async def server_events(
         self, server_id: str, *, cursor: str | None, page_size: int
     ) -> EventPage:
-        """See ServerInventory.server_events; an unknown server's History is empty, as there."""
-        self._read()
-        row = self._rows.get(server_id)
-        if row is None:
-            return EventPage.model_validate(
-                {"items": (), "page": _EMPTY_PAGE | {"page_size": page_size}}
-            )
-        return self._records.page(row, cursor, page_size)
+        """See ServerInventory.server_events: the trail by its id (unknown: empty, as there)."""
+        query = EventQuery(server_id=server_id, cursor=cursor, page_size=page_size)
+        return event_page(self._trail(), query)
+
+    async def events(self, query: EventQuery) -> EventPage:
+        """See ServerInventory.events."""
+        return event_page(self._trail(), query)
+
+    async def event_actors(self) -> EventActorList:
+        """See ServerInventory.event_actors."""
+        return event_actors(self._trail())
 
     async def classification_rules(self) -> ClassificationRuleList:
         """See ServerInventory.classification_rules: the seeded ones, as server-scan seeds them."""
@@ -247,6 +256,12 @@ class FakeServerInventory:
         )
         self._records.log_maintenance(row, changed, at=self._clock())
         return self._change(changed)
+
+    def _trail(self) -> list[JSONish]:
+        """Every event now: each server's History and the seeded ones."""
+        self._read()
+        histories = [e for row in self._rows.values() for e in self._records.history(row)]
+        return histories + [dict(event) for event in self._events]
 
     def _carried_skill(self) -> Skill:
         self._read()

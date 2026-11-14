@@ -113,7 +113,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token (every read, the Server Scan area's Sites included). Empty: no token, for a server-scan with auth off |
 | `serverScan.tokenSecret.key` | `SERVER_SCAN_TOKEN` (day1 only) | `token` | The token's key in that Secret |
 | `serverScan.tokenSecret.adminKey` | `SERVER_SCAN_ADMIN_TOKEN` (day1 only) | `admin-token` | An optional key of the same Secret with server-scan's **admin** token, sent only when an admin turns a server's maintenance on or off on the Server Scan area's Servers page or a server's page. A Secret without the key still starts day1: the toggle is greyed out with why. Empty: never read. With no Secret at all (auth off) the toggle works without it |
-| `serverScan.tokenSecret.auditorKey` | `SERVER_SCAN_AUDITOR_TOKEN` (day1 only) | `auditor-token` | An optional key of the same Secret with server-scan's **auditor** token, sent only when an admin opens a server's History in the Server Scan area. A Secret without the key still starts day1: History says it is not set up. Empty: never read. With no Secret at all (auth off) History works without it |
+| `serverScan.tokenSecret.auditorKey` | `SERVER_SCAN_AUDITOR_TOKEN` (day1 only) | `auditor-token` | An optional key of the same Secret with server-scan's **auditor** token, sent only on the audit trail's reads: a server's History and the Events page in the Server Scan area. A Secret without the key still starts day1: History and Events say they are not set up. Empty: never read. With no Secret at all (auth off) both work without it |
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
@@ -356,6 +356,10 @@ oc -n <ns> rollout restart deploy/wingman-day1
 
 Without the key History says it is not set up; against a server-scan with auth off it
 works without one (`docs/notes/2026-11-13-server-scan-area-api.md` §8, §9).
+
+Its **Events** page (`/server-scan/events`) is the same audit trail for the whole fleet,
+filtered and paged as server-scan's page: the same auditor token, read on those reads only,
+nothing new to set. Without the key it says it is not set up, as History does (§14).
 
 Its **Claude** page (`/server-scan/claude`) reads server-scan's Claude Code skill and its
 zip with the viewer token (nothing new). The zip, the MCP command and the link to server-scan's

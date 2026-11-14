@@ -124,8 +124,8 @@ class ServerScanUnavailableError(ServerScanError):
 class ServerScanDeniedError(ServerScanUnavailableError):
     """server-scan refused Wingman's token (401 or 403): a deployment problem.
 
-    The viewer token on a read, the auditor token on a server's History, the
-    admin token on a maintenance write.
+    The viewer token on a read, the auditor token on the audit trail (a
+    server's History, the Events page), the admin token on a maintenance write.
     """
 
 
@@ -154,7 +154,7 @@ class ServerScanSkillMissingError(ServerScanError):
 
 
 class ServerScanRefusedError(InvalidInputError):
-    """server-scan refused a maintenance write's body (its 422); nothing changed."""
+    """server-scan refused what was sent: a maintenance body (its 422), an events cursor (400)."""
 
 
 class AmbiguousServerScanWriteError(ServerScanError):

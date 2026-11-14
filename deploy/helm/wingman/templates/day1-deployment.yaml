@@ -60,8 +60,9 @@ spec:
                   optional: true
             {{- end }}
             {{- if .Values.serverScan.tokenSecret.auditorKey }}
-            # server-scan's auditor token, for a server's History only; a Secret
-            # without the key still starts day1, with History off (ADR-0048)
+            # server-scan's auditor token, for the audit trail only (History,
+            # Events); a Secret without the key still starts day1, with both off
+            # (ADR-0048)
             - name: SERVER_SCAN_AUDITOR_TOKEN
               valueFrom:
                 secretKeyRef:

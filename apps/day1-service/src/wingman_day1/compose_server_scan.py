@@ -65,12 +65,14 @@ def server_scan_service(
     Its maintenance toggle works with server-scan's admin token, or with no
     token at all (a server-scan with auth off); a viewer token alone turns it
     off (ADR-0048's 3.23.0 amendment). A server's History works the same way
-    with server-scan's auditor token (3.25.0). The Claude page names the token
-    line server-scan writes into Wingman's copy of its skill (3.27.0).
+    with server-scan's auditor token (3.25.0), and so does the Events page
+    (3.31.0). The Claude page names the token line server-scan writes into
+    Wingman's copy of its skill (3.27.0).
     """
     if inventory is None:
         return None
     viewer = bool(settings.server_scan_token.get_secret_value())
+    auditor = bool(settings.server_scan_auditor_token.get_secret_value())
     return ServerScanService(
         inventory,
         ui_url=server_scan_ui(settings),
@@ -79,9 +81,6 @@ def server_scan_service(
             viewer_token=viewer,
             admin_token=bool(settings.server_scan_admin_token.get_secret_value()),
         ),
-        history_detail=audit_detail(
-            "History",
-            viewer_token=viewer,
-            auditor_token=bool(settings.server_scan_auditor_token.get_secret_value()),
-        ),
+        history_detail=audit_detail("History", viewer_token=viewer, auditor_token=auditor),
+        events_detail=audit_detail("Events", viewer_token=viewer, auditor_token=auditor),
     )

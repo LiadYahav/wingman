@@ -6,7 +6,8 @@ here: the Sites page, the Servers page's fleet rows, a server's page (the
 record, a VM's host, History with the auditor token), the Claude page
 (server-scan's skill and its zip, with server-scan's address written in, for
 people: ``ui_url``), the Architecture page's diagrams from server-scan's
-UI, and the Confs page's hardware catalog. server-scan failing is
+UI, the Confs page's hardware catalog, and the Events page's audit trail of
+the fleet (the auditor token, as History). server-scan failing is
 ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
@@ -29,7 +30,7 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
-from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -49,6 +50,7 @@ class ServerScanService:
         *,
         maintenance_detail: str | None = None,
         history_detail: str | None = None,
+        events_detail: str | None = None,
         ui_url: str = "",
         token_line: str = AUDITOR_TOKEN_LINE,
     ) -> None:
@@ -56,14 +58,15 @@ class ServerScanService:
 
         ``maintenance_detail`` says why the maintenance writes are off here
         (``domain.server_scan_servers.maintenance_detail``), ``history_detail``
-        why a server's History is (``domain.server_scan_events.audit_detail``);
-        ``None``: on. ``ui_url`` is server-scan's address for people and
-        Claude Code; ``token_line`` the line its zip of the skill names
-        (``domain.server_scan_skill.token_line``).
+        why a server's History is and ``events_detail`` why the Events page is
+        (``domain.server_scan_events.audit_detail``); ``None``: on. ``ui_url``
+        is server-scan's address for people and Claude Code; ``token_line`` the
+        line its zip of the skill names (``domain.server_scan_skill.token_line``).
         """
         self._inventory = inventory
         self.maintenance_detail = maintenance_detail
         self.history_detail = history_detail
+        self.events_detail = events_detail
         self.ui_url = ui_url.rstrip("/")
         self.token_line = token_line
 
@@ -95,6 +98,16 @@ class ServerScanService:
         """One page of a server's History, with server-scan's auditor token; off without it."""
         _audited(self.history_detail)
         return await self._inventory.server_events(server_id, cursor=cursor, page_size=page_size)
+
+    async def events(self, query: EventQuery) -> EventPage:
+        """The Events page: one page of the fleet's audit trail; off without the auditor token."""
+        _audited(self.events_detail)
+        return await self._inventory.events(query)
+
+    async def event_actors(self) -> EventActorList:
+        """The Events page's User filter: who wrote the audit trail, busiest first."""
+        _audited(self.events_detail)
+        return await self._inventory.event_actors()
 
     async def skill(self) -> Skill:
         """The Claude page: server-scan's Claude Code skill, as it holds it now."""

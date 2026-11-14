@@ -274,8 +274,9 @@ serverScan:
   # greyed out (with no Secret at all, server-scan runs with auth off and it works):
   #   oc -n <ns> set data secret/server-scan-viewer admin-token=<admin token>
   # auditorKey: an optional third key, server-scan's auditor token, sent only
-  # when an admin opens a server's History in the Server Scan area (ADR-0048).
-  # Without it, History says it is not set up (with no Secret at all, it works):
+  # on the audit trail's reads: a server's History and the Events page in the
+  # Server Scan area (ADR-0048). Without it, both say they are not set up (with
+  # no Secret at all, they work):
   #   oc -n <ns> set data secret/server-scan-viewer auditor-token=<auditor token>
   tokenSecret:
     name: ""
