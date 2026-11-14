@@ -107,6 +107,21 @@ OAuth redirect URI — use explicit value or derive from route.host
 {{- end }}
 
 {{/*
+A TLS verification setting, as the services read it ("true", "false" or a CA
+bundle path): a boolean as "true" or "false", a string as given, unset or empty
+as "true" (what the services do with an empty one). One helper for all five
+sslVerify keys: before 3.33, `default "true"` turned a boolean false into "true".
+Called with the value: (include "wingman.tlsVerify" .Values.serverScan.sslVerify).
+*/}}
+{{- define "wingman.tlsVerify" -}}
+{{- if kindIs "bool" . -}}
+  {{- ternary "true" "false" . -}}
+{{- else -}}
+  {{- . | default "true" -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 True if a CA bundle is configured
 */}}
 {{- define "wingman.hasCA" -}}

@@ -39,8 +39,9 @@ OBJECTS = [
 WRONG: list[tuple[dict[str, Any], str, str]] = [
     ({"replicaCount": {"web": "two"}}, "/replicaCount/web", "integer"),
     ({"image": {"day1": {"tag": 3.3}}}, "/image/day1/tag", "string"),
-    # rendered with `default "true"`: a boolean false was verification on
-    ({"serverScan": {"sslVerify": False}}, "/serverScan/sslVerify", "string"),
+    # a boolean or a non-empty string (wingman.tlsVerify renders both)
+    ({"serverScan": {"sslVerify": 0}}, "/serverScan/sslVerify", "want boolean or string"),
+    ({"workflows": {"sslVerify": ""}}, "/workflows/sslVerify", "minLength"),
     # tested with `if`: the string "false" is true there
     ({"devAuth": {"enabled": "false"}}, "/devAuth/enabled", "boolean"),
     ({"day1": {"provisioner": "pull-request"}}, "/day1/provisioner", "one of"),

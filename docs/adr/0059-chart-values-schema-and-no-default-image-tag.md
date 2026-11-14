@@ -37,11 +37,13 @@ accepts and ignores (ADR-0052's amendment).
   it fails `helm template`, `install`, `upgrade` and `lint`, naming its path
   (`at '/serverScan': additional properties 'tokenSecert' not allowed`).
 - **Types follow what the templates do with a value.** A switch the templates
-  test with `if` is a boolean only. The `sslVerify` of `serverScan`,
-  `workflows` and `segmentsManager` (rendered with `default "true"`) is a
-  string only: `"true"`, `"false"` or a CA path. `auth.sslVerify` and
-  `clusterStatus.sslVerify`, rendered as given, take a string or a boolean;
-  the project ids a string or an integer (`--set gitlab.day1ProjectId=42`).
+  test with `if` is a boolean only; the project ids a string or an integer
+  (`--set gitlab.day1ProjectId=42`).
+- **The five `sslVerify` keys take a boolean or a non-empty string**
+  (`"true"`, `"false"` or a CA path), and one helper renders all five
+  (`wingman.tlsVerify`): a boolean as `"true"` or `"false"`, a string as given,
+  unset or empty as `"true"`. `--set serverScan.sslVerify=false` now means
+  false; each key's default in `values.yaml` is unchanged.
 - **Enums** where the templates take only a few values: `environment`,
   `day1.provisioner`, the Route's TLS `termination` and
   `insecureEdgeTerminationPolicy`, `pullPolicy`. **Ranges** where the services
@@ -91,6 +93,9 @@ accepts and ignores (ADR-0052's amendment).
   refuses its own `values.yaml`; the tests render it.
 - An install that names no release fails. Every documented install and upgrade
   already set the three tags.
+- A boolean `false` in the `sslVerify` of `serverScan`, `workflows` or
+  `segmentsManager` now turns verification off, as written; before 3.33 it was
+  silently on. The upgrade guide has the release's values checked for one.
 - `helm lint` reports a template's `fail` only as information, so it passes a
   chart that cannot render without tags. The gate and CI lint the chart with
   each `ci/` fixture instead, as herzi does, and `helm template` renders each.
@@ -100,9 +105,12 @@ accepts and ignores (ADR-0052's amendment).
 `tests/repo/test_chart_schema.py`: `values.yaml`, `values.minikube.yaml` and
 every `ci/` fixture render; every object in the schema refuses unknown keys;
 a typo at the root and in each nested object, a wrong type, a bad enum, a value
-out of range and a boolean `serverScan.sslVerify` each fail `helm template` and
+out of range and an empty `sslVerify` each fail `helm template` and
 `helm lint --strict` with the key named; every deprecated key is accepted and
 changes nothing; an empty Wingman tag fails naming it.
+`tests/repo/test_chart_env_contract.py`: each of the five `sslVerify` keys
+given `false`, `"false"`, `true`, a CA path or nothing sets its variable to
+`"false"`, `"false"`, `"true"`, the path or `"true"`.
 `tests/repo/test_chart_nginx.py`: an nginx tag kept beside the chart's digest
 fails, and an empty digest pulls that image by its tag.
 `tests/repo/test_web_docs_contract.py` lets the docs name a deprecated key.

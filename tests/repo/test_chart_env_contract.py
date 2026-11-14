@@ -269,3 +269,33 @@ def test_adding_servers_is_off_unless_enabled_and_needs_the_orchestrator() -> No
     refused = template("--set", "day1.addServers.enabled=true")
     assert refused.returncode != 0
     assert "day1.addServers.enabled needs workflows.url" in refused.stderr
+
+
+TLS_VERIFY = {
+    "auth.sslVerify": "OPENSHIFT_SSL_VERIFY",
+    "clusterStatus.sslVerify": "MCE_SSL_VERIFY",
+    "serverScan.sslVerify": "SERVER_SCAN_SSL_VERIFY",
+    "workflows.sslVerify": "WORKFLOWS_SSL_VERIFY",
+    "segmentsManager.sslVerify": "SEGMENTS_MANAGER_SSL_VERIFY",
+}
+
+
+@pytest.mark.parametrize(("key", "variable"), TLS_VERIFY.items())
+@pytest.mark.parametrize(
+    ("flag", "value", "expected"),
+    [
+        ("--set", "false", "false"),  # a boolean: before 3.33 three keys turned it into "true"
+        ("--set-string", "false", "false"),
+        ("--set", "true", "true"),
+        ("--set", "/etc/pki/ca-trust/internal.pem", "/etc/pki/ca-trust/internal.pem"),
+        ("--set", "null", "true"),  # unset, as values kept from before the key
+    ],
+    ids=["false", "string false", "true", "a CA path", "unset"],
+)
+def test_every_tls_setting_takes_a_boolean_a_string_or_nothing(
+    key: str, variable: str, flag: str, value: str, expected: str
+) -> None:
+    """``wingman.tlsVerify`` renders all five the same way (ADR-0059)."""
+    assert variable in read_by_services()
+    config = render(*ALL_ON, flag, f"{key}={value}")["wingman-config"]["data"]
+    assert config[variable] == expected

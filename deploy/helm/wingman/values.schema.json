@@ -155,7 +155,7 @@
           "type": "string"
         },
         "sslVerify": {
-          "$ref": "#/definitions/tlsVerifyOrBool"
+          "$ref": "#/definitions/tlsVerify"
         },
         "oauthClientSecret": {
           "type": "string"
@@ -332,7 +332,7 @@
           ]
         },
         "sslVerify": {
-          "$ref": "#/definitions/tlsVerifyOrBool"
+          "$ref": "#/definitions/tlsVerify"
         },
         "clusterNamePrefix": {
           "description": "Deprecated: removed in 3.0.0 and ignored; delete it (docs/upgrade/legacy-to-ecosystem.md, step 5); it became day1.clusterNameStripPrefix"
@@ -642,16 +642,12 @@
       "pattern": "^(https?://[^\\s/]+\\S*)?$"
     },
     "tlsVerify": {
-      "description": "\"true\", \"false\" or the path of a CA bundle, as a string.",
-      "type": "string",
-      "minLength": 1
-    },
-    "tlsVerifyOrBool": {
-      "description": "\"true\", \"false\" or the path of a CA bundle.",
+      "description": "true, false, or the path of a CA bundle: a boolean or a non-empty string (wingman.tlsVerify renders it).",
       "type": [
-        "string",
-        "boolean"
-      ]
+        "boolean",
+        "string"
+      ],
+      "minLength": 1
     },
     "seconds60": {
       "type": "number",

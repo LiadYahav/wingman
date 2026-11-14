@@ -214,9 +214,10 @@ chart renders no NetworkPolicy (network restrictions are the site's; CLAUDE.md c
 
 - a key the chart does not read, at the root or in any map: `at '/serverScan': additional
   properties 'tokenSecert' not allowed`;
-- a wrong type: a switch is `true` or `false`, not `"false"`; the `sslVerify` of `serverScan`,
-  `workflows` and `segmentsManager` is a string (`"false"`, quoted, or `--set-string`);
-  numbers are numbers;
+- a wrong type: a switch is `true` or `false`, not `"false"`; numbers are numbers. The five
+  `sslVerify` keys take either: `true`, `false`, `"true"`, `"false"` or a CA bundle path,
+  rendered the same by one helper (before 3.33, a boolean `false` in `serverScan`,
+  `workflows` or `segmentsManager` was silently turned into `"true"`);
 - a value outside its list (`environment`, `day1.provisioner`, the Route's TLS settings,
   `pullPolicy`), its range (cache TTLs and timeouts at most 60 s, the upgrade targets' 120 s,
   `jwtExpiryHours` 1 to 24, a Quick Links section's `columns` 1 to 6) or its shape (URLs, host

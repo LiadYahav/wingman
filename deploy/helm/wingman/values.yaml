@@ -139,6 +139,7 @@ auth:
 
   # SSL verification for OpenShift OAuth/API calls
   # "true" → verify using system CAs, "false" → skip (internal self-signed certs), or CA bundle path
+  # (every sslVerify here takes true/false unquoted too: wingman.tlsVerify renders them alike)
   sslVerify: "false"
 
   # OAuthClient secret — generate a random string, e.g.: openssl rand -hex 32
@@ -269,7 +270,7 @@ clusterStatus:
   enabled: false
   mceDomain: ""           # e.g. "openshift.example.com" → https://api.{mce}.openshift.example.com:6443 (unless the MCE has its own url)
   tokensSecretName: "mce-sa-tokens"  # name of the k8s secret holding SA tokens
-  sslVerify: "false"                 # set to "true" or CA bundle path for production
+  sslVerify: "false"                 # "true" (or true) or a CA bundle path for production
 
 # ── Cluster nodes from server-scan (ADR-0038) ─────────────────────────────────
 # Off by default. With a url, day1 lists the servers under each hosted cluster
@@ -279,7 +280,7 @@ clusterStatus:
 serverScan:
   url: ""                 # the API, e.g. "http://server-scan-api.<ns>.svc:8000"; empty: off
   uiUrl: ""               # the UI, e.g. "https://server-scan.example" (node links, the Claude page); empty: url
-  sslVerify: "true"       # "true", "false" or a CA bundle path
+  sslVerify: "true"       # "true", "false" (or true, false) or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
   # A viewer token (sent as "Authorization: Bearer"), from an existing Secret:
   #   oc create secret generic server-scan-viewer -n <ns> --from-literal=token=<token>
@@ -309,7 +310,7 @@ serverScan:
 # (an uninstall checks the server in server-scan first): the chart fails without it.
 workflows:
   url: ""                 # e.g. "http://workflows-orchestrator-api.<ns>.svc:8080"; empty: off
-  sslVerify: "true"       # "true", "false" or a CA bundle path
+  sslVerify: "true"       # "true", "false" (or true, false) or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
   targetsTimeoutSeconds: 65  # the upgrade targets read (the orchestrator waits up to 60 s), at most 120
 
@@ -323,7 +324,7 @@ workflows:
 segmentsManager:
   url: ""                 # the API, e.g. "http://segments-manager.<ns>.svc:8000"; empty: no EPG
   uiUrl: ""               # the UI, e.g. "https://segments-manager.example"; empty: url (none: no link)
-  sslVerify: "true"       # "true", "false" or a CA bundle path
+  sslVerify: "true"       # "true", "false" (or true, false) or a CA bundle path
   timeoutSeconds: 5       # per request, at most 60
 
 # ── Quick Links: the launcher page (ADR-0052; admins only) ────────────────────
