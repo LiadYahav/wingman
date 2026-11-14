@@ -3,8 +3,10 @@
 #
 # AIR-GAPPED DEPLOYMENT CHECKLIST
 # ────────────────────────────────
+# Always: image.{day1,day2,web}.tag → the release you deploy (no default;
+# an empty one fails the render). values.schema.json refuses any key not here.
 # Fields marked [AIR-GAPPED] must be changed for air-gapped / on-prem networks:
-#   1. image.registry      → your internal container registry
+#   1. image.registry      → your internal container registry (nginx: mirror by digest)
 #   2. gitlab.*            → your internal GitLab instance
 #   3. auth.*              → your OpenShift OAuth settings
 #   4. tls.caBundle        → your internal CA certificate (PEM)
@@ -28,21 +30,27 @@ image:
   day1:
     repository: wingman-day1
     tag: ""
+    digest: ""
     pullPolicy: IfNotPresent
 
   day2:
     repository: wingman-day2
     tag: ""
+    digest: ""
     pullPolicy: IfNotPresent
 
   web:
     repository: wingman-web
     tag: ""
+    digest: ""
     pullPolicy: IfNotPresent
 
   # The one entry point (ADR-0058): Red Hat's UBI nginx, pinned by tag and by
   # the digest of its manifest list (docs/ops/images.md, "The nginx image").
-  # The digest is what nodes pull; change the tag and the digest together.
+  # The digest is what nodes pull; change the tag and the digest together, here
+  # and in templates/_helpers.tpl's copy (wingman.nginxImage refuses a tag kept
+  # from earlier values beside this digest; tests/repo/test_chart_nginx.py holds
+  # the two equal).
   # [AIR-GAPPED] Mirror it by digest. With image.registry set it is pulled from
   # <registry>/<repository>, like the others: set repository to its path in
   # your mirror (for example ubi9/nginx-124). With image.registry empty, an

@@ -28,7 +28,7 @@ docker build -t wingman-day1:latest -f apps/day1-service/Dockerfile .
 docker build -t wingman-day2:latest -f apps/day2-service/Dockerfile .
 docker build -t wingman-web:latest -f apps/web/Dockerfile .
 
-# Install with the minikube values: dev login, an Ingress, the local GitLab
+# Install with the minikube values: dev login, an Ingress, the local GitLab, the images above
 helm upgrade --install wingman ./deploy/helm/wingman -n wingman --create-namespace \
   -f deploy/helm/wingman/values.minikube.yaml \
   --set gitlab.accessToken=<token> \
@@ -134,34 +134,111 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `route.host` | | `wingman.apps.your-cluster.internal` | The Route's host |
 | `openshiftRoute.enabled` | | `true` | A Route and the `OAuthClient`; `false` on plain Kubernetes |
 | `ingress.enabled` | | `false` | An Ingress instead (`ingress.host`, `ingress.className`) |
-| `image.registry` | | `""` | Prefix of every image: `<registry>/<repository>:<tag>` |
-| `image.{day1,day2,web,nginx}.{repository,tag,pullPolicy}` | | `latest` tags | In production, pin day1, day2 and web to one release (`3.0.1`, docs/ops/images.md) |
+| `image.registry` | | `""` | Prefix of every image, nginx's included: `<registry>/<repository>:<tag>` |
+| `image.{day1,day2,web}.tag` | | `""`, **required** | The release you deploy, the same for all three (`3.33.0`; docs/ops/images.md). Empty fails the render, naming the key (ADR-0059) |
+| `image.{day1,day2,web}.repository` | | `wingman-day1`, `wingman-day2`, `wingman-web` | |
+| `image.nginx.{repository,tag,digest}` | | `registry.access.redhat.com/ubi9/nginx-124`, `9.8`, `sha256:d5cec86a…` | Red Hat's UBI nginx, the one entry point (ADR-0058), pulled by digest. Change the tag and the digest together ([Images](#images)) |
+| `image.{day1,day2,web}.digest` | | `""` | Optional: the image is then pulled as `<repository>:<tag>@<digest>` |
+| `image.{day1,day2,web,nginx}.pullPolicy` | | `IfNotPresent` | |
 | `replicaCount.{day1,day2,web,nginx}` | | `1` | |
 | `imagePullSecret` | | `""` | An existing registry Secret |
 | `monitoring.{serviceMonitor,prometheusRule,grafanaDashboard}.enabled` | | `false` | `docs/ops/metrics.md`, `docs/ops/runbook.md` |
 
-`values.yaml` has the rest (resources, the service account) with comments.
+`values.yaml` has the rest (resources, the service account) with comments. Every key is in
+`values.schema.json`, which refuses any other ([Values schema](#values-schema)).
 
-### Image Configuration
+### Images
 
-For air-gapped environments, mirror the images and point the chart at the mirror:
+The three Wingman images are one release: set `image.day1.tag`, `image.day2.tag` and
+`image.web.tag` to it (`3.33.0`, no `v`). They have no default: an empty one fails the render
+with `image.day1.tag is empty: set it to the release to deploy, for example --set
+image.day1.tag=3.33.0`. Never `latest`, `3.33` or `3`, which move (docs/ops/images.md).
+
+nginx is Red Hat's UBI nginx, `registry.access.redhat.com/ubi9/nginx-124:9.8`, pinned by the
+digest of its manifest list (ADR-0058): nodes pull `<repository>:<tag>@<digest>`, so the same
+line runs on amd64 and arm64 and never moves. The image's own command is an S2I usage note,
+so the chart starts `nginx` itself. To move it to a newer build, change the tag and the digest
+together (docs/ops/images.md, "The nginx image"). A tag of another image kept from earlier
+values beside the chart's digest fails the render (`image.nginx.tag is "…" but
+image.nginx.digest is the chart's`): set that image's digest, or `image.nginx.digest: ""` to
+pull it by its tag.
+
+For air-gapped environments, mirror the images, nginx by digest, and point the chart at the
+mirror. `image.registry` prefixes every image, nginx's included:
 
 ```yaml
 image:
   registry: registry.example.com/wingman
   day1:
-    repository: wingman-day1
-    tag: "<version>"     # a release, e.g. "3.0.1"
+    tag: "<version>"     # the release, e.g. "3.33.0"
   day2:
-    repository: wingman-day2
-    tag: "<version>"     # a release, e.g. "3.0.1"
+    tag: "<version>"
   web:
-    repository: wingman-web
-    tag: "<version>"     # a release, e.g. "3.0.1"
+    tag: "<version>"
   nginx:
-    repository: nginx      # mirror it too
-    tag: "<pinned tag>"
+    repository: ubi9/nginx-124   # its path in the mirror; tag and digest stay the chart's
 ```
+
+On OpenShift with an `ImageDigestMirrorSet` for `registry.access.redhat.com` (how Red Hat's
+images usually reach a disconnected cluster), leave `image.registry` empty and give each Wingman
+image its full path instead (`repository: registry.example.com/wingman/wingman-day1`): nginx's
+digest is then redirected to the mirror as is.
+
+### Security context
+
+Every pod runs as OpenShift's `restricted-v2` SCC expects, with no SCC of its own to grant (the
+set server-scan's and herzi's charts use):
+
+- the pod: `runAsNonRoot: true` and `seccompProfile: RuntimeDefault`, no `runAsUser` (OpenShift
+  assigns the UID from the namespace's range; each image's numeric USER satisfies
+  `runAsNonRoot` elsewhere), and `automountServiceAccountToken: false`: no pod calls the
+  Kubernetes API with its own token (day1 reads the MCE hubs with the tokens Secret's);
+- each container: `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]` and
+  `readOnlyRootFilesystem: true`.
+
+Only these paths are writable, each an `emptyDir` with a size limit:
+
+| Pod | Path | Why |
+|---|---|---|
+| nginx | `/tmp` (256Mi) | nginx's pid and temp files: a request or an answer larger than its buffers waits there |
+| web | `/app/apps/web/.next/cache` (64Mi) | Next.js's runtime cache. The pages never write it; its image optimizer (`/_next/image`) does |
+| day1, day2 | none | They write no file: GitLab's archives are read in memory |
+
+Checked with podman as `restricted-v2` runs them (docs/ops/images.md, "Read-only root"). The
+chart renders no NetworkPolicy (network restrictions are the site's; CLAUDE.md convention 15).
+
+### Values schema
+
+`values.schema.json` checks the values of every `helm install`, `upgrade`, `template` and `lint`
+(ADR-0059). It refuses:
+
+- a key the chart does not read, at the root or in any map: `at '/serverScan': additional
+  properties 'tokenSecert' not allowed`;
+- a wrong type: a switch is `true` or `false`, not `"false"`; the `sslVerify` of `serverScan`,
+  `workflows` and `segmentsManager` is a string (`"false"`, quoted, or `--set-string`);
+  numbers are numbers;
+- a value outside its list (`environment`, `day1.provisioner`, the Route's TLS settings,
+  `pullPolicy`), its range (cache TTLs and timeouts at most 60 s, the upgrade targets' 120 s,
+  `jwtExpiryHours` 1 to 24, a Quick Links section's `columns` 1 to 6) or its shape (URLs, host
+  names, Kubernetes names, image tags and digests, Prometheus durations, `openshiftApiHost`
+  without `https://`).
+
+Keys an older release documented and then dropped are accepted and ignored, marked deprecated
+in the schema: `quickLinks.status`, `quickLinks.sslVerify`, `quickLinks.argocdTokensSecret` and a
+link's `ping` and `argocd` (3.13.1), and the legacy chart's `cache`, `paths`,
+`gitlab.defaultBranch`, `gitlab.sslVerify` and `clusterStatus.clusterNamePrefix`. Delete them
+when convenient.
+
+Check a values file before an upgrade, without touching the cluster:
+
+```bash
+helm template <release> $CHART -n <ns> -f my-values.yaml \
+  --set image.day1.tag=<tag> --set image.day2.tag=<tag> --set image.web.tag=<tag> > /dev/null
+```
+
+An unknown key named there is a typo of a real key (fix its name) or a key no release reads
+(delete it; with `--reset-then-reuse-values`, `--set <key>=null`). `docs/upgrade/3.32-to-3.33.md`
+does this for a running release.
 
 ### Login (OpenShift OAuth)
 
@@ -421,8 +498,8 @@ else is needed.
 Wingman only lists the links: neither day1 nor the browser calls them, so the page shows no
 status dots and no ArgoCD application counts (both removed in 3.13.1; the ArgoCD shows its own
 counts one click away). day1 needs no route to the links, and no token for any of them. Values
-kept from 3.9 to 3.13.0 that still set the checks or the ArgoCD tokens are ignored; what to
-delete is at the top of `docs/upgrade/3.8-to-3.9.md`.
+kept from 3.9 to 3.13.0 that still set the checks or the ArgoCD tokens are ignored (the schema
+accepts them as deprecated); what to delete is at the top of `docs/upgrade/3.8-to-3.9.md`.
 
 `quickLinks.sections` and `quickLinks.clusters` are rendered into the ConfigMap
 `wingman-quick-links`, mounted in day1 as a directory. day1 reads it on every page load, so an
@@ -472,9 +549,29 @@ docker push registry.example.com/wingman/wingman-day1:$VERSION
 # ... repeat for the other images
 ```
 
+nginx is mirrored by digest, all architectures, so the chart's digest still names it
+(`image.nginx.digest` in `values.yaml`):
+
+```bash
+skopeo copy --all \
+  docker://registry.access.redhat.com/ubi9/nginx-124:9.8@sha256:d5cec86a9adf972dbfa0d87b134e7c404706cc1920fc2e6a2b146e290276f219 \
+  docker://registry.example.com/wingman/ubi9/nginx-124:9.8
+```
+
 ## Troubleshooting
 
+### Render Errors
+
+`values don't meet the specifications of the schema(s)` names each key the schema refused
+([Values schema](#values-schema)); `image.<name>.tag is empty` asks for the release
+([Images](#images)). Nothing reaches the cluster until the render passes.
+
 ### Health Check Failures
+
+nginx answers its own `/healthz` for both probes: a restarting nginx is nginx itself (its log is
+the pod's), never the web. An API call that answers `DEPENDENCY_UNAVAILABLE` with "Wingman's day1
+service could not be reached" (or "did not answer in time") is nginx's own problem: the service
+named has no ready pod, or is too slow; check that service.
 
 If pods restart due to liveness probe timeouts, or never become ready:
 - Liveness is `/health/live` (the process answers); readiness is

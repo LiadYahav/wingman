@@ -91,8 +91,9 @@ accepts and ignores (ADR-0052's amendment).
   refuses its own `values.yaml`; the tests render it.
 - An install that names no release fails. Every documented install and upgrade
   already set the three tags.
-- `helm lint` needs the tags too, so the gate and CI lint the chart with each
-  `ci/` fixture, as herzi does.
+- `helm lint` reports a template's `fail` only as information, so it passes a
+  chart that cannot render without tags. The gate and CI lint the chart with
+  each `ci/` fixture instead, as herzi does, and `helm template` renders each.
 
 ## Verification
 
@@ -101,5 +102,7 @@ every `ci/` fixture render; every object in the schema refuses unknown keys;
 a typo at the root and in each nested object, a wrong type, a bad enum, a value
 out of range and a boolean `serverScan.sslVerify` each fail `helm template` and
 `helm lint --strict` with the key named; every deprecated key is accepted and
-changes nothing; an empty Wingman tag fails naming it; an nginx tag kept beside
-the chart's digest fails.
+changes nothing; an empty Wingman tag fails naming it.
+`tests/repo/test_chart_nginx.py`: an nginx tag kept beside the chart's digest
+fails, and an empty digest pulls that image by its tag.
+`tests/repo/test_web_docs_contract.py` lets the docs name a deprecated key.

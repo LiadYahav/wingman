@@ -229,5 +229,6 @@ decision gets an ADR (template in `docs/adr/README.md`).
 `deploy/helm/wingman/README.md` installs the chart; `docs/ops/images.md` builds and publishes the images.
 Every merge to main is a release, versioned from the commit subjects (ADR-0031). Deploy a
 release by its version, the same for every image, with `image.<component>.tag`
-(`image.day1.tag`, `image.day2.tag`, `image.web.tag`; for example `3.0.1`, never `latest`).
+(`image.day1.tag`, `image.day2.tag`, `image.web.tag`; for example `3.33.0`, never `latest`).
+The chart has no default tag and refuses to render without one (ADR-0059).
 Operating it: `docs/ops/metrics.md` and `docs/ops/runbook.md`.
