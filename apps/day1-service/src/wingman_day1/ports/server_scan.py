@@ -5,8 +5,8 @@ all read server-scan through this port and its one adapter, cache and fake.
 The Server Scan area's maintenance toggle is the one write (ADR-0048's 3.23.0
 amendment); its server page reads a server whole, a VM's host and the
 server's History (3.25.0); its Claude page reads server-scan's skill and the
-skill's zip (3.27.0); its Architecture page reads the diagrams server-scan's
-UI serves (3.28.0).
+skill's zip (3.29.0); its Architecture page reads the diagrams server-scan's
+UI serves (3.28.0); its Confs page the hardware catalog (3.29.0).
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
+from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -83,6 +84,9 @@ class ServerInventory(Protocol):
 
         One it does not serve is ``ServerScanDiagramNotFoundError``.
         """
+
+    async def confs(self) -> ConfList:
+        """server-scan's hardware catalog, every conf it can read (``GET /api/v1/confs``)."""
         ...
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:

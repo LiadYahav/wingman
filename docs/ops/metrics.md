@@ -41,7 +41,7 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
-| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `get_skill`, `download_skill`, `get_architecture_diagram` |
+| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
@@ -108,7 +108,7 @@ Operations of the other dependencies (day1):
   `list_server_events` it is **the auditor token** (`SERVER_SCAN_AUDITOR_TOKEN`).
   `get_server` stays the uninstall's fresh check of a server's cluster.
 - `server_scan` `get_skill` and `download_skill` are the Server Scan area's
-  Claude page (ADR-0048's 3.27.0 amendment): server-scan's Claude Code skill,
+  Claude page (ADR-0048's 3.29.0 amendment): server-scan's Claude Code skill,
   at most one call per replica per minute (its cache), and its zip, one call
   per download, never cached. Both use the viewer token: `denied` is
   `SERVER_SCAN_TOKEN` refused. `not_found` is a server-scan that carries no
@@ -122,6 +122,12 @@ Operations of the other dependencies (day1):
   5 minutes (its cache). `not_found` is a diagram server-scan's UI does not
   serve, or an address that is not its UI (its API has no diagrams);
   `unavailable` its UI unreachable or answering anything but the page.
+- `server_scan` `list_confs` is the Server Scan area's Confs page, the
+  hardware catalog (ADR-0048's 3.29.0 amendment): one call per page open, and
+  again when it is opened after 30 seconds, never cached by day1 (a small
+  collection server-scan reads per call). `denied` is the viewer token
+  refused (`SERVER_SCAN_TOKEN`); `unavailable` includes an answer day1 could
+  not read.
 - `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the

@@ -11,7 +11,9 @@ when server-scan is released; about 0.7 MB each). One server is
 never cached: the uninstall's check reads it fresh, so it acts on what
 server-scan says now. Nor is a server's record, a VM's host or a server's
 History (server-scan caches the record per revision itself, the host's
-health changes without the VM changing, History comes in cursors). A
+health changes without the VM changing, History comes in cursors), nor the
+Confs page's catalog (a small collection server-scan reads per call, asked
+for by that page only, so a cache would only delay a change). A
 failure is not cached. A maintenance write clears the rows and the sites, so
 the next read shows it (whatever its outcome: an ambiguous one may have
 landed).
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
+from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -106,6 +109,10 @@ class CachedServerInventory:
             lambda: self._inner.architecture_diagram(slug),
             ttl=self._diagram_ttl,
         )
+
+    async def confs(self) -> ConfList:
+        """See ServerInventory.confs; always read through."""
+        return await self._inner.confs()
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance; clears the rows and sites."""

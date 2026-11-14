@@ -13,8 +13,9 @@ Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
 (read by ``server_scan_sites``). A server's page reads the server whole,
 a VM's host and its History (``server_scan_record``, ADR-0048's 3.25.0
 amendment); the Claude page its skill and the skill's zip (``server_scan_skill``,
-3.27.0). The Architecture page's diagrams come from server-scan's UI, not
-its API, with no token (``server_scan_architecture``, 3.28.0).
+3.29.0). The Architecture page's diagrams come from server-scan's UI, not
+its API, with no token (``server_scan_architecture``, 3.28.0). The Confs page
+reads the hardware catalog (``server_scan_confs``, 3.29.0).
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
@@ -34,6 +35,7 @@ from wingman_core.observability.metrics import Dependency, WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
 from wingman_day1.domain.errors import ServerNotFoundError, ServerScanUnavailableError
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
+from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -43,6 +45,7 @@ from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.http import json_client
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
 from wingman_day1.infrastructure.server_scan_architecture import read_diagram, ui_client
+from wingman_day1.infrastructure.server_scan_confs import read_confs
 from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_detail
 from wingman_day1.infrastructure.server_scan_record import (
     check,
@@ -132,6 +135,10 @@ class HttpServerInventory:
     async def sites(self) -> FleetSites:
         """See ServerInventory.sites."""
         return await self._observer.call(ServerScanOperation.LIST_SITES, self._sites())
+
+    async def confs(self) -> ConfList:
+        """See ServerInventory.confs."""
+        return await self._observer.call(ServerScanOperation.LIST_CONFS, read_confs(self._client))
 
     async def record(self, server_id: str) -> ServerRecord:
         """See ServerInventory.record."""

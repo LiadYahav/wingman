@@ -19,6 +19,7 @@ from wingman_day1.domain.errors import (
     ServerScanUnavailableError,
 )
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
+from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -317,6 +318,7 @@ class CountingInventory:
         self.row_reads = 0
         self.server_reads = 0
         self.site_reads = 0
+        self.conf_reads = 0
         self.fail = False
 
     async def rows(self) -> list[ServerRow]:
@@ -337,6 +339,10 @@ class CountingInventory:
         if self.fail:
             raise ServerScanUnavailableError("down")
         return count_sites([PARSED], [("bat-yam", "Bat Yam")])
+
+    async def confs(self) -> ConfList:
+        self.conf_reads += 1
+        return ConfList(items=())
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         raise AssertionError("not written here")
@@ -418,3 +424,11 @@ async def test_a_failed_sites_read_is_not_cached() -> None:
     inner.fail = False
     assert (await cached.sites()).sites[0].site_id == "bat-yam"
     assert inner.site_reads == 2
+
+
+async def test_the_confs_are_read_through_every_time() -> None:
+    inner = CountingInventory()
+    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
+    await cached.confs()
+    await cached.confs()
+    assert inner.conf_reads == 2

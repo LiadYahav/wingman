@@ -1,0 +1,234 @@
+# server-scan's hardware catalog, for DAY1_FAKE_FLEET=true (development only):
+# the Server Scan area's Confs page (ADR-0048's 3.29.0 amendment,
+# docs/notes/2026-11-13-server-scan-area-api.md §10).
+#
+# In server-scan's own answer shape (`GET /api/v1/confs`, its
+# `ConfListResponse`), read by the same strict model as the real answer.
+# The confs are server-scan's own fake catalog, transcribed from
+# `backend/app/infrastructure/providers/fake/confs.py` (team-redbull/server-scan
+# at 92146d3, decision 18): `CONF-<n>` is a scan with no catalog entry, so
+# it has no part number (Unmapped); `CONF-34`'s memory scan failed, so its
+# RAM is all zeros. `unreadable` names one stored document server-scan
+# could not read, to show the page's notice. Nothing here is real.
+items:
+  - conf_id: "CONF200"
+    part_number: "210-AZKL"
+    model: "PowerEdge R650"
+    cpu: {"model": "Intel Xeon Gold 6338", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2000, "max_clock_mhz": 3200, "cache_kb": {"l1": 2560, "l2": 40960, "l3": 49152}}
+    ram: {"total_gib": 512, "dimms": 16, "per_dimm_gb": 32, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 2, "type": "NVME", "capacity_tb": 1.92}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}, {"count": 1, "ports": 2, "speed": 1.0}]
+    adapter_count: 2
+  - conf_id: "CONF200.2"
+    part_number: "210-AZKL-2"
+    model: "PowerEdge R650"
+    cpu: {"model": "Intel Xeon Gold 6338", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2000, "max_clock_mhz": 3200, "cache_kb": {"l1": 2560, "l2": 40960, "l3": 49152}}
+    ram: {"total_gib": 1024, "dimms": 16, "per_dimm_gb": 64, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 2, "type": "NVME", "capacity_tb": 1.92}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}, {"count": 1, "ports": 2, "speed": 1.0}]
+    adapter_count: 2
+  - conf_id: "CONF201"
+    part_number: "210-AZYV"
+    model: "PowerEdge R750"
+    cpu: {"model": "Intel Xeon Platinum 8358", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2600, "max_clock_mhz": 3400, "cache_kb": {"l1": 2560, "l2": 40960, "l3": 49152}}
+    ram: {"total_gib": 2048, "dimms": 32, "per_dimm_gb": 64, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 4, "type": "NVME", "capacity_tb": 3.2}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 2, "ports": 2, "speed": 100.0}, {"count": 1, "ports": 2, "speed": 1.0}]
+    adapter_count: 3
+  - conf_id: "CONF202"
+    part_number: "210-AZYV-G"
+    model: "PowerEdge R750"
+    cpu: {"model": "Intel Xeon Platinum 8358", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2600, "max_clock_mhz": 3400, "cache_kb": {"l1": 2560, "l2": 40960, "l3": 49152}}
+    ram: {"total_gib": 2048, "dimms": 32, "per_dimm_gb": 64, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 8, "type": "NVME", "capacity_tb": 7.68}]
+    gpus: [{"count": 8, "model": "NVIDIA H200 SXM"}]
+    gpu_count: 8
+    gpu_vram_gb: 141
+    adapters: [{"count": 4, "ports": 2, "speed": 100.0}]
+    adapter_count: 4
+  - conf_id: "CONF203"
+    part_number: "210-ASVF"
+    model: "PowerEdge R6515"
+    cpu: {"model": "AMD EPYC 7513", "vendor": "AMD", "sockets": 1, "cores_per_cpu": 32, "total_cores_ht": 64, "clock_mhz": 2600, "max_clock_mhz": 3650, "cache_kb": {"l1": 2048, "l2": 16384, "l3": 131072}}
+    ram: {"total_gib": 256, "dimms": 8, "per_dimm_gb": 32, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF210"
+    part_number: "UCSC-C220-M6S"
+    model: "UCS C220 M6"
+    cpu: {"model": "Intel Xeon Gold 6348", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 28, "total_cores_ht": 112, "clock_mhz": 2600, "max_clock_mhz": 3500, "cache_kb": {"l1": 2240, "l2": 35840, "l3": 43008}}
+    ram: {"total_gib": 512, "dimms": 16, "per_dimm_gb": 32, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "NVME", "capacity_tb": 0.48}, {"count": 4, "type": "SSD", "capacity_tb": 1.92}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 4, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF211"
+    part_number: "UCSC-C240-M6SX"
+    model: "UCS C240 M6"
+    cpu: {"model": "Intel Xeon Gold 6348", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 28, "total_cores_ht": 112, "clock_mhz": 2600, "max_clock_mhz": 3500, "cache_kb": {"l1": 2240, "l2": 35840, "l3": 43008}}
+    ram: {"total_gib": 768, "dimms": 24, "per_dimm_gb": 32, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "NVME", "capacity_tb": 0.48}, {"count": 10, "type": "HDD", "capacity_tb": 8.0}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 4, "speed": 25.0}, {"count": 1, "ports": 2, "speed": 100.0}]
+    adapter_count: 2
+  - conf_id: "CONF211.2"
+    part_number: "UCSC-C240-M6SX-G"
+    model: "UCS C240 M6"
+    cpu: {"model": "Intel Xeon Gold 6348", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 28, "total_cores_ht": 112, "clock_mhz": 2600, "max_clock_mhz": 3500, "cache_kb": {"l1": 2240, "l2": 35840, "l3": 43008}}
+    ram: {"total_gib": 768, "dimms": 24, "per_dimm_gb": 32, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "NVME", "capacity_tb": 0.48}, {"count": 2, "type": "NVME", "capacity_tb": 1.92}]
+    gpus: [{"count": 2, "model": "NVIDIA L4"}]
+    gpu_count: 2
+    gpu_vram_gb: 24
+    adapters: [{"count": 1, "ports": 4, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF212"
+    part_number: "UCSB-B200-M6"
+    model: "UCS B200 M6"
+    cpu: {"model": "Intel Xeon Silver 4314", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 16, "total_cores_ht": 64, "clock_mhz": 2400, "max_clock_mhz": 3400, "cache_kb": {"l1": 1280, "l2": 20480, "l3": 24576}}
+    ram: {"total_gib": 512, "dimms": 16, "per_dimm_gb": 32, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 4, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF220"
+    part_number: "P40636-B21"
+    model: "ProLiant DL360 Gen11"
+    cpu: {"model": "AMD EPYC 9354", "vendor": "AMD", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 3250, "max_clock_mhz": 3800, "cache_kb": {"l1": 2048, "l2": 32768, "l3": 262144}}
+    ram: {"total_gib": 768, "dimms": 24, "per_dimm_gb": 32, "type": ["DDR5"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 4, "type": "NVME", "capacity_tb": 3.2}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF221"
+    part_number: "P52534-B21"
+    model: "ProLiant DL380 Gen11"
+    cpu: {"model": "AMD EPYC 9354", "vendor": "AMD", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 3250, "max_clock_mhz": 3800, "cache_kb": {"l1": 2048, "l2": 32768, "l3": 262144}}
+    ram: {"total_gib": 1536, "dimms": 24, "per_dimm_gb": 64, "type": ["DDR5"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 8, "type": "NVME", "capacity_tb": 7.68}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 2, "ports": 2, "speed": 100.0}]
+    adapter_count: 2
+  - conf_id: "CONF221.2"
+    part_number: "P52534-B21-G"
+    model: "ProLiant DL380 Gen11"
+    cpu: {"model": "AMD EPYC 9354", "vendor": "AMD", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 3250, "max_clock_mhz": 3800, "cache_kb": {"l1": 2048, "l2": 32768, "l3": 262144}}
+    ram: {"total_gib": 1536, "dimms": 24, "per_dimm_gb": 64, "type": ["DDR5"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 8, "type": "NVME", "capacity_tb": 7.68}]
+    gpus: [{"count": 4, "model": "NVIDIA H100"}]
+    gpu_count: 4
+    gpu_vram_gb: 80
+    adapters: [{"count": 2, "ports": 2, "speed": 100.0}]
+    adapter_count: 2
+  - conf_id: "CONF222"
+    part_number: "P54199-B21"
+    model: "ProLiant DL325 Gen11"
+    cpu: {"model": "AMD EPYC 9354", "vendor": "AMD", "sockets": 1, "cores_per_cpu": 32, "total_cores_ht": 64, "clock_mhz": 3250, "max_clock_mhz": 3800, "cache_kb": {"l1": 2048, "l2": 32768, "l3": 262144}}
+    ram: {"total_gib": 384, "dimms": 12, "per_dimm_gb": 32, "type": ["DDR5"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF223"
+    part_number: "868703-B21"
+    model: "ProLiant DL380 Gen10"
+    cpu: {"model": "AMD EPYC 7513", "vendor": "AMD", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2600, "max_clock_mhz": 3650, "cache_kb": {"l1": 2048, "l2": 16384, "l3": 131072}}
+    ram: {"total_gib": 512, "dimms": 16, "per_dimm_gb": 32, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "NVME", "capacity_tb": 0.48}, {"count": 4, "type": "SSD", "capacity_tb": 1.92}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF224"
+    part_number: "867959-B21"
+    model: "ProLiant DL360 Gen10"
+    cpu: {"model": "AMD EPYC 7513", "vendor": "AMD", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2600, "max_clock_mhz": 3650, "cache_kb": {"l1": 2048, "l2": 16384, "l3": 131072}}
+    ram: {"total_gib": 384, "dimms": 12, "per_dimm_gb": 32, "type": ["DDR4"]}
+    disks: [{"count": 2, "type": "NVME", "capacity_tb": 0.48}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF230"
+    part_number: "7D76CTO1WW"
+    model: "ThinkSystem SR650 V3"
+    cpu: {"model": "Intel Xeon Gold 6438Y+", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2000, "max_clock_mhz": 4000, "cache_kb": {"l1": 2560, "l2": 65536, "l3": 61440}}
+    ram: {"total_gib": 1024, "dimms": 16, "per_dimm_gb": 64, "type": ["DDR5"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 4, "type": "NVME", "capacity_tb": 3.2}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF231"
+    part_number: "SYS-221H-TNR"
+    model: "SYS-221H-TNR"
+    cpu: {"model": "Intel Xeon Gold 6438Y+", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2000, "max_clock_mhz": 4000, "cache_kb": {"l1": 2560, "l2": 65536, "l3": 61440}}
+    ram: {"total_gib": 1024, "dimms": 16, "per_dimm_gb": 64, "type": ["DDR5"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 8, "type": "NVME", "capacity_tb": 7.68}]
+    gpus: [{"count": 4, "model": "NVIDIA L40S"}]
+    gpu_count: 4
+    gpu_vram_gb: 48
+    adapters: [{"count": 2, "ports": 2, "speed": 100.0}]
+    adapter_count: 2
+  - conf_id: "CONF232"
+    part_number: "AS-2125HS-TNR"
+    model: "AS-2125HS-TNR"
+    cpu: {"model": "AMD EPYC 9454", "vendor": "AMD", "sockets": 2, "cores_per_cpu": 48, "total_cores_ht": 192, "clock_mhz": 2750, "max_clock_mhz": 3800, "cache_kb": {"l1": 3072, "l2": 49152, "l3": 262144}}
+    ram: {"total_gib": 2304, "dimms": 24, "per_dimm_gb": 96, "type": ["DDR5"]}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 8, "type": "NVME", "capacity_tb": 7.68}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 2, "ports": 2, "speed": 100.0}]
+    adapter_count: 2
+  - conf_id: "CONF-21"
+    part_number: null
+    model: "PowerEdge R650"
+    cpu: {"model": "Intel Xeon Gold 6338", "vendor": "Intel", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2000, "max_clock_mhz": 3200, "cache_kb": {"l1": 2560, "l2": 40960, "l3": 49152}}
+    ram: {"total_gib": 512, "dimms": 16, "per_dimm_gb": 32, "type": []}
+    disks: [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 2, "type": "unknown", "capacity_tb": 0.96}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 25.0}]
+    adapter_count: 1
+  - conf_id: "CONF-34"
+    part_number: null
+    model: "ProLiant DL380 Gen9"
+    cpu: {"model": "AMD EPYC 7513", "vendor": "AMD", "sockets": 2, "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2600, "max_clock_mhz": 3650, "cache_kb": {"l1": 2048, "l2": 16384, "l3": 131072}}
+    ram: {"total_gib": 0, "dimms": 0, "per_dimm_gb": 0, "type": []}
+    disks: [{"count": 2, "type": "unknown", "capacity_tb": 0.96}]
+    gpus: []
+    gpu_count: 0
+    gpu_vram_gb: 0
+    adapters: [{"count": 1, "ports": 2, "speed": 1.0}]
+    adapter_count: 1
+unreadable: ["CONF-99"]

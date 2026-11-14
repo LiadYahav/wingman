@@ -4,7 +4,8 @@ Admins only for now (decision 13 of ``docs/ideas/single-pane.md``, until
 RBAC). With ``SERVER_SCAN_URL`` empty every route answers 501; server-scan
 failing or refusing the token is 502. A server's page reads the record, a VM's
 host and its History (the auditor token; without it, 501). The Architecture
-page reads server-scan's diagrams from its UI. The one write, a
+page reads server-scan's diagrams from its UI; the Confs page, server-scan's
+hardware catalog. The one write, a
 server's maintenance, is never retried: unanswered, it is 504
 ``AMBIGUOUS_WRITE``. The contract: ``docs/notes/2026-11-13-server-scan-area-api.md``.
 """
@@ -27,6 +28,7 @@ from wingman_day1.api.v1.server_scan_servers_schemas import (
     ServerRowsOut,
 )
 from wingman_day1.domain.server_scan_architecture import DIAGRAM_SLUG
+from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import (
     CURSOR_MAX_LENGTH,
     EVENTS_PAGE_MAX,
@@ -108,6 +110,12 @@ async def server_scan_events(
 ) -> EventPage:
     """One page of a server's History, newest first, with server-scan's auditor token."""
     return await service.history(server_id, cursor=cursor, page_size=page_size)
+
+
+@router.get("/confs")
+async def server_scan_confs(service: ServerScan, user: AdminUser) -> ConfList:
+    """server-scan's hardware catalog in its shape: every conf it can read, and those it cannot."""
+    return await service.confs()
 
 
 @router.put("/servers/{server_id}/maintenance")
