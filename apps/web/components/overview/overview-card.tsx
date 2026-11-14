@@ -48,6 +48,15 @@ export function OverviewCard({
   );
 }
 
+/**
+ * One muted line in place of a card's body: a source that is not set up
+ * here, or one another card already shows the failure of. Never an error
+ * block: the page that owns the source shows the problem.
+ */
+export function CardNote({ children, ...props }: { children: ReactNode; "data-testid"?: string }) {
+  return <p className="text-xs text-muted-foreground" {...props}>{children}</p>;
+}
+
 /** A card's rows while they load. */
 export function RowsSkeleton({ rows = 3, className = "h-11" }: { rows?: number; className?: string }) {
   return (

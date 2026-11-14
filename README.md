@@ -104,6 +104,7 @@ wingman/
 
 | Feature | Description |
 |---------|-------------|
+| **Overview** | The home page (`/`): the clusters, ready, pending approvals and drifted counts, Cluster Health and the newest approvals, then sections that each read their own source and load, fail and empty on their own: **Where Clusters Run** (clusters per site and MCE folder) and **OpenShift Versions** (clusters per mastertag, newest first, and with `DAY1_UPGRADES` how many have an upgrade available or running, each opening the clusters list with that filter). New Cluster, New Flavor (admins) and Browse Flavors sit beside the title. |
 | **Two-phase spec/cluster form** | Specs (flavors) set the nodepools a cluster starts with, presets and locked values; clusters fill the rest. The create form shows a locked value read-only, prefills presets, starts each nodepool (and one added at create) with the team's machine-config defaults, picks configs and hardware types from `mc-files/` (the generic network template `nm-conf-template.bu`, written as plain `nm-conf`, first and the default when the repo has it), and shows day1's problems at their fields (ADR-0026 to ADR-0029). |
 | **Marketplace addon picker** | Browse and select Day2 addons from a marketplace UI on the spec creation/edit pages. Configure which fields are overrideable per cluster. |
 | **YAML fields everywhere** | Dynamic form fields accept plain YAML — no JSON syntax required. Scalars (`high-perf-tuned`), maps, and lists all work naturally. |

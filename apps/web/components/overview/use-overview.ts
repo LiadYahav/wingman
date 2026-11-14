@@ -15,7 +15,7 @@ import type { ClusterStatus, DriftSummaryItem, MRDetail, SpecEntry } from "@/typ
  * two cards calling one hook make one request.
  */
 
-function useOverviewClusters() {
+export function useOverviewClusters() {
   return useQuery<ClusterStatus[]>({
     queryKey: day1Keys.clusters.all,
     queryFn: day1Api.clusters.list,
