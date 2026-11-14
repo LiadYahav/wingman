@@ -4,6 +4,8 @@ server-scan's dashboard drifted from its chart (a threshold of 43200 against a
 default of 21600) because nothing compared the two. These tests compare
 every PromQL expression in the alert rules and the dashboard against the
 metrics the code registers, and every alert against its runbook section.
+Label values are checked too: a panel reading ``operation="start_upgrade"``
+goes empty without an error if the code renames the operation.
 """
 
 from __future__ import annotations
@@ -21,7 +23,18 @@ from wingman_core.observability.metrics import (
     Dependency,
     GitLabOperation,
     Outcome,
+    PlacementDecision,
+    RolloutOutcome,
+    RolloutTrigger,
     WingmanMetrics,
+)
+from wingman_day1.infrastructure.observed import (
+    Day2Operation,
+    HubOperation,
+    OAuthOperation,
+    SegmentsManagerOperation,
+    ServerScanOperation,
+    WorkflowsOperation,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +47,26 @@ RUNBOOK = (ROOT / "docs/ops/runbook.md").read_text(encoding="utf-8")
 
 TARGET_LABELS = {"job", "instance", "namespace", "pod", "service"}
 
+OPERATIONS: dict[str, set[str]] = {
+    Dependency.GITLAB: set(GitLabOperation),
+    Dependency.KUBERNETES: set(HubOperation),
+    Dependency.OPENSHIFT_OAUTH: set(OAuthOperation),
+    Dependency.DAY2: set(Day2Operation),
+    Dependency.SERVER_SCAN: set(ServerScanOperation),
+    Dependency.WORKFLOWS: set(WorkflowsOperation),
+    Dependency.SEGMENTS_MANAGER: set(SegmentsManagerOperation),
+}
+"""Every ``operation`` value each ``dependency`` can carry."""
+
+LABEL_VALUES: dict[str, set[str]] = {
+    "dependency": set(Dependency),
+    "outcome": {str(o) for o in (*Outcome, *RolloutOutcome)},
+    "trigger": set(RolloutTrigger),
+    "decision": set(PlacementDecision),
+    "status_class": {"1xx", "2xx", "3xx", "4xx", "5xx", "other"},
+}
+"""The fixed values of every bounded label but ``operation``."""
+
 
 def catalogue() -> dict[str, set[str]]:
     """Every series name the code can export, with its labels."""
@@ -41,6 +74,7 @@ def catalogue() -> dict[str, set[str]]:
     # One request and one GitLab call, so every family has a sample to read labels from.
     metrics.observe_http(method="GET", route="/x", status=200, seconds=0.1)
     metrics.observe_dependency(Dependency.GITLAB, GitLabOperation.READ_FILE, Outcome.OK, 0.1)
+    metrics.observe_placement(PlacementDecision.PICKED)
     series: dict[str, set[str]] = {"up": set()}
     for family in metrics.registry.collect():
         labels = {label for sample in family.samples for label in sample.labels}
@@ -116,3 +150,48 @@ def test_dashboard_thresholds_quote_the_alert_thresholds() -> None:
                 assert f"> {int(percent.group(1)) / 100:g}" in " ".join(
                     rules[alert]["expr"].split()
                 ), f"{panel['title']} says {percent.group(1)}% but {alert} uses another threshold"
+
+
+def label_matchers(expr: str) -> list[tuple[str, str, str]]:
+    """Every ``label op "value"`` matcher in ``expr``, for the bounded labels."""
+    labels = "dependency|operation|outcome|trigger|decision|status_class"
+    return re.findall(rf'\b({labels})\s*(=~|!~|!=|=)\s*"([^"]*)"', expr)
+
+
+def matches_some(pattern: str, op: str, known: set[str]) -> bool:
+    """An exact value is one of ``known``; a regex matches at least one."""
+    if op in {"=", "!="}:
+        return pattern in known
+    return any(re.fullmatch(pattern, value) for value in known)
+
+
+@pytest.mark.parametrize("expr", all_exprs())
+def test_every_label_value_in_an_expression_is_one_the_code_exports(expr: str) -> None:
+    matchers = label_matchers(expr)
+    dependencies = {v for label, op, v in matchers if label == "dependency" and op == "="}
+    operations = set().union(*(OPERATIONS[d] for d in dependencies or OPERATIONS))
+    for label, op, value in matchers:
+        if "$" in value:  # a dashboard variable
+            continue
+        known = operations if label == "operation" else LABEL_VALUES[label]
+        # Each alternative of a regex must name something, or the panel half reads nothing.
+        for part in value.split("|") if op in {"=~", "!~"} else [value]:
+            assert matches_some(part, op, known), f"{label} {op} {part!r} matches nothing: {expr}"
+
+
+def test_every_dashboard_panel_says_what_it_shows_and_what_to_do() -> None:
+    for panel in DASHBOARD["panels"]:
+        if panel["type"] != "row":
+            assert len(panel.get("description", "")) > 20, f"{panel['title']} has no description"
+
+
+def test_dashboard_windows_are_grafanas_or_named_in_the_panel() -> None:
+    """A fixed window (``[10m]``) is said in the title or description; the rest are Grafana's."""
+    grafana = {"$__rate_interval", "$__interval", "$__range"}
+    for panel in DASHBOARD["panels"]:
+        text = f"{panel['title']} {panel.get('description', '')}"
+        for target in panel.get("targets", []):
+            for window in re.findall(r"\[([^\]]+)\]", target["expr"]):
+                assert window in grafana or window in text, (
+                    f"{panel['title']} reads a {window} window its text does not name"
+                )
