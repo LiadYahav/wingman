@@ -11,7 +11,7 @@ recording ``dev`` as who. A server's record and History are its row and its
 model's hardware (``fake_server_records``, ADR-0048's 3.25.0 amendment); no
 fake server is a VM unless the records fixture says so. Its Claude skill is
 a folder, read and zipped as server-scan does (``fake_server_scan_skill``,
-3.29.0); without one it carries none. Its architecture diagrams are
+3.27.0); without one it carries none. Its architecture diagrams are
 ``fake_server_scan_architecture``'s (3.28.0). Its hardware catalog (the Confs
 page) is the fixture's, as loaded (``fake_server_scan_confs``, 3.29.0).
 

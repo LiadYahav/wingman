@@ -13,7 +13,7 @@ Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
 (read by ``server_scan_sites``). A server's page reads the server whole,
 a VM's host and its History (``server_scan_record``, ADR-0048's 3.25.0
 amendment); the Claude page its skill and the skill's zip (``server_scan_skill``,
-3.29.0). The Architecture page's diagrams come from server-scan's UI, not
+3.27.0). The Architecture page's diagrams come from server-scan's UI, not
 its API, with no token (``server_scan_architecture``, 3.28.0). The Confs page
 reads the hardware catalog (``server_scan_confs``, 3.29.0).
 

@@ -5,7 +5,7 @@ all read server-scan through this port and its one adapter, cache and fake.
 The Server Scan area's maintenance toggle is the one write (ADR-0048's 3.23.0
 amendment); its server page reads a server whole, a VM's host and the
 server's History (3.25.0); its Claude page reads server-scan's skill and the
-skill's zip (3.29.0); its Architecture page reads the diagrams server-scan's
+skill's zip (3.27.0); its Architecture page reads the diagrams server-scan's
 UI serves (3.28.0); its Confs page the hardware catalog (3.29.0).
 """
 
