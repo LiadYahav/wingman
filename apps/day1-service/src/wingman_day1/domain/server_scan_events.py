@@ -1,10 +1,11 @@
-"""A server's History: server-scan's audit trail for it (ADR-0048's 3.25.0 amendment).
+"""server-scan's audit trail: a server's History (ADR-0048's 3.25.0 amendment).
 
 server-scan's ``GET /api/v1/servers/{id}/events`` (its ``AuditEventListResponse``
 in team-redbull/server-scan at 92146d3): newest first, in keyset pages, read
 only with its auditor token. An event's ``data`` is whatever its writer
 recorded and is passed through as JSON; everything else is typed. Its
 ``event_type`` stays a string, so a type server-scan adds later still shows.
+Whether the audit trail can be read here is ``audit_detail``'s rule.
 """
 
 from __future__ import annotations
@@ -22,6 +23,32 @@ EVENTS_PAGE_MAX: Final = 200
 """The largest page server-scan serves."""
 CURSOR_MAX_LENGTH: Final = 512
 """The longest cursor day1 passes on; server-scan's are a few dozen characters."""
+AUDITOR_SETTING: Final = "SERVER_SCAN_AUDITOR_TOKEN"
+"""Where day1 finds server-scan's auditor token."""
+
+
+def audit_off(page: str) -> str:
+    """The one line ``page`` of the audit trail shows when it cannot be read here."""
+    return (
+        f"{page} needs server-scan's auditor token: add the key auditor-token to the "
+        f"server-scan Secret and restart day1 ({AUDITOR_SETTING})."
+    )
+
+
+HISTORY_OFF: Final = audit_off("History")
+
+
+def audit_detail(page: str, *, viewer_token: bool, auditor_token: bool) -> str | None:
+    """Why ``page`` of the audit trail does not work in this deployment; ``None`` when it does.
+
+    As ``maintenance_detail``: with the auditor token it is read with it;
+    with no token at all server-scan runs with auth off and needs none; a
+    viewer token alone means auth is on, and server-scan keeps its audit
+    trail from viewers.
+    """
+    if auditor_token or not viewer_token:
+        return None
+    return audit_off(page)
 
 
 class Actor(BaseModel):

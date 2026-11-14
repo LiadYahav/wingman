@@ -16,16 +16,10 @@ is ``held``, which server-scan computes for its rows only (``ReservationState``)
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Final
 
 from pydantic import BaseModel
 
 from wingman_day1.domain.server_scan_hardware import SHAPE, Cpu, Hardware
-
-HISTORY_OFF: Final = (
-    "History needs server-scan's auditor token: add the key auditor-token to the server-scan "
-    "Secret and restart day1 (SERVER_SCAN_AUDITOR_TOKEN)."
-)
 
 
 class ProfileTemplate(BaseModel):
@@ -293,16 +287,3 @@ class VmHostAnswer(BaseModel):
     node_name: str | None
     match: str
     host: VmHostServer | None
-
-
-def history_detail(*, viewer_token: bool, auditor_token: bool) -> str | None:
-    """Why History does not work in this deployment; ``None`` when it does.
-
-    As ``maintenance_detail``: with the auditor token it is read with it;
-    with no token at all server-scan runs with auth off and needs none; a
-    viewer token alone means auth is on, and server-scan keeps its audit
-    trail from viewers.
-    """
-    if auditor_token or not viewer_token:
-        return None
-    return HISTORY_OFF

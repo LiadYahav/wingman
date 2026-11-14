@@ -17,8 +17,8 @@ import pytest
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.domain.errors import ServerScanDeniedError
-from wingman_day1.domain.server_scan_events import EventPage
-from wingman_day1.domain.server_scan_record import HISTORY_OFF, ServerRecord
+from wingman_day1.domain.server_scan_events import HISTORY_OFF, EventPage
+from wingman_day1.domain.server_scan_record import ServerRecord
 from wingman_day1.domain.server_scan_servers import MAINTENANCE_OFF
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import (

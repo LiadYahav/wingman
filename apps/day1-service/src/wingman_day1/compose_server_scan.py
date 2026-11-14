@@ -14,7 +14,7 @@ from typing import Final
 
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.application.server_scan import ServerScanService
-from wingman_day1.domain.server_scan_record import history_detail
+from wingman_day1.domain.server_scan_events import audit_detail
 from wingman_day1.domain.server_scan_servers import maintenance_detail
 from wingman_day1.domain.server_scan_skill import token_line
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
@@ -79,7 +79,8 @@ def server_scan_service(
             viewer_token=viewer,
             admin_token=bool(settings.server_scan_admin_token.get_secret_value()),
         ),
-        history_detail=history_detail(
+        history_detail=audit_detail(
+            "History",
             viewer_token=viewer,
             auditor_token=bool(settings.server_scan_auditor_token.get_secret_value()),
         ),

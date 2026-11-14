@@ -24,7 +24,7 @@ from collections.abc import Awaitable, Mapping
 from wingman_core.domain.users import User
 from wingman_day1.domain.errors import (
     AmbiguousServerScanWriteError,
-    ServerScanHistoryOffError,
+    ServerScanAuditOffError,
     ServerScanWritesOffError,
 )
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
@@ -56,7 +56,7 @@ class ServerScanService:
 
         ``maintenance_detail`` says why the maintenance writes are off here
         (``domain.server_scan_servers.maintenance_detail``), ``history_detail``
-        why a server's History is (``domain.server_scan_record.history_detail``);
+        why a server's History is (``domain.server_scan_events.audit_detail``);
         ``None``: on. ``ui_url`` is server-scan's address for people and
         Claude Code; ``token_line`` the line its zip of the skill names
         (``domain.server_scan_skill.token_line``).
@@ -93,8 +93,7 @@ class ServerScanService:
 
     async def history(self, server_id: str, *, cursor: str | None, page_size: int) -> EventPage:
         """One page of a server's History, with server-scan's auditor token; off without it."""
-        if self.history_detail is not None:
-            raise ServerScanHistoryOffError(self.history_detail)
+        _audited(self.history_detail)
         return await self._inventory.server_events(server_id, cursor=cursor, page_size=page_size)
 
     async def skill(self) -> Skill:
@@ -137,6 +136,12 @@ class ServerScanService:
     def _writable(self) -> None:
         if self.maintenance_detail is not None:
             raise ServerScanWritesOffError(self.maintenance_detail)
+
+
+def _audited(detail: str | None) -> None:
+    """The audit trail's guard: ``detail`` says why it cannot be read here (``None``: it can)."""
+    if detail is not None:
+        raise ServerScanAuditOffError(detail)
 
 
 async def _recorded(

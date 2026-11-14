@@ -145,8 +145,8 @@ class ServerScanWritesOffError(ServerScanError):
     """Maintenance writes are off here: a viewer token without server-scan's admin token."""
 
 
-class ServerScanHistoryOffError(ServerScanError):
-    """A server's History is off here: a viewer token without server-scan's auditor token."""
+class ServerScanAuditOffError(ServerScanError):
+    """server-scan's audit trail is off here: a viewer token without its auditor token."""
 
 
 class ServerScanSkillMissingError(ServerScanError):
