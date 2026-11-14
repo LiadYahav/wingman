@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { chartsPrefix } from "./addons";
 import { json } from "./api-handlers";
 import { HOSTED_ID, HOSTED_NAME, MCE_ID, TWIN_IDS } from "./day2";
 import type {
@@ -80,7 +81,7 @@ function template(name: string): AddonTemplate {
     read_only_reason: found?.read_only_reason ?? null,
     sync: MANUAL,
     sync_source: `the sync options most of sigs/${name}'s add-ons use (2 of 2)`,
-    repourl_prefix: `https://gitlab.example.com/${name}/helm-charts/`,
+    repourl_prefix: chartsPrefix(name),
     known_sync_options: KNOWN_SYNC_OPTIONS,
     scopes: SCOPES,
   };

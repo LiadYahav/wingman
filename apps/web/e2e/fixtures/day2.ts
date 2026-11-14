@@ -1,7 +1,8 @@
 import type { Page } from "@playwright/test";
-import { mockAddons } from "./addons";
+import { chartsPrefix, mockAddons } from "./addons";
 import { json } from "./api-handlers";
 import type {
+  AddonTemplate,
   BulkBody,
   BulkResult,
   CatalogEntry,
@@ -332,6 +333,13 @@ export async function mockDay2World(page: Page): Promise<Day2Requests> {
   );
   await page.route("**/api/day2/addons", (r) => json(r, day2Catalog));
   await page.route("**/api/day2/lints**", (r) => json(r, lints));
+  // An install that must give a repourl suggests the team's chart address; fixtures/authoring.ts routes the full template.
+  await page.route(/\/api\/day2\/teams\/[^/?]+\/addon-template$/, (r) => {
+    const team = decodeURIComponent(new URL(r.request().url()).pathname.split("/")[4]);
+    const sync = { auto_sync: false, prune: false, self_heal: false, sync_options: ["CreateNamespace=true"] };
+    const template: AddonTemplate = { team, writable: true, read_only_reason: null, sync, sync_source: "the platform's default", repourl_prefix: chartsPrefix(team), known_sync_options: [], scopes: [] };
+    return json(r, template);
+  });
   await page.route("**/api/day2/clusters", (r) => json(r, destinations));
 
   await page.route(/\/api\/day2\/clusters\/[^/?]+(\?.*)?$/, (r) => {

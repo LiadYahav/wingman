@@ -34,6 +34,16 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
+/** Where the chart address comes from: only a suggestion (ADR-0060). */
+function ChartAddressHint({ team }: { team: string }) {
+  return (
+    <>
+      A team&apos;s charts sit in <code>&lt;team&gt;/helm-charts</code> on Wingman&apos;s GitLab, here <code>{team}/helm-charts</code>, so the
+      address follows the name until you edit it. It can be changed to any chart repo.
+    </>
+  );
+}
+
 /**
  * A new add-on in a team's catalog (ADR-0043, ADR-0053):
  * `operators/<name>/<name>.yaml` and its Sig values, `values.yaml`, in one MR, optionally a
@@ -80,8 +90,8 @@ export function NewAddonForm({
   });
 
   const chart = name.trim();
-  // Pre-filled while untouched: the team's usual chart-repo folder and the name as namespace.
-  const repo = repourl ?? (data?.repourl_prefix && chart ? `${data.repourl_prefix}${chart}.git` : "");
+  // Pre-filled while untouched: the chart in the team's charts group (ADR-0060) and the name as namespace.
+  const repo = repourl ?? (data && chart ? `${data.repourl_prefix}${chart}.git` : "");
   const ns = namespace ?? chart;
   const syncValue = sync ?? data?.sync ?? DEFAULT_SYNC;
   const ignore = parseIgnoreDifferences(ignoreText);
@@ -161,7 +171,8 @@ export function NewAddonForm({
           type="url"
           value={repo}
           onChange={setRepourl}
-          placeholder={data.repourl_prefix ? `${data.repourl_prefix}<name>.git` : "https://gitlab.example.com/helm-charts/<name>.git"}
+          placeholder={`${data.repourl_prefix}<name>.git`}
+          hint={<ChartAddressHint team={team} />}
           help={
             <>
               Written as lowercase <code>repourl</code>, the only spelling the platform reads.

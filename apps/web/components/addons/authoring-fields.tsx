@@ -1,11 +1,14 @@
 "use client";
 
+import { useId } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Info } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { day2Api, day2Keys, scopeLabel } from "@/lib/day2";
 import { cn } from "@/lib/utils";
 import { parseIgnoreDifferences } from "@/lib/values";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Hint } from "@/components/common/hint";
 import type { AddonTemplate, FleetScope, ScopeReach } from "@/types/day2";
 
 /** A chart folder becomes part of Application names: a DNS label (the service's rule `chart-name`). */
@@ -20,6 +23,7 @@ export function TextField({
   onChange,
   placeholder,
   help,
+  hint,
   type = "text",
   list,
   mono = true,
@@ -30,30 +34,61 @@ export function TextField({
   onChange: (value: string) => void;
   placeholder?: string;
   help?: React.ReactNode;
+  /** More about the field, behind an ⓘ beside its label. */
+  hint?: React.ReactNode;
   type?: "text" | "url";
   list?: string;
   mono?: boolean;
   disabled?: boolean;
 }) {
+  const id = useId();
+  const labelClass = "font-semibold uppercase tracking-wide text-muted-foreground";
+  const helpText = help && (
+    <span id={`${id}-help`} className="block text-muted-foreground">
+      {help}
+    </span>
+  );
+  const input = (
+    <input
+      id={id}
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      list={list}
+      autoComplete="off"
+      spellCheck={false}
+      disabled={disabled}
+      aria-describedby={hint && help ? `${id}-help` : undefined}
+      className={cn(
+        "h-8 w-full rounded-lg border bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60",
+        mono && "font-mono",
+      )}
+    />
+  );
+  if (!hint) {
+    return (
+      <label className="block space-y-1 text-xs">
+        <span className={labelClass}>{label}</span>
+        {input}
+        {helpText}
+      </label>
+    );
+  }
+  // The ⓘ is a button: inside the <label> it would be the element the label names, not the input
   return (
-    <label className="block space-y-1 text-xs">
-      <span className="font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        list={list}
-        autoComplete="off"
-        spellCheck={false}
-        disabled={disabled}
-        className={cn(
-          "h-8 w-full rounded-lg border bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60",
-          mono && "font-mono",
-        )}
-      />
-      {help && <span className="block text-muted-foreground">{help}</span>}
-    </label>
+    <div className="space-y-1 text-xs">
+      <div className="flex items-center gap-1">
+        <label htmlFor={id} className={labelClass}>
+          {label}
+        </label>
+        <Hint hint={hint} label={`About ${label}`} className="-my-1 text-muted-foreground">
+          <Info aria-hidden className="h-3.5 w-3.5" />
+        </Hint>
+      </div>
+      {input}
+      {helpText}
+    </div>
   );
 }
 

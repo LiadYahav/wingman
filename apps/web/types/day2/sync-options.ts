@@ -33,8 +33,8 @@ export interface AddonTemplate {
   sync: SyncSettings;
   /** Where `sync` comes from, for a hint under the control. */
   sync_source: string;
-  /** The folder most of the team's chart repos sit in (`<prefix><chart>.git`), or `null`. */
-  repourl_prefix: string | null;
+  /** `<GITLAB_URL>/<team>/helm-charts/`: where a new add-on's chart repo is suggested, `<prefix><name>.git` (ADR-0060). */
+  repourl_prefix: string;
   known_sync_options: string[];
   scopes: ScopeReach[];
 }
