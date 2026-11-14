@@ -18,6 +18,8 @@ from wingman_day1.domain.errors import (
     ServerScanDeniedError,
     ServerScanUnavailableError,
 )
+from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
@@ -339,6 +341,17 @@ class CountingInventory:
 
     async def end_maintenance(self, server_id: str) -> ServerMaintenance:
         raise AssertionError("not written here")
+
+    async def record(self, server_id: str) -> ServerRecord:
+        raise AssertionError("not read here")
+
+    async def vm_host(self, server_id: str) -> VmHostAnswer:
+        raise AssertionError("not read here")
+
+    async def server_events(
+        self, server_id: str, *, cursor: str | None, page_size: int
+    ) -> EventPage:
+        raise AssertionError("not read here")
 
 
 async def test_the_cache_reads_the_fleet_once_per_ttl_and_one_server_every_time() -> None:

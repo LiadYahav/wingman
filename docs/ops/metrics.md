@@ -41,7 +41,7 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
-| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance` |
+| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
@@ -98,6 +98,15 @@ Operations of the other dependencies (day1):
   `ambiguous` a write sent whose answer was lost (logged as
   `server_maintenance_unconfirmed`): never retried, look at the server's row
   before trying again.
+- `server_scan` `get_server_record`, `get_vm_host` and `list_server_events`
+  are the Server Scan area's server page (ADR-0048's 3.25.0 amendment): the
+  server whole, a VM's host and the server's History, one call each per page
+  open or History page, never cached by day1 (server-scan caches the record
+  itself). `not_found` is an id server-scan does not have, or a VM host asked
+  of a server that is not a VM. `denied` on `get_server_record` and
+  `get_vm_host` is the viewer token refused (`SERVER_SCAN_TOKEN`); on
+  `list_server_events` it is **the auditor token** (`SERVER_SCAN_AUDITOR_TOKEN`).
+  `get_server` stays the uninstall's fresh check of a server's cluster.
 - `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the

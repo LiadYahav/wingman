@@ -79,6 +79,11 @@ hubs, server-scan, the workflows orchestrator and segments-manager with fakes se
   card shows 0. The Servers page (`/server-scan/servers`) lists them, and its maintenance
   toggle changes them in memory, recorded as by `dev` (no token, as on a server-scan with
   auth off);
+- `server-records.yaml` is the hardware behind them, per model, in server-scan's shape: a
+  server's page (`/server-scan/servers/<id>`) shows its row with its model's CPU, memory,
+  drives, GPUs (the R760s), PSUs, NICs and Cisco's fabric uplinks, a few servers' health
+  reasons, unread fields and an unreachable BMC; its History is made up from the row plus
+  every maintenance change made since day1 started;
 - `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update
   half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
   approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace

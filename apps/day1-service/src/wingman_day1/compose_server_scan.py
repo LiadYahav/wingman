@@ -12,6 +12,7 @@ from typing import Final
 
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.application.server_scan import ServerScanService
+from wingman_day1.domain.server_scan_record import history_detail
 from wingman_day1.domain.server_scan_servers import maintenance_detail
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.ports import ServerInventory
@@ -37,12 +38,20 @@ def server_scan_service(
 
     Its maintenance toggle works with server-scan's admin token, or with no
     token at all (a server-scan with auth off); a viewer token alone turns it
-    off (ADR-0048's 3.23.0 amendment).
+    off (ADR-0048's 3.23.0 amendment). A server's History works the same way
+    with server-scan's auditor token (3.25.0).
     """
     if inventory is None:
         return None
-    detail = maintenance_detail(
-        viewer_token=bool(settings.server_scan_token.get_secret_value()),
-        admin_token=bool(settings.server_scan_admin_token.get_secret_value()),
+    viewer = bool(settings.server_scan_token.get_secret_value())
+    return ServerScanService(
+        inventory,
+        maintenance_detail=maintenance_detail(
+            viewer_token=viewer,
+            admin_token=bool(settings.server_scan_admin_token.get_secret_value()),
+        ),
+        history_detail=history_detail(
+            viewer_token=viewer,
+            auditor_token=bool(settings.server_scan_auditor_token.get_secret_value()),
+        ),
     )
-    return ServerScanService(inventory, maintenance_detail=detail)

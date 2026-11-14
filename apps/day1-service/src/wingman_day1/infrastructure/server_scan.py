@@ -2,14 +2,17 @@
 
 Read only (ADR-0038, ADR-0048) but for a server's maintenance, the Server Scan
 area's one write (``server_scan_writes``, ADR-0048's 3.23.0 amendment). Day1
-presents a viewer token (``Authorization: Bearer``) on every read and the
-admin token on the writes only, or none for an instance that runs with auth off.
+presents a viewer token (``Authorization: Bearer``) on every read, the
+auditor token on a server's History only and the admin token on the writes
+only, or none for an instance that runs with auth off.
 The fleet is one read, ``GET /api/v1/servers/rows`` (about 250 KB gzipped for
 3,000 servers); its weak ``ETag`` goes back as ``If-None-Match``, so an
 unchanged fleet costs a 304 and no download. One server is
 ``GET /api/v1/servers/{id}``, read fresh for the uninstall's check. The Server
 Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
-(read by ``server_scan_sites``).
+(read by ``server_scan_sites``). A server's page reads the server whole,
+a VM's host and its History (``server_scan_record``, ADR-0048's 3.25.0
+amendment).
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
@@ -20,24 +23,29 @@ server) and ``server_scan_sites``.
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
 from typing import Final
 from urllib.parse import quote
 
 import httpx
 
 from wingman_core.observability.metrics import Dependency, WingmanMetrics
-from wingman_day1.domain.errors import (
-    ServerNotFoundError,
-    ServerScanDeniedError,
-    ServerScanUnavailableError,
-)
+from wingman_core.ports.clock import Clock, system_clock
+from wingman_day1.domain.errors import ServerNotFoundError, ServerScanUnavailableError
+from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.http import json_client
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
 from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_detail
+from wingman_day1.infrastructure.server_scan_record import (
+    check,
+    fetch,
+    read_events,
+    read_record,
+    read_vm_host,
+)
 from wingman_day1.infrastructure.server_scan_sites import fleet_sites
 from wingman_day1.infrastructure.server_scan_writes import send_maintenance, start_body
 
@@ -55,23 +63,28 @@ class HttpServerInventory:
         base_url: str,
         token: str = "",
         admin_token: str = "",
+        auditor_token: str = "",
         verify: bool | str = True,
         timeout_seconds: float = 10.0,
         metrics: WingmanMetrics | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         timer: Timer = time.perf_counter,
+        clock: Clock = system_clock,
     ) -> None:
         """Read server-scan at ``base_url``; an empty ``token`` sends no Authorization header.
 
-        ``admin_token`` replaces it on the maintenance writes only (empty: the
-        writes carry ``token``'s header, or none). ``verify`` is
-        ``True``/``False`` or a CA bundle path (read now, so a missing bundle
-        stops start-up); ``transport`` is for tests.
+        ``admin_token`` replaces it on the maintenance writes only, and
+        ``auditor_token`` on a server's History only (empty: those carry
+        ``token``'s header, or none). ``verify`` is ``True``/``False`` or a CA
+        bundle path (read now, so a missing bundle stops start-up);
+        ``transport`` is for tests; ``clock`` judges a record's reservation.
         """
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         self._write_headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
+        self._audit_headers = {"Authorization": f"Bearer {auditor_token}"} if auditor_token else {}
+        self._clock = clock
         self._observer = Observer(Dependency.SERVER_SCAN, metrics, timer=timer)
         self._client = json_client(
             base_url=base_url,
@@ -104,6 +117,29 @@ class HttpServerInventory:
         """See ServerInventory.sites."""
         return await self._observer.call(ServerScanOperation.LIST_SITES, self._sites())
 
+    async def record(self, server_id: str) -> ServerRecord:
+        """See ServerInventory.record."""
+        read = read_record(self._client, server_id, now=self._clock())
+        return await self._observer.call(ServerScanOperation.GET_SERVER_RECORD, read)
+
+    async def vm_host(self, server_id: str) -> VmHostAnswer:
+        """See ServerInventory.vm_host."""
+        read = read_vm_host(self._client, server_id)
+        return await self._observer.call(ServerScanOperation.GET_VM_HOST, read)
+
+    async def server_events(
+        self, server_id: str, *, cursor: str | None, page_size: int
+    ) -> EventPage:
+        """See ServerInventory.server_events."""
+        read = read_events(
+            self._client,
+            server_id,
+            cursor=cursor,
+            page_size=page_size,
+            headers=self._audit_headers,
+        )
+        return await self._observer.call(ServerScanOperation.LIST_SERVER_EVENTS, read)
+
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance."""
         write = send_maintenance(
@@ -120,10 +156,10 @@ class HttpServerInventory:
         what = "listing servers"
         last = self._fleet
         headers = {"If-None-Match": self._etag} if self._etag and last is not None else {}
-        response = await self._get(ROWS_PATH, what=what, headers=headers)
+        response = await fetch(self._client, ROWS_PATH, what=what, headers=headers)
         if response.status_code == 304 and last is not None:
             return last
-        _check(response, what=what)
+        check(response, what=what)
         try:
             fleet = fleet_rows(response.json())
         except (ValueError, KeyError, TypeError) as exc:
@@ -134,10 +170,11 @@ class HttpServerInventory:
 
     async def _server(self, server_id: str) -> ServerDetail:
         what = f"reading server {server_id}"
-        response = await self._get(SERVER_PATH.format(id=quote(server_id, safe="")), what=what)
+        path = SERVER_PATH.format(id=quote(server_id, safe=""))
+        response = await fetch(self._client, path, what=what)
         if response.status_code == 404:
             raise ServerNotFoundError(f"server-scan has no server {server_id!r}")
-        _check(response, what=what)
+        check(response, what=what)
         try:
             return server_detail(response.json())
         except (ValueError, KeyError, TypeError) as exc:
@@ -147,29 +184,9 @@ class HttpServerInventory:
 
     async def _sites(self) -> FleetSites:
         what = "listing sites"
-        response = await self._get(SITES_PATH, what=what)
-        _check(response, what=what)
+        response = await fetch(self._client, SITES_PATH, what=what)
+        check(response, what=what)
         try:
             return fleet_sites(response.json())
         except (ValueError, KeyError, TypeError) as exc:
             raise ServerScanUnavailableError("server-scan returned malformed sites") from exc
-
-    async def _get(
-        self, path: str, *, what: str, headers: Mapping[str, str] | None = None
-    ) -> httpx.Response:
-        try:
-            return await self._client.get(path, headers=headers)
-        except httpx.TransportError as exc:
-            raise ServerScanUnavailableError(
-                f"server-scan unreachable {what}: {type(exc).__name__}"
-            ) from exc
-
-
-def _check(response: httpx.Response, *, what: str) -> None:
-    status = response.status_code
-    if status in (401, 403):
-        raise ServerScanDeniedError(
-            f"server-scan refused Wingman's token ({status}) {what}: check SERVER_SCAN_TOKEN"
-        )
-    if status != 200:
-        raise ServerScanUnavailableError(f"server-scan answered {status} {what}")

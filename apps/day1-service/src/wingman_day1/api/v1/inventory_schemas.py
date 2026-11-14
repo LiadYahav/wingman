@@ -199,6 +199,8 @@ class InventoryRunOut(BaseModel):
     infra_env: str | None
     slot: int | None
     server_name: str | None
+    server_id: str | None
+    """server-scan's id for ``server_name`` when exactly one server has it, for the link."""
     origin: Origin | None
     """``named``: a person. ``pool``: herzi or a person (nothing tells which)."""
     phase: str | None
@@ -219,7 +221,8 @@ class InventoryRunOut(BaseModel):
             mce=target.mce or None,
             infra_env=target.infra_env,
             slot=target.slot,
-            server_name=detail.server_name or target.server,
+            server_name=shown.server_name,
+            server_id=shown.server_id,
             origin=origin,
             phase=detail.phase,
             error=detail.error,

@@ -2,8 +2,9 @@
 
 Read through the one ``ServerInventory`` the Nodes tab, placement and
 Inventory Management share (its cache in front). Each page adds its reads
-here: the Sites page, and the Servers page's fleet rows. server-scan failing
-is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
+here: the Sites page, the Servers page's fleet rows, and a server's page (the
+record, a VM's host, History with the auditor token). server-scan failing is
+``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
 The one write is a server's maintenance on and off (ADR-0048's 3.23.0
@@ -18,7 +19,13 @@ import logging
 from collections.abc import Awaitable, Mapping
 
 from wingman_core.domain.users import User
-from wingman_day1.domain.errors import AmbiguousServerScanWriteError, ServerScanWritesOffError
+from wingman_day1.domain.errors import (
+    AmbiguousServerScanWriteError,
+    ServerScanHistoryOffError,
+    ServerScanWritesOffError,
+)
+from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.ports import ServerInventory
@@ -30,15 +37,22 @@ class ServerScanService:
     """The area's use cases over server-scan."""
 
     def __init__(
-        self, inventory: ServerInventory, *, maintenance_detail: str | None = None
+        self,
+        inventory: ServerInventory,
+        *,
+        maintenance_detail: str | None = None,
+        history_detail: str | None = None,
     ) -> None:
         """Read server-scan through ``inventory``.
 
         ``maintenance_detail`` says why the maintenance writes are off here
-        (``domain.server_scan_servers.maintenance_detail``); ``None``: on.
+        (``domain.server_scan_servers.maintenance_detail``), ``history_detail``
+        why a server's History is (``domain.server_scan_record.history_detail``);
+        ``None``: on.
         """
         self._inventory = inventory
         self.maintenance_detail = maintenance_detail
+        self.history_detail = history_detail
 
     async def sites(self) -> FleetSites:
         """The Sites page: every configured site and the fleet, as server-scan counts them."""
@@ -47,6 +61,20 @@ class ServerScanService:
     async def servers(self) -> FleetRows:
         """The Servers page: every server as server-scan's rows, from the shared cached read."""
         return await self._inventory.fleet()
+
+    async def record(self, server_id: str) -> ServerRecord:
+        """A server's page: the server whole, read now."""
+        return await self._inventory.record(server_id)
+
+    async def vm_host(self, server_id: str) -> VmHostAnswer:
+        """The host a VM runs on, resolved now (a server's page, for a VM)."""
+        return await self._inventory.vm_host(server_id)
+
+    async def history(self, server_id: str, *, cursor: str | None, page_size: int) -> EventPage:
+        """One page of a server's History, with server-scan's auditor token; off without it."""
+        if self.history_detail is not None:
+            raise ServerScanHistoryOffError(self.history_detail)
+        return await self._inventory.server_events(server_id, cursor=cursor, page_size=page_size)
 
     async def start_maintenance(
         self, server_id: str, start: MaintenanceStart, *, user: User

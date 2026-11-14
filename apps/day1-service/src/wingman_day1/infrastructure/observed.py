@@ -85,12 +85,19 @@ class ServerScanOperation(StrEnum):
 
     LIST_SERVER_ROWS = "list_server_rows"
     GET_SERVER = "get_server"
+    """``GET /api/v1/servers/{id}``, its name and cluster only: the uninstall's fresh check."""
     LIST_SITES = "list_sites"
     """``GET /api/v1/sites``: the Server Scan area's Sites page (ADR-0048)."""
     ENABLE_MAINTENANCE = "enable_maintenance"
     """``PUT /api/v1/servers/{id}/maintenance``: the Servers page's toggle (admin token)."""
     DISABLE_MAINTENANCE = "disable_maintenance"
     """``DELETE /api/v1/servers/{id}/maintenance``."""
+    GET_SERVER_RECORD = "get_server_record"
+    """``GET /api/v1/servers/{id}`` read whole: the Server Scan area's server page."""
+    GET_VM_HOST = "get_vm_host"
+    """``GET /api/v1/servers/{id}/vm-host``: the host a KubeVirt VM runs on."""
+    LIST_SERVER_EVENTS = "list_server_events"
+    """``GET /api/v1/servers/{id}/events``: a server's History (the auditor token)."""
 
 
 class SegmentsManagerOperation(StrEnum):

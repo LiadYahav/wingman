@@ -273,10 +273,15 @@ serverScan:
   # the Server Scan area's Servers page (ADR-0048). Without it, the toggle is
   # greyed out (with no Secret at all, server-scan runs with auth off and it works):
   #   oc -n <ns> set data secret/server-scan-viewer admin-token=<admin token>
+  # auditorKey: an optional third key, server-scan's auditor token, sent only
+  # when an admin opens a server's History in the Server Scan area (ADR-0048).
+  # Without it, History says it is not set up (with no Secret at all, it works):
+  #   oc -n <ns> set data secret/server-scan-viewer auditor-token=<auditor token>
   tokenSecret:
     name: ""
     key: "token"
     adminKey: "admin-token"
+    auditorKey: "auditor-token"
 
 # ── Node uninstall through the workflows orchestrator (ADR-0038) ──────────────
 # Off by default. With a url, day1 starts the platform's uninstall-server-from-hc

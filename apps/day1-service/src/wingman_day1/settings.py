@@ -108,6 +108,10 @@ class Day1Settings(BaseSettings):
     # only (ADR-0048's 3.23.0 amendment). Empty with a viewer token: the toggle is
     # off; empty with none: server-scan runs with auth off and takes writes as is.
     server_scan_admin_token: SecretStr = SecretStr("")
+    # server-scan's auditor token, for a server's History only (ADR-0048's 3.25.0
+    # amendment). Empty with a viewer token: History is off; empty with none:
+    # server-scan runs with auth off and serves it as is.
+    server_scan_auditor_token: SecretStr = SecretStr("")
     server_scan_ssl_verify: str = "true"
     server_scan_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     workflows_api_url: str = ""
