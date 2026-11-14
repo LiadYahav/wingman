@@ -6,7 +6,9 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { fulfillProblem, go, injectAdminAuth, injectViewerAuth, mockDashboardApis } from "../fixtures/api-handlers";
+import { fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
+import { OVERVIEW as INVENTORY } from "../fixtures/inventory";
+import { SITES as SEGMENT_SITES, STATS as SEGMENT_STATS } from "../fixtures/segments";
 import { openOverview, RUNS, SITE1_A, SITE1_B, UPGRADES_OFF } from "../fixtures/overview";
 
 test.describe("The Overview's header", () => {
@@ -97,5 +99,77 @@ test.describe("Where clusters run and on which version", () => {
     await expect(page.getByTestId("overview-sites-empty")).toContainText("No clusters yet");
     await expect(page.getByTestId("overview-versions-empty")).toContainText("No clusters yet");
     await expect(page.getByTestId("overview-site")).toHaveCount(0);
+  });
+});
+
+test.describe("Capacity", () => {
+  test("free servers per MCE and free segments per site, each opening its page", async ({ page }) => {
+    await openOverview(page, {
+      before: async (p) => {
+        await p.route("**/api/day1/inventory", (route) => json(route, INVENTORY));
+        await p.route("**/api/day1/segments/sites", (route) => json(route, SEGMENT_SITES));
+        await p.route("**/api/day1/segments/stats", (route) => json(route, SEGMENT_STATS));
+      },
+    });
+
+    const servers = page.getByTestId("overview-servers");
+    await expect(servers.getByTestId("overview-servers-total")).toHaveText("10free across 2 MCEs");
+    const mces = servers.getByTestId("overview-mce");
+    await expect(mces).toHaveCount(2);
+    await expect(mces.nth(0)).toHaveAccessibleName("ocp4-prod-mce-site1-a: 6 free of 16 servers");
+    await expect(mces.nth(0)).toHaveAttribute("href", "/inventory");
+    // The most free pool first, the servers no InfraEnv names last; one free server cannot be used now
+    await expect(mces.nth(0).getByTestId("overview-pools")).toHaveText(
+      "dell-r650-site1-96c-768gb2hp-gen12-site1-64c-512gb0no InfraEnv41 not usable"
+    );
+    await expect(servers.getByTestId("overview-servers-more")).toHaveText("1 MCE not in server-scan");
+
+    const segments = page.getByTestId("overview-segments");
+    await expect(segments.getByTestId("overview-segments-total")).toHaveText("3free across 3 sites");
+    const sites = segments.getByTestId("overview-segment-site");
+    await expect(sites.nth(0)).toHaveAccessibleName("site1: 1 free of 5 segments");
+    await expect(sites.nth(2)).toHaveAccessibleName("site3: 0 free of 0 segments");
+    await sites.nth(1).click();
+    await expect(page).toHaveURL(/\/segments\?status=available&site=site2$/);
+  });
+
+  test("off here, Free Servers says so in one muted line and Free Segments is not shown", async ({ page }) => {
+    await openOverview(page);
+
+    await expect(page.getByTestId("overview-servers-off")).toContainText("Not set up here");
+    await expect(page.getByTestId("overview-servers").getByRole("alert")).toHaveCount(0);
+    await expect(page.getByTestId("overview-versions")).toBeVisible();
+    await expect(page.getByTestId("overview-segments")).toHaveCount(0);
+  });
+
+  test("a failed read fails its own card only", async ({ page }) => {
+    await openOverview(page, {
+      before: async (p) => {
+        await p.route("**/api/day1/inventory", (route) =>
+          fulfillProblem(route, 502, "DEPENDENCY_UNAVAILABLE", "server-scan unreachable listing servers: ConnectError"));
+      },
+    });
+
+    await expect(page.getByTestId("overview-servers").getByRole("alert")).toContainText("server-scan unreachable");
+    await expect(page.getByTestId("overview-site")).toHaveCount(2);
+    await expect(page.getByTestId("health-empty")).toHaveCount(0);
+  });
+
+  test("a viewer sees Free Servers, never Free Segments, and never asks for it", async ({ page }) => {
+    let segmentReads = 0;
+    await openOverview(page, {
+      viewer: true,
+      before: async (p) => {
+        await p.route("**/api/day1/inventory", (route) => json(route, INVENTORY));
+        await p.route("**/api/day1/segments/**", (route) => {
+          segmentReads += 1;
+          return fulfillProblem(route, 403, "FORBIDDEN", "This needs the admin role.");
+        });
+      },
+    });
+
+    await expect(page.getByTestId("overview-mce")).toHaveCount(2);
+    await expect(page.getByTestId("overview-segments")).toHaveCount(0);
+    expect(segmentReads).toBe(0);
   });
 });

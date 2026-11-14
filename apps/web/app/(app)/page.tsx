@@ -2,13 +2,9 @@
 
 import { ApprovalsCard } from "@/components/overview/approvals-card";
 import { ClusterHealthCard } from "@/components/overview/cluster-health-card";
-import { ClustersBySiteCard } from "@/components/overview/clusters-by-site-card";
 import { OverviewHeader } from "@/components/overview/overview-header";
+import { OverviewSections } from "@/components/overview/overview-sections";
 import { StatCards } from "@/components/overview/stat-cards";
-import { VersionsCard } from "@/components/overview/versions-card";
-
-/** Two columns on a wide screen; a card left alone on its row takes both. */
-const SECTIONS = "grid gap-4 lg:grid-cols-2 lg:[&>*:last-child:nth-child(odd)]:col-span-2";
 
 /** The Overview: the platform at a glance, each card reading its own source. */
 export default function DashboardPage() {
@@ -23,10 +19,7 @@ export default function DashboardPage() {
         <ApprovalsCard />
       </div>
 
-      <div className={SECTIONS} data-testid="overview-sections">
-        <ClustersBySiteCard />
-        <VersionsCard />
-      </div>
+      <OverviewSections />
     </div>
   );
 }
