@@ -58,7 +58,7 @@ def server_scan_service(
     token at all (a server-scan with auth off); a viewer token alone turns it
     off (ADR-0048's 3.23.0 amendment). A server's History works the same way
     with server-scan's auditor token (3.25.0). The Claude page names the token
-    line server-scan writes into Wingman's copy of its skill (3.29.0).
+    line server-scan writes into Wingman's copy of its skill (3.27.0).
     """
     if inventory is None:
         return None

@@ -1,5 +1,5 @@
 /**
- * The Claude page's commands and addresses (ADR-0048's 3.29.0 amendment), in
+ * The Claude page's commands and addresses (ADR-0048's 3.27.0 amendment), in
  * server-scan's words (its `SkillPage.tsx` and `McpSection.tsx` at 92146d3).
  * They name server-scan, never Wingman: Claude Code calls server-scan's API
  * itself, with the person's own token, which server-scan makes on its own

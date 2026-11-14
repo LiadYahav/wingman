@@ -13,7 +13,7 @@ Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
 (read by ``server_scan_sites``). A server's page reads the server whole,
 a VM's host and its History (``server_scan_record``, ADR-0048's 3.25.0
 amendment); the Claude page its skill and the skill's zip (``server_scan_skill``,
-3.29.0).
+3.27.0).
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"

@@ -1,4 +1,4 @@
-"""The Claude page: server-scan's skill and its zip (ADR-0048, 3.29.0).
+"""The Claude page: server-scan's skill and its zip (ADR-0048, 3.27.0).
 
 The adapter against server-scan's answers (MockTransport), in the shape its
 ``backend/app/api/v1/skill.py`` sends at 92146d3: the skill read and typed,

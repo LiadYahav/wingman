@@ -10,7 +10,7 @@ recording ``dev`` as who. A server's record and History are its row and its
 model's hardware (``fake_server_records``, ADR-0048's 3.25.0 amendment); no
 fake server is a VM unless the records fixture says so. Its Claude skill is
 a folder, read and zipped as server-scan does (``fake_server_scan_skill``,
-3.29.0); without one it carries none.
+3.27.0); without one it carries none.
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which

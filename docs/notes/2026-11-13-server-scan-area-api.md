@@ -4,7 +4,7 @@ The **Server Scan** area (`/server-scan`) is server-scan's UI rebuilt in
 Wingman, one page at a time (workstream 4 of `docs/ideas/single-pane.md`,
 decision 22, ADR-0048). This note covers the area, its first page,
 **Sites** (§1 to §7), its second, **Servers** (§8, 3.23.0), a
-server's own page (§9, 3.25.0) and the **Claude** page (§12, 3.29.0). Each
+server's own page (§9, 3.25.0) and the **Claude** page (§12, 3.27.0). Each
 later page adds its section here (§10 lists them).
 
 - **server-scan's API does not change.** day1 reads server-scan with the
@@ -219,7 +219,7 @@ rules ported, so the demo's cards agree with its servers.
   copied.
 - **The sidebar**: server-scan's pages, in its navigation's order, only those
   Wingman has built, so no entry leads nowhere: **Sites**, since 3.23.0
-  **Servers**, and since 3.29.0 **Claude** (§12), in a Reference section.
+  **Servers**, and since 3.27.0 **Claude** (§12), in a Reference section.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the
@@ -863,13 +863,13 @@ In single-pane §4's order; each is its own PR, with its section in this note.
 | Events | `GET /api/v1/events`, `/events/actors` (auditor) | Filters and cursor pages; History's timeline and its auditor token (§9) reused |
 | Jobs | `GET /api/v1/jobs`, a run's pod logs, `POST /jobs/{cronjob}/run` (admin) | "Run now" behind the admin check, its confirmation, Wingman's audit |
 | Architecture | none | server-scan's diagrams, framed from its UI (`SERVER_SCAN_UI_URL`) |
-| Claude | `GET /api/v1/skill`, `/skill/download` (viewer) | Built in 3.29.0 (§12): the skill and its zip through day1; the personal token stays a link out, server-scan makes it only for its own login |
+| Claude | `GET /api/v1/skill`, `/skill/download` (viewer) | Built in 3.27.0 (§12): the skill and its zip through day1; the personal token stays a link out, server-scan makes it only for its own login |
 
-## 12. The Claude page (3.29.0)
+## 12. The Claude page (3.27.0)
 
 server-scan's **Claude** page (`/skill`, the seventh in its navigation)
 rebuilt at `/server-scan/claude`, in Wingman's design and server-scan's
-words (ADR-0048's 3.29.0 amendment). Read from `team-redbull/server-scan`
+words (ADR-0048's 3.27.0 amendment). Read from `team-redbull/server-scan`
 at `92146d3`: `frontend/src/features/skill/` (`SkillPage.tsx`,
 `McpSection.tsx`, `TokenSection.tsx`, `skillText.ts` and their tests),
 `frontend/src/api/skill.ts`, `backend/app/api/v1/skill.py`,

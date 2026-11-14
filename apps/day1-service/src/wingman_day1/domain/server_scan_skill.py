@@ -1,4 +1,4 @@
-"""The Claude Code skill server-scan serves, as its Claude page shows it (ADR-0048, 3.29.0).
+"""The Claude Code skill server-scan serves, as its Claude page shows it (ADR-0048, 3.27.0).
 
 server-scan's ``GET /api/v1/skill`` (its ``SkillResponse``,
 ``backend/app/api/v1/skill_schemas.py``, team-redbull/server-scan at

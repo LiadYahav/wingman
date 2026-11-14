@@ -1,6 +1,6 @@
 /**
  * day1's Claude page routes (docs/notes/2026-11-13-server-scan-area-api.md
- * §12, ADR-0048's 3.29.0 amendment): server-scan's skill, read through day1,
+ * §12, ADR-0048's 3.27.0 amendment): server-scan's skill, read through day1,
  * and its zip. Admins only, as the area; `501` when server-scan is not
  * configured, `404` when it carries no skill.
  */

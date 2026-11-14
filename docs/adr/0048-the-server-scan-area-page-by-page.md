@@ -283,7 +283,7 @@ page for viewers** (the area is admins only: the page would answer `403`).
 Verification: `apps/web/lib/server-scan/server-page.test.ts` and
 `apps/web/e2e/tests/cluster-nodes.spec.ts` (an admin with the area, a viewer).
 
-**2026-11-14, 3.29.0: the Claude page.** server-scan's Claude page at
+**2026-11-14, 3.27.0: the Claude page.** server-scan's Claude page at
 `/server-scan/claude`: its guide to the `server-scan-api` Claude Code skill,
 the download, the four setup steps, the MCP command and the skill's files,
 in Wingman's design and server-scan's words. The contract is §12 of

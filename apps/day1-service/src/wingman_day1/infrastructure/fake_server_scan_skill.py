@@ -1,4 +1,4 @@
-"""The fake server-scan's Claude Code skill: a folder read and zipped as server-scan does (3.29.0).
+"""The fake server-scan's Claude Code skill: a folder read and zipped as server-scan does (3.27.0).
 
 ``DAY1_FAKE_FLEET=true`` (development only) serves the skill in
 ``dev/fleet-fixtures/skill/``: a short stand-in for server-scan's

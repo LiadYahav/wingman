@@ -1,4 +1,4 @@
-"""The Server Scan area's Claude page: server-scan's skill and its zip (ADR-0048, 3.29.0).
+"""The Server Scan area's Claude page: server-scan's skill and its zip (ADR-0048, 3.27.0).
 
 Admins only, as the area (decision 13 of ``docs/ideas/single-pane.md``):
 501 with ``SERVER_SCAN_URL`` empty, 404 when server-scan carries no skill,

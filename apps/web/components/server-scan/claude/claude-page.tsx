@@ -106,7 +106,7 @@ function Guide({ skill, error }: { skill: SkillAnswer; error: unknown }) {
 }
 
 /**
- * The Server Scan area's Claude page (ADR-0048's 3.29.0 amendment,
+ * The Server Scan area's Claude page (ADR-0048's 3.27.0 amendment,
  * docs/notes/2026-11-13-server-scan-area-api.md §12): server-scan's guide to
  * its Claude Code skill, in Wingman's design and server-scan's words. The
  * skill is server-scan's, read through day1 every minute and on focus, as

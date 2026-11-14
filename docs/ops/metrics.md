@@ -108,7 +108,7 @@ Operations of the other dependencies (day1):
   `list_server_events` it is **the auditor token** (`SERVER_SCAN_AUDITOR_TOKEN`).
   `get_server` stays the uninstall's fresh check of a server's cluster.
 - `server_scan` `get_skill` and `download_skill` are the Server Scan area's
-  Claude page (ADR-0048's 3.29.0 amendment): server-scan's Claude Code skill,
+  Claude page (ADR-0048's 3.27.0 amendment): server-scan's Claude Code skill,
   at most one call per replica per minute (its cache), and its zip, one call
   per download, never cached. Both use the viewer token: `denied` is
   `SERVER_SCAN_TOKEN` refused. `not_found` is a server-scan that carries no

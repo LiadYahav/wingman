@@ -1,5 +1,5 @@
 /**
- * Reading server-scan's skill for its Claude page (ADR-0048's 3.29.0
+ * Reading server-scan's skill for its Claude page (ADR-0048's 3.27.0
  * amendment), ported as they are from server-scan's
  * `frontend/src/features/skill/skillText.ts` (team-redbull/server-scan at
  * 92146d3, decision 18 of the single-pane plan), with its tests' cases.

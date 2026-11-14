@@ -1,4 +1,4 @@
-"""server-scan's reads for the Claude page: its skill and the skill's zip (ADR-0048, 3.29.0).
+"""server-scan's reads for the Claude page: its skill and the skill's zip (ADR-0048, 3.27.0).
 
 ``GET /api/v1/skill`` read strictly into the domain's ``Skill``, and
 ``GET /api/v1/skill/download?base_url=``, the zip server-scan builds with

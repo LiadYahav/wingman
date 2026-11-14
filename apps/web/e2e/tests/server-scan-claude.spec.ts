@@ -1,6 +1,6 @@
 /**
  * The Server Scan area's Claude page (mocked; docs/notes/2026-11-13-server-scan-area-api.md
- * §12, ADR-0048's 3.29.0 amendment): server-scan's guide to its Claude Code
+ * §12, ADR-0048's 3.27.0 amendment): server-scan's guide to its Claude Code
  * skill in Wingman, its words; the download through day1; the commands and
  * the token link naming server-scan, never Wingman; no token made here; the
  * states. Never a live server-scan.
