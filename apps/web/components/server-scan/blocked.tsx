@@ -2,12 +2,22 @@ import { Lock, Unplug } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { isApiError } from "@/lib/api-client";
 
-/** The setting a `501` names when the audit trail waits for server-scan's auditor token (§14.5), not for server-scan. */
-const AUDITOR_SETTING = "SERVER_SCAN_AUDITOR_TOKEN";
+/**
+ * The settings a `501` names (`details.setting`) when a page waits for one of
+ * server-scan's tokens, not for server-scan: the auditor token (History,
+ * Events, §14.5) or the admin token (Jobs, §15.5).
+ */
+type TokenSetting = "SERVER_SCAN_AUDITOR_TOKEN" | "SERVER_SCAN_ADMIN_TOKEN";
 
-/** Whether day1's answer is the audit trail's `501`: server-scan is there, its auditor token is not. */
-export const needsAuditorToken = (error: unknown): boolean =>
-  isApiError(error, "FEATURE_DISABLED") && error.details.setting === AUDITOR_SETTING;
+/** Whether day1's answer is a `501` waiting for `setting`: server-scan is there, that token is not. */
+const needsToken = (error: unknown, setting: TokenSetting): boolean =>
+  isApiError(error, "FEATURE_DISABLED") && error.details.setting === setting;
+
+/** The audit trail's `501`: server-scan is there, its auditor token is not. */
+export const needsAuditorToken = (error: unknown): boolean => needsToken(error, "SERVER_SCAN_AUDITOR_TOKEN");
+
+/** Jobs' `501`: server-scan is there, its admin token is not. */
+export const needsAdminToken = (error: unknown): boolean => needsToken(error, "SERVER_SCAN_ADMIN_TOKEN");
 
 /** Whether day1's answer means the area cannot be shown at all: not an admin (403), or server-scan not configured (501). */
 export const isBlocked = (error: unknown): boolean => isApiError(error, "FORBIDDEN") || isApiError(error, "FEATURE_DISABLED");

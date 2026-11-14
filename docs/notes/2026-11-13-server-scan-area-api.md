@@ -226,8 +226,10 @@ rules ported, so the demo's cards agree with its servers.
   Wingman has built, so no entry leads nowhere: **Sites**, since 3.23.0
   **Servers**, since 3.27.0 **Claude** (§12) and since 3.28.0 **Architecture**
   (§11), both in a Reference section, since 3.29.0 **Confs** (§10.8), in
-  Fleet after Servers, and since 3.30.0 **Rules & Policies** (§13.8), in a
-  Configuration section between Fleet and Reference.
+  Fleet after Servers, since 3.30.0 **Rules & Policies** (§13.8), in a
+  Configuration section between Fleet and Reference, and since 3.31.0
+  **Events** (§14.8) and 3.32.0 **Jobs** (§15.9), in that order, in an
+  Activity section between Fleet and Configuration.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the
@@ -1988,10 +1990,13 @@ only, never on another read.
   server-scan; there is nothing to sort, filter or page, so the shared table
   does not fit.
 - **States**: skeleton cards while loading; "For admins" on `403`; on
-  `501` "Jobs is not set up" with day1's line (the admin token's key, or
-  `SERVER_SCAN_URL`); the problem on `502`; a failed re-read keeps the last
-  list with a notice; server-scan's words for the feature off and for no
-  CronJob.
+  `501` with `details.setting` "Jobs is not set up" with day1's line naming
+  the admin token's key, and on one without it the area's "Server Scan is
+  not set up" (no server-scan at all), as Events (§14.8); the problem on `502`; a
+  failed re-read keeps the last list with a notice; server-scan's words for
+  the feature off and for no CronJob.
+- **Never kept in the browser's storage** (the query cache persists other
+  answers): a stored list would offer Run job while a run goes on.
 - **Fresh as the original**: the list every 5 seconds while a Job is
   unfinished, else every 30 seconds; an open log every 3 seconds while its
   Job is unfinished.

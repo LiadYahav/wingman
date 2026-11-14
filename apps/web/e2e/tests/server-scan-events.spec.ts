@@ -29,7 +29,7 @@ test.describe("The Events page", () => {
   test("the sidebar's Events, in Activity between Fleet and Configuration, opens the trail", async ({ page }) => {
     await setUpEvents(page);
     await go(page, "/server-scan");
-    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Events", "Rules & Policies", "Claude", "Architecture"]);
+    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Events", "Jobs", "Rules & Policies", "Claude", "Architecture"]);
     await expect(scanNav(page)).toContainText(/Fleet.*Activity.*Configuration.*Reference/);
     await scanNav(page).getByRole("link", { name: "Events" }).click();
     await expect(page).toHaveURL(/\/server-scan\/events$/);

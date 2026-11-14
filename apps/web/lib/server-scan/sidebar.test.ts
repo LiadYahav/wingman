@@ -5,7 +5,7 @@ const entries = (pathname: string) =>
   serverScanSidebar(pathname).map((s) => [s.label, s.items.map((i) => [i.label, i.href, i.active])]);
 
 describe("the Server Scan sidebar", () => {
-  it("lists only the pages Wingman has built, in server-scan's order: Sites, Servers, Confs, Events, Rules & Policies, Claude, Architecture", () => {
+  it("lists only the pages Wingman has built, in server-scan's order: Sites, Servers, Confs, Events, Jobs, Rules & Policies, Claude, Architecture", () => {
     expect(entries("/server-scan")).toEqual([
       [
         "Fleet",
@@ -15,7 +15,7 @@ describe("the Server Scan sidebar", () => {
           ["Confs", "/server-scan/confs", false],
         ],
       ],
-      ["Activity", [["Events", "/server-scan/events", false]]],
+      ["Activity", [["Events", "/server-scan/events", false], ["Jobs", "/server-scan/jobs", false]]],
       ["Configuration", [["Rules & Policies", "/server-scan/rules", false]]],
       ["Reference", [["Claude", "/server-scan/claude", false], ["Architecture", "/server-scan/architecture", false]]],
     ]);
@@ -33,6 +33,11 @@ describe("the Server Scan sidebar", () => {
     const sections = serverScanSidebar("/server-scan/events");
     expect(sections.map((s) => s.label)).toEqual(["Fleet", "Activity", "Configuration", "Reference"]);
     expect(sections.flatMap((s) => s.items.filter((i) => i.active).map((i) => i.key))).toEqual(["events"]);
+  });
+
+  it("marks Jobs on its page, in the Activity section after Events", () => {
+    const marked = serverScanSidebar("/server-scan/jobs").flatMap((s) => s.items.filter((i) => i.active).map((i) => i.label));
+    expect(marked).toEqual(["Jobs"]);
   });
 
   it("marks Rules & Policies on its page", () => {

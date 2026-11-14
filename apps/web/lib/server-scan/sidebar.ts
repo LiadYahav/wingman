@@ -25,6 +25,7 @@ const PAGES: ServerScanPage[] = [
   { section: "Fleet", key: "servers", label: "Servers", href: `${HOME}/servers`, icon: "servers" },
   { section: "Fleet", key: "confs", label: "Confs", href: `${HOME}/confs`, icon: "confs" },
   { section: "Activity", key: "events", label: "Events", href: `${HOME}/events`, icon: "events" },
+  { section: "Activity", key: "jobs", label: "Jobs", href: `${HOME}/jobs`, icon: "jobs" },
   { section: "Configuration", key: "rules", label: "Rules & Policies", href: `${HOME}/rules`, icon: "rules" },
   { section: "Reference", key: "claude", label: "Claude", href: `${HOME}/claude`, icon: "claude" },
   { section: "Reference", key: "architecture", label: "Architecture", href: `${HOME}/architecture`, icon: "architecture" },
