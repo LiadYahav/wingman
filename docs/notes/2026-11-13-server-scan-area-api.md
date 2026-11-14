@@ -849,7 +849,8 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
   Scan is not set up" on `501`; "No server <id>" on `404`, with a link to
   Servers; the problem on `502`; a failed re-read keeps the record with a
   notice. History: loading, the not-set-up line, the problem, "No events
-  recorded.".
+  recorded."; since 3.31.0 a failed re-read keeps the pages read with a
+  notice, as Events (§14.8).
 - **Fresh as the original**: read on open, again when opened after 30
   seconds; not polled.
 - **Reused from server-scan** (decision 18, credited in the code):
@@ -1691,7 +1692,8 @@ On each route:
   and off), the platform's (the retention purge, an iDRAC reset, a rename,
   an OpenShift state change), herzi's install lock taken, refused and
   released with the admin token, and a pruned server whose name is gone.
-  About 100 events, so the list has two pages. Filtered and paged as
+  About 100 events from those two fixtures, two pages (three with the
+  Inventory Management demo's servers, which `DAY1_FAKE_FLEET` adds). Filtered and paged as
   server-scan does (`since` inclusive, `until` exclusive, `server_name` a
   case-insensitive substring of the current name, the legacy event type,
   keyset cursors, the total on the first page); the actors counted, busiest
@@ -1715,7 +1717,7 @@ On each route:
   `serverHref`), the one view of a server (§9.8).
 - **States**: "For admins" on `403`; "Server Scan is not set up" on a `501`
   without `details.setting`; §14.5's line, and no filters, on a `501` with
-  it; skeleton rows and "Loading events…" while loading; the problem on
+  it; "Loading events…" over a skeleton while loading; the problem on
   `502`; a failed re-read keeps the list with a notice; "No events recorded."
   when nothing matches; a bad custom date marked with "Use DD/MM/YYYY HH:MM".
   server-scan's `AuditGate` has no counterpart: the area is for Wingman's

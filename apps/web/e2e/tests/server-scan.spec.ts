@@ -77,7 +77,7 @@ test.describe("The Server Scan chrome", () => {
     await expect(brand(page)).toHaveAttribute("href", "/server-scan");
     await expect(brand(page).locator("img")).toHaveAttribute("src", "/server-scan-icon.svg");
     await expect(wingmanNav(page)).toHaveCount(0);
-    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Rules & Policies", "Claude", "Architecture"]);
+    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Events", "Rules & Policies", "Claude", "Architecture"]);
     await expect(scanNav(page).getByTestId("area-nav-sites")).toHaveAttribute("aria-current", "page");
     await expect(scanNav(page).getByTestId("area-nav-sites")).toHaveAttribute("href", "/server-scan");
   });

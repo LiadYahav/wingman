@@ -23,7 +23,7 @@ test.describe("The Confs page", () => {
   test("the sidebar's Confs, after Servers, opens server-scan's catalog in its columns", async ({ page }) => {
     await setUpConfs(page);
     await go(page, "/server-scan");
-    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Rules & Policies", "Claude", "Architecture"]);
+    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Events", "Rules & Policies", "Claude", "Architecture"]);
     await scanNav(page).getByRole("link", { name: "Confs" }).click();
     await expect(page).toHaveURL(/\/server-scan\/confs$/);
     await expect(scanNav(page).getByTestId("area-nav-confs")).toHaveAttribute("aria-current", "page");

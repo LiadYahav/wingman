@@ -12,8 +12,9 @@ import { EventTimeline } from "./event-timeline";
 /**
  * Loading, the problem, none, or one page of events with Previous, "Page X of
  * Y" and Next over server-scan's cursors, as server-scan's `EventList.tsx`
- * (team-redbull/server-scan at 92146d3, decision 18). `testId` prefixes the
- * states' test ids; the words are the page's.
+ * (team-redbull/server-scan at 92146d3, decision 18). A failed re-read keeps
+ * the pages read with a notice. `testId` prefixes the states' test ids; the
+ * words are the page's.
  */
 export function EventList({
   query,
@@ -21,6 +22,7 @@ export function EventList({
   loading,
   problem,
   testId,
+  showServer = false,
 }: {
   query: UseInfiniteQueryResult<InfiniteData<AuditEventPage, unknown>, unknown>;
   /** The table's name. */
@@ -30,6 +32,8 @@ export function EventList({
   /** The problem's title when the first page could not be read. */
   problem: string;
   testId: string;
+  /** The Server column, for the fleet's trail. */
+  showServer?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   if (query.isPending) {
@@ -40,7 +44,7 @@ export function EventList({
       </div>
     );
   }
-  if (query.isError) return <ProblemList error={query.error} title={problem} />;
+  if (query.data === undefined) return <ProblemList error={query.error} title={problem} />;
   const pages = query.data.pages;
   if ((pages[0]?.items.length ?? 0) === 0) {
     return (
@@ -57,7 +61,8 @@ export function EventList({
   };
   return (
     <div className="space-y-3">
-      <EventTimeline events={shown.items} label={label} />
+      {query.isRefetchError && <ProblemList error={query.error} title="The last read failed; these are the events read before it" />}
+      <EventTimeline events={shown.items} label={label} showServer={showServer} />
       <div className="flex items-center gap-3" data-testid={`${testId}-pager`}>
         <button type="button" disabled={index <= 0} onClick={() => setIndex(index - 1)} className={buttonVariants({ variant: "outline", size: "sm" })}>
           Previous
