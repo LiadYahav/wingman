@@ -87,7 +87,8 @@ jobs:
         run: uv sync --locked --all-packages --all-groups --all-extras
 
       # day2's oracle test renders the platform charts with helm, as the team's
-      # render_chain.py does; without helm it fails rather than skips.
+      # render_chain.py does, and tests/repo/test_chart_*.py render this chart
+      # (its nginx, hardening and schema); without helm they fail rather than skip.
       - name: Install helm (pinned, checksum-verified)
         run: scripts/install-helm.sh
 
@@ -163,8 +164,12 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
           install -m 0755 "$RUNNER_TEMP/prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool" /usr/local/bin/promtool
 
-      - name: helm lint --strict
-        run: helm lint --strict deploy/helm/wingman
+      # Each fixture sets what the chart requires: the image tags (ADR-0059).
+      - name: helm lint --strict (every deploy/helm/wingman/ci fixture)
+        run: |
+          for f in deploy/helm/wingman/ci/*.yaml; do
+            helm lint --strict deploy/helm/wingman -f "$f"
+          done
 
       - name: helm template (every deploy/helm/wingman/ci fixture)
         run: |

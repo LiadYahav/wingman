@@ -163,8 +163,8 @@ Still to do:
   - the orchestrator on (node uninstall);
   - `day1.provisioner: merge-request` until the store is shared.
 - **Chart fixes found on the way** go in their own PR: an nginx that runs
-  under OpenShift's restricted SCC, pinned (chart hardening, "Not done yet"
-  item 2).
+  under OpenShift's restricted SCC, pinned (chart hardening; built in 3.33.0,
+  ADR-0058 and ADR-0059).
 - **A per-MCE API address.** Wingman builds `https://api.<mce>.<domain>:6443`,
   and the sandbox's hub does not follow that pattern. Add an optional address
   per MCE in the tokens Secret. Live status, the nodes view and placement's

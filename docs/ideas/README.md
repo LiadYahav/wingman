@@ -49,7 +49,7 @@ checked against it.
 | Edit `exclusions.yaml` from the UI | Parked: deferred since the day2 rewrite; few edits a year | — |
 | Bulk operations (replicas or an add-on version across many clusters in one MR) | Parked: undecided; flavors v2 sync covers the common case. If built: totals, never deltas | — |
 | Notifications (an MR needs approval, was approved, failed) | Parked | — |
-| Chart hardening (a values schema, a pinned nginx image) | Parked: undecided | — |
+| Chart hardening (a values schema, a pinned nginx image) | **Built** 2026-11-14 (3.33.0): nginx stays the one entry point on UBI nginx by digest (ADR-0058); restricted pods with read-only roots; `values.schema.json` and no default image tag (ADR-0059) | — |
 | Team questions on `clusterName` and off-convention MCEs | Parked: open questions 2 and 3 in the ecosystem README | — |
 
 ## Adding an idea

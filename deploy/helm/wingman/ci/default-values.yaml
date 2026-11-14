@@ -1,2 +1,6 @@
-# helm template fixture: the chart's own defaults (nothing overridden).
-{}
+# helm template fixture: the chart's own defaults, and the one thing it
+# requires, the Wingman image tags (an empty one fails the render, ADR-0059).
+image:
+  day1: { tag: "3.33.0" }
+  day2: { tag: "3.33.0" }
+  web: { tag: "3.33.0" }

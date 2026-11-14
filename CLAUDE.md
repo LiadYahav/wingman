@@ -137,10 +137,12 @@ Explicit user instructions; violating one is a real mistake, not style.
   a merge re-reads only the files it changed (ADR-0041, `docs/ops/performance.md`).
 - Done (2026-11-12): create can start the `provision-cluster` workflow,
   off by default (ADR-0042).
+- Done (2026-11-14): chart hardening: nginx stays the one entry point, on
+  UBI nginx by digest (ADR-0058); every pod restricted with a read-only root;
+  `values.schema.json` and no default image tag (ADR-0059).
 - **Not done yet, in order:** (1) the architect's
-  answers (`docs/ideas/architecture-fit.md`); (2) chart hardening (a values
-  schema, a pinned nginx image); (3) flavors v2's "Left for later";
-  (4) ecosystem features (`docs/ideas/`).
+  answers (`docs/ideas/architecture-fit.md`); (2) flavors v2's "Left for
+  later"; (3) ecosystem features (`docs/ideas/`).
 
 ## Key technical facts (cross-cutting traps)
 
@@ -169,6 +171,10 @@ Explicit user instructions; violating one is a real mistake, not style.
   GitLab's archive). It is a valid write guard, since GitLab checks "changed
   since that commit". Never decide staleness with `expected != current`: use
   `RepoReads.changed_since`. For "changed by, at", use `last_change`.
+- **Every chart value is in `values.schema.json`** (ADR-0059), which refuses
+  any other key: a new value gets its schema entry in the same commit, and a
+  dropped one stays there, marked deprecated. A container that writes a file
+  needs an `emptyDir` (read-only roots; `docs/ops/images.md`).
 - **ty honours only `# type: ignore` or `# ty: ignore[rule]`**, never a
   mypy-style `# type: ignore[code]` (ADR-0008).
 - **Next.js 16 / React 19 / Tailwind 4 / zod 4** differ from older docs. Read
@@ -247,7 +253,8 @@ ADR-0032). The pass:
    old ones (server-scan had to replace a tagging action for that).
 5. **Base images.** `apps/web/Dockerfile` (and the service Dockerfiles) pin
    UBI 9.8 by tag and digest, and CPython by checksum; docs/ops/images.md has
-   the commands to resolve a new digest and checksums.
+   the commands to resolve a new digest and checksums. The chart's nginx
+   (`image.nginx`, UBI `nginx-124`) too: docs/ops/images.md, "The nginx image".
 6. **ty and ruff** are pinned exactly in the root dev group; a ty bump moves
    diagnostics (ADR-0008), so bump it in its own commit and read new errors as
    ty changing. **hatchling** (root `build` group) follows the members'

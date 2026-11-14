@@ -3,8 +3,10 @@
 #
 # AIR-GAPPED DEPLOYMENT CHECKLIST
 # ────────────────────────────────
+# Always: image.{day1,day2,web}.tag → the release you deploy (no default;
+# an empty one fails the render). values.schema.json refuses any key not here.
 # Fields marked [AIR-GAPPED] must be changed for air-gapped / on-prem networks:
-#   1. image.registry      → your internal container registry
+#   1. image.registry      → your internal container registry (nginx: mirror by digest)
 #   2. gitlab.*            → your internal GitLab instance
 #   3. auth.*              → your OpenShift OAuth settings
 #   4. tls.caBundle        → your internal CA certificate (PEM)
@@ -17,31 +19,46 @@ image:
   # Example: registry.internal/wingman
   registry: ""   # if empty, images are pulled without a registry prefix
 
-  # [VERSIONING] Set every tag to the release you deploy, the same for all
-  # three images. Example: tag: "3.0.1"  (the GitHub release v3.0.1; no "v").
-  # Every merge to main is a release (docs/ops/images.md). "latest", "3.0" and
-  # "3" move and "sha-..." names no release: production pins a full version,
-  # so releases are traceable and rollbacks are safe. "latest" is for local dev.
+  # [VERSIONING] Required: set every tag to the release you deploy, the same
+  # for all three images, e.g. --set image.day1.tag=3.33.0 (the GitHub release
+  # v3.33.0; no "v"). An empty tag fails the render, naming it: there is no
+  # default (ADR-0059). Every merge to main is a release (docs/ops/images.md).
+  # "latest", "3.33" and "3" move and "sha-..." names no release: production
+  # pins a full version, so releases are traceable and rollbacks are safe.
+  # Each image also takes an optional digest (sha256:...), which nodes then pull.
 
   day1:
     repository: wingman-day1
-    tag: "latest"
+    tag: ""
+    digest: ""
     pullPolicy: IfNotPresent
 
   day2:
     repository: wingman-day2
-    tag: "latest"
+    tag: ""
+    digest: ""
     pullPolicy: IfNotPresent
 
   web:
     repository: wingman-web
-    tag: "latest"
+    tag: ""
+    digest: ""
     pullPolicy: IfNotPresent
 
+  # The one entry point (ADR-0058): Red Hat's UBI nginx, pinned by tag and by
+  # the digest of its manifest list (docs/ops/images.md, "The nginx image").
+  # The digest is what nodes pull; change the tag and the digest together, here
+  # and in templates/_helpers.tpl's copy (wingman.nginxImage refuses a tag kept
+  # from earlier values beside this digest; tests/repo/test_chart_nginx.py holds
+  # the two equal).
+  # [AIR-GAPPED] Mirror it by digest. With image.registry set it is pulled from
+  # <registry>/<repository>, like the others: set repository to its path in
+  # your mirror (for example ubi9/nginx-124). With image.registry empty, an
+  # ImageDigestMirrorSet for registry.access.redhat.com redirects it as is.
   nginx:
-    # [AIR-GAPPED] Replace with mirror of nginx in your registry
-    repository: nginx
-    tag: "latest"
+    repository: registry.access.redhat.com/ubi9/nginx-124
+    tag: "9.8"
+    digest: "sha256:d5cec86a9adf972dbfa0d87b134e7c404706cc1920fc2e6a2b146e290276f219"
     pullPolicy: IfNotPresent
 
 # ── GitLab connection ──────────────────────────────────────────────────────────
@@ -122,6 +139,7 @@ auth:
 
   # SSL verification for OpenShift OAuth/API calls
   # "true" → verify using system CAs, "false" → skip (internal self-signed certs), or CA bundle path
+  # (every sslVerify here takes true/false unquoted too: wingman.tlsVerify renders them alike)
   sslVerify: "false"
 
   # OAuthClient secret — generate a random string, e.g.: openssl rand -hex 32
@@ -252,7 +270,7 @@ clusterStatus:
   enabled: false
   mceDomain: ""           # e.g. "openshift.example.com" → https://api.{mce}.openshift.example.com:6443 (unless the MCE has its own url)
   tokensSecretName: "mce-sa-tokens"  # name of the k8s secret holding SA tokens
-  sslVerify: "false"                 # set to "true" or CA bundle path for production
+  sslVerify: "false"                 # "true" (or true) or a CA bundle path for production
 
 # ── Cluster nodes from server-scan (ADR-0038) ─────────────────────────────────
 # Off by default. With a url, day1 lists the servers under each hosted cluster
@@ -262,7 +280,7 @@ clusterStatus:
 serverScan:
   url: ""                 # the API, e.g. "http://server-scan-api.<ns>.svc:8000"; empty: off
   uiUrl: ""               # the UI, e.g. "https://server-scan.example" (node links, the Claude page); empty: url
-  sslVerify: "true"       # "true", "false" or a CA bundle path
+  sslVerify: "true"       # "true", "false" (or true, false) or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
   # A viewer token (sent as "Authorization: Bearer"), from an existing Secret:
   #   oc create secret generic server-scan-viewer -n <ns> --from-literal=token=<token>
@@ -292,7 +310,7 @@ serverScan:
 # (an uninstall checks the server in server-scan first): the chart fails without it.
 workflows:
   url: ""                 # e.g. "http://workflows-orchestrator-api.<ns>.svc:8080"; empty: off
-  sslVerify: "true"       # "true", "false" or a CA bundle path
+  sslVerify: "true"       # "true", "false" (or true, false) or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
   targetsTimeoutSeconds: 65  # the upgrade targets read (the orchestrator waits up to 60 s), at most 120
 
@@ -306,7 +324,7 @@ workflows:
 segmentsManager:
   url: ""                 # the API, e.g. "http://segments-manager.<ns>.svc:8000"; empty: no EPG
   uiUrl: ""               # the UI, e.g. "https://segments-manager.example"; empty: url (none: no link)
-  sslVerify: "true"       # "true", "false" or a CA bundle path
+  sslVerify: "true"       # "true", "false" (or true, false) or a CA bundle path
   timeoutSeconds: 5       # per request, at most 60
 
 # ── Quick Links: the launcher page (ADR-0052; admins only) ────────────────────

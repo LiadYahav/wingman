@@ -19,16 +19,21 @@ spec:
         app.kubernetes.io/component: web
     spec:
       serviceAccountName: {{ include "wingman.serviceAccountName" . }}
+      # No pod reads the Kubernetes API with its own service-account token (day1
+      # reads the MCE hubs with the tokens Secret's): none is mounted.
+      automountServiceAccountToken: false
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       {{- end }}
       securityContext:
-        runAsNonRoot: true
+        {{- include "wingman.podSecurityContext" . | nindent 8 }}
       containers:
         - name: web
-          image: {{ include "wingman.image" (dict "reg" .Values.image.registry "repo" .Values.image.web.repository "tag" .Values.image.web.tag) }}
+          image: {{ include "wingman.serviceImage" (list $ "web") | quote }}
           imagePullPolicy: {{ .Values.image.web.pullPolicy }}
+          securityContext:
+            {{- include "wingman.containerSecurityContext" . | nindent 12 }}
           ports:
             - containerPort: 3000
               protocol: TCP
@@ -36,6 +41,12 @@ spec:
           env:
             - name: NODE_ENV
               value: "production"
+          # The one path the server writes: Next.js's runtime cache. The pages
+          # never write it; its image optimizer (/_next/image) does, and without
+          # it a request there logs an unhandled rejection.
+          volumeMounts:
+            - name: next-cache
+              mountPath: /app/apps/web/.next/cache
           resources:
             {{- toYaml .Values.resources.web | nindent 12 }}
           livenessProbe:
@@ -50,3 +61,7 @@ spec:
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 10
+      volumes:
+        - name: next-cache
+          emptyDir:
+            sizeLimit: 64Mi

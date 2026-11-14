@@ -73,7 +73,8 @@ That is seconds of GitLab time a day, not seconds of waiting for a person.
 Before that, a cheaper step for more than one replica is **affinity per
 person**, so each person stays on one warm pod and sees one commit. The
 Route's own stickiness does not reach day1: the Route goes to nginx, and
-nginx proxies to the day1 Service's one ClusterIP. Two ways that do:
+nginx proxies to the day1 Service's one ClusterIP (a cost ADR-0058 accepts
+to keep nginx the one entry point). Two ways that do:
 - a headless Service for day1 and day2, and `hash $http_authorization
   consistent;` in nginx's upstreams (nginx resolves the names at start-up,
   so a scale-up needs an nginx restart, or a `resolver` and a variable);

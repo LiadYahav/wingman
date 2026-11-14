@@ -8,43 +8,27 @@ status checks and the ArgoCD tokens). day1 parses what the chart renders.
 
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
-import pytest
 import yaml
 
 from wingman_day1.domain.quick_links import LinksFileState, parse_links_file
 from wingman_day1.settings import Day1Settings
 
-ROOT = Path(__file__).resolve().parents[2]
-CHART = ROOT / "deploy/helm/wingman"
+sys.path.insert(0, str(Path(__file__).parent))
+from chart_render import CHART, require_helm
+from chart_render import render as render_chart
+
 FIXTURE = CHART / "ci/quick-links-values.yaml"
 
-HELM = shutil.which("helm")
-if HELM is None:
-    if os.environ.get("CI"):
-        raise RuntimeError("the chart's Quick Links tests need helm on PATH in CI")
-    pytest.skip("helm is not installed", allow_module_level=True)
+require_helm("the chart's Quick Links tests")
 
 
 def render(*extra: str) -> dict[str, dict[str, Any]]:
     """Every rendered document, by kind and name."""
-    assert HELM is not None
-    rendered = subprocess.run(  # noqa: S603 - a fixed argv, no shell
-        [HELM, "template", "wingman", str(CHART), "--namespace", "wingman", *extra],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    return {
-        f"{doc['kind']}/{doc['metadata']['name']}": doc
-        for doc in yaml.safe_load_all(rendered)
-        if doc
-    }
+    return {f"{doc['kind']}/{doc['metadata']['name']}": doc for doc in render_chart(*extra)}
 
 
 def config(*extra: str) -> dict[str, str]:

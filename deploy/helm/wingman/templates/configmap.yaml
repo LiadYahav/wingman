@@ -58,7 +58,7 @@ data:
   OPENSHIFT_API_HOST: {{ .Values.auth.openshiftApiHost | quote }}
   OPENSHIFT_OAUTH_CLIENT_ID: {{ .Values.auth.oauthClientId | quote }}
   OPENSHIFT_OAUTH_REDIRECT_URI: {{ include "wingman.oauthRedirectUri" . | quote }}
-  OPENSHIFT_SSL_VERIFY: {{ .Values.auth.sslVerify | quote }}
+  OPENSHIFT_SSL_VERIFY: {{ include "wingman.tlsVerify" .Values.auth.sslVerify | quote }}
 
   # ── Sessions and roles ───────────────────────────────────────────────────────
   JWT_EXPIRY_HOURS: {{ .Values.auth.jwtExpiryHours | quote }}
@@ -72,7 +72,7 @@ data:
   CLUSTER_STATUS_ENABLED: {{ .Values.clusterStatus.enabled | quote }}
   {{- if .Values.clusterStatus.enabled }}
   MCE_API_DOMAIN: {{ .Values.clusterStatus.mceDomain | quote }}
-  MCE_SSL_VERIFY: {{ .Values.clusterStatus.sslVerify | quote }}
+  MCE_SSL_VERIFY: {{ include "wingman.tlsVerify" .Values.clusterStatus.sslVerify | quote }}
   MCE_TOKENS_FILE: "/etc/wingman/mce-tokens/tokens"
   {{- end }}
 
@@ -84,7 +84,7 @@ data:
   {{- if .Values.serverScan.uiUrl }}
   SERVER_SCAN_UI_URL: {{ .Values.serverScan.uiUrl | quote }}
   {{- end }}
-  SERVER_SCAN_SSL_VERIFY: {{ .Values.serverScan.sslVerify | default "true" | quote }}
+  SERVER_SCAN_SSL_VERIFY: {{ include "wingman.tlsVerify" .Values.serverScan.sslVerify | quote }}
   SERVER_SCAN_TIMEOUT_SECONDS: {{ .Values.serverScan.timeoutSeconds | default 10 | quote }}
   {{- end }}
 
@@ -94,7 +94,7 @@ data:
   {{- fail "workflows.url needs serverScan.url: an uninstall checks the server in server-scan first" }}
   {{- end }}
   WORKFLOWS_API_URL: {{ .Values.workflows.url | quote }}
-  WORKFLOWS_SSL_VERIFY: {{ .Values.workflows.sslVerify | default "true" | quote }}
+  WORKFLOWS_SSL_VERIFY: {{ include "wingman.tlsVerify" .Values.workflows.sslVerify | quote }}
   WORKFLOWS_TIMEOUT_SECONDS: {{ .Values.workflows.timeoutSeconds | default 10 | quote }}
   WORKFLOWS_TARGETS_TIMEOUT_SECONDS: {{ .Values.workflows.targetsTimeoutSeconds | default 65 | quote }}
   {{- end }}
@@ -103,7 +103,7 @@ data:
   # Values reused from 3.4 have only segmentsManager.uiUrl: every other key has a default.
   {{- if and .Values.segmentsManager .Values.segmentsManager.url }}
   SEGMENTS_MANAGER_URL: {{ .Values.segmentsManager.url | quote }}
-  SEGMENTS_MANAGER_SSL_VERIFY: {{ .Values.segmentsManager.sslVerify | default "true" | quote }}
+  SEGMENTS_MANAGER_SSL_VERIFY: {{ include "wingman.tlsVerify" .Values.segmentsManager.sslVerify | quote }}
   SEGMENTS_MANAGER_TIMEOUT_SECONDS: {{ .Values.segmentsManager.timeoutSeconds | default 5 | quote }}
   {{- end }}
   {{- if and .Values.segmentsManager .Values.segmentsManager.uiUrl }}

@@ -11,24 +11,20 @@ day2 load (ADR-0009).
 
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 from wingman_core.settings import GitLabSettings
 from wingman_day1.settings import Day1Settings
 
 sys.path.insert(0, str(Path(__file__).parent))
+from chart_render import render as render_chart
+from chart_render import require_helm, template
 from service_settings import env_names, read_by_services
 
-ROOT = Path(__file__).resolve().parents[2]
-CHART = ROOT / "deploy/helm/wingman"
 # Read by libraries, not by a settings class: httpx's CA bundle.
 LIBRARY_VARIABLES = {"SSL_CERT_FILE"}
 # Set by the image (docs/ops/images.md), not by the chart.
@@ -56,26 +52,15 @@ ALL_ON = [
     for arg in ("--set", value)
 ]
 
-HELM = shutil.which("helm")
-if HELM is None:
-    if os.environ.get("CI"):
-        raise RuntimeError("the chart env contract needs helm on PATH in CI")
-    pytest.skip("helm is not installed", allow_module_level=True)
+require_helm("the chart env contract tests")
 
 
 def render(*extra: str) -> dict[str, dict[str, Any]]:
     """The rendered ConfigMap, Secret and service Deployments, by name."""
-    assert HELM is not None
-    rendered = subprocess.run(  # noqa: S603 - a fixed argv, no shell
-        [HELM, "template", "wingman", str(CHART), "--namespace", "wingman", *extra],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
     docs = {
         doc["metadata"]["name"]: doc
-        for doc in yaml.safe_load_all(rendered)
-        if doc and doc.get("metadata", {}).get("name") in SHARED | SERVICES
+        for doc in render_chart(*extra)
+        if doc.get("metadata", {}).get("name") in SHARED | SERVICES
     }
     assert set(docs) == SHARED | SERVICES, f"the chart rendered only {sorted(docs)}"
     return docs
@@ -251,13 +236,7 @@ def test_creates_open_merge_requests_unless_the_workflow_is_chosen() -> None:
     assert kept["DAY1_PROVISIONER"] == "merge-request"
     on = render(*ALL_ON, "--set", "day1.provisioner=workflow")["wingman-config"]["data"]
     assert on["DAY1_PROVISIONER"] == "workflow"
-    assert HELM is not None
-    refused = subprocess.run(  # noqa: S603 - a fixed argv, no shell
-        [HELM, "template", "wingman", str(CHART), "--set", "day1.provisioner=workflow"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    refused = template("--set", "day1.provisioner=workflow")
     assert refused.returncode != 0
     assert "day1.provisioner workflow needs workflows.url" in refused.stderr
 
@@ -274,13 +253,7 @@ def test_upgrades_are_off_unless_turned_on_also_for_values_kept_from_3_15() -> N
     assert on["WORKFLOWS_TARGETS_TIMEOUT_SECONDS"] == "65"
     reused = render(*ALL_ON, "--set", "workflows.targetsTimeoutSeconds=null")
     assert reused["wingman-config"]["data"]["WORKFLOWS_TARGETS_TIMEOUT_SECONDS"] == "65"
-    assert HELM is not None
-    refused = subprocess.run(  # noqa: S603 - a fixed argv, no shell
-        [HELM, "template", "wingman", str(CHART), "--set", "day1.upgrades.enabled=true"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    refused = template("--set", "day1.upgrades.enabled=true")
     assert refused.returncode != 0
     assert "day1.upgrades.enabled needs workflows.url" in refused.stderr
 
@@ -293,12 +266,36 @@ def test_adding_servers_is_off_unless_enabled_and_needs_the_orchestrator() -> No
     assert kept["DAY1_ADD_SERVERS"] == "false"
     on = render(*ALL_ON, "--set", "day1.addServers.enabled=true")["wingman-config"]["data"]
     assert on["DAY1_ADD_SERVERS"] == "true"
-    assert HELM is not None
-    refused = subprocess.run(  # noqa: S603 - a fixed argv, no shell
-        [HELM, "template", "wingman", str(CHART), "--set", "day1.addServers.enabled=true"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    refused = template("--set", "day1.addServers.enabled=true")
     assert refused.returncode != 0
     assert "day1.addServers.enabled needs workflows.url" in refused.stderr
+
+
+TLS_VERIFY = {
+    "auth.sslVerify": "OPENSHIFT_SSL_VERIFY",
+    "clusterStatus.sslVerify": "MCE_SSL_VERIFY",
+    "serverScan.sslVerify": "SERVER_SCAN_SSL_VERIFY",
+    "workflows.sslVerify": "WORKFLOWS_SSL_VERIFY",
+    "segmentsManager.sslVerify": "SEGMENTS_MANAGER_SSL_VERIFY",
+}
+
+
+@pytest.mark.parametrize(("key", "variable"), TLS_VERIFY.items())
+@pytest.mark.parametrize(
+    ("flag", "value", "expected"),
+    [
+        ("--set", "false", "false"),  # a boolean: before 3.33 three keys turned it into "true"
+        ("--set-string", "false", "false"),
+        ("--set", "true", "true"),
+        ("--set", "/etc/pki/ca-trust/internal.pem", "/etc/pki/ca-trust/internal.pem"),
+        ("--set", "null", "true"),  # unset, as values kept from before the key
+    ],
+    ids=["false", "string false", "true", "a CA path", "unset"],
+)
+def test_every_tls_setting_takes_a_boolean_a_string_or_nothing(
+    key: str, variable: str, flag: str, value: str, expected: str
+) -> None:
+    """``wingman.tlsVerify`` renders all five the same way (ADR-0059)."""
+    assert variable in read_by_services()
+    config = render(*ALL_ON, flag, f"{key}={value}")["wingman-config"]["data"]
+    assert config[variable] == expected

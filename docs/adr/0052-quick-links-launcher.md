@@ -156,7 +156,8 @@ the settings `QUICK_LINKS_STATUS_ENABLED`, `QUICK_LINKS_STATUS_TTL_SECONDS`,
 `QUICK_LINKS_SSL_VERIFY` and `QUICK_LINKS_ARGOCD_TOKENS_FILE`; the chart's
 `quickLinks.status.*`, `quickLinks.sslVerify` and
 `quickLinks.argocdTokensSecret` and the tokens Secret's mount (values that
-still set them render, and are ignored: there is no values schema); the
+still set them render, and are ignored; the values schema of ADR-0059 accepts
+them as deprecated); the
 metric values `link_check`/`check_link` and `argocd`/`list_applications`
 (`docs/ops/metrics.md`); the fake fleet's `dev/fleet-fixtures/quick-links.yaml`.
 A card's links lose `ping` and a card loses `argocd` in

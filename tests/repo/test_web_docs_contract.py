@@ -12,7 +12,8 @@ These tests read the docs' source and compare what they name with the code:
   before ``=``, with what a settings class reads, a problem ``code``
   (ADR-0004) or the short ``NOT_SETTINGS`` allowlist;
 - every ``<status> <CODE>`` with that code's status in ``wingman_core.web.errors``;
-- every Helm key with ``deploy/helm/wingman/values.yaml``, and every key-to-variable pair
+- every Helm key with ``deploy/helm/wingman/values.yaml`` (or a key its schema keeps as
+  deprecated, ADR-0059), and every key-to-variable pair
   with what ``deploy/helm/wingman/templates/configmap.yaml`` and ``secret.yaml`` set,
   and the ``env`` entries of its ``*-deployment.yaml`` templates;
 - and nothing the rewrite removed (``REMOVED``) comes back.
@@ -31,12 +32,13 @@ from __future__ import annotations
 
 import inspect
 import itertools
+import json
 import re
 import sys
 from collections.abc import Callable, Mapping
 from functools import cache
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
 import yaml
@@ -308,6 +310,7 @@ NOT_SETTINGS: Mapping[str, str] = {
     "ROUTERS": "day1's router tuple in main.py",
     "FROM": "a Dockerfile instruction",
     "CMD": "a Dockerfile instruction",
+    "PYTHONDONTWRITEBYTECODE": "Python's own, set by the service images (docs/ops/images.md)",
     "MCE": "the create form's field label, on the docs page",
     "AVAILABLE": "server-scan's openshift_state of a server in no MCE (Inventory, ADR-0057)",
     "INSTALLED_TO_INVENTORY": "server-scan's openshift_state of an MCE's free Agent (ADR-0057)",
@@ -430,9 +433,29 @@ def expand(key: str) -> list[str]:
     return ["".join(choice) for choice in itertools.product(*parts)]
 
 
+@cache
+def deprecated_paths() -> frozenset[str]:
+    """Keys an older release dropped: the schema still accepts them (ADR-0059), and docs name
+    them to say they are ignored and may be deleted."""
+    schema = json.loads((CHART / "values.schema.json").read_text(encoding="utf-8"))
+    found: set[str] = set()
+
+    def walk(node: Mapping[str, Any], prefix: str) -> None:
+        for key, child in node.get("properties", {}).items():
+            if str(child.get("description", "")).startswith("Deprecated:"):
+                found.add(prefix + key)
+            walk(child, f"{prefix}{key}.")
+
+    walk(schema, "")
+    return frozenset(found)
+
+
 def helm_key_exists(key: str) -> bool:
-    """``key`` is a values path (``<x>`` matches any one key), or is under a free-form map."""
+    """``key`` is a values path (``<x>`` matches any one key), is under a free-form map, or is
+    a key the schema keeps as deprecated."""
     for one in expand(key):
+        if one in deprecated_paths():
+            continue
         pattern = re.compile(
             r"\.".join(r"[^.]+" if s.startswith("<") else re.escape(s) for s in one.split("."))
         )

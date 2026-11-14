@@ -1,7 +1,8 @@
 # Images
 
 Wingman ships three images: `wingman-day1`, `wingman-day2` and `wingman-web`.
-Every one is built from the **repository root**, so it can read the two
+The chart runs a fourth it does not build, Red Hat's UBI nginx ([The nginx
+image](#the-nginx-image)). Every one of the three is built from the **repository root**, so it can read the two
 lockfiles, and everything inside it comes from them: nothing is resolved at
 build time (ADR-0003). CI builds all three on every pull request without
 pushing, and publishes them from `main` (ADR-0030, ADR-0031).
@@ -90,7 +91,8 @@ curl -sI -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.do
 # or: skopeo inspect --raw docker://registry.access.redhat.com/ubi9/nodejs-24:9.8 | sha256sum
 ```
 
-Replace the tag and the digest together, build the image, and run it.
+Replace the tag and the digest together, build the image, and run it. The
+chart's nginx is pinned the same way, in the chart ([The nginx image](#the-nginx-image)).
 **Bumping CPython**: take both `install_only` checksums from the release's
 `SHA256SUMS` (`https://github.com/astral-sh/python-build-standalone/releases/download/<release>/SHA256SUMS`)
 and replace the version, the release and both checksums.
@@ -144,3 +146,92 @@ a viewer token).
 After any `pyproject.toml` change: `uv lock`, then `scripts/export-requirements.sh`,
 and commit both. The `images` job builds every image on every pull request,
 with `VERSION` and `COMMIT` build arguments, so a pattern that breaks fails there.
+
+## The nginx image
+
+The chart's nginx, the one entry point (ADR-0058), is Red Hat's UBI nginx and
+no image of Wingman's: `registry.access.redhat.com/ubi9/nginx-124:9.8`, pinned
+by the digest of its manifest list (amd64, arm64, s390x, ppc64le), `image.nginx`
+in `deploy/helm/wingman/values.yaml`. It is nginx 1.24. The chart mounts its
+own `nginx.conf` over the image's and starts `nginx -e /dev/stderr -g 'daemon
+off;'`: the image is an S2I builder whose own command prints a usage note.
+
+**Re-resolving the digest** (CLAUDE.md, "Keeping CI current", item 5): ask the
+registry for the manifest list the tag points at now, and check its digest
+against the bytes:
+
+```bash
+curl -sS -D headers.txt -o list.json \
+  -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+  https://registry.access.redhat.com/v2/ubi9/nginx-124/manifests/9.8
+grep -i docker-content-digest headers.txt; shasum -a 256 list.json   # the same digest twice
+```
+
+Set the tag and the digest in `values.yaml` and in the copy in
+`templates/_helpers.tpl` (`wingman.nginxImage`) together:
+`tests/repo/test_chart_nginx.py` fails until the two agree. Then run the check
+below. Resolved on 2026-11-14: `9.8` (the same build as `9.8-1793639597`, built
+2026-11-02) at
+`sha256:d5cec86a9adf972dbfa0d87b134e7c404706cc1920fc2e6a2b146e290276f219`.
+
+**The check**, in bash, as OpenShift's `restricted-v2` runs it: the chart's
+rendered `nginx.conf`, a read-only root with only `/tmp` writable, an arbitrary
+UID in group 0, no capabilities, no new privileges.
+`--read-only-tmpfs=false` matters: podman otherwise makes `/tmp`, `/var/tmp`
+and `/run` writable, which a Kubernetes read-only root does not.
+
+```bash
+helm template wingman deploy/helm/wingman -f deploy/helm/wingman/ci/default-values.yaml \
+  | uv run python -c 'import sys, yaml
+for d in yaml.safe_load_all(sys.stdin):
+    if d and d["kind"] == "ConfigMap" and d["metadata"]["name"] == "wingman-nginx":
+        print(d["data"]["nginx.conf"], end="")' > nginx.conf
+img=registry.access.redhat.com/ubi9/nginx-124:9.8@sha256:d5cec86a9adf972dbfa0d87b134e7c404706cc1920fc2e6a2b146e290276f219
+run=(--read-only --read-only-tmpfs=false --tmpfs /tmp --user 1000680000:0 --cap-drop ALL
+  --security-opt no-new-privileges -v "$PWD/nginx.conf:/etc/nginx/nginx.conf:ro,Z"
+  --add-host wingman-day1:127.0.0.1 --add-host wingman-day2:192.0.2.1 --add-host wingman-web:127.0.0.1)
+podman run --rm "${run[@]}" "$img" nginx -e /dev/stderr -t
+podman run -d --name wingman-nginx-check -p 127.0.0.1:18080:8080 "${run[@]}" "$img" \
+  nginx -e /dev/stderr -g 'daemon off;'
+curl -i http://127.0.0.1:18080/healthz              # 200 ok
+curl -i http://127.0.0.1:18080/api/day1/clusters    # 502, application/problem+json: no day1 listens
+curl -i http://127.0.0.1:18080/api/day2/teams       # 504, application/problem+json, after 10 s: day2 unroutable
+curl -i http://127.0.0.1:18080/                     # 502, nginx's HTML page: pages keep it
+podman rm -f wingman-nginx-check
+```
+
+Run on 2026-11-14 with the pin above: all four as commented, `Server: nginx`
+with no version, every request on the container's stdout and every error on
+its stderr.
+
+**Air gap:** mirror it by digest, every architecture
+(`skopeo copy --all docker://registry.access.redhat.com/ubi9/nginx-124:9.8@sha256:… docker://<mirror>/ubi9/nginx-124:9.8`),
+and point the chart at the mirror (the chart README's "Images"), or let an
+`ImageDigestMirrorSet` redirect the digest on OpenShift.
+
+## Read-only root
+
+The chart runs every container with `readOnlyRootFilesystem: true` (the chart
+README's "Security context"). The paths a process writes, each an `emptyDir`:
+
+| Image | Writable | Why |
+|---|---|---|
+| nginx | `/tmp` | its pid and temp files (`nginx.conf` puts them there) |
+| `wingman-web` | `/app/apps/web/.next/cache` | Next.js's runtime cache: the pages never write it, its image optimizer (`/_next/image`) does |
+| `wingman-day1`, `wingman-day2` | nothing | GitLab's archives are read in memory; no temp file, no form upload, no bytecode (`PYTHONDONTWRITEBYTECODE`) |
+
+Checked on 2026-11-14 on the released 3.30.0 images (amd64, emulated on an
+arm64 laptop) and the nginx check's image, in one podman pod, each container
+with the flags above and only its own paths writable, and the fake backend
+(`WINGMAN_ENVIRONMENT=development WINGMAN_GIT_BACKEND=fake`,
+`DAY1_FAKE_FLEET=true`, dev login; the repository's `dev/` mounted read-only at
+`/opt/dev`, where the fakes look for their fixtures). day1 and day2 became
+ready with nothing writable. Through nginx: a dev login, the cluster list, the
+flavors, the sites, a cluster and its nodes, day2's teams and add-ons (both
+services counted `read_archive` ok), gzip, the live-status stream unbuffered,
+the web's pages and its static files. No EROFS, EACCES or traceback in any
+log. The web without its `emptyDir` renders every page, but a request to
+`/_next/image` logs `unhandledRejection: ENOENT ... mkdir '/app/apps/web/.next/cache'`.
+
+A new write (a temp file, a cache directory) needs an `emptyDir` in the chart
+and its path in the writable table of `tests/repo/test_chart_hardening.py`.

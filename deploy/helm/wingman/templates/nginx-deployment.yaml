@@ -21,14 +21,25 @@ spec:
         checksum/nginx-config: {{ include (print $.Template.BasePath "/nginx-configmap.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "wingman.serviceAccountName" . }}
+      # No pod reads the Kubernetes API with its own service-account token (day1
+      # reads the MCE hubs with the tokens Secret's): none is mounted.
+      automountServiceAccountToken: false
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       {{- end }}
+      securityContext:
+        {{- include "wingman.podSecurityContext" . | nindent 8 }}
       containers:
         - name: nginx
-          image: {{ include "wingman.image" (dict "reg" .Values.image.registry "repo" .Values.image.nginx.repository "tag" .Values.image.nginx.tag) }}
+          image: {{ include "wingman.nginxImage" . | quote }}
           imagePullPolicy: {{ .Values.image.nginx.pullPolicy }}
+          securityContext:
+            {{- include "wingman.containerSecurityContext" . | nindent 12 }}
+          # The UBI image's own command prints an S2I usage note and exits, so
+          # nginx is started here. -e: its start-up errors go to stderr too,
+          # before it reads nginx.conf (the compiled-in log file is read-only).
+          command: ["nginx", "-e", "/dev/stderr", "-g", "daemon off;"]
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -37,18 +48,32 @@ spec:
               mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf
               readOnly: true
+            # Where nginx.conf puts the pid and the temp files: a body or an
+            # answer larger than its buffers waits here.
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.resources.nginx | nindent 12 }}
+          # nginx answers /healthz itself (ADR-0058): neither probe waits on the web.
           livenessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
       volumes:
         - name: nginx-config
           configMap:
             name: wingman-nginx
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
 ---
 apiVersion: v1
 kind: Service
