@@ -180,3 +180,79 @@ allowed, refused, unanswered, no token), `apps/day1-service/tests/api/test_serve
 `tests/repo/test_chart_env_contract.py` (the optional admin key),
 `apps/web/lib/server-scan/*.test.ts` (server-scan's cases) and
 `apps/web/e2e/tests/server-scan-servers.spec.ts`.
+
+**2026-11-14, 3.25.0: a server's own page, and the auditor token.** The
+third page, server-scan's server page at `/server-scan/servers/<id>`, its
+five tabs (Overview, Hardware, Network, Connectivity, History) and every
+button (decision 14), in Wingman's design. The contract is §9 of
+`docs/notes/2026-11-13-server-scan-area-api.md`.
+
+- **One record per server.** This page is the one view of a server in
+  Wingman: the Servers table's names, Inventory Management's candidates and
+  add-server runs, and a VM's host link to it instead of repeating it (for a
+  person who has the area; for anyone else they stay text). The cluster
+  page's Nodes tab does not change.
+- **Three reads through the one client** (`ServerInventory.record`,
+  `vm_host`, `server_events`): server-scan's `GET /api/v1/servers/{id}`,
+  `/vm-host` and `/servers/{id}/events`, behind `AdminUser`. **Not cached by
+  day1**: server-scan caches the record per revision itself, never caches
+  the VM host (the host's health changes without the VM changing), and
+  History's pages are cursors. The uninstall's fresh check (`server`) keeps
+  reading only what it needs.
+- **The record is typed by day1 in server-scan's shape**, as Pydantic models
+  in the domain (`domain/server_scan_record.py`, `server_scan_hardware.py`),
+  parsed in the adapter and sent by the route as they are: one definition,
+  not a parser, a domain type and a response model for each of about 150
+  fields. They hold the fields server-scan's UI reads (its
+  `ServerDetail` type), each typed, enumerations kept as strings so a value
+  server-scan adds later reaches the page; its internals are left out.
+  Two additions: `reservation.held`, computed by day1 with the rule
+  server-scan uses for its rows (server-scan's detail answer lacks it, so
+  its own page never shows an install lock), and the maintenance's dates,
+  since Wingman's dialog sets an expected end.
+- **server-scan's auditor token** is a third optional key of the same
+  Secret (`serverScan.tokenSecret.auditorKey`, default `auditor-token`, read
+  into `SERVER_SCAN_AUDITOR_TOKEN` by day1 only), sent only on History's
+  read, as the admin token is only on the writes. Without it beside a viewer
+  token History says so in one line and its route answers `501`; with no
+  token at all (auth off, the sandbox) it reads without one.
+- **No new admin write.** server-scan's page has none: it shows maintenance
+  read only (its `0bb7dad`), and the API's reclassify, health recalculate
+  and reservation writes have no button in its UI.
+- **The maintenance block carries the Servers page's toggle**, which
+  server-scan's page does not (it keeps one place to switch maintenance
+  from). Here it is the same component and the same write, admin token,
+  confirmation, log line and metrics as on the Servers page, so there is
+  still one flow to audit, and an admin who opened a server to look at it
+  acts on it there.
+- **History for every admin**, as the area is admins only (server-scan
+  hides the tab from viewers). The tab is in the URL (`?tab=`), which
+  server-scan's is not.
+- **Reuse** (decision 18): server-scan's types, `datetime.ts`, `actor.ts`,
+  `gpuModel.ts`, `drives.ts`, `describeEvent.ts`, the fabric grouping, the
+  NIC wording, the health breakdown's rules and labels, and their tests'
+  cases as Vitest cases.
+- **Inventory's runs gain `server_id`**: a run names its server only by
+  name, so day1 looks the name up in the rows it already caches (exactly one
+  server, ignoring case) for the link; `null` when none or several match, or
+  when server-scan could not be read, and the runs are listed either way.
+
+Rejected: **caching the record in day1** (server-scan already caches it per
+revision; a second cache only delays a change); **passing server-scan's
+JSON through untyped** (a malformed answer would reach the page as blanks,
+and ADR-0048 types every answer); **a dataclass, a parser and a response
+model per field** (three copies of about 150 fields to keep in step);
+**History with the admin token** (it would put a write-capable token on a
+read; the admin token stays on the writes); **History from `GET
+/api/v1/events?server_id=`** (the server's own route exists; the global one
+is the Events page's); **reclassify, recalculate and reservation buttons**
+(not in server-scan's UI; the reservation is herzi's and the workflows');
+**resolving a run's server in the browser** (it would download the fleet's
+2 MB rows on the Inventory page for a link).
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_record.py`
+(the record, the VM host and History read and typed, malformed answers, the
+tokens, the metrics, the fake), `apps/day1-service/tests/api/test_server_scan_record_api.py`,
+`tests/repo/test_chart_env_contract.py` (the optional auditor key),
+`apps/web/lib/server-scan/*.test.ts` (server-scan's cases) and
+`apps/web/e2e/tests/server-scan-server.spec.ts`.

@@ -194,6 +194,7 @@ Read 2026-11-13 from team-redbull's public repositories.
       "infra_env": "dell-r650-site1-96c-768gb",
       "slot": 3,
       "server_name": "ocp-dell-r650-site1-96c-768gb-<serial>",
+      "server_id": "srv_…",
       "origin": "pool",
       "phase": "waiting-for-agent",
       "error": null
@@ -217,6 +218,14 @@ Read 2026-11-13 from team-redbull's public repositories.
   "herzi or a person". The orchestrator records no `requested_by`, so a
   pool draw's author cannot be told. Never guessed.
 - `phase` is the workflow's own word, passed through; Wingman keeps no list.
+- **`server_id`** (since 3.25.0) is server-scan's id for `server_name`,
+  for the link to the server's page in the Server Scan area
+  (`docs/notes/2026-11-13-server-scan-area-api.md` §9.8): looked up in the
+  fleet rows day1 already caches, when exactly one server has that name
+  (ignoring case: a named install's id lowercases it). `null` when none or
+  several do, when the run names no server, or when server-scan could not be
+  read; the runs are listed either way. The page links the name only for a
+  person who has the Server Scan area.
 
 | Status | `code` | When |
 |---|---|---|
