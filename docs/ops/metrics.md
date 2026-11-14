@@ -41,7 +41,7 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
-| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `list_events`, `list_event_actors`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs`, `list_classification_rules`, `list_health_policies` |
+| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `list_events`, `list_event_actors`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs`, `list_classification_rules`, `list_health_policies`, `list_jobs`, `get_job_logs`, `run_job` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
@@ -141,6 +141,23 @@ Operations of the other dependencies (day1):
   collection server-scan reads per call). `denied` is the viewer token
   refused (`SERVER_SCAN_TOKEN`); `unavailable` includes an answer day1 could
   not read.
+- `server_scan` `list_jobs` and `get_job_logs` are the Server Scan area's
+  Jobs page (ADR-0048's 3.32.0 amendment): server-scan's triggerable
+  CronJobs with their runs, every 5 seconds per open page while a Job runs
+  and every 30 seconds otherwise, and an open pod's log every 3 seconds while
+  its Job runs; never cached by day1. Both go with **the admin token**
+  (server-scan keeps its Jobs for its admins, reads included): `denied` is
+  `SERVER_SCAN_ADMIN_TOKEN` refused; `not_found` a CronJob, Job or pod
+  server-scan does not have (or its feature off); `unavailable` includes an
+  answer day1 could not read.
+- `server_scan` `run_job` is the Jobs page's Run job, the area's second write
+  (ADR-0048's 3.32.0 amendment): a real Job of a collector or prune CronJob,
+  by an admin, logged with the person (`server_scan_job_started`). `conflict`
+  is server-scan's "already has an unfinished Job" (its `409`); `not_found` a
+  CronJob it may not start (or its feature off); `denied` the admin token
+  refused; `ambiguous` a start sent whose answer was lost (logged as
+  `server_scan_job_unconfirmed`): never retried, look at the CronJob's runs
+  before starting it again.
 - `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the

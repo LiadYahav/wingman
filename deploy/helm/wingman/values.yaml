@@ -270,8 +270,10 @@ serverScan:
   # itself in values. day1 reads it at start: restart day1 after rotating it.
   # adminKey: an optional second key of the same Secret, server-scan's admin
   # token, sent only when an admin turns a server's maintenance on or off on
-  # the Server Scan area's Servers page (ADR-0048). Without it, the toggle is
-  # greyed out (with no Secret at all, server-scan runs with auth off and it works):
+  # the Server Scan area's Servers page, and on its Jobs page, whose reads
+  # server-scan keeps for its admins too (ADR-0048). Without it, the toggle is
+  # greyed out and Jobs says it is not set up (with no Secret at all,
+  # server-scan runs with auth off and both work):
   #   oc -n <ns> set data secret/server-scan-viewer admin-token=<admin token>
   # auditorKey: an optional third key, server-scan's auditor token, sent only
   # on the audit trail's reads: a server's History and the Events page in the

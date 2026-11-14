@@ -105,8 +105,9 @@ class Day1Settings(BaseSettings):
     server_scan_ui_url: str = ""
     server_scan_token: SecretStr = SecretStr("")
     # server-scan's admin token, for the Server Scan area's maintenance toggle
-    # only (ADR-0048's 3.23.0 amendment). Empty with a viewer token: the toggle is
-    # off; empty with none: server-scan runs with auth off and takes writes as is.
+    # (ADR-0048's 3.23.0 amendment) and its Jobs page, reads too (3.32.0) only.
+    # Empty with a viewer token: both are off; empty with none: server-scan runs
+    # with auth off and takes them as is.
     server_scan_admin_token: SecretStr = SecretStr("")
     # server-scan's auditor token, for a server's History only (ADR-0048's 3.25.0
     # amendment). Empty with a viewer token: History is off; empty with none:

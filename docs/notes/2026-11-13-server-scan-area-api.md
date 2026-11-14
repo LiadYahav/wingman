@@ -6,15 +6,16 @@ decision 22, ADR-0048). This note covers the area, its first page,
 **Sites** (§1 to §7), its second, **Servers** (§8, 3.23.0), a
 server's own page (§9, 3.25.0), the **Claude** page (§12, 3.27.0),
 **Architecture** (§11, 3.28.0), the hardware catalog, **Confs** (§10,
-3.29.0), what server-scan runs, **Rules & Policies** (§13, 3.30.0), and the
-fleet's audit trail, **Events** (§14, 3.31.0). Each later page adds its
-section here (§15 lists them).
+3.29.0), what server-scan runs, **Rules & Policies** (§13, 3.30.0), the
+fleet's audit trail, **Events** (§14, 3.31.0), and its CronJobs, **Jobs**
+(§15, 3.32.0). Each later page adds its section here (§16 lists them).
 
 - **server-scan's API does not change.** day1 reads server-scan with the
-  viewer token it already holds (§4), and a server's History and the Events
-  page with its auditor token (§9.5, §14.5). The one write is a server's
-  maintenance on and off, with server-scan's admin token, behind Wingman's
-  admin check (§8.5).
+  viewer token it already holds (§4), a server's History and the Events page
+  with its auditor token (§9.5, §14.5), and Jobs with its admin token
+  (§15.5). The writes are a server's maintenance on and off (§8.5) and
+  starting a Job (§15.6), with server-scan's admin token, behind Wingman's
+  admin check.
 - **The browser never calls server-scan.** It reads day1's routes below.
 - **Admins only** (decision 13 of the single-pane plan, until RBAC): every
   route takes `AdminUser`, so a viewer gets `403 FORBIDDEN` and an anonymous
@@ -225,8 +226,10 @@ rules ported, so the demo's cards agree with its servers.
   Wingman has built, so no entry leads nowhere: **Sites**, since 3.23.0
   **Servers**, since 3.27.0 **Claude** (§12) and since 3.28.0 **Architecture**
   (§11), both in a Reference section, since 3.29.0 **Confs** (§10.8), in
-  Fleet after Servers, and since 3.30.0 **Rules & Policies** (§13.8), in a
-  Configuration section between Fleet and Reference.
+  Fleet after Servers, since 3.30.0 **Rules & Policies** (§13.8), in a
+  Configuration section between Fleet and Reference, and since 3.31.0
+  **Events** (§14.8) and 3.32.0 **Jobs** (§15.9), in that order, in an
+  Activity section between Fleet and Configuration.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the
@@ -389,7 +392,9 @@ maintenance:
   `secretKeyRef` marked `optional`, so a Secret without the key still starts
   day1. Add it with
   `oc -n <ns> set data secret/<serverScan.tokenSecret.name> admin-token=<INVENTORY_API_TOKEN_ADMIN>`
-  and restart day1. It is sent only on the two writes, never on a read.
+  and restart day1. It is sent only on the two writes, never on a read
+  (since 3.32.0 also on Jobs, which server-scan serves to its admins only:
+  §15.5).
 - **Whether the toggle works**:
 
   | Viewer token | Admin token | Writes |
@@ -1734,7 +1739,274 @@ On each route:
   Server cell of `EventTimeline.tsx`, its words, and their tests' cases as
   Vitest cases.
 
-## 15. Left for later pages
+## 15. The Jobs page (3.32.0)
+
+`/server-scan/jobs`: server-scan's Jobs page (ADR-0048's 3.32.0
+amendment). server-scan runs its collectors and its two prunes as
+Kubernetes CronJobs; this page lists the ones it may start, their recent
+Jobs and pods, a pod's log, and **Run job**, which starts one now, as
+`oc create job --from=cronjob/<name>` does (server-scan's ADR-0055). It is
+the area's second write.
+
+### 15.1 What server-scan's Jobs page shows and does
+
+Read from `team-redbull/server-scan` at `92146d3`:
+`frontend/src/features/jobs/` (`JobsPage.tsx`, `JobsPage.test.tsx`),
+`frontend/src/api/jobs.ts`, `backend/app/api/v1/jobs.py`,
+`job_schemas.py`, `backend/app/config/jobs.py`,
+`backend/app/application/services/job_trigger.py`,
+`backend/app/infrastructure/jobs/` and its ADR-0055. Fifth in its
+navigation, at `/jobs`, for admins only (its nav hides it from anyone
+else, and its API answers them `403`).
+
+- **Header**: "Jobs", then: "Start a collector or prune CronJob now, like
+  `oc create job --from`, and read its logs. Every run is recorded in the
+  audit trail." With server-scan's fake backend it adds "This deployment
+  uses simulated jobs."
+- **A card per triggerable CronJob**, by name (a CronJob labelled
+  `server-scan.io/triggerable: "true"` in server-scan's namespace: its
+  chart's two prunes and the `server-scan-collectors` release's collectors):
+  - the name (monospace), its schedule (`0 6 * * *`), "suspended" when
+    suspended;
+  - a pill `enabled: true` or `enabled: false`, its tooltip "The `enabled`
+    flag for this job in the deployment's values.yaml" (server-scan's chart
+    catalog of every triggerable job; a CronJob the catalog does not know
+    counts as enabled);
+  - **Run job**, disabled while one of its Jobs is unfinished ("A Job of
+    this CronJob is already running") or when it is not deployed ("Not
+    deployed: turn it on in values.yaml first");
+  - its recent Jobs, newest first (as many as the CronJob's history limits
+    keep), each a line: its state as a chip (`active`, `succeeded`,
+    `failed`, `pending`), its name (monospace), "by hand" with who for a
+    manual one ("by hand (api-token-admin)"), when it was created
+    ("3 hours ago", the exact time its tooltip), and a button per pod,
+    "Logs · <the pod name's last 5 characters> · <its phase>";
+  - none: "No Jobs yet.", or for a CronJob not deployed "Not deployed: it
+    is switched off in values.yaml." The card of a job switched off is
+    dimmed.
+- **A pod's log** opens over the page: the pod and its Job (monospace),
+  Refresh and Close, "Last 500 lines, refreshing every 3 s while the job
+  runs." (the second half only while it runs), the text, "(no output yet)"
+  for an empty log, "Loading…" before it; its problem when it cannot be
+  read. Escape or a click outside closes it.
+- **Run job** opens a confirmation (§15.6).
+- **States**: the problem when the list cannot be read; "Running jobs from
+  the UI is not enabled on this deployment." when its chart has
+  `jobTrigger.enabled: false` (or its backend is off); "No triggerable
+  CronJobs found." when it is on and finds none.
+- **Fresh**: the list is read every 5 seconds while any CronJob has an
+  unfinished Job, every 30 seconds otherwise; an open log every 3 seconds
+  while its Job is unfinished, else once (and on Refresh).
+
+### 15.2 Every control on server-scan's Jobs page
+
+| server-scan | Wingman |
+|---|---|
+| Run job (per card) | The same, behind Wingman's admin check, with server-scan's admin token (§15.6) |
+| The confirmation's Cancel and Run job | The same words; the submit is disabled while sending and after an unanswered start |
+| Logs · … · … (per pod) | The same; the button of the open log is marked pressed |
+| The log's Refresh and Close | The same |
+
+There is no tail control: server-scan's page always asks for 500 lines.
+Wingman's route takes `tail` (server-scan's bounds) and the page asks for
+500, as there.
+
+### 15.3 What server-scan serves
+
+Every route of `/api/v1/jobs` requires server-scan's **admin** role, reads
+included (`require_admin` on the router; a personal token is never admin):
+logs and Job names are operational detail.
+
+| Call | Answer |
+|---|---|
+| `GET /api/v1/jobs` | `{enabled, backend, namespace, cronjobs: [{name, schedule, suspend, last_schedule_time, last_successful_time, warning, active, enabled, deployed, jobs: [{name, created_at, started_at, finished_at, active, succeeded, failed, state, manual, triggered_by, pods: [{name, phase, started_at}]}]}]}`, the CronJobs by name, each one's Jobs newest first, a Job's pods oldest first. The feature off: `200` with `enabled: false, backend: "off", namespace: null, cronjobs: []` |
+| `POST /api/v1/jobs/{cronjob}/run` | `201`: the new Job (the `jobs[]` item's shape), usually with no pod yet. `409` while the CronJob has an unfinished Job (`active` or `pending`), in its words: "<cronjob> already has an unfinished Job (<job>)."; `404` for a name that is not a triggerable CronJob ("No triggerable CronJob named '<name>'.") or when the feature is off ("Running jobs from the UI is not enabled on this deployment."). No body |
+| `GET /api/v1/jobs/{cronjob}/runs/{job}/pods/{pod}/logs?tail=` | `{pod, tail, text}`: the pod's last `tail` lines (1 to 100,000, capped by its `INVENTORY_JOBS_LOG_TAIL_MAX`, 2,000 by default), only along the chain triggerable CronJob → a Job it owns → a pod that Job owns; `404` otherwise, or when the feature is off |
+
+The timestamps are Kubernetes' ISO strings (`2026-11-14T06:00:00Z`) or
+`null`. server-scan reads the Kubernetes API on every call and caches
+nothing.
+
+### 15.4 day1's routes
+
+**`GET /api/day1/server-scan/jobs`**: server-scan's answer, typed, in its
+shape:
+
+```json
+{
+  "enabled": true,
+  "backend": "kubernetes",
+  "namespace": "server-scan",
+  "cronjobs": [
+    {
+      "name": "server-scan-collectors-collector-openmanage",
+      "schedule": "0 6 * * *", "suspend": false,
+      "last_schedule_time": "2026-11-14T06:00:00Z", "last_successful_time": "2026-11-14T06:04:10Z",
+      "warning": "This run can restart an iDRAC (ADR-0050) when a Dell has every disk or NIC UNKNOWN.",
+      "active": false, "enabled": true, "deployed": true,
+      "jobs": [
+        {
+          "name": "server-scan-collectors-collector-openmanage-29386440",
+          "created_at": "2026-11-14T06:00:00Z", "started_at": "2026-11-14T06:00:00Z",
+          "finished_at": "2026-11-14T06:04:10Z",
+          "active": 0, "succeeded": 1, "failed": 0, "state": "succeeded",
+          "manual": false, "triggered_by": null,
+          "pods": [{"name": "server-scan-collectors-collector-openmanage-29386440-x7k2p", "phase": "Succeeded", "started_at": "2026-11-14T06:00:00Z"}]
+        }
+      ]
+    }
+  ]
+}
+```
+
+**`GET /api/day1/server-scan/jobs/{cronjob}/runs/{job}/pods/{pod}/logs?tail=500`**:
+`{pod, tail, text}`, server-scan's answer. `tail` is 1 to 100,000 (default
+500, the page's); server-scan caps it.
+
+**`POST /api/day1/server-scan/jobs/{cronjob}/run`**: no body; `201` with
+the new Job in the `jobs[]` item's shape (§15.6).
+
+- **Every field server-scan sends**, typed (`domain/server_scan_jobs.py`),
+  with its defaults (a CronJob's `jobs` empty, `enabled` and `deployed`
+  true, as its port's). A field of the wrong type is a `502`, never a blank;
+  server-scan's words (a state, a phase, a backend) stay strings, so a word
+  it adds later reaches the page.
+- **The names** in the paths are Kubernetes names (lower case, digits, `-`
+  and `.`, at most 253 characters); anything else is `422` before
+  server-scan is asked.
+- **`enabled: false` passes through**, so the page says the deployment has
+  the feature off.
+- **Not cached by day1**: the page polls every 5 seconds while a Job runs,
+  and a cached list would hide the run it just started.
+
+### 15.5 The tokens
+
+server-scan serves `/api/v1/jobs` to its admin role only, so **every Jobs
+route, the reads too, goes with server-scan's admin token**: the same
+optional key as maintenance (§8.4, `serverScan.tokenSecret.adminKey`,
+default `admin-token`, read into `SERVER_SCAN_ADMIN_TOKEN` by day1 only).
+**No new Secret, value or key.** The decision is maintenance's, one helper
+for both:
+
+| Viewer token | Admin token | Jobs |
+|---|---|---|
+| any | set | read and run with the admin token |
+| none | none | read and run with no token: server-scan runs with auth off (the sandbox), where every caller is an admin |
+| set | none | off: every Jobs route answers `501 FEATURE_DISABLED` with the line below and `details.setting` `"SERVER_SCAN_ADMIN_TOKEN"`, and the page shows it as "Jobs is not set up" |
+
+The line: "Jobs needs server-scan's admin token: add the key admin-token
+to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN)."
+`details.setting` tells it from server-scan not being configured (whose
+`501` has none), as the Events page's auditor token does (§14.5); the
+maintenance writes' `501` carries the same `setting` since 3.32.0. The rule
+is one function for both tokens (`domain/server_scan_tokens.py`).
+
+The admin token is sent on the Jobs routes and the maintenance writes
+only, never on another read.
+
+### 15.6 The write: run now
+
+- **As server-scan's UI does it.** Run job opens a dialog: "Run this job
+  now?", the CronJob's name, "It starts a real Job from the CronJob's
+  template and runs exactly as scheduled.", the CronJob's warning when it
+  has one (its annotation `server-scan.io/trigger-warning`, the chart's
+  words: the OpenManage collector "can restart an iDRAC", the prunes "can
+  permanently delete data"), then Cancel and Run job ("Starting…" while
+  sent). On success the dialog closes, the list is read again, and the new
+  Job's first pod's log opens when the answer already names one (as
+  server-scan's page).
+- **What it starts**: a real Job from the CronJob's `jobTemplate`, the
+  same image, environment, Secrets and limits as a scheduled run, named
+  `<cronjob>-manual-<6 characters>`, owned by the CronJob, marked
+  `cronjob.kubernetes.io/instantiate: manual`; a collector reads its source
+  and writes server-scan's inventory, a prune deletes stale servers or old
+  audit events. It runs exactly as scheduled (no dry run).
+- **Behind Wingman's admin check** (`AdminUser`), as the whole area.
+- **A second send**: server-scan has no idempotency key. While the first
+  run is unfinished it answers `409` ("… already has an unfinished Job
+  (…)"); once that run has finished, a second send is a second run. So
+  Wingman sends once per click, and the submit is disabled while sending.
+- **Never retried** (ADR-0006). Not sent (server-scan unreachable before the
+  request left) is `502`, nothing started. Sent but unanswered (a timeout or
+  a connection lost after sending, or a gateway's `504`), or answered `201`
+  in a shape day1 cannot read, is `504 AMBIGUOUS_WRITE`: a run may have
+  started. The dialog says to look at the CronJob's runs before starting it
+  again, its Run job stays disabled until it is closed, and the card keeps
+  that line until the next start is answered.
+- **Recorded with the person's name.** server-scan writes the caller's
+  actor id on the Job (`server-scan.io/triggered-by`, shown as "by hand
+  (api-token-admin)") and in its audit trail (`JOB_TRIGGERED`), and that is
+  Wingman's admin token, not the person (server-scan takes no body to say
+  who). day1 logs each start with the person, as maintenance does:
+  `server_scan_job_started` (info) with `user`, `cronjob` and `job`, and
+  `server_scan_job_unconfirmed` (warning) when the answer did not come
+  back.
+- **409 and 404 as server-scan shows them**: its words, in the dialog.
+
+### 15.7 Errors
+
+| Status | `code` | When |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | No session |
+| 403 | `FORBIDDEN` | Not one of Wingman's admins |
+| 404 | `NOT_FOUND` | Run or logs: server-scan has no such triggerable CronJob, Job or pod, or has the feature off (its `404`, its words) |
+| 409 | `JOB_ALREADY_RUNNING` | Run: the CronJob has an unfinished Job (server-scan's `409`, its words) |
+| 422 | `VALIDATION_ERROR` | A name that is not a Kubernetes name, or a `tail` out of bounds |
+| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty; or a viewer token without the admin token (§15.5, `details.setting`) |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan unreachable, answering an error, refusing the admin token (check `SERVER_SCAN_ADMIN_TOKEN`), or sending an answer day1 cannot read; on run, also nothing sent |
+| 504 | `AMBIGUOUS_WRITE` | Run sent and not answered (§15.6) |
+
+### 15.8 Metrics and the fake
+
+- **Metrics**: three new operations on `dependency="server_scan"`:
+  `list_jobs` and `get_job_logs` (`ok`, `not_found`, `denied` (the admin
+  token refused), `unavailable`), and `run_job` (also `conflict`, its `409`,
+  and `ambiguous`) (`docs/ops/metrics.md`).
+- **The fake** (`DAY1_FAKE_FLEET=true`): server-scan's own fake runner,
+  ported (`fake_server_scan_jobs.py`), with three CronJobs as a deployment
+  of server-scan's charts has them: the OpenManage collector (with its
+  iDRAC warning; a failed run between two that succeeded), the UCS Central
+  collector (a scheduled run going on now, 15 minutes long, so Run job is
+  disabled) and the events prune (with its warning). A start runs for 20
+  seconds and then succeeds, its log growing meanwhile, recorded `by hand
+  (dev)`, as server-scan with auth off records it; a second start while one
+  runs answers its `409`. The logs are server-scan's fake lines (a failed
+  run's end in errors). No token is needed, as on the sandbox; its backend
+  says `fake`, so the page says the jobs are simulated.
+
+### 15.9 The web
+
+- **`/server-scan/jobs`** (server-scan's own path), the sidebar's **Jobs**,
+  in the **Activity** section after Events (§14.8), between Fleet and
+  Configuration: server-scan's navigation has it after Confs and Events and
+  before Rules & Policies.
+- **§15.1 in Wingman's design**: its cards, words, chips, warning and log
+  view, in Wingman's colour tokens (light and dark). Its introduction sits
+  in a tooltip beside the heading, with one line under it; the CronJob's
+  `last_schedule_time` and `last_successful_time`, which server-scan's
+  page does not show, are the schedule's tooltip; a Job's start and end its
+  time's tooltip.
+- **Not a table**: a card per CronJob with its few runs as lines, as in
+  server-scan; there is nothing to sort, filter or page, so the shared table
+  does not fit.
+- **States**: skeleton cards while loading; "For admins" on `403`; on
+  `501` with `details.setting` "Jobs is not set up" with day1's line naming
+  the admin token's key, and on one without it the area's "Server Scan is
+  not set up" (no server-scan at all), as Events (§14.8); the problem on `502`; a
+  failed re-read keeps the last list with a notice; server-scan's words for
+  the feature off and for no CronJob.
+- **Never kept in the browser's storage** (the query cache persists other
+  answers): a stored list would offer Run job while a run goes on.
+- **Fresh as the original**: the list every 5 seconds while a Job is
+  unfinished, else every 30 seconds; an open log every 3 seconds while its
+  Job is unfinished.
+- **Reused from server-scan** (decision 18, credited in the code): its types
+  (`JobsOverview`, `CronJob`, `JobRun`, `JobPod`, `PodLogs`), the page's
+  pure decisions (the poll intervals, whether a Job is unfinished, why Run
+  job is off, a card's empty line, a pod's button), its words, and its
+  tests' cases as Vitest cases.
+
+## 16. Left for later pages
 
 In single-pane §4's order; each is its own PR, with its section in this note.
 
@@ -1743,6 +2015,6 @@ In single-pane §4's order; each is its own PR, with its section in this note.
 | Confs | Built (§10, 3.29.0): `GET /api/v1/confs` (viewer) | Read only |
 | Rules & Policies | Built (§13, 3.30.0): `GET /api/v1/classification-rules`, `/health-policies` (viewer) | Read only |
 | Events | Built (§14, 3.31.0): `GET /api/v1/events`, `/events/actors` (auditor) | Read only: filters and cursor pages; History's timeline and its auditor token (§9) reused |
-| Jobs | `GET /api/v1/jobs`, a run's pod logs, `POST /jobs/{cronjob}/run` (admin) | "Run now" behind the admin check, its confirmation, Wingman's audit |
+| Jobs | Built (§15, 3.32.0): `GET /api/v1/jobs`, a run's pod logs, `POST /api/v1/jobs/{cronjob}/run` (admin, reads too) | "Run job" behind the admin check, server-scan's confirmation, never retried, logged with the person |
 | Architecture | Built (§11, 3.28.0): its UI's static diagrams, no token | Read through day1, shown in a sandboxed frame |
 | Claude | `GET /api/v1/skill`, `/skill/download` (viewer) | Built in 3.27.0 (§12): the skill and its zip through day1; the personal token stays a link out, server-scan makes it only for its own login |

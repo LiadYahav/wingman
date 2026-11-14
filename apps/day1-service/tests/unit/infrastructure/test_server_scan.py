@@ -21,6 +21,7 @@ from wingman_day1.domain.errors import (
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -314,6 +315,20 @@ async def test_calls_are_counted_by_operation_and_outcome() -> None:
     assert count("get_server", "not_found") == 1
 
 
+RUN = {
+    "name": "",
+    "created_at": None,
+    "started_at": None,
+    "finished_at": None,
+    "active": 0,
+    "succeeded": 0,
+    "failed": 0,
+    "state": "pending",
+    "manual": True,
+    "triggered_by": "api-token-admin",
+}
+
+
 class CountingInventory:
     rule_reads = 0
     """Both reads of the Rules & Policies page."""
@@ -324,6 +339,8 @@ class CountingInventory:
         self.site_reads = 0
         self.conf_reads = 0
         self.event_reads = 0
+        self.job_reads = 0
+        self.job_starts = 0
         self.fail = False
 
     async def rows(self) -> list[ServerRow]:
@@ -392,6 +409,18 @@ class CountingInventory:
     async def health_policies(self) -> HealthPolicyList:
         self.rule_reads += 1
         return HealthPolicyList(items=())
+
+    async def jobs(self) -> JobsOverview:
+        self.job_reads += 1
+        return JobsOverview(enabled=False, backend="off", namespace=None)
+
+    async def job_logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
+        self.job_reads += 1
+        return PodLogs(pod=pod, tail=tail, text="")
+
+    async def run_job(self, cronjob: str) -> JobRun:
+        self.job_starts += 1
+        return JobRun.model_validate(RUN | {"name": f"{cronjob}-manual-abc123"})
 
 
 async def test_the_cache_reads_the_fleet_once_per_ttl_and_one_server_every_time() -> None:
@@ -473,3 +502,22 @@ async def test_the_events_and_their_actors_are_read_through_every_time() -> None
         await cached.events(EventQuery())
         await cached.event_actors()
     assert inner.event_reads == 4
+
+
+async def test_the_jobs_and_their_logs_are_read_through_every_time() -> None:
+    inner = CountingInventory()
+    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
+    for _ in range(2):
+        await cached.jobs()
+        await cached.job_logs("c", "j", "p", tail=5)
+    assert inner.job_reads == 4
+
+
+async def test_a_job_start_goes_through_once_and_clears_nothing() -> None:
+    inner = CountingInventory()
+    cache = TtlCache()
+    cached = CachedServerInventory(inner, cache, ttl=30, sites_ttl=10)
+    await cached.rows()
+    started = await cached.run_job("c")
+    await cached.rows()
+    assert (started.name, inner.job_starts, inner.row_reads) == ("c-manual-abc123", 1, 1)

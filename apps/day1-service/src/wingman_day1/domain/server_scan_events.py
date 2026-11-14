@@ -20,6 +20,7 @@ from typing import Final
 from pydantic import BaseModel, JsonValue
 
 from wingman_day1.domain.server_scan_hardware import SHAPE
+from wingman_day1.domain.server_scan_tokens import token_detail
 
 EVENTS_PAGE_SIZE: Final = 50
 """server-scan's page, and its UI's."""
@@ -51,14 +52,10 @@ EVENTS_OFF: Final = audit_off("Events")
 def audit_detail(page: str, *, viewer_token: bool, auditor_token: bool) -> str | None:
     """Why ``page`` of the audit trail does not work in this deployment; ``None`` when it does.
 
-    As ``maintenance_detail``: with the auditor token it is read with it;
-    with no token at all server-scan runs with auth off and needs none; a
-    viewer token alone means auth is on, and server-scan keeps its audit
-    trail from viewers.
+    The rule of every token server-scan keeps for a role (``token_detail``):
+    server-scan keeps its audit trail from viewers.
     """
-    if auditor_token or not viewer_token:
-        return None
-    return audit_off(page)
+    return token_detail(audit_off(page), viewer_token=viewer_token, token=auditor_token)
 
 
 class Actor(BaseModel):

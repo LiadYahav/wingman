@@ -1,17 +1,21 @@
-"""server-scan's one write: a server's maintenance on and off (ADR-0048's 3.23.0 amendment).
+"""server-scan's writes: a server's maintenance on and off (ADR-0048's 3.23.0 amendment).
 
 ``PUT /api/v1/servers/{id}/maintenance`` (``{reason?, expected_end?}``) and
 ``DELETE`` on the same path, each answering the server (``ServerDetail``),
 whose ``maintenance`` is read. Sent with server-scan's admin token, or with
-none to a server-scan that runs with auth off. Never retried (ADR-0006):
-nothing sent is "unavailable", nothing changed; sent but unanswered (a
-timeout or a connection lost after sending, a gateway's 504), or answered 200
-in a shape day1 cannot read, is ``AmbiguousServerScanWriteError``.
+none to a server-scan that runs with auth off.
+
+Every write to server-scan goes out through ``send_once`` and is judged by
+``accepted`` and ``refused``, so each is never retried (ADR-0006) in the same
+way: nothing sent is "unavailable", nothing changed; sent but unanswered (a
+timeout or a connection lost after sending, a gateway's 504), or accepted in
+a shape day1 cannot read, is ``AmbiguousServerScanWriteError``, which names
+what to look at (``check_first``) before trying again.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Final, Literal
 from urllib.parse import quote
 
@@ -21,6 +25,7 @@ from wingman_day1.domain.errors import (
     AmbiguousServerScanWriteError,
     ServerNotFoundError,
     ServerScanDeniedError,
+    ServerScanError,
     ServerScanRefusedError,
     ServerScanUnavailableError,
 )
@@ -31,7 +36,7 @@ from wingman_day1.infrastructure.server_scan_parse import json_object
 MAINTENANCE_PATH: Final = "/api/v1/servers/{id}/maintenance"
 CHECK_FIRST: Final = "Reload the servers and look at its row before trying again."
 
-Method = Literal["PUT", "DELETE"]
+Method = Literal["PUT", "POST", "DELETE"]
 
 
 def start_body(start: MaintenanceStart) -> dict[str, str]:
@@ -44,9 +49,62 @@ def start_body(start: MaintenanceStart) -> dict[str, str]:
     return body
 
 
-async def send_maintenance(
+async def send_once(
     client: httpx.AsyncClient,
     method: Method,
+    path: str,
+    *,
+    what: str,
+    check_first: str,
+    headers: Mapping[str, str],
+    body: Mapping[str, str] | None = None,
+) -> httpx.Response:
+    """Send one write and return server-scan's answer; once, whatever happens."""
+    try:
+        return await client.request(method, path, json=body, headers=headers)
+    except NOT_SENT as exc:
+        raise ServerScanUnavailableError(
+            f"server-scan could not be reached {what} ({type(exc).__name__}); nothing changed"
+        ) from exc
+    except httpx.TransportError as exc:
+        raise AmbiguousServerScanWriteError(
+            f"{what} was sent to server-scan but no answer came back ({type(exc).__name__}): "
+            f"it may have changed. {check_first}"
+        ) from exc
+
+
+def accepted[T](
+    response: httpx.Response, read: Callable[[httpx.Response], T], *, what: str, check_first: str
+) -> T:
+    """The answer to a write server-scan accepted; one day1 cannot read is ambiguous."""
+    try:
+        return read(response)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise AmbiguousServerScanWriteError(
+            f"server-scan accepted {what} ({response.status_code}) but its answer could not be "
+            f"read. {check_first}"
+        ) from exc
+
+
+def refused(response: httpx.Response, *, what: str, check_first: str) -> ServerScanError:
+    """The error for an answer a write has no rule of its own for, to raise."""
+    status = response.status_code
+    if status in (401, 403):
+        return ServerScanDeniedError(
+            f"server-scan refused Wingman's admin token ({status}) {what}: "
+            "check SERVER_SCAN_ADMIN_TOKEN"
+        )
+    if status == 504:
+        return AmbiguousServerScanWriteError(
+            f"a gateway timed out waiting for server-scan {what}: it may have changed. "
+            f"{check_first}"
+        )
+    return ServerScanUnavailableError(f"server-scan answered {status} {what}")
+
+
+async def send_maintenance(
+    client: httpx.AsyncClient,
+    method: Literal["PUT", "DELETE"],
     server_id: str,
     *,
     headers: Mapping[str, str],
@@ -55,44 +113,17 @@ async def send_maintenance(
     """Send one maintenance write and read its answer; once, whatever happens."""
     what = f"{'starting' if method == 'PUT' else 'ending'} maintenance on {server_id}"
     path = MAINTENANCE_PATH.format(id=quote(server_id, safe=""))
-    try:
-        response = await client.request(method, path, json=body, headers=headers)
-    except NOT_SENT as exc:
-        raise ServerScanUnavailableError(
-            f"server-scan could not be reached {what} ({type(exc).__name__}); nothing changed"
-        ) from exc
-    except httpx.TransportError as exc:
-        raise AmbiguousServerScanWriteError(
-            f"{what} was sent to server-scan but no answer came back ({type(exc).__name__}): "
-            f"it may have changed. {CHECK_FIRST}"
-        ) from exc
-    return _answer(response, server_id, what)
-
-
-def _answer(response: httpx.Response, server_id: str, what: str) -> ServerMaintenance:
+    response = await send_once(
+        client, method, path, what=what, check_first=CHECK_FIRST, headers=headers, body=body
+    )
     status = response.status_code
     if status == 200:
-        try:
-            return server_maintenance(response.json())
-        except (ValueError, KeyError, TypeError) as exc:
-            raise AmbiguousServerScanWriteError(
-                f"server-scan accepted {what} (200) but its answer could not be read. {CHECK_FIRST}"
-            ) from exc
+        return accepted(response, _maintenance_of, what=what, check_first=CHECK_FIRST)
     if status == 404:
         raise ServerNotFoundError(f"server-scan has no server {server_id!r}")
-    if status in (401, 403):
-        raise ServerScanDeniedError(
-            f"server-scan refused Wingman's admin token ({status}) {what}: "
-            "check SERVER_SCAN_ADMIN_TOKEN"
-        )
     if status == 422:
         raise ServerScanRefusedError(f"server-scan refused {what}", _problem(response))
-    if status == 504:
-        raise AmbiguousServerScanWriteError(
-            f"a gateway timed out waiting for server-scan {what}: it may have changed. "
-            f"{CHECK_FIRST}"
-        )
-    raise ServerScanUnavailableError(f"server-scan answered {status} {what}")
+    raise refused(response, what=what, check_first=CHECK_FIRST)
 
 
 def server_maintenance(raw: JSON) -> ServerMaintenance:
@@ -110,6 +141,10 @@ def server_maintenance(raw: JSON) -> ServerMaintenance:
         reason=optional_text(maintenance, "reason"),
         created_by=optional_text(maintenance, "created_by"),
     )
+
+
+def _maintenance_of(response: httpx.Response) -> ServerMaintenance:
+    return server_maintenance(response.json())
 
 
 def _problem(response: httpx.Response) -> list[str]:

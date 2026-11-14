@@ -89,6 +89,7 @@ def fleet_adapters(
             default_events_file,
             load_events,
         )
+        from wingman_day1.infrastructure.fake_server_scan_jobs import demo_jobs
         from wingman_day1.infrastructure.fake_server_scan_rules import (
             default_rules_file,
             load_rules,
@@ -109,6 +110,7 @@ def fleet_adapters(
             diagrams=load_diagrams(default_diagram_file()),
             confs=load_confs(default_confs_file()),
             events=load_events(default_events_file(), rows),
+            jobs=demo_jobs(clock),
             clock=clock,
         )
         workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)

@@ -1,13 +1,15 @@
-"""server-scan's port: the one way day1 reads it, and its one write (ADR-0038, ADR-0048).
+"""server-scan's port: the one way day1 reads it, and its writes (ADR-0038, ADR-0048).
 
 The Nodes tab, MCE placement, Inventory Management and the Server Scan area
 all read server-scan through this port and its one adapter, cache and fake.
-The Server Scan area's maintenance toggle is the one write (ADR-0048's 3.23.0
-amendment); its server page reads a server whole, a VM's host and the
-server's History (3.25.0); its Claude page reads server-scan's skill and the
-skill's zip (3.27.0); its Architecture page reads the diagrams server-scan's
-UI serves (3.28.0); its Confs page the hardware catalog (3.29.0); its Events
-page the fleet's audit trail and who wrote it (3.31.0).
+The Server Scan area's writes are the maintenance toggle (ADR-0048's 3.23.0
+amendment) and the Jobs page's Run job (3.32.0); its server page reads a
+server whole, a VM's host and the server's History (3.25.0); its Claude page
+reads server-scan's skill and the skill's zip (3.27.0); its Architecture
+page reads the diagrams server-scan's UI serves (3.28.0); its Confs page the
+hardware catalog (3.29.0); its Events page the fleet's audit trail and who
+wrote it (3.31.0); its Jobs page the CronJobs server-scan may start and a
+pod's log (3.32.0).
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import Protocol
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -31,7 +34,7 @@ class ServerInventory(Protocol):
     Raises ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a
     refused token) when server-scan cannot answer: servers are then unknown,
     never "none". Read only but for a server's maintenance, which the Server
-    Scan area's admins turn on and off (ADR-0048).
+    Scan area's admins turn on and off, and a Job they start (ADR-0048).
     """
 
     async def rows(self) -> list[ServerRow]:
@@ -108,6 +111,23 @@ class ServerInventory(Protocol):
 
     async def confs(self) -> ConfList:
         """server-scan's hardware catalog, every conf it can read (``GET /api/v1/confs``)."""
+        ...
+
+    async def jobs(self) -> JobsOverview:
+        """The CronJobs server-scan may start, their recent Jobs and pods (its admin token)."""
+        ...
+
+    async def job_logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
+        """A pod's last ``tail`` lines; not of that CronJob: ``ServerScanJobNotFoundError``."""
+        ...
+
+    async def run_job(self, cronjob: str) -> JobRun:
+        """Start a Job of ``cronjob`` now, from its template. Never retried (ADR-0006).
+
+        ``ServerScanJobNotFoundError`` for a CronJob server-scan may not start;
+        ``ServerScanJobRunningError`` while it has an unfinished Job;
+        ``AmbiguousServerScanWriteError`` when it was sent and no answer came back.
+        """
         ...
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:

@@ -65,6 +65,7 @@ class ErrorCode(StrEnum):
     UPGRADE_DECISION_REFUSED = "UPGRADE_DECISION_REFUSED"
     UPGRADE_TARGETS_REFUSED = "UPGRADE_TARGETS_REFUSED"
     ADD_SERVER_ALREADY_RUNNING = "ADD_SERVER_ALREADY_RUNNING"
+    JOB_ALREADY_RUNNING = "JOB_ALREADY_RUNNING"
 
     @property
     def slug(self) -> str:
@@ -235,6 +236,13 @@ class AddServerAlreadyRunning(AppError):
 
     status = 409
     code = ErrorCode.ADD_SERVER_ALREADY_RUNNING
+
+
+class JobAlreadyRunning(AppError):
+    """server-scan refuses to start a CronJob that has an unfinished Job (ADR-0048, 3.32.0)."""
+
+    status = 409
+    code = ErrorCode.JOB_ALREADY_RUNNING
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (

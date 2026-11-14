@@ -22,7 +22,7 @@ test.describe("The Rules & Policies page", () => {
   test("the sidebar's Rules & Policies, after Servers, opens both sections", async ({ page }) => {
     await setUpRules(page);
     await go(page, "/server-scan");
-    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Events", "Rules & Policies", "Claude", "Architecture"]);
+    await expect(scanNav(page).getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Events", "Jobs", "Rules & Policies", "Claude", "Architecture"]);
     await scanNav(page).getByRole("link", { name: "Rules & Policies" }).click();
     await expect(page).toHaveURL(/\/server-scan\/rules$/);
     await expect(scanNav(page).getByTestId("area-nav-rules")).toHaveAttribute("aria-current", "page");

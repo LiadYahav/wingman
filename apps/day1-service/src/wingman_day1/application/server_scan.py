@@ -7,27 +7,27 @@ record, a VM's host, History with the auditor token), the Claude page
 (server-scan's skill and its zip, with server-scan's address written in, for
 people: ``ui_url``), the Architecture page's diagrams from server-scan's
 UI, the Confs page's hardware catalog, and the Events page's audit trail of
-the fleet (the auditor token, as History). server-scan failing is
+the fleet (the auditor token, as History); the Jobs page is its own use
+case (``jobs``, ``server_scan_jobs``). server-scan failing is
 ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
-The one write is a server's maintenance on and off (ADR-0048's 3.23.0
-amendment), behind the routes' admin check. server-scan records the token as
-who did it, so each write is logged here with the person's name, as node
-uninstall logs its starts (``node_uninstall_started``): Wingman's record.
+Its write here is a server's maintenance on and off (ADR-0048's 3.23.0
+amendment), behind the routes' admin check; the Jobs page's Run job is the
+other (``server_scan_jobs``). server-scan records the token as who did it,
+so each write is logged with the person's name
+(``server_scan_audit.recorded``): Wingman's record. A page that needs the
+auditor's or the admin's token is guarded by ``server_scan_guards``.
 """
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Awaitable, Mapping
+from typing import Final
 
 from wingman_core.domain.users import User
-from wingman_day1.domain.errors import (
-    AmbiguousServerScanWriteError,
-    ServerScanAuditOffError,
-    ServerScanWritesOffError,
-)
+from wingman_day1.application.server_scan_audit import recorded
+from wingman_day1.application.server_scan_guards import admin_only, audited
+from wingman_day1.application.server_scan_jobs import ServerScanJobs
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
@@ -38,7 +38,8 @@ from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.server_scan_skill import AUDITOR_TOKEN_LINE, Skill, SkillZip
 from wingman_day1.ports import ServerInventory
 
-logger = logging.getLogger(__name__)
+UNCONFIRMED: Final = "server_maintenance_unconfirmed"
+"""The log event of a maintenance write sent and not answered."""
 
 
 class ServerScanService:
@@ -53,6 +54,7 @@ class ServerScanService:
         events_detail: str | None = None,
         ui_url: str = "",
         token_line: str = AUDITOR_TOKEN_LINE,
+        jobs: ServerScanJobs | None = None,
     ) -> None:
         """Read server-scan through ``inventory``.
 
@@ -62,6 +64,7 @@ class ServerScanService:
         (``domain.server_scan_events.audit_detail``); ``None``: on. ``ui_url``
         is server-scan's address for people and Claude Code; ``token_line`` the
         line its zip of the skill names (``domain.server_scan_skill.token_line``).
+        ``jobs`` is the Jobs page (none: over ``inventory``, on).
         """
         self._inventory = inventory
         self.maintenance_detail = maintenance_detail
@@ -69,6 +72,7 @@ class ServerScanService:
         self.events_detail = events_detail
         self.ui_url = ui_url.rstrip("/")
         self.token_line = token_line
+        self.jobs = jobs or ServerScanJobs(inventory)
 
     async def sites(self) -> FleetSites:
         """The Sites page: every configured site and the fleet, as server-scan counts them."""
@@ -96,17 +100,17 @@ class ServerScanService:
 
     async def history(self, server_id: str, *, cursor: str | None, page_size: int) -> EventPage:
         """One page of a server's History, with server-scan's auditor token; off without it."""
-        _audited(self.history_detail)
+        audited(self.history_detail)
         return await self._inventory.server_events(server_id, cursor=cursor, page_size=page_size)
 
     async def events(self, query: EventQuery) -> EventPage:
         """The Events page: one page of the fleet's audit trail; off without the auditor token."""
-        _audited(self.events_detail)
+        audited(self.events_detail)
         return await self._inventory.events(query)
 
     async def event_actors(self) -> EventActorList:
         """The Events page's User filter: who wrote the audit trail, busiest first."""
-        _audited(self.events_detail)
+        audited(self.events_detail)
         return await self._inventory.event_actors()
 
     async def skill(self) -> Skill:
@@ -129,7 +133,7 @@ class ServerScanService:
         self, server_id: str, start: MaintenanceStart, *, user: User
     ) -> ServerMaintenance:
         """Put a server into maintenance (or update its reason). Never retried (ADR-0006)."""
-        self._writable()
+        admin_only(self.maintenance_detail)
         event = {
             "user": user.username,
             "server_id": server_id,
@@ -137,48 +141,24 @@ class ServerScanService:
             "expected_end": start.expected_end.isoformat() if start.expected_end else "",
         }
         write = self._inventory.start_maintenance(server_id, start)
-        return await _recorded(write, event, done="server_maintenance_started")
+        return await recorded(
+            write,
+            event,
+            done="server_maintenance_started",
+            unconfirmed=UNCONFIRMED,
+            answered=_named,
+        )
 
     async def end_maintenance(self, server_id: str, *, user: User) -> ServerMaintenance:
         """End a server's maintenance. Never retried (ADR-0006)."""
-        self._writable()
+        admin_only(self.maintenance_detail)
         event = {"user": user.username, "server_id": server_id}
         write = self._inventory.end_maintenance(server_id)
-        return await _recorded(write, event, done="server_maintenance_ended")
-
-    def _writable(self) -> None:
-        if self.maintenance_detail is not None:
-            raise ServerScanWritesOffError(self.maintenance_detail)
-
-
-def _audited(detail: str | None) -> None:
-    """The audit trail's guard: ``detail`` says why it cannot be read here (``None``: it can)."""
-    if detail is not None:
-        raise ServerScanAuditOffError(detail)
-
-
-async def _recorded(
-    write: Awaitable[ServerMaintenance], event: Mapping[str, str], *, done: str
-) -> ServerMaintenance:
-    """Await ``write`` and log it with the person: ``done``, or unconfirmed when unanswered."""
-    try:
-        result = await write
-    except AmbiguousServerScanWriteError:
-        logger.warning(
-            "server maintenance change unconfirmed: %s",
-            _fields(event),
-            extra={"event": "server_maintenance_unconfirmed", "change": done, **event},
+        return await recorded(
+            write, event, done="server_maintenance_ended", unconfirmed=UNCONFIRMED, answered=_named
         )
-        raise
-    recorded = {**event, "server_name": result.server_name}
-    logger.info(
-        "%s: %s",
-        done.replace("_", " "),
-        _fields(recorded),
-        extra={"event": done, **recorded},
-    )
-    return result
 
 
-def _fields(event: Mapping[str, str]) -> str:
-    return " ".join(f"{key}={value}" for key, value in event.items())
+def _named(change: ServerMaintenance) -> dict[str, str]:
+    """What a maintenance answer adds to its log line: the server's name."""
+    return {"server_name": change.server_name}

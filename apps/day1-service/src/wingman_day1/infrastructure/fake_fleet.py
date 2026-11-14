@@ -16,7 +16,8 @@ a folder, read and zipped as server-scan does (``fake_server_scan_skill``,
 page) is the fixture's, as loaded (``fake_server_scan_confs``, 3.29.0). Its
 audit trail is every server's History and the seeded ``events``, filtered and
 paged as server-scan does, for the Events page and a server's History alike
-(``fake_server_scan_events``, 3.31.0).
+(``fake_server_scan_events``, 3.31.0). Its Jobs are server-scan's fake
+runner, ported (``fake_server_scan_jobs``, 3.32.0).
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which
@@ -51,6 +52,7 @@ from wingman_day1.domain.errors import (
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer, VmHostServer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -67,6 +69,7 @@ from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.infrastructure.fake_server_records import FakeRecords
 from wingman_day1.infrastructure.fake_server_scan_architecture import FakeDiagrams
 from wingman_day1.infrastructure.fake_server_scan_events import JSONish, event_actors, event_page
+from wingman_day1.infrastructure.fake_server_scan_jobs import FakeJobs
 from wingman_day1.infrastructure.fake_server_scan_rules import FakeRules
 from wingman_day1.infrastructure.fake_server_scan_sites import SiteName, catalog_of, count_sites
 from wingman_day1.infrastructure.fake_server_scan_skill import zip_skill
@@ -100,6 +103,7 @@ class FakeServerInventory:
         diagrams: FakeDiagrams | None = None,
         confs: ConfList | None = None,
         events: Sequence[JSONish] = (),
+        jobs: FakeJobs | None = None,
         clock: Clock = system_clock,
     ) -> None:
         """Seed the fleet; ``sites`` is server-scan's site catalog (none: the rows' own sites).
@@ -110,6 +114,7 @@ class FakeServerInventory:
         ``confs`` is the hardware catalog (none: empty).
         ``rules`` are its classification rules and health policies (none: none).
         ``events`` join the servers' History in its audit trail (``load_events``).
+        ``jobs`` are its CronJobs (none: none, the feature on).
         """
         self._rows = {row.id: row for row in rows}
         self.unavailable = unavailable
@@ -120,11 +125,14 @@ class FakeServerInventory:
         self._diagrams = diagrams or FakeDiagrams()
         self._confs = confs or ConfList(items=())
         self._events = tuple(events)
+        self._jobs = jobs or FakeJobs(clock=clock)
         self._clock = clock
         self.server_reads = 0
         """How many times ``server`` was called (the uninstall's fresh read)."""
         self.maintenance_starts: list[tuple[str, MaintenanceStart]] = []
         """Every ``start_maintenance`` that reached a server, in order."""
+        self.job_starts: list[str] = []
+        """Every ``run_job`` that reached the fake server-scan, in order."""
         self._before_read: list[Callable[[], None]] = []
 
     def before_read(self, hook: Callable[[], None]) -> None:
@@ -234,6 +242,22 @@ class FakeServerInventory:
         """See ServerInventory.confs: the seeded catalog, as server-scan's fake seeds it once."""
         self._read()
         return self._confs
+
+    async def jobs(self) -> JobsOverview:
+        """See ServerInventory.jobs: the fake runner's, each run judged on its clock."""
+        self._read()
+        return self._jobs.overview()
+
+    async def job_logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
+        """See ServerInventory.job_logs."""
+        self._read()
+        return self._jobs.logs(cronjob, job, pod, tail=tail)
+
+    async def run_job(self, cronjob: str) -> JobRun:
+        """See ServerInventory.run_job: by ``dev``, as a server-scan with auth off records it."""
+        self._read()
+        self.job_starts.append(cronjob)
+        return self._jobs.run(cronjob, triggered_by=FAKE_ACTOR)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance: who stays the first one's, as in server-scan."""

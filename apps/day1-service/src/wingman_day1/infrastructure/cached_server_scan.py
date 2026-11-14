@@ -19,7 +19,9 @@ the next read shows it (whatever its outcome: an ambiguous one may have
 landed). The Rules & Policies page's rules and policies are read through too:
 two small reads server-scan answers from its database, asked for by that page
 only; and so is the Events page's audit trail (cursors and filters over a
-trail that grows) and its actors (at most once a minute per open page).
+trail that grows) and its actors (at most once a minute per open page). So
+are the Jobs page's CronJobs and logs: the page polls every 5 seconds while
+a Job runs, and a cached list would hide the run just started.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -133,6 +136,18 @@ class CachedServerInventory:
     async def confs(self) -> ConfList:
         """See ServerInventory.confs; always read through."""
         return await self._inner.confs()
+
+    async def jobs(self) -> JobsOverview:
+        """See ServerInventory.jobs; always read through."""
+        return await self._inner.jobs()
+
+    async def job_logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
+        """See ServerInventory.job_logs; always read through."""
+        return await self._inner.job_logs(cronjob, job, pod, tail=tail)
+
+    async def run_job(self, cronjob: str) -> JobRun:
+        """See ServerInventory.run_job; nothing cached to clear (the Jobs are never cached)."""
+        return await self._inner.run_job(cronjob)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance; clears the rows and sites."""
