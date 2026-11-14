@@ -73,6 +73,18 @@ deptry_all() {
   done
 }
 
+# Every fixture sets what the chart requires (the image tags, ADR-0059), so the
+# chart is linted with each of them, as herzi's CI does.
+helm_lint_all() {
+  local values
+  for values in deploy/helm/wingman/ci/*.yaml; do
+    helm lint --strict deploy/helm/wingman -f "$values" || {
+      echo "failed: $values"
+      return 1
+    }
+  done
+}
+
 helm_template_all() {
   local values
   for values in deploy/helm/wingman/ci/*.yaml; do
@@ -106,7 +118,7 @@ if [[ $scope == all || $scope == python ]]; then
 fi
 
 if [[ $scope == all || $scope == chart ]]; then
-  step "helm lint --strict" helm lint --strict deploy/helm/wingman
+  step "helm lint --strict (every deploy/helm/wingman/ci fixture)" helm_lint_all
   step "helm template (every deploy/helm/wingman/ci fixture)" helm_template_all
   step "promtool check rules" promtool check rules deploy/helm/wingman/files/alerts.rules.yaml
   step "promtool test rules" promtool test rules deploy/helm/wingman/tests/alerts.test.yaml

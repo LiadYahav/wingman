@@ -30,7 +30,7 @@ spec:
         {{- include "wingman.podSecurityContext" . | nindent 8 }}
       containers:
         - name: web
-          image: {{ include "wingman.image" (dict "registry" .Values.image.registry "image" .Values.image.web) | quote }}
+          image: {{ include "wingman.serviceImage" (list $ "web") | quote }}
           imagePullPolicy: {{ .Values.image.web.pullPolicy }}
           securityContext:
             {{- include "wingman.containerSecurityContext" . | nindent 12 }}

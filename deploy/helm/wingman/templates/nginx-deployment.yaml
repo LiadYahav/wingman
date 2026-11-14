@@ -32,7 +32,7 @@ spec:
         {{- include "wingman.podSecurityContext" . | nindent 8 }}
       containers:
         - name: nginx
-          image: {{ include "wingman.image" (dict "registry" .Values.image.registry "image" .Values.image.nginx) | quote }}
+          image: {{ include "wingman.nginxImage" . | quote }}
           imagePullPolicy: {{ .Values.image.nginx.pullPolicy }}
           securityContext:
             {{- include "wingman.containerSecurityContext" . | nindent 12 }}

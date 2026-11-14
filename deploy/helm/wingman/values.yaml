@@ -17,25 +17,27 @@ image:
   # Example: registry.internal/wingman
   registry: ""   # if empty, images are pulled without a registry prefix
 
-  # [VERSIONING] Set every tag to the release you deploy, the same for all
-  # three images. Example: tag: "3.0.1"  (the GitHub release v3.0.1; no "v").
-  # Every merge to main is a release (docs/ops/images.md). "latest", "3.0" and
-  # "3" move and "sha-..." names no release: production pins a full version,
-  # so releases are traceable and rollbacks are safe. "latest" is for local dev.
+  # [VERSIONING] Required: set every tag to the release you deploy, the same
+  # for all three images, e.g. --set image.day1.tag=3.33.0 (the GitHub release
+  # v3.33.0; no "v"). An empty tag fails the render, naming it: there is no
+  # default (ADR-0059). Every merge to main is a release (docs/ops/images.md).
+  # "latest", "3.33" and "3" move and "sha-..." names no release: production
+  # pins a full version, so releases are traceable and rollbacks are safe.
+  # Each image also takes an optional digest (sha256:...), which nodes then pull.
 
   day1:
     repository: wingman-day1
-    tag: "latest"
+    tag: ""
     pullPolicy: IfNotPresent
 
   day2:
     repository: wingman-day2
-    tag: "latest"
+    tag: ""
     pullPolicy: IfNotPresent
 
   web:
     repository: wingman-web
-    tag: "latest"
+    tag: ""
     pullPolicy: IfNotPresent
 
   # The one entry point (ADR-0058): Red Hat's UBI nginx, pinned by tag and by

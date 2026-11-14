@@ -34,7 +34,7 @@ spec:
         {{- include "wingman.podSecurityContext" . | nindent 8 }}
       containers:
         - name: day1
-          image: {{ include "wingman.image" (dict "registry" .Values.image.registry "image" .Values.image.day1) | quote }}
+          image: {{ include "wingman.serviceImage" (list $ "day1") | quote }}
           imagePullPolicy: {{ .Values.image.day1.pullPolicy }}
           securityContext:
             {{- include "wingman.containerSecurityContext" . | nindent 12 }}
