@@ -90,7 +90,7 @@ test.describe("Where clusters run and on which version", () => {
       upgrades: (route) => fulfillProblem(route, 502, "DEPENDENCY_UNAVAILABLE", "The workflows orchestrator did not answer"),
     });
 
-    await expect(page.getByTestId("overview-upgrade-available")).toHaveText("2 upgrade available");
+    await expect(page.getByTestId("overview-upgrade-available")).toHaveText("2 upgrades available");
     await expect(page.getByTestId("overview-upgrading")).toHaveText("— upgrading");
   });
 

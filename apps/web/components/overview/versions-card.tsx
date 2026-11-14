@@ -52,7 +52,7 @@ function UpgradeCounts({ clusters }: { clusters: ClusterStatus[] }) {
         title="Clusters whose MCE offers a newer OpenShift release than their mastertag"
         className={cn(PILL, "bg-primary/8 text-primary hover:bg-primary/15")}>
         <CircleArrowUp aria-hidden className="h-3.5 w-3.5" />
-        <span><span className="tabular-nums">{summary.available}</span> upgrade available</span>
+        <span><span className="tabular-nums">{summary.available}</span> {summary.available === 1 ? "upgrade" : "upgrades"} available</span>
       </Link>
       <Link href={upgradesHref("upgrading")} data-testid="overview-upgrading"
         title={summary.upgrading === null ? "The upgrade runs could not be read" : "Clusters with an upgrade-cluster run open"}
