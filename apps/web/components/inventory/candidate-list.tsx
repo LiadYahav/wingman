@@ -5,6 +5,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/common/hint";
 import { ProblemList } from "@/components/common/problem-list";
+import { ServerLink } from "@/components/server-scan/server-link";
+import { useServerScanArea } from "@/lib/api/server-scan";
 import { hardwareLabel } from "@/lib/inventory/pools";
 import { cn } from "@/lib/utils";
 import type { Candidate } from "@/types/inventory";
@@ -26,13 +28,32 @@ function Why({ candidate }: { candidate: Candidate }) {
   );
 }
 
-/** The name, its pool's shared prefix muted and cut first, so the part that differs stays whole. */
-function ServerName({ name, prefix }: { name: string; prefix: string }) {
+/**
+ * The name, its pool's shared prefix muted and cut first, so the part that
+ * differs stays whole. With `link`, a link to the server's page in the Server
+ * Scan area (in a new tab from the install dialog's picker, `newTab`).
+ */
+function ServerName({ candidate, prefix, link, newTab }: { candidate: Candidate; prefix: string; link: boolean; newTab: boolean }) {
+  const { name } = candidate;
   const shared = name.startsWith(prefix) ? prefix : "";
-  return (
-    <span className="flex min-w-0 flex-1 font-mono" title={name}>
+  const text = (
+    <>
       {shared && <span className="truncate text-muted-foreground">{shared}</span>}
       <span className="shrink-0">{name.slice(shared.length)}</span>
+    </>
+  );
+  if (!link) {
+    return (
+      <span className="flex min-w-0 flex-1 font-mono" title={name}>
+        {text}
+      </span>
+    );
+  }
+  return (
+    <span className="flex min-w-0 flex-1" title={name}>
+      <ServerLink id={candidate.id} newTab={newTab} className="flex min-w-0 font-mono">
+        {text}
+      </ServerLink>
     </span>
   );
 }
@@ -57,6 +78,8 @@ export function CandidateList({
   selected?: string[];
   onToggle?: (name: string) => void;
 }) {
+  // A server's page is in the Server Scan area: a link for whoever has it, text for anyone else
+  const linked = useServerScanArea() === true;
   if (isLoading) return <Skeleton className="h-16 w-full" />;
   if (error) return <ProblemList error={error} title="The pool's servers could not be read" />;
   if (!candidates || candidates.length === 0) {
@@ -88,7 +111,7 @@ export function CandidateList({
               className={cn("h-1.5 w-1.5 shrink-0 rounded-full", HEALTH_TONE[c.health] ?? "bg-muted-foreground/50")}
               title={c.health}
             />
-            <ServerName name={c.name} prefix={`ocp-${infraEnv}`} />
+            <ServerName candidate={c} prefix={`ocp-${infraEnv}`} link={linked} newTab={Boolean(selected)} />
             <span className="hidden shrink-0 sm:inline">{hardwareLabel(c)}</span>
             <Why candidate={c} />
           </li>

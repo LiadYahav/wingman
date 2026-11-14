@@ -77,7 +77,7 @@ const CANDIDATES: Candidates = {
 
 const run = (overrides: Partial<InventoryRun>): InventoryRun => ({
   workflow_id: `add-server-to-mce-${SITE1_A}_${R650}_1`, status: "running", started_at: "2026-11-13T12:00:00+00:00",
-  closed_at: null, mce: SITE1_A, infra_env: R650, slot: 1, server_name: null, origin: "pool", phase: "acquiring-server",
+  closed_at: null, mce: SITE1_A, infra_env: R650, slot: 1, server_name: null, server_id: null, origin: "pool", phase: "acquiring-server",
   error: null, ...overrides,
 });
 
