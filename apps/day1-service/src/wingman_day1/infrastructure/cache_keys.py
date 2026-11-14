@@ -81,6 +81,11 @@ def server_scan_sites() -> str:
     return "server-scan:sites"
 
 
+def server_scan_skill() -> str:
+    """server-scan's Claude Code skill, the Server Scan area's Claude page (expires)."""
+    return "server-scan:skill"
+
+
 def segments_manager_prefix() -> str:
     """Everything cached from segments-manager; cleared by a ``fresh`` read (ADR-0047)."""
     return "segments-manager:"

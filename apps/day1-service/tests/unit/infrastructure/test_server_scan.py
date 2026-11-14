@@ -22,6 +22,7 @@ from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
+from wingman_day1.domain.server_scan_skill import Skill, SkillZip
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.fake_server_scan_sites import count_sites
@@ -351,6 +352,12 @@ class CountingInventory:
     async def server_events(
         self, server_id: str, *, cursor: str | None, page_size: int
     ) -> EventPage:
+        raise AssertionError("not read here")
+
+    async def skill(self) -> Skill:
+        raise AssertionError("not read here")
+
+    async def skill_zip(self, base_url: str) -> SkillZip:
         raise AssertionError("not read here")
 
 

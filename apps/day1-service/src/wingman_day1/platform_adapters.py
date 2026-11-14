@@ -78,12 +78,17 @@ def fleet_adapters(
             load_records,
         )
         from wingman_day1.infrastructure.fake_server_scan_sites import load_site_catalog
+        from wingman_day1.infrastructure.fake_server_scan_skill import (
+            default_skill_dir,
+            load_skill,
+        )
 
         rows, runs = load_fleet(default_fleet_file())
         fake = FakeServerInventory(
             rows,
             sites=load_site_catalog(default_fleet_file()),
             records=load_records(default_records_file()),
+            skill=load_skill(default_skill_dir()),
             clock=clock,
         )
         workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)

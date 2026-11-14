@@ -282,3 +282,59 @@ page for viewers** (the area is admins only: the page would answer `403`).
 
 Verification: `apps/web/lib/server-scan/server-page.test.ts` and
 `apps/web/e2e/tests/cluster-nodes.spec.ts` (an admin with the area, a viewer).
+
+**2026-11-14, 3.27.0: the Claude page.** server-scan's Claude page at
+`/server-scan/claude`: its guide to the `server-scan-api` Claude Code skill,
+the download, the four setup steps, the MCP command and the skill's files,
+in Wingman's design and server-scan's words. The contract is §12 of
+`docs/notes/2026-11-13-server-scan-area-api.md`.
+
+- **The skill is read from server-scan, never copied.** server-scan serves
+  it from its API, read from its disk on every call (its ADR-0052, so the
+  page follows every edit): day1 reads `GET /api/v1/skill` through the one
+  client (`ServerInventory.skill`, typed in server-scan's shape, cached 60
+  seconds per replica, the original page's refresh) and passes on the zip
+  server-scan builds (`ServerInventory.skill_zip`, `GET
+  /api/v1/skill/download`, never cached). Both with the viewer token: no new
+  Secret, key or value.
+- **The zip and the commands name server-scan, not Wingman.** Claude Code
+  calls server-scan's API with the person's own token, so the address
+  written into the zip, the MCP command's and the token link's is
+  server-scan's for people (`SERVER_SCAN_UI_URL`, else `SERVER_SCAN_URL`,
+  the node links' rule), sent by day1 as `server_scan_url`. server-scan's
+  page uses its own origin.
+- **The token placeholder is server-scan's rule**: server-scan writes
+  `VIEWER_TOKEN` into a viewer caller's copy, `AUDITOR_TOKEN` into anyone
+  else's. The caller is Wingman, so day1 says which (`token_line`):
+  `VIEWER_TOKEN` with its viewer token, `AUDITOR_TOKEN` with none (auth off).
+- **The personal token is a link out**, the one place parity is impossible
+  (single-pane §4): server-scan makes, replaces and revokes it only for a
+  person signed in to server-scan, never for a service token. Step 3 and the
+  MCP section link to server-scan's own Claude page in a new tab and say so
+  in one line; Wingman has no token section and never sees a token.
+- **No write.** The page reads the skill and downloads the zip; nothing
+  changes on server-scan.
+- **Reuse** (decision 18): server-scan's `skillText.ts` (`extractPrompts`,
+  `outline`), the tools' split, its types and its tests' cases; the fake
+  reads and zips a stand-in skill (`dev/fleet-fixtures/skill/`) with
+  server-scan's `skill_bundle.py` rules, ported.
+
+Rejected: **copying the skill into Wingman** (stale on server-scan's first
+edit: its ADR-0052's reason); **a link out for the whole page** (the
+download, the commands and the files need no server-scan login, and
+leaving Wingman for them is the second login ADR-0048 avoids); **minting a
+token through Wingman** (server-scan makes personal tokens only for its own
+sessions, and a token made with Wingman's service token would be
+Wingman's, recorded as Wingman, not the person); **building the zip in
+day1** from the skill's files (a second copy of server-scan's packing rules,
+the `BASE_URL` line and the viewer rename, to keep in step);
+**`window.location.origin` as the address** (Wingman's, which Claude Code
+must not call).
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_skill.py`
+(the skill and the zip read and typed, malformed answers, no skill, the
+token, the refused address, the metrics, the cache, the fake, the token
+line), `apps/day1-service/tests/api/test_server_scan_skill_api.py`,
+`apps/web/lib/server-scan/skill-text.test.ts` (server-scan's cases, the
+commands), `apps/web/lib/server-scan/sidebar.test.ts` and
+`apps/web/e2e/tests/server-scan-claude.spec.ts`.

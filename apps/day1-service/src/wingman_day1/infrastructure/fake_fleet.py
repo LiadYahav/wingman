@@ -8,7 +8,9 @@ server-scan's rules over a site catalog (``fake_server_scan_sites``, ADR-0048);
 its maintenance writes change the row as a server-scan with auth off does,
 recording ``dev`` as who. A server's record and History are its row and its
 model's hardware (``fake_server_records``, ADR-0048's 3.25.0 amendment); no
-fake server is a VM unless the records fixture says so.
+fake server is a VM unless the records fixture says so. Its Claude skill is
+a folder, read and zipped as server-scan does (``fake_server_scan_skill``,
+3.27.0); without one it carries none.
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which
@@ -34,6 +36,7 @@ import yaml
 from wingman_core.ports.clock import Clock, system_clock
 from wingman_day1.domain.errors import (
     ServerNotFoundError,
+    ServerScanSkillMissingError,
     ServerScanUnavailableError,
     UninstallAlreadyRunningError,
     WorkflowsError,
@@ -43,6 +46,7 @@ from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer, VmHostServer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
+from wingman_day1.domain.server_scan_skill import Skill, SkillZip
 from wingman_day1.domain.servers import (
     UNINSTALL_HOLDER,
     RunSummary,
@@ -53,6 +57,7 @@ from wingman_day1.domain.servers import (
 from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.infrastructure.fake_server_records import FakeRecords
 from wingman_day1.infrastructure.fake_server_scan_sites import SiteName, catalog_of, count_sites
+from wingman_day1.infrastructure.fake_server_scan_skill import zip_skill
 from wingman_day1.infrastructure.server_scan_parse import server_row
 
 DEMO_PHASES: Final = (
@@ -79,16 +84,19 @@ class FakeServerInventory:
         unavailable: bool = False,
         sites: Sequence[SiteName] = (),
         records: FakeRecords | None = None,
+        skill: Skill | None = None,
         clock: Clock = system_clock,
     ) -> None:
         """Seed the fleet; ``sites`` is server-scan's site catalog (none: the rows' own sites).
 
-        ``records`` gives each model its hardware (none: every record has none).
+        ``records`` gives each model its hardware (none: every record has none);
+        ``skill`` is the Claude skill it serves (none: it carries none).
         """
         self._rows = {row.id: row for row in rows}
         self.unavailable = unavailable
         self._sites = tuple(sites)
         self._records = records or FakeRecords()
+        self._skill = skill
         self._clock = clock
         self.server_reads = 0
         """How many times ``server`` was called (the uninstall's fresh read)."""
@@ -173,6 +181,14 @@ class FakeServerInventory:
         rows = list(self._rows.values())
         return count_sites(rows, self._sites or catalog_of(rows))
 
+    async def skill(self) -> Skill:
+        """See ServerInventory.skill."""
+        return self._carried_skill()
+
+    async def skill_zip(self, base_url: str) -> SkillZip:
+        """See ServerInventory.skill_zip: zipped as server-scan zips it, for an admin."""
+        return zip_skill(self._carried_skill(), base_url)
+
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance: who stays the first one's, as in server-scan."""
         row = self._writable(server_id)
@@ -194,6 +210,14 @@ class FakeServerInventory:
         )
         self._records.log_maintenance(row, changed, at=self._clock())
         return self._change(changed)
+
+    def _carried_skill(self) -> Skill:
+        self._read()
+        if self._skill is None:
+            raise ServerScanSkillMissingError(
+                "server-scan: This deployment carries no Claude Code skill. (fake)"
+            )
+        return self._skill
 
     def _writable(self, server_id: str) -> ServerRow:
         self._read()

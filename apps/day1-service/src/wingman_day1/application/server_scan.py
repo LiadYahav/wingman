@@ -2,8 +2,10 @@
 
 Read through the one ``ServerInventory`` the Nodes tab, placement and
 Inventory Management share (its cache in front). Each page adds its reads
-here: the Sites page, the Servers page's fleet rows, and a server's page (the
-record, a VM's host, History with the auditor token). server-scan failing is
+here: the Sites page, the Servers page's fleet rows, a server's page (the
+record, a VM's host, History with the auditor token), and the Claude page
+(server-scan's skill and its zip, with server-scan's address written in, for
+people: ``ui_url``). server-scan failing is
 ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
@@ -28,6 +30,7 @@ from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
+from wingman_day1.domain.server_scan_skill import AUDITOR_TOKEN_LINE, Skill, SkillZip
 from wingman_day1.ports import ServerInventory
 
 logger = logging.getLogger(__name__)
@@ -42,17 +45,23 @@ class ServerScanService:
         *,
         maintenance_detail: str | None = None,
         history_detail: str | None = None,
+        ui_url: str = "",
+        token_line: str = AUDITOR_TOKEN_LINE,
     ) -> None:
         """Read server-scan through ``inventory``.
 
         ``maintenance_detail`` says why the maintenance writes are off here
         (``domain.server_scan_servers.maintenance_detail``), ``history_detail``
         why a server's History is (``domain.server_scan_record.history_detail``);
-        ``None``: on.
+        ``None``: on. ``ui_url`` is server-scan's address for people and
+        Claude Code; ``token_line`` the line its zip of the skill names
+        (``domain.server_scan_skill.token_line``).
         """
         self._inventory = inventory
         self.maintenance_detail = maintenance_detail
         self.history_detail = history_detail
+        self.ui_url = ui_url.rstrip("/")
+        self.token_line = token_line
 
     async def sites(self) -> FleetSites:
         """The Sites page: every configured site and the fleet, as server-scan counts them."""
@@ -75,6 +84,14 @@ class ServerScanService:
         if self.history_detail is not None:
             raise ServerScanHistoryOffError(self.history_detail)
         return await self._inventory.server_events(server_id, cursor=cursor, page_size=page_size)
+
+    async def skill(self) -> Skill:
+        """The Claude page: server-scan's Claude Code skill, as it holds it now."""
+        return await self._inventory.skill()
+
+    async def skill_zip(self) -> SkillZip:
+        """The skill zipped by server-scan, with server-scan's address (``ui_url``) written in."""
+        return await self._inventory.skill_zip(self.ui_url)
 
     async def start_maintenance(
         self, server_id: str, start: MaintenanceStart, *, user: User

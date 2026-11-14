@@ -261,7 +261,7 @@ clusterStatus:
 # (ADR-0048), all with the one viewer token below.
 serverScan:
   url: ""                 # the API, e.g. "http://server-scan-api.<ns>.svc:8000"; empty: off
-  uiUrl: ""               # the UI, e.g. "https://server-scan.example"; empty: url
+  uiUrl: ""               # the UI, e.g. "https://server-scan.example" (node links, the Claude page); empty: url
   sslVerify: "true"       # "true", "false" or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
   # A viewer token (sent as "Authorization: Bearer"), from an existing Secret:

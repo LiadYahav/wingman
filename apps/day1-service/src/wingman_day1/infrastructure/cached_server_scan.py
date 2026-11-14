@@ -3,7 +3,9 @@
 A list page that shows many clusters' nodes reads the fleet once per TTL
 (ADR-0011, ADR-0038), and so does the Server Scan area's Servers page,
 however many are open: the rows and the fleet are one entry (ADR-0048). The
-Sites page reads server-scan's counts once per ``sites_ttl``. One server is
+Sites page reads server-scan's counts once per ``sites_ttl``, and the Claude
+page its skill once per ``skill_ttl`` (server-scan's own page reads it every
+minute; the zip is never cached: it is built per download). One server is
 never cached: the uninstall's check reads it fresh, so it acts on what
 server-scan says now. Nor is a server's record, a VM's host or a server's
 History (server-scan caches the record per revision itself, the host's
@@ -20,6 +22,7 @@ from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
+from wingman_day1.domain.server_scan_skill import Skill, SkillZip
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure import cache_keys as keys
 from wingman_day1.ports import ServerInventory
@@ -29,13 +32,20 @@ class CachedServerInventory:
     """A ``ServerInventory`` that caches ``inner``'s fleet rows and sites."""
 
     def __init__(
-        self, inner: ServerInventory, cache: TtlCache, *, ttl: float, sites_ttl: float | None = None
+        self,
+        inner: ServerInventory,
+        cache: TtlCache,
+        *,
+        ttl: float,
+        sites_ttl: float | None = None,
+        skill_ttl: float | None = None,
     ) -> None:
-        """Cache ``inner``'s rows for ``ttl`` seconds, its sites for ``sites_ttl`` (or ``ttl``)."""
+        """Cache ``inner``'s rows for ``ttl`` seconds, its sites and skill as long or as given."""
         self._inner = inner
         self._cache = cache
         self._ttl = ttl
         self._sites_ttl = ttl if sites_ttl is None else sites_ttl
+        self._skill_ttl = ttl if skill_ttl is None else skill_ttl
 
     async def rows(self) -> list[ServerRow]:
         """See ServerInventory.rows."""
@@ -70,6 +80,16 @@ class CachedServerInventory:
         return await self._cache.get_or_fetch(
             keys.server_scan_sites(), self._inner.sites, ttl=self._sites_ttl
         )
+
+    async def skill(self) -> Skill:
+        """See ServerInventory.skill."""
+        return await self._cache.get_or_fetch(
+            keys.server_scan_skill(), self._inner.skill, ttl=self._skill_ttl
+        )
+
+    async def skill_zip(self, base_url: str) -> SkillZip:
+        """See ServerInventory.skill_zip; always read through."""
+        return await self._inner.skill_zip(base_url)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance; clears the rows and sites."""

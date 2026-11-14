@@ -6,7 +6,7 @@ models (``server_scan_record``, ``server_scan_events``): an answer that does
 not fit is "unavailable", never a blank. The record and the VM host go with
 the viewer token; History with the auditor token's header, which the
 adapter passes. ``fetch`` and ``check`` are how every server-scan read goes
-out and is judged.
+out and is judged; ``parsed`` and ``problem_detail`` how its answer is read.
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ async def read_record(client: httpx.AsyncClient, server_id: str, *, now: datetim
     response = await fetch(client, _path(RECORD_PATH, server_id), what=what)
     _found(response, f"server-scan has no server {server_id!r}")
     check(response, what=what)
-    return _parsed(ServerRecord, response, f"a malformed server {server_id}").judged(now)
+    return parsed(ServerRecord, response, f"a malformed server {server_id}").judged(now)
 
 
 async def read_vm_host(client: httpx.AsyncClient, server_id: str) -> VmHostAnswer:
@@ -78,7 +78,7 @@ async def read_vm_host(client: httpx.AsyncClient, server_id: str) -> VmHostAnswe
     response = await fetch(client, _path(VM_HOST_PATH, server_id), what=what)
     _found(response, f"server-scan has no virtual machine {server_id!r}")
     check(response, what=what)
-    return _parsed(VmHostAnswer, response, f"a malformed host of {server_id}")
+    return parsed(VmHostAnswer, response, f"a malformed host of {server_id}")
 
 
 async def read_events(
@@ -97,7 +97,7 @@ async def read_events(
     path = _path(EVENTS_PATH, server_id)
     response = await fetch(client, path, what=what, headers=headers, params=params)
     check(response, what=what, token=AUDITOR)
-    return _parsed(EventPage, response, f"a malformed history of {server_id}")
+    return parsed(EventPage, response, f"a malformed history of {server_id}")
 
 
 def _path(template: str, server_id: str) -> str:
@@ -107,17 +107,18 @@ def _path(template: str, server_id: str) -> str:
 def _found(response: httpx.Response, fallback: str) -> None:
     """A 404 is ``ServerNotFoundError``, in server-scan's own words when it sent them."""
     if response.status_code == 404:
-        raise ServerNotFoundError(_detail(response) or fallback)
+        raise ServerNotFoundError(problem_detail(response) or fallback)
 
 
-def _parsed[M: BaseModel](model: type[M], response: httpx.Response, what: str) -> M:
+def parsed[M: BaseModel](model: type[M], response: httpx.Response, what: str) -> M:
+    """The answer read strictly into ``model``; one that does not fit is unavailable."""
     try:
         return model.model_validate_json(response.content)
     except ValidationError as exc:
         raise ServerScanUnavailableError(f"server-scan returned {what}") from exc
 
 
-def _detail(response: httpx.Response) -> str | None:
+def problem_detail(response: httpx.Response) -> str | None:
     """server-scan's problem ``detail`` (``No server with id 'x'.``), when it sent one."""
     try:
         raw = response.json()
