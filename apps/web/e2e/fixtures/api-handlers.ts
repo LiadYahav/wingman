@@ -613,6 +613,10 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/segments/**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Segments is not set up in this deployment: SEGMENTS_MANAGER_URL is empty.")
   );
+  // Inventory Management is off unless a test turns it on (e2e/fixtures/inventory.ts): the Overview's Free Servers says so
+  await page.route("**/api/day1/inventory", (route: Route) =>
+    fulfillProblem(route, 501, "FEATURE_DISABLED", "Inventory Management is not set up in this deployment: SERVER_SCAN_URL is empty.")
+  );
   // The Server Scan area is off unless a test turns it on (e2e/fixtures/server-scan.ts)
   await page.route("**/api/day1/server-scan/**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Server Scan is not set up in this deployment: SERVER_SCAN_URL is empty.")
