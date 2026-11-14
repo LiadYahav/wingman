@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backHref, parseTab, serverHref } from "./server-page";
+import { backHref, nodeServerLink, parseTab, serverHref } from "./server-page";
 import { isHealthSeverity } from "./vocabulary";
 
 describe("the server page's address", () => {
@@ -22,6 +22,28 @@ describe("the server page's address", () => {
     expect(backHref("/server-scan/servers/srv_1")).toBe("/server-scan/servers");
     expect(backHref("https://elsewhere.example/server-scan/servers")).toBe("/server-scan/servers");
     expect(backHref(null)).toBe("/server-scan/servers");
+  });
+});
+
+describe("a node's server link", () => {
+  const server = { id: "srv_0d48/1", name: "ocp-dell-r660-site1-DL0000123", url: "https://server-scan.example/servers/srv_0d48%2F1" };
+
+  it("is the server's page here, in this tab, for whoever has the Server Scan area", () => {
+    expect(nodeServerLink(server, true)).toEqual({
+      href: "/server-scan/servers/srv_0d48%2F1",
+      inApp: true,
+      label: "ocp-dell-r660-site1-DL0000123, its server page",
+    });
+  });
+
+  it("is server-scan's own page, in a new tab, for anyone else and while that is found out", () => {
+    const original = {
+      href: server.url,
+      inApp: false,
+      label: "ocp-dell-r660-site1-DL0000123, its server-scan page (opens in a new tab)",
+    };
+    expect(nodeServerLink(server, false)).toEqual(original);
+    expect(nodeServerLink(server, undefined)).toEqual(original);
   });
 });
 

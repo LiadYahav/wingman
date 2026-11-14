@@ -490,8 +490,8 @@ maintenance:
 
 `/server-scan/servers/<id>`: server-scan's server page, one server's
 record (ADR-0048's 3.25.0 amendment). It is **the one view of a server** in
-Wingman: the Servers table and Inventory Management link to it instead of
-repeating it (§9.8).
+Wingman: the Servers table, Inventory Management and (since 3.26.0) the
+cluster page's Nodes tab link to it instead of repeating it (§9.8).
 
 ### 9.1 What server-scan's server page shows and does
 
@@ -831,7 +831,13 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
     already caches; `null` otherwise, or when server-scan could not be read
     (the runs are still listed);
   - a VM's **Host** links to its host server's page.
-  - **The cluster page's Nodes tab does not change.**
+  - **The cluster page's Nodes tab** (3.26.0, ADR-0048's amendment): a
+    server's name there, and a node in the Overview's opened nodepool,
+    opens its page in this tab, without the external-link mark, for a
+    person who has the area; anyone else keeps server-scan's own page
+    (`url`) in a new tab. The nodes read already carries the id
+    (`server.id`); `nodeServerLink` in `lib/server-scan/server-page.ts` is
+    the one decision. Nothing else on the cluster page changes.
 - **States**: skeleton fields while loading; "For admins" on `403`; "Server
   Scan is not set up" on `501`; "No server <id>" on `404`, with a link to
   Servers; the problem on `502`; a failed re-read keeps the record with a

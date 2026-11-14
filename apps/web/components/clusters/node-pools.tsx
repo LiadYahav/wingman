@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { CircleDashed, CircleX, ExternalLink, Layers, Loader2, ServerOff, TriangleAlert } from "lucide-react";
+import { CircleDashed, CircleX, Layers, Loader2, ServerOff, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { HealthBadge, NodeFlags, NodeStateChip, RunStatus, ServerStateText } from "@/components/clusters/node-badges";
+import { NodeServerName } from "@/components/clusters/node-server-link";
 import type { UninstallTarget } from "@/components/clusters/uninstall-node-dialog";
 import { humanize, isRunning } from "@/lib/nodes";
 import { cn } from "@/lib/utils";
-import type { NodePoolNodes, NodePoolUpdate, PoolNode, ServerRecord, UnassignedServer, WorkflowRun } from "@/types";
+import type { NodePoolNodes, NodePoolUpdate, PoolNode, UnassignedServer, WorkflowRun } from "@/types";
 
 /** What a row needs from the tab: the run to show, and whether and how to start an uninstall. */
 export interface NodeActions {
@@ -22,22 +23,6 @@ export interface NodeActions {
 
 /** The state, health and action slots have fixed widths, so they line up down a pool and across pools. */
 const SLOTS = "sm:grid-cols-[0.5rem_minmax(0,1fr)_6.5rem_6rem_5.5rem]";
-
-/** A server's name: its page in server-scan, in a new tab. */
-function ServerLink({ server }: { server: ServerRecord }) {
-  return (
-    <a
-      href={server.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`${server.name}, its server-scan page (opens in a new tab)`}
-      className="group inline-flex items-center gap-1 whitespace-nowrap rounded-sm font-mono text-xs font-medium text-foreground underline-offset-4 outline-none hover:text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-    >
-      {server.name}
-      <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden />
-    </a>
-  );
-}
 
 function UninstallButton({ target, actions }: { target: UninstallTarget; actions: NodeActions }) {
   return (
@@ -236,7 +221,7 @@ function NodeRow({ node, pool, actions }: { node: PoolNode; pool: string; action
       testId={`node-${name}`}
       title={
         server ? (
-          <ServerLink server={server} />
+          <NodeServerName server={server} />
         ) : (
           <span className="whitespace-nowrap font-mono text-xs font-medium text-foreground" title="No server-scan record">
             {name}
@@ -531,7 +516,7 @@ export function UnassignedServers({ servers, actions }: { servers: UnassignedSer
             <Row
               key={server.id}
               testId={`node-${server.name}`}
-              title={<ServerLink server={server} />}
+              title={<NodeServerName server={server} />}
               flags={<NodeFlags server={server} />}
               meta={[
                 server.serial && <span key="serial" className="font-mono">{server.serial}</span>,
