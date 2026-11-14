@@ -23,12 +23,12 @@ from wingman_core.observability.metrics import WingmanMetrics
 from wingman_day1.application.server_scan import ServerScanService
 from wingman_day1.domain.errors import (
     ServerNotFoundError,
+    ServerScanAuditOffError,
     ServerScanDeniedError,
-    ServerScanHistoryOffError,
     ServerScanUnavailableError,
 )
-from wingman_day1.domain.server_scan_events import EventPage
-from wingman_day1.domain.server_scan_record import HISTORY_OFF, ServerRecord, history_detail
+from wingman_day1.domain.server_scan_events import HISTORY_OFF, EventPage, audit_detail
+from wingman_day1.domain.server_scan_record import ServerRecord
 from wingman_day1.domain.server_scan_servers import MaintenanceStart
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
 from wingman_day1.infrastructure.fake_fleet import (
@@ -539,14 +539,14 @@ async def test_the_cache_reads_a_record_and_history_through_every_time() -> None
 def test_history_needs_the_auditor_token_beside_a_viewer_token(
     viewer: bool, auditor: bool, detail: str | None
 ) -> None:
-    assert history_detail(viewer_token=viewer, auditor_token=auditor) == detail
+    assert audit_detail("History", viewer_token=viewer, auditor_token=auditor) == detail
 
 
 async def test_the_use_case_keeps_history_off_without_the_auditor_token() -> None:
     fleet = fixture_fleet()
     service = ServerScanService(fleet, history_detail=HISTORY_OFF)
     server_id = fleet.snapshot()[0].id
-    with pytest.raises(ServerScanHistoryOffError, match="SERVER_SCAN_AUDITOR_TOKEN"):
+    with pytest.raises(ServerScanAuditOffError, match="SERVER_SCAN_AUDITOR_TOKEN"):
         await service.history(server_id, cursor=None, page_size=50)
     assert (await service.record(server_id)).id == server_id, "the record reads all the same"
 

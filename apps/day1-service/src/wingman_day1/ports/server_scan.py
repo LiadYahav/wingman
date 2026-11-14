@@ -6,7 +6,8 @@ The Server Scan area's maintenance toggle is the one write (ADR-0048's 3.23.0
 amendment); its server page reads a server whole, a VM's host and the
 server's History (3.25.0); its Claude page reads server-scan's skill and the
 skill's zip (3.27.0); its Architecture page reads the diagrams server-scan's
-UI serves (3.28.0); its Confs page the hardware catalog (3.29.0).
+UI serves (3.28.0); its Confs page the hardware catalog (3.29.0); its Events
+page the fleet's audit trail and who wrote it (3.31.0).
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from typing import Protocol
 
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
-from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -63,6 +64,17 @@ class ServerInventory(Protocol):
         self, server_id: str, *, cursor: str | None, page_size: int
     ) -> EventPage:
         """One page of a server's History from ``cursor``, newest first (the auditor token)."""
+        ...
+
+    async def events(self, query: EventQuery) -> EventPage:
+        """One page of the audit trail ``query`` keeps, newest first (the auditor token).
+
+        A cursor server-scan refuses is ``ServerScanRefusedError``.
+        """
+        ...
+
+    async def event_actors(self) -> EventActorList:
+        """Who wrote the audit trail and how much, busiest first (the auditor token)."""
         ...
 
     async def classification_rules(self) -> ClassificationRuleList:

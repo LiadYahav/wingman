@@ -6,7 +6,8 @@ built in server-scan's own JSON shape and read by the same strict models as
 the real answer, so the fixture cannot drift from the shape. Its History is
 made up from the row (discovered, classified, installed, health, maintenance)
 plus every maintenance change made in the fake since it started, by ``dev``,
-as a server-scan with auth off records it. Nothing here is real.
+as a server-scan with auth off records it; the fleet's audit trail joins them
+(``fake_server_scan_events``). Nothing here is real.
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ from typing import Any, Final
 
 import yaml
 
-from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord
 from wingman_day1.domain.servers import ServerRow
 
@@ -87,22 +87,6 @@ class FakeRecords:
         }
         return ServerRecord.model_validate_json(json.dumps(raw, default=_iso)).judged(now)
 
-    def page(self, row: ServerRow, cursor: str | None, page_size: int) -> EventPage:
-        """One page of the row's History, newest first; the cursor is the next event's index."""
-        events = self._events(row)
-        start = int(cursor) if cursor and cursor.isdigit() else 0
-        end = start + page_size
-        answer = {
-            "items": events[start:end],
-            "page": {
-                "next_cursor": str(end) if end < len(events) else None,
-                "has_more": end < len(events),
-                "page_size": page_size,
-                "total": None if cursor else len(events),
-            },
-        }
-        return EventPage.model_validate_json(json.dumps(answer, default=_iso))
-
     def log_maintenance(
         self,
         before: ServerRow,
@@ -148,13 +132,14 @@ class FakeRecords:
             "expected_end": expected_end if on else None,
         }
 
-    def _events(self, row: ServerRow) -> list[JSONish]:
+    def history(self, row: ServerRow) -> list[JSONish]:
+        """The row's events, in server-scan's shape: as seeded, then the fake's own writes."""
         seeded = self._before.get(row.id, row)
         events = _history(seeded, self._classification(row), self._servers.get(row.name, {}))
         events += self._logged.get(row.id, [])
         for index, event in enumerate(events):
             event["id"] = f"evt_{row.id[-12:]}_{index:04d}"
-        return sorted(events, key=lambda event: (event["created_at"], event["id"]), reverse=True)
+        return events
 
 
 def _hardware(spec: Mapping[str, Any], row: ServerRow) -> JSONish:

@@ -41,7 +41,7 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
-| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs`, `list_classification_rules`, `list_health_policies` |
+| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `list_events`, `list_event_actors`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs`, `list_classification_rules`, `list_health_policies` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
@@ -113,6 +113,13 @@ Operations of the other dependencies (day1):
   `get_vm_host` is the viewer token refused (`SERVER_SCAN_TOKEN`); on
   `list_server_events` it is **the auditor token** (`SERVER_SCAN_AUDITOR_TOKEN`).
   `get_server` stays the uninstall's fresh check of a server's cluster.
+- `server_scan` `list_events` and `list_event_actors` are the Server Scan
+  area's Events page (ADR-0048's 3.31.0 amendment): one page of the fleet's
+  audit trail per page shown (filters and cursors, never cached by day1),
+  and who wrote it, at most once a minute per open page. Both use **the
+  auditor token**: `denied` is `SERVER_SCAN_AUDITOR_TOKEN` refused.
+  `rejected` on `list_events` is a cursor server-scan refused (its `400`, a
+  `422` to the page); `unavailable` includes an answer day1 could not read.
 - `server_scan` `get_skill` and `download_skill` are the Server Scan area's
   Claude page (ADR-0048's 3.27.0 amendment): server-scan's Claude Code skill,
   at most one call per replica per minute (its cache), and its zip, one call

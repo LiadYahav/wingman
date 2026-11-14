@@ -3,8 +3,9 @@
 Read only (ADR-0038, ADR-0048) but for a server's maintenance, the Server Scan
 area's one write (``server_scan_writes``, ADR-0048's 3.23.0 amendment). Day1
 presents a viewer token (``Authorization: Bearer``) on every read, the
-auditor token on a server's History only and the admin token on the writes
-only, or none for an instance that runs with auth off.
+auditor token on the audit trail only (a server's History, the Events page)
+and the admin token on the writes only, or none for an instance that runs
+with auth off.
 The fleet is one read, ``GET /api/v1/servers/rows`` (about 250 KB gzipped for
 3,000 servers); its weak ``ETag`` goes back as ``If-None-Match``, so an
 unchanged fleet costs a 304 and no download. One server is
@@ -22,7 +23,8 @@ server-scan refuses the token): nodes are then unknown, never "none"
 (ADR-0004). The answers are read by ``server_scan_parse`` (rows and one
 server) and ``server_scan_sites``. The Rules & Policies page reads the enabled
 classification rules and health policies (``server_scan_rules``, ADR-0048's
-3.30.0 amendment).
+3.30.0 amendment); the Events page the fleet's audit trail and its actors
+(``server_scan_events``, 3.31.0).
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ from wingman_core.ports.clock import Clock, system_clock
 from wingman_day1.domain.errors import ServerNotFoundError, ServerScanUnavailableError
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
-from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -49,6 +51,7 @@ from wingman_day1.infrastructure.http import json_client
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
 from wingman_day1.infrastructure.server_scan_architecture import read_diagram, ui_client
 from wingman_day1.infrastructure.server_scan_confs import read_confs
+from wingman_day1.infrastructure.server_scan_events import read_event_actors, read_fleet_events
 from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_detail
 from wingman_day1.infrastructure.server_scan_record import (
     check,
@@ -90,7 +93,7 @@ class HttpServerInventory:
         ``ui_url`` is server-scan's UI, where its diagrams are (empty: ``base_url``).
 
         ``admin_token`` replaces it on the maintenance writes only, and
-        ``auditor_token`` on a server's History only (empty: those carry
+        ``auditor_token`` on the audit trail only (empty: those carry
         ``token``'s header, or none). ``verify`` is ``True``/``False`` or a CA
         bundle path (read now, so a missing bundle stops start-up);
         ``transport`` is for tests; ``clock`` judges a record's reservation.
@@ -166,6 +169,16 @@ class HttpServerInventory:
             headers=self._audit_headers,
         )
         return await self._observer.call(ServerScanOperation.LIST_SERVER_EVENTS, read)
+
+    async def events(self, query: EventQuery) -> EventPage:
+        """See ServerInventory.events."""
+        read = read_fleet_events(self._client, query, headers=self._audit_headers)
+        return await self._observer.call(ServerScanOperation.LIST_EVENTS, read)
+
+    async def event_actors(self) -> EventActorList:
+        """See ServerInventory.event_actors."""
+        read = read_event_actors(self._client, headers=self._audit_headers)
+        return await self._observer.call(ServerScanOperation.LIST_EVENT_ACTORS, read)
 
     async def skill(self) -> Skill:
         """See ServerInventory.skill."""

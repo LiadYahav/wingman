@@ -6,13 +6,15 @@ decision 22, ADR-0048). This note covers the area, its first page,
 **Sites** (§1 to §7), its second, **Servers** (§8, 3.23.0), a
 server's own page (§9, 3.25.0), the **Claude** page (§12, 3.27.0),
 **Architecture** (§11, 3.28.0), the hardware catalog, **Confs** (§10,
-3.29.0), and what server-scan runs, **Rules & Policies** (§13, 3.30.0). Each
-later page adds its section here (§14 lists them).
+3.29.0), what server-scan runs, **Rules & Policies** (§13, 3.30.0), and the
+fleet's audit trail, **Events** (§14, 3.31.0). Each later page adds its
+section here (§15 lists them).
 
 - **server-scan's API does not change.** day1 reads server-scan with the
-  viewer token it already holds (§4), and a server's History with its
-  auditor token (§9.5). The one write is a server's maintenance on and off,
-  with server-scan's admin token, behind Wingman's admin check (§8.5).
+  viewer token it already holds (§4), and a server's History and the Events
+  page with its auditor token (§9.5, §14.5). The one write is a server's
+  maintenance on and off, with server-scan's admin token, behind Wingman's
+  admin check (§8.5).
 - **The browser never calls server-scan.** It reads day1's routes below.
 - **Admins only** (decision 13 of the single-pane plan, until RBAC): every
   route takes `AdminUser`, so a viewer gets `403 FORBIDDEN` and an anonymous
@@ -847,7 +849,8 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
   Scan is not set up" on `501`; "No server <id>" on `404`, with a link to
   Servers; the problem on `502`; a failed re-read keeps the record with a
   notice. History: loading, the not-set-up line, the problem, "No events
-  recorded.".
+  recorded."; since 3.31.0 a failed re-read keeps the pages read with a
+  notice, as Events (§14.8).
 - **Fresh as the original**: read on open, again when opened after 30
   seconds; not polled.
 - **Reused from server-scan** (decision 18, credited in the code):
@@ -1523,7 +1526,215 @@ On each route:
   `severityRank` and `conditionSummary`, its words, and its tests' cases as
   Vitest cases.
 
-## 14. Left for later pages
+## 14. The Events page (3.31.0)
+
+`/server-scan/events`: server-scan's Events page, the audit trail of the
+whole fleet, read only (ADR-0048's 3.31.0 amendment). It is a server's
+History (§9) without the server: the same events, words, timeline, details
+and pages, across every server and the platform's own events (logins,
+tokens, jobs run by hand), with filters. It reads with the auditor token
+History uses (§9.5), behind the same guard.
+
+### 14.1 What server-scan's Events page shows and does
+
+Read from `team-redbull/server-scan` at `92146d3`:
+`frontend/src/features/events/` (`EventsPage.tsx`, `ActorCombobox.tsx`,
+`filters.ts`, `EventList.tsx`, `EventTimeline.tsx`, `describeEvent.ts`,
+`hooks.ts`, and `EventsUi.test.tsx`, `filters.test.ts`,
+`EventTimeline.test.tsx`), `frontend/src/api/events.ts`,
+`frontend/src/lib/datetime.ts` (`parseIsraelInput`),
+`frontend/src/components/AuditGate.tsx`, and
+`backend/app/api/v1/events.py`, `events_schemas.py` with
+`backend/app/infrastructure/mongodb/audit_event_repository.py`. Fourth in its
+navigation, after Confs, at `/events`, for an auditor or an admin only.
+
+- **Header**: "Events", then "The audit trail, newest first. Times are Israel
+  time."
+- **Four filters**, in this order, each in the URL:
+
+  | Filter | Control | URL parameter | Sent to server-scan |
+  |---|---|---|---|
+  | Event type | a dropdown: "All", then the 19 types server-scan writes, in its menu's order (`WRITTEN_EVENT_TYPES`) | `event_type` (a bookmarked `HEALTH_STATUS_CHANGED` or "Health changes" reads as `HEALTH_CHANGED`) | `event_type` |
+  | Server | a text box, "Server name" | `server_name` | `server_name`, trimmed: a case-insensitive substring of the server's current name, or of the name recorded on the event (so a pruned server still matches) |
+  | User | a searchable list (`ActorCombobox`): "All" first, then every actor busiest first, each as `actorLabel` names it ("Alice A", "API token (admin)", "System (ingest)") with its event count; typing narrows it by the label or the raw id, Enter or a click picks one, "All" (or an emptied box) clears it, "No matching user" when nothing matches; closed, it shows the picked actor's label | `actor_id` | `actor_id`, exact |
+  | Time range | a dropdown: "Any time", "Last hour", "Last 24 hours", "Last 7 days", "Last 30 days", "Custom" | `range` (`1h`, `24h`, `7d`, `30d`, `custom`) | `since`: now, rounded down to the minute, less the range |
+
+  With **Custom**, two text boxes follow: "From (Israel time)" and "To
+  (exclusive) (Israel time)", each `DD/MM/YYYY` or `DD/MM/YYYY HH:MM`
+  (a bare date is 00:00), in the URL as `from` and `to` as typed, sent as
+  `since` and `until` in UTC. A box whose text is not a real date is marked
+  and says "Use DD/MM/YYYY HH:MM", and is not sent. The text boxes wait 300
+  ms after the last key before asking; a change replaces the URL's history
+  entry. Filters combine with AND.
+- **The list**, newest first, 50 a page: **Server** (its name, a link to the
+  server's page; "Unknown server", its id on hover, for a server since
+  pruned; "-" for an event of no server), **What happened**, **When**,
+  **User**, and a row's **▸ Details**: §9.1's History columns and details,
+  with the Server column first.
+- **Paging**: Previous, "Page X of Y" (Y from the first page's total) and
+  Next, over server-scan's cursors; a change of filters starts again at page 1.
+- **Fresh**: the events are read when the page opens and again when it is
+  opened after 30 seconds (its query client's `staleTime`); the User list
+  once a minute (its own `staleTime`). Not polled.
+- **States**: "Loading history…"; the problem's detail; "No events
+  recorded." when nothing matches. A viewer who opens `/events` sees "Audit
+  trail: The audit trail is available to admins and auditors only."
+  (`AuditGate`), and the navigation hides the page from them.
+
+### 14.2 Every control on server-scan's Events page
+
+| Control | Does | Kind | In Wingman |
+|---|---|---|---|
+| Event type, Server, User, Time range, From, To | Filter the list (§14.1) | read | The same, in the URL under the same names |
+| A server's name | That server's page | read (navigation) | Wingman's server page (§9) |
+| ▸ Details / ▾ Hide details | Opens one event | read | The same |
+| Previous, Next | Pages of 50 | read | The same |
+
+**No write.** server-scan's audit trail is append-only: there is no
+`POST /events`, and only its retention job deletes (its ADR-0045).
+`GET /api/v1/events?server_id=` exists and the page does not use it (a
+server's History has its own route, §9.3).
+
+### 14.3 What server-scan serves
+
+| Call | Token | Answer |
+|---|---|---|
+| `GET /api/v1/events?server_id=&event_type=&actor_id=&since=&until=&server_name=&cursor=&page_size=` | **auditor or admin** (`require_audit_access`; a viewer token is `403`) | `{items: AuditEventResponse[], page: {next_cursor, has_more, page_size, total}}`, newest first, keyset pages: `page_size` 1 to 200 (50), `since` inclusive and `until` exclusive (ISO 8601), the legacy `HEALTH_STATUS_CHANGED` matched as `HEALTH_CHANGED`, `server_name` resolved against at most 5,000 current servers' ids and the names recorded on events, `total` on the first page only. A malformed cursor is `400 CURSOR_INVALID` |
+| `GET /api/v1/events/actors` | **auditor or admin** | `{items: [{id, type, display, event_count}]}`: each distinct `actor.id`, its type and display from its newest event, busiest first, then by id, at most 200 |
+
+Neither is cached by server-scan: the list is a count and a find, the actors
+an aggregate over the whole collection.
+
+### 14.4 day1's routes
+
+**`GET /api/day1/server-scan/events`**: one page of the audit trail,
+server-scan's answer in its shape (§9.4's History page: the same model),
+read with the auditor token. Its parameters are server-scan's, passed on
+when given, each checked first:
+
+| Parameter | Checked |
+|---|---|
+| `event_type` | server-scan's form, `^[A-Z][A-Z0-9_]*$`, at most 64 characters |
+| `server_name` | 1 to 256 characters |
+| `actor_id`, `server_id` | 1 to 256 characters |
+| `since`, `until` | an ISO 8601 date and time **with its zone** (the browser sends UTC); sent to server-scan in UTC |
+| `cursor` | at most 512 characters, the previous page's `next_cursor`; empty is the first page |
+| `page_size` | 1 to 200 (default 50) |
+
+```json
+{
+  "items": [
+    {
+      "id": "evt_…", "event_type": "JOB_TRIGGERED",
+      "server_id": null, "server_name": null,
+      "actor": {"type": "USER", "id": "alice", "display": "Alice Cohen"},
+      "request_id": "…", "created_at": "2026-11-14T08:05:00Z",
+      "data": {"cronjob": "collector-openmanage-site1", "job": "collector-openmanage-site1-manual-8kq2d"}
+    }
+  ],
+  "page": {"next_cursor": "…", "has_more": true, "page_size": 50, "total": 13223}
+}
+```
+
+**`GET /api/day1/server-scan/events/actors`**: who has written events,
+server-scan's answer, typed, in its shape:
+
+```json
+{"items": [{"id": "collector-openmanage", "type": "SYSTEM", "display": null, "event_count": 9120}]}
+```
+
+- An event's `data` is whatever its writer recorded, passed through as JSON;
+  every other field is typed (`domain/server_scan_events.py`). `event_type`
+  and an actor's `type` stay strings, so a word server-scan adds later still
+  shows.
+- **Not cached by day1** (§14.7).
+
+### 14.5 The token
+
+The auditor token, `SERVER_SCAN_AUDITOR_TOKEN`, exactly as History (§9.5):
+sent on these two reads and History's, never on another call; the same rule
+for whether it works (the auditor token; or no token at all, a server-scan
+with auth off; a viewer token alone turns Events off); **no new Secret,
+value or key**. Without it, both routes answer `501 FEATURE_DISABLED` with
+the line "Events needs server-scan's auditor token: add the key
+auditor-token to the server-scan Secret and restart day1
+(SERVER_SCAN_AUDITOR_TOKEN)." and `details.setting`
+`"SERVER_SCAN_AUDITOR_TOKEN"`, so the page tells a missing token from
+server-scan not being configured (whose `501` has no `setting`). History's
+`501` carries the same `details.setting` since 3.31.0.
+
+### 14.6 Errors
+
+On each route:
+
+| Status | `code` | When |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | No session |
+| 403 | `FORBIDDEN` | Not one of Wingman's admins |
+| 422 | `VALIDATION_ERROR` | A parameter outside §14.4's checks; or a cursor server-scan refuses (its `400`), in its words |
+| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty; or a viewer token without the auditor token (§14.5, `details.setting`) |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan unreachable, answering an error, refusing the auditor token (check `SERVER_SCAN_AUDITOR_TOKEN`), or sending an answer day1 cannot read |
+
+### 14.7 Cache, metrics and the fake
+
+- **Not cached by day1.** The list comes in cursors and filters, read when a
+  page is shown; the actors at most once a minute per open page, as the
+  original's list. Only this page asks, and a cache would only hide a new
+  event or a person's first one.
+- **Metrics**: two new operations on `dependency="server_scan"`,
+  `list_events` and `list_event_actors`, with `ok`, `denied` (the auditor
+  token refused), `unavailable`, and on `list_events` `rejected` (a cursor
+  server-scan refused) (`docs/ops/metrics.md`).
+- **The fake** (`DAY1_FAKE_FLEET=true`): the fleet's audit trail is every
+  fake server's History (§9.7) and the events of
+  `dev/fleet-fixtures/events.yaml`: people's (logins, a refused login, a
+  personal token made and revoked, collectors run by hand, a maintenance on
+  and off), the platform's (the retention purge, an iDRAC reset, a rename,
+  an OpenShift state change), herzi's install lock taken, refused and
+  released with the admin token, and a pruned server whose name is gone.
+  About 100 events from those two fixtures, two pages (three with the
+  Inventory Management demo's servers, which `DAY1_FAKE_FLEET` adds). Filtered and paged as
+  server-scan does (`since` inclusive, `until` exclusive, `server_name` a
+  case-insensitive substring of the current name, the legacy event type,
+  keyset cursors, the total on the first page); the actors counted, busiest
+  first. A server's History is the same trail filtered by its id, so the
+  fixture's events on a server show there too. No token is needed, as on
+  the sandbox.
+
+### 14.8 The web
+
+- **`/server-scan/events`** (server-scan's own path), the sidebar's
+  **Events**, in an **Activity** section of its own between Fleet and
+  Configuration (Jobs joins it): server-scan's navigation has it after Confs
+  and before Jobs and Rules & Policies.
+- **§14.1 in Wingman's design**: its filters, URL parameters, columns,
+  words, details and pager, Wingman's colour tokens (light and dark) and
+  dropdowns. The User filter is Wingman's searchable dropdown: "All", then
+  each actor's label with its event count, narrowed by label or id, the
+  picked label shown closed. The explanation (the auditor token, Wingman's
+  writes recorded as the admin token) sits in a tooltip beside the heading.
+- **A server's name links to its page here** (`/server-scan/servers/<id>`,
+  `serverHref`), the one view of a server (§9.8).
+- **States**: "For admins" on `403`; "Server Scan is not set up" on a `501`
+  without `details.setting`; §14.5's line, and no filters, on a `501` with
+  it; "Loading events…" over a skeleton while loading; the problem on
+  `502`; a failed re-read keeps the list with a notice; "No events recorded."
+  when nothing matches; a bad custom date marked with "Use DD/MM/YYYY HH:MM".
+  server-scan's `AuditGate` has no counterpart: the area is for Wingman's
+  admins (decision 13), who may all read the trail.
+- **Fresh as the original**: read on open, again when opened after 30
+  seconds; the User list once a minute; not polled. A filter's change is a
+  new read, from page 1.
+- **Reused**: History's timeline, details, pager and states (§9.8), shared
+  now with a Server column, and `describeEvent`, `actorLabel`,
+  `formatTimestamp`, `WRITTEN_EVENT_TYPES` already ported. **Ported from
+  server-scan** (decision 18, credited in the code): `filters.ts`
+  (`RANGE_PRESETS`, `normalizeEventType`, `filtersToParams`),
+  `parseIsraelInput`, the User list's choices (`ActorCombobox.tsx`), the
+  Server cell of `EventTimeline.tsx`, its words, and their tests' cases as
+  Vitest cases.
+
+## 15. Left for later pages
 
 In single-pane §4's order; each is its own PR, with its section in this note.
 
@@ -1531,7 +1742,7 @@ In single-pane §4's order; each is its own PR, with its section in this note.
 |---|---|---|
 | Confs | Built (§10, 3.29.0): `GET /api/v1/confs` (viewer) | Read only |
 | Rules & Policies | Built (§13, 3.30.0): `GET /api/v1/classification-rules`, `/health-policies` (viewer) | Read only |
-| Events | `GET /api/v1/events`, `/events/actors` (auditor) | Filters and cursor pages; History's timeline and its auditor token (§9) reused |
+| Events | Built (§14, 3.31.0): `GET /api/v1/events`, `/events/actors` (auditor) | Read only: filters and cursor pages; History's timeline and its auditor token (§9) reused |
 | Jobs | `GET /api/v1/jobs`, a run's pod logs, `POST /jobs/{cronjob}/run` (admin) | "Run now" behind the admin check, its confirmation, Wingman's audit |
 | Architecture | Built (§11, 3.28.0): its UI's static diagrams, no token | Read through day1, shown in a sandboxed frame |
 | Claude | `GET /api/v1/skill`, `/skill/download` (viewer) | Built in 3.27.0 (§12): the skill and its zip through day1; the personal token stays a link out, server-scan makes it only for its own login |

@@ -497,3 +497,65 @@ the records fixture), `test_server_scan.py` (read through the cache),
 `apps/day1-service/tests/api/test_server_scan_rules_api.py`,
 `apps/web/lib/server-scan/rules.test.ts` (server-scan's cases) and
 `apps/web/e2e/tests/server-scan-rules.spec.ts`.
+
+**2026-11-14, 3.31.0: the Events page, the fleet's audit trail.**
+server-scan's Events page at `/server-scan/events`, every feature of it
+(decision 14), in Wingman's design, in an Activity section of the sidebar
+between Fleet and Configuration. The contract is §14 of
+`docs/notes/2026-11-13-server-scan-area-api.md`.
+
+- **Two reads through the one client** (`ServerInventory.events`,
+  `event_actors`): server-scan's `GET /api/v1/events` with its filters and
+  keyset cursor (`server_id`, `event_type`, `actor_id`, `since`, `until`,
+  `server_name`, `cursor`, `page_size`) and `GET /api/v1/events/actors`,
+  behind `AdminUser`, operations `list_events` and `list_event_actors`. day1
+  checks each parameter (lengths, server-scan's event-type form, a date with
+  its zone, the page size) and passes on those given; a cursor server-scan
+  refuses is a `422`. The answer is History's page, the same model.
+- **History's auditor token and guard, extended, not copied.** The same
+  `SERVER_SCAN_AUDITOR_TOKEN`, sent on History and these two reads only; the
+  same rule for when the audit trail works (the auditor token, or no token at
+  all: auth off); the same use-case guard and `501 FEATURE_DISABLED`, now
+  `ServerScanAuditOffError` for both pages, each with its own line. The
+  `501` carries `details.setting: "SERVER_SCAN_AUDITOR_TOKEN"`, so a page
+  tells a missing auditor token from server-scan not being configured. No
+  new Secret, value or key.
+- **Not cached by day1**: cursors and filters, read when a page is shown;
+  the actors at most once a minute per open page, as the original's list.
+- **Read only**, as server-scan's audit trail is: append-only, with no write
+  in its API but its retention job's.
+- **One audit trail in the fake.** The fleet's trail is every fake server's
+  History plus `dev/fleet-fixtures/events.yaml` (people's and the platform's
+  events, herzi's install lock, a pruned server), filtered and paged as
+  server-scan does; a server's History is the same trail by its id, so both
+  pages agree.
+- **The web shares History's timeline, details and pager**, moved to
+  `components/server-scan/events/` with a Server column whose name links to
+  the server's page here. The User filter is Wingman's searchable dropdown
+  over server-scan's actor list (label and count, narrowed by label or id).
+- **Fresh as the original**: read on open, again when opened after 30
+  seconds; the User list once a minute; not polled.
+- **Reuse** (decision 18): server-scan's `filters.ts`, `parseIsraelInput`,
+  `ActorCombobox.tsx`'s choices, `EventTimeline.tsx`'s Server cell, its
+  words, and its tests' cases as Vitest cases; `describeEvent.ts`,
+  `actor.ts` and `datetime.ts` were ported with History.
+
+Rejected: **the list with the viewer token** (server-scan keeps its audit
+trail from viewers: `require_audit_access`); **the admin token** (a
+write-capable token on a read); **a separate "off" signal for Events**, such
+as a status route or a field on the sites (the `501`'s `details.setting` is
+the answer itself, as `history_available` is the record's); **caching the
+list** (cursors over a trail that grows; a page would show old events);
+**History from the fleet route with `server_id`** (kept from 3.25.0: the
+server's own route exists); **server-scan's `AuditGate`** (the area is for
+Wingman's admins, who may all read the trail; RBAC decides the rest);
+**a text box that narrows a list as you type, as server-scan's User
+filter** (Wingman's searchable dropdown does the same in Wingman's look).
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_events.py`
+(both reads, the parameters sent, the auditor token only, a refused cursor
+and token, malformed answers, the metrics, the cache, the fake's filters,
+cursors and actors, the guard), `apps/day1-service/tests/api/test_server_scan_events_api.py`,
+`apps/web/lib/server-scan/event-filters.test.ts` and `datetime.test.ts`
+(server-scan's cases), `sidebar.test.ts` and
+`apps/web/e2e/tests/server-scan-events.spec.ts`.

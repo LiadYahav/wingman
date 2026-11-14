@@ -18,7 +18,8 @@ failure is not cached. A maintenance write clears the rows and the sites, so
 the next read shows it (whatever its outcome: an ambiguous one may have
 landed). The Rules & Policies page's rules and policies are read through too:
 two small reads server-scan answers from its database, asked for by that page
-only.
+only; and so is the Events page's audit trail (cursors and filters over a
+trail that grows) and its actors (at most once a minute per open page).
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from __future__ import annotations
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
-from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -88,6 +89,14 @@ class CachedServerInventory:
     ) -> EventPage:
         """See ServerInventory.server_events; always read through."""
         return await self._inner.server_events(server_id, cursor=cursor, page_size=page_size)
+
+    async def events(self, query: EventQuery) -> EventPage:
+        """See ServerInventory.events; always read through."""
+        return await self._inner.events(query)
+
+    async def event_actors(self) -> EventActorList:
+        """See ServerInventory.event_actors; always read through."""
+        return await self._inner.event_actors()
 
     async def classification_rules(self) -> ClassificationRuleList:
         """See ServerInventory.classification_rules; always read through."""

@@ -5,21 +5,23 @@ RBAC). With ``SERVER_SCAN_URL`` empty every route answers 501; server-scan
 failing or refusing the token is 502. A server's page reads the record, a VM's
 host and its History (the auditor token; without it, 501). The Architecture
 page reads server-scan's diagrams from its UI; the Confs page, server-scan's
-hardware catalog. The one write, a
-server's maintenance, is never retried: unanswered, it is 504
-``AMBIGUOUS_WRITE``. The contract: ``docs/notes/2026-11-13-server-scan-area-api.md``.
+hardware catalog; the Events page, the fleet's audit trail and who wrote it
+(the auditor token, as History). The one write, a server's maintenance, is
+never retried: unanswered, it is 504 ``AMBIGUOUS_WRITE``. The contract:
+``docs/notes/2026-11-13-server-scan-area-api.md``.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 
 from wingman_core.web.auth import AdminUser
 from wingman_day1.api.conditional import conditional_json, weak_etag
 from wingman_day1.api.deps import ServerScan
 from wingman_day1.api.v1.server_scan_architecture_schemas import DiagramOut
+from wingman_day1.api.v1.server_scan_events_schemas import event_query
 from wingman_day1.api.v1.server_scan_record_schemas import ServerRecordOut
 from wingman_day1.api.v1.server_scan_schemas import SitesOut
 from wingman_day1.api.v1.server_scan_servers_schemas import (
@@ -33,7 +35,9 @@ from wingman_day1.domain.server_scan_events import (
     CURSOR_MAX_LENGTH,
     EVENTS_PAGE_MAX,
     EVENTS_PAGE_SIZE,
+    EventActorList,
     EventPage,
+    EventQuery,
 )
 from wingman_day1.domain.server_scan_record import VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
@@ -125,6 +129,20 @@ async def server_scan_events(
 ) -> EventPage:
     """One page of a server's History, newest first, with server-scan's auditor token."""
     return await service.history(server_id, cursor=cursor, page_size=page_size)
+
+
+@router.get("/events")
+async def server_scan_fleet_events(
+    service: ServerScan, user: AdminUser, query: Annotated[EventQuery, Depends(event_query)]
+) -> EventPage:
+    """One page of the fleet's audit trail, newest first, filtered as server-scan filters it."""
+    return await service.events(query)
+
+
+@router.get("/events/actors")
+async def server_scan_event_actors(service: ServerScan, user: AdminUser) -> EventActorList:
+    """Who wrote the audit trail and how much, busiest first: the Events page's User filter."""
+    return await service.event_actors()
 
 
 @router.get("/confs")

@@ -1,0 +1,147 @@
+# Made-up audit events for DAY1_FAKE_FLEET=true (development only, ADR-0048's
+# 3.31.0 amendment): the Events page, and a server's History.
+#
+# The fake's audit trail is every server's History (made from its row in
+# servers.yaml, by fake_server_records) plus these: what people did, what
+# the platform did on its own, herzi's install lock, and a server since
+# pruned. Together about 100 events, so the Events page has two pages.
+#
+# Each item is one of server-scan's `AuditEventResponse`s without its id:
+# `server` names a server of servers.yaml (its id and current name are
+# filled in); `server_id` alone is a server server-scan no longer lists,
+# whose name is gone. `data` is what server-scan's writer records for the
+# type (team-redbull/server-scan at 92146d3). Times are UTC. Nothing here is
+# real: the people, jobs and tickets are invented.
+
+items:
+  # ── People ───────────────────────────────────────────────────────────────
+  - event_type: LOGIN_SUCCEEDED
+    created_at: "2026-11-14T07:58:00Z"
+    actor: {type: USER, id: alice, display: Alice Cohen}
+    request_id: req-0001
+    data: {user: alice, role: ADMIN}
+  - event_type: TOKEN_CREATED
+    created_at: "2026-11-14T08:02:00Z"
+    actor: {type: USER, id: alice, display: Alice Cohen}
+    request_id: req-0002
+    data: {user: alice, role: AUDITOR, expires_at: "2027-02-12T08:02:00+00:00"}
+  - event_type: JOB_TRIGGERED
+    created_at: "2026-11-14T08:05:00Z"
+    actor: {type: USER, id: alice, display: Alice Cohen}
+    request_id: req-0003
+    data: {cronjob: collector-openmanage-site1, job: collector-openmanage-site1-manual-8kq2d, namespace: server-scan}
+  - event_type: LOGIN_SUCCEEDED
+    created_at: "2026-11-13T12:01:00Z"
+    actor: {type: USER, id: bob, display: Bob Levi}
+    request_id: req-0004
+    data: {user: bob, role: AUDITOR}
+  - event_type: LOGIN_DENIED
+    created_at: "2026-11-13T12:05:00Z"
+    actor: {type: USER, id: eve}
+    request_id: req-0005
+    data: {user: eve, role: NONE}
+  - event_type: LOGIN_SUCCEEDED
+    created_at: "2026-11-12T07:30:00Z"
+    actor: {type: USER, id: ops, display: ops}
+    request_id: req-0006
+    data: {user: ops, role: ADMIN}
+  - event_type: JOB_TRIGGERED
+    created_at: "2026-11-12T07:35:00Z"
+    actor: {type: USER, id: ops, display: ops}
+    request_id: req-0007
+    data: {cronjob: nodes-status-site1, job: nodes-status-site1-manual-x7f2p, namespace: server-scan}
+  - event_type: TOKEN_REVOKED
+    created_at: "2026-11-11T16:00:00Z"
+    actor: {type: USER, id: alice, display: Alice Cohen}
+    request_id: req-0008
+    data: {user: alice}
+  - event_type: TOKEN_REVOKED
+    created_at: "2026-11-11T16:05:00Z"
+    actor: {type: USER, id: alice, display: Alice Cohen}
+    request_id: req-0009
+    data: {user: dana, by_admin: true}
+  - event_type: MAINTENANCE_ENABLED
+    server: ocp-cisco-m6-site1-128c-512gb-CSFAKE0302
+    created_at: "2026-11-10T10:00:00Z"
+    actor: {type: USER, id: alice, display: Alice Cohen}
+    request_id: req-0010
+    data: {reason: "RAID controller replacement — INC-4502"}
+  - event_type: MAINTENANCE_DISABLED
+    server: ocp-cisco-m6-site1-128c-512gb-CSFAKE0302
+    created_at: "2026-11-10T14:00:00Z"
+    actor: {type: USER, id: alice, display: Alice Cohen}
+    request_id: req-0011
+  - event_type: LOGIN_SUCCEEDED
+    created_at: "2026-11-09T09:00:00Z"
+    actor: {type: USER, id: dana, display: Dana Mizrahi}
+    request_id: req-0012
+    data: {user: dana, role: VIEWER}
+  - event_type: TOKEN_CREATED
+    created_at: "2026-11-09T09:03:00Z"
+    actor: {type: USER, id: dana, display: Dana Mizrahi}
+    request_id: req-0013
+    data: {user: dana, role: VIEWER, expires_at: "2027-02-07T09:03:00+00:00"}
+
+  # ── herzi's install lock, through server-scan's admin token ──────────────
+  - event_type: SERVER_RESERVED
+    server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0501
+    created_at: "2026-11-13T09:00:00Z"
+    actor: {type: TOKEN, id: api-token-admin}
+    request_id: req-0014
+    data: {holder: herzi, mce_cluster: ocp4-prod-mce-site1-a, infra_env: dell-r660-site1-128c-1024gb, workflow_id: add-server-dlfake0501, expires_at: "2026-11-13T11:00:00+00:00"}
+  - event_type: SERVER_RESERVATION_REFUSED
+    server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0501
+    created_at: "2026-11-13T09:10:00Z"
+    actor: {type: TOKEN, id: api-token-admin}
+    request_id: req-0015
+    data: {requested_by: provision-cluster, requested_for_mce: ocp4-prod-mce-site1-a, held_by: herzi, held_for_mce: ocp4-prod-mce-site1-a, expires_at: "2026-11-13T11:00:00+00:00"}
+  - event_type: SERVER_RELEASED
+    server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0501
+    created_at: "2026-11-13T09:40:00Z"
+    actor: {type: TOKEN, id: api-token-admin}
+    request_id: req-0016
+    data: {holder: herzi, mce_cluster: ocp4-prod-mce-site1-a, workflow_id: add-server-dlfake0501}
+
+  # ── The platform on its own ─────────────────────────────────────────────
+  - event_type: AUDIT_PURGED
+    created_at: "2026-11-14T02:00:00Z"
+    actor: {type: SYSTEM, id: audit-retention}
+    data: {cutoff: "2026-05-18T02:00:00+00:00", retention_days: 180, deleted: 1204, batches: 2, truncated: false, complete: true, reason: age-based retention}
+  - event_type: IDRAC_RESET
+    server: ocp-dell-r660-site1-128c-1024gb-DLFAKE0102
+    created_at: "2026-11-12T03:00:00Z"
+    actor: {type: SYSTEM, id: ingestion}
+    data: {trigger: disks, outcome: requested, bmc_host: 192.0.2.102, detail: null, active_jobs: [], powered_on: false, power_state: "On"}
+  - event_type: SERVER_RENAMED
+    server: ocp-dell-r760-site1-64c-512gb-DLFAKE0104
+    created_at: "2026-09-02T06:00:00Z"
+    actor: {type: SYSTEM, id: collector-openmanage}
+    data: {name_from: dell-r760-DLFAKE0104, name_to: ocp-dell-r760-site1-64c-512gb-DLFAKE0104}
+  - event_type: OPENSHIFT_STATE_CHANGED
+    server: ocp-hp-gen11-site2-64c-512gb-HPFAKE0502
+    created_at: "2026-11-08T11:00:00Z"
+    actor: {type: SYSTEM, id: membership-job}
+    data: {from: INSTALLED, to: AVAILABLE, cluster_name: ocp4-prep-amit-site2-a}
+  - event_type: HEALTH_CHANGED
+    server: ocp-dell-r660-site2-64c-256gb-DLFAKE0401
+    created_at: "2026-11-07T04:00:00Z"
+    actor: {type: SYSTEM, id: collector-openmanage}
+    data:
+      from: WARNING
+      to: HEALTHY
+      from_reasons:
+        - {policy_key: storage.predictive_failure, policy_name: A drive predicts its failure, category: storage, severity: WARNING, message: Disk.Bay.1 predicts failure}
+      to_reasons: []
+
+  # ── A server server-scan no longer lists: its name is gone ──────────────
+  - event_type: MAINTENANCE_ENABLED
+    server_id: srv_00000000000000000000000000000999
+    created_at: "2026-10-20T08:00:00Z"
+    actor: {type: USER, id: ops, display: ops}
+    request_id: req-0017
+    data: {reason: decommission}
+  - event_type: SERVER_PRUNED
+    server_id: srv_00000000000000000000000000000999
+    created_at: "2026-10-27T06:00:00Z"
+    actor: {type: SYSTEM, id: collector-openmanage}
+    data: {}

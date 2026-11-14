@@ -89,7 +89,7 @@ tag exists.
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
 | 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0046 | M | 1 for a place to show it |
 | 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand (3.17.0); full parity (decision 22) built for 3.21.0 |
-| 4 | Server Scan area | 0048 | L–XL | Sites and Servers built (ADR-0048 and its 3.23.0 amendment), with maintenance on/off and the admin token; the other pages follow, one PR each; the auditor token with the pages that need it |
+| 4 | Server Scan area | 0048 | L–XL | Sites, Servers (with maintenance on/off and the admin token), a server's page (History, the auditor token), Claude, Architecture, Confs, Rules & Policies and Events built (ADR-0048 and its amendments, 3.22.0 to 3.31.0); Jobs follows |
 | 5 | Hosted clusters and MCEs from cluster-navigator | 0049 | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
@@ -279,8 +279,8 @@ Never its `/api/logs` endpoints (open, unauthenticated: a finding for the team).
 
 **Status (2026-11-14): Sites (3.22.0), Servers (3.23.0), a server's page
 (3.25.0), Claude (3.27.0), Architecture (3.28.0), Confs (3.29.0, the
-hardware catalog, read only) and Rules & Policies (3.30.0, read only) built;
-the other pages follow**, page by page, one PR each (the user: "page over
+hardware catalog, read only), Rules & Policies (3.30.0, read only) and
+Events (3.31.0, the audit trail, read only) built; Jobs follows**, page by page, one PR each (the user: "page over
 page, not all together"). Servers brought the area's first write, a
 server's maintenance on and off, with server-scan's admin token (an
 optional key of the same Secret) and logged with the person's name. A
@@ -296,8 +296,10 @@ nothing is copied (ADR-0048's 3.28.0 amendment). Confs is server-scan's
 catalog of server configurations, with the viewer token; server-scan has no
 write for it. Rules & Policies shows what server-scan runs, its
 classification rules and health policies, with the viewer token; neither
-server-scan's page nor its API writes them. The contract is
-`docs/notes/2026-11-13-server-scan-area-api.md`; its §14 lists what each later
+server-scan's page nor its API writes them. Events is the fleet's audit
+trail with server-scan's filters and cursors, on History's auditor token and
+timeline; the trail is append-only, so there is nothing to write. The contract is
+`docs/notes/2026-11-13-server-scan-area-api.md`; its §15 lists what each later
 page needs.
 
 **Option C (decision 22).** A top-bar
@@ -336,7 +338,7 @@ How it calls server-scan:
 | Server detail | M–L | Overview, Hardware, Network, Connectivity, History (History needs the auditor token) |
 | Confs | S | The hardware catalog, read-only |
 | Rules & Policies | S | Classification rules and health policies, read-only |
-| Events | M | The audit trail with filters and cursor pages; auditor token |
+| Events | M | The audit trail with filters and cursor pages; auditor token. Built (3.31.0): History's timeline and token, a Server column linking to the server's page |
 | Jobs | M | Collector jobs, runs and logs; admin; "run now" starts a real collector |
 | Architecture | S | Iframe server-scan's diagrams; copying them would go stale. Built (3.28.0): framed from day1, which reads them from server-scan's UI |
 | Claude | S | Link out: its token and MCP flow belong to server-scan's own login. Built (3.27.0): the skill and its zip read through day1, the MCP command naming server-scan, the token a link out |

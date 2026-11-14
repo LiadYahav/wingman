@@ -2,7 +2,8 @@
 
 The core handlers already cover Git errors, self-approval and unmanaged MRs;
 this maps day1's own. ``details.problems`` lists every rule a request broke,
-so the form can show them all at once.
+so the form can show them all at once; ``details.setting`` names the setting
+a ``501`` waits for when it is not ``SERVER_SCAN_URL`` (the auditor token).
 """
 
 from __future__ import annotations
@@ -54,8 +55,8 @@ from wingman_day1.domain.errors import (
     ResourceNotFoundError,
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
+    ServerScanAuditOffError,
     ServerScanDiagramNotFoundError,
-    ServerScanHistoryOffError,
     ServerScanNotConfiguredError,
     ServerScanSkillMissingError,
     ServerScanUnavailableError,
@@ -68,6 +69,7 @@ from wingman_day1.domain.errors import (
     WorkflowsNotConfiguredError,
     WorkflowsUnavailableError,
 )
+from wingman_day1.domain.server_scan_events import AUDITOR_SETTING
 
 _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (InvalidInputError, ValidationFailed),
@@ -88,7 +90,7 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (ServerScanDiagramNotFoundError, NotFound),
     (ServerScanNotConfiguredError, FeatureDisabled),
     (ServerScanWritesOffError, FeatureDisabled),
-    (ServerScanHistoryOffError, FeatureDisabled),
+    (ServerScanAuditOffError, FeatureDisabled),
     (ServerScanUnavailableError, DependencyUnavailable),
     (AmbiguousServerScanWriteError, AmbiguousWrite),
     (NodeNotInClusterError, NodeNotInCluster),
@@ -112,6 +114,8 @@ def to_app_error(error: Day1Error) -> AppError:
         details["problems"] = list(error.problems)
     if isinstance(error, PlacementChangedError):
         details["pick"] = error.pick
+    if isinstance(error, ServerScanAuditOffError):
+        details["setting"] = AUDITOR_SETTING
     for domain_type, app_type in _MAPPING:
         if isinstance(error, domain_type):
             return app_type(str(error), details=details)

@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import type { AuditEvent, AuditEventPage } from "@/types/server-scan-record";
 import {
-  WRITTEN_EVENT_TYPES, describeEvent, eventTone, healthSections, historyPager, matchedRule, topReason, transition, transitionSides, visibleData,
+  WRITTEN_EVENT_TYPES, describeEvent, eventTone, healthSections, eventPager, matchedRule, topReason, transition, transitionSides, visibleData,
 } from "./events";
 import { auditEvent as ev } from "./testing";
 
@@ -159,11 +159,11 @@ describe("the pager", () => {
     items: [], page: { next_cursor: hasMore ? "c" : null, has_more: hasMore, page_size: 50, total },
   });
   it("counts the pages from the first page's total", () => {
-    expect(historyPager([page(132, true)], 0, true)).toEqual({ pageCount: 3, canNext: true });
-    expect(historyPager([page(10, false)], 0, false)).toEqual({ pageCount: 1, canNext: false });
+    expect(eventPager([page(132, true)], 0, true)).toEqual({ pageCount: 3, canNext: true });
+    expect(eventPager([page(10, false)], 0, false)).toEqual({ pageCount: 1, canNext: false });
   });
   it("without a total, counts the pages read and one more while there are more", () => {
-    expect(historyPager([page(null, true), page(null, true)], 1, true)).toEqual({ pageCount: 3, canNext: true });
-    expect(historyPager([page(null, true), page(null, false)], 0, false)).toEqual({ pageCount: 2, canNext: true });
+    expect(eventPager([page(null, true), page(null, true)], 1, true)).toEqual({ pageCount: 3, canNext: true });
+    expect(eventPager([page(null, true), page(null, false)], 0, false)).toEqual({ pageCount: 2, canNext: true });
   });
 });
