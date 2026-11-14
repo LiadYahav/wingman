@@ -81,3 +81,25 @@ True if a CA bundle is configured
 {{- define "wingman.hasCA" -}}
 {{- if .Values.tls.caBundle -}}true{{- end }}
 {{- end }}
+
+{{/*
+Every pod runs as OpenShift's restricted-v2 SCC expects, as server-scan's and
+herzi's do: non-root, the runtime's seccomp profile, no runAsUser (OpenShift
+assigns the UID; each image's USER is numeric for runAsNonRoot elsewhere).
+*/}}
+{{- define "wingman.podSecurityContext" -}}
+runAsNonRoot: true
+seccompProfile:
+  type: RuntimeDefault
+{{- end }}
+
+{{/*
+Every container: no privilege escalation, no capabilities, and a read-only
+root. A container that must write gets an emptyDir at that path only.
+*/}}
+{{- define "wingman.containerSecurityContext" -}}
+allowPrivilegeEscalation: false
+capabilities:
+  drop: ["ALL"]
+readOnlyRootFilesystem: true
+{{- end }}

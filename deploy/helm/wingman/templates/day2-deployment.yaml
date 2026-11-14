@@ -22,16 +22,21 @@ spec:
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "wingman.serviceAccountName" . }}
+      # No pod reads the Kubernetes API with its own service-account token (day1
+      # reads the MCE hubs with the tokens Secret's): none is mounted.
+      automountServiceAccountToken: false
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       {{- end }}
       securityContext:
-        runAsNonRoot: true
+        {{- include "wingman.podSecurityContext" . | nindent 8 }}
       containers:
         - name: day2
           image: {{ include "wingman.image" (dict "registry" .Values.image.registry "image" .Values.image.day2) | quote }}
           imagePullPolicy: {{ .Values.image.day2.pullPolicy }}
+          securityContext:
+            {{- include "wingman.containerSecurityContext" . | nindent 12 }}
           ports:
             - containerPort: 8002
               protocol: TCP
