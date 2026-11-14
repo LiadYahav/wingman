@@ -1,5 +1,5 @@
 /**
- * A server's History, as server-scan's server page shows it
+ * server-scan's audit events, as a server's History shows them
  * (docs/notes/2026-11-13-server-scan-area-api.md §9.1): one sentence per
  * audit event from the `data` its writer records, a health change's reasons
  * on each side, a classification's matched rule, the data without legacy
@@ -210,7 +210,7 @@ export function eventTone(eventType: string): EventTone {
  * total when server-scan sent one, else the pages read and one more while
  * there are more), and whether Next has somewhere to go.
  */
-export function historyPager(pages: readonly AuditEventPage[], index: number, hasNextPage: boolean): { pageCount: number; canNext: boolean } {
+export function eventPager(pages: readonly AuditEventPage[], index: number, hasNextPage: boolean): { pageCount: number; canNext: boolean } {
   const first = pages[0]?.page;
   const pageCount = first?.total ? Math.max(1, Math.ceil(first.total / first.page_size)) : pages.length + (hasNextPage ? 1 : 0);
   return { pageCount, canNext: index + 1 < pages.length || hasNextPage };
