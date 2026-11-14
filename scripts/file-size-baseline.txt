@@ -34,7 +34,7 @@
   603  apps/web/components/addons/authoring-flow.tsx
   722  apps/web/components/clusters/dynamic-variable-form.tsx
   529  apps/web/components/clusters/mce-placement.tsx
-  556  apps/web/components/clusters/node-pools.tsx
+  541  apps/web/components/clusters/node-pools.tsx
   554  apps/web/components/clusters/sync-dialog.tsx
   866  apps/web/components/specs/flavor-editor/model.ts
   551  apps/web/components/specs/flavor-editor/nodepools-section.tsx

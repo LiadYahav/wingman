@@ -11,10 +11,10 @@ export type NodeHealth = "HEALTHY" | "WARNING" | "MAJOR" | "CRITICAL" | "UNKNOWN
 
 /** server-scan's record of a server. */
 export interface ServerRecord {
-  /** server-scan's server id: the uninstall route names the server by it. */
+  /** server-scan's server id: the uninstall route names the server by it, and Wingman's server page is `/server-scan/servers/<id>`. */
   id: string;
   name: string;
-  /** The server's page in server-scan's UI. */
+  /** The server's page in server-scan's UI, where the name links for anyone without the Server Scan area. */
   url: string;
   serial: string | null;
   vendor: string | null;

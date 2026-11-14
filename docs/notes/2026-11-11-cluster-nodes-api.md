@@ -228,7 +228,7 @@ Most refusals happen inside the run: it fails, and its `error` says why.
 | Variable | Default | Meaning |
 |---|---|---|
 | `SERVER_SCAN_URL` | empty (off) | server-scan's API base, e.g. `http://server-scan-api.<ns>.svc:8000`. |
-| `SERVER_SCAN_UI_URL` | `SERVER_SCAN_URL` | Where the node links point: server-scan's UI. |
+| `SERVER_SCAN_UI_URL` | `SERVER_SCAN_URL` | Where the node links (`url`) point: server-scan's UI. Since 3.26.0 the web links a person who has the Server Scan area to Wingman's server page by `id` instead (ADR-0048's amendment). |
 | `SERVER_SCAN_TOKEN` | empty | A server-scan viewer token (`Authorization: Bearer`), from a Secret. Empty: no header, for an instance with auth off. |
 | `SERVER_SCAN_SSL_VERIFY` | `true` | `true`, `false` or a CA bundle path. |
 | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request. The fleet read is about 250 KB gzipped for 3,000 servers. |

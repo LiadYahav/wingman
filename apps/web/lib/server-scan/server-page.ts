@@ -35,6 +35,27 @@ export function serverHref(id: string, tab: ServerTab = "overview"): string {
   return tab === "overview" ? page : `${page}?tab=${tab}`;
 }
 
+/** Where a node's server name links, and what a screen reader hears for it. */
+export interface NodeServerLink {
+  href: string;
+  /** Wingman's server page, followed in this tab; else server-scan's own page, in a new tab. */
+  inApp: boolean;
+  label: string;
+}
+
+/**
+ * A server's link from a cluster's nodes (ADR-0048's 3.26.0 amendment): its
+ * page here for whoever has the Server Scan area (`hasArea`, from
+ * `useServerScanArea()`: `undefined` while that is found out), so a server
+ * has one view; server-scan's own page (`url`, built by day1) for anyone
+ * else, until RBAC opens the area to them.
+ */
+export function nodeServerLink(server: { id: string; name: string; url: string }, hasArea: boolean | undefined): NodeServerLink {
+  return hasArea === true
+    ? { href: serverHref(server.id), inApp: true, label: `${server.name}, its server page` }
+    : { href: server.url, inApp: false, label: `${server.name}, its server-scan page (opens in a new tab)` };
+}
+
 /** Where "← Servers" goes: the Servers view the page was opened from, when it is one, else the unfiltered list. */
 export function backHref(stored: string | null): string {
   if (!stored) return SERVERS_HREF;

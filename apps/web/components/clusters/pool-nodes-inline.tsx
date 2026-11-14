@@ -4,14 +4,18 @@ import { ArrowRight, CircleDashed, ExternalLink, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
 import { HealthBadge, NodeStateChip } from "@/components/clusters/node-badges";
+import { NodeServerAnchor } from "@/components/clusters/node-server-link";
+import { useServerScanArea } from "@/lib/api/server-scan";
 import type { NodesRead } from "@/lib/nodes";
+import { nodeServerLink } from "@/lib/server-scan/server-page";
 import { cn } from "@/lib/utils";
 import type { NodePoolNodes, PoolNode } from "@/types";
 
 /**
  * A NodePool of the cluster file, opened on the Overview: its nodes as the MCE
- * reports them, each one linking to its server in server-scan. The Nodes tab
- * has the full board (activity, problems, uninstall); this is the quick look.
+ * reports them, each one linking to its server (its page here for whoever has
+ * the Server Scan area, else in server-scan). The Nodes tab has the full board
+ * (activity, problems, uninstall); this is the quick look.
  */
 
 /** The MCE's NodePool for a file's nodepool: by its name, which the chart derives as `<clusterName>-<infraEnv>`. */
@@ -30,6 +34,8 @@ export function matchPool(
 
 function NodeRow({ node }: { node: PoolNode }) {
   const server = node.server;
+  const hasArea = useServerScanArea();
+  const link = server ? nodeServerLink(server, hasArea) : null;
   const label = server?.name ?? node.server_name ?? node.machine ?? "A node";
   const gap = node.state === "waiting" || node.state === "missing";
   const body = (
@@ -40,7 +46,7 @@ function NodeRow({ node }: { node: PoolNode }) {
           <span className={cn("truncate font-mono text-xs", gap ? "text-muted-foreground" : "font-medium text-foreground")}>
             {gap ? (node.state === "missing" ? "A node is missing" : "Waiting for a server") : label}
           </span>
-          {server && (
+          {link && !link.inApp && (
             <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden />
           )}
         </span>
@@ -66,7 +72,7 @@ function NodeRow({ node }: { node: PoolNode }) {
     node.current && "border-l-2 border-l-status-provisioning bg-status-provisioning/5",
     gap && "border border-dashed border-border/80 rounded-md my-1"
   );
-  if (!server) {
+  if (!link) {
     return (
       <li data-testid="pool-node" className={row}>
         {body}
@@ -75,15 +81,12 @@ function NodeRow({ node }: { node: PoolNode }) {
   }
   return (
     <li data-testid="pool-node">
-      <a
-        href={server.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`${server.name}: open in server-scan (new tab)`}
+      <NodeServerAnchor
+        link={link}
         className={cn(row, "group outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50")}
       >
         {body}
-      </a>
+      </NodeServerAnchor>
     </li>
   );
 }

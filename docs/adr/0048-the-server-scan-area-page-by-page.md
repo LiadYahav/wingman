@@ -191,7 +191,8 @@ button (decision 14), in Wingman's design. The contract is §9 of
   Wingman: the Servers table's names, Inventory Management's candidates and
   add-server runs, and a VM's host link to it instead of repeating it (for a
   person who has the area; for anyone else they stay text). The cluster
-  page's Nodes tab does not change.
+  page's Nodes tab does not change (superseded by the 3.26.0 amendment: it
+  links there too).
 - **Three reads through the one client** (`ServerInventory.record`,
   `vm_host`, `server_events`): server-scan's `GET /api/v1/servers/{id}`,
   `/vm-host` and `/servers/{id}/events`, behind `AdminUser`. **Not cached by
@@ -254,3 +255,30 @@ tokens, the metrics, the fake), `apps/day1-service/tests/api/test_server_scan_re
 `tests/repo/test_chart_env_contract.py` (the optional auditor key),
 `apps/web/lib/server-scan/*.test.ts` (server-scan's cases) and
 `apps/web/e2e/tests/server-scan-server.spec.ts`.
+
+**2026-11-14, 3.26.0: the Nodes tab links admins to a server's page.** A
+server's name on the cluster page's Nodes tab, and a node in the Overview's
+opened nodepool, opens the server's page here (`/server-scan/servers/<id>`)
+for a person who has the Server Scan area (an admin, with server-scan
+configured), in the same tab as any link inside Wingman and without the
+external-link mark: one view per server. Anyone else keeps the link to
+server-scan's own page (`url`, built by day1), in a new tab, until RBAC
+opens the area to them. Nothing else on the cluster page changes.
+
+- **No API change.** The nodes read already carries server-scan's id
+  (`server.id`, the uninstall's key), the id the server page reads by, so
+  the web builds the link; `url` stays as it is.
+- **One decision**: `nodeServerLink` (`apps/web/lib/server-scan/server-page.ts`)
+  returns the address, whether it stays in Wingman and the accessible name
+  ("<name>, its server page", or "<name>, its server-scan page (opens in a
+  new tab)"), and both views link through it. The Overview's rows used to
+  say "<name>: open in server-scan (new tab)"; they now say what the Nodes
+  tab says.
+
+Rejected: **the Nodes tab's own server details** (a second view of a server
+to keep in step with the page); **server-scan's page for everyone** (an
+admin would leave Wingman for a record Wingman already shows); **Wingman's
+page for viewers** (the area is admins only: the page would answer `403`).
+
+Verification: `apps/web/lib/server-scan/server-page.test.ts` and
+`apps/web/e2e/tests/cluster-nodes.spec.ts` (an admin with the area, a viewer).
