@@ -221,7 +221,8 @@ class GitLabChartRepository:
         """``base_url`` is the GitLab's own URL; a ``repourl`` elsewhere is not resolved."""
         self._gitlab = gitlab
         self._cache = cache
-        base = urlsplit(base_url.rstrip("/"))
+        self._base_url = base_url.rstrip("/")
+        base = urlsplit(self._base_url)
         self._host = base.netloc.lower()
         self._prefix = base.path.rstrip("/")
         self._ttl = ttl
@@ -242,6 +243,10 @@ class GitLabChartRepository:
     def on_this_gitlab(self, repo_url: str) -> bool:
         """See ChartRepository.on_this_gitlab."""
         return self.project_path(repo_url) is not None
+
+    def group_url(self, group: str) -> str:
+        """See ChartRepository.group_url; the GitLab URL's sub-path is kept."""
+        return f"{self._base_url}/{group.strip('/')}/"
 
     def _kept[T](self, key: str, fetch: Callable[[], Awaitable[T]]) -> Awaitable[T]:
         return self._cache.get_or_fetch(key, fetch, ttl=self._ttl, stale=stale_for(self._ttl))

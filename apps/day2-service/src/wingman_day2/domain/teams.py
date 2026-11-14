@@ -30,6 +30,16 @@ class Team:
         return cls(project.path_with_namespace.rsplit("/", 1)[-1], project)
 
 
+def charts_group(team: str) -> str:
+    """``<team>/helm-charts``: the GitLab group a team's chart repos sit in (ADR-0060).
+
+    Fixed here, not a setting: a new add-on is only suggested an address in
+    it, and nothing checks an add-on's ``repourl`` against it. An environment
+    that nests the group (``<top>/<team>/helm-charts``) changes this line.
+    """
+    return f"{team}/helm-charts"
+
+
 WRITE_LEVEL = AccessLevel.DEVELOPER
 """The least access that lets Wingman push a branch and open a merge request."""
 

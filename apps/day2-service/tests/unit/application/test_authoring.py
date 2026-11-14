@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from functools import partial
+from typing import Any
 
 import pytest
 import yaml
@@ -17,6 +18,7 @@ from wingman_core.domain.mr_conventions import (
     parse_mr_title,
 )
 from wingman_core.domain.users import User
+from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day2.application.authoring import (
     UNSET,
@@ -37,6 +39,11 @@ from wingman_day2.domain.errors import (
 from wingman_day2.domain.findings import Rule
 from wingman_day2.domain.platform import AppSource
 from wingman_day2.domain.sync_policy import PLATFORM_DEFAULT, SyncSettings
+from wingman_day2.infrastructure.repositories import (
+    GitLabChartRepository,
+    GitLabDay1Repository,
+    GitLabSigsRepository,
+)
 from wingman_day2.settings import FAKE_GITLAB_URL
 
 HOSTED = DefaultsScope.HOSTED_CLUSTERS
@@ -626,7 +633,7 @@ async def test_fleet_default_edit_refusals(services: Day2Services, jane_user: Us
 # ── template ────────────────────────────────────────────────────────────────
 
 
-async def test_the_template_copies_the_teams_usual_sync_options_and_repo_folder(
+async def test_the_template_copies_the_teams_usual_sync_options_and_suggests_its_charts_group(
     services: Day2Services,
 ) -> None:
     redbull = await services.authoring.template("redbull")
@@ -637,5 +644,50 @@ async def test_the_template_copies_the_teams_usual_sync_options_and_repo_folder(
     assert redbull.access.writable
     falcon = await services.authoring.template("falcon")
     assert falcon.sync == SyncSettings(auto_sync=True, prune=False, self_heal=True)
+    assert falcon.repourl_prefix == f"{FAKE_GITLAB_URL}/falcon/helm-charts/"
     orca = await services.authoring.template("orca")
     assert not orca.access.writable
+    assert orca.repourl_prefix == f"{FAKE_GITLAB_URL}/orca/helm-charts/"
+
+
+async def test_the_suggested_charts_group_is_the_teams_whatever_its_add_ons_use(
+    services: Day2Services, gitlab: InMemoryGitLab
+) -> None:
+    # Every lynx add-on points at the shared group of before ADR-0060, or at another host.
+    lynx = await gitlab.get_project("sigs/lynx")
+    urls = {
+        "operators/backup/backup.yaml": f"{FAKE_GITLAB_URL}/helm-charts/backup.git",
+        "operators/cluster-roles/cluster-roles.yaml": "https://charts.example.org/roles.git",
+    }
+    changes = [
+        FileChange.update(RepoPath(path), f"repourl: {url}\n", last_commit_id=None)
+        for path, url in urls.items()
+    ]
+    await gitlab.commit(lynx.id, branch="main", message="charts elsewhere", changes=changes)
+    template = await services.authoring.template("lynx")
+    assert template.repourl_prefix == f"{FAKE_GITLAB_URL}/lynx/helm-charts/"
+
+
+async def test_a_team_without_add_ons_is_suggested_its_charts_group_too(
+    services: Day2Services, gitlab: InMemoryGitLab
+) -> None:
+    gitlab.create_project("sigs/kite", {"README.md": "# kite\n"})
+    template = await services.authoring.template("kite")
+    assert template.repourl_prefix == f"{FAKE_GITLAB_URL}/kite/helm-charts/"
+    assert "has no add-on in operators/" in template.sync_source
+
+
+async def test_the_suggestion_follows_the_configured_gitlab_url_and_its_sub_path(
+    gitlab: InMemoryGitLab,
+    sigs: GitLabSigsRepository,
+    day1: GitLabDay1Repository,
+    cache: TtlCache,
+    clock: Any,
+) -> None:
+    url = "https://git.example.com/gitlab/"
+    charts = GitLabChartRepository(gitlab, cache, base_url=url, ttl=30)
+    services = Day2Services.build(
+        gitlab=gitlab, sigs=sigs, day1=day1, charts=charts, clock=clock, gitlab_url=url
+    )
+    template = await services.authoring.template("orca")
+    assert template.repourl_prefix == "https://git.example.com/gitlab/orca/helm-charts/"

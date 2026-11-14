@@ -94,7 +94,7 @@ from wingman_day2.domain.sync_policy import (
     policy_override,
     sync_settings,
 )
-from wingman_day2.domain.teams import TeamAccess
+from wingman_day2.domain.teams import TeamAccess, charts_group
 from wingman_day2.domain.yaml_text import dump_yaml, edit_mapping_text, same_value
 from wingman_day2.domain.yaml_values import dump_values, parse_values
 
@@ -180,13 +180,14 @@ class ScopeReach:
 
 @dataclass(frozen=True, slots=True)
 class AddonTemplate:
-    """What a new add-on form starts from, read from the team's own add-ons."""
+    """What a new add-on form starts from: its team's usual sync options and charts group."""
 
     team: str
     access: TeamAccess
     sync: SyncSettings
     sync_source: str
-    repourl_prefix: str | None
+    repourl_prefix: str
+    """``<GITLAB_URL>/<team>/helm-charts/``, whatever the team's add-ons use (ADR-0060)."""
     scopes: tuple[ScopeReach, ...]
 
 
@@ -306,17 +307,12 @@ class AuthoringService(PlanWriter):
         else:
             sync = PLATFORM_DEFAULT
             source = f"the platform's default: {project} has no add-on in operators/ to copy from"
-        prefixes = Counter(
-            str(x.values[REPOURL]).strip().rsplit("/", 1)[0] + "/"
-            for x in loaded
-            if truthy(x.values.get(REPOURL)) and "/" in str(x.values[REPOURL])
-        )
         return AddonTemplate(
             team=state.team.name,
             access=await self._access.of(state.team),
             sync=sync,
             sync_source=source,
-            repourl_prefix=prefixes.most_common(1)[0][0] if prefixes else None,
+            repourl_prefix=self._charts.group_url(charts_group(state.team.name)),
             scopes=tuple(
                 ScopeReach(scope, scope_destinations(state.plan, scope)) for scope in SCOPE_ORDER
             ),

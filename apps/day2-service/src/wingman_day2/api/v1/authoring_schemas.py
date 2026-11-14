@@ -186,7 +186,10 @@ class AddonTemplateOut(BaseModel):
     read_only_reason: str | None
     sync: SyncOut
     sync_source: str
-    repourl_prefix: str | None
+    repourl_prefix: str = Field(
+        description="`<GITLAB_URL>/<team>/helm-charts/`: where a new add-on's chart repo is "
+        "suggested, as `<prefix><name>.git` (ADR-0060). Only a suggestion: any repourl is accepted."
+    )
     known_sync_options: list[str]
     scopes: list[ScopeOut]
 

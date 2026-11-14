@@ -21,6 +21,7 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.infrastructure.snapshots import RepoSnapshots
 from wingman_day2.application.catalog import CatalogEntry
 from wingman_day2.application.services import Day2Services
+from wingman_day2.domain.teams import charts_group
 from wingman_day2.infrastructure.repositories import (
     GitLabChartRepository,
     GitLabDay1Repository,
@@ -222,3 +223,18 @@ async def test_an_unreachable_gitlab_keeps_the_lookup_for_the_minute_then_fails_
     seconds.now += MAX_AGE
     with pytest.raises(GitUnavailableError):
         await day2.catalog.entries()
+
+
+@pytest.mark.parametrize(
+    ("base_url", "prefix"),
+    [
+        (FAKE_GITLAB_URL, f"{FAKE_GITLAB_URL}/orca/helm-charts/"),
+        ("https://git.example.com/gitlab/", "https://git.example.com/gitlab/orca/helm-charts/"),
+    ],
+)
+def test_a_groups_url_keeps_the_gitlab_sub_path_and_reads_back_as_its_projects(
+    gitlab: InMemoryGitLab, ttl_cache: TtlCache, base_url: str, prefix: str
+) -> None:
+    repos = GitLabChartRepository(gitlab, ttl_cache, base_url=base_url, ttl=TTL)
+    assert repos.group_url(charts_group("orca")) == prefix
+    assert repos.project_path(f"{prefix}metrics.git") == "orca/helm-charts/metrics"
