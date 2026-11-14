@@ -13,7 +13,8 @@ Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
 (read by ``server_scan_sites``). A server's page reads the server whole,
 a VM's host and its History (``server_scan_record``, ADR-0048's 3.25.0
 amendment); the Claude page its skill and the skill's zip (``server_scan_skill``,
-3.27.0).
+3.27.0). The Architecture page's diagrams come from server-scan's UI, not
+its API, with no token (``server_scan_architecture``, 3.28.0).
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
@@ -32,6 +33,7 @@ import httpx
 from wingman_core.observability.metrics import Dependency, WingmanMetrics
 from wingman_core.ports.clock import Clock, system_clock
 from wingman_day1.domain.errors import ServerNotFoundError, ServerScanUnavailableError
+from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -40,6 +42,7 @@ from wingman_day1.domain.server_scan_skill import Skill, SkillZip
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.http import json_client
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
+from wingman_day1.infrastructure.server_scan_architecture import read_diagram, ui_client
 from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_detail
 from wingman_day1.infrastructure.server_scan_record import (
     check,
@@ -64,6 +67,7 @@ class HttpServerInventory:
         self,
         *,
         base_url: str,
+        ui_url: str = "",
         token: str = "",
         admin_token: str = "",
         auditor_token: str = "",
@@ -75,6 +79,8 @@ class HttpServerInventory:
         clock: Clock = system_clock,
     ) -> None:
         """Read server-scan at ``base_url``; an empty ``token`` sends no Authorization header.
+
+        ``ui_url`` is server-scan's UI, where its diagrams are (empty: ``base_url``).
 
         ``admin_token`` replaces it on the maintenance writes only, and
         ``auditor_token`` on a server's History only (empty: those carry
@@ -96,13 +102,20 @@ class HttpServerInventory:
             transport=transport,
             headers=headers,
         )
+        self._ui = ui_client(
+            base_url=ui_url or base_url,
+            verify=verify,
+            timeout_seconds=timeout_seconds,
+            transport=transport,
+        )
         self._etag: str | None = None
         self._fleet: FleetRows | None = None
         """The last fleet read, answered again (the same object) when server-scan says ``304``."""
 
     async def aclose(self) -> None:
-        """Close the HTTP client."""
+        """Close the HTTP clients."""
         await self._client.aclose()
+        await self._ui.aclose()
 
     async def rows(self) -> list[ServerRow]:
         """See ServerInventory.rows."""
@@ -151,6 +164,11 @@ class HttpServerInventory:
         """See ServerInventory.skill_zip."""
         read = read_skill_zip(self._client, base_url)
         return await self._observer.call(ServerScanOperation.DOWNLOAD_SKILL, read)
+
+    async def architecture_diagram(self, slug: str) -> ArchitectureDiagram:
+        """See ServerInventory.architecture_diagram."""
+        read = read_diagram(self._ui, slug)
+        return await self._observer.call(ServerScanOperation.GET_ARCHITECTURE_DIAGRAM, read)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance."""

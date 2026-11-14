@@ -34,10 +34,17 @@ def server_scan_ui(settings: Day1Settings) -> str:
     return settings.server_scan_ui_base or FAKE_SERVER_SCAN_UI
 
 
+DIAGRAM_TTL_SECONDS: Final = 300.0
+"""How long day1 keeps one of server-scan's diagrams: they change only with its releases."""
+
+
 def cached_inventory(
     inventory: ServerInventory | None, cache: TtlCache, *, ttl: float
 ) -> ServerInventory | None:
-    """``inventory`` behind the shared cache: rows for ``ttl``, sites and skill shorter."""
+    """``inventory`` behind the shared cache: rows for ``ttl``, sites and skill shorter.
+
+    The architecture diagrams are kept five minutes.
+    """
     if inventory is None:
         return None
     return CachedServerInventory(
@@ -46,6 +53,7 @@ def cached_inventory(
         ttl=ttl,
         sites_ttl=min(ttl, SITES_TTL_SECONDS),
         skill_ttl=min(ttl, SKILL_TTL_SECONDS),
+        diagram_ttl=DIAGRAM_TTL_SECONDS,
     )
 
 

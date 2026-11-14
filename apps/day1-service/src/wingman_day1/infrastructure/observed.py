@@ -34,6 +34,7 @@ from wingman_day1.domain.errors import (
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanDeniedError,
+    ServerScanDiagramNotFoundError,
     ServerScanRefusedError,
     ServerScanSkillMissingError,
     ServerScanUnavailableError,
@@ -103,6 +104,8 @@ class ServerScanOperation(StrEnum):
     """``GET /api/v1/skill``: the Claude page's skill (ADR-0048's 3.27.0 amendment)."""
     DOWNLOAD_SKILL = "download_skill"
     """``GET /api/v1/skill/download``: the skill's zip, for the Claude page's download."""
+    GET_ARCHITECTURE_DIAGRAM = "get_architecture_diagram"
+    """``GET <ui>/architecture/<slug>.html``: a diagram from server-scan's UI (no token)."""
 
 
 class SegmentsManagerOperation(StrEnum):
@@ -142,6 +145,7 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (IdentityError, Outcome.DENIED),
     (ServerNotFoundError, Outcome.NOT_FOUND),
     (ServerScanSkillMissingError, Outcome.NOT_FOUND),
+    (ServerScanDiagramNotFoundError, Outcome.NOT_FOUND),
     (ServerScanDeniedError, Outcome.DENIED),
     (ServerScanUnavailableError, Outcome.UNAVAILABLE),
     (ServerScanRefusedError, Outcome.REJECTED),

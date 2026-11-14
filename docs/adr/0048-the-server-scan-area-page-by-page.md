@@ -338,3 +338,66 @@ line), `apps/day1-service/tests/api/test_server_scan_skill_api.py`,
 `apps/web/lib/server-scan/skill-text.test.ts` (server-scan's cases, the
 commands), `apps/web/lib/server-scan/sidebar.test.ts` and
 `apps/web/e2e/tests/server-scan-claude.spec.ts`.
+
+**2026-11-14, 3.28.0: the Architecture page, server-scan's diagrams through
+day1 in a sandboxed frame.** server-scan's Architecture page at
+`/server-scan/architecture`, its tabs, words and descriptions, the diagram
+in the URL (`?diagram=`), in Wingman's design. The contract is §11 of
+`docs/notes/2026-11-13-server-scan-area-api.md`.
+
+server-scan's diagrams are archify's self-contained pages (about 0.7 MB
+each: inline SVG and the viewer's scripts for pan, zoom, search and its
+toolbar), served by its UI's nginx as static files
+(`<ui>/architecture/<slug>.html`), without login or framing headers. Its API
+does not have them; their JSON sources are not served; the list of
+diagrams is compiled into its frontend. The single-pane plan said to frame
+them, so they never go stale.
+
+- **day1 reads each diagram from server-scan's UI**, through the one client
+  (`ServerInventory.architecture_diagram`, operation
+  `get_architecture_diagram`), at `SERVER_SCAN_UI_URL` (else
+  `SERVER_SCAN_URL`, as node links), **with no token**: the files need none.
+  It takes the page only if archify made it, since server-scan's nginx answers
+  a missing file with its app and a `200`. Cached five minutes per diagram:
+  they change only with server-scan's releases.
+- **The web shows the page in a sandboxed frame**: `srcdoc`,
+  `sandbox="allow-scripts allow-downloads"`, no `allow-same-origin`, so the
+  diagram's scripts run in an origin of their own and reach nothing of
+  Wingman's. The page is server-scan's, unchanged but for one script first
+  in its head that answers `prefers-color-scheme` with Wingman's theme
+  (server-scan passes `?theme=`; a `srcdoc` has no address).
+- **The list of diagrams is server-scan's, reused** (decision 18): seven
+  slugs, labels and descriptions in `apps/web/lib/server-scan/diagrams.ts`.
+  The diagrams are never copied; only their names are. A diagram server-scan
+  adds is one entry; one it drops answers `404` and its tab says so.
+- **No new setting, Secret, token or write.** A deployment whose
+  `SERVER_SCAN_URL` is server-scan's in-cluster API needs `serverScan.uiUrl`
+  to be its UI (node links already need it), reachable and trusted from
+  day1.
+- **The sidebar** gains Architecture in the "Reference" section, after
+  Claude and last, as in server-scan's navigation.
+
+Rejected: **the browser framing server-scan's UI directly** (the plan's
+first idea): the single pane's rule is that the browser never calls
+server-scan; a cross-origin frame cannot report a failure, so a missing
+diagram would show server-scan's own app in the frame (its fallback) and an
+outage the browser's error page; a framing header server-scan adds later
+would blank the page silently; and there would be no fake, metric or
+problem. **Rendering the diagrams in Wingman**, as the plan prefers for
+text diagrams such as Mermaid: their sources are archify's JSON, which
+server-scan does not serve, and archify is not a library to load. **Copying
+the pages into Wingman**: they would go stale with server-scan's next
+release (the plan's reason to frame them). **A link out to server-scan's
+page**: it leaves Wingman for a second login (why this ADR kept the Sites
+counts from linking out). **The frame with `allow-same-origin`**: server-scan's
+scripts would run as Wingman, with its session and storage. **Reading the
+list of diagrams from server-scan's bundle**: a build artefact's internals,
+not an interface.
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_architecture.py`
+(read from the UI without a token, a missing diagram and the SPA's
+fallback, failures, the size cap, the metric, the cache, the fake),
+`apps/day1-service/tests/api/test_server_scan_architecture_api.py`,
+`apps/web/lib/server-scan/diagrams.test.ts` (server-scan's cases, the theme
+script) and `apps/web/e2e/tests/server-scan-architecture.spec.ts` (the
+sandbox, the picker and the URL, the theme, the states).

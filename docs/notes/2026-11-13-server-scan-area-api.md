@@ -4,8 +4,9 @@ The **Server Scan** area (`/server-scan`) is server-scan's UI rebuilt in
 Wingman, one page at a time (workstream 4 of `docs/ideas/single-pane.md`,
 decision 22, ADR-0048). This note covers the area, its first page,
 **Sites** (§1 to §7), its second, **Servers** (§8, 3.23.0), a
-server's own page (§9, 3.25.0) and the **Claude** page (§12, 3.27.0). Each
-later page adds its section here (§10 lists them).
+server's own page (§9, 3.25.0), the **Claude** page (§12, 3.27.0) and
+**Architecture** (§11, 3.28.0). Each later page adds its section here (§10
+lists them).
 
 - **server-scan's API does not change.** day1 reads server-scan with the
   viewer token it already holds (§4), and a server's History with its
@@ -219,7 +220,8 @@ rules ported, so the demo's cards agree with its servers.
   copied.
 - **The sidebar**: server-scan's pages, in its navigation's order, only those
   Wingman has built, so no entry leads nowhere: **Sites**, since 3.23.0
-  **Servers**, and since 3.27.0 **Claude** (§12), in a Reference section.
+  **Servers**, since 3.27.0 **Claude** (§12) and since 3.28.0 **Architecture**
+  (§11), both in a Reference section.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the
@@ -862,8 +864,156 @@ In single-pane §4's order; each is its own PR, with its section in this note.
 | Rules & Policies | `GET /api/v1/classification-rules`, `/health-policies` (viewer) | Read only |
 | Events | `GET /api/v1/events`, `/events/actors` (auditor) | Filters and cursor pages; History's timeline and its auditor token (§9) reused |
 | Jobs | `GET /api/v1/jobs`, a run's pod logs, `POST /jobs/{cronjob}/run` (admin) | "Run now" behind the admin check, its confirmation, Wingman's audit |
-| Architecture | none | server-scan's diagrams, framed from its UI (`SERVER_SCAN_UI_URL`) |
+| Architecture | Built (§11, 3.28.0): its UI's static diagrams, no token | Read through day1, shown in a sandboxed frame |
 | Claude | `GET /api/v1/skill`, `/skill/download` (viewer) | Built in 3.27.0 (§12): the skill and its zip through day1; the personal token stays a link out, server-scan makes it only for its own login |
+
+## 11. The Architecture page (3.28.0)
+
+server-scan's Architecture page in Wingman, at `/server-scan/architecture`
+(ADR-0048's 3.28.0 amendment). The plan said to frame server-scan's
+diagrams so they never go stale; they are framed, but their page comes
+through day1, never from the browser to server-scan (§11.4 says why).
+
+### 11.1 What server-scan's Architecture page shows and does
+
+Read from `team-redbull/server-scan` at `92146d3`:
+`frontend/src/features/architecture/ArchitecturePage.tsx`, `diagrams.ts`,
+its test, and the files under `frontend/public/architecture/`.
+
+- **Header**: "Architecture", then "How data moves through the platform —
+  pan, zoom, search and trace each diagram; every fact is sourced from an
+  ADR or the provider it names."
+- **A row of tabs**, one per diagram, from a static list in its frontend
+  (`DIAGRAMS`): Full flow (`runtime-architecture`), Cisco UCS Central
+  (`ucs-central`), Cisco Intersight (`intersight`), Dell OpenManage
+  (`openmanage`), HPE OneView (`oneview`), Redfish Standalone
+  (`redfish-standalone`), Nodes Status (`nodes-status`). The chosen one is
+  in the URL (`?diagram=<slug>`); none, or one not in the list, is the first.
+- **The chosen diagram's description** under the tabs, then **an iframe**
+  of `/architecture/<slug>.html?theme=dark`, 85% of the window high.
+- **The diagrams** are archify's output (`<meta name="generator"
+  content="archify 2.16.0-dev.0">`), generated ahead of time from the JSON
+  specs in its `docs/diagrams/` and committed as self-contained pages of
+  about 0.7 MB each: inline SVG, styles and scripts (pan, zoom, search,
+  guided views, a toolbar with a Dark/Light switch, Present and Export), and
+  the JetBrains Mono font from Google Fonts, loaded without blocking (an
+  air-gapped browser falls back to its monospace). They read `?theme=` and
+  `?embed=`, keep view state in the URL's fragment, and wrap every storage
+  and history call in `try`.
+- **No other button and no read of its API.** Every role sees the page.
+
+### 11.2 What server-scan serves
+
+- **The diagrams are static files of its UI**, served by the frontend's
+  nginx at `<ui>/architecture/<slug>.html` (its `frontend/nginx.conf`:
+  `try_files $uri`, no login, no `X-Frame-Options` or CSP). Its API
+  (`<release>-api`, what `SERVER_SCAN_URL` names in-cluster) does not have
+  them, and the JSON specs in `docs/` are not served at all.
+- **An unknown path answers the app's `index.html` with a `200`** (the
+  SPA's fallback), so a diagram that is not there does not look missing.
+- **The list of diagrams is served nowhere**: it is compiled into the
+  frontend's bundle.
+
+### 11.3 day1's route
+
+`GET /api/day1/server-scan/architecture/{slug}`, `AdminUser`:
+
+```json
+{ "slug": "ucs-central", "html": "<!DOCTYPE html>\n<html lang=\"en\" ..." }
+```
+
+- **`slug`** must match `^[a-z0-9][a-z0-9-]{0,63}$` (`422` otherwise, before
+  server-scan is asked); a `/` reaches no route.
+- **day1 reads `GET <ui>/architecture/<slug>.html`** from server-scan's UI
+  address: `SERVER_SCAN_UI_URL`, else `SERVER_SCAN_URL` (the setting node
+  links already use), through the one adapter (`HttpServerInventory`, with a
+  client of its own for the UI), **with no token**: the files need none,
+  and the viewer token is not sent where it is not needed. `Accept:
+  text/html`; redirects are not followed.
+- **Taken only if it is a diagram**: archify's `generator` in the page's
+  first 8 KB (`domain/server_scan_architecture.is_diagram`), so the SPA's
+  fallback is "not found", not a blank frame; at most 8 MB.
+- **`html` is the page as server-scan serves it**, unchanged.
+
+### 11.4 Why through day1, not the browser framing server-scan
+
+The single pane's rule is that the browser never calls server-scan
+(workstream 2, "Backend calls only"). Framing `<ui>/architecture/…` directly
+would work today (no login on the files, no framing headers), but:
+
+- the browser would need to reach server-scan's UI, and a framing header
+  server-scan adds later would blank the page silently;
+- a cross-origin frame cannot tell Wingman it failed: the SPA's fallback
+  would show server-scan's app inside the frame for a missing diagram, and
+  an unreachable server-scan would show the browser's error page; through
+  day1 each is a state (§11.6);
+- there would be no fake for development and tests, no metric and no
+  RFC 9457 problem (ADR-0001, ADR-0004, ADR-0010).
+
+Rendering the diagrams in Wingman (the plan's preferred way for text
+diagrams such as Mermaid) is not possible: their sources are archify's JSON,
+which server-scan does not serve, and archify is not a library Wingman could
+load. A link out would leave Wingman for a second login.
+
+### 11.5 Errors, cache, metrics and the fake
+
+| Status | `code` | When |
+|---|---|---|
+| 401 / 403 | `UNAUTHORIZED` / `FORBIDDEN` | No session / not an admin |
+| 404 | `NOT_FOUND` | server-scan's UI serves no such diagram: a `404`, or a page that is not a diagram (the SPA's fallback). The detail says `SERVER_SCAN_UI_URL` must be its UI: an address that is its API has none |
+| 422 | `VALIDATION_ERROR` | A `slug` no diagram can have |
+| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty |
+| 502 | `DEPENDENCY_UNAVAILABLE` | Its UI unreachable, or answering anything but `200` or `404` (a redirect, `401`, `5xx`), or more than 8 MB |
+
+- **Cached 5 minutes per diagram per replica** (`server-scan:diagram:<slug>`):
+  the diagrams change only when server-scan is released; seven of them are
+  about 5 MB. A failure is not cached.
+- **Metric**: operation `get_architecture_diagram` on `wingman_dependency_*`
+  with `dependency="server_scan"` (`docs/ops/metrics.md`): `not_found` and
+  `unavailable` as above.
+- **The fake** (`DAY1_FAKE_FLEET=true`): one stand-in page for every name,
+  `dev/fleet-fixtures/architecture-diagram.html` with the name written in,
+  marked as archify's so it passes the same check; tests give each name its
+  page (`FakeDiagrams`).
+- **Deployment**: day1 must reach server-scan's UI. When `SERVER_SCAN_URL`
+  is its in-cluster API Service, set `serverScan.uiUrl`
+  (`SERVER_SCAN_UI_URL`) to its UI's address, which node links already use;
+  if that is the Route, day1 must trust its certificate
+  (`SERVER_SCAN_SSL_VERIFY`, a CA bundle path). The page says so on `404`.
+
+### 11.6 The web
+
+- **The sidebar** gains **Architecture** in the "Reference" section (icon: a
+  network), after Claude and last, as in server-scan's navigation.
+- **§11.1 in Wingman's design**: the header and its words, the tabs (Wingman's
+  tab strip, wrapping), the description, the diagram 85% of the window high.
+  The chosen diagram is in the URL as server-scan's `?diagram=` (the first
+  has none); switching replaces the history entry, as the server page's
+  tabs do.
+- **The frame**: `srcdoc` is day1's `html`, `sandbox="allow-scripts
+  allow-downloads"` (no `allow-same-origin`): the diagram's scripts run in
+  an origin of their own and reach nothing of Wingman's, not its page, its
+  storage or its session; downloads stay for the diagram's own Export;
+  `allow="clipboard-write"` for its copy buttons. Its fragment state and
+  saved theme do not persist there (each is caught by the diagram).
+- **Wingman's theme**: server-scan passes `?theme=`; a `srcdoc` has no
+  address, so the diagram would follow the browser's colour preference.
+  Wingman adds one script first in its head that answers
+  `prefers-color-scheme` queries with Wingman's theme (`withTheme` in
+  `lib/server-scan/diagrams.ts`); every other query goes to the browser. A
+  theme change reloads the frame. The diagram's own switch still works.
+- **States**: a skeleton in the frame's place while loading; "For admins" on
+  `403` and "Server Scan is not set up" on `501`, instead of the tabs;
+  "server-scan serves no <label> diagram" with day1's detail on `404`, the
+  other tabs still open; the problem on `502`.
+- **Fresh as the original**: a diagram is read when its tab is first shown,
+  and kept for the session (30 minutes); never polled. Not kept in
+  localStorage (0.7 MB each).
+- **Reused from server-scan** (decision 18, credited in the code): its
+  diagram list (slugs, labels, descriptions) and its page test's cases as
+  Vitest cases. A diagram server-scan adds is one entry in
+  `lib/server-scan/diagrams.ts`; one it drops answers `404` and its tab says
+  so.
 
 ## 12. The Claude page (3.27.0)
 

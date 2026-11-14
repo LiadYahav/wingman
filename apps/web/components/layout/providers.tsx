@@ -13,9 +13,11 @@ const NOT_PERSISTED = new Set(["approvals", "placement"]);
 /**
  * Never kept in localStorage at all: server-scan's fleet rows (2 MB for ~3,100
  * servers, polled every 30 s) would not fit, and the browser's HTTP cache
- * already makes re-reading an unchanged fleet a bodiless 304.
+ * already makes re-reading an unchanged fleet a bodiless 304; nor its
+ * architecture diagrams (about 0.7 MB each).
  */
-const TOO_BIG = (key: readonly unknown[]) => key[0] === "server-scan" && key[1] === "servers";
+const TOO_BIG = (key: readonly unknown[]) =>
+  key[0] === "server-scan" && (key[1] === "servers" || key[1] === "architecture");
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once - must be stable across renders

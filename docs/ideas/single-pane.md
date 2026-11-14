@@ -278,8 +278,9 @@ Never its `/api/logs` endpoints (open, unauthenticated: a finding for the team).
 ### 4. Server Scan area (ADR-0048)
 
 **Status (2026-11-14): Sites (3.22.0), Servers (3.23.0), a server's page
-(3.25.0) and Claude (3.27.0) built; the other pages follow**, page by page, one PR each (the
-user: "page over page, not all together"). Servers brought the area's first
+(3.25.0), Claude (3.27.0) and Architecture (3.28.0) built; the other pages
+follow**, page by page, one PR each (the user: "page over page, not all
+together"). Servers brought the area's first
 write, a server's maintenance on and off, with server-scan's admin token (an
 optional key of the same Secret) and logged with the person's name. A
 server's page is the one record of a server, which Servers and Inventory
@@ -287,7 +288,10 @@ Management link to: its five tabs, the same maintenance toggle, and History
 with server-scan's auditor token (a third optional key); server-scan's page
 has no other write. Claude reads server-scan's skill and its zip through
 day1 with the viewer token and links to server-scan's own page for the
-personal token. The contract is
+personal token. Architecture shows server-scan's diagrams as its UI serves
+them: day1 reads each page from server-scan's UI (no token) and the web
+frames it, sandboxed, so the browser still never calls server-scan and
+nothing is copied (ADR-0048's 3.28.0 amendment). The contract is
 `docs/notes/2026-11-13-server-scan-area-api.md`; its §10 lists what each later
 page needs.
 
@@ -329,7 +333,7 @@ How it calls server-scan:
 | Rules & Policies | S | Classification rules and health policies, read-only |
 | Events | M | The audit trail with filters and cursor pages; auditor token |
 | Jobs | M | Collector jobs, runs and logs; admin; "run now" starts a real collector |
-| Architecture | S | Iframe server-scan's diagrams; copying them would go stale |
+| Architecture | S | Iframe server-scan's diagrams; copying them would go stale. Built (3.28.0): framed from day1, which reads them from server-scan's UI |
 | Claude | S | Link out: its token and MCP flow belong to server-scan's own login. Built (3.27.0): the skill and its zip read through day1, the MCP command naming server-scan, the token a link out |
 
 **Parity (decision 14).** Every page and every button behaves as in

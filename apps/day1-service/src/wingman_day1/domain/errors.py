@@ -137,6 +137,10 @@ class ServerNotFoundError(ServerScanError):
     """server-scan has no server with this id (or, asked for a VM's host, it is not a VM)."""
 
 
+class ServerScanDiagramNotFoundError(ServerScanError):
+    """server-scan's UI serves no architecture diagram by this name (ADR-0048, 3.28.0)."""
+
+
 class ServerScanWritesOffError(ServerScanError):
     """Maintenance writes are off here: a viewer token without server-scan's admin token."""
 

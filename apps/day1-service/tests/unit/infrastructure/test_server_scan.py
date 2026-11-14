@@ -18,6 +18,7 @@ from wingman_day1.domain.errors import (
     ServerScanDeniedError,
     ServerScanUnavailableError,
 )
+from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -358,6 +359,9 @@ class CountingInventory:
         raise AssertionError("not read here")
 
     async def skill_zip(self, base_url: str) -> SkillZip:
+        raise AssertionError("not read here")
+
+    async def architecture_diagram(self, slug: str) -> ArchitectureDiagram:
         raise AssertionError("not read here")
 
 
