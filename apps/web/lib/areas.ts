@@ -84,7 +84,7 @@ export function chromeArea(pathname: string, access: AreaAccess): AreaId {
 // ── A data-driven sidebar (every area but Wingman's, whose items stay in sidebar-nav.tsx) ──
 
 /** An entry's icon; the layout maps each key to its icon. */
-export type NavIcon = "all" | "available" | "allocated" | "mismatch" | "site" | "servers" | "docs" | "claude" | "architecture";
+export type NavIcon = "all" | "available" | "allocated" | "mismatch" | "site" | "servers" | "confs" | "docs" | "claude" | "architecture";
 
 export interface NavItem {
   /** Unique in its section; also its test id. */

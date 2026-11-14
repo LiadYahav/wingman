@@ -23,6 +23,7 @@ const HOME = areaById("server-scan").href;
 const PAGES: ServerScanPage[] = [
   { section: "Fleet", key: "sites", label: "Sites", href: HOME, icon: "site" },
   { section: "Fleet", key: "servers", label: "Servers", href: `${HOME}/servers`, icon: "servers" },
+  { section: "Fleet", key: "confs", label: "Confs", href: `${HOME}/confs`, icon: "confs" },
   { section: "Reference", key: "claude", label: "Claude", href: `${HOME}/claude`, icon: "claude" },
   { section: "Reference", key: "architecture", label: "Architecture", href: `${HOME}/architecture`, icon: "architecture" },
 ];

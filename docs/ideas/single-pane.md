@@ -278,10 +278,10 @@ Never its `/api/logs` endpoints (open, unauthenticated: a finding for the team).
 ### 4. Server Scan area (ADR-0048)
 
 **Status (2026-11-14): Sites (3.22.0), Servers (3.23.0), a server's page
-(3.25.0), Claude (3.27.0) and Architecture (3.28.0) built; the other pages
-follow**, page by page, one PR each (the user: "page over page, not all
-together"). Servers brought the area's first
-write, a server's maintenance on and off, with server-scan's admin token (an
+(3.25.0), Claude (3.27.0), Architecture (3.28.0) and Confs (3.29.0, the
+hardware catalog, read only) built; the other pages follow**, page by page,
+one PR each (the user: "page over page, not all together"). Servers brought
+the area's first write, a server's maintenance on and off, with server-scan's admin token (an
 optional key of the same Secret) and logged with the person's name. A
 server's page is the one record of a server, which Servers and Inventory
 Management link to: its five tabs, the same maintenance toggle, and History
@@ -291,8 +291,10 @@ day1 with the viewer token and links to server-scan's own page for the
 personal token. Architecture shows server-scan's diagrams as its UI serves
 them: day1 reads each page from server-scan's UI (no token) and the web
 frames it, sandboxed, so the browser still never calls server-scan and
-nothing is copied (ADR-0048's 3.28.0 amendment). The contract is
-`docs/notes/2026-11-13-server-scan-area-api.md`; its §10 lists what each later
+nothing is copied (ADR-0048's 3.28.0 amendment). Confs is server-scan's
+catalog of server configurations, with the viewer token; server-scan has no
+write for it. The contract is
+`docs/notes/2026-11-13-server-scan-area-api.md`; its §13 lists what each later
 page needs.
 
 **Option C (decision 22).** A top-bar

@@ -221,7 +221,8 @@ rules ported, so the demo's cards agree with its servers.
 - **The sidebar**: server-scan's pages, in its navigation's order, only those
   Wingman has built, so no entry leads nowhere: **Sites**, since 3.23.0
   **Servers**, since 3.27.0 **Claude** (§12) and since 3.28.0 **Architecture**
-  (§11), both in a Reference section.
+  (§11), both in a Reference section, and since 3.29.0 **Confs** (§10.8), in
+  Fleet after Servers.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the

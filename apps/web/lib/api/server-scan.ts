@@ -10,6 +10,7 @@ import { api, isApiError } from "@/lib/api-client";
 import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
 import type { SiteStatsList } from "@/types/server-scan";
+import type { ConfList } from "@/types/server-scan-confs";
 import type { AuditEventPage, ServerRecord, VmHostAnswer } from "@/types/server-scan-record";
 import type { MaintenanceAnswer, MaintenanceStart, ServerRowsAnswer } from "@/types/server-scan-servers";
 
@@ -21,6 +22,8 @@ import type { MaintenanceAnswer, MaintenanceStart, ServerRowsAnswer } from "@/ty
 const SITES_STALE_MS = 30_000;
 /** How long the top bar trusts that the area is on before asking again. */
 const AREA_STALE_MS = 5 * 60_000;
+/** As server-scan's query client: the Confs page is read on open, and again when opened after 30 seconds (§10.1). */
+const CONFS_STALE_MS = 30_000;
 /**
  * As server-scan's Servers page: the fleet is read every 30 seconds, in the
  * background too. An unchanged fleet is a bodiless 304 (day1's ETag, answered
@@ -37,6 +40,7 @@ const HISTORY_PAGE_SIZE = 50;
 
 const serverScanKeys = {
   sites: ["server-scan", "sites"] as const,
+  confs: ["server-scan", "confs"] as const,
   /** Never persisted to localStorage (`components/layout/providers.tsx`): 2 MB, polled. */
   servers: ["server-scan", "servers"] as const,
   /** A server's page; its VM host and History sit below it, so dropping it drops them. */
@@ -49,6 +53,7 @@ const serverPath = (id: string) => `/api/day1/server-scan/servers/${encodeURICom
 
 const serverScanApi = {
   sites: () => api.get<SiteStatsList>("/api/day1/server-scan/sites"),
+  confs: () => api.get<ConfList>("/api/day1/server-scan/confs"),
   servers: () => api.get<ServerRowsAnswer>("/api/day1/server-scan/servers"),
   server: (id: string) => api.get<ServerRecord>(serverPath(id)),
   vmHost: (id: string) => api.get<VmHostAnswer>(`${serverPath(id)}/vm-host`),
@@ -90,6 +95,16 @@ export function useServerScanArea(): boolean | undefined {
   if (!admin) return false;
   if (sites.isPending) return undefined;
   return !(isApiError(sites.error, "FEATURE_DISABLED") || isApiError(sites.error, "FORBIDDEN"));
+}
+
+/** server-scan's hardware catalog, for the Confs page (§10.4); read on open and again after 30 seconds, never polled. */
+export function useServerScanConfs() {
+  return useQuery<ConfList>({
+    queryKey: serverScanKeys.confs,
+    queryFn: serverScanApi.confs,
+    staleTime: CONFS_STALE_MS,
+    retry: retryUnlessProblem,
+  });
 }
 
 /** server-scan's whole fleet, as rows, for the Servers page (§8.3); polled every 30 seconds. */
