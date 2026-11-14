@@ -2409,7 +2409,7 @@
       "type": "table",
       "title": "Systems in the last 15m",
       "id": 35,
-      "description": "Each system's calls, the share that ended ok, the share that failed, and the p95, over the last 15m. A low ok share with no failures is answers like not_found or conflict; a failure share above 5% needs a look. GitLab is listed with 0 calls while idle.",
+      "description": "Each system's calls, the share that ended ok, the share that failed, and the p95, over the last 15m. A low ok share with no failures is answers like not_found or conflict; a failure share above 5% needs a look. Only systems Wingman called in those 15 minutes are listed.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2423,7 +2423,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(sum by (dependency) (increase(wingman_dependency_requests_total{job=~\"$job\",dependency=~\"$dependency\"}[15m])))",
+          "expr": "round(sum by (dependency) (increase(wingman_dependency_requests_total{job=~\"$job\",dependency=~\"$dependency\"}[15m]))) > 0",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
@@ -2459,7 +2459,7 @@
         },
         {
           "refId": "D",
-          "expr": "histogram_quantile(0.95, sum by (dependency, le) (rate(wingman_dependency_request_duration_seconds_bucket{job=~\"$job\",dependency=~\"$dependency\"}[15m])))",
+          "expr": "(histogram_quantile(0.95, sum by (dependency, le) (rate(wingman_dependency_request_duration_seconds_bucket{job=~\"$job\",dependency=~\"$dependency\"}[15m])))) >= 0",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",
