@@ -5,8 +5,9 @@ Wingman, one page at a time (workstream 4 of `docs/ideas/single-pane.md`,
 decision 22, ADR-0048). This note covers the area, its first page,
 **Sites** (§1 to §7), its second, **Servers** (§8, 3.23.0), a
 server's own page (§9, 3.25.0), the **Claude** page (§12, 3.27.0),
-**Architecture** (§11, 3.28.0) and the hardware catalog, **Confs** (§10,
-3.29.0). Each later page adds its section here (§13 lists them).
+**Architecture** (§11, 3.28.0), the hardware catalog, **Confs** (§10,
+3.29.0), and what server-scan runs, **Rules & Policies** (§13, 3.30.0). Each
+later page adds its section here (§14 lists them).
 
 - **server-scan's API does not change.** day1 reads server-scan with the
   viewer token it already holds (§4), and a server's History with its
@@ -221,8 +222,9 @@ rules ported, so the demo's cards agree with its servers.
 - **The sidebar**: server-scan's pages, in its navigation's order, only those
   Wingman has built, so no entry leads nowhere: **Sites**, since 3.23.0
   **Servers**, since 3.27.0 **Claude** (§12) and since 3.28.0 **Architecture**
-  (§11), both in a Reference section, and since 3.29.0 **Confs** (§10.8), in
-  Fleet after Servers.
+  (§11), both in a Reference section, since 3.29.0 **Confs** (§10.8), in
+  Fleet after Servers, and since 3.30.0 **Rules & Policies** (§13.8), in a
+  Configuration section between Fleet and Reference.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the
@@ -1324,14 +1326,211 @@ copy; the line's name is only a name, and the skill reads the value.
   `skillText.ts` (`extractPrompts`, `outline`), the tools' split, its types,
   and its tests' cases as Vitest cases (`lib/server-scan/skill-text.test.ts`).
 
-## 13. Left for later pages
+## 13. The Rules & Policies page (3.30.0)
+
+`/server-scan/rules`: server-scan's Rules & Policies page, read only
+(ADR-0048's 3.30.0 amendment). The **classification rules** give each server
+its installation type from its own fields; the **health policies** judge
+its health. Both ship in server-scan's code and are seeded at its start-up;
+nothing writes them through its API.
+
+### 13.1 What server-scan's Rules & Policies page shows and does
+
+Read from `team-redbull/server-scan` at `92146d3`:
+`frontend/src/features/rules/` (`RulesPage.tsx`, `RulesPage.test.tsx`),
+`frontend/src/types/classification.ts`, `frontend/src/types/health.ts` and
+`frontend/src/api/classificationRules.ts`, `healthPolicies.ts`. Sixth in its
+navigation, at `/rules`, for every signed-in role.
+
+- **Header**: "Rules & Policies", then: "The rules and policies this
+  deployment runs, and every deployment gets the same set. They are defined
+  in code and seeded at startup, not created here — a rule that exists in
+  one estate and not another makes two installations that look identical
+  classify the same server differently. Anything disabled is not listed,
+  because it is not something this deployment does."
+- **Classification rules** (a section): "Assign an installation type
+  (HOSTED_CLUSTER / MCE / UPI / UNCLASSIFIED) from a server's own fields."
+  A table, in server-scan's order (highest priority first, then each rule's
+  order: the order it tries them, the first match wins):
+
+  | Column | Shows |
+  |---|---|
+  | Name | the rule's name |
+  | Type | the installation type it gives, as a badge |
+  | Matches | `field ~ pattern` in monospace, and "(case-insensitive)" when the rule ignores case |
+  | Priority | its number |
+  | Scope | `vendor=…, manager=…, site=…`, the ones set; none: "(unscoped)", never a blank that reads as missing data |
+
+  None: "No classification rules are configured."
+- **Health policies** (a section): "Assign per-category and overall health
+  severity. Within one `policy_key` the highest-priority enabled policy wins
+  and the rest are shadowed." Grouped by scope, a heading per group:
+  **General** (no scope; "Applies to every server, whatever collected it."),
+  then a vendor ("Dell"), collectors ("Cisco — UCS Central, Intersight": the
+  vendor, then the collectors), a site ("Site tlv"), and their mixes joined
+  by " — "; groups by how specific they are (general, vendor, collector,
+  site), then by heading. Each group is a table: **Name**, **Category**,
+  **Severity** (its glyph and word), **Condition** (one line:
+  `metric OPERATOR value`, `A AND B`, `(A OR B)`, `NOT A`; a count's
+  `equals` as `of "x"`) and **policy_key**; rows by severity, critical first,
+  then by name. None: "No health policies are configured."
+- **Enabled only**: both reads ask `?enabled=true`; there is no status
+  column.
+- **Fresh**: read when the page opens and again when it is opened after 30
+  seconds (its query client's `staleTime`); not polled.
+- **States**: each section on its own: "Loading…"; its problem.
+
+### 13.2 Every control on server-scan's Rules & Policies page
+
+**None.** Its test "offers no way to create, edit, enable or delete
+anything" asserts no button, link, text box or dropdown. server-scan made
+the rules and policies read only (its `27b20a8`, `f9ab059`): its API lists
+them and reads one by id, and nothing else. `GET /api/v1/health-metrics`
+(the metric registry, kept "for a future condition-builder UI") and the
+by-id reads are not called by the page. So Wingman has no write to leave out.
+
+### 13.3 What server-scan serves
+
+| Call | Token | Answer |
+|---|---|---|
+| `GET /api/v1/classification-rules?enabled=true` | any (viewer) | `{items: ClassificationRuleResponse[]}`, highest priority first, then `order`, then id: the order the engine tries them. Unpaged (dozens) |
+| `GET /api/v1/health-policies?enabled=true` | any (viewer) | `{items: HealthPolicyResponse[]}`, in the database's order (the page sorts them). Every condition node carries every field, the unused ones `null` |
+
+Neither is cached by server-scan: one database read per call.
+
+### 13.4 day1's routes
+
+**`GET /api/day1/server-scan/classification-rules`**: server-scan's answer,
+typed, in its shape:
+
+```json
+{
+  "items": [
+    {
+      "id": "rule-hc", "name": "Hosted cluster nodes",
+      "description": "Hosted-cluster nodes, named after their hardware spec and site: …",
+      "enabled": true, "system": true, "installation_type": "HOSTED_CLUSTER",
+      "scope": {"vendor": null, "manager_type": null, "site_id": null},
+      "field": "name", "pattern": "^ocp-[a-z]+-[a-z0-9]+-site",
+      "flags": {"ignore_case": true, "multiline": false, "dotall": false},
+      "source": "SYSTEM_DEFAULT", "priority": 100, "order": 0,
+      "stats": {"last_matched_at": null, "timeout_count": 0, "quarantined": false},
+      "revision": 1, "created_at": "2026-09-01T06:00:00Z", "updated_at": "2026-09-01T06:00:00Z",
+      "created_by": null, "updated_by": null
+    }
+  ]
+}
+```
+
+**`GET /api/day1/server-scan/health-policies`**:
+
+```json
+{
+  "items": [
+    {
+      "id": "policy-power-psu-failed-critical", "name": "Power supply failed (no redundancy left)",
+      "description": "Fires when two or more power supplies report DOWN, …",
+      "enabled": true, "system": true, "policy_key": "power.psu_failed_critical",
+      "mode": "EVALUATE", "category": "power", "severity": "CRITICAL",
+      "condition": {
+        "all_of": null, "not": null, "metric": null, "operator": null, "value": null, "equals": null,
+        "any_of": [
+          {"all_of": null, "any_of": null, "not": null, "metric": "power.failed_psu_count", "operator": "GTE", "value": 2, "equals": null},
+          {"all_of": ["…"], "any_of": null, "not": null, "metric": null, "operator": null, "value": null, "equals": null}
+        ]
+      },
+      "evidence": [{"key": "failed", "metric": "power.failed_psu_count"}, {"key": "total", "metric": "power.psu_count"}],
+      "message_template": "{failed} of {total} power supplies failed",
+      "scope": {"site_id": null, "vendor": null, "manager_types": []},
+      "source": "SYSTEM_DEFAULT", "priority": 100, "order": 3,
+      "stats": {"fire_count": 0, "last_fired_at": null, "error_count": 0, "quarantined": false},
+      "revision": 1, "created_at": "2026-09-01T06:00:00Z", "updated_at": "2026-09-01T06:00:00Z",
+      "created_by": null, "updated_by": null
+    }
+  ]
+}
+```
+
+- **The enabled ones only**: day1 always asks server-scan for
+  `enabled=true`, as its page does; the routes take no parameter.
+- **Every field server-scan sends**, typed (`domain/server_scan_rules.py`),
+  with its domain models' defaults (a field left out gets server-scan's
+  default: an empty scope, `ignore_case` true, mode `EVALUATE`, zero stats).
+  A field of the wrong type is a `502`, never a blank. server-scan's words
+  (an installation type, a severity, a source, a collector, an operator, a
+  category) stay strings, so a word it adds later reaches the page. A
+  condition's `value` and `equals` are whatever JSON the policy holds; its
+  grammar (exactly one of `all_of`, `any_of`, `not`, `metric` per node) is
+  server-scan's to check when it seeds them, and day1 only types it.
+- **Not cached by day1** (§13.7).
+
+### 13.5 The token
+
+The viewer token, `SERVER_SCAN_TOKEN`, as Sites (§4): server-scan serves
+both to any authenticated caller. **No new Secret, value or key.**
+
+### 13.6 Errors
+
+On each route:
+
+| Status | `code` | When |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | No session |
+| 403 | `FORBIDDEN` | Not one of Wingman's admins |
+| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan unreachable, answering an error, refusing the viewer token (check `SERVER_SCAN_TOKEN`), or sending an answer day1 cannot read |
+
+### 13.7 Cache, metrics and the fake
+
+- **Not cached by day1.** Two small reads per page open, at most once per
+  30 seconds per open page, that server-scan answers from its database; only
+  this page asks. A cache would save no measurable load, and after a
+  server-scan upgrade re-seeds them the page shows the new set at once.
+- **Metrics**: two new operations on `dependency="server_scan"`,
+  `list_classification_rules` and `list_health_policies`, with `ok`,
+  `denied` (the viewer token refused) and `unavailable`
+  (`docs/ops/metrics.md`).
+- **The fake** (`DAY1_FAKE_FLEET=true`): `dev/fleet-fixtures/rules.yaml`, in
+  the answers' shapes and read by the same strict models. Its classification
+  rules are the three the fake servers' records name as matched
+  (`server-records.yaml`, so a server's page and this one agree; a test keeps
+  them in step); its health policies are server-scan's own 20 seeded system
+  defaults (its `health_policy_defaults.py`): general ones, two for Cisco's
+  fabric collectors, one for physical servers' collectors, one for the
+  collectors that read RAID. No token is needed, as on the sandbox.
+
+### 13.8 The web
+
+- **`/server-scan/rules`** (server-scan's own path), the sidebar's **Rules &
+  Policies**, in a Configuration section of its own between Fleet and
+  Reference: server-scan's navigation has it after Confs, Events and Jobs
+  and before Claude and Architecture.
+- **§13.1 in Wingman's design**: its sections, columns, words, groups and
+  order, the severity in the area's glyph and colour, Wingman's colour tokens
+  (light and dark). Its long introduction sits in a tooltip beside the
+  heading, with one line under it; a rule's or policy's description is its
+  name's tooltip (a policy's adds its message).
+- **States**: "For admins" on `403` and "Server Scan is not set up" on `501`
+  (either read); each section on its own: skeleton rows while loading, its
+  problem on `502`, a failed re-read keeping the last answer with a notice,
+  and server-scan's words when there are none.
+- **Fresh as the original**: read on open, again when opened after 30
+  seconds; not polled.
+- **Reused from server-scan** (decision 18, credited in the code): its types
+  (`ClassificationRuleResponse`, `HealthPolicyResponse`, `Condition` with its
+  guards, the scopes, `MANAGER_TYPE_LABELS`), `RulesPage.tsx`'s
+  `scopeSummary`, `policyScopeLabel`, `policyScopeRank`, `policySections`,
+  `severityRank` and `conditionSummary`, its words, and its tests' cases as
+  Vitest cases.
+
+## 14. Left for later pages
 
 In single-pane §4's order; each is its own PR, with its section in this note.
 
 | Page | server-scan reads (token) | What Wingman adds |
 |---|---|---|
 | Confs | Built (§10, 3.29.0): `GET /api/v1/confs` (viewer) | Read only |
-| Rules & Policies | `GET /api/v1/classification-rules`, `/health-policies` (viewer) | Read only |
+| Rules & Policies | Built (§13, 3.30.0): `GET /api/v1/classification-rules`, `/health-policies` (viewer) | Read only |
 | Events | `GET /api/v1/events`, `/events/actors` (auditor) | Filters and cursor pages; History's timeline and its auditor token (§9) reused |
 | Jobs | `GET /api/v1/jobs`, a run's pod logs, `POST /jobs/{cronjob}/run` (admin) | "Run now" behind the admin check, its confirmation, Wingman's audit |
 | Architecture | Built (§11, 3.28.0): its UI's static diagrams, no token | Read through day1, shown in a sandboxed frame |

@@ -19,7 +19,7 @@ test.describe("The Architecture page", () => {
     const { asked } = await setUpArchitecture(page);
     await go(page, "/server-scan");
     const nav = page.getByRole("navigation", { name: "Server Scan" });
-    await expect(nav.getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Claude", "Architecture"]);
+    await expect(nav.getByRole("link")).toHaveText(["Sites", "Servers", "Confs", "Rules & Policies", "Claude", "Architecture"]);
     await nav.getByRole("link", { name: "Architecture" }).click();
     await expect(page).toHaveURL(/\/server-scan\/architecture$/);
     await expect(page.getByRole("heading", { level: 1, name: "Architecture" })).toBeVisible();

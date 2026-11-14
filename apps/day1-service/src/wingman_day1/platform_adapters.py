@@ -85,6 +85,10 @@ def fleet_adapters(
             default_confs_file,
             load_confs,
         )
+        from wingman_day1.infrastructure.fake_server_scan_rules import (
+            default_rules_file,
+            load_rules,
+        )
         from wingman_day1.infrastructure.fake_server_scan_sites import load_site_catalog
         from wingman_day1.infrastructure.fake_server_scan_skill import (
             default_skill_dir,
@@ -94,6 +98,7 @@ def fleet_adapters(
         rows, runs = load_fleet(default_fleet_file())
         fake = FakeServerInventory(
             rows,
+            rules=load_rules(default_rules_file()),
             sites=load_site_catalog(default_fleet_file()),
             records=load_records(default_records_file()),
             skill=load_skill(default_skill_dir()),

@@ -16,7 +16,9 @@ Confs page's catalog (a small collection server-scan reads per call, asked
 for by that page only, so a cache would only delay a change). A
 failure is not cached. A maintenance write clears the rows and the sites, so
 the next read shows it (whatever its outcome: an ambiguous one may have
-landed).
+landed). The Rules & Policies page's rules and policies are read through too:
+two small reads server-scan answers from its database, asked for by that page
+only.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
+from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.server_scan_skill import Skill, SkillZip
@@ -85,6 +88,14 @@ class CachedServerInventory:
     ) -> EventPage:
         """See ServerInventory.server_events; always read through."""
         return await self._inner.server_events(server_id, cursor=cursor, page_size=page_size)
+
+    async def classification_rules(self) -> ClassificationRuleList:
+        """See ServerInventory.classification_rules; always read through."""
+        return await self._inner.classification_rules()
+
+    async def health_policies(self) -> HealthPolicyList:
+        """See ServerInventory.health_policies; always read through."""
+        return await self._inner.health_policies()
 
     async def sites(self) -> FleetSites:
         """See ServerInventory.sites."""

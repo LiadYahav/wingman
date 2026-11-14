@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, CircleDashed, CircleDot, Cpu, Layers, MapPin, Network, Server, Sparkles, TriangleAlert, type LucideIcon } from "lucide-react";
+import { BookOpen, CircleDashed, CircleDot, Cpu, Layers, ListChecks, MapPin, Network, Server, Sparkles, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { NavIcon, NavSection } from "@/lib/areas";
 import { SidebarHeading, SidebarLink, SidebarNavList } from "./sidebar-parts";
 
@@ -12,6 +12,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   site: MapPin,
   servers: Server,
   confs: Cpu,
+  rules: ListChecks,
   docs: BookOpen,
   claude: Sparkles,
   architecture: Network,

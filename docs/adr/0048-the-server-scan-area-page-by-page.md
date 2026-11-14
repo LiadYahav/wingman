@@ -443,3 +443,57 @@ token, the metric, the fake), `test_server_scan.py` (read through the cache),
 `apps/day1-service/tests/api/test_server_scan_confs_api.py`,
 `apps/web/lib/server-scan/confs.test.ts` (server-scan's cases) and
 `apps/web/e2e/tests/server-scan-confs.spec.ts`.
+
+**2026-11-14, 3.30.0: the Rules & Policies page, what server-scan runs.**
+server-scan's Rules & Policies page at `/server-scan/rules`, every feature of
+it (decision 14), in Wingman's design: the classification rules that give a
+server its installation type, and the health policies that judge its health,
+grouped and ordered as server-scan does, in a Configuration section of the
+sidebar between Fleet and Reference. The contract is §13 of
+`docs/notes/2026-11-13-server-scan-area-api.md`.
+
+- **Two reads through the one client** (`ServerInventory.classification_rules`,
+  `health_policies`): server-scan's `GET /api/v1/classification-rules` and
+  `/health-policies`, the enabled ones only (`?enabled=true`, as its page
+  asks), with the viewer token, behind `AdminUser`, operations
+  `list_classification_rules` and `list_health_policies`. Two routes, not
+  one, so each section loads and fails on its own, as in server-scan. No new
+  Secret, value or key.
+- **Typed by day1 in server-scan's shapes** (`domain/server_scan_rules.py`):
+  every field, with its domain models' defaults; a policy's condition tree
+  typed node by node (`not` keeps its name), its values any JSON; server-scan's
+  words stay strings.
+- **Not cached by day1**: two small reads server-scan answers from its
+  database, asked for by this page only, at most once per 30 seconds per
+  open page; after a server-scan upgrade re-seeds them, the page shows the
+  new set at once.
+- **Read only, and nothing left out**: server-scan's page has no control at
+  all, and its API has no write for rules or policies (its `27b20a8`,
+  `f9ab059`: they ship in code and are seeded at start-up).
+- **Fresh as the original**: read on open, again when opened after 30
+  seconds; not polled.
+- **The fake** serves the three classification rules the fake servers'
+  records name (one source for "Matched rule" on a server's page and this
+  page, held together by a test) and server-scan's own 20 seeded health
+  policies, transcribed into `dev/fleet-fixtures/rules.yaml`.
+- **Reuse** (decision 18): server-scan's rule and policy types, the
+  condition guards, `MANAGER_TYPE_LABELS`, `RulesPage.tsx`'s scope, section,
+  severity and condition functions, its words, and its tests' cases as
+  Vitest cases.
+
+Rejected: **one route for both** (one failing would blank the other, which
+server-scan's page keeps apart); **an `enabled` parameter** (the page lists
+what the deployment does; a disabled rule is not that, and server-scan's
+page never asks for one); **checking a condition's grammar in day1**
+(server-scan validates it against its metric registry when it seeds it; day1
+types it and shows it); **the metric registry** (`/api/v1/health-metrics`:
+the page does not read it); **caching** (nothing to save, an upgrade shows
+later).
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_rules.py`
+(both reads, enabled only, the shapes field for field, the defaults,
+malformed answers, the token, the metrics, the fake and its agreement with
+the records fixture), `test_server_scan.py` (read through the cache),
+`apps/day1-service/tests/api/test_server_scan_rules_api.py`,
+`apps/web/lib/server-scan/rules.test.ts` (server-scan's cases) and
+`apps/web/e2e/tests/server-scan-rules.spec.ts`.

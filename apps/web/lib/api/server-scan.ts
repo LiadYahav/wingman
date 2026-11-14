@@ -12,6 +12,7 @@ import { useIsAdmin } from "@/stores/auth-store";
 import type { SiteStatsList } from "@/types/server-scan";
 import type { ConfList } from "@/types/server-scan-confs";
 import type { AuditEventPage, ServerRecord, VmHostAnswer } from "@/types/server-scan-record";
+import type { ClassificationRuleListResponse, HealthPolicyListResponse } from "@/types/server-scan-rules";
 import type { MaintenanceAnswer, MaintenanceStart, ServerRowsAnswer } from "@/types/server-scan-servers";
 
 /**
@@ -37,6 +38,8 @@ const SERVERS_POLL_MS = 30_000;
 const RECORD_STALE_MS = 30_000;
 /** A History page, as server-scan's: 50 events, newest first. */
 const HISTORY_PAGE_SIZE = 50;
+/** As server-scan's query client: Rules & Policies is read on open, and again when opened after 30 seconds (§13.1). */
+const RULES_STALE_MS = 30_000;
 
 const serverScanKeys = {
   sites: ["server-scan", "sites"] as const,
@@ -47,6 +50,8 @@ const serverScanKeys = {
   server: (id: string) => ["server-scan", "server", id] as const,
   vmHost: (id: string) => ["server-scan", "server", id, "vm-host"] as const,
   history: (id: string) => ["server-scan", "server", id, "history"] as const,
+  classificationRules: ["server-scan", "classification-rules"] as const,
+  healthPolicies: ["server-scan", "health-policies"] as const,
 };
 
 const serverPath = (id: string) => `/api/day1/server-scan/servers/${encodeURIComponent(id)}`;
@@ -66,6 +71,8 @@ const serverScanApi = {
     const path = `${serverPath(id)}/maintenance`;
     return start ? api.put<MaintenanceAnswer>(path, start) : api.del<MaintenanceAnswer>(path);
   },
+  classificationRules: () => api.get<ClassificationRuleListResponse>("/api/day1/server-scan/classification-rules"),
+  healthPolicies: () => api.get<HealthPolicyListResponse>("/api/day1/server-scan/health-policies"),
 };
 
 /** A problem is day1's answer (403 for a viewer, 501 when off, 502 when server-scan fails): show it. Else once more, as server-scan's UI. */
@@ -190,5 +197,25 @@ export function useServerScanHistory(id: string, enabled: boolean) {
     staleTime: RECORD_STALE_MS,
     retry: retryUnlessProblem,
     enabled,
+  });
+}
+
+/** server-scan's enabled classification rules, for Rules & Policies (§13.4); read on open and again after 30 seconds. */
+export function useServerScanClassificationRules() {
+  return useQuery<ClassificationRuleListResponse>({
+    queryKey: serverScanKeys.classificationRules,
+    queryFn: serverScanApi.classificationRules,
+    staleTime: RULES_STALE_MS,
+    retry: retryUnlessProblem,
+  });
+}
+
+/** server-scan's enabled health policies, for Rules & Policies (§13.4); each section loads and fails on its own. */
+export function useServerScanHealthPolicies() {
+  return useQuery<HealthPolicyListResponse>({
+    queryKey: serverScanKeys.healthPolicies,
+    queryFn: serverScanApi.healthPolicies,
+    staleTime: RULES_STALE_MS,
+    retry: retryUnlessProblem,
   });
 }

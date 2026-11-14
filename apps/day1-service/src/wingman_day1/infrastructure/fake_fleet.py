@@ -2,15 +2,16 @@
 
 Tests seed them directly; ``DAY1_FAKE_FLEET=true`` (development only) seeds
 them from ``dev/fleet-fixtures/servers.yaml``, written in server-scan's own
-row shape and read by the HTTP adapter's parser. They raise the same domain
-errors as the real adapters. The fake's sites are its rows counted by
+row shape and read by the HTTP adapter's parser, and its rules and policies
+(Rules & Policies) from ``rules.yaml`` (``fake_server_scan_rules``). They
+raise the same domain errors as the real adapters. The fake's sites are its rows counted by
 server-scan's rules over a site catalog (``fake_server_scan_sites``, ADR-0048);
 its maintenance writes change the row as a server-scan with auth off does,
 recording ``dev`` as who. A server's record and History are its row and its
 model's hardware (``fake_server_records``, ADR-0048's 3.25.0 amendment); no
 fake server is a VM unless the records fixture says so. Its Claude skill is
 a folder, read and zipped as server-scan does (``fake_server_scan_skill``,
-3.29.0); without one it carries none. Its architecture diagrams are
+3.27.0); without one it carries none. Its architecture diagrams are
 ``fake_server_scan_architecture``'s (3.28.0). Its hardware catalog (the Confs
 page) is the fixture's, as loaded (``fake_server_scan_confs``, 3.29.0).
 
@@ -48,6 +49,7 @@ from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer, VmHostServer
+from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.server_scan_skill import Skill, SkillZip
@@ -61,6 +63,7 @@ from wingman_day1.domain.servers import (
 from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.infrastructure.fake_server_records import FakeRecords
 from wingman_day1.infrastructure.fake_server_scan_architecture import FakeDiagrams
+from wingman_day1.infrastructure.fake_server_scan_rules import FakeRules
 from wingman_day1.infrastructure.fake_server_scan_sites import SiteName, catalog_of, count_sites
 from wingman_day1.infrastructure.fake_server_scan_skill import zip_skill
 from wingman_day1.infrastructure.server_scan_parse import server_row
@@ -87,6 +90,7 @@ class FakeServerInventory:
         rows: Iterable[ServerRow] = (),
         *,
         unavailable: bool = False,
+        rules: FakeRules | None = None,
         sites: Sequence[SiteName] = (),
         records: FakeRecords | None = None,
         skill: Skill | None = None,
@@ -100,9 +104,11 @@ class FakeServerInventory:
         ``skill`` is the Claude skill it serves (none: it carries none).
         ``diagrams`` are the UI's architecture diagrams (none: it serves none).
         ``confs`` is the hardware catalog (none: empty).
+        ``rules`` are its classification rules and health policies (none: none).
         """
         self._rows = {row.id: row for row in rows}
         self.unavailable = unavailable
+        self._rules = rules or FakeRules()
         self._sites = tuple(sites)
         self._records = records or FakeRecords()
         self._skill = skill
@@ -185,6 +191,16 @@ class FakeServerInventory:
                 {"items": (), "page": _EMPTY_PAGE | {"page_size": page_size}}
             )
         return self._records.page(row, cursor, page_size)
+
+    async def classification_rules(self) -> ClassificationRuleList:
+        """See ServerInventory.classification_rules: the seeded ones, as server-scan seeds them."""
+        self._read()
+        return self._rules.rules
+
+    async def health_policies(self) -> HealthPolicyList:
+        """See ServerInventory.health_policies: the seeded ones."""
+        self._read()
+        return self._rules.policies
 
     async def sites(self) -> FleetSites:
         """See ServerInventory.sites: the rows now, counted as server-scan counts them."""
