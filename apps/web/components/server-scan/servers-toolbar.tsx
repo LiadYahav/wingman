@@ -40,8 +40,7 @@ export function ServerSearch({
   onCommit: () => void;
 }) {
   return (
-    <div className="flex w-full flex-col gap-1 text-xs font-medium text-muted-foreground sm:w-96">
-      <span>Search</span>
+    <div className="flex w-full flex-col gap-1 text-xs font-medium text-muted-foreground sm:w-80">
       <div className="relative">
         <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
         <input
