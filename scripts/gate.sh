@@ -6,7 +6,8 @@
 #   scripts/gate.sh ci       # workflows and scripts: actionlint, zizmor, shellcheck (pinned, scripts/ci-tools.sh)
 #   scripts/gate.sh python   # only the Python checks, including the requirement-export drift check
 #                            # and the file-size limits (of every language: ADR-0056)
-#   scripts/gate.sh chart    # only the Helm chart and alert-rule checks (needs helm, promtool)
+#   scripts/gate.sh chart    # only the Helm chart and alert-rule checks (needs helm, promtool),
+#                            # with the chart's rendered-output tests (tests/repo/test_chart_*.py)
 #   scripts/gate.sh web      # only the web checks, including npm audit
 #   scripts/gate.sh e2e      # the mocked Playwright suite against a production build
 #
@@ -120,6 +121,11 @@ fi
 if [[ $scope == all || $scope == chart ]]; then
   step "helm lint --strict (every deploy/helm/wingman/ci fixture)" helm_lint_all
   step "helm template (every deploy/helm/wingman/ci fixture)" helm_template_all
+  # The chart's rendered-output tests are pytest: `all` and `python` run them with
+  # the rest (as CI's python job does, with helm); `chart` alone runs them here.
+  if [[ $scope == chart ]]; then
+    step "chart tests (pytest tests/repo/test_chart_*.py)" uv run pytest -q tests/repo/test_chart_*.py
+  fi
   step "promtool check rules" promtool check rules deploy/helm/wingman/files/alerts.rules.yaml
   step "promtool test rules" promtool test rules deploy/helm/wingman/tests/alerts.test.yaml
 fi
