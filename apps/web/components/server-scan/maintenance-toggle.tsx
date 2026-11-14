@@ -111,7 +111,7 @@ function StartDialog({ server, open, onOpenChange }: { server: Switchable; open:
  * `detail` as its tooltip when the deployment cannot write (no admin token):
  * `aria-disabled`, not `disabled`, so the tooltip still shows.
  */
-export function MaintenanceToggle({ server, available, detail }: { server: Switchable; available: boolean; detail: string | null }) {
+function MaintenanceToggle({ server, available, detail }: { server: Switchable; available: boolean; detail: string | null }) {
   const end = useMaintenanceChange();
   const [asking, setAsking] = useState(false);
   const enabled = server.maintenance.enabled;
