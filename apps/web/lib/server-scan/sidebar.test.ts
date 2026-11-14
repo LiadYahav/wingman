@@ -5,7 +5,7 @@ const entries = (pathname: string) =>
   serverScanSidebar(pathname).map((s) => [s.label, s.items.map((i) => [i.label, i.href, i.active])]);
 
 describe("the Server Scan sidebar", () => {
-  it("lists only the pages Wingman has built, in server-scan's order: Sites, Servers, Confs, Claude, Architecture", () => {
+  it("lists only the pages Wingman has built, in server-scan's order: Sites, Servers, Confs, Rules & Policies, Claude, Architecture", () => {
     expect(entries("/server-scan")).toEqual([
       [
         "Fleet",
@@ -15,6 +15,7 @@ describe("the Server Scan sidebar", () => {
           ["Confs", "/server-scan/confs", false],
         ],
       ],
+      ["Configuration", [["Rules & Policies", "/server-scan/rules", false]]],
       ["Reference", [["Claude", "/server-scan/claude", false], ["Architecture", "/server-scan/architecture", false]]],
     ]);
   });
@@ -25,6 +26,11 @@ describe("the Server Scan sidebar", () => {
     expect(marked("/server-scan/servers")).toEqual(["Servers"]);
     expect(marked("/server-scan/servers/srv_1")).toEqual(["Servers"]);
     expect(marked("/server-scan/confs")).toEqual(["Confs"]);
+  });
+
+  it("marks Rules & Policies on its page", () => {
+    const marked = serverScanSidebar("/server-scan/rules").flatMap((s) => s.items.filter((i) => i.active).map((i) => i.label));
+    expect(marked).toEqual(["Rules & Policies"]);
   });
 
   it("marks Claude on its page", () => {
