@@ -5,13 +5,15 @@ all read server-scan through this port and its one adapter, cache and fake.
 The Server Scan area's maintenance toggle is the one write (ADR-0048's 3.23.0
 amendment); its server page reads a server whole, a VM's host and the
 server's History (3.25.0); its Claude page reads server-scan's skill and the
-skill's zip (3.27.0).
+skill's zip (3.27.0); its Architecture page reads the diagrams server-scan's
+UI serves (3.28.0).
 """
 
 from __future__ import annotations
 
 from typing import Protocol
 
+from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -74,6 +76,13 @@ class ServerInventory(Protocol):
 
     async def skill_zip(self, base_url: str) -> SkillZip:
         """The skill zipped by server-scan, ``base_url`` written in as its ``BASE_URL``."""
+        ...
+
+    async def architecture_diagram(self, slug: str) -> ArchitectureDiagram:
+        """One of server-scan's architecture diagrams, as its UI serves it (no token).
+
+        One it does not serve is ``ServerScanDiagramNotFoundError``.
+        """
         ...
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:

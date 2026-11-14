@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="archify (a stand-in from Wingman's fake fleet)">
+  <title>{{slug}} Diagram</title>
+  <!-- The fake server-scan's diagram (DAY1_FAKE_FLEET, development only):
+       one page for every name, so the Architecture page can be seen without
+       server-scan. A real server-scan serves archify's interactive pages. -->
+  <style>
+    :root { --bg: #ffffff; --text: #0f172a; --muted: #64748b; --box: #f1f5f9; --line: #94a3b8; --accent: #0891b2; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #020617; --text: #f8fafc; --muted: #94a3b8; --box: #0f172a; --line: #475569; --accent: #22d3ee; }
+    }
+    body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font: 14px ui-monospace, monospace; }
+    h1 { margin: 0 0 4px; font-size: 18px; }
+    p { margin: 0 0 24px; color: var(--muted); }
+    svg { width: 100%; max-width: 960px; }
+    rect { fill: var(--box); stroke: var(--accent); stroke-width: 1.5; }
+    text { fill: var(--text); font: 13px ui-monospace, monospace; }
+    path { stroke: var(--line); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    marker path { fill: var(--line); stroke: none; }
+  </style>
+</head>
+<body>
+  <h1>{{slug}}</h1>
+  <p>A stand-in from Wingman's fake fleet: a real server-scan serves its own diagram here.</p>
+  <svg viewBox="0 0 960 180" role="img" aria-label="Collectors, ingest, MongoDB, the API and the UI">
+    <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z"/></marker></defs>
+    <rect x="10" y="60" width="150" height="60" rx="8"/><text x="85" y="95" text-anchor="middle">Collectors</text>
+    <rect x="210" y="60" width="150" height="60" rx="8"/><text x="285" y="95" text-anchor="middle">IngestService</text>
+    <rect x="410" y="60" width="150" height="60" rx="8"/><text x="485" y="95" text-anchor="middle">MongoDB</text>
+    <rect x="610" y="60" width="150" height="60" rx="8"/><text x="685" y="95" text-anchor="middle">API</text>
+    <rect x="810" y="60" width="140" height="60" rx="8"/><text x="880" y="95" text-anchor="middle">UI</text>
+    <path d="M160 90H205"/><path d="M360 90H405"/><path d="M560 90H605"/><path d="M760 90H805"/>
+  </svg>
+</body>
+</html>

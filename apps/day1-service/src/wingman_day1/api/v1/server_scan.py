@@ -3,7 +3,8 @@
 Admins only for now (decision 13 of ``docs/ideas/single-pane.md``, until
 RBAC). With ``SERVER_SCAN_URL`` empty every route answers 501; server-scan
 failing or refusing the token is 502. A server's page reads the record, a VM's
-host and its History (the auditor token; without it, 501). The one write, a
+host and its History (the auditor token; without it, 501). The Architecture
+page reads server-scan's diagrams from its UI. The one write, a
 server's maintenance, is never retried: unanswered, it is 504
 ``AMBIGUOUS_WRITE``. The contract: ``docs/notes/2026-11-13-server-scan-area-api.md``.
 """
@@ -12,11 +13,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Path, Query, Request, Response
 
 from wingman_core.web.auth import AdminUser
 from wingman_day1.api.conditional import conditional_json, weak_etag
 from wingman_day1.api.deps import ServerScan
+from wingman_day1.api.v1.server_scan_architecture_schemas import DiagramOut
 from wingman_day1.api.v1.server_scan_record_schemas import ServerRecordOut
 from wingman_day1.api.v1.server_scan_schemas import SitesOut
 from wingman_day1.api.v1.server_scan_servers_schemas import (
@@ -24,6 +26,7 @@ from wingman_day1.api.v1.server_scan_servers_schemas import (
     ServerMaintenanceOut,
     ServerRowsOut,
 )
+from wingman_day1.domain.server_scan_architecture import DIAGRAM_SLUG
 from wingman_day1.domain.server_scan_events import (
     CURSOR_MAX_LENGTH,
     EVENTS_PAGE_MAX,
@@ -123,3 +126,11 @@ async def end_server_maintenance(
 ) -> ServerMaintenanceOut:
     """End a server's maintenance in one call, as server-scan's UI does."""
     return ServerMaintenanceOut.of(await service.end_maintenance(server_id, user=user))
+
+
+@router.get("/architecture/{slug}")
+async def server_scan_diagram(
+    slug: Annotated[str, Path(pattern=DIAGRAM_SLUG)], service: ServerScan, user: AdminUser
+) -> DiagramOut:
+    """One of server-scan's architecture diagrams, the page its UI serves, for a sandboxed frame."""
+    return DiagramOut.of(await service.diagram(slug))

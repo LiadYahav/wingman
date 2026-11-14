@@ -86,6 +86,11 @@ def server_scan_skill() -> str:
     return "server-scan:skill"
 
 
+def server_scan_diagram(slug: str) -> str:
+    """One of server-scan's architecture diagrams, from its UI (expires)."""
+    return f"server-scan:diagram:{slug}"
+
+
 def segments_manager_prefix() -> str:
     """Everything cached from segments-manager; cleared by a ``fresh`` read (ADR-0047)."""
     return "segments-manager:"

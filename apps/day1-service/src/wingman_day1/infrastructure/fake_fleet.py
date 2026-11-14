@@ -10,7 +10,8 @@ recording ``dev`` as who. A server's record and History are its row and its
 model's hardware (``fake_server_records``, ADR-0048's 3.25.0 amendment); no
 fake server is a VM unless the records fixture says so. Its Claude skill is
 a folder, read and zipped as server-scan does (``fake_server_scan_skill``,
-3.27.0); without one it carries none.
+3.27.0); without one it carries none. Its architecture diagrams are
+``fake_server_scan_architecture``'s (3.28.0).
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which
@@ -42,6 +43,7 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
     WorkflowsUnavailableError,
 )
+from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer, VmHostServer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -56,6 +58,7 @@ from wingman_day1.domain.servers import (
 )
 from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.infrastructure.fake_server_records import FakeRecords
+from wingman_day1.infrastructure.fake_server_scan_architecture import FakeDiagrams
 from wingman_day1.infrastructure.fake_server_scan_sites import SiteName, catalog_of, count_sites
 from wingman_day1.infrastructure.fake_server_scan_skill import zip_skill
 from wingman_day1.infrastructure.server_scan_parse import server_row
@@ -85,18 +88,21 @@ class FakeServerInventory:
         sites: Sequence[SiteName] = (),
         records: FakeRecords | None = None,
         skill: Skill | None = None,
+        diagrams: FakeDiagrams | None = None,
         clock: Clock = system_clock,
     ) -> None:
         """Seed the fleet; ``sites`` is server-scan's site catalog (none: the rows' own sites).
 
         ``records`` gives each model its hardware (none: every record has none);
         ``skill`` is the Claude skill it serves (none: it carries none).
+        ``diagrams`` are the UI's architecture diagrams (none: it serves none).
         """
         self._rows = {row.id: row for row in rows}
         self.unavailable = unavailable
         self._sites = tuple(sites)
         self._records = records or FakeRecords()
         self._skill = skill
+        self._diagrams = diagrams or FakeDiagrams()
         self._clock = clock
         self.server_reads = 0
         """How many times ``server`` was called (the uninstall's fresh read)."""
@@ -188,6 +194,11 @@ class FakeServerInventory:
     async def skill_zip(self, base_url: str) -> SkillZip:
         """See ServerInventory.skill_zip: zipped as server-scan zips it, for an admin."""
         return zip_skill(self._carried_skill(), base_url)
+
+    async def architecture_diagram(self, slug: str) -> ArchitectureDiagram:
+        """See ServerInventory.architecture_diagram."""
+        self._read()
+        return self._diagrams.diagram(slug)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance: who stays the first one's, as in server-scan."""

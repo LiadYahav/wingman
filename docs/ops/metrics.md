@@ -41,7 +41,7 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
-| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `get_skill`, `download_skill` |
+| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `get_skill`, `download_skill`, `get_architecture_diagram` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
@@ -115,6 +115,13 @@ Operations of the other dependencies (day1):
   skill (the page says so); `unavailable` on `download_skill` includes
   server-scan refusing the address written into the zip (check
   `SERVER_SCAN_UI_URL`).
+- `server_scan` `get_architecture_diagram` is the Server Scan area's
+  Architecture page (ADR-0048's 3.28.0 amendment): one of server-scan's
+  diagrams, read from **its UI** (`SERVER_SCAN_UI_URL`, else
+  `SERVER_SCAN_URL`) with no token, at most once per diagram per replica per
+  5 minutes (its cache). `not_found` is a diagram server-scan's UI does not
+  serve, or an address that is not its UI (its API has no diagrams);
+  `unavailable` its UI unreachable or answering anything but the page.
 - `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the

@@ -3,9 +3,11 @@
 A list page that shows many clusters' nodes reads the fleet once per TTL
 (ADR-0011, ADR-0038), and so does the Server Scan area's Servers page,
 however many are open: the rows and the fleet are one entry (ADR-0048). The
-Sites page reads server-scan's counts once per ``sites_ttl``, and the Claude
+Sites page reads server-scan's counts once per ``sites_ttl``, the Claude
 page its skill once per ``skill_ttl`` (server-scan's own page reads it every
-minute; the zip is never cached: it is built per download). One server is
+minute; the zip is never cached: it is built per download), and the
+Architecture page each diagram once per ``diagram_ttl`` (they change only
+when server-scan is released; about 0.7 MB each). One server is
 never cached: the uninstall's check reads it fresh, so it acts on what
 server-scan says now. Nor is a server's record, a VM's host or a server's
 History (server-scan caches the record per revision itself, the host's
@@ -18,6 +20,7 @@ landed).
 from __future__ import annotations
 
 from wingman_core.infrastructure.cache import TtlCache
+from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -39,13 +42,18 @@ class CachedServerInventory:
         ttl: float,
         sites_ttl: float | None = None,
         skill_ttl: float | None = None,
+        diagram_ttl: float | None = None,
     ) -> None:
-        """Cache ``inner``'s rows for ``ttl`` seconds, its sites and skill as long or as given."""
+        """Cache ``inner``'s rows for ``ttl`` seconds; its sites, skill and diagrams as given.
+
+        Each of ``sites_ttl``, ``skill_ttl`` and ``diagram_ttl`` defaults to ``ttl``.
+        """
         self._inner = inner
         self._cache = cache
         self._ttl = ttl
         self._sites_ttl = ttl if sites_ttl is None else sites_ttl
         self._skill_ttl = ttl if skill_ttl is None else skill_ttl
+        self._diagram_ttl = ttl if diagram_ttl is None else diagram_ttl
 
     async def rows(self) -> list[ServerRow]:
         """See ServerInventory.rows."""
@@ -90,6 +98,14 @@ class CachedServerInventory:
     async def skill_zip(self, base_url: str) -> SkillZip:
         """See ServerInventory.skill_zip; always read through."""
         return await self._inner.skill_zip(base_url)
+
+    async def architecture_diagram(self, slug: str) -> ArchitectureDiagram:
+        """See ServerInventory.architecture_diagram."""
+        return await self._cache.get_or_fetch(
+            keys.server_scan_diagram(slug),
+            lambda: self._inner.architecture_diagram(slug),
+            ttl=self._diagram_ttl,
+        )
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance; clears the rows and sites."""

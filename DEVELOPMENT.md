@@ -84,6 +84,9 @@ hubs, server-scan, the workflows orchestrator and segments-manager with fakes se
   drives, GPUs (the R760s), PSUs, NICs and Cisco's fabric uplinks, a few servers' health
   reasons, unread fields and an unreachable BMC; its History is made up from the row plus
   every maintenance change made since day1 started;
+- `architecture-diagram.html` is the fake server-scan UI's one diagram: the Architecture page
+  (`/server-scan/architecture`) shows it for every tab, with the tab's name, as a stand-in for
+  server-scan's archify pages;
 - `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update
   half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
   approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace
