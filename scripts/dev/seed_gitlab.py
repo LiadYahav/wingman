@@ -1,10 +1,13 @@
 """Seed a GitLab with the fixture repos in ``dev/gitlab-fixtures``.
 
 Creates each group and project as production lays them out
-(``gitops-day1/platform-config``, ``sigs/<team>``, ``helm-charts/<chart>``,
-``wingman/cluster-specs``), commits the fixture files, and creates the
-release branches named in ``branches.yaml``. Projects that already exist are
-left alone unless ``--reset`` deletes and recreates them.
+(``gitops-day1/platform-config``, ``sigs/<team>``, ``<team>/helm-charts/<chart>``,
+``wingman/cluster-specs``), nested groups included (``falcon``, then
+``falcon/helm-charts``), commits the fixture files, and creates the release
+branches named in ``branches.yaml``. Projects that already exist are left
+alone unless ``--reset`` deletes and recreates them; nothing else is ever
+deleted, so a project the fixtures no longer have (the shared
+``helm-charts/<chart>`` of before ADR-0060) stays where it is.
 
     uv run python scripts/dev/seed_gitlab.py [--url URL] [--token TOKEN] [--reset]
 
@@ -38,12 +41,15 @@ from wingman_core.testing.fixtures import (
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "gitlab.local"}
 
 
-async def _group_id(client: httpx.AsyncClient, path: str) -> int:
-    response = await client.get(f"/groups/{quote(path, safe='')}")
+async def _group_id(client: httpx.AsyncClient, full_path: str) -> int:
+    """The group's id, creating it, and any missing group above it, when it does not exist."""
+    response = await client.get(f"/groups/{quote(full_path, safe='')}")
     if response.status_code == 404:
-        response = await client.post(
-            "/groups", json={"name": path, "path": path, "visibility": "private"}
-        )
+        parent, _, name = full_path.rpartition("/")
+        body: dict[str, object] = {"name": name, "path": name, "visibility": "private"}
+        if parent:
+            body["parent_id"] = await _group_id(client, parent)
+        response = await client.post("/groups", json=body)
     response.raise_for_status()
     return int(response.json()["id"])
 
@@ -78,7 +84,7 @@ async def _delete_and_wait(client: httpx.AsyncClient, path: str) -> None:
 
 
 async def _seed_project(client: httpx.AsyncClient, fixture: FixtureProject, *, reset: bool) -> str:
-    group, name = fixture.path_with_namespace.split("/", 1)
+    group, name = fixture.path_with_namespace.rsplit("/", 1)
     existing = await client.get(f"/projects/{quote(fixture.path_with_namespace, safe='')}")
     if existing.status_code == 200:
         if not reset:

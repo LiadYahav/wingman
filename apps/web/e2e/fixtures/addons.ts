@@ -1,6 +1,9 @@
 import type { ClusterSpec } from "../../types";
 import type { CatalogEntry } from "../../types/day2";
 
+/** A team's charts group on the mocked GitLab (ADR-0060): the add-on template's `repourl_prefix`. */
+export const chartsPrefix = (team: string) => `https://gitlab.example.com/${team}/helm-charts/`;
+
 type Chart = Pick<CatalogEntry, "team" | "name" | "current_version" | "available_versions" | "default_values"> &
   Partial<CatalogEntry>;
 
@@ -11,7 +14,7 @@ export function catalogEntry({ team, name, ...rest }: Chart): CatalogEntry {
     name,
     argocd_metadata: {
       projectNamespace: name,
-      repourl: `https://gitlab.example.com/helm-charts/${name}.git`,
+      repourl: `${chartsPrefix(team)}${name}.git`,
       targetRevision: rest.current_version,
       syncPolicy: { syncOptions: ["CreateNamespace=true"] },
       path: ".",
@@ -19,7 +22,7 @@ export function catalogEntry({ team, name, ...rest }: Chart): CatalogEntry {
     dependencies: [],
     ocp_version_pins: [],
     fleet_defaults: [],
-    chart_project: `helm-charts/${name}`,
+    chart_project: `${team}/helm-charts/${name}`,
     warnings: [],
     writable: true,
     read_only_reason: null,

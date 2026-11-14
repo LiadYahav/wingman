@@ -15,7 +15,7 @@ TOKEN = """\
 # The DHCP API bearer token, deployed once per MCE in-cluster.
 projectNamespace: dhcp-scope-manager
 # repourl, all lowercase.
-repourl: https://gitlab.example/helm-charts/dhcp-scope-manager.git
+repourl: https://gitlab.example/redbull/helm-charts/dhcp-scope-manager.git
 targetRevision: main  # the default branch
 path: charts/dhcp-api-token
 syncPolicy:
@@ -74,7 +74,7 @@ def test_a_list_is_rewritten_below_the_comments_at_its_head() -> None:
 def test_a_removed_key_takes_its_own_lines_and_never_a_comment() -> None:
     out = edit(TOKEN, repourl=None)
     assert changed_lines(TOKEN, out) == (
-        ["repourl: https://gitlab.example/helm-charts/dhcp-scope-manager.git"],
+        ["repourl: https://gitlab.example/redbull/helm-charts/dhcp-scope-manager.git"],
         [],
     )
     policy = doc(TOKEN)["syncPolicy"]

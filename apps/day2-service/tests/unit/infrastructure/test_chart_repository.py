@@ -21,6 +21,7 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.infrastructure.snapshots import RepoSnapshots
 from wingman_day2.application.catalog import CatalogEntry
 from wingman_day2.application.services import Day2Services
+from wingman_day2.domain.teams import charts_group
 from wingman_day2.infrastructure.repositories import (
     GitLabChartRepository,
     GitLabDay1Repository,
@@ -29,7 +30,7 @@ from wingman_day2.infrastructure.repositories import (
 from wingman_day2.settings import FAKE_GITLAB_URL
 
 TTL = 15.0
-ROLES = f"{FAKE_GITLAB_URL}/helm-charts/cluster-roles.git"
+ROLES = f"{FAKE_GITLAB_URL}/redbull/helm-charts/cluster-roles.git"
 
 
 class Seconds:
@@ -135,7 +136,7 @@ async def test_past_the_ttl_the_addon_list_answers_at_once_and_each_lookup_refre
     before = await day2.catalog.entries()
     cold = Counter({k: v for k, v in gate.calls.items() if k in ("get_project", "list_branches")})
     assert cold["list_branches"] > 1  # several chart repos, so the shared refresh means something
-    roles = await gitlab.get_project("helm-charts/cluster-roles")
+    roles = await gitlab.get_project("redbull/helm-charts/cluster-roles")
     gitlab.create_project_branch(roles.id, "3.0.0", {"values.yaml": "a: 1\n"})
 
     gate.close()
@@ -180,20 +181,21 @@ async def test_a_moved_chart_repo_is_seen_once_the_refresh_has_read_it(
 ) -> None:
     before = await chart_repos.resolve(ROLES)
     assert before is not None
-    gitlab.rename_project(before.id, "helm-charts/cluster-roles-operator")
+    gitlab.rename_project(before.id, "redbull/helm-charts/cluster-roles-operator")
     seconds.now += TTL + 1
     assert await chart_repos.resolve(ROLES) == before  # answered stale; the refresh starts
     await settle()
     after = await chart_repos.resolve(ROLES)
-    assert after is not None and after.path_with_namespace == "helm-charts/cluster-roles-operator"
+    assert after is not None
+    assert after.path_with_namespace == "redbull/helm-charts/cluster-roles-operator"
 
 
 async def test_no_such_chart_repo_is_an_answer_refreshed_like_a_project(
     chart_repos: GitLabChartRepository, gitlab: InMemoryGitLab, seconds: Seconds
 ) -> None:
-    url = f"{FAKE_GITLAB_URL}/helm-charts/not-yet.git"
+    url = f"{FAKE_GITLAB_URL}/redbull/helm-charts/not-yet.git"
     assert await chart_repos.resolve(url) is None
-    created = gitlab.create_project("helm-charts/not-yet", {"values.yaml": "a: 1\n"})
+    created = gitlab.create_project("redbull/helm-charts/not-yet", {"values.yaml": "a: 1\n"})
     assert await chart_repos.resolve(url) is None  # within the TTL: kept
     seconds.now += TTL + 1
     assert await chart_repos.resolve(url) is None  # answered stale; the refresh starts
@@ -221,3 +223,18 @@ async def test_an_unreachable_gitlab_keeps_the_lookup_for_the_minute_then_fails_
     seconds.now += MAX_AGE
     with pytest.raises(GitUnavailableError):
         await day2.catalog.entries()
+
+
+@pytest.mark.parametrize(
+    ("base_url", "prefix"),
+    [
+        (FAKE_GITLAB_URL, f"{FAKE_GITLAB_URL}/orca/helm-charts/"),
+        ("https://git.example.com/gitlab/", "https://git.example.com/gitlab/orca/helm-charts/"),
+    ],
+)
+def test_a_groups_url_keeps_the_gitlab_sub_path_and_reads_back_as_its_projects(
+    gitlab: InMemoryGitLab, ttl_cache: TtlCache, base_url: str, prefix: str
+) -> None:
+    repos = GitLabChartRepository(gitlab, ttl_cache, base_url=base_url, ttl=TTL)
+    assert repos.group_url(charts_group("orca")) == prefix
+    assert repos.project_path(f"{prefix}metrics.git") == "orca/helm-charts/metrics"

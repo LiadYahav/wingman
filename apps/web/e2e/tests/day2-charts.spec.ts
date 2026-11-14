@@ -189,14 +189,14 @@ test.describe("A destination's charts", () => {
     const review = card.getByRole("button", { name: "Review install" });
     await expect(review).toBeDisabled();
 
-    await card.getByPlaceholder(/helm-charts/).fill("https://gitlab.example.com/helm-charts/kyverno.git");
+    await card.getByPlaceholder(/helm-charts/).fill("https://gitlab.example.com/security/helm-charts/kyverno.git");
     await review.click();
     await page.getByRole("dialog").getByRole("button", { name: /Create MR/ }).click();
 
     await expect(page.getByRole("region", { name: "Opened merge requests" })).toBeVisible();
     expect(requests.writes.find((w) => w.method === "POST")?.body).toEqual({
       override_values: {},
-      repourl: "https://gitlab.example.com/helm-charts/kyverno.git",
+      repourl: "https://gitlab.example.com/security/helm-charts/kyverno.git",
     });
   });
 

@@ -114,7 +114,7 @@ What the New add-on form starts from, read from the team's own files:
   "read_only_reason": null,
   "sync": {"auto_sync": false, "prune": false, "self_heal": false, "sync_options": ["CreateNamespace=true"]},
   "sync_source": "the sync options most of sigs/redbull's add-ons use (3 of 3)",
-  "repourl_prefix": "https://gitlab.example/helm-charts/",
+  "repourl_prefix": "https://gitlab.example/redbull/helm-charts/",
   "known_sync_options": ["CreateNamespace=true", "ServerSideApply=true", "PruneLast=true", "ApplyOutOfSyncOnly=true", "RespectIgnoreDifferences=true", "Replace=true", "Validate=false", "SkipDryRunOnMissingResource=true", "FailOnSharedResource=true", "PrunePropagationPolicy=foreground", "PrunePropagationPolicy=background", "PrunePropagationPolicy=orphan"],
   "scopes": [
     {"scope": "hosted-clusters", "label": "every hosted cluster", "destinations": ["hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1", "..."]},
@@ -129,8 +129,12 @@ What the New add-on form starts from, read from the team's own files:
   (`operators/*/<chart>.yaml`) use; with no add-on yet, the platform's
   default: manual sync with `CreateNamespace=true`. `sync_source` says
   which, for a hint under the control.
-- `repourl_prefix`: the folder most of the team's add-ons' chart repos sit in
-  (`<prefix><chart>.git` is a good pre-fill), or `null`.
+- `repourl_prefix`: where a new add-on's chart repo is suggested, the team's
+  own group: always `<GITLAB_URL>/<team>/helm-charts/`, from the GitLab URL
+  day2 is configured with (a sub-path kept), whatever the team's existing
+  add-ons use (ADR-0060; before 3.35.0, the folder most of them used, or
+  `null`). The form pre-fills `<prefix><name>.git` until the address is
+  edited. Only a suggestion: any `repourl` is accepted as before.
 - `scopes`: the four fleet scopes, each with the destinations a default there
   reaches today: the folders this team's repo has for that kind, minus none
   (exclusions name charts, and a new default has none). A fleet default
@@ -141,7 +145,7 @@ What the New add-on form starts from, read from the team's own files:
 ```json
 {
   "name": "podinfo",
-  "repourl": "https://gitlab.example/helm-charts/podinfo.git",
+  "repourl": "https://gitlab.example/redbull/helm-charts/podinfo.git",
   "target_revision": null,
   "path": null,
   "project_namespace": "podinfo",
@@ -212,7 +216,7 @@ Every field is optional; an absent field is left as it is.
 
 ```json
 {
-  "repourl": "https://gitlab.example/helm-charts/kyverno.git",
+  "repourl": "https://gitlab.example/redbull/helm-charts/kyverno.git",
   "target_revision": "3.3.0",
   "path": null,
   "project_namespace": "kyverno",

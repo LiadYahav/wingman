@@ -1,5 +1,5 @@
 projectNamespace: kyverno
-repoUrl: {{GITLAB_URL}}/helm-charts/kyverno.git
+repoUrl: {{GITLAB_URL}}/redbull/helm-charts/kyverno.git
 targetRevision: main
 syncPolicy:
   syncOptions:

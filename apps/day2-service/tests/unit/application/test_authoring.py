@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from functools import partial
+from typing import Any
 
 import pytest
 import yaml
@@ -17,6 +18,7 @@ from wingman_core.domain.mr_conventions import (
     parse_mr_title,
 )
 from wingman_core.domain.users import User
+from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day2.application.authoring import (
     UNSET,
@@ -37,11 +39,16 @@ from wingman_day2.domain.errors import (
 from wingman_day2.domain.findings import Rule
 from wingman_day2.domain.platform import AppSource
 from wingman_day2.domain.sync_policy import PLATFORM_DEFAULT, SyncSettings
+from wingman_day2.infrastructure.repositories import (
+    GitLabChartRepository,
+    GitLabDay1Repository,
+    GitLabSigsRepository,
+)
 from wingman_day2.settings import FAKE_GITLAB_URL
 
 HOSTED = DefaultsScope.HOSTED_CLUSTERS
 MCES = DefaultsScope.MCES
-CHART_REPO = f"{FAKE_GITLAB_URL}/helm-charts/example-chart.git"
+CHART_REPO = f"{FAKE_GITLAB_URL}/redbull/helm-charts/example-chart.git"
 AUTO = SyncSettings(auto_sync=True, prune=False, self_heal=True)
 AUTO_NS = SyncSettings(True, False, True, ("CreateNamespace=true",))
 REDBULL_HOSTED = {
@@ -209,8 +216,8 @@ async def test_a_dry_run_plans_everything_and_opens_nothing(
     ("overrides", "rule"),
     [
         ({"chart": "Pod_Info"}, "chart-name"),
-        ({"repourl": "gitlab/helm-charts/x.git"}, "repourl-invalid"),
-        ({"repourl": f"{FAKE_GITLAB_URL}/helm-charts/nope.git"}, "chart-repo-missing"),
+        ({"repourl": "gitlab/redbull/helm-charts/x.git"}, "repourl-invalid"),
+        ({"repourl": f"{FAKE_GITLAB_URL}/redbull/helm-charts/nope.git"}, "chart-repo-missing"),
         ({"target_revision": "9.9.9"}, "revision-unknown"),
         ({"project_namespace": "Pod Info"}, "namespace-invalid"),
         ({"sync": SyncSettings(prune=True)}, "sync-without-auto"),
@@ -295,7 +302,7 @@ async def test_editing_the_team_default_rewrites_only_what_changes(
     text = (await branch_files(gitlab, result))["operators/bmhgen/bmhgen.yaml"]
     assert text == (
         "projectNamespace: metal3-system\n"
-        f"repourl: {FAKE_GITLAB_URL}/helm-charts/bmhgen.git\n"
+        f"repourl: {FAKE_GITLAB_URL}/redbull/helm-charts/bmhgen.git\n"
         "syncPolicy:\n"
         "  syncOptions:\n"
         "    - CreateNamespace=true\n"
@@ -357,7 +364,7 @@ async def test_an_add_on_edit_says_sig_values_and_one_opened_saying_team_default
 async def test_setting_repourl_fixes_a_miscased_one_in_place(
     services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
 ) -> None:
-    url = f"{FAKE_GITLAB_URL}/helm-charts/kyverno.git"
+    url = f"{FAKE_GITLAB_URL}/redbull/helm-charts/kyverno.git"
     result = await confirmed(
         partial(
             services.authoring.update_team_default,
@@ -605,7 +612,7 @@ async def test_a_fleet_default_goes_back_to_the_team_default_sync(
     branch = await branch_files(gitlab, result)
     assert yaml.safe_load(branch["defaults/mces/example-chart/example-chart.yaml"]) == {
         "projectNamespace": "example-namespace",
-        "repourl": f"{FAKE_GITLAB_URL}/helm-charts/example-chart.git",
+        "repourl": f"{FAKE_GITLAB_URL}/redbull/helm-charts/example-chart.git",
         "targetRevision": "main",
     }
     assert yaml.safe_load(branch["defaults/mces/example-chart/values.yaml"]) == {"fleet": True}
@@ -626,16 +633,61 @@ async def test_fleet_default_edit_refusals(services: Day2Services, jane_user: Us
 # ── template ────────────────────────────────────────────────────────────────
 
 
-async def test_the_template_copies_the_teams_usual_sync_options_and_repo_folder(
+async def test_the_template_copies_the_teams_usual_sync_options_and_suggests_its_charts_group(
     services: Day2Services,
 ) -> None:
     redbull = await services.authoring.template("redbull")
     assert redbull.sync == PLATFORM_DEFAULT and "3 of 3" in redbull.sync_source
-    assert redbull.repourl_prefix == f"{FAKE_GITLAB_URL}/helm-charts/"
+    assert redbull.repourl_prefix == f"{FAKE_GITLAB_URL}/redbull/helm-charts/"
     scopes = {str(s.scope): [r.id for r in s.destinations] for s in redbull.scopes}
     assert len(scopes["hosted-clusters"]) == 4 and scopes["hub"] == ["hub"]
     assert redbull.access.writable
     falcon = await services.authoring.template("falcon")
     assert falcon.sync == SyncSettings(auto_sync=True, prune=False, self_heal=True)
+    assert falcon.repourl_prefix == f"{FAKE_GITLAB_URL}/falcon/helm-charts/"
     orca = await services.authoring.template("orca")
     assert not orca.access.writable
+    assert orca.repourl_prefix == f"{FAKE_GITLAB_URL}/orca/helm-charts/"
+
+
+async def test_the_suggested_charts_group_is_the_teams_whatever_its_add_ons_use(
+    services: Day2Services, gitlab: InMemoryGitLab
+) -> None:
+    # Every lynx add-on points at the shared group of before ADR-0060, or at another host.
+    lynx = await gitlab.get_project("sigs/lynx")
+    urls = {
+        "operators/backup/backup.yaml": f"{FAKE_GITLAB_URL}/helm-charts/backup.git",
+        "operators/cluster-roles/cluster-roles.yaml": "https://charts.example.org/roles.git",
+    }
+    changes = [
+        FileChange.update(RepoPath(path), f"repourl: {url}\n", last_commit_id=None)
+        for path, url in urls.items()
+    ]
+    await gitlab.commit(lynx.id, branch="main", message="charts elsewhere", changes=changes)
+    template = await services.authoring.template("lynx")
+    assert template.repourl_prefix == f"{FAKE_GITLAB_URL}/lynx/helm-charts/"
+
+
+async def test_a_team_without_add_ons_is_suggested_its_charts_group_too(
+    services: Day2Services, gitlab: InMemoryGitLab
+) -> None:
+    gitlab.create_project("sigs/kite", {"README.md": "# kite\n"})
+    template = await services.authoring.template("kite")
+    assert template.repourl_prefix == f"{FAKE_GITLAB_URL}/kite/helm-charts/"
+    assert "has no add-on in operators/" in template.sync_source
+
+
+async def test_the_suggestion_follows_the_configured_gitlab_url_and_its_sub_path(
+    gitlab: InMemoryGitLab,
+    sigs: GitLabSigsRepository,
+    day1: GitLabDay1Repository,
+    cache: TtlCache,
+    clock: Any,
+) -> None:
+    url = "https://git.example.com/gitlab/"
+    charts = GitLabChartRepository(gitlab, cache, base_url=url, ttl=30)
+    services = Day2Services.build(
+        gitlab=gitlab, sigs=sigs, day1=day1, charts=charts, clock=clock, gitlab_url=url
+    )
+    template = await services.authoring.template("orca")
+    assert template.repourl_prefix == "https://git.example.com/gitlab/orca/helm-charts/"

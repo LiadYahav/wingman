@@ -81,6 +81,10 @@ class ChartRepository(Protocol):
         """Whether ``repo_url`` points at this GitLab (scheme, host and sub-path)."""
         ...
 
+    def group_url(self, group: str) -> str:
+        """``<GITLAB_URL>/<group>/``: how the ``repourl`` of a repo in ``group`` starts."""
+        ...
+
     async def resolve(self, repo_url: str) -> Project | None:
         """The project a ``repourl`` names, or ``None`` if it is not on this GitLab."""
         ...

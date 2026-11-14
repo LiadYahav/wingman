@@ -92,7 +92,7 @@ async def test_install_without_a_team_default_repourl_needs_one_and_writes_it(
     with pytest.raises(ChangeRefusedError) as refused:
         await services.changes.install(HERZI, InstallSpec("redbull", "kyverno"), jane_user)
     assert refused.value.details["rule"] == str(Rule.REPOURL_MISSING)
-    url = "http://gitlab.fake/helm-charts/kyverno.git"
+    url = "http://gitlab.fake/redbull/helm-charts/kyverno.git"
     result = await services.changes.install(
         HERZI,
         InstallSpec("redbull", "kyverno", repourl=url, project_namespace="kyverno-hc"),
@@ -115,7 +115,9 @@ async def test_a_chart_outside_the_catalog_needs_a_repourl(
         await services.changes.install(HERZI, InstallSpec("redbull", "cert-manager"), jane_user)
     result = await services.changes.install(
         HERZI,
-        InstallSpec("redbull", "cert-manager", repourl="http://gitlab.fake/helm-charts/x.git"),
+        InstallSpec(
+            "redbull", "cert-manager", repourl="http://gitlab.fake/redbull/helm-charts/x.git"
+        ),
         jane_user,
     )
     assert len(result.changes) == 2
@@ -160,7 +162,9 @@ async def test_an_excluded_cluster_may_get_the_chart_in_its_own_folder(
 ) -> None:
     result = await services.changes.install(
         PREP_MCE,
-        InstallSpec("redbull", "dhcp-api-token", repourl="http://gitlab.fake/helm-charts/x.git"),
+        InstallSpec(
+            "redbull", "dhcp-api-token", repourl="http://gitlab.fake/redbull/helm-charts/x.git"
+        ),
         jane_user,
     )
     assert changes(result)[0] == (

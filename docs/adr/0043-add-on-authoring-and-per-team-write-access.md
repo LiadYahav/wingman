@@ -1,7 +1,7 @@
 # ADR-0043: Teams opt in to day2 writes per project; Wingman creates add-ons, edits team and fleet defaults, and a new fleet default takes over the clusters that already have the chart
 
 Date: 2026-11-12
-Status: Accepted; superseded in part by ADR-0053 (every write is confirmed against its preview's digest; a stale exclusion of an adopted cluster goes in the same commit; the review of 3.8.0); amended 2026-11-13 (the UI says sig values and the add-on, not team default; the API names stay; since 3.19.1 the MR titles say Sig values too)
+Status: Accepted; superseded in part by ADR-0053 (every write is confirmed against its preview's digest; a stale exclusion of an adopted cluster goes in the same commit; the review of 3.8.0); amended 2026-11-13 (the UI says sig values and the add-on, not team default; the API names stay; since 3.19.1 the MR titles say Sig values too); amended 2026-11-14 (ADR-0060: a new add-on's suggested chart address is the team's `<team>/helm-charts` group)
 
 ## Context
 
@@ -197,3 +197,13 @@ Since 3.20.1 day2's errors, lint findings and warnings say Sig values too
 ("edit its Sig values instead", "it falls back to its Sig values"); only
 docstrings and schema descriptions that document the API's names keep team
 default (`test_no_message_says_team_default`).
+
+## Amendment (2026-11-14): the suggested chart address
+
+A new add-on's suggested `repourl` is no longer the folder most of the team's
+add-ons' chart repos sit in: it is always `<GITLAB_URL>/<team>/helm-charts/`,
+plus `<name>.git` (ADR-0060), so a team with no add-on gets one too. The
+template's field keeps its name, `repourl_prefix`, and is never `null` now.
+The checks on a `repourl` are unchanged: one on this GitLab must name a
+project Wingman can read, one elsewhere is accepted with a warning, and no
+address is refused or flagged for sitting outside the team's group.

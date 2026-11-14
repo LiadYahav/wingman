@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from wingman_core.domain.git import FileChange, RepoPath
+from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day2.settings import FAKE_GITLAB_URL
 
 PROBLEM_KEYS = {"type", "title", "status", "detail", "instance", "code", "request_id", "details"}
@@ -23,7 +25,7 @@ AUTO = {
 }
 NEW = {
     "name": "podinfo",
-    "repourl": f"{FAKE_GITLAB_URL}/helm-charts/example-chart.git",
+    "repourl": f"{FAKE_GITLAB_URL}/redbull/helm-charts/example-chart.git",
     "project_namespace": "podinfo",
     "sync": MANUAL,
 }
@@ -95,10 +97,24 @@ async def test_a_read_only_teams_writes_are_403_before_any_other_check(
 async def test_the_template_pre_fills_a_new_addon(jane: httpx.AsyncClient) -> None:
     body = ok(await jane.get("/api/day2/teams/redbull/addon-template"))
     assert body["sync"] == MANUAL and body["writable"] is True
-    assert body["repourl_prefix"] == f"{FAKE_GITLAB_URL}/helm-charts/"
+    assert body["repourl_prefix"] == f"{FAKE_GITLAB_URL}/redbull/helm-charts/"
     assert "ServerSideApply=true" in body["known_sync_options"]
     assert [s["scope"] for s in body["scopes"]] == ["hosted-clusters", "mces", "hub", "upi"]
     assert body["scopes"][0]["label"] == "every hosted cluster"
+
+
+async def test_the_template_suggests_each_teams_own_charts_group(
+    jane: httpx.AsyncClient, gitlab: InMemoryGitLab
+) -> None:
+    # lynx's add-on points at the shared group of before ADR-0060; the suggestion is lynx's own.
+    lynx = await gitlab.get_project("sigs/lynx")
+    shared = f"repourl: {FAKE_GITLAB_URL}/helm-charts/backup.git\n"
+    backup = RepoPath("operators/backup/backup.yaml")
+    change = FileChange.update(backup, shared, last_commit_id=None)
+    await gitlab.commit(lynx.id, branch="main", message="a shared group", changes=[change])
+    for team in ("falcon", "lynx", "orca"):
+        body = ok(await jane.get(f"/api/day2/teams/{team}/addon-template"))
+        assert body["repourl_prefix"] == f"{FAKE_GITLAB_URL}/{team}/helm-charts/"
 
 
 async def test_create_dry_run_then_real(jane: httpx.AsyncClient) -> None:

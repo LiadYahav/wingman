@@ -22,7 +22,7 @@ from wingman_day2.domain.sync_policy import SyncSettings
 from wingman_day2.settings import FAKE_GITLAB_URL
 
 HOSTED = DefaultsScope.HOSTED_CLUSTERS
-CHART_REPO = f"{FAKE_GITLAB_URL}/helm-charts/example-chart.git"
+CHART_REPO = f"{FAKE_GITLAB_URL}/redbull/helm-charts/example-chart.git"
 HERZI = "hosted:site1:prod:ocp4-prod-mce-site1-a:ocp4-prod-herzi-site1"
 HERZI_DIR = "sites/site1/prod/mces/ocp4-prod-mce-site1-a/ocp4-prod-herzi-site1"
 HOSTED_EXCLUSIONS = "defaults/hosted-clusters/exclusions.yaml"

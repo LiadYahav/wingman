@@ -119,9 +119,9 @@ async def test_project_paths_are_encoded() -> None:
 
 MOVED = {
     "id": 314,
-    "path_with_namespace": "helm-charts/new-name",
+    "path_with_namespace": "redbull/helm-charts/new-name",
     "default_branch": "main",
-    "web_url": "http://gitlab.test/helm-charts/new-name",
+    "web_url": "http://gitlab.test/redbull/helm-charts/new-name",
 }
 
 
@@ -135,10 +135,10 @@ MOVED = {
 )
 async def test_a_renamed_project_is_followed_to_its_id_on_this_gitlab(location: str) -> None:
     rec = Recorder(reply(301, None, {"location": location}), reply(200, MOVED))
-    project = await rec.adapter().get_project("helm-charts/old-name")
-    assert project.path_with_namespace == "helm-charts/new-name"
+    project = await rec.adapter().get_project("redbull/helm-charts/old-name")
+    assert project.path_with_namespace == "redbull/helm-charts/new-name"
     old, new = rec.requests
-    assert old.url.raw_path == b"/api/v4/projects/helm-charts%2Fold-name"
+    assert old.url.raw_path == b"/api/v4/projects/redbull%2Fhelm-charts%2Fold-name"
     assert (new.url.host, new.url.raw_path) == ("gitlab.test", b"/api/v4/projects/314")
     assert new.headers["PRIVATE-TOKEN"] == TOKEN
 
@@ -159,7 +159,7 @@ async def test_only_get_project_follows_a_redirect() -> None:
     location = "http://gitlab.test/api/v4/projects/314/repository/branches"
     rec = Recorder(reply(301, None, {"location": location}))
     with pytest.raises(InvalidRequestError, match=r"301 to .*/projects/314/repository/branches"):
-        await rec.adapter().list_group_projects("helm-charts")
+        await rec.adapter().list_group_projects("redbull/helm-charts")
     assert len(rec.requests) == 1
 
 

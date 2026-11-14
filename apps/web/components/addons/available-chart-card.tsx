@@ -12,13 +12,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ProblemList } from "@/components/common/problem-list";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { FindingsBadge, FindingsList } from "@/components/addons/findings";
+import { useAddonTemplate } from "@/components/addons/authoring-fields";
 import { ValuesEditor } from "@/components/addons/values-editor";
 import { FilePreview, MessageField, WriteError, type PlannedFile } from "@/components/addons/file-preview";
 import { VersionField } from "@/components/addons/version-field";
 import { useValuesPreview } from "@/components/addons/use-values-preview";
 import type { DestinationRef } from "@/components/addons/installed-chart-card";
 import type { OpenedChanges } from "@/components/addons/change-result";
-import type { CatalogEntry, ChangeResult, InstallBody, ValuesPreview } from "@/types/day2";
+import type { AddonTemplate, CatalogEntry, ChangeResult, InstallBody, ValuesPreview } from "@/types/day2";
 
 const EMPTY: Values = {};
 
@@ -39,6 +40,11 @@ export const DEFAULT_CHOICE: InstallChoice = { values: EMPTY, version: null, eme
  */
 export function needsRepourl(entry: CatalogEntry, preview?: ValuesPreview): boolean {
   return !(preview ? preview.deploy.repo_url : entry.argocd_metadata.repourl);
+}
+
+/** Where the chart's repo would sit in its team's charts group (ADR-0060), once the team's template says. */
+function suggestedRepourl(entry: CatalogEntry, template: AddonTemplate | undefined): string {
+  return `${template?.repourl_prefix ?? `https://<gitlab>/${entry.team}/helm-charts/`}${entry.name}.git`;
 }
 
 /**
@@ -64,6 +70,8 @@ export function InstallForm({
   const data = preview.data;
   const inherited = data?.deploy.target_revision ?? entry.current_version;
   const valuesPath = installPaths(entry, data).values;
+  const missingRepourl = needsRepourl(entry, data);
+  const template = useAddonTemplate(entry.team, missingRepourl);
   return (
     <div className="space-y-4">
       <FindingsList findings={entry.warnings} showContext />
@@ -73,7 +81,7 @@ export function InstallForm({
           installing it gives {destination.name} its own copy in its folder.
         </p>
       )}
-      {needsRepourl(entry, data) && (
+      {missingRepourl && (
         <label className="block space-y-1 text-xs">
           <span className="font-semibold uppercase tracking-wide text-muted-foreground">Chart repo URL (repourl)</span>
           <input
@@ -81,7 +89,7 @@ export function InstallForm({
             required
             value={choice.repourl}
             onChange={(e) => onChange({ ...choice, repourl: e.target.value })}
-            placeholder="https://gitlab.example.com/helm-charts/chart.git"
+            placeholder={suggestedRepourl(entry, template.data)}
             className="h-8 w-full rounded-lg border bg-background px-3 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
           <span className="block text-muted-foreground">
