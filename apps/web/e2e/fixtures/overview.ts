@@ -28,7 +28,7 @@ function overviewCluster(
   };
 }
 
-/** site1 holds four (three on MCE a), site2 one; two MCEs offer 4.18.56, one cluster sets no mastertag. */
+/** site1 holds four (three on MCE a), site2 one; MCE a offers two of them 4.18.56; one file sets no mastertag. */
 const CLUSTERS: ClusterStatus[] = [
   overviewCluster("ocp4-prod-lark-site1", "site1", SITE1_A, { upgrade_available: "4.18.56" }),
   overviewCluster("ocp4-prod-owl-site1", "site1", SITE1_A, { upgrade_available: "4.18.56" }),
@@ -62,7 +62,7 @@ export async function openOverview(
     upgrades,
     viewer = false,
     before,
-  }: { clusters?: ClusterStatus[]; upgrades?: FleetUpgrade[] | Handler; viewer?: boolean; before?: (page: Page) => Promise<void> } = {}
+  }: { clusters?: ClusterStatus[]; upgrades?: FleetUpgrade[] | Handler; viewer?: boolean; before?: (page: Page) => Promise<unknown> } = {}
 ) {
   await injectAdminAuth(page);
   if (viewer) await injectViewerAuth(page);
