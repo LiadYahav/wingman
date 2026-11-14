@@ -13,21 +13,17 @@ token).
 
 The one write is a server's maintenance on and off (ADR-0048's 3.23.0
 amendment), behind the routes' admin check. server-scan records the token as
-who did it, so each write is logged here with the person's name, as node
-uninstall logs its starts (``node_uninstall_started``): Wingman's record.
+who did it, so each write is logged with the person's name
+(``server_scan_audit.recorded``): Wingman's record.
 """
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Awaitable, Mapping
+from typing import Final
 
 from wingman_core.domain.users import User
-from wingman_day1.domain.errors import (
-    AmbiguousServerScanWriteError,
-    ServerScanAuditOffError,
-    ServerScanWritesOffError,
-)
+from wingman_day1.application.server_scan_audit import recorded
+from wingman_day1.domain.errors import ServerScanAuditOffError, ServerScanWritesOffError
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
@@ -38,7 +34,8 @@ from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.server_scan_skill import AUDITOR_TOKEN_LINE, Skill, SkillZip
 from wingman_day1.ports import ServerInventory
 
-logger = logging.getLogger(__name__)
+UNCONFIRMED: Final = "server_maintenance_unconfirmed"
+"""The log event of a maintenance write sent and not answered."""
 
 
 class ServerScanService:
@@ -137,14 +134,22 @@ class ServerScanService:
             "expected_end": start.expected_end.isoformat() if start.expected_end else "",
         }
         write = self._inventory.start_maintenance(server_id, start)
-        return await _recorded(write, event, done="server_maintenance_started")
+        return await recorded(
+            write,
+            event,
+            done="server_maintenance_started",
+            unconfirmed=UNCONFIRMED,
+            answered=_named,
+        )
 
     async def end_maintenance(self, server_id: str, *, user: User) -> ServerMaintenance:
         """End a server's maintenance. Never retried (ADR-0006)."""
         self._writable()
         event = {"user": user.username, "server_id": server_id}
         write = self._inventory.end_maintenance(server_id)
-        return await _recorded(write, event, done="server_maintenance_ended")
+        return await recorded(
+            write, event, done="server_maintenance_ended", unconfirmed=UNCONFIRMED, answered=_named
+        )
 
     def _writable(self) -> None:
         if self.maintenance_detail is not None:
@@ -157,28 +162,6 @@ def _audited(detail: str | None) -> None:
         raise ServerScanAuditOffError(detail)
 
 
-async def _recorded(
-    write: Awaitable[ServerMaintenance], event: Mapping[str, str], *, done: str
-) -> ServerMaintenance:
-    """Await ``write`` and log it with the person: ``done``, or unconfirmed when unanswered."""
-    try:
-        result = await write
-    except AmbiguousServerScanWriteError:
-        logger.warning(
-            "server maintenance change unconfirmed: %s",
-            _fields(event),
-            extra={"event": "server_maintenance_unconfirmed", "change": done, **event},
-        )
-        raise
-    recorded = {**event, "server_name": result.server_name}
-    logger.info(
-        "%s: %s",
-        done.replace("_", " "),
-        _fields(recorded),
-        extra={"event": done, **recorded},
-    )
-    return result
-
-
-def _fields(event: Mapping[str, str]) -> str:
-    return " ".join(f"{key}={value}" for key, value in event.items())
+def _named(change: ServerMaintenance) -> dict[str, str]:
+    """What a maintenance answer adds to its log line: the server's name."""
+    return {"server_name": change.server_name}

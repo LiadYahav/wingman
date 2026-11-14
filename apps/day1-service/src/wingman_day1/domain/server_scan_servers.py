@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Final
 
+from wingman_day1.domain.server_scan_tokens import token_detail
 from wingman_day1.domain.servers import ServerRow
 
 MAINTENANCE_OFF: Final = (
@@ -54,12 +55,5 @@ class ServerMaintenance:
 
 
 def maintenance_detail(*, viewer_token: bool, admin_token: bool) -> str | None:
-    """Why the maintenance toggle does not work in this deployment; ``None`` when it does.
-
-    With the admin token the writes carry it. With no token at all server-scan
-    runs with auth off (every caller is an admin there), so the writes need
-    none. A viewer token alone means auth is on and the writes would be refused.
-    """
-    if admin_token or not viewer_token:
-        return None
-    return MAINTENANCE_OFF
+    """Why the maintenance toggle does not work in this deployment; ``None`` when it does."""
+    return token_detail(MAINTENANCE_OFF, viewer_token=viewer_token, token=admin_token)
