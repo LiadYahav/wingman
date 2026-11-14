@@ -35,6 +35,7 @@ from wingman_day1.domain.errors import (
     ServerNotFoundError,
     ServerScanDeniedError,
     ServerScanRefusedError,
+    ServerScanSkillMissingError,
     ServerScanUnavailableError,
     UninstallAlreadyRunningError,
     UpgradeAlreadyRunningError,
@@ -98,6 +99,10 @@ class ServerScanOperation(StrEnum):
     """``GET /api/v1/servers/{id}/vm-host``: the host a KubeVirt VM runs on."""
     LIST_SERVER_EVENTS = "list_server_events"
     """``GET /api/v1/servers/{id}/events``: a server's History (the auditor token)."""
+    GET_SKILL = "get_skill"
+    """``GET /api/v1/skill``: the Claude page's skill (ADR-0048's 3.29.0 amendment)."""
+    DOWNLOAD_SKILL = "download_skill"
+    """``GET /api/v1/skill/download``: the skill's zip, for the Claude page's download."""
 
 
 class SegmentsManagerOperation(StrEnum):
@@ -136,6 +141,7 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (IdentityUnavailableError, Outcome.UNAVAILABLE),
     (IdentityError, Outcome.DENIED),
     (ServerNotFoundError, Outcome.NOT_FOUND),
+    (ServerScanSkillMissingError, Outcome.NOT_FOUND),
     (ServerScanDeniedError, Outcome.DENIED),
     (ServerScanUnavailableError, Outcome.UNAVAILABLE),
     (ServerScanRefusedError, Outcome.REJECTED),

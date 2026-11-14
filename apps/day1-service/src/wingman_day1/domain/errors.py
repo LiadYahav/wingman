@@ -145,6 +145,10 @@ class ServerScanHistoryOffError(ServerScanError):
     """A server's History is off here: a viewer token without server-scan's auditor token."""
 
 
+class ServerScanSkillMissingError(ServerScanError):
+    """server-scan carries no Claude Code skill (its ``/api/v1/skill`` answers 404)."""
+
+
 class ServerScanRefusedError(InvalidInputError):
     """server-scan refused a maintenance write's body (its 422); nothing changed."""
 

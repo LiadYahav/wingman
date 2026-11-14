@@ -60,6 +60,7 @@ from wingman_day1.api.v1 import placement as placement_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
 from wingman_day1.api.v1 import segments as segments_api
 from wingman_day1.api.v1 import server_scan as server_scan_api
+from wingman_day1.api.v1 import server_scan_skill as server_scan_skill_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import upgrades as upgrades_api
@@ -82,7 +83,7 @@ from wingman_day1.application.sync import SyncService
 from wingman_day1.compose_inventory import add_server_workflow, inventory_service
 from wingman_day1.compose_quick_links import quick_links_service
 from wingman_day1.compose_segments import segment_ledger, segments_service
-from wingman_day1.compose_server_scan import cached_inventory, server_scan_service
+from wingman_day1.compose_server_scan import cached_inventory, server_scan_service, server_scan_ui
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
@@ -125,8 +126,6 @@ HUB_TTL_SECONDS: Final = 10.0
 """The longest live status and the nodes view cache an MCE read (ADR-0041)."""
 PLACEMENT_TTL_SECONDS: Final = 5.0
 """The longest placement keeps an MCE's nodes and pods: read when a create asks (ADR-0050)."""
-FAKE_SERVER_SCAN_UI: Final = "http://server-scan.example"
-"""Where the fake fleet's node links point when ``SERVER_SCAN_UI_URL`` is empty."""
 FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
 """Where the fake fleet's segments-manager links point when no segments-manager URL is set."""
 ROUTERS: Final = (
@@ -141,6 +140,7 @@ ROUTERS: Final = (
     inventory_api.router,
     segments_api.router,
     server_scan_api.router,
+    server_scan_skill_api.router,
     upgrades_api.router,
     approvals_api.router,
     audit_api.router,
@@ -374,7 +374,7 @@ def build_context(
             hub,
             cluster_service,
             inventory=inventory,
-            ui_url=settings.server_scan_ui_base or FAKE_SERVER_SCAN_UI,
+            ui_url=server_scan_ui(settings),
             workflows=(
                 CachedUninstallWorkflow(adapters.uninstall, cache, ttl=runs_ttl)
                 if adapters.uninstall is not None

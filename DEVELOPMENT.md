@@ -97,6 +97,10 @@ hubs, server-scan, the workflows orchestrator and segments-manager with fakes se
 - `inventory.yaml` adds servers in no MCE to the fleet (one locked by another add-server run,
   one in maintenance), the add-server runs' sample phases, past runs, and a fake herzi that
   starts a pool draw on `ocp4-prod-lark-site1`'s short pool now and then (ADR-0057).
+- `skill/` is a short stand-in for server-scan's Claude Code skill (`SKILL.md` and one
+  reference): the Server Scan area's Claude page (`/server-scan/claude`) shows it, and its
+  download is it zipped as server-scan zips it, with `http://server-scan.example` written in
+  unless `SERVER_SCAN_UI_URL` says otherwise.
 
 The fake MCE also serves live status and InfraEnvs, as if `CLUSTER_STATUS_ENABLED` were on. An
 uninstall walks a few sample phases, about 8 s each, then frees the server and removes its

@@ -12,7 +12,8 @@ unchanged fleet costs a 304 and no download. One server is
 Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
 (read by ``server_scan_sites``). A server's page reads the server whole,
 a VM's host and its History (``server_scan_record``, ADR-0048's 3.25.0
-amendment).
+amendment); the Claude page its skill and the skill's zip (``server_scan_skill``,
+3.29.0).
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
@@ -35,6 +36,7 @@ from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
+from wingman_day1.domain.server_scan_skill import Skill, SkillZip
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.http import json_client
 from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, Timer
@@ -47,6 +49,7 @@ from wingman_day1.infrastructure.server_scan_record import (
     read_vm_host,
 )
 from wingman_day1.infrastructure.server_scan_sites import fleet_sites
+from wingman_day1.infrastructure.server_scan_skill import read_skill, read_skill_zip
 from wingman_day1.infrastructure.server_scan_writes import send_maintenance, start_body
 
 ROWS_PATH: Final = "/api/v1/servers/rows"
@@ -139,6 +142,15 @@ class HttpServerInventory:
             headers=self._audit_headers,
         )
         return await self._observer.call(ServerScanOperation.LIST_SERVER_EVENTS, read)
+
+    async def skill(self) -> Skill:
+        """See ServerInventory.skill."""
+        return await self._observer.call(ServerScanOperation.GET_SKILL, read_skill(self._client))
+
+    async def skill_zip(self, base_url: str) -> SkillZip:
+        """See ServerInventory.skill_zip."""
+        read = read_skill_zip(self._client, base_url)
+        return await self._observer.call(ServerScanOperation.DOWNLOAD_SKILL, read)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance."""

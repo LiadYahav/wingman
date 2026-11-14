@@ -4,7 +4,8 @@ The Nodes tab, MCE placement, Inventory Management and the Server Scan area
 all read server-scan through this port and its one adapter, cache and fake.
 The Server Scan area's maintenance toggle is the one write (ADR-0048's 3.23.0
 amendment); its server page reads a server whole, a VM's host and the
-server's History (3.25.0).
+server's History (3.25.0); its Claude page reads server-scan's skill and the
+skill's zip (3.29.0).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
+from wingman_day1.domain.server_scan_skill import Skill, SkillZip
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 
 
@@ -61,6 +63,17 @@ class ServerInventory(Protocol):
 
     async def sites(self) -> FleetSites:
         """server-scan's sites and fleet, as it counts them (``GET /api/v1/sites``, ADR-0048)."""
+        ...
+
+    async def skill(self) -> Skill:
+        """server-scan's Claude Code skill (``GET /api/v1/skill``).
+
+        A server-scan that carries none is ``ServerScanSkillMissingError``.
+        """
+        ...
+
+    async def skill_zip(self, base_url: str) -> SkillZip:
+        """The skill zipped by server-scan, ``base_url`` written in as its ``BASE_URL``."""
         ...
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:

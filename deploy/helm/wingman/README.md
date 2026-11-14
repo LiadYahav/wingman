@@ -107,7 +107,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `clusterStatus.sslVerify` | `MCE_SSL_VERIFY` | `"false"` | `"true"`, `"false"` or a CA bundle path |
 | `clusterStatus.tokensSecretName` | | `mce-sa-tokens` | The Secret whose key `tokens` (a YAML map of MCE name to token, or to `{token, url}`) is mounted as `MCE_TOKENS_FILE` |
 | `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. The nodes' servers, Inventory Management, and the **Server Scan** area for admins ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)). Empty: nodes are listed without their servers, no Inventory Management, no Server Scan area |
-| `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the node links point. Empty: `serverScan.url` |
+| `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the node links point; the Server Scan area's Claude page writes it into the skill's zip, its MCP command and its token link. Empty: `serverScan.url` |
 | `serverScan.sslVerify` | `SERVER_SCAN_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token (every read, the Server Scan area's Sites included). Empty: no token, for a server-scan with auth off |
@@ -312,7 +312,7 @@ oc create secret generic server-scan-viewer -n wingman --from-literal=token=<tok
 ```yaml
 serverScan:
   url: http://server-scan-api.<ns>.svc:8000
-  uiUrl: https://server-scan.example      # where the node links point
+  uiUrl: https://server-scan.example      # where the node links and the Claude page's commands point
   tokenSecret: { name: server-scan-viewer }
 workflows:
   url: http://workflows-orchestrator-api.<ns>.svc:8080
@@ -356,6 +356,11 @@ oc -n <ns> rollout restart deploy/wingman-day1
 
 Without the key History says it is not set up; against a server-scan with auth off it
 works without one (`docs/notes/2026-11-13-server-scan-area-api.md` §8, §9).
+
+Its **Claude** page (`/server-scan/claude`) reads server-scan's Claude Code skill and its
+zip with the viewer token (nothing new). The zip, the MCP command and the link to server-scan's
+own token page name `uiUrl` (else `url`): set `uiUrl` to server-scan's browser address when
+`url` is its in-cluster API Service, or they name an address a laptop cannot reach (§12).
 
 ### segments-manager
 
