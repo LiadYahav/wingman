@@ -401,3 +401,45 @@ fallback, failures, the size cap, the metric, the cache, the fake),
 `apps/web/lib/server-scan/diagrams.test.ts` (server-scan's cases, the theme
 script) and `apps/web/e2e/tests/server-scan-architecture.spec.ts` (the
 sandbox, the picker and the URL, the theme, the states).
+
+**2026-11-14, 3.29.0: the Confs page, server-scan's hardware catalog.**
+server-scan's Confs page at `/server-scan/confs`, every feature of it
+(decision 14), in Wingman's design, in the sidebar's Fleet section after
+Servers. The contract is §10 of
+`docs/notes/2026-11-13-server-scan-area-api.md`.
+
+- **One read through the one client** (`ServerInventory.confs`): server-scan's
+  `GET /api/v1/confs` with the viewer token, behind `AdminUser`, operation
+  `list_confs`. No new Secret, value or key.
+- **Typed by day1 in server-scan's shape** (`domain/server_scan_confs.py`):
+  every field of its `Conf`, which is the collection writer's shape, with
+  its defaults; its `unreadable` ids passed on, so the page names the stored
+  confs server-scan skipped.
+- **Not cached by day1**: server-scan reads its small collection on every
+  call and caches nothing itself, and only this page asks, at most once per
+  30 seconds per open page. A cache would only delay a change the
+  collection's writer makes.
+- **Read only**, as server-scan's page is: its only controls are the search
+  and a row's ▸, and server-scan has no write for confs (another system
+  writes the collection).
+- **Fresh as the original**: read on open, again when opened after 30
+  seconds; not polled.
+- **The fake** serves server-scan's own fake catalog
+  (`providers/fake/confs.py`), transcribed into
+  `dev/fleet-fixtures/confs.yaml` in the answer's shape, plus one unreadable
+  id to show the notice.
+- **Reuse** (decision 18): server-scan's `Conf` type, `format.ts` with its
+  search, the page's words, and its tests' cases as Vitest cases.
+
+Rejected: **caching the confs in day1** (nothing to save, a change shows
+later); **`GET /api/v1/confs/{conf_id}` for an opened row** (the list already
+carries every field, and server-scan's page does not call it); **linking a
+conf to the servers built to it** (server-scan does not, and nothing in a
+server's record names its conf).
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_confs.py`
+(the read, the shape field for field, the defaults, malformed answers, the
+token, the metric, the fake), `test_server_scan.py` (read through the cache),
+`apps/day1-service/tests/api/test_server_scan_confs_api.py`,
+`apps/web/lib/server-scan/confs.test.ts` (server-scan's cases) and
+`apps/web/e2e/tests/server-scan-confs.spec.ts`.
