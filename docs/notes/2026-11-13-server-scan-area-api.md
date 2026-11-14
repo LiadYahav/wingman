@@ -3,9 +3,9 @@
 The **Server Scan** area (`/server-scan`) is server-scan's UI rebuilt in
 Wingman, one page at a time (workstream 4 of `docs/ideas/single-pane.md`,
 decision 22, ADR-0048). This note covers the area, its first page,
-**Sites** (§1 to §7), its second, **Servers** (§8, 3.23.0), and a
-server's own page (§9, 3.25.0). Each later page adds its section here (§10
-lists them).
+**Sites** (§1 to §7), its second, **Servers** (§8, 3.23.0), a
+server's own page (§9, 3.25.0) and the **Claude** page (§12, 3.29.0). Each
+later page adds its section here (§10 lists them).
 
 - **server-scan's API does not change.** day1 reads server-scan with the
   viewer token it already holds (§4), and a server's History with its
@@ -218,8 +218,8 @@ rules ported, so the demo's cards agree with its servers.
   instead: a third-party trademark and not server-scan's mark, so it is not
   copied.
 - **The sidebar**: server-scan's pages, in its navigation's order, only those
-  Wingman has built, so no entry leads nowhere: **Sites**, and since 3.23.0
-  **Servers**.
+  Wingman has built, so no entry leads nowhere: **Sites**, since 3.23.0
+  **Servers**, and since 3.29.0 **Claude** (§12), in a Reference section.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the
@@ -863,4 +863,160 @@ In single-pane §4's order; each is its own PR, with its section in this note.
 | Events | `GET /api/v1/events`, `/events/actors` (auditor) | Filters and cursor pages; History's timeline and its auditor token (§9) reused |
 | Jobs | `GET /api/v1/jobs`, a run's pod logs, `POST /jobs/{cronjob}/run` (admin) | "Run now" behind the admin check, its confirmation, Wingman's audit |
 | Architecture | none | server-scan's diagrams, framed from its UI (`SERVER_SCAN_UI_URL`) |
-| Claude | none | A link out: server-scan mints the personal token only for its own login |
+| Claude | `GET /api/v1/skill`, `/skill/download` (viewer) | Built in 3.29.0 (§12): the skill and its zip through day1; the personal token stays a link out, server-scan makes it only for its own login |
+
+## 12. The Claude page (3.29.0)
+
+server-scan's **Claude** page (`/skill`, the seventh in its navigation)
+rebuilt at `/server-scan/claude`, in Wingman's design and server-scan's
+words (ADR-0048's 3.29.0 amendment). Read from `team-redbull/server-scan`
+at `92146d3`: `frontend/src/features/skill/` (`SkillPage.tsx`,
+`McpSection.tsx`, `TokenSection.tsx`, `skillText.ts` and their tests),
+`frontend/src/api/skill.ts`, `backend/app/api/v1/skill.py`,
+`backend/app/application/services/skill_bundle.py`, its ADR-0052 (the skill
+page) and ADR-0054 (the MCP server).
+
+### 12.1 What server-scan's Claude page shows and does
+
+A guide to `server-scan-api`, the Claude Code skill in server-scan's repo
+(`.claude/skills/server-scan-api`: `SKILL.md` and `references/*.md`).
+Everything on it is read from `GET /api/v1/skill`, so editing the skill
+updates the page; it is read again every minute and on window focus.
+
+- **Header**: "Ask Claude about Server Scan"; "Install the `<name>` skill in
+  Claude Code and ask in plain language. It builds the API calls, pages
+  through the results and answers with real data."; **Download
+  `<name>.zip`**. "Loading the skill…" while it loads; "This server carries
+  no skill, or it could not be read." when it cannot.
+- **Set it up in a minute**, four steps: (1) Download the zip: "The address
+  of this server (`<origin>`) is already written into it."; (2) Unzip it
+  into your skills folder: `unzip -o ~/Downloads/<name>.zip -d
+  ~/.claude/skills`, with a copy button; (3) Add your token: "Create it
+  below, then open `~/.claude/skills/<name>/SKILL.md` and replace the
+  `VIEWER_TOKEN` (a viewer) or `AUDITOR_TOKEN` (anyone else) placeholder.
+  Keep it out of git."; (4) Ask: "Start Claude Code and just ask.", with up
+  to six chips, the quoted examples in the skill's description, each copied
+  on click.
+- **Your token** (only when login is on and the person is signed in to
+  server-scan): their one personal token (ADR-0053 there): its prefix,
+  access, expiry, last use; **Create my token** / **Replace my token** and
+  **Revoke**; a new token is shown once, as the line to paste
+  (`AUDITOR_TOKEN=ssk_…`).
+- **Or connect it as an MCP server**: "One command, nothing to unzip and no
+  file to edit. …", the command `claude mcp add --transport http
+  server-scan <origin>/mcp --header "Authorization: Bearer <your token>"`
+  with a copy button; a token just created is filled in.
+- **When Claude uses it** (the description and `when_to_use`) and **What it
+  may run** ("Read-only. The skill is limited to these tools and stays on
+  GET requests.", the `allowed-tools` as chips).
+- **What's inside**: each file as a tab, an "On this page" outline of its
+  `##` and `###` headings (fenced code skipped) that scrolls to the line,
+  the line count, a copy button for the file, the numbered lines.
+
+### 12.2 Every button, and Wingman's
+
+| server-scan | Wingman |
+|---|---|
+| Download `<name>.zip` | The same, through day1 (§12.4); server-scan's zip, its address written in |
+| Copy the unzip command, a prompt chip, the MCP command, a file | The same |
+| Create my token, Replace my token, Revoke | **None.** server-scan makes a personal token only for a person signed in to server-scan itself (its session, never a service token), so step 3 and the MCP section link to server-scan's own Claude page (`<server-scan>/skill`, a new tab) and say so in one line |
+| The outline's headings, the file tabs | The same |
+
+### 12.3 What server-scan serves
+
+| Call | Token | Answer |
+|---|---|---|
+| `GET /api/v1/skill` | any resolved caller (viewer) | `{name, description, when_to_use, allowed_tools, version, updated_at, files: [{path, content}]}`, read from server-scan's disk on every call (`SKILL.md` first); `version` is a hash of the files. `404` when the deployment carries no skill |
+| `GET /api/v1/skill/download?base_url=` | any resolved caller (viewer) | `application/zip`, `attachment; filename="<name>.zip"`: `<name>/SKILL.md` and `<name>/references/*.md`, `base_url` written over the `BASE_URL=` line (a plain http(s) address, else `422`), the token never; a viewer caller's copy says `VIEWER_TOKEN` where the skill says `AUDITOR_TOKEN`. `404` as above |
+| `/mcp` | the person's token | server-scan's MCP server (its ADR-0054), behind its UI's nginx when its chart's `mcp.enabled`; Wingman never calls it |
+
+### 12.4 day1's routes
+
+**`GET /api/day1/server-scan/skill`**: server-scan's skill in its shape,
+typed by day1, plus two fields:
+
+```json
+{
+  "name": "server-scan-api",
+  "description": "Queries the Server Scan REST API … (\"all Dell servers in site1\", …)",
+  "when_to_use": "Also for questions about a server's BMC address, …",
+  "allowed_tools": "Bash(curl *) Bash(jq *)",
+  "version": "0123456789ab",
+  "updated_at": "2026-11-01T08:00:00Z",
+  "files": [{"path": "SKILL.md", "content": "---\nname: server-scan-api\n…"}, {"path": "references/endpoints.md", "content": "…"}],
+  "server_scan_url": "https://server-scan.example",
+  "token_line": "VIEWER_TOKEN"
+}
+```
+
+- `server_scan_url` is server-scan's address for people and Claude Code:
+  `SERVER_SCAN_UI_URL`, else `SERVER_SCAN_URL` (the node links' rule), the
+  fake fleet's `http://server-scan.example` when both are empty. server-scan's
+  page uses its own origin; Wingman's cannot, since Claude Code must call
+  server-scan, never Wingman.
+- `token_line` is the placeholder the download's `SKILL.md` names, by
+  server-scan's own rule with Wingman as the caller whose copy it is:
+  `VIEWER_TOKEN` when Wingman sends its viewer token, `AUDITOR_TOKEN` when it
+  sends none (server-scan with auth off: every caller is an admin).
+- Cached for 60 seconds per replica (`server-scan:skill`), the original's
+  refresh; a failure is not cached.
+
+**`GET /api/day1/server-scan/skill/download`**: server-scan's zip as it
+sent it, `base_url` = `server_scan_url`, once it reads as a zip;
+`application/zip`, `Content-Disposition: attachment; filename="<name>.zip"`
+(server-scan's name when it is a skill name, else `server-scan-api`),
+`Cache-Control: no-cache`. Never cached by day1.
+
+### 12.5 The token
+
+**The viewer token only** (`SERVER_SCAN_TOKEN`, §4) on both reads; no new
+Secret, key or value. The person's own token is server-scan's: it is made,
+replaced and revoked on server-scan's Claude page by someone signed in to
+server-scan, and never passes through Wingman. A person whose server-scan
+token is an auditor's pastes it over the `VIEWER_TOKEN` line of a viewer
+copy; the line's name is only a name, and the skill reads the value.
+
+### 12.6 Errors
+
+| Status | `code` | When |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | No session |
+| 403 | `FORBIDDEN` | Not one of Wingman's admins |
+| 404 | `NOT_FOUND` | server-scan carries no skill (its own words in the detail) |
+| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan unreachable, answering an error, refusing the viewer token (check `SERVER_SCAN_TOKEN`), refusing the address written into the zip (its `422`: check `SERVER_SCAN_UI_URL`), or sending a skill day1 cannot read or a download that is not a zip |
+
+### 12.7 Metrics and the fake
+
+- **Metrics**: two new operations on `dependency="server_scan"`:
+  `get_skill` and `download_skill`, with `ok`, `not_found` (no skill),
+  `denied` (the viewer token refused) and `unavailable`
+  (`docs/ops/metrics.md`).
+- **The fake** (`DAY1_FAKE_FLEET=true`): a short stand-in skill in
+  `dev/fleet-fixtures/skill/` (`SKILL.md` with server-scan's frontmatter
+  keys and its `BASE_URL=`/`AUDITOR_TOKEN=` lines, and one
+  `references/endpoints.md`), read and zipped as server-scan's
+  `skill_bundle.py` does (ported), as a server-scan with auth off answers:
+  `AUDITOR_TOKEN`. Without a skill the fake answers `404`.
+
+### 12.8 The web
+
+- **`/server-scan/claude`**, in the sidebar's **Reference** section after
+  the Fleet pages (server-scan's order: … Rules & Policies, Claude,
+  Architecture).
+- **§12.1 in Wingman's design**, server-scan's words, with these changes:
+  step 1 names server-scan's address (`server_scan_url`), not the page's
+  origin; step 3 links to server-scan's Claude page for the token and says
+  in one line that server-scan makes a personal token only for someone
+  signed in to it; there is no token section; the MCP command keeps `<your
+  token>`, with a line to paste it from server-scan's page.
+- **The download** fetches day1's zip with the session's token (as every
+  call) and hands it to the browser as `<name>.zip`; a failure shows day1's
+  problem under the button.
+- **States**: a skeleton while loading; "For admins" on `403`; "Server Scan
+  is not set up" on `501`; "No Claude skill" on `404`; the problem on
+  `502`; a failed re-read keeps the page with a notice.
+- **Fresh as the original**: read again every minute and on window focus.
+- **Reused from server-scan** (decision 18, credited in the code):
+  `skillText.ts` (`extractPrompts`, `outline`), the tools' split, its types,
+  and its tests' cases as Vitest cases (`lib/server-scan/skill-text.test.ts`).
