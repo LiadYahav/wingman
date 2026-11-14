@@ -10,7 +10,7 @@ have (or its feature off), 502 when server-scan fails or refuses the token.
 Never cached. Run job is the area's second write, as server-scan's Run job:
 never retried, 409 ``JOB_ALREADY_RUNNING`` while the CronJob has an unfinished
 Job, 504 ``AMBIGUOUS_WRITE`` when unanswered, logged with the person's name.
-The contract: ``docs/notes/2026-11-13-server-scan-area-api.md`` §14.
+The contract: ``docs/notes/2026-11-13-server-scan-area-api.md`` §15.
 """
 
 from __future__ import annotations

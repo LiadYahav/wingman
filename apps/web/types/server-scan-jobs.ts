@@ -1,7 +1,7 @@
 /**
  * The Server Scan area's Jobs page: server-scan's CronJobs, their runs and a
  * pod's log, which day1 passes through typed and in server-scan's own shapes
- * (docs/notes/2026-11-13-server-scan-area-api.md §14, ADR-0048's 3.32.0
+ * (docs/notes/2026-11-13-server-scan-area-api.md §15, ADR-0048's 3.32.0
  * amendment). server-scan keeps them for its admins, reads included, so day1
  * reads them with its admin token.
  *

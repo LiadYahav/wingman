@@ -1,5 +1,5 @@
 /**
- * The Jobs page's mocks (docs/notes/2026-11-13-server-scan-area-api.md §14),
+ * The Jobs page's mocks (docs/notes/2026-11-13-server-scan-area-api.md §15),
  * typed so a shape change fails `tsc`: made-up CronJobs in server-scan's own
  * shapes, as its `JobsPage.test.tsx` makes them: a collector with a warning
  * and a failed run between two good ones, one running now (started by

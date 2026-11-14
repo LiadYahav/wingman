@@ -89,10 +89,10 @@ function CronJobs({ data, selected, onSelect, onRun, unconfirmed }: Cards) {
 
 /**
  * The Server Scan area's Jobs page (ADR-0048's 3.32.0 amendment,
- * docs/notes/2026-11-13-server-scan-area-api.md §14): server-scan's
+ * docs/notes/2026-11-13-server-scan-area-api.md §15): server-scan's
  * triggerable CronJobs, their recent Jobs and a pod's log, its cards, words
  * and log view, in Wingman's design. Read every 5 seconds while a Job runs,
- * every 30 otherwise, as the original. Run job starts one now (§14.6): on
+ * every 30 otherwise, as the original. Run job starts one now (§15.6): on
  * success the list is read again and the new Job's log opens.
  */
 export function JobsPage() {

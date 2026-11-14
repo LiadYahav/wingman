@@ -1,11 +1,11 @@
 /**
- * day1's Jobs routes (docs/notes/2026-11-13-server-scan-area-api.md §14,
+ * day1's Jobs routes (docs/notes/2026-11-13-server-scan-area-api.md §15,
  * ADR-0048's 3.32.0 amendment): server-scan's CronJobs, their runs and a
  * pod's log, read through day1 with server-scan's admin token. Admins only,
  * as the area; `501` without the admin token (beside a viewer token) or
  * without server-scan, `404` for a CronJob, Job or pod server-scan does not
  * have. Read as server-scan's page reads them; never kept in the browser.
- * Run job is the area's second write (§14.6).
+ * Run job is the area's second write (§15.6).
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,7 +48,7 @@ export function useJobLogs(selected: SelectedPod, active: boolean) {
 }
 
 /**
- * Run job (§14.6): a real Job of the CronJob, behind day1's admin check.
+ * Run job (§15.6): a real Job of the CronJob, behind day1's admin check.
  * Never retried (ADR-0006): server-scan has no idempotency key, and an
  * unanswered start is `AMBIGUOUS_WRITE`. The list is read again after any
  * answer, so it shows the run (or its absence) as server-scan has it.

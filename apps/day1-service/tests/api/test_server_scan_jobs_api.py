@@ -1,4 +1,4 @@
-"""``/api/day1/server-scan/jobs`` (docs/notes/2026-11-13-server-scan-area-api.md §14).
+"""``/api/day1/server-scan/jobs`` (docs/notes/2026-11-13-server-scan-area-api.md §15).
 
 The Server Scan area's Jobs page (ADR-0048's 3.32.0 amendment): server-scan's
 CronJobs, their runs and a pod's log, in its shapes. Admins only; with

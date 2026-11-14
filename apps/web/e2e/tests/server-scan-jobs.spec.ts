@@ -1,6 +1,6 @@
 /**
  * The Server Scan area's Jobs page (mocked;
- * docs/notes/2026-11-13-server-scan-area-api.md §14, ADR-0048's 3.32.0
+ * docs/notes/2026-11-13-server-scan-area-api.md §15, ADR-0048's 3.32.0
  * amendment): server-scan's CronJobs in its cards and words, their runs and
  * a pod's log; Run job, the area's second write (asked first, sent once,
  * server-scan's 409 and 404, unanswered, refused); the feature off, no

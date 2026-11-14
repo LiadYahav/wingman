@@ -1,6 +1,6 @@
 /**
  * The Jobs page's decisions and words, as server-scan's page makes them
- * (docs/notes/2026-11-13-server-scan-area-api.md §14.1): how often the list
+ * (docs/notes/2026-11-13-server-scan-area-api.md §15.1): how often the list
  * and an open log are read, whether a Job is unfinished, a card's line when
  * it has no Job, a pod's button, a manual run's words and the log's caption;
  * and why Run job is off, and its confirmation's words.
