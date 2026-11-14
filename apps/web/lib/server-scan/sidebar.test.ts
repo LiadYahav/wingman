@@ -5,18 +5,26 @@ const entries = (pathname: string) =>
   serverScanSidebar(pathname).map((s) => [s.label, s.items.map((i) => [i.label, i.href, i.active])]);
 
 describe("the Server Scan sidebar", () => {
-  it("lists only the pages Wingman has built, in server-scan's order: Sites, Servers, Claude, Architecture", () => {
+  it("lists only the pages Wingman has built, in server-scan's order: Sites, Servers, Confs, Claude, Architecture", () => {
     expect(entries("/server-scan")).toEqual([
-      ["Fleet", [["Sites", "/server-scan", true], ["Servers", "/server-scan/servers", false]]],
+      [
+        "Fleet",
+        [
+          ["Sites", "/server-scan", true],
+          ["Servers", "/server-scan/servers", false],
+          ["Confs", "/server-scan/confs", false],
+        ],
+      ],
       ["Reference", [["Claude", "/server-scan/claude", false], ["Architecture", "/server-scan/architecture", false]]],
     ]);
   });
 
-  it("marks Sites on the area's home only, and Servers on its page", () => {
-    expect(entries("/server-scan/servers")).toEqual([
-      ["Fleet", [["Sites", "/server-scan", false], ["Servers", "/server-scan/servers", true]]],
-      ["Reference", [["Claude", "/server-scan/claude", false], ["Architecture", "/server-scan/architecture", false]]],
-    ]);
+  it("marks Sites on the area's home only, and Servers or Confs on its page", () => {
+    const marked = (pathname: string) => serverScanSidebar(pathname).flatMap((s) => s.items.filter((i) => i.active).map((i) => i.label));
+    expect(marked("/server-scan")).toEqual(["Sites"]);
+    expect(marked("/server-scan/servers")).toEqual(["Servers"]);
+    expect(marked("/server-scan/servers/srv_1")).toEqual(["Servers"]);
+    expect(marked("/server-scan/confs")).toEqual(["Confs"]);
   });
 
   it("marks Claude on its page", () => {

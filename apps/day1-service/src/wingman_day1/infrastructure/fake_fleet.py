@@ -10,8 +10,9 @@ recording ``dev`` as who. A server's record and History are its row and its
 model's hardware (``fake_server_records``, ADR-0048's 3.25.0 amendment); no
 fake server is a VM unless the records fixture says so. Its Claude skill is
 a folder, read and zipped as server-scan does (``fake_server_scan_skill``,
-3.27.0); without one it carries none. Its architecture diagrams are
-``fake_server_scan_architecture``'s (3.28.0).
+3.29.0); without one it carries none. Its architecture diagrams are
+``fake_server_scan_architecture``'s (3.28.0). Its hardware catalog (the Confs
+page) is the fixture's, as loaded (``fake_server_scan_confs``, 3.29.0).
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which
@@ -44,6 +45,7 @@ from wingman_day1.domain.errors import (
     WorkflowsUnavailableError,
 )
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
+from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer, VmHostServer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -89,6 +91,7 @@ class FakeServerInventory:
         records: FakeRecords | None = None,
         skill: Skill | None = None,
         diagrams: FakeDiagrams | None = None,
+        confs: ConfList | None = None,
         clock: Clock = system_clock,
     ) -> None:
         """Seed the fleet; ``sites`` is server-scan's site catalog (none: the rows' own sites).
@@ -96,6 +99,7 @@ class FakeServerInventory:
         ``records`` gives each model its hardware (none: every record has none);
         ``skill`` is the Claude skill it serves (none: it carries none).
         ``diagrams`` are the UI's architecture diagrams (none: it serves none).
+        ``confs`` is the hardware catalog (none: empty).
         """
         self._rows = {row.id: row for row in rows}
         self.unavailable = unavailable
@@ -103,6 +107,7 @@ class FakeServerInventory:
         self._records = records or FakeRecords()
         self._skill = skill
         self._diagrams = diagrams or FakeDiagrams()
+        self._confs = confs or ConfList(items=())
         self._clock = clock
         self.server_reads = 0
         """How many times ``server`` was called (the uninstall's fresh read)."""
@@ -199,6 +204,11 @@ class FakeServerInventory:
         """See ServerInventory.architecture_diagram."""
         self._read()
         return self._diagrams.diagram(slug)
+
+    async def confs(self) -> ConfList:
+        """See ServerInventory.confs: the seeded catalog, as server-scan's fake seeds it once."""
+        self._read()
+        return self._confs
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance: who stays the first one's, as in server-scan."""

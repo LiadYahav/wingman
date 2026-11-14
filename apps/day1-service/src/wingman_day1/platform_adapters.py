@@ -81,6 +81,10 @@ def fleet_adapters(
             default_diagram_file,
             load_diagrams,
         )
+        from wingman_day1.infrastructure.fake_server_scan_confs import (
+            default_confs_file,
+            load_confs,
+        )
         from wingman_day1.infrastructure.fake_server_scan_sites import load_site_catalog
         from wingman_day1.infrastructure.fake_server_scan_skill import (
             default_skill_dir,
@@ -94,6 +98,7 @@ def fleet_adapters(
             records=load_records(default_records_file()),
             skill=load_skill(default_skill_dir()),
             diagrams=load_diagrams(default_diagram_file()),
+            confs=load_confs(default_confs_file()),
             clock=clock,
         )
         workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)

@@ -5,8 +5,8 @@ Inventory Management share (its cache in front). Each page adds its reads
 here: the Sites page, the Servers page's fleet rows, a server's page (the
 record, a VM's host, History with the auditor token), the Claude page
 (server-scan's skill and its zip, with server-scan's address written in, for
-people: ``ui_url``), and the Architecture page's diagrams from server-scan's
-UI. server-scan failing is
+people: ``ui_url``), the Architecture page's diagrams from server-scan's
+UI, and the Confs page's hardware catalog. server-scan failing is
 ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
@@ -28,6 +28,7 @@ from wingman_day1.domain.errors import (
     ServerScanWritesOffError,
 )
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
+from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -98,6 +99,10 @@ class ServerScanService:
     async def diagram(self, slug: str) -> ArchitectureDiagram:
         """The Architecture page: one of server-scan's diagrams, as its UI serves it."""
         return await self._inventory.architecture_diagram(slug)
+
+    async def confs(self) -> ConfList:
+        """The Confs page: server-scan's hardware catalog, every conf it can read."""
+        return await self._inventory.confs()
 
     async def start_maintenance(
         self, server_id: str, start: MaintenanceStart, *, user: User

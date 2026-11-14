@@ -101,11 +101,13 @@ class ServerScanOperation(StrEnum):
     LIST_SERVER_EVENTS = "list_server_events"
     """``GET /api/v1/servers/{id}/events``: a server's History (the auditor token)."""
     GET_SKILL = "get_skill"
-    """``GET /api/v1/skill``: the Claude page's skill (ADR-0048's 3.27.0 amendment)."""
+    """``GET /api/v1/skill``: the Claude page's skill (ADR-0048's 3.29.0 amendment)."""
     DOWNLOAD_SKILL = "download_skill"
     """``GET /api/v1/skill/download``: the skill's zip, for the Claude page's download."""
     GET_ARCHITECTURE_DIAGRAM = "get_architecture_diagram"
     """``GET <ui>/architecture/<slug>.html``: a diagram from server-scan's UI (no token)."""
+    LIST_CONFS = "list_confs"
+    """``GET /api/v1/confs``: the Server Scan area's Confs page, the hardware catalog."""
 
 
 class SegmentsManagerOperation(StrEnum):

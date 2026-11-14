@@ -4,9 +4,9 @@ The **Server Scan** area (`/server-scan`) is server-scan's UI rebuilt in
 Wingman, one page at a time (workstream 4 of `docs/ideas/single-pane.md`,
 decision 22, ADR-0048). This note covers the area, its first page,
 **Sites** (§1 to §7), its second, **Servers** (§8, 3.23.0), a
-server's own page (§9, 3.25.0), the **Claude** page (§12, 3.27.0) and
-**Architecture** (§11, 3.28.0). Each later page adds its section here (§10
-lists them).
+server's own page (§9, 3.25.0), the **Claude** page (§12, 3.27.0),
+**Architecture** (§11, 3.28.0) and the hardware catalog, **Confs** (§10,
+3.29.0). Each later page adds its section here (§13 lists them).
 
 - **server-scan's API does not change.** day1 reads server-scan with the
   viewer token it already holds (§4), and a server's History with its
@@ -221,7 +221,8 @@ rules ported, so the demo's cards agree with its servers.
 - **The sidebar**: server-scan's pages, in its navigation's order, only those
   Wingman has built, so no entry leads nowhere: **Sites**, since 3.23.0
   **Servers**, since 3.27.0 **Claude** (§12) and since 3.28.0 **Architecture**
-  (§11), both in a Reference section.
+  (§11), both in a Reference section, and since 3.29.0 **Confs** (§10.8), in
+  Fleet after Servers.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
 - **The Sites page**: §1's cards, counts and words in Wingman's design (its
   colour tokens, light and dark). **The counts are not links yet**: the
@@ -854,18 +855,170 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
   breakdown's rules, the profile-template and unreachable labels, the event
   tints, its types, and their tests' cases as Vitest cases.
 
-## 10. Left for later pages
+## 10. The Confs page (3.29.0)
 
-In single-pane §4's order; each is its own PR, with its section in this note.
+`/server-scan/confs`: server-scan's Confs page, the hardware catalog, read
+only (ADR-0048's 3.29.0 amendment). A conf is a server configuration (a
+spec): the CPU, memory, drives, GPUs and network adapters one kind of server
+is bought with. Another system writes server-scan's `confs` collection;
+server-scan and Wingman only read it.
 
-| Page | server-scan reads (token) | What Wingman adds |
+### 10.1 What server-scan's Confs page shows and does
+
+Read from `team-redbull/server-scan` at `92146d3`:
+`frontend/src/features/confs/` (`ConfsPage.tsx`, `format.ts`, `hooks.ts`,
+`ConfsPage.test.tsx`) and `frontend/src/api/confs.ts`. Third in its
+navigation, at `/confs`, for every signed-in role.
+
+- **Header**: "Confs", then "Server configurations (specs). Read-only: the
+  `confs` collection is written outside Server Scan. Click a row for the full
+  spec."
+- **Search** ("Conf ID, part number, model, CPU, GPU or disk type"): every
+  word typed, ignoring case, must appear in the conf's id, part number,
+  model, CPU model or vendor, memory types, disk types or GPU models; the
+  confs keep server-scan's order. Beside it, "N confs", or "M of N confs"
+  while it narrows them.
+- **A notice for unreadable confs**: "N stored conf(s) could not be read and
+  is (are) not listed: <ids>", when server-scan skipped any.
+- **Table**, one row per conf:
+
+  | Column | Shows |
+  |---|---|
+  | Conf | ▸ or ▾ and the id |
+  | Part number | the catalog's part number; none: an **Unmapped** badge (no catalog entry matches the conf) |
+  | Model | the server model |
+  | CPU | "2× Intel Xeon Gold 6338", under it "64 cores · 128 threads · 2.0 GHz" |
+  | RAM | "512 GiB", under it "16 × 32 GB DDR4" (several types joined by "/", none read: "type unread"); a total of 0 is "not read (scan failed)", never "0 GiB" |
+  | Storage | the total ("4.8 TB", the shortest exact text), under it "N drives"; none: "—" |
+  | GPU | "8× NVIDIA H200 SXM" per model (the same model listed twice shows once, summed; a count with no model listed is "N× unknown"), under it "141 GB each" when a VRAM size is recorded; none: "—" |
+  | Adapters | "1× 2-port 100 Gb/s" per group; none: "—" |
+
+  A value the writer recorded as `unknown` (a disk type, a GPU model) is muted
+  and in italics, so it reads as a value, not a gap.
+- **A row opens** (a click on the row or its ▸) into the full spec under it:
+  **Identity** (Conf ID, Part number, Model), **CPU** (its model, vendor,
+  "2 sockets × 32 cores", "128 threads (HT)", "2.0 GHz base, 3.2 GHz max",
+  "Cache: L1 2.5 MB · L2 40 MB · L3 48 MB"), **Memory** (the total, "16 × 32
+  GB DIMMs", "Type: DDR4", or "not read (DIMM read failed)"; a failed scan:
+  "not read (scan failed)"), **Storage, GPU and adapters** (each drive group
+  "2× 0.48 TB SSD" or "No disks", "GPUs (N):" with each model and "N GB VRAM
+  per GPU", "Adapters (N):" with each group). Several rows may be open.
+- **Fresh**: read when the page opens and again when it is opened after 30
+  seconds (its query client's `staleTime`); not polled.
+- **States**: "Loading…"; the problem's detail; "No confs are stored." with
+  none, "No conf matches the search." when the search keeps none.
+
+### 10.2 Every control on server-scan's Confs page
+
+| Control | Does | Kind | In Wingman |
+|---|---|---|---|
+| Search | Narrows the rows in the browser | read | The same |
+| ▸ / ▾, a click on a row | Opens or closes the conf's full spec | read | The same |
+
+**No write.** server-scan's page has no other control, and its API has no
+write for confs: the collection is another system's (server-scan's
+`docs/adr/0061-confs.md`). `GET /api/v1/confs/{conf_id}` exists and the page
+does not call it: the list carries every field.
+
+### 10.3 What server-scan serves
+
+| Call | Token | Answer |
 |---|---|---|
-| Confs | `GET /api/v1/confs` (viewer) | Read only |
-| Rules & Policies | `GET /api/v1/classification-rules`, `/health-policies` (viewer) | Read only |
-| Events | `GET /api/v1/events`, `/events/actors` (auditor) | Filters and cursor pages; History's timeline and its auditor token (§9) reused |
-| Jobs | `GET /api/v1/jobs`, a run's pod logs, `POST /jobs/{cronjob}/run` (admin) | "Run now" behind the admin check, its confirmation, Wingman's audit |
-| Architecture | Built (§11, 3.28.0): its UI's static diagrams, no token | Read through day1, shown in a sandboxed frame |
-| Claude | `GET /api/v1/skill`, `/skill/download` (viewer) | Built in 3.27.0 (§12): the skill and its zip through day1; the personal token stays a link out, server-scan makes it only for its own login |
+| `GET /api/v1/confs` | any (viewer) | `{items: Conf[], unreadable: string[]}`: every conf whose stored document matches the schema, in natural `conf_id` order (`CONF9` before `CONF10`), unpaged (tens to hundreds), and the `conf_id` of each it skipped, logged on its side. Not cached by server-scan: one Mongo read per call |
+
+### 10.4 day1's route
+
+**`GET /api/day1/server-scan/confs`**: server-scan's answer, typed, in its
+shape:
+
+```json
+{
+  "items": [
+    {
+      "conf_id": "CONF200",
+      "part_number": "210-AZKL",
+      "model": "PowerEdge R650",
+      "cpu": {
+        "model": "Intel Xeon Gold 6338", "vendor": "Intel", "sockets": 2,
+        "cores_per_cpu": 32, "total_cores_ht": 128, "clock_mhz": 2000,
+        "max_clock_mhz": 3200, "cache_kb": {"l1": 2560, "l2": 40960, "l3": 49152}
+      },
+      "ram": {"total_gib": 512, "dimms": 16, "per_dimm_gb": 32, "type": ["DDR4"]},
+      "disks": [{"count": 2, "type": "SSD", "capacity_tb": 0.48}, {"count": 2, "type": "NVME", "capacity_tb": 1.92}],
+      "gpus": [],
+      "gpu_count": 0,
+      "gpu_vram_gb": 0,
+      "adapters": [{"count": 1, "ports": 2, "speed": 25.0}, {"count": 1, "ports": 2, "speed": 1.0}],
+      "adapter_count": 2
+    }
+  ],
+  "unreadable": ["CONF-99"]
+}
+```
+
+- **Every field server-scan sends**, typed (`domain/server_scan_confs.py`):
+  the writer's shape as server-scan reproduces it, with its defaults
+  (`part_number`, a CPU's `vendor` and `gpu_vram_gb` may be `null`; a list
+  left out is empty; a count left out is 0). A field of the wrong type is a
+  `502`, never a blank. Words the writer picks (a disk type, `unknown`) stay
+  strings. Sizes are the writer's units: cache in KB, memory in GiB, a DIMM
+  in GB, drives in TB, VRAM in GB per GPU, an adapter's `speed` in Gb/s per
+  port.
+- **`unreadable`** is passed on as server-scan sends it, so the page can say
+  which stored confs are missing.
+- **Not cached by day1** (§10.7).
+
+### 10.5 The token
+
+The viewer token, `SERVER_SCAN_TOKEN`, as Sites (§4): server-scan serves the
+confs to any authenticated caller. **No new Secret, value or key.**
+
+### 10.6 Errors
+
+| Status | `code` | When |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | No session |
+| 403 | `FORBIDDEN` | Not one of Wingman's admins |
+| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty |
+| 502 | `DEPENDENCY_UNAVAILABLE` | server-scan unreachable, answering an error, refusing the viewer token (check `SERVER_SCAN_TOKEN`), or sending an answer day1 cannot read |
+
+### 10.7 Cache, metrics and the fake
+
+- **Not cached by day1.** server-scan reads its small collection on every
+  call and caches nothing itself; only the Confs page asks (the top bar asks
+  for the sites), and an open page asks at most once per 30 seconds. A cache
+  in day1 would save no measurable load and only delay a change the
+  collection's writer makes.
+- **Metrics**: one new operation on `dependency="server_scan"`, `list_confs`,
+  with `ok`, `denied` (the viewer token refused) and `unavailable`
+  (`docs/ops/metrics.md`).
+- **The fake** (`DAY1_FAKE_FLEET=true`): `dev/fleet-fixtures/confs.yaml`,
+  server-scan's own fake catalog (its
+  `backend/app/infrastructure/providers/fake/confs.py`) transcribed in the
+  answer's shape and read by the same strict model: 20 confs over Dell,
+  Cisco, HPE, Lenovo and Supermicro models, two of them unmapped (`CONF-21`,
+  `CONF-34`, whose memory scan failed), four with GPUs, and one unreadable id
+  (`CONF-99`) so the notice shows. No token is needed, as on the sandbox.
+
+### 10.8 The web
+
+- **`/server-scan/confs`**, the sidebar's **Confs**, after Servers, as in
+  server-scan's navigation.
+- **§10.1 in Wingman's design**: its columns, words, badge, notice and open
+  rows, Wingman's colour tokens (light and dark). The read-only explanation
+  sits in a tooltip beside the heading, and the **Unmapped** badge's tooltip
+  says what it means.
+- **States**: skeleton rows while loading; "For admins" on `403`; "Server
+  Scan is not set up" on `501`; the problem on `502`; a failed re-read keeps
+  the last answer with a notice; "No confs are stored." with none; "No conf
+  matches the search." when the search keeps none.
+- **Fresh as the original**: read on open, again when opened after 30
+  seconds; not polled.
+- **Reused from server-scan** (decision 18, credited in the code): its `Conf`
+  type, `format.ts` (`groupByModel`, `gpuEntries`, `hasVram`, `formatTb`,
+  `formatGhz`, `formatKb`, `totalStorageTb`, `searchText`, `visibleConfs`,
+  `adapterText`) and the RAM and count words of `ConfsPage.tsx`, with its
+  tests' cases as Vitest cases.
 
 ## 11. The Architecture page (3.28.0)
 
@@ -1170,3 +1323,16 @@ copy; the line's name is only a name, and the skill reads the value.
 - **Reused from server-scan** (decision 18, credited in the code):
   `skillText.ts` (`extractPrompts`, `outline`), the tools' split, its types,
   and its tests' cases as Vitest cases (`lib/server-scan/skill-text.test.ts`).
+
+## 13. Left for later pages
+
+In single-pane §4's order; each is its own PR, with its section in this note.
+
+| Page | server-scan reads (token) | What Wingman adds |
+|---|---|---|
+| Confs | Built (§10, 3.29.0): `GET /api/v1/confs` (viewer) | Read only |
+| Rules & Policies | `GET /api/v1/classification-rules`, `/health-policies` (viewer) | Read only |
+| Events | `GET /api/v1/events`, `/events/actors` (auditor) | Filters and cursor pages; History's timeline and its auditor token (§9) reused |
+| Jobs | `GET /api/v1/jobs`, a run's pod logs, `POST /jobs/{cronjob}/run` (admin) | "Run now" behind the admin check, its confirmation, Wingman's audit |
+| Architecture | Built (§11, 3.28.0): its UI's static diagrams, no token | Read through day1, shown in a sandboxed frame |
+| Claude | `GET /api/v1/skill`, `/skill/download` (viewer) | Built in 3.27.0 (§12): the skill and its zip through day1; the personal token stays a link out, server-scan makes it only for its own login |
