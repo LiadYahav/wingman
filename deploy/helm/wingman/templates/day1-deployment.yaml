@@ -31,7 +31,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: day1
-          image: {{ include "wingman.image" (dict "reg" .Values.image.registry "repo" .Values.image.day1.repository "tag" .Values.image.day1.tag) }}
+          image: {{ include "wingman.image" (dict "registry" .Values.image.registry "image" .Values.image.day1) | quote }}
           imagePullPolicy: {{ .Values.image.day1.pullPolicy }}
           ports:
             - containerPort: 8001

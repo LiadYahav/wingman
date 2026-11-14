@@ -23,7 +23,7 @@ image:
   web:
     pullPolicy: Never
   nginx:
-    pullPolicy: IfNotPresent   # nginx:latest (values.yaml) pulled from Docker Hub (or a mirror)
+    pullPolicy: IfNotPresent   # Red Hat's UBI nginx by digest (values.yaml), from registry.access.redhat.com
 
 # Local only: allows weak dev login (ADR-0009).
 environment: "development"

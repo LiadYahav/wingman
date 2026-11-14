@@ -27,8 +27,12 @@ spec:
       {{- end }}
       containers:
         - name: nginx
-          image: {{ include "wingman.image" (dict "reg" .Values.image.registry "repo" .Values.image.nginx.repository "tag" .Values.image.nginx.tag) }}
+          image: {{ include "wingman.image" (dict "registry" .Values.image.registry "image" .Values.image.nginx) | quote }}
           imagePullPolicy: {{ .Values.image.nginx.pullPolicy }}
+          # The UBI image's own command prints an S2I usage note and exits, so
+          # nginx is started here. -e: its start-up errors go to stderr too,
+          # before it reads nginx.conf (the compiled-in log file is read-only).
+          command: ["nginx", "-e", "/dev/stderr", "-g", "daemon off;"]
           ports:
             - containerPort: 8080
               protocol: TCP
@@ -39,12 +43,19 @@ spec:
               readOnly: true
           resources:
             {{- toYaml .Values.resources.nginx | nindent 12 }}
+          # nginx answers /healthz itself (ADR-0058): neither probe waits on the web.
           livenessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
       volumes:
         - name: nginx-config
           configMap:

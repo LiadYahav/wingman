@@ -6,18 +6,22 @@ Expand chart name.
 {{- end }}
 
 {{/*
-Full image reference: registry/repository:tag
-If registry is empty, returns repository:tag
+Full image reference: [registry/]repository:tag[@digest]. `image.registry`
+prefixes every image, nginx's included (an air-gapped mirror); a digest, when
+set, is what the node pulls, and the tag stays for people.
+Called with (dict "registry" .Values.image.registry "image" .Values.image.<name>).
 */}}
 {{- define "wingman.image" -}}
-{{- $reg := .reg -}}
-{{- $repo := .repo -}}
-{{- $tag := .tag | default "latest" -}}
-{{- if $reg -}}
-  {{- printf "%s/%s:%s" $reg $repo $tag -}}
-{{- else -}}
-  {{- printf "%s:%s" $repo $tag -}}
-{{- end }}
+{{- $image := .image | default dict -}}
+{{- $ref := $image.repository -}}
+{{- if .registry -}}
+  {{- $ref = printf "%s/%s" .registry $ref -}}
+{{- end -}}
+{{- $ref = printf "%s:%s" $ref ($image.tag | default "latest") -}}
+{{- if $image.digest -}}
+  {{- $ref = printf "%s@%s" $ref $image.digest -}}
+{{- end -}}
+{{- $ref -}}
 {{- end }}
 
 {{/*

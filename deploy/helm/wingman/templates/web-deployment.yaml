@@ -27,7 +27,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: web
-          image: {{ include "wingman.image" (dict "reg" .Values.image.registry "repo" .Values.image.web.repository "tag" .Values.image.web.tag) }}
+          image: {{ include "wingman.image" (dict "registry" .Values.image.registry "image" .Values.image.web) | quote }}
           imagePullPolicy: {{ .Values.image.web.pullPolicy }}
           ports:
             - containerPort: 3000

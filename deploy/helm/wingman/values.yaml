@@ -38,10 +38,17 @@ image:
     tag: "latest"
     pullPolicy: IfNotPresent
 
+  # The one entry point (ADR-0058): Red Hat's UBI nginx, pinned by tag and by
+  # the digest of its manifest list (docs/ops/images.md, "The nginx image").
+  # The digest is what nodes pull; change the tag and the digest together.
+  # [AIR-GAPPED] Mirror it by digest. With image.registry set it is pulled from
+  # <registry>/<repository>, like the others: set repository to its path in
+  # your mirror (for example ubi9/nginx-124). With image.registry empty, an
+  # ImageDigestMirrorSet for registry.access.redhat.com redirects it as is.
   nginx:
-    # [AIR-GAPPED] Replace with mirror of nginx in your registry
-    repository: nginx
-    tag: "latest"
+    repository: registry.access.redhat.com/ubi9/nginx-124
+    tag: "9.8"
+    digest: "sha256:d5cec86a9adf972dbfa0d87b134e7c404706cc1920fc2e6a2b146e290276f219"
     pullPolicy: IfNotPresent
 
 # ── GitLab connection ──────────────────────────────────────────────────────────
