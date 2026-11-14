@@ -5,13 +5,14 @@
  * as the area; `501` without the admin token (beside a viewer token) or
  * without server-scan, `404` for a CronJob, Job or pod server-scan does not
  * have. Read as server-scan's page reads them; never kept in the browser.
+ * Run job is the area's second write (§14.6).
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { retryUnlessProblem } from "@/lib/api/server-scan";
 import { jobsPollMs, LOG_POLL_MS, LOG_TAIL, type SelectedPod } from "@/lib/server-scan/jobs";
-import type { JobsOverview, PodLogs } from "@/types/server-scan-jobs";
+import type { JobRun, JobsOverview, PodLogs } from "@/types/server-scan-jobs";
 
 const JOBS_PATH = "/api/day1/server-scan/jobs";
 
@@ -43,5 +44,20 @@ export function useJobLogs(selected: SelectedPod, active: boolean) {
     refetchInterval: active ? LOG_POLL_MS : false,
     staleTime: 0,
     retry: retryUnlessProblem,
+  });
+}
+
+/**
+ * Run job (§14.6): a real Job of the CronJob, behind day1's admin check.
+ * Never retried (ADR-0006): server-scan has no idempotency key, and an
+ * unanswered start is `AMBIGUOUS_WRITE`. The list is read again after any
+ * answer, so it shows the run (or its absence) as server-scan has it.
+ */
+export function useRunJob() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (cronjob: string) => api.post<JobRun>(`${JOBS_PATH}/${encodeURIComponent(cronjob)}/run`),
+    retry: false,
+    onSettled: () => client.invalidateQueries({ queryKey: serverScanJobsKeys.all, exact: true }),
   });
 }

@@ -3,7 +3,7 @@
  * typed so a shape change fails `tsc`: made-up CronJobs in server-scan's own
  * shapes, as its `JobsPage.test.tsx` makes them: a collector with a warning
  * and a failed run between two good ones, one running now (started by
- * hand), and one switched off in values.yaml.
+ * hand), and one switched off in values.yaml; and Run job's answers.
  */
 
 import type { Page, Route } from "@playwright/test";
@@ -17,7 +17,7 @@ const ago = (ms: number) => new Date(Date.now() - ms).toISOString().replace(/\.\
 export const OPENMANAGE = "server-scan-collectors-collector-openmanage";
 export const UCS = "server-scan-collectors-collector-ucs-central";
 export const REDFISH = "server-scan-collectors-collector-redfish-standalone";
-const IDRAC_WARNING = "This run can restart an iDRAC (ADR-0050) when a Dell has every disk or NIC UNKNOWN.";
+export const IDRAC_WARNING = "This run can restart an iDRAC (ADR-0050) when a Dell has every disk or NIC UNKNOWN.";
 
 function run(name: string, overrides: Partial<JobRun> = {}): JobRun {
   const state = overrides.state ?? "succeeded";
@@ -103,4 +103,17 @@ export async function setUpJobs(
     return json(route, { ...logs, pod });
   });
   return { reads: () => reads, logReads: () => logReads };
+}
+
+/** What a start answers: the new Job, its pod already there. */
+export const STARTED = run(`${OPENMANAGE}-manual-q7x2ka`, { state: "active", manual: true, triggered_by: "api-token-admin", created_at: ago(1_000) });
+
+/** day1's Run job route for every CronJob; returns how many starts were sent. */
+export async function mockRun(page: Page, answer: Answer<JobRun> = STARTED): Promise<() => number> {
+  let sent = 0;
+  await page.route("**/api/day1/server-scan/jobs/*/run", (route) => {
+    sent += 1;
+    return typeof answer === "function" ? answer(route) : json(route, answer, 201);
+  });
+  return () => sent;
 }

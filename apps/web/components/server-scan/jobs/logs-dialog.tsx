@@ -19,7 +19,6 @@ export function LogsDialog({ selected, active, onClose }: { selected: SelectedPo
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        aria-label={`Logs of ${selected.pod}`}
         showCloseButton={false}
         className="flex max-h-[85vh] flex-col sm:max-w-4xl"
         data-testid="ss-job-logs"

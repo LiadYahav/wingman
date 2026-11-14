@@ -1,6 +1,9 @@
 import { pill } from "@/components/server-scan/server-badges";
+import { buttonVariants } from "@/components/ui/button";
 import { formatRelative } from "@/lib/server-scan/datetime";
-import { ENABLED_HINT, enabledLabel, manualText, noRunsText, podButtonLabel, runTimesHint, scheduleHint, type SelectedPod } from "@/lib/server-scan/jobs";
+import {
+  ENABLED_HINT, enabledLabel, manualText, noRunsText, podButtonLabel, runBlocked, runTimesHint, scheduleHint, UNCONFIRMED_START, type SelectedPod,
+} from "@/lib/server-scan/jobs";
 import { cn } from "@/lib/utils";
 import type { CronJob, JobRun, JobState } from "@/types/server-scan-jobs";
 
@@ -9,7 +12,9 @@ import type { CronJob, JobRun, JobState } from "@/types/server-scan-jobs";
  * `JobRow` (team-redbull/server-scan at 92146d3,
  * `frontend/src/features/jobs/JobsPage.tsx`, decision 18): its name,
  * schedule, values.yaml flag and recent Jobs, newest first, each with its
- * state, who started it by hand, when, and a button per pod for its log.
+ * state, who started it by hand, when, and a button per pod for its log;
+ * and Run job, off (with why as its tooltip) while a Job of it is unfinished
+ * or when it is not deployed.
  */
 
 const STATE_TONE: Record<JobState, string> = {
@@ -72,15 +77,41 @@ function JobLine({
   );
 }
 
+/** Run job: `aria-disabled`, not `disabled`, when off, so its tooltip still says why. */
+function RunButton({ cronjob, onRun }: { cronjob: CronJob; onRun: () => void }) {
+  const blocked = runBlocked(cronjob);
+  return (
+    <button
+      type="button"
+      title={blocked ?? undefined}
+      aria-disabled={blocked ? true : undefined}
+      aria-haspopup="dialog"
+      onClick={() => {
+        if (!blocked) onRun();
+      }}
+      className={cn(buttonVariants({ size: "sm" }), "ml-auto", blocked && "cursor-not-allowed opacity-40")}
+      data-testid="ss-run-job"
+    >
+      Run job
+    </button>
+  );
+}
+
 /** A CronJob's card: dimmed when its values.yaml flag is off. */
 export function CronJobCard({
   cronjob,
   selected,
   onSelect,
+  onRun,
+  unconfirmed = false,
 }: {
   cronjob: CronJob;
   selected: SelectedPod | null;
   onSelect: (pod: SelectedPod) => void;
+  /** Run job's click; none: no Run job. */
+  onRun?: () => void;
+  /** Its last start was sent and not answered. */
+  unconfirmed?: boolean;
 }) {
   return (
     <section
@@ -103,7 +134,13 @@ export function CronJobCard({
         >
           {enabledLabel(cronjob)}
         </span>
+        {onRun && <RunButton cronjob={cronjob} onRun={onRun} />}
       </div>
+      {unconfirmed && (
+        <p role="note" className="mt-3 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm text-status-warning-fg" data-testid="ss-run-unconfirmed">
+          {UNCONFIRMED_START}
+        </p>
+      )}
       {cronjob.jobs.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground" data-testid="ss-cronjob-empty">
           {noRunsText(cronjob)}

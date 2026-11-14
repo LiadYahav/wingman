@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { CronJob, JobRun, JobsOverview } from "@/types/server-scan-jobs";
 import {
   backendNote, enabledLabel, isUnfinished, jobsPollMs, LIST_POLL_MS, logsBody, logsCaption, manualText, noRunsText,
-  podButtonLabel, runTimesHint, scheduleHint,
+  podButtonLabel, runBlocked, runTimesHint, scheduleHint, startedPod,
 } from "./jobs";
 
 const POD = { name: "r-collector-oneview-123-abcde", phase: "Succeeded", started_at: null };
@@ -104,6 +104,22 @@ describe("a card's words", () => {
     expect(scheduleHint(ran)).toMatch(/^Last scheduled 15\/07\/2026, 06:00:00.*\nLast succeeded 15\/07\/2026, 06:04:00/);
     expect(scheduleHint(cronjob("new"))).toBe("It has not run yet.");
     expect(runTimesHint(job({ started_at: "2026-11-01T06:00:05Z" })).split("\n")).toHaveLength(2);
+  });
+});
+
+describe("Run job", () => {
+  it("is off for a CronJob that already has a running Job", () => {
+    expect(runBlocked(cronjob("idle"))).toBeNull();
+    expect(runBlocked(cronjob("busy", { active: true }))).toBe("A Job of this CronJob is already running");
+  });
+
+  it("cannot run one that is not deployed", () => {
+    expect(runBlocked(cronjob("off", { enabled: false, deployed: false, jobs: [], schedule: "" }))).toBe("Not deployed: turn it on in values.yaml first");
+  });
+
+  it("opens the new Job's first pod's log when the answer already names one", () => {
+    expect(startedPod("c", job({ name: "new-job", state: "active", active: 1, pods: [] }))).toBeNull();
+    expect(startedPod("c", job({ name: "new-job" }))).toEqual({ cronjob: "c", job: "new-job", pod: POD.name });
   });
 });
 

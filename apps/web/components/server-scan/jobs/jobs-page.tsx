@@ -8,11 +8,12 @@ import { ProblemList } from "@/components/common/problem-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { errorMessages, isApiError } from "@/lib/api-client";
 import { useServerScanJobs } from "@/lib/api/server-scan-jobs";
-import { backendNote, FEATURE_OFF, isUnfinished, NO_CRONJOBS, type SelectedPod } from "@/lib/server-scan/jobs";
-import type { JobsOverview } from "@/types/server-scan-jobs";
+import { backendNote, FEATURE_OFF, isUnfinished, NO_CRONJOBS, startedPod, type SelectedPod } from "@/lib/server-scan/jobs";
+import type { CronJob, JobsOverview } from "@/types/server-scan-jobs";
 import { Blocked, needsAdminToken } from "../blocked";
 import { CronJobCard } from "./cronjob-card";
 import { LogsDialog } from "./logs-dialog";
+import { RunDialog } from "./run-dialog";
 
 /** server-scan's introduction, and who Wingman records, in the heading's tooltip. */
 const ABOUT =
@@ -46,7 +47,16 @@ function Off({ error }: { error: unknown }) {
   );
 }
 
-function CronJobs({ data, selected, onSelect }: { data: JobsOverview; selected: SelectedPod | null; onSelect: (pod: SelectedPod) => void }) {
+interface Cards {
+  data: JobsOverview;
+  selected: SelectedPod | null;
+  onSelect: (pod: SelectedPod) => void;
+  onRun: (cronjob: CronJob) => void;
+  /** The CronJobs whose last start was not answered. */
+  unconfirmed: string[];
+}
+
+function CronJobs({ data, selected, onSelect, onRun, unconfirmed }: Cards) {
   if (!data.enabled) {
     return (
       <EmptyState
@@ -64,7 +74,14 @@ function CronJobs({ data, selected, onSelect }: { data: JobsOverview; selected: 
   return (
     <div className="space-y-4">
       {data.cronjobs.map((cronjob) => (
-        <CronJobCard key={cronjob.name} cronjob={cronjob} selected={selected} onSelect={onSelect} />
+        <CronJobCard
+          key={cronjob.name}
+          cronjob={cronjob}
+          selected={selected}
+          onSelect={onSelect}
+          onRun={() => onRun(cronjob)}
+          unconfirmed={unconfirmed.includes(cronjob.name)}
+        />
       ))}
     </div>
   );
@@ -75,11 +92,16 @@ function CronJobs({ data, selected, onSelect }: { data: JobsOverview; selected: 
  * docs/notes/2026-11-13-server-scan-area-api.md §14): server-scan's
  * triggerable CronJobs, their recent Jobs and a pod's log, its cards, words
  * and log view, in Wingman's design. Read every 5 seconds while a Job runs,
- * every 30 otherwise, as the original.
+ * every 30 otherwise, as the original. Run job starts one now (§14.6): on
+ * success the list is read again and the new Job's log opens.
  */
 export function JobsPage() {
   const jobs = useServerScanJobs();
   const [selected, setSelected] = useState<SelectedPod | null>(null);
+  const [asking, setAsking] = useState<CronJob | null>(null);
+  const [unconfirmed, setUnconfirmed] = useState<string[]>([]);
+  const mark = (name: string, unanswered: boolean) =>
+    setUnconfirmed((names) => [...names.filter((n) => n !== name), ...(unanswered ? [name] : [])]);
   const off = isApiError(jobs.error, "FORBIDDEN") || isApiError(jobs.error, "FEATURE_DISABLED");
   const data = off ? undefined : jobs.data;
   const note = backendNote(data);
@@ -107,8 +129,22 @@ export function JobsPage() {
       ) : (
         <>
           {jobs.error !== null && <ProblemList error={jobs.error} title="The last read failed; this is the read before it" />}
-          <CronJobs data={data} selected={selected} onSelect={setSelected} />
+          <CronJobs data={data} selected={selected} onSelect={setSelected} onRun={setAsking} unconfirmed={unconfirmed} />
         </>
+      )}
+      {asking && (
+        <RunDialog
+          key={asking.name}
+          cronjob={asking}
+          onClose={() => setAsking(null)}
+          onStarted={(job) => {
+            mark(asking.name, false);
+            setAsking(null);
+            const pod = startedPod(asking.name, job);
+            if (pod) setSelected(pod);
+          }}
+          onUnconfirmed={() => mark(asking.name, true)}
+        />
       )}
       {selected && (
         <LogsDialog

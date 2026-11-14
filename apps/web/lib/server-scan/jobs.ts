@@ -2,7 +2,8 @@
  * The Jobs page's decisions and words, as server-scan's page makes them
  * (docs/notes/2026-11-13-server-scan-area-api.md §14.1): how often the list
  * and an open log are read, whether a Job is unfinished, a card's line when
- * it has no Job, a pod's button, a manual run's words and the log's caption.
+ * it has no Job, a pod's button, a manual run's words and the log's caption;
+ * and why Run job is off, and its confirmation's words.
  *
  * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
  * single-pane plan): `frontend/src/features/jobs/JobsPage.tsx` (`TAIL`,
@@ -22,6 +23,11 @@ export const LOG_POLL_MS = 3_000;
 export const NO_CRONJOBS = "No triggerable CronJobs found.";
 export const FEATURE_OFF = "Running jobs from the UI is not enabled on this deployment.";
 export const ENABLED_HINT = "The `enabled` flag for this job in the deployment's values.yaml";
+/** The confirmation's words: what Run job starts. */
+export const RUN_WORDS = "It starts a real Job from the CronJob's template and runs exactly as scheduled.";
+/** A card's line after a start that was sent and not answered (Wingman's; server-scan's page has none). */
+export const UNCONFIRMED_START =
+  "The last start was not answered: a run may have started. Look at the runs below before starting it again.";
 
 /** The open log: which pod of which Job of which CronJob. */
 export interface SelectedPod {
@@ -44,6 +50,19 @@ function isUnfinishedState(state: JobState): boolean {
 export function isUnfinished(cronjobs: CronJob[] | undefined, selected: SelectedPod): boolean {
   const job = cronjobs?.find((c) => c.name === selected.cronjob)?.jobs.find((j) => j.name === selected.job);
   return job !== undefined && isUnfinishedState(job.state);
+}
+
+/** Why Run job is off for this CronJob (its tooltip), as server-scan's; `null` when it can run. */
+export function runBlocked(cronjob: CronJob): string | null {
+  if (!cronjob.deployed) return "Not deployed: turn it on in values.yaml first";
+  if (cronjob.active) return "A Job of this CronJob is already running";
+  return null;
+}
+
+/** The new Job's first pod, whose log opens after a start; none yet: nothing opens. */
+export function startedPod(cronjob: string, job: JobRun): SelectedPod | null {
+  const pod = job.pods[0];
+  return pod ? { cronjob, job: job.name, pod: pod.name } : null;
 }
 
 /** A card's line in place of its Jobs. */
