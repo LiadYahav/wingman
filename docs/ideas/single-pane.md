@@ -297,7 +297,7 @@ catalog of server configurations, with the viewer token; server-scan has no
 write for it. Rules & Policies shows what server-scan runs, its
 classification rules and health policies, with the viewer token; neither
 server-scan's page nor its API writes them. The contract is
-`docs/notes/2026-11-13-server-scan-area-api.md`; its §14 lists what each later
+`docs/notes/2026-11-13-server-scan-area-api.md`; its §15 lists what each later
 page needs.
 
 **Option C (decision 22).** A top-bar
