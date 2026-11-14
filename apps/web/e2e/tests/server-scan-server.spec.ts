@@ -2,7 +2,7 @@
  * The Server Scan area's server page (mocked; docs/notes/2026-11-13-server-scan-area-api.md
  * §9, ADR-0048's 3.25.0 amendment): server-scan's server page in Wingman, its
  * five tabs with the tab in the URL, its words and badges; History with and
- * without server-scan's auditor token; the maintenance toggle on the record;
+ * without server-scan's auditor token; maintenance read only on the record;
  * the states; and the link into it from the Servers table (Inventory
  * Management's links: inventory.spec.ts).
  */
@@ -244,43 +244,15 @@ test.describe("The page's states", () => {
 });
 
 test.describe("Maintenance on the record", () => {
-  const toggle = (page: Page) => page.getByTestId("ss-maintenance").getByTestId("ss-maintenance-toggle");
-  const dialog = (page: Page) => page.getByTestId("ss-maintenance-dialog");
-
-  test("on: server-scan's dialog asks why; the PUT carries it and the record shows it", async ({ page }) => {
+  test("is read only, as in server-scan, with a link to switch it from Servers", async ({ page }) => {
     const calls = await setUpServer(page);
     await go(page, PAGE);
-    await expect(toggle(page)).toHaveAccessibleName(`Put ${NODE} into maintenance`);
-    await toggle(page).click();
-    await expect(dialog(page).getByRole("heading")).toHaveText("Put into maintenance");
-    await expect(dialog(page)).toContainText("Include the word “donor” to mark it as a parts donor.");
-    await dialog(page).getByRole("textbox", { name: /^Why is it going/ }).fill("Replacing DIMM A1 — INC-5000");
-    await dialog(page).getByRole("button", { name: "Start maintenance" }).click();
-    await expect(dialog(page)).toHaveCount(0);
-    expect(calls.changes).toEqual([{ method: "PUT", body: { reason: "Replacing DIMM A1 — INC-5000", expected_end: null } }]);
-    await expect(page.getByTestId("ss-maintenance")).toContainText("Replacing DIMM A1 — INC-5000 - by API token (admin)");
-    await expect(toggle(page)).toHaveAttribute("data-state", "on");
-  });
-
-  test("off: one click ends it with a DELETE", async ({ page }) => {
-    const calls = await setUpServer(page, { records: [ciscoRecord()] });
-    await go(page, `/server-scan/servers/${CISCO_ID}`);
-    await expect(toggle(page)).toHaveAccessibleName(/^End maintenance on/);
-    await toggle(page).click();
-    await expect(page.getByTestId("ss-maintenance")).toContainText("Not in maintenance");
-    expect(calls.changes).toEqual([{ method: "DELETE", body: null }]);
-    await expect(dialog(page)).toHaveCount(0);
-  });
-
-  test("without server-scan's admin token the toggle is greyed out with day1's one line", async ({ page }) => {
-    const detail =
-      "Maintenance needs server-scan's admin token: add the key admin-token to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN).";
-    const calls = await setUpServer(page, { records: [nodeRecord({ maintenance_available: false, maintenance_detail: detail })] });
-    await go(page, PAGE);
-    await expect(toggle(page)).toHaveAttribute("aria-disabled", "true");
-    await expect(toggle(page)).toHaveAttribute("title", detail);
-    await toggle(page).click({ force: true });
-    await expect(dialog(page)).toHaveCount(0);
+    const block = page.getByTestId("ss-maintenance");
+    await expect(block).toContainText("Not in maintenance");
+    await expect(block.getByTestId("ss-maintenance-toggle")).toHaveCount(0);
+    const link = block.getByTestId("ss-maintenance-switch");
+    await expect(link).toHaveText("Switch on Servers");
+    await expect(link).toHaveAttribute("href", `/server-scan/servers?search=${encodeURIComponent(NODE)}`);
     expect(calls.changes).toEqual([]);
   });
 });

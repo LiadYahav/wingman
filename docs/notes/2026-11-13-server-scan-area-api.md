@@ -599,7 +599,7 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/server
 | Copy BMC address (Network) | The address to the clipboard | read | The same |
 | ▸ Details / ▾ Hide details (History) | Opens one event | read | The same |
 | Previous, Next (History) | Pages of 50 | read | The same |
-| Maintenance (Overview) | Nothing: server-scan shows it read only | **write already built** (§8.5) | The maintenance block carries the Servers page's toggle (§9.8) |
+| Maintenance (Overview) | Nothing: server-scan shows it read only | read | Read only too, with a "Switch on Servers" link to the list at this server (§9.8) |
 
 **No new admin write.** server-scan's page has no other control: its
 commit `0bb7dad` ("switch maintenance only from the inventory list; the
@@ -808,12 +808,10 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
 - **§9.1 in Wingman's design**: server-scan's tabs, fields, words and
   badges, Wingman's colour tokens (light and dark), the explanations in
   tooltips.
-- **The maintenance block carries the toggle**: the Servers page's own
-  (§8.5), with its dialog, words, admin token, greyed-out state and
-  tooltip, never retried, logged with the person. Unlike server-scan, whose
-  page is read only for it; it is the same component and the same write, so
-  there is still one flow to audit. After a change the record, the rows and
-  the Sites counts are read again.
+- **The maintenance block is read only**, as server-scan's page is (its
+  `0bb7dad`): the state, the reason (since when and the expected end in its
+  tooltip), and a "Switch on Servers" link that opens the Servers list at
+  this server, where the toggle is (§8.5).
 - **History** is a tab for every admin (server-scan hides it from viewers;
   the area is for admins). Without the auditor token it says so in the one
   line of §9.5.

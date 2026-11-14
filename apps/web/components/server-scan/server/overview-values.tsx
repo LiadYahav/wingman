@@ -6,8 +6,8 @@ import { formatRelative, formatTimestamp } from "@/lib/server-scan/datetime";
 import { inferredGpuModel } from "@/lib/server-scan/hardware";
 import { categoryLabel, healthCategories, maintenanceText, maintenanceWhen, raidNote } from "@/lib/server-scan/overview";
 import { serverHref } from "@/lib/server-scan/server-page";
+import { serversHref } from "@/lib/server-scan/servers-view";
 import type { ServerRecord, VmHost } from "@/types/server-scan-record";
-import { MaintenanceToggle } from "../maintenance-toggle";
 import { InstallationBadge, ReservationBadge, SeverityPill } from "../server-badges";
 import { Tag } from "./fields";
 
@@ -139,9 +139,10 @@ export function HealthBreakdown({ record }: { record: ServerRecord }) {
 }
 
 /**
- * Whether the server is in maintenance and why, with the Servers page's own
- * toggle beside it (§9.8; server-scan's page shows this read only). Since
- * when and the expected end are the reason's tooltip.
+ * Whether the server is in maintenance and why, read only, as server-scan's
+ * page shows it (its `0bb7dad`: maintenance is switched only from the
+ * Servers list). A link opens that list at this server. Since when and the
+ * expected end are the reason's tooltip.
  */
 export function MaintenanceValue({ record }: { record: ServerRecord }) {
   const text = maintenanceText(record.maintenance);
@@ -154,7 +155,16 @@ export function MaintenanceValue({ record }: { record: ServerRecord }) {
       ) : (
         <span className="text-muted-foreground">Not in maintenance</span>
       )}
-      <MaintenanceToggle server={record} available={record.maintenance_available} detail={record.maintenance_detail} />
+      {record.name && (
+        <Link
+          href={serversHref(new URLSearchParams({ search: record.name }).toString())}
+          className="text-xs text-primary hover:underline"
+          title="Maintenance is switched from the Servers list, as in server-scan"
+          data-testid="ss-maintenance-switch"
+        >
+          Switch on Servers
+        </Link>
+      )}
     </span>
   );
 }

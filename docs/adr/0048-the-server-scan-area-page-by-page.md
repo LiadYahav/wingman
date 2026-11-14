@@ -219,12 +219,10 @@ button (decision 14), in Wingman's design. The contract is §9 of
 - **No new admin write.** server-scan's page has none: it shows maintenance
   read only (its `0bb7dad`), and the API's reclassify, health recalculate
   and reservation writes have no button in its UI.
-- **The maintenance block carries the Servers page's toggle**, which
-  server-scan's page does not (it keeps one place to switch maintenance
-  from). Here it is the same component and the same write, admin token,
-  confirmation, log line and metrics as on the Servers page, so there is
-  still one flow to audit, and an admin who opened a server to look at it
-  acts on it there.
+- **Maintenance is read only on the server's page**, as in server-scan
+  (its `0bb7dad`: one place to switch it, the Servers list). The block
+  shows the state and reason, and a "Switch on Servers" link opens the
+  list at this server (decision 14: exactly server-scan's buttons).
 - **History for every admin**, as the area is admins only (server-scan
   hides the tab from viewers). The tab is in the URL (`?tab=`), which
   server-scan's is not.
