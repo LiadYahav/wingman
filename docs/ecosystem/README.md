@@ -195,7 +195,7 @@ The live spec is saved in [`notes/workflows-orchestrator-openapi.json`](notes/wo
 `team-redbull/gitops-day2-prod` is a 4-commit mock of separate air-gapped GitLab projects:
 - **`argocd-day2-platform`:** five Helm charts that only render Argo objects, chained groups → mces → clusters → operators → deploy.
 - **`sigs/<team>`:** one repo per team; there are five in the air-gap.
-- **`helm-charts/<chart>`:** one repo per chart, with one frozen branch per release.
+- **`<team>/helm-charts/<chart>`:** one repo per chart, with one frozen branch per release, in each team's own group at the GitLab root (`redbull/helm-charts/<chart>`, `orca/helm-charts/<chart>`; the team is the `sigs/<team>` project's name). Wingman suggests that address for a new add-on and reads a `repourl` anywhere else on its GitLab just the same (ADR-0060).
 
 It is not limited to the redbull team or to non-OCP clusters. "redbull" is the infra/SRE team's repo (`sigs/redbull`), and every target is OpenShift. Clusters differ by kind: hub, MCE, hosted, UPI.
 
@@ -222,7 +222,7 @@ Example: install cert-manager on hosted cluster `ocp4-prod-herzi-site1` (one MR 
 
 ```
 sites/site1/prod/mces/ocp4-prod-mce-site1-a/ocp4-prod-herzi-site1/cert-manager/cert-manager.yaml
-  repourl: https://<gl>/<top>/helm-charts/cert-manager.git   # only if operators/ has no default
+  repourl: https://<gl>/redbull/helm-charts/cert-manager.git   # only if operators/ has no default
   projectNamespace: cert-manager
   # targetRevision only as an emergency pin
 sites/site1/prod/mces/ocp4-prod-mce-site1-a/ocp4-prod-herzi-site1/cert-manager/values.yaml   # top layer, always wins
