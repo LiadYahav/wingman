@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from wingman_core.domain.users import User
 from wingman_day1.application.server_scan_audit import recorded
-from wingman_day1.domain.errors import ServerScanWritesOffError
+from wingman_day1.application.server_scan_guards import admin_only
 from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.ports import ServerInventory
 
@@ -33,17 +33,17 @@ class ServerScanJobs:
 
     async def overview(self) -> JobsOverview:
         """The CronJobs server-scan may start, with their recent runs and pods."""
-        self._on()
+        admin_only(self.detail)
         return await self._inventory.jobs()
 
     async def logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
         """A pod's last ``tail`` lines (server-scan caps them)."""
-        self._on()
+        admin_only(self.detail)
         return await self._inventory.job_logs(cronjob, job, pod, tail=tail)
 
     async def run(self, cronjob: str, *, user: User) -> JobRun:
         """Start a Job of ``cronjob`` now, as server-scan's Run job; logged with ``user``."""
-        self._on()
+        admin_only(self.detail)
         event = {"user": user.username, "cronjob": cronjob}
         start = self._inventory.run_job(cronjob)
         return await recorded(
@@ -53,10 +53,6 @@ class ServerScanJobs:
             unconfirmed="server_scan_job_unconfirmed",
             answered=_named,
         )
-
-    def _on(self) -> None:
-        if self.detail is not None:
-            raise ServerScanWritesOffError(self.detail)
 
 
 def _named(job: JobRun) -> dict[str, str]:

@@ -12,10 +12,12 @@ case (``jobs``, ``server_scan_jobs``). server-scan failing is
 ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
-The one write is a server's maintenance on and off (ADR-0048's 3.23.0
-amendment), behind the routes' admin check. server-scan records the token as
-who did it, so each write is logged with the person's name
-(``server_scan_audit.recorded``): Wingman's record.
+Its write here is a server's maintenance on and off (ADR-0048's 3.23.0
+amendment), behind the routes' admin check; the Jobs page's Run job is the
+other (``server_scan_jobs``). server-scan records the token as who did it,
+so each write is logged with the person's name
+(``server_scan_audit.recorded``): Wingman's record. A page that needs the
+auditor's or the admin's token is guarded by ``server_scan_guards``.
 """
 
 from __future__ import annotations
@@ -24,8 +26,8 @@ from typing import Final
 
 from wingman_core.domain.users import User
 from wingman_day1.application.server_scan_audit import recorded
+from wingman_day1.application.server_scan_guards import admin_only, audited
 from wingman_day1.application.server_scan_jobs import ServerScanJobs
-from wingman_day1.domain.errors import ServerScanAuditOffError, ServerScanWritesOffError
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
@@ -98,17 +100,17 @@ class ServerScanService:
 
     async def history(self, server_id: str, *, cursor: str | None, page_size: int) -> EventPage:
         """One page of a server's History, with server-scan's auditor token; off without it."""
-        _audited(self.history_detail)
+        audited(self.history_detail)
         return await self._inventory.server_events(server_id, cursor=cursor, page_size=page_size)
 
     async def events(self, query: EventQuery) -> EventPage:
         """The Events page: one page of the fleet's audit trail; off without the auditor token."""
-        _audited(self.events_detail)
+        audited(self.events_detail)
         return await self._inventory.events(query)
 
     async def event_actors(self) -> EventActorList:
         """The Events page's User filter: who wrote the audit trail, busiest first."""
-        _audited(self.events_detail)
+        audited(self.events_detail)
         return await self._inventory.event_actors()
 
     async def skill(self) -> Skill:
@@ -131,7 +133,7 @@ class ServerScanService:
         self, server_id: str, start: MaintenanceStart, *, user: User
     ) -> ServerMaintenance:
         """Put a server into maintenance (or update its reason). Never retried (ADR-0006)."""
-        self._writable()
+        admin_only(self.maintenance_detail)
         event = {
             "user": user.username,
             "server_id": server_id,
@@ -149,22 +151,12 @@ class ServerScanService:
 
     async def end_maintenance(self, server_id: str, *, user: User) -> ServerMaintenance:
         """End a server's maintenance. Never retried (ADR-0006)."""
-        self._writable()
+        admin_only(self.maintenance_detail)
         event = {"user": user.username, "server_id": server_id}
         write = self._inventory.end_maintenance(server_id)
         return await recorded(
             write, event, done="server_maintenance_ended", unconfirmed=UNCONFIRMED, answered=_named
         )
-
-    def _writable(self) -> None:
-        if self.maintenance_detail is not None:
-            raise ServerScanWritesOffError(self.maintenance_detail)
-
-
-def _audited(detail: str | None) -> None:
-    """The audit trail's guard: ``detail`` says why it cannot be read here (``None``: it can)."""
-    if detail is not None:
-        raise ServerScanAuditOffError(detail)
 
 
 def _named(change: ServerMaintenance) -> dict[str, str]:
