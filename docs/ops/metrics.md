@@ -45,6 +45,33 @@ Operations of the other dependencies (day1):
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
+## The dashboard
+
+`deploy/helm/wingman/dashboards/wingman.json` (uid `wingman`), shipped as a
+ConfigMap for Grafana's sidecar with `monitoring.grafanaDashboard.enabled`,
+or imported by hand. It reads only this catalogue and `up`, so it works on
+OpenShift user-workload monitoring through Thanos Querier's tenancy port
+(one namespace). Variables: `datasource`; `job`, Wingman's services (from
+`wingman_build_info`); `dependency`, the external systems the External
+systems row shows (default All). Every panel's description says what it
+means and what to do when it is bad; a metric with no series yet reads `0`,
+`None` or No data, never an error. `tests/repo/test_observability_contract.py`
+checks every name, label and label value it reads against the code.
+
+| Row | What it shows |
+|---|---|
+| Overview | Targets up; the running builds (component, version, short commit); GitLab token rejected (10m) and ambiguous writes (30m), the alerts' counts. Over the dashboard's range: MRs opened, MRs merged, approvals (GitLab `ok` calls of `create_merge_request`, `merge_merge_request`, `approve_merge_request`), workflow runs started (`workflows` `start_*`), server-scan writes (`enable_maintenance`, `disable_maintenance`, `run_job`); systems failing (each `dependency` with `unavailable` or `error` calls in the last 10m, or None) |
+| Activity | Per hour: MRs opened, approved, merged and closed; workflow starts by operation; flavor rollout runs by `trigger`; rollout MRs by `outcome`; MCE placement decisions by `decision` |
+| API | Requests per second and p95 by route, the 5xx ratio (over 10m, as `WingmanHighServerErrorRate`), responses by status class; tables of the 10 slowest routes by p95 over the range (status streams left out) and of the routes that answered 5xx, with their share |
+| External systems | Calls per second, outcomes, p95 and the unavailable + error ratio by `dependency`; a table of each system's calls, ok share, failure share and p95 over the last 15m |
+| GitLab | Calls per second, outcomes and p95 by operation, the unavailable ratio (over 10m, as `WingmanGitLabUnavailable`); write safety: `conflict`, `not_mergeable`, `ambiguous` and `denied` by operation per 15 minutes |
+
+Counts over a range come from `increase()`: a series created at its first
+call (every dependency's but GitLab's `ok`, `denied`, `unavailable` and
+`ambiguous`, which exist from start-up) misses that first call after a
+restart, so the workflow and server-scan counts can read one low per pod
+start. Time-series legends list only the series with something to show.
+
 ## Reading the GitLab outcomes
 
 - `denied` means GitLab refused **Wingman's own token**: an expired or revoked

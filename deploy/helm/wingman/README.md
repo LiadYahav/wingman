@@ -142,7 +142,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `image.{day1,day2,web,nginx}.pullPolicy` | | `IfNotPresent` | |
 | `replicaCount.{day1,day2,web,nginx}` | | `1` | |
 | `imagePullSecret` | | `""` | An existing registry Secret |
-| `monitoring.{serviceMonitor,prometheusRule,grafanaDashboard}.enabled` | | `false` | `docs/ops/metrics.md`, `docs/ops/runbook.md` |
+| `monitoring.{serviceMonitor,prometheusRule,grafanaDashboard}.enabled` | | `false` | [Monitoring](#monitoring), `docs/ops/metrics.md`, `docs/ops/runbook.md` |
 
 `values.yaml` has the rest (resources, the service account) with comments. Every key is in
 `values.schema.json`, which refuses any other ([Values schema](#values-schema)).
@@ -528,6 +528,24 @@ quickLinks:
 ```
 
 A running Wingman adds all of this with `docs/upgrade/3.8-to-3.9.md`.
+
+### Monitoring
+
+`monitoring.serviceMonitor`, `monitoring.prometheusRule` and
+`monitoring.grafanaDashboard` (all off by default) add a ServiceMonitor for
+both services' `/metrics`, the alert rules (`files/alerts.rules.yaml`, with
+`docs/ops/runbook.md`) and the Grafana dashboard (`dashboards/wingman.json`)
+as a ConfigMap for Grafana's sidecar. The dashboard has five rows: Overview
+(targets, builds, the alerts' counts, and over the dashboard's range the MRs
+opened, merged and approved, workflow runs started, server-scan writes and
+the external systems failing now), Activity (MRs, workflow starts, flavor
+rollouts and MCE placement over time), API (load, errors, latency, the
+slowest routes and the routes answering 5xx), External systems (calls,
+outcomes, latency and failures per system, with a `dependency` variable)
+and GitLab (calls, outcomes, latency, and write safety). It reads only
+Wingman's metrics and `up`, so it works through Thanos Querier's tenancy
+port on user-workload monitoring. `docs/ops/metrics.md` describes each
+panel's metrics.
 
 ## Loading Pre-built Images (Air-gapped)
 

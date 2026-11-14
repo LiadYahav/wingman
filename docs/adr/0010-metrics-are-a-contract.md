@@ -57,6 +57,10 @@ outcomes exist at zero; `other` fallbacks; a scrape through ASGI.
 alert or a dashboard query is exported, every alert has a runbook section and
 every section an alert, dashboard panels use the datasource variable and the
 `job` filter, and a panel quoting an alert's threshold quotes the real one.
+Since 3.36.0 it also checks every label value an alert or a panel matches
+(`dependency`, `operation` per dependency, `outcome`, `trigger`, `decision`,
+`status_class`) against the code's enums, that every panel has a description,
+and that a fixed window (`[10m]`) is named in its panel's text.
 Verified on 2026-11-07 by breaking each: a misspelled metric in a rule and a
 wrong threshold in a panel each fail the suite. `promtool test rules
 chart/tests/alerts.test.yaml` fires and clears each alert.
