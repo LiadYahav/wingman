@@ -559,3 +559,61 @@ cursors and actors, the guard), `apps/day1-service/tests/api/test_server_scan_ev
 `apps/web/lib/server-scan/event-filters.test.ts` and `datetime.test.ts`
 (server-scan's cases), `sidebar.test.ts` and
 `apps/web/e2e/tests/server-scan-events.spec.ts`.
+
+**2026-11-14, 3.32.0: the Jobs page, and the area's second write.**
+server-scan's Jobs page at `/server-scan/jobs`, every feature and button
+(decision 14), in Wingman's design, in the sidebar's Activity section
+after Events. The contract is §15 of
+`docs/notes/2026-11-13-server-scan-area-api.md`.
+
+- **Three calls through the one client** (`ServerInventory.jobs`,
+  `job_logs`, `run_job`): server-scan's `GET /api/v1/jobs` (the triggerable
+  CronJobs, their recent Jobs and pods), a pod's log, and `POST
+  /api/v1/jobs/{cronjob}/run`, behind `AdminUser`, operations `list_jobs`,
+  `get_job_logs` and `run_job`. Typed by day1 in server-scan's shape
+  (`domain/server_scan_jobs.py`); `enabled: false` passes through, so the
+  page says the deployment has the feature off.
+- **The admin token on the reads too.** server-scan serves the whole
+  `/api/v1/jobs` router to its admin role only (logs and Job names are
+  operational detail, its ADR-0055), so day1 reads it with the same optional
+  admin key the maintenance toggle uses, decided by the same helper: the
+  admin token when set, none when Wingman holds no token (auth off, the
+  sandbox), and off with a viewer token alone: every Jobs route answers
+  `501` with the line naming the key, and the page shows "Jobs is not set
+  up" with it. No new Secret, value or key.
+- **Not cached by day1**: the page polls every 5 seconds while a Job runs,
+  as server-scan's does, and a cached list would hide the run it started.
+- **Run now, as server-scan's UI does it**: its confirmation's words and the
+  CronJob's warning (the chart's annotation), a real Job from the CronJob's
+  template. server-scan refuses a start while a run is unfinished (`409`,
+  `JOB_ALREADY_RUNNING`, its words) and has no idempotency key, so a second
+  send after the first finished is a second run: never retried (ADR-0006),
+  the submit disabled while sending, `504 AMBIGUOUS_WRITE` when unanswered,
+  after which the page says to look at the runs before starting it again.
+- **The person is recorded by Wingman**: the Job and server-scan's audit
+  trail name Wingman's admin token; day1 logs each start with the person
+  (`server_scan_job_started`, `_unconfirmed`), through the same recording
+  maintenance uses.
+- **Reuse** (decision 18): server-scan's types, the page's pure decisions
+  and words, and its tests' cases as Vitest cases; its fake runner, ported,
+  with three CronJobs.
+
+Rejected: **the viewer token for the reads** (server-scan answers it `403`:
+its router is admin only); **the Jobs routes on without the admin token
+behind a viewer token** (every read would be a `502` naming a token that is
+not wrong, only missing); **caching the list** (the run just started would
+show a poll later, and server-scan reads Kubernetes per call anyway);
+**retrying an unanswered start** (a second collector or prune run, which
+server-scan only refuses while the first is unfinished); **a person's name
+on the Job** (server-scan's run takes no body and writes the caller's actor;
+Wingman's log is the record); **the shared table** (a card per CronJob with
+a few runs as lines, as server-scan's: nothing to sort, filter or page).
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_jobs.py`
+(the reads and the start typed, the admin token, auth off, refused, not
+found, conflict, unanswered, sent once, the metrics, the fake),
+`apps/day1-service/tests/api/test_server_scan_jobs_api.py` (admins only, the
+tokens' table, 501, 502, 409, 404, 504, logged with the person),
+`apps/web/lib/server-scan/jobs.test.ts` (server-scan's cases),
+`apps/web/lib/server-scan/sidebar.test.ts` and
+`apps/web/e2e/tests/server-scan-jobs.spec.ts`.
