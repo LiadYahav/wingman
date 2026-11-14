@@ -4,6 +4,43 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-14 — 3.18.5 to 3.24.0: Install servers, upgrades in the list, option C started.**
+- **Web code** (3.18.5): the web calls day1 through `lib/api/day1/`
+  (`day1Api`, `day1Keys`; 56 cases pin the keys), plus a readability pass on
+  the code written last year (the user's ask; memory: refactors include
+  readability, in separate commits).
+- **Inventory Management** (3.19.0, ADR-0057 amendment): an **Install
+  servers** button in the page header; install works without live MCE
+  status (pools from the cluster files' `infraEnvName`).
+- **Cluster upgrade** (ADR-0055 amendments): the fleet's runs live **in the
+  clusters list** (3.20.0): "Upgrade available → <version>" from the MCE's
+  offered versions (ADR-0034, a hint only; the workflow plans) and
+  "Upgrading · <phase>", an Upgrade button on the row for admins, a filter.
+  Starting stays admin-only until RBAC (workstream 8) gives it to owners.
+- **Sig values everywhere**: day2's MR titles (3.19.1; old titles still
+  parse) and its error and lint messages (3.20.1, with a guard test).
+- **Option C** (decision 22), the user's go: Segments Manager at full parity
+  (3.21.0: an Excel-style filter on every column in the shared table,
+  Excel export with `write-excel-file`, a connection dot); **Server Scan**
+  in the top bar, page by page (ADR-0048): Sites (3.22.0), Servers with
+  maintenance on/off and server-scan's admin token as an optional Secret key
+  (3.23.0).
+- `fix(core)` (3.23.0): Wingman's INFO records (who started an uninstall, an
+  install, a maintenance) now reach the pod log.
+- The sidebar collapses to an icon rail, Ctrl/⌘+B (3.24.0).
+- The sandbox runs 3.24.0 with `DAY1_ADD_SERVERS` and `DAY1_UPGRADES` on
+  (the user's OK: "this is a lab cluster"). The upgrade workflow writes to
+  its own day1 repo, not Wingman's GitLab copy.
+
+**Next:**
+- Server Scan's next pages, one PR each: Server detail (in progress; the
+  auditor token as a third optional key), Confs, Rules & Policies, Events,
+  Jobs, Architecture, Claude.
+- Code organisation, later (the user): helpers out of `.tsx`, a typed day2
+  call layer, the design splits; 33 files left in the size baseline.
+- The team's questions: the upgrade workflow on the sandbox and its direct
+  pushes, herzi, provision-cluster's 24 characters, RBAC.
+
 **2026-11-13 — 3.14.1 to 3.18.x: code organisation, Segments, cluster upgrade, Inventory Management.**
 - **Code organisation** (ADR-0056, convention 16): file-size and complexity
   guards whose baselines only shrink (3.14.2). Mechanical splits so far, no

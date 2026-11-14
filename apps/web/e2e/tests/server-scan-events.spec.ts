@@ -19,10 +19,15 @@ const events = (page: Page) => page.getByTestId("ss-event");
 const pager = (page: Page) => page.getByTestId("ss-events-pager");
 const dropdown = (page: Page, name: string) => page.getByRole("combobox", { name, exact: true });
 
+/** Waits for the list to unmount: a Combobox reopened during its exit animation keeps the search it closed with (base-ui 1.4.0). */
+async function closed(page: Page) {
+  await expect(page.getByRole("option")).toHaveCount(0);
+}
+
 async function choose(page: Page, name: string, option: string) {
   await dropdown(page, name).click();
   await page.getByRole("option", { name: option, exact: true }).click();
-  await expect(page.getByRole("option")).toHaveCount(0);
+  await closed(page);
 }
 
 test.describe("The Events page", () => {
@@ -131,6 +136,7 @@ test.describe("The Events page", () => {
     await expect(page.getByText("No matching user")).toBeVisible();
     await page.getByRole("combobox", { name: "Name or id" }).fill("alice");
     await page.getByRole("option", { name: /Alice Cohen/ }).click();
+    await closed(page);
     await expect(page).toHaveURL(/actor_id=alice/);
     await expect(user).toContainText("Alice Cohen");
     await expect.poll(() => calls.lists.at(-1)?.actor_id).toBe("alice");
