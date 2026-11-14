@@ -76,7 +76,7 @@ interface FleetProps {
   sites: SiteStats[] | undefined;
 }
 
-/** The fleet: the cluster sidebar, the filters, the table and its pages. */
+/** The fleet: the header with the search, the cluster sidebar, the filters, the table and its pages. */
 function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
   const search = useSearchDraft(view.search, (q) => setView(withChange(view, { search: q })), SEARCH_PAUSE_MS);
   const searchError = useMemo(() => parseSearch(search.draft).error, [search.draft]);
@@ -118,63 +118,71 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
     );
 
   return (
-    <div className="flex items-start gap-4">
-      <ClusterSidebar
-        facets={model.clusters}
-        mce={view.multi.mce}
-        cluster={view.multi.cluster}
-        onToggle={(key, value) => setView(toggleValue(view, key, value))}
-      />
-      <section aria-label="Servers" className="min-w-0 flex-1 space-y-3">
-        {error !== null && <ProblemList error={error} title="The last re-read failed; these are the servers read before it" />}
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <ServerSearch value={search.draft} error={searchError} onChange={search.setDraft} onCommit={search.flush} />
-          <ServerExports shown={model.matched.length} {...exports} />
-        </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <ServerDropdowns view={view} setView={setView} facets={model.facets} sites={siteList} />
-        </div>
-        <ServerToggles view={view} setView={setView} total={model.matched.length} />
-        <ActiveFilters
-          chips={chips}
-          view={view}
-          setView={(next) => {
-            if (next.search !== view.search) search.setDraft(next.search);
-            setView(next);
-          }}
-          onClear={clear}
+    <>
+      <Header data={data} shown={model.matched.length}>
+        <ServerSearch value={search.draft} error={searchError} onChange={search.setDraft} onCommit={search.flush} />
+        <ServerExports shown={model.matched.length} {...exports} />
+      </Header>
+      <div className="flex items-start gap-4">
+        <ClusterSidebar
+          facets={model.clusters}
+          mce={view.multi.mce}
+          cluster={view.multi.cluster}
+          onToggle={(key, value) => setView(toggleValue(view, key, value))}
         />
-        <DataTable
-          table={table}
-          label="Servers"
-          sort={{ id: view.sort, desc: view.sortDesc }}
-          onSort={(id) => isSortableField(id) && setView(nextSort(view, id))}
-          filters={{ rows: model.base, value: view.columns, onChange: (columns) => setView(withChange(view, { columns })) }}
-          rowProps={(row) => ({ "data-testid": "ss-server-row", "data-server": row.name, className: rowAccent(row) })}
-          className="max-h-[70vh]"
-          empty={empty}
-        />
-        {model.matched.length > 0 && <Pager page={model.page.page} pageCount={model.page.pageCount} onPage={(page) => setView({ ...view, page })} />}
-      </section>
-    </div>
+        <section aria-label="Servers" className="min-w-0 flex-1 space-y-3">
+          {error !== null && <ProblemList error={error} title="The last re-read failed; these are the servers read before it" />}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <ServerDropdowns view={view} setView={setView} facets={model.facets} sites={siteList} />
+          </div>
+          <ServerToggles view={view} setView={setView} total={model.matched.length} />
+          <ActiveFilters
+            chips={chips}
+            view={view}
+            setView={(next) => {
+              if (next.search !== view.search) search.setDraft(next.search);
+              setView(next);
+            }}
+            onClear={clear}
+          />
+          <DataTable
+            table={table}
+            label="Servers"
+            sort={{ id: view.sort, desc: view.sortDesc }}
+            onSort={(id) => isSortableField(id) && setView(nextSort(view, id))}
+            filters={{ rows: model.base, value: view.columns, onChange: (columns) => setView(withChange(view, { columns })) }}
+            rowProps={(row) => ({ "data-testid": "ss-server-row", "data-server": row.name, className: rowAccent(row) })}
+            className="max-h-[70vh]"
+            empty={empty}
+          />
+          {model.matched.length > 0 && <Pager page={model.page.page} pageCount={model.page.pageCount} onPage={(page) => setView({ ...view, page })} />}
+        </section>
+      </div>
+    </>
   );
 }
 
-/** "Servers", how many the filters keep, and when server-scan's inventory last changed. */
-function Header({ data, shown }: { data: ServerRowsAnswer | undefined; shown: number | null }) {
+/**
+ * One row: "Servers", how many the filters keep and when server-scan's
+ * inventory last changed; the search and the exports at its right, once loaded.
+ */
+function Header({ data, shown, children }: { data: ServerRowsAnswer | undefined; shown: number | null; children?: React.ReactNode }) {
   return (
-    <header>
-      <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
-        Servers
-      </h1>
-      <p className="mt-0.5 text-sm text-muted-foreground" aria-live="polite">
-        <span data-testid="ss-servers-summary">{shown === null ? "Browse and filter discovered servers." : plural(shown, "server")}</span>
-        {data?.generated_at && (
-          <span className="ml-2 text-xs" data-testid="ss-servers-updated">
-            Updated {formatDateTime(data.generated_at)}
-          </span>
-        )}
-      </p>
+    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+      <div className="flex flex-wrap items-baseline gap-x-3">
+        <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
+          Servers
+        </h1>
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          <span data-testid="ss-servers-summary">{shown === null ? "Browse and filter discovered servers." : plural(shown, "server")}</span>
+          {data?.generated_at && (
+            <span className="ml-2 text-xs" data-testid="ss-servers-updated">
+              Updated {formatDateTime(data.generated_at)}
+            </span>
+          )}
+        </p>
+      </div>
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </header>
   );
 }
@@ -193,8 +201,8 @@ export function ServersPage() {
   const data = blocked ? undefined : servers.data;
   const model = useMemo(() => (data ? serversModel(data.items, view) : null), [data, view]);
   return (
-    <div className="space-y-5 p-6 lg:p-8">
-      <Header data={data} shown={model ? model.matched.length : null} />
+    <div className="space-y-4 px-6 pb-6 pt-4 lg:px-8 lg:pt-5">
+      {(!data || !model) && <Header data={data} shown={null} />}
       {blocked ? (
         <Blocked error={servers.error} />
       ) : servers.isPending ? (
