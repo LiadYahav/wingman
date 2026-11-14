@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 /** Copy `value` to the clipboard, with a toast either way; `label` names what is copied ("VLAN ID"). */
-async function copyValue(value: string, label: string) {
+export async function copyValue(value: string, label: string) {
   try {
     await navigator.clipboard.writeText(value);
     toast.success(`${label} copied to clipboard`);

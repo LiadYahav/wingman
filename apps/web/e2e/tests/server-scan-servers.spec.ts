@@ -38,7 +38,7 @@ test.describe("The Servers page", () => {
     await setUpServers(page);
     await go(page, "/server-scan");
     const nav = page.getByRole("navigation", { name: "Server Scan" });
-    await expect(nav.getByRole("link")).toHaveText(["Sites", "Servers"]);
+    await expect(nav.getByRole("link")).toHaveText(["Sites", "Servers", "Claude"]);
     await nav.getByRole("link", { name: "Servers" }).click();
     await expect(page).toHaveURL(/\/server-scan\/servers$/);
     await expect(nav.getByTestId("area-nav-servers")).toHaveAttribute("aria-current", "page");

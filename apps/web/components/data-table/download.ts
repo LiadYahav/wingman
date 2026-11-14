@@ -1,7 +1,7 @@
 import { xlsxSheet, type ExportTable } from "@/lib/table/export";
 
 /** Hand the browser a file to save under `filename`. */
-function saveBlob(filename: string, blob: Blob): void {
+export function saveBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

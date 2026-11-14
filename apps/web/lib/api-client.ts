@@ -176,6 +176,10 @@ async function requestText(path: string, options: RequestOptions = {}): Promise<
   return (await send(path, options)).text();
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  return (await send(path, {})).blob();
+}
+
 type CallOptions = Pick<RequestOptions, "redirectOnUnauthorized">;
 
 function withBody(method: string, body: unknown, options?: CallOptions): RequestOptions {
@@ -185,6 +189,8 @@ function withBody(method: string, body: unknown, options?: CallOptions): Request
 export const api = {
   get: <T>(path: string, options?: CallOptions) => request<T>(path, options),
   getText: (path: string) => requestText(path),
+  /** A file to save (a zip), read with the session's token as every call is. */
+  getBlob: (path: string) => requestBlob(path),
   post: <T>(path: string, body?: unknown, options?: CallOptions) =>
     request<T>(path, withBody("POST", body, options)),
   put: <T>(path: string, body?: unknown) => request<T>(path, withBody("PUT", body)),

@@ -64,7 +64,7 @@ const serverScanApi = {
 };
 
 /** A problem is day1's answer (403 for a viewer, 501 when off, 502 when server-scan fails): show it. Else once more, as server-scan's UI. */
-const retryUnlessProblem = (count: number, error: unknown) => !isApiError(error) && count < 1;
+export const retryUnlessProblem = (count: number, error: unknown) => !isApiError(error) && count < 1;
 
 /** server-scan's sites and fleet; also how the top bar learns whether the area is on. */
 export function useServerScanSites({ enabled = true, staleTime = SITES_STALE_MS } = {}) {
