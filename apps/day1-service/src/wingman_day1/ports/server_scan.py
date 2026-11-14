@@ -7,7 +7,8 @@ amendment); its server page reads a server whole, a VM's host and the
 server's History (3.25.0); its Claude page reads server-scan's skill and the
 skill's zip (3.27.0); its Architecture page reads the diagrams server-scan's
 UI serves (3.28.0); its Confs page the hardware catalog (3.29.0); its Events
-page the fleet's audit trail and who wrote it (3.31.0).
+page the fleet's audit trail and who wrote it (3.31.0); its Jobs page the
+CronJobs server-scan may start and a pod's log (3.32.0).
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from typing import Protocol
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
+from wingman_day1.domain.server_scan_jobs import JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -108,6 +110,14 @@ class ServerInventory(Protocol):
 
     async def confs(self) -> ConfList:
         """server-scan's hardware catalog, every conf it can read (``GET /api/v1/confs``)."""
+        ...
+
+    async def jobs(self) -> JobsOverview:
+        """The CronJobs server-scan may start, their recent Jobs and pods (its admin token)."""
+        ...
+
+    async def job_logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
+        """A pod's last ``tail`` lines; not of that CronJob: ``ServerScanJobNotFoundError``."""
         ...
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:

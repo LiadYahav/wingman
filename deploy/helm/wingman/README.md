@@ -112,7 +112,7 @@ the names are explained in the root README's [Environment Variables](../README.m
 | `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token (every read, the Server Scan area's Sites included). Empty: no token, for a server-scan with auth off |
 | `serverScan.tokenSecret.key` | `SERVER_SCAN_TOKEN` (day1 only) | `token` | The token's key in that Secret |
-| `serverScan.tokenSecret.adminKey` | `SERVER_SCAN_ADMIN_TOKEN` (day1 only) | `admin-token` | An optional key of the same Secret with server-scan's **admin** token, sent only when an admin turns a server's maintenance on or off on the Server Scan area's Servers page or a server's page. A Secret without the key still starts day1: the toggle is greyed out with why. Empty: never read. With no Secret at all (auth off) the toggle works without it |
+| `serverScan.tokenSecret.adminKey` | `SERVER_SCAN_ADMIN_TOKEN` (day1 only) | `admin-token` | An optional key of the same Secret with server-scan's **admin** token, sent only when an admin turns a server's maintenance on or off (the Server Scan area's Servers page or a server's page) and on the area's Jobs page, which server-scan keeps for its admins, reads included. A Secret without the key still starts day1: the toggle is greyed out with why, and Jobs says it is not set up. Empty: never read. With no Secret at all (auth off) both work without it |
 | `serverScan.tokenSecret.auditorKey` | `SERVER_SCAN_AUDITOR_TOKEN` (day1 only) | `auditor-token` | An optional key of the same Secret with server-scan's **auditor** token, sent only on the audit trail's reads: a server's History and the Events page in the Server Scan area. A Secret without the key still starts day1: History and Events say they are not set up. Empty: never read. With no Secret at all (auth off) both work without it |
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
@@ -342,6 +342,12 @@ oc -n <ns> rollout restart deploy/wingman-day1
 
 Without the key the toggle is greyed out and says so; against a server-scan with auth off
 (no Secret at all) it works without one. The same toggle sits on a server's own page.
+
+The **Jobs** page (`/server-scan/jobs`) lists server-scan's collector and prune CronJobs,
+their runs and logs. server-scan serves them to its admins only, so day1 reads them with the
+same admin key; without it beside a viewer token the page says Jobs is not set up and names
+the key. Nothing else to set: server-scan's own chart decides which CronJobs it may start
+(`jobTrigger.enabled`).
 
 Its third page, a **server's page** (`/server-scan/servers/<id>`, opened from a server's
 name on Servers or in Inventory Management), reads the server whole and, for a VM, its

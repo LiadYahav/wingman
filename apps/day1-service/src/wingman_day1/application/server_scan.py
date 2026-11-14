@@ -7,7 +7,8 @@ record, a VM's host, History with the auditor token), the Claude page
 (server-scan's skill and its zip, with server-scan's address written in, for
 people: ``ui_url``), the Architecture page's diagrams from server-scan's
 UI, the Confs page's hardware catalog, and the Events page's audit trail of
-the fleet (the auditor token, as History). server-scan failing is
+the fleet (the auditor token, as History); the Jobs page is its own use
+case (``jobs``, ``server_scan_jobs``). server-scan failing is
 ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
@@ -23,6 +24,7 @@ from typing import Final
 
 from wingman_core.domain.users import User
 from wingman_day1.application.server_scan_audit import recorded
+from wingman_day1.application.server_scan_jobs import ServerScanJobs
 from wingman_day1.domain.errors import ServerScanAuditOffError, ServerScanWritesOffError
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
@@ -50,6 +52,7 @@ class ServerScanService:
         events_detail: str | None = None,
         ui_url: str = "",
         token_line: str = AUDITOR_TOKEN_LINE,
+        jobs: ServerScanJobs | None = None,
     ) -> None:
         """Read server-scan through ``inventory``.
 
@@ -59,6 +62,7 @@ class ServerScanService:
         (``domain.server_scan_events.audit_detail``); ``None``: on. ``ui_url``
         is server-scan's address for people and Claude Code; ``token_line`` the
         line its zip of the skill names (``domain.server_scan_skill.token_line``).
+        ``jobs`` is the Jobs page (none: over ``inventory``, on).
         """
         self._inventory = inventory
         self.maintenance_detail = maintenance_detail
@@ -66,6 +70,7 @@ class ServerScanService:
         self.events_detail = events_detail
         self.ui_url = ui_url.rstrip("/")
         self.token_line = token_line
+        self.jobs = jobs or ServerScanJobs(inventory)
 
     async def sites(self) -> FleetSites:
         """The Sites page: every configured site and the fleet, as server-scan counts them."""

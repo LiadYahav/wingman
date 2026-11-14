@@ -14,7 +14,9 @@ from typing import Final
 
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.application.server_scan import ServerScanService
+from wingman_day1.application.server_scan_jobs import ServerScanJobs
 from wingman_day1.domain.server_scan_events import audit_detail
+from wingman_day1.domain.server_scan_jobs import jobs_detail
 from wingman_day1.domain.server_scan_servers import maintenance_detail
 from wingman_day1.domain.server_scan_skill import token_line
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
@@ -67,20 +69,20 @@ def server_scan_service(
     off (ADR-0048's 3.23.0 amendment). A server's History works the same way
     with server-scan's auditor token (3.25.0), and so does the Events page
     (3.31.0). The Claude page names the token line server-scan writes into
-    Wingman's copy of its skill (3.27.0).
+    Wingman's copy of its skill (3.27.0). The Jobs page follows the toggle's
+    rule, its reads too (3.32.0).
     """
     if inventory is None:
         return None
     viewer = bool(settings.server_scan_token.get_secret_value())
     auditor = bool(settings.server_scan_auditor_token.get_secret_value())
+    admin = bool(settings.server_scan_admin_token.get_secret_value())
     return ServerScanService(
         inventory,
         ui_url=server_scan_ui(settings),
         token_line=token_line(viewer_token=viewer),
-        maintenance_detail=maintenance_detail(
-            viewer_token=viewer,
-            admin_token=bool(settings.server_scan_admin_token.get_secret_value()),
-        ),
+        maintenance_detail=maintenance_detail(viewer_token=viewer, admin_token=admin),
+        jobs=ServerScanJobs(inventory, detail=jobs_detail(viewer_token=viewer, admin_token=admin)),
         history_detail=audit_detail("History", viewer_token=viewer, auditor_token=auditor),
         events_detail=audit_detail("Events", viewer_token=viewer, auditor_token=auditor),
     )

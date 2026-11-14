@@ -579,8 +579,10 @@ after Events. The contract is §15 of
   admin key the maintenance toggle uses, decided by the same helper: the
   admin token when set, none when Wingman holds no token (auth off, the
   sandbox), and off with a viewer token alone: every Jobs route answers
-  `501` with the line naming the key, and the page shows "Jobs is not set
-  up" with it. No new Secret, value or key.
+  `501` with the line naming the key and `details.setting`, as the Events
+  page's auditor token does, and the page shows "Jobs is not set up" with
+  it. One rule for both tokens (`token_detail`). No new Secret, value or
+  key.
 - **Not cached by day1**: the page polls every 5 seconds while a Job runs,
   as server-scan's does, and a cached list would hide the run it started.
 - **Run now, as server-scan's UI does it**: its confirmation's words and the

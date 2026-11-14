@@ -3,7 +3,8 @@
 The core handlers already cover Git errors, self-approval and unmanaged MRs;
 this maps day1's own. ``details.problems`` lists every rule a request broke,
 so the form can show them all at once; ``details.setting`` names the setting
-a ``501`` waits for when it is not ``SERVER_SCAN_URL`` (the auditor token).
+a ``501`` waits for when it is not ``SERVER_SCAN_URL`` (the auditor token, or
+the admin token: maintenance and Jobs).
 """
 
 from __future__ import annotations
@@ -57,6 +58,7 @@ from wingman_day1.domain.errors import (
     ServerNotFoundError,
     ServerScanAuditOffError,
     ServerScanDiagramNotFoundError,
+    ServerScanJobNotFoundError,
     ServerScanNotConfiguredError,
     ServerScanSkillMissingError,
     ServerScanUnavailableError,
@@ -70,6 +72,7 @@ from wingman_day1.domain.errors import (
     WorkflowsUnavailableError,
 )
 from wingman_day1.domain.server_scan_events import AUDITOR_SETTING
+from wingman_day1.domain.server_scan_servers import ADMIN_SETTING
 
 _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (InvalidInputError, ValidationFailed),
@@ -88,6 +91,7 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (ServerNotFoundError, NotFound),
     (ServerScanSkillMissingError, NotFound),
     (ServerScanDiagramNotFoundError, NotFound),
+    (ServerScanJobNotFoundError, NotFound),
     (ServerScanNotConfiguredError, FeatureDisabled),
     (ServerScanWritesOffError, FeatureDisabled),
     (ServerScanAuditOffError, FeatureDisabled),
@@ -116,6 +120,8 @@ def to_app_error(error: Day1Error) -> AppError:
         details["pick"] = error.pick
     if isinstance(error, ServerScanAuditOffError):
         details["setting"] = AUDITOR_SETTING
+    if isinstance(error, ServerScanWritesOffError):
+        details["setting"] = ADMIN_SETTING
     for domain_type, app_type in _MAPPING:
         if isinstance(error, domain_type):
             return app_type(str(error), details=details)

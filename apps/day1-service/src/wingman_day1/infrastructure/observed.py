@@ -35,6 +35,7 @@ from wingman_day1.domain.errors import (
     ServerNotFoundError,
     ServerScanDeniedError,
     ServerScanDiagramNotFoundError,
+    ServerScanJobNotFoundError,
     ServerScanRefusedError,
     ServerScanSkillMissingError,
     ServerScanUnavailableError,
@@ -116,6 +117,10 @@ class ServerScanOperation(StrEnum):
     """``GET <ui>/architecture/<slug>.html``: a diagram from server-scan's UI (no token)."""
     LIST_CONFS = "list_confs"
     """``GET /api/v1/confs``: the Server Scan area's Confs page, the hardware catalog."""
+    LIST_JOBS = "list_jobs"
+    """``GET /api/v1/jobs``: the Jobs page's CronJobs and their runs (the admin token, 3.32.0)."""
+    GET_JOB_LOGS = "get_job_logs"
+    """``GET /api/v1/jobs/{cronjob}/runs/{job}/pods/{pod}/logs``: one pod's log."""
 
 
 class SegmentsManagerOperation(StrEnum):
@@ -156,6 +161,7 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (ServerNotFoundError, Outcome.NOT_FOUND),
     (ServerScanSkillMissingError, Outcome.NOT_FOUND),
     (ServerScanDiagramNotFoundError, Outcome.NOT_FOUND),
+    (ServerScanJobNotFoundError, Outcome.NOT_FOUND),
     (ServerScanDeniedError, Outcome.DENIED),
     (ServerScanUnavailableError, Outcome.UNAVAILABLE),
     (ServerScanRefusedError, Outcome.REJECTED),

@@ -16,9 +16,11 @@ from typing import Final
 from wingman_day1.domain.server_scan_tokens import token_detail
 from wingman_day1.domain.servers import ServerRow
 
+ADMIN_SETTING: Final = "SERVER_SCAN_ADMIN_TOKEN"
+"""Where day1 finds server-scan's admin token."""
 MAINTENANCE_OFF: Final = (
     "Maintenance needs server-scan's admin token: add the key admin-token to the server-scan "
-    "Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN)."
+    f"Secret and restart day1 ({ADMIN_SETTING})."
 )
 REASON_MAX_LENGTH: Final = 500
 """The longest reason day1 sends; server-scan sets no limit of its own."""

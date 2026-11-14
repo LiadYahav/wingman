@@ -142,7 +142,14 @@ class ServerScanDiagramNotFoundError(ServerScanError):
 
 
 class ServerScanWritesOffError(ServerScanError):
-    """Maintenance writes are off here: a viewer token without server-scan's admin token."""
+    """What server-scan keeps for its admins is off here: a viewer token without its admin token.
+
+    The maintenance writes, and the Jobs page, its reads too (ADR-0048, 3.32.0).
+    """
+
+
+class ServerScanJobNotFoundError(ServerScanError):
+    """server-scan has no such triggerable CronJob, Job or pod, or has its Jobs feature off."""
 
 
 class ServerScanAuditOffError(ServerScanError):

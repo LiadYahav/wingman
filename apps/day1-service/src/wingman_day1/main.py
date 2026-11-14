@@ -59,12 +59,11 @@ from wingman_day1.api.v1 import machine_configs as machine_configs_api
 from wingman_day1.api.v1 import placement as placement_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
 from wingman_day1.api.v1 import segments as segments_api
-from wingman_day1.api.v1 import server_scan as server_scan_api
-from wingman_day1.api.v1 import server_scan_skill as server_scan_skill_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import upgrades as upgrades_api
 from wingman_day1.api.v1 import webhooks as webhooks_api
+from wingman_day1.api.v1.server_scan_area import ROUTERS as SERVER_SCAN_ROUTERS
 from wingman_day1.application.approvals import ApprovalService, RepoKey
 from wingman_day1.application.audit import AuditService
 from wingman_day1.application.auth import AuthService
@@ -139,8 +138,7 @@ ROUTERS: Final = (
     quick_links_api.router,
     inventory_api.router,
     segments_api.router,
-    server_scan_api.router,
-    server_scan_skill_api.router,
+    *SERVER_SCAN_ROUTERS,
     upgrades_api.router,
     approvals_api.router,
     audit_api.router,

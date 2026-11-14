@@ -1890,10 +1890,14 @@ for both:
 |---|---|---|
 | any | set | read and run with the admin token |
 | none | none | read and run with no token: server-scan runs with auth off (the sandbox), where every caller is an admin |
-| set | none | off: every Jobs route answers `501 FEATURE_DISABLED` with the line below, and the page shows it as "Jobs is not set up" |
+| set | none | off: every Jobs route answers `501 FEATURE_DISABLED` with the line below and `details.setting` `"SERVER_SCAN_ADMIN_TOKEN"`, and the page shows it as "Jobs is not set up" |
 
 The line: "Jobs needs server-scan's admin token: add the key admin-token
 to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN)."
+`details.setting` tells it from server-scan not being configured (whose
+`501` has none), as the Events page's auditor token does (§14.5); the
+maintenance writes' `501` carries the same `setting` since 3.32.0. The rule
+is one function for both tokens (`domain/server_scan_tokens.py`).
 
 The admin token is sent on the Jobs routes and the maintenance writes
 only, never on another read.
@@ -1946,7 +1950,7 @@ only, never on another read.
 | 404 | `NOT_FOUND` | Run or logs: server-scan has no such triggerable CronJob, Job or pod, or has the feature off (its `404`, its words) |
 | 409 | `JOB_ALREADY_RUNNING` | Run: the CronJob has an unfinished Job (server-scan's `409`, its words) |
 | 422 | `VALIDATION_ERROR` | A name that is not a Kubernetes name, or a `tail` out of bounds |
-| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty; or a viewer token without the admin token (§15.5) |
+| 501 | `FEATURE_DISABLED` | `SERVER_SCAN_URL` is empty; or a viewer token without the admin token (§15.5, `details.setting`) |
 | 502 | `DEPENDENCY_UNAVAILABLE` | server-scan unreachable, answering an error, refusing the admin token (check `SERVER_SCAN_ADMIN_TOKEN`), or sending an answer day1 cannot read; on run, also nothing sent |
 | 504 | `AMBIGUOUS_WRITE` | Run sent and not answered (§15.6) |
 

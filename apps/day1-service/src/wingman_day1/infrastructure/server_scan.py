@@ -4,8 +4,8 @@ Read only (ADR-0038, ADR-0048) but for a server's maintenance, the Server Scan
 area's one write (``server_scan_writes``, ADR-0048's 3.23.0 amendment). Day1
 presents a viewer token (``Authorization: Bearer``) on every read, the
 auditor token on the audit trail only (a server's History, the Events page)
-and the admin token on the writes only, or none for an instance that runs
-with auth off.
+and the admin token on the writes and the Jobs page only, or none for an
+instance that runs with auth off.
 The fleet is one read, ``GET /api/v1/servers/rows`` (about 250 KB gzipped for
 3,000 servers); its weak ``ETag`` goes back as ``If-None-Match``, so an
 unchanged fleet costs a 304 and no download. One server is
@@ -16,7 +16,9 @@ a VM's host and its History (``server_scan_record``, ADR-0048's 3.25.0
 amendment); the Claude page its skill and the skill's zip (``server_scan_skill``,
 3.27.0). The Architecture page's diagrams come from server-scan's UI, not
 its API, with no token (``server_scan_architecture``, 3.28.0). The Confs page
-reads the hardware catalog (``server_scan_confs``, 3.29.0).
+reads the hardware catalog (``server_scan_confs``, 3.29.0). The Jobs page
+reads the CronJobs and a pod's log with the admin token, since server-scan
+keeps them for its admins (``server_scan_jobs``, 3.32.0).
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
@@ -41,6 +43,7 @@ from wingman_day1.domain.errors import ServerNotFoundError, ServerScanUnavailabl
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
+from wingman_day1.domain.server_scan_jobs import JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -52,6 +55,7 @@ from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, 
 from wingman_day1.infrastructure.server_scan_architecture import read_diagram, ui_client
 from wingman_day1.infrastructure.server_scan_confs import read_confs
 from wingman_day1.infrastructure.server_scan_events import read_event_actors, read_fleet_events
+from wingman_day1.infrastructure.server_scan_jobs import read_job_logs, read_jobs
 from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_detail
 from wingman_day1.infrastructure.server_scan_record import (
     check,
@@ -92,7 +96,7 @@ class HttpServerInventory:
 
         ``ui_url`` is server-scan's UI, where its diagrams are (empty: ``base_url``).
 
-        ``admin_token`` replaces it on the maintenance writes only, and
+        ``admin_token`` replaces it on the maintenance writes and Jobs only, and
         ``auditor_token`` on the audit trail only (empty: those carry
         ``token``'s header, or none). ``verify`` is ``True``/``False`` or a CA
         bundle path (read now, so a missing bundle stops start-up);
@@ -101,7 +105,7 @@ class HttpServerInventory:
         headers = {"Accept": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        self._write_headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
+        self._admin_headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
         self._audit_headers = {"Authorization": f"Bearer {auditor_token}"} if auditor_token else {}
         self._clock = clock
         self._observer = Observer(Dependency.SERVER_SCAN, metrics, timer=timer)
@@ -204,16 +208,27 @@ class HttpServerInventory:
         read = read_policies(self._client)
         return await self._observer.call(ServerScanOperation.LIST_HEALTH_POLICIES, read)
 
+    async def jobs(self) -> JobsOverview:
+        """See ServerInventory.jobs."""
+        read = read_jobs(self._client, headers=self._admin_headers)
+        return await self._observer.call(ServerScanOperation.LIST_JOBS, read)
+
+    async def job_logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
+        """See ServerInventory.job_logs."""
+        headers = self._admin_headers
+        read = read_job_logs(self._client, cronjob, job, pod, tail=tail, headers=headers)
+        return await self._observer.call(ServerScanOperation.GET_JOB_LOGS, read)
+
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance."""
         write = send_maintenance(
-            self._client, "PUT", server_id, headers=self._write_headers, body=start_body(start)
+            self._client, "PUT", server_id, headers=self._admin_headers, body=start_body(start)
         )
         return await self._observer.call(ServerScanOperation.ENABLE_MAINTENANCE, write)
 
     async def end_maintenance(self, server_id: str) -> ServerMaintenance:
         """See ServerInventory.end_maintenance."""
-        write = send_maintenance(self._client, "DELETE", server_id, headers=self._write_headers)
+        write = send_maintenance(self._client, "DELETE", server_id, headers=self._admin_headers)
         return await self._observer.call(ServerScanOperation.DISABLE_MAINTENANCE, write)
 
     async def _read_fleet(self) -> FleetRows:

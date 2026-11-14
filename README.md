@@ -277,6 +277,8 @@ server-scan's pages, read through day1 in server-scan's own shapes; `501 FEATURE
 | `GET` | `/api/day1/server-scan/skill/download` | server-scan's zip of the skill (`<name>.zip`), `server_scan_url` written into its `SKILL.md`; never cached |
 | `GET` | `/api/day1/server-scan/architecture/{slug}` | One of server-scan's architecture diagrams, `{slug, html}`: the page its UI serves at `<SERVER_SCAN_UI_URL>/architecture/<slug>.html`, read with no token, taken only if archify made it, cached 5 minutes per replica. 404 for one its UI does not serve (or an address that is not its UI), 422 for a slug no diagram can have |
 | `GET` | `/api/day1/server-scan/confs` | server-scan's hardware catalog, in its shape: every conf (server configuration) it can read, unpaged, in its natural `conf_id` order, and `unreadable`, the ids of the stored ones it could not read; read now with the viewer token, not cached by day1 |
+| `GET` | `/api/day1/server-scan/jobs` | server-scan's triggerable CronJobs (its collectors and prunes), each with its schedule, warning, `values.yaml` flag and recent Jobs, newest first, and their pods, in its shape; `enabled: false` when server-scan has the feature off. With server-scan's **admin** token (it keeps Jobs for its admins, reads too), none when it runs with auth off; `501` with a viewer token alone; not cached by day1 |
+| `GET` | `/api/day1/server-scan/jobs/{cronjob}/runs/{job}/pods/{pod}/logs?tail=` | A pod's last `tail` lines (default 500; server-scan caps them), only along CronJob → its Job → its pod (else `404`, server-scan's words); the admin token, as above |
 
 #### Inventory Management (everyone reads, admins add; ADR-0057)
 
