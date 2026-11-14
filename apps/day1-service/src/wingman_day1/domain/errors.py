@@ -124,7 +124,8 @@ class ServerScanUnavailableError(ServerScanError):
 class ServerScanDeniedError(ServerScanUnavailableError):
     """server-scan refused Wingman's token (401 or 403): a deployment problem.
 
-    The viewer token on a read, the admin token on a maintenance write.
+    The viewer token on a read, the auditor token on a server's History, the
+    admin token on a maintenance write.
     """
 
 
@@ -133,11 +134,15 @@ class ServerScanNotConfiguredError(ServerScanError):
 
 
 class ServerNotFoundError(ServerScanError):
-    """server-scan has no server with this id."""
+    """server-scan has no server with this id (or, asked for a VM's host, it is not a VM)."""
 
 
 class ServerScanWritesOffError(ServerScanError):
     """Maintenance writes are off here: a viewer token without server-scan's admin token."""
+
+
+class ServerScanHistoryOffError(ServerScanError):
+    """A server's History is off here: a viewer token without server-scan's auditor token."""
 
 
 class ServerScanRefusedError(InvalidInputError):

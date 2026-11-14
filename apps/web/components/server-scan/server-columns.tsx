@@ -2,16 +2,18 @@
 
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
-import { CopyCell } from "@/components/data-table/copy-cell";
+import { CopyButton } from "@/components/data-table/copy-cell";
 import { columnText } from "@/lib/server-scan/servers-model";
 import type { ServerRow } from "@/types/server-scan-servers";
 import { InstallationCell, StateCell } from "./server-badges";
+import { ServerLink } from "./server-link";
 
 /**
  * The Servers table's columns, server-scan's own in its order and words
  * (team-redbull/server-scan at 92146d3, `frontend/src/features/inventory/InventoryTable.tsx`,
- * decision 18): Name, BMC, Installation, MCE (only when a row on the page has
- * one), Cluster, Model, State, then Maintenance. Name, Installation, MCE,
+ * decision 18): Name (a link to the server's page), BMC, Installation, MCE
+ * (only when a row on the page has one), Cluster, Model, State, then
+ * Maintenance. Name, Installation, MCE,
  * Cluster, Model and State sort; Model also has Wingman's value filter, the
  * one column server-scan cannot filter.
  */
@@ -66,17 +68,25 @@ const NOWRAP = "whitespace-nowrap px-2";
 const column = createColumnHelper<ServerRow>();
 const muted = (value: string | null) => (value ? <span className="text-muted-foreground">{value}</span> : <Empty />);
 
-/**
- * The columns. The Server detail page does not exist yet, so a name is text
- * with its copy button, not a link that leads nowhere; it becomes a link with
- * that page. `trailing` are the columns after State (the maintenance toggle).
- */
+/** The name, a link to the server's page (remembering this view for its "← Servers"), and a copy button on hover. */
+function NameCell({ row }: { row: ServerRow }) {
+  return (
+    <span className="group inline-flex items-center gap-0.5">
+      <ServerLink id={row.id} fromServers className="font-medium">
+        {row.name}
+      </ServerLink>
+      <CopyButton value={row.name} label="server name" reveal />
+    </span>
+  );
+}
+
+/** The columns. `trailing` are the columns after State (the maintenance toggle). */
 export function serverColumns(withMce: boolean, trailing: ColumnDef<ServerRow, never>[] = []): ColumnDef<ServerRow, never>[] {
   const columns = [
     column.accessor("name", {
       header: "Name",
       meta: { label: "Name", className: NOWRAP },
-      cell: (c) => <CopyCell value={c.getValue()} label="server name" className="font-medium" />,
+      cell: (c) => <NameCell row={c.row.original} />,
     }),
     column.display({ id: "bmc", header: "BMC", meta: { label: "BMC", className: NOWRAP }, cell: (c) => <BmcLink row={c.row.original} /> }),
     column.accessor("openshift_state", {

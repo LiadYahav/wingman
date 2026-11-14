@@ -5,14 +5,19 @@ A list page that shows many clusters' nodes reads the fleet once per TTL
 however many are open: the rows and the fleet are one entry (ADR-0048). The
 Sites page reads server-scan's counts once per ``sites_ttl``. One server is
 never cached: the uninstall's check reads it fresh, so it acts on what
-server-scan says now. A failure is not cached. A maintenance write clears the
-rows and the sites, so the next read shows it (whatever its outcome: an
-ambiguous one may have landed).
+server-scan says now. Nor is a server's record, a VM's host or a server's
+History (server-scan caches the record per revision itself, the host's
+health changes without the VM changing, History comes in cursors). A
+failure is not cached. A maintenance write clears the rows and the sites, so
+the next read shows it (whatever its outcome: an ambiguous one may have
+landed).
 """
 
 from __future__ import annotations
 
 from wingman_core.infrastructure.cache import TtlCache
+from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
@@ -45,6 +50,20 @@ class CachedServerInventory:
     async def server(self, server_id: str) -> ServerDetail:
         """See ServerInventory.server; always read through."""
         return await self._inner.server(server_id)
+
+    async def record(self, server_id: str) -> ServerRecord:
+        """See ServerInventory.record; always read through."""
+        return await self._inner.record(server_id)
+
+    async def vm_host(self, server_id: str) -> VmHostAnswer:
+        """See ServerInventory.vm_host; always read through."""
+        return await self._inner.vm_host(server_id)
+
+    async def server_events(
+        self, server_id: str, *, cursor: str | None, page_size: int
+    ) -> EventPage:
+        """See ServerInventory.server_events; always read through."""
+        return await self._inner.server_events(server_id, cursor=cursor, page_size=page_size)
 
     async def sites(self) -> FleetSites:
         """See ServerInventory.sites."""

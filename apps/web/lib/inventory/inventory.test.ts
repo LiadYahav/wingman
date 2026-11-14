@@ -14,7 +14,7 @@ const mce = (name: string, site: string, overrides: Partial<MceInventory> = {}):
 const run = (overrides: Partial<InventoryRun> = {}): InventoryRun => ({
   workflow_id: "add-server-to-mce-ocp4-prod-mce-site1-a_pool_1", status: "running",
   started_at: null, closed_at: null, mce: "ocp4-prod-mce-site1-a", infra_env: "pool", slot: 1,
-  server_name: null, origin: "pool", phase: null, error: null, ...overrides,
+  server_name: null, server_id: null, origin: "pool", phase: null, error: null, ...overrides,
 });
 
 const problem = (status: number, code: ErrorCode) =>

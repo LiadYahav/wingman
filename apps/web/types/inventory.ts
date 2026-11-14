@@ -95,6 +95,12 @@ export interface InventoryRun {
   infra_env: string | null;
   slot: number | null;
   server_name: string | null;
+  /**
+   * server-scan's id for `server_name` when exactly one server has it, for the
+   * link to its page in the Server Scan area; null otherwise, or when
+   * server-scan could not be read.
+   */
+  server_id: string | null;
   origin: RunOrigin | null;
   /** The workflow's own word, passed through. */
   phase: string | null;

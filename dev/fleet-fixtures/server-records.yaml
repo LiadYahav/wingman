@@ -1,0 +1,190 @@
+# The made-up hardware behind servers.yaml, for DAY1_FAKE_FLEET=true
+# (development only): the Server Scan area's server page (ADR-0048's 3.25.0
+# amendment, docs/notes/2026-11-13-server-scan-area-api.md §9.7).
+#
+# A server's record is its row in servers.yaml plus, here:
+#   - `models`: the hardware of its model, in server-scan's own shape
+#     (`hardware` of `GET /api/v1/servers/{id}`), its NICs (named in order
+#     for the row's MACs), the NICs' OS names, its fabric uplinks (Cisco) and
+#     its manager. `{serial}` is replaced by the server's serial. The CPU's
+#     cores and the memory's total come from the server's name
+#     (`-128c-1024gb-`) when it has them.
+#   - `rules`: the classification rule that matched each installation type.
+#   - `servers`: what differs for one server: its health per category and
+#     why, the fields the last collection could not read, an unreachable BMC.
+#
+# Nothing here is real: the models' parts, serials and MACs are invented.
+
+rules:
+  HOSTED_CLUSTER: {id: rule-hc, name: Hosted cluster nodes, field: name, pattern: "^ocp-[a-z]+-[a-z0-9]+-site"}
+  MCE: {id: rule-mce, name: MCE nodes, field: name, pattern: "^mce-"}
+  UPI: {id: rule-upi, name: UPI nodes, field: name, pattern: "^upi-"}
+
+models:
+  PowerEdge R660:
+    manager: openmanage-site1
+    nics:
+      names: [NIC.Integrated.1-1-1, NIC.Integrated.1-2-1, NIC.Slot.3-1-1, NIC.Slot.3-2-1]
+      locations: [1/1/1, 1/2/1, 3/1/1, 3/2/1]
+      speed_mbps: 25000
+      os_names: {NIC.Integrated.1-1-1: eno12399np0, NIC.Integrated.1-2-1: eno12409np1}
+    hardware:
+      cpu: {sockets: 2, cores: 64, threads: 128, model: Intel(R) Xeon(R) Gold 6438Y+}
+      memory: {modules: 16, speed_mhz: 4800}
+      storage:
+        drives:
+          - {id: Disk.Direct.0-0:BOSS-N1, model: MTFDDAV480TGA, serial: "{serial}-B0", media_type: SSD, capacity_bytes: 480103981056, health: HEALTHY, health_detail: OK}
+          - {id: Disk.Direct.1-1:BOSS-N1, model: MTFDDAV480TGA, serial: "{serial}-B1", media_type: SSD, capacity_bytes: 480103981056, health: HEALTHY, health_detail: OK}
+          - {id: Disk.Bay.0:Enclosure.Internal.0-1, model: Dell Ent NVMe P5520 RI, serial: "{serial}-N0", media_type: SSD, capacity_bytes: 3840755982336, health: HEALTHY, health_detail: OK}
+          - {id: Disk.Bay.1:Enclosure.Internal.0-1, model: Dell Ent NVMe P5520 RI, serial: "{serial}-N1", media_type: SSD, capacity_bytes: 3840755982336, health: HEALTHY, health_detail: OK}
+        controllers:
+          - id: AHCI.Slot.1-1
+            name: BOSS-N1 Monolithic
+            kind: BOSS
+            volumes:
+              - {id: Disk.Virtual.0:AHCI.Slot.1-1, raid_type: RAID1, volume_type: Mirrored, capacity_bytes: 479559942144, health: HEALTHY}
+        raid: {state: PRESENT, method: redfish_storage, bmc: iDRAC9, reason: null}
+      gpus: []
+      power:
+        psus:
+          - {id: PSU.Slot.1, model: PWR SPLY 1400W, serial: "{serial}-P1", health: HEALTHY, health_detail: OK, capacity_watts: 1400, power_watts: 318.0}
+          - {id: PSU.Slot.2, model: PWR SPLY 1400W, serial: "{serial}-P2", health: HEALTHY, health_detail: OK, capacity_watts: 1400, power_watts: 304.0}
+
+  PowerEdge R760:
+    manager: openmanage-site1
+    nics:
+      names: [NIC.Integrated.1-1-1, NIC.Integrated.1-2-1]
+      locations: [1/1/1, 1/2/1]
+      speed_mbps: 25000
+      os_names: {NIC.Integrated.1-1-1: eno12399np0, NIC.Integrated.1-2-1: eno12409np1}
+    hardware:
+      cpu: {sockets: 2, cores: 64, threads: 128, model: Intel(R) Xeon(R) Gold 6430}
+      memory: {modules: 16, speed_mhz: 4400}
+      storage:
+        drives:
+          - {id: Disk.Bay.0:Enclosure.Internal.0-1:RAID.SL.3-1, model: MZ7L3480HCHQ, serial: "{serial}-S0", media_type: SSD, capacity_bytes: 480103981056, health: HEALTHY, health_detail: OK}
+          - {id: Disk.Bay.1:Enclosure.Internal.0-1:RAID.SL.3-1, model: MZ7L3480HCHQ, serial: "{serial}-S1", media_type: SSD, capacity_bytes: 480103981056, health: HEALTHY, health_detail: OK}
+          - {id: Disk.Bay.2:Enclosure.Internal.0-1:RAID.SL.3-1, model: ST8000NM017B, serial: "{serial}-H2", media_type: HDD, capacity_bytes: 8001563222016, health: HEALTHY, health_detail: OK}
+          - {id: Disk.Bay.3:Enclosure.Internal.0-1:RAID.SL.3-1, model: ST8000NM017B, serial: "{serial}-H3", media_type: HDD, capacity_bytes: 8001563222016, health: HEALTHY, health_detail: OK}
+          - {id: Disk.Bay.4:Enclosure.Internal.0-1:RAID.SL.3-1, model: ST8000NM017B, serial: "{serial}-H4", media_type: HDD, capacity_bytes: null, health: null, health_detail: null}
+        controllers:
+          - id: RAID.SL.3-1
+            name: PERC H755 Front
+            kind: RAID
+            volumes:
+              - {id: Disk.Virtual.0:RAID.SL.3-1, raid_type: RAID1, volume_type: Mirrored, capacity_bytes: 479559942144, health: HEALTHY}
+        raid: {state: PRESENT, method: redfish_storage, bmc: iDRAC9, reason: null}
+      gpus:
+        - {vendor: NVIDIA, model: NVIDIA L40S 48GB, serial: "{serial}-G0", memory_bytes: 51539607552, health: HEALTHY, health_detail: OK, pci_address: "0000:4a:00.0", firmware_version: 95.02.5D.00.01, memory_type: GDDR6, ecc_mode_enabled: true, correctable_error_count: 0, uncorrectable_error_count: 0, temperature_celsius: 41.0, power_watts: 82.4}
+        - {vendor: NVIDIA, model: NVIDIA L40S 48GB, serial: "{serial}-G1", memory_bytes: 51539607552, health: HEALTHY, health_detail: OK, pci_address: "0000:61:00.0", firmware_version: 95.02.5D.00.01, memory_type: GDDR6, ecc_mode_enabled: true, correctable_error_count: 2, uncorrectable_error_count: 0, temperature_celsius: 44.0, power_watts: 88.1}
+      power:
+        psus:
+          - {id: PSU.Slot.1, model: PWR SPLY 1800W, serial: "{serial}-P1", health: HEALTHY, health_detail: OK, capacity_watts: 1800, power_watts: 612.0}
+          - {id: PSU.Slot.2, model: PWR SPLY 1800W, serial: "{serial}-P2", health: HEALTHY, health_detail: OK, capacity_watts: 1800, power_watts: 598.0}
+
+  PowerEdge R650:
+    manager: openmanage-site1
+    nics:
+      names: [NIC.Integrated.1-1-1, NIC.Integrated.1-2-1]
+      locations: [1/1/1, 1/2/1]
+      speed_mbps: 25000
+      os_names: {}
+    hardware:
+      cpu: {sockets: 2, cores: 48, threads: 96, model: Intel(R) Xeon(R) Gold 6342}
+      memory: {modules: 24, speed_mhz: 3200}
+      storage:
+        drives:
+          - {id: Disk.Bay.0:Enclosure.Internal.0-1:RAID.Integrated.1-1, model: MZ7L3960HCJR, serial: "{serial}-S0", media_type: SSD, capacity_bytes: 960197124096, health: HEALTHY, health_detail: OK}
+          - {id: Disk.Bay.1:Enclosure.Internal.0-1:RAID.Integrated.1-1, model: MZ7L3960HCJR, serial: "{serial}-S1", media_type: SSD, capacity_bytes: 960197124096, health: HEALTHY, health_detail: OK}
+        controllers:
+          - id: RAID.Integrated.1-1
+            name: PERC H745 Front
+            kind: RAID
+            volumes:
+              - {id: Disk.Virtual.0:RAID.Integrated.1-1, raid_type: RAID1, volume_type: Mirrored, capacity_bytes: 959656755200, health: HEALTHY}
+        raid: {state: PRESENT, method: redfish_storage, bmc: iDRAC9, reason: null}
+      gpus: []
+      power:
+        psus:
+          - {id: PSU.Slot.1, model: PWR SPLY 1100W, serial: "{serial}-P1", health: HEALTHY, health_detail: OK, capacity_watts: 1100, power_watts: 254.0}
+          - {id: PSU.Slot.2, model: PWR SPLY 1100W, serial: "{serial}-P2", health: HEALTHY, health_detail: OK, capacity_watts: 1100, power_watts: 249.0}
+
+  ProLiant DL360 Gen11: &proliant
+    manager: oneview-site1
+    nics:
+      names: [NIC.Slot.1.1, NIC.Slot.1.2]
+      locations: [Slot 1 Port 1, Slot 1 Port 2]
+      speed_mbps: 25000
+      os_names: {}
+    hardware:
+      cpu: {sockets: 2, cores: 64, threads: 128, model: Intel(R) Xeon(R) Gold 6448Y}
+      memory: {modules: 16, speed_mhz: 4800}
+      storage:
+        drives:
+          - {id: "1I:1:1", model: VO000960KXAVL, serial: "{serial}-D1", media_type: SSD, capacity_bytes: 960197124096, health: HEALTHY, health_detail: OK}
+          - {id: "1I:1:2", model: VO000960KXAVL, serial: "{serial}-D2", media_type: SSD, capacity_bytes: 960197124096, health: HEALTHY, health_detail: OK}
+        controllers:
+          - id: DE00A000
+            name: HPE MR416i-o Gen11
+            kind: RAID
+            volumes:
+              - {id: "1", raid_type: RAID1, volume_type: null, capacity_bytes: 959656755200, health: HEALTHY}
+        raid: {state: PRESENT, method: hpe_smartstorage, bmc: iLO 6, reason: null}
+      gpus: []
+      power:
+        psus:
+          - {id: "1", model: 1000W FS Plat Ht Plg LH Pwr Sply Kit, serial: "{serial}-P1", health: HEALTHY, health_detail: OK, capacity_watts: 1000, power_watts: 288.0}
+          - {id: "2", model: 1000W FS Plat Ht Plg LH Pwr Sply Kit, serial: "{serial}-P2", health: HEALTHY, health_detail: OK, capacity_watts: 1000, power_watts: 280.0}
+
+  ProLiant DL360 Gen12: *proliant
+
+  UCS C220 M6:
+    manager: intersight-site1
+    nics:
+      names: [eth0, eth1]
+      locations: [MLOM/1, MLOM/2]
+      speed_mbps: 100000
+      os_names: {}
+    hardware:
+      cpu: {sockets: 2, cores: 64, threads: 128, model: Intel(R) Xeon(R) Platinum 8358}
+      memory: {modules: 16, speed_mhz: 3200}
+      storage:
+        drives:
+          - {id: storage-SATA-1, model: UCS-M2-480G, serial: "{serial}-M1", media_type: SSD, capacity_bytes: 480103981056, health: Good, health_detail: null}
+          - {id: storage-SATA-2, model: UCS-M2-480G, serial: "{serial}-M2", media_type: SSD, capacity_bytes: 480103981056, health: Good, health_detail: null}
+        controllers: []
+        raid: {state: UNKNOWN, method: null, bmc: null, reason: Intersight does not report the boot drives' RAID}
+      gpus: []
+      power:
+        psus:
+          - {id: PSU1, model: UCSC-PSU1-1050W, serial: "{serial}-P1", health: UP, health_detail: null, capacity_watts: 1050, power_watts: null}
+          - {id: PSU2, model: UCSC-PSU1-1050W, serial: "{serial}-P2", health: UP, health_detail: null, capacity_watts: 1050, power_watts: null}
+    uplinks:
+      - {fabric: A, fabric_name: FI-SITE1-A, fabric_model: UCS-FI-6454, fabric_serial: FDOFAKE0A01, server_interface: MLOM/1, server_port: "1/1", fabric_port: "1/17", interface_kind: PHYSICAL}
+      - {fabric: B, fabric_name: FI-SITE1-B, fabric_model: UCS-FI-6454, fabric_serial: FDOFAKE0B01, server_interface: MLOM/2, server_port: "1/2", fabric_port: "1/17", interface_kind: PHYSICAL}
+      - {fabric: A, fabric_name: FI-SITE1-A, fabric_model: UCS-FI-6454, fabric_serial: FDOFAKE0A01, server_interface: vnic-a, server_port: null, fabric_port: null, interface_kind: VNIC}
+
+servers:
+  ocp-dell-r660-site1-128c-1024gb-DLFAKE0102:
+    health:
+      memory: WARNING
+    reasons:
+      - {policy_key: memory.correctable_errors, policy_name: Correctable memory errors, category: memory, severity: WARNING, message: "DIMM B3 reports correctable ECC errors (12 in 24 h)"}
+  ocp-dell-r760-site1-64c-512gb-DLFAKE0104:
+    unread_fields: [hardware.storage.drives, hardware.power.psus]
+  ocp-hp-gen11-site1-64c-512gb-HPFAKE0202:
+    health:
+      storage: MAJOR
+    reasons:
+      - {policy_key: storage.predictive_failure, policy_name: Drive predicts failure, category: storage, severity: MAJOR, message: "Drive 1I:1:2 predicts a failure (SMART)"}
+  ocp-cisco-m6-site1-128c-512gb-CSFAKE0302:
+    health:
+      connectivity: CRITICAL
+    reasons:
+      - {policy_key: connectivity.fabric_paths_down, policy_name: Fabric paths down, category: connectivity, severity: CRITICAL, message: "0 of 2 fabric paths up"}
+    uplinks_down: true
+    unreachable_reason: timeout
+    unread_fields: [hardware.memory.total_bytes, hardware.power.psus, network.interfaces]
+  ocp-dell-r660-site2-64c-256gb-DLFAKE0402:
+    unevaluated: true
+    unread_fields: [hardware.cpu.model, hardware.storage.total_bytes, hardware.gpus]

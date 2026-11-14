@@ -203,6 +203,50 @@ async def test_the_runs_say_who_may_have_started_them(
     )
 
 
+async def test_a_runs_server_carries_its_server_scan_id_for_the_link(
+    fleet: httpx.AsyncClient, auth: Auth, support: Any, inventory: FakeServerInventory
+) -> None:
+    """docs/notes/2026-11-13-inventory-management-api.md §4: the id of the one server named so."""
+    await fleet.post(f"{POOL}/add-servers", json={"count": 1}, headers=auth(support.ALICE))
+    await fleet.post(
+        f"{POOL}/add-servers", json={"server_names": [FREE]}, headers=auth(support.ALICE)
+    )
+    named, pool = (await fleet.get("/api/day1/inventory/runs", headers=auth(support.ALICE))).json()[
+        "runs"
+    ]
+    free = inventory.by_name(FREE)
+    assert free is not None
+    assert named["server_id"] == free.id
+    assert (pool["server_name"], pool["server_id"]) == (None, None), "a pool draw names none yet"
+
+
+async def test_runs_are_listed_without_ids_when_server_scan_fails(
+    support: Any,
+    gitlab: InMemoryGitLab,
+    clock: Any,
+    mce: FakeHubApi,
+    inventory: FakeServerInventory,
+    workflow: FakeAddServerWorkflow,
+    auth: Auth,
+) -> None:
+    def fresh() -> FastAPI:  # a new day1, so nothing of server-scan is cached
+        return app_of(
+            support, gitlab, clock, hub=mce, inventory=inventory, workflow=workflow,
+            DAY1_ADD_SERVERS=True,
+        )  # fmt: skip
+
+    async for client in serve(fresh()):
+        await client.post(
+            f"{POOL}/add-servers", json={"server_names": [FREE]}, headers=auth(support.ALICE)
+        )
+    inventory.unavailable = True
+    async for client in serve(fresh()):
+        response = await client.get("/api/day1/inventory/runs", headers=auth(support.ALICE))
+    assert response.status_code == 200
+    ((run),) = response.json()["runs"]
+    assert (run["server_name"], run["server_id"]) == (FREE, None)
+
+
 # ── Starting ─────────────────────────────────────────────────────────────────
 
 

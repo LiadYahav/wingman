@@ -6,7 +6,9 @@ row shape and read by the HTTP adapter's parser. They raise the same domain
 errors as the real adapters. The fake's sites are its rows counted by
 server-scan's rules over a site catalog (``fake_server_scan_sites``, ADR-0048);
 its maintenance writes change the row as a server-scan with auth off does,
-recording ``dev`` as who.
+recording ``dev`` as who. A server's record and History are its row and its
+model's hardware (``fake_server_records``, ADR-0048's 3.25.0 amendment); no
+fake server is a VM unless the records fixture says so.
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which
@@ -37,6 +39,8 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
     WorkflowsUnavailableError,
 )
+from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer, VmHostServer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import (
@@ -47,6 +51,7 @@ from wingman_day1.domain.servers import (
     uninstall_workflow_id,
 )
 from wingman_day1.domain.workflows import WorkflowRun
+from wingman_day1.infrastructure.fake_server_records import FakeRecords
 from wingman_day1.infrastructure.fake_server_scan_sites import SiteName, catalog_of, count_sites
 from wingman_day1.infrastructure.server_scan_parse import server_row
 
@@ -61,6 +66,7 @@ PHASE_SECONDS: Final = 8.0
 FAKE_ACTOR: Final = "dev"
 """Who a server-scan with auth off records for every write."""
 FLEET_FILE: Final = Path("dev/fleet-fixtures/servers.yaml")
+_EMPTY_PAGE: Final = {"next_cursor": None, "has_more": False, "total": 0}
 
 
 class FakeServerInventory:
@@ -72,11 +78,18 @@ class FakeServerInventory:
         *,
         unavailable: bool = False,
         sites: Sequence[SiteName] = (),
+        records: FakeRecords | None = None,
+        clock: Clock = system_clock,
     ) -> None:
-        """Seed the fleet; ``sites`` is server-scan's site catalog (none: the rows' own sites)."""
+        """Seed the fleet; ``sites`` is server-scan's site catalog (none: the rows' own sites).
+
+        ``records`` gives each model its hardware (none: every record has none).
+        """
         self._rows = {row.id: row for row in rows}
         self.unavailable = unavailable
         self._sites = tuple(sites)
+        self._records = records or FakeRecords()
+        self._clock = clock
         self.server_reads = 0
         """How many times ``server`` was called (the uninstall's fresh read)."""
         self.maintenance_starts: list[tuple[str, MaintenanceStart]] = []
@@ -123,6 +136,37 @@ class FakeServerInventory:
             raise ServerNotFoundError(f"server-scan has no server {server_id!r} (fake)")
         return ServerDetail(id=row.id, name=row.name, cluster_name=row.cluster_name)
 
+    async def record(self, server_id: str) -> ServerRecord:
+        """See ServerInventory.record."""
+        return self._records.record(self._writable(server_id), self._clock())
+
+    async def vm_host(self, server_id: str) -> VmHostAnswer:
+        """See ServerInventory.vm_host: the host found by its node's name (as a fallback there)."""
+        record = await self.record(server_id)
+        vm = record.vm_host
+        if vm is None:
+            raise ServerNotFoundError(
+                f"server-scan: Server {record.name!r} is not a virtual machine."
+            )
+        host = self.by_name(vm.node_name) if vm.node_name else None
+        match = "NOT_RUNNING" if vm.node_name is None else "NAME" if host else "NOT_IN_INVENTORY"
+        summary = self._host(host) if host else None
+        return VmHostAnswer(
+            cluster_name=vm.cluster_name, node_name=vm.node_name, match=match, host=summary
+        )
+
+    async def server_events(
+        self, server_id: str, *, cursor: str | None, page_size: int
+    ) -> EventPage:
+        """See ServerInventory.server_events; an unknown server's History is empty, as there."""
+        self._read()
+        row = self._rows.get(server_id)
+        if row is None:
+            return EventPage.model_validate(
+                {"items": (), "page": _EMPTY_PAGE | {"page_size": page_size}}
+            )
+        return self._records.page(row, cursor, page_size)
+
     async def sites(self) -> FleetSites:
         """See ServerInventory.sites: the rows now, counted as server-scan counts them."""
         self._read()
@@ -134,20 +178,22 @@ class FakeServerInventory:
         row = self._writable(server_id)
         self.maintenance_starts.append((server_id, start))
         who = row.maintenance_by if row.maintenance else FAKE_ACTOR
-        return self._change(
-            dataclasses.replace(
-                row, maintenance=True, maintenance_reason=start.reason, maintenance_by=who
-            )
+        changed = dataclasses.replace(
+            row, maintenance=True, maintenance_reason=start.reason, maintenance_by=who
         )
+        self._records.log_maintenance(
+            row, changed, at=self._clock(), expected_end=start.expected_end
+        )
+        return self._change(changed)
 
     async def end_maintenance(self, server_id: str) -> ServerMaintenance:
         """See ServerInventory.end_maintenance."""
         row = self._writable(server_id)
-        return self._change(
-            dataclasses.replace(
-                row, maintenance=False, maintenance_reason=None, maintenance_by=None
-            )
+        changed = dataclasses.replace(
+            row, maintenance=False, maintenance_reason=None, maintenance_by=None
         )
+        self._records.log_maintenance(row, changed, at=self._clock())
+        return self._change(changed)
 
     def _writable(self, server_id: str) -> ServerRow:
         self._read()
@@ -155,6 +201,21 @@ class FakeServerInventory:
         if row is None:
             raise ServerNotFoundError(f"server-scan has no server {server_id!r} (fake)")
         return row
+
+    def _host(self, row: ServerRow) -> VmHostServer:
+        record = self._records.record(row, self._clock())
+        return VmHostServer(
+            id=row.id,
+            name=row.name,
+            vendor=record.identity.vendor,
+            model=row.model,
+            site_id=row.site,
+            cpu=record.hardware.cpu,
+            memory_total_bytes=record.hardware.memory.total_bytes,
+            health=row.health,
+            maintenance=row.maintenance,
+            cluster_name=row.cluster_name,
+        )
 
     def _change(self, row: ServerRow) -> ServerMaintenance:
         self._rows[row.id] = row

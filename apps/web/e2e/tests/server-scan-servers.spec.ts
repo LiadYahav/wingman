@@ -55,7 +55,8 @@ test.describe("The Servers page", () => {
     await expect(node.locator('[data-column="openshift_state"]')).toHaveText("Installed");
     await expect(node.locator('[data-column="mce_name"]')).toHaveText("ocp4-prod-mce-site1-a");
     await expect(node.locator('[data-column="health"]')).toHaveText("●Healthy");
-    // The name is text with its copy button: the Server detail page comes next
+    // The name opens the server's page (server-scan-server.spec.ts), its copy button beside it
+    await expect(node.getByRole("link", { name: "ocp-dell-r660-site1-node-01", exact: true })).toHaveAttribute("href", "/server-scan/servers/srv_ocp-dell-r660-site1-node-01");
     await expect(node.getByRole("button", { name: "Copy server name ocp-dell-r660-site1-node-01" })).toBeVisible();
     await expect(row(page, "ocp-dell-r760-site1-free-06").getByTestId("ss-reservation")).toHaveText("→ocp4-prod-mce-site1-b");
     await expect(row(page, "ucs-cisco-site2-upi-08")).toContainText("Contested with ocp4-upi-other");

@@ -21,7 +21,7 @@ const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory 
 
 const run = (mceName: string, infraEnv: string | null): InventoryRun => ({
   workflow_id: `add-server-to-mce-${mceName}_${infraEnv}_1`, status: "running", started_at: null, closed_at: null,
-  mce: mceName, infra_env: infraEnv, slot: 1, server_name: null, origin: "pool", phase: null, error: null,
+  mce: mceName, infra_env: infraEnv, slot: 1, server_name: null, server_id: null, origin: "pool", phase: null, error: null,
 });
 
 describe("an InfraEnv name", () => {

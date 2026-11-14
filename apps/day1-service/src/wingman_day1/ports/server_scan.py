@@ -3,13 +3,16 @@
 The Nodes tab, MCE placement, Inventory Management and the Server Scan area
 all read server-scan through this port and its one adapter, cache and fake.
 The Server Scan area's maintenance toggle is the one write (ADR-0048's 3.23.0
-amendment).
+amendment); its server page reads a server whole, a VM's host and the
+server's History (3.25.0).
 """
 
 from __future__ import annotations
 
 from typing import Protocol
 
+from wingman_day1.domain.server_scan_events import EventPage
+from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.servers import ServerDetail, ServerRow
@@ -33,7 +36,27 @@ class ServerInventory(Protocol):
         ...
 
     async def server(self, server_id: str) -> ServerDetail:
-        """One server, read now. An unknown id is ``ServerNotFoundError``."""
+        """One server's name and cluster, read now (the uninstall's check).
+
+        An unknown id is ``ServerNotFoundError``.
+        """
+        ...
+
+    async def record(self, server_id: str) -> ServerRecord:
+        """One server whole, read now: the Server Scan area's server page.
+
+        An unknown id is ``ServerNotFoundError``.
+        """
+        ...
+
+    async def vm_host(self, server_id: str) -> VmHostAnswer:
+        """The host a KubeVirt VM runs on, resolved now; not a VM is ``ServerNotFoundError``."""
+        ...
+
+    async def server_events(
+        self, server_id: str, *, cursor: str | None, page_size: int
+    ) -> EventPage:
+        """One page of a server's History from ``cursor``, newest first (the auditor token)."""
         ...
 
     async def sites(self) -> FleetSites:
