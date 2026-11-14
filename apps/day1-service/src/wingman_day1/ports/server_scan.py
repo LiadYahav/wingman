@@ -17,6 +17,7 @@ from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
+from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.server_scan_skill import Skill, SkillZip
@@ -62,6 +63,14 @@ class ServerInventory(Protocol):
         self, server_id: str, *, cursor: str | None, page_size: int
     ) -> EventPage:
         """One page of a server's History from ``cursor``, newest first (the auditor token)."""
+        ...
+
+    async def classification_rules(self) -> ClassificationRuleList:
+        """The enabled rules that give a server its installation type (Rules & Policies)."""
+        ...
+
+    async def health_policies(self) -> HealthPolicyList:
+        """The enabled policies that judge a server's health (Rules & Policies)."""
         ...
 
     async def sites(self) -> FleetSites:

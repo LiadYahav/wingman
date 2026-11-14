@@ -36,6 +36,7 @@ from wingman_day1.domain.server_scan_events import (
     EventPage,
 )
 from wingman_day1.domain.server_scan_record import VmHostAnswer
+from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows
 
 router = APIRouter(prefix="/api/day1/server-scan", tags=["server-scan"])
@@ -45,6 +46,20 @@ router = APIRouter(prefix="/api/day1/server-scan", tags=["server-scan"])
 async def server_scan_sites(service: ServerScan, user: AdminUser) -> SitesOut:
     """Every configured site and the fleet, as server-scan counts them, in its shape."""
     return SitesOut.of(await service.sites())
+
+
+@router.get("/classification-rules")
+async def server_scan_classification_rules(
+    service: ServerScan, user: AdminUser
+) -> ClassificationRuleList:
+    """The enabled rules that give a server its installation type, in server-scan's shape."""
+    return await service.classification_rules()
+
+
+@router.get("/health-policies")
+async def server_scan_health_policies(service: ServerScan, user: AdminUser) -> HealthPolicyList:
+    """The enabled policies that judge a server's health, in server-scan's shape."""
+    return await service.health_policies()
 
 
 class EncodedFleet:

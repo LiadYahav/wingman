@@ -20,7 +20,9 @@ reads the hardware catalog (``server_scan_confs``, 3.29.0).
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
 (ADR-0004). The answers are read by ``server_scan_parse`` (rows and one
-server) and ``server_scan_sites``.
+server) and ``server_scan_sites``. The Rules & Policies page reads the enabled
+classification rules and health policies (``server_scan_rules``, ADR-0048's
+3.30.0 amendment).
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
+from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.server_scan_skill import Skill, SkillZip
@@ -54,6 +57,7 @@ from wingman_day1.infrastructure.server_scan_record import (
     read_record,
     read_vm_host,
 )
+from wingman_day1.infrastructure.server_scan_rules import read_policies, read_rules
 from wingman_day1.infrastructure.server_scan_sites import fleet_sites
 from wingman_day1.infrastructure.server_scan_skill import read_skill, read_skill_zip
 from wingman_day1.infrastructure.server_scan_writes import send_maintenance, start_body
@@ -176,6 +180,16 @@ class HttpServerInventory:
         """See ServerInventory.architecture_diagram."""
         read = read_diagram(self._ui, slug)
         return await self._observer.call(ServerScanOperation.GET_ARCHITECTURE_DIAGRAM, read)
+
+    async def classification_rules(self) -> ClassificationRuleList:
+        """See ServerInventory.classification_rules."""
+        read = read_rules(self._client)
+        return await self._observer.call(ServerScanOperation.LIST_CLASSIFICATION_RULES, read)
+
+    async def health_policies(self) -> HealthPolicyList:
+        """See ServerInventory.health_policies."""
+        read = read_policies(self._client)
+        return await self._observer.call(ServerScanOperation.LIST_HEALTH_POLICIES, read)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance."""

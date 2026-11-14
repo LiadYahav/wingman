@@ -1,0 +1,424 @@
+# What server-scan runs, for DAY1_FAKE_FLEET=true (development only): the
+# Server Scan area's Rules & Policies page (ADR-0048's 3.30.0 amendment,
+# docs/notes/2026-11-13-server-scan-area-api.md §10).
+#
+# In server-scan's own answer shapes (`GET /api/v1/classification-rules` and
+# `/health-policies`, the enabled ones), read by the same strict models as
+# the real answers.
+#   - `classification_rules`: the three rules server-records.yaml says the
+#     fake servers matched (the same ids, names and patterns; a test keeps
+#     them in step), in server-scan's order (priority, then order).
+#   - `health_policies`: server-scan's own seeded system defaults,
+#     transcribed from `backend/app/domain/services/health/health_policy_defaults.py`
+#     (team-redbull/server-scan at 92146d3, decision 18), their descriptions
+#     shortened. A condition lists only the fields it sets.
+# Nothing here is real.
+classification_rules:
+  items:
+    - id: rule-hc
+      name: "Hosted cluster nodes"
+      description: "Hosted-cluster nodes, named after their hardware spec and site: ocp-<vendor>-<model>-site…."
+      enabled: true
+      system: true
+      installation_type: HOSTED_CLUSTER
+      scope: {vendor: null, manager_type: null, site_id: null}
+      field: name
+      pattern: "^ocp-[a-z]+-[a-z0-9]+-site"
+      flags: {ignore_case: true, multiline: false, dotall: false}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 0
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: rule-mce
+      name: "MCE nodes"
+      description: "An MCE hub's own nodes: any name starting with mce-."
+      enabled: true
+      system: true
+      installation_type: MCE
+      scope: {vendor: null, manager_type: null, site_id: null}
+      field: name
+      pattern: "^mce-"
+      flags: {ignore_case: true, multiline: false, dotall: false}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 1
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: rule-upi
+      name: "UPI nodes"
+      description: "User-provisioned infrastructure: any name starting with upi-."
+      enabled: true
+      system: true
+      installation_type: UPI
+      scope: {vendor: null, manager_type: null, site_id: null}
+      field: name
+      pattern: "^upi-"
+      flags: {ignore_case: true, multiline: false, dotall: false}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 2
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+health_policies:
+  items:
+    - id: "policy-connectivity-fabric-paths-down-warning"
+      name: "UCS fabric path down (warning)"
+      description: "Fires when exactly one UCS fabric path is reported down."
+      enabled: true
+      system: true
+      policy_key: connectivity.fabric_paths_down_warning
+      mode: EVALUATE
+      category: connectivity
+      severity: WARNING
+      condition: {"metric": "connectivity.fabric_paths_down", "operator": "EQ", "value": 1}
+      evidence: [{"key": "down", "metric": "connectivity.fabric_paths_down"}]
+      message_template: "{down} UCS fabric path is down"
+      scope: {"site_id": null, "vendor": "cisco", "manager_types": ["UCS_CENTRAL", "INTERSIGHT"]}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 0
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-connectivity-fabric-paths-down-critical"
+      name: "UCS fabric paths down (critical)"
+      description: "Fires when two or more UCS fabric paths are reported down."
+      enabled: true
+      system: true
+      policy_key: connectivity.fabric_paths_down_critical
+      mode: EVALUATE
+      category: connectivity
+      severity: CRITICAL
+      condition: {"metric": "connectivity.fabric_paths_down", "operator": "GTE", "value": 2}
+      evidence: [{"key": "down", "metric": "connectivity.fabric_paths_down"}]
+      message_template: "{down} UCS fabric paths are down"
+      scope: {"site_id": null, "vendor": "cisco", "manager_types": ["UCS_CENTRAL", "INTERSIGHT"]}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 1
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-power-psu-failed-major"
+      name: "Power supply failed (redundancy lost)"
+      description: "Fires when exactly one power supply reports DOWN and the server has more than one fitted — redundancy lost, not power lost, which is exactly what a redundant PSU pair is for."
+      enabled: true
+      system: true
+      policy_key: power.psu_failed_major
+      mode: EVALUATE
+      category: power
+      severity: MAJOR
+      condition: {"all_of": [{"metric": "power.failed_psu_count", "operator": "EQ", "value": 1}, {"metric": "power.psu_count", "operator": "GT", "value": 1}]}
+      evidence: [{"key": "failed", "metric": "power.failed_psu_count"}, {"key": "total", "metric": "power.psu_count"}]
+      message_template: "{failed} of {total} power supplies failed"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 2
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-power-psu-failed-critical"
+      name: "Power supply failed (no redundancy left)"
+      description: "Fires when two or more power supplies report DOWN, or a single-PSU server's only one does — either way there is no working redundancy left. Covers every server kind: UCS and Intersight report PSUs from OperState, Redfish from the chassis power subsystem."
+      enabled: true
+      system: true
+      policy_key: power.psu_failed_critical
+      mode: EVALUATE
+      category: power
+      severity: CRITICAL
+      condition: {"any_of": [{"metric": "power.failed_psu_count", "operator": "GTE", "value": 2}, {"all_of": [{"metric": "power.failed_psu_count", "operator": "EQ", "value": 1}, {"metric": "power.psu_count", "operator": "LTE", "value": 1}]}]}
+      evidence: [{"key": "failed", "metric": "power.failed_psu_count"}, {"key": "total", "metric": "power.psu_count"}]
+      message_template: "{failed} of {total} power supplies failed"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 3
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-storage-os-disk-bad-major"
+      name: "OS disk degraded or failed"
+      description: "Fires when exactly one OS disk (the smallest capacity present) reports WARNING or CRITICAL. The boot mirror is unprotected."
+      enabled: true
+      system: true
+      policy_key: storage.os_disk_bad_major
+      mode: EVALUATE
+      category: storage
+      severity: MAJOR
+      condition: {"metric": "storage.os_bad_disk_count", "operator": "EQ", "value": 1}
+      evidence: [{"key": "bad", "metric": "storage.os_bad_disk_count"}, {"key": "total", "metric": "storage.os_disk_count"}]
+      message_template: "{bad} of {total} OS disks degraded or failed"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 4
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-storage-os-disk-bad-major-multiple"
+      name: "Multiple OS disks degraded (none failed outright)"
+      description: "Fires when two or more OS disks report WARNING (predictive failure) but none has actually failed — still MAJOR, not CRITICAL, until one of them really goes."
+      enabled: true
+      system: true
+      policy_key: storage.os_disk_bad_major_multiple
+      mode: EVALUATE
+      category: storage
+      severity: MAJOR
+      condition: {"all_of": [{"metric": "storage.os_bad_disk_count", "operator": "GTE", "value": 2}, {"metric": "storage.os_failed_disk_count", "operator": "EQ", "value": 0}]}
+      evidence: [{"key": "bad", "metric": "storage.os_bad_disk_count"}, {"key": "total", "metric": "storage.os_disk_count"}]
+      message_template: "{bad} of {total} OS disks degraded (predictive failure)"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 5
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-storage-os-disk-bad-critical"
+      name: "Multiple OS disks degraded or failed"
+      description: "Fires when two or more OS disks report WARNING or CRITICAL and at least one has actually failed. On the usual two-disk boot mirror, nothing healthy is left."
+      enabled: true
+      system: true
+      policy_key: storage.os_disk_bad_critical
+      mode: EVALUATE
+      category: storage
+      severity: CRITICAL
+      condition: {"all_of": [{"metric": "storage.os_bad_disk_count", "operator": "GTE", "value": 2}, {"metric": "storage.os_failed_disk_count", "operator": "GTE", "value": 1}]}
+      evidence: [{"key": "bad", "metric": "storage.os_bad_disk_count"}, {"key": "total", "metric": "storage.os_disk_count"}]
+      message_template: "{bad} of {total} OS disks degraded or failed"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 6
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-storage-data-disk-bad-large-warning"
+      name: "Data disk degraded (large-storage server)"
+      description: "Fires when exactly one non-OS disk is degraded or failed on a server whose name carries the 10TB token."
+      enabled: true
+      system: true
+      policy_key: storage.data_disk_bad_large_warning
+      mode: EVALUATE
+      category: storage
+      severity: WARNING
+      condition: {"all_of": [{"metric": "server.name_has_10tb", "operator": "EQ", "value": true}, {"metric": "storage.data_bad_disk_count", "operator": "EQ", "value": 1}]}
+      evidence: [{"key": "bad", "metric": "storage.data_bad_disk_count"}]
+      message_template: "{bad} data disk degraded or failed"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 7
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-storage-data-disk-bad-large-major-multiple"
+      name: "Multiple data disks degraded, none failed (large-storage server)"
+      description: "Fires when two or more non-OS disks report WARNING (predictive failure) but none has actually failed, on a server whose name carries the 10TB token — MAJOR, not CRITICAL, until one really goes."
+      enabled: true
+      system: true
+      policy_key: storage.data_disk_bad_large_major_multiple
+      mode: EVALUATE
+      category: storage
+      severity: MAJOR
+      condition: {"all_of": [{"metric": "server.name_has_10tb", "operator": "EQ", "value": true}, {"metric": "storage.data_bad_disk_count", "operator": "GTE", "value": 2}, {"metric": "storage.data_failed_disk_count", "operator": "EQ", "value": 0}]}
+      evidence: [{"key": "bad", "metric": "storage.data_bad_disk_count"}]
+      message_template: "{bad} data disks degraded (predictive failure)"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 8
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-storage-data-disk-bad-large-critical"
+      name: "Multiple data disks degraded or failed (large-storage server)"
+      description: "Fires when two or more non-OS disks are degraded or failed, and at least one has actually failed, on a server whose name carries the 10TB token."
+      enabled: true
+      system: true
+      policy_key: storage.data_disk_bad_large_critical
+      mode: EVALUATE
+      category: storage
+      severity: CRITICAL
+      condition: {"all_of": [{"metric": "server.name_has_10tb", "operator": "EQ", "value": true}, {"metric": "storage.data_bad_disk_count", "operator": "GTE", "value": 2}, {"metric": "storage.data_failed_disk_count", "operator": "GTE", "value": 1}]}
+      evidence: [{"key": "bad", "metric": "storage.data_bad_disk_count"}]
+      message_template: "{bad} data disks degraded or failed"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 9
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-storage-data-disk-bad-warning"
+      name: "Data disk degraded"
+      description: "Fires when any non-OS disk is degraded or failed on a server that is not a large-storage node."
+      enabled: true
+      system: true
+      policy_key: storage.data_disk_bad_warning
+      mode: EVALUATE
+      category: storage
+      severity: WARNING
+      condition: {"all_of": [{"metric": "server.name_has_10tb", "operator": "EQ", "value": false}, {"metric": "storage.data_bad_disk_count", "operator": "GTE", "value": 1}]}
+      evidence: [{"key": "bad", "metric": "storage.data_bad_disk_count"}]
+      message_template: "{bad} data disk(s) degraded or failed"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 10
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-storage-name-capacity-mismatch"
+      name: "Storage doesn't match the server's own name"
+      description: "Fires when a server's name carries a -<N>tb capacity token and its total storage differs from that by more than 1.5 TB, in either direction — judged only when storage was actually read (a total of zero is never a reading)."
+      enabled: true
+      system: true
+      policy_key: storage.name_capacity_mismatch
+      mode: EVALUATE
+      category: name
+      severity: CRITICAL
+      condition: {"all_of": [{"metric": "storage.name_capacity_bytes", "operator": "EXISTS"}, {"metric": "storage.total_bytes", "operator": "GT", "value": 0}, {"metric": "storage.capacity_deviation_bytes", "operator": "GT", "value": 1500000000000}]}
+      evidence: [{"key": "total", "metric": "storage.total_bytes"}, {"key": "expected", "metric": "storage.name_capacity_bytes"}]
+      message_template: "{total:tb} of storage, but the name promises {expected:tb}"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 11
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-name-site-conflict"
+      name: "BMC IP and the server's name name different sites"
+      description: "Fires when the BMC IP prefix names one site and the server's own name names another. The BMC is the source of truth for the site, so this means the name is wrong or the prefix rule is."
+      enabled: true
+      system: true
+      policy_key: name.site_conflict
+      mode: EVALUATE
+      category: name
+      severity: CRITICAL
+      condition: {"metric": "name.site_conflict", "operator": "EQ", "value": true}
+      evidence: [{"key": "bmc", "metric": "name.site_by_bmc"}, {"key": "name", "metric": "name.site_by_name"}]
+      message_template: "BMC IP says {bmc}, but the name says {name}"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 12
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-memory-degraded-dimm"
+      name: "Memory module degraded"
+      description: "Fires when one or more DIMMs report WARNING or CRITICAL. Only providers that read per-DIMM health populate this; one that does not leaves the count at zero and this never fires."
+      enabled: true
+      system: true
+      policy_key: memory.degraded_dimm
+      mode: EVALUATE
+      category: memory
+      severity: WARNING
+      condition: {"metric": "memory.degraded_dimm_count", "operator": "GTE", "value": 1}
+      evidence: [{"key": "bad", "metric": "memory.degraded_dimm_count"}, {"key": "total", "metric": "memory.dimm_count"}]
+      message_template: "{bad} of {total} memory modules degraded"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 13
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-network-all-links-down"
+      name: "No network link up"
+      description: "Fires when a server reports readable link states and none of them is up. Says nothing about a server whose link states were never read."
+      enabled: true
+      system: true
+      policy_key: network.all_links_down
+      mode: EVALUATE
+      category: network
+      severity: CRITICAL
+      condition: {"all_of": [{"metric": "network.links_known_count", "operator": "GTE", "value": 1}, {"metric": "network.links_up_count", "operator": "EQ", "value": 0}]}
+      evidence: [{"key": "interfaces", "metric": "network.links_known_count"}, {"key": "reported", "metric": "network.interface_count"}]
+      message_template: "no network link is up across {interfaces} of {reported} interface(s) with a readable link state"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 14
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-network-single-link-up"
+      name: "Only one network link up"
+      description: "Fires when exactly one interface is up. Treated the same as every link being down: two bonded uplinks are a platform requirement."
+      enabled: true
+      system: true
+      policy_key: network.single_link_up
+      mode: EVALUATE
+      category: network
+      severity: CRITICAL
+      condition: {"metric": "network.links_up_count", "operator": "EQ", "value": 1}
+      evidence: [{"key": "up", "metric": "network.links_up_count"}, {"key": "interfaces", "metric": "network.links_known_count"}]
+      message_template: "only {up} of {interfaces} readable network links is up"
+      scope: {"site_id": null, "vendor": null, "manager_types": ["OPENMANAGE", "REDFISH_STANDALONE", "ONEVIEW", "INTERSIGHT", "UCS_CENTRAL", "UCS_MANAGER"]}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 15
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-gpu-failed"
+      name: "GPU failed"
+      description: "Fires when one or more GPUs report a failed state, in either vocabulary the providers use — CRITICAL from Redfish, DOWN from UCS and Intersight."
+      enabled: true
+      system: true
+      policy_key: gpu.failed
+      mode: EVALUATE
+      category: gpu
+      severity: CRITICAL
+      condition: {"metric": "gpu.failed_count", "operator": "GTE", "value": 1}
+      evidence: [{"key": "failed", "metric": "gpu.failed_count"}, {"key": "total", "metric": "gpu.count"}]
+      message_template: "{failed} of {total} GPUs failed"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 16
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-gpu-uncorrectable-errors"
+      name: "GPU uncorrectable ECC errors"
+      description: "Fires on any uncorrectable ECC error across the server's GPUs. Only Redfish reports these; a provider that does not leaves the count at zero and this never fires."
+      enabled: true
+      system: true
+      policy_key: gpu.uncorrectable_errors
+      mode: EVALUATE
+      category: gpu
+      severity: WARNING
+      condition: {"metric": "gpu.uncorrectable_error_count", "operator": "GTE", "value": 1}
+      evidence: [{"key": "errors", "metric": "gpu.uncorrectable_error_count"}]
+      message_template: "{errors} uncorrectable GPU ECC error(s)"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 17
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-bmc-unreachable"
+      name: "BMC unreachable"
+      description: "Fires when the server's BMC could not be reached: dead, wrong credentials, TLS failure or timeout. Only collectors that check the BMC populate it."
+      enabled: true
+      system: true
+      policy_key: bmc.unreachable
+      mode: EVALUATE
+      category: bmc
+      severity: CRITICAL
+      condition: {"metric": "bmc.unreachable_count", "operator": "GTE", "value": 1}
+      evidence: [{"key": "reason", "metric": "bmc.unreachable_reason"}]
+      message_template: "BMC unreachable ({reason})"
+      scope: {"site_id": null, "vendor": null, "manager_types": []}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 18
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"
+    - id: "policy-raid-os-mirror-missing"
+      name: "No RAID 1 configured for the OS"
+      description: "Fires when the collector read every RAID source it trusts for this server and found no RAID 1 for the OS. UNKNOWN, where the BMC cannot say, is never a verdict."
+      enabled: true
+      system: true
+      policy_key: raid.os_mirror_missing
+      mode: EVALUATE
+      category: raid
+      severity: CRITICAL
+      condition: {"metric": "raid.state", "operator": "EQ", "value": "ABSENT"}
+      evidence: [{"key": "method", "metric": "raid.method"}, {"key": "volumes", "metric": "raid.volume_count"}, {"key": "controllers", "metric": "raid.controller_count"}]
+      message_template: "no RAID 1 for the OS (read via {method}: {volumes} virtual disk(s) across {controllers} controller(s))"
+      scope: {"site_id": null, "vendor": null, "manager_types": ["OPENMANAGE", "REDFISH_STANDALONE", "UCS_CENTRAL", "UCS_MANAGER"]}
+      source: SYSTEM_DEFAULT
+      priority: 100
+      order: 19
+      created_at: "2026-09-01T06:00:00Z"
+      updated_at: "2026-09-01T06:00:00Z"

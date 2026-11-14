@@ -22,6 +22,7 @@ from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
+from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.server_scan_skill import Skill, SkillZip
@@ -314,6 +315,9 @@ async def test_calls_are_counted_by_operation_and_outcome() -> None:
 
 
 class CountingInventory:
+    rule_reads = 0
+    """Both reads of the Rules & Policies page."""
+
     def __init__(self) -> None:
         self.row_reads = 0
         self.server_reads = 0
@@ -370,6 +374,14 @@ class CountingInventory:
     async def architecture_diagram(self, slug: str) -> ArchitectureDiagram:
         raise AssertionError("not read here")
 
+    async def classification_rules(self) -> ClassificationRuleList:
+        self.rule_reads += 1
+        return ClassificationRuleList(items=())
+
+    async def health_policies(self) -> HealthPolicyList:
+        self.rule_reads += 1
+        return HealthPolicyList(items=())
+
 
 async def test_the_cache_reads_the_fleet_once_per_ttl_and_one_server_every_time() -> None:
     inner = CountingInventory()
@@ -379,6 +391,15 @@ async def test_the_cache_reads_the_fleet_once_per_ttl_and_one_server_every_time(
     await cached.server(SERVER_ID)
     await cached.server(SERVER_ID)
     assert (inner.row_reads, inner.server_reads) == (1, 2)
+
+
+async def test_the_rules_and_policies_are_read_through_every_time() -> None:
+    inner = CountingInventory()
+    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
+    for _ in range(2):
+        await cached.classification_rules()
+        await cached.health_policies()
+    assert inner.rule_reads == 4
 
 
 async def test_a_failed_fleet_read_is_not_cached() -> None:

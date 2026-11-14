@@ -31,6 +31,7 @@ from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventPage
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
+from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.domain.server_scan_sites import FleetSites
 from wingman_day1.domain.server_scan_skill import AUDITOR_TOKEN_LINE, Skill, SkillZip
@@ -73,6 +74,14 @@ class ServerScanService:
     async def servers(self) -> FleetRows:
         """The Servers page: every server as server-scan's rows, from the shared cached read."""
         return await self._inventory.fleet()
+
+    async def classification_rules(self) -> ClassificationRuleList:
+        """The Rules & Policies page: the enabled rules that classify a server by its fields."""
+        return await self._inventory.classification_rules()
+
+    async def health_policies(self) -> HealthPolicyList:
+        """The Rules & Policies page: the enabled policies that judge a server's health."""
+        return await self._inventory.health_policies()
 
     async def record(self, server_id: str) -> ServerRecord:
         """A server's page: the server whole, read now."""
