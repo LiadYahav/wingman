@@ -62,3 +62,12 @@ export const SEVERITY_GLYPH: Record<HealthSeverity, string> = {
 
 /** Most to least severe; the one ordering every severity sort uses. */
 export const SEVERITY_ORDER: readonly HealthSeverity[] = ["CRITICAL", "MAJOR", "WARNING", "HEALTHY", "UNKNOWN"];
+
+/**
+ * Whether a component's health is a severity this UI styles: Cisco and the
+ * Redfish PSU path report UP, DOWN, DISABLED or UNKNOWN instead, shown as
+ * their own word.
+ */
+export function isHealthSeverity(value: string): value is HealthSeverity {
+  return value in SEVERITY_GLYPH;
+}

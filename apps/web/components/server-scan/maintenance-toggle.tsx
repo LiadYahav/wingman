@@ -11,6 +11,9 @@ import { useMaintenanceChange } from "@/lib/api/server-scan";
 import { cn } from "@/lib/utils";
 import type { ServerRow } from "@/types/server-scan-servers";
 
+/** What the toggle needs of a server: a row of the Servers page, or a server's page's record. */
+type Switchable = Pick<ServerRow, "id" | "name" | "maintenance">;
+
 /**
  * One row's maintenance switch, as server-scan's (team-redbull/server-scan at
  * 92146d3, `frontend/src/features/inventory/MaintenanceToggle.tsx`, decision
@@ -30,7 +33,7 @@ function isoOf(local: string): string | null {
   return Number.isNaN(at.getTime()) ? null : at.toISOString();
 }
 
-function StartDialog({ server, open, onOpenChange }: { server: ServerRow; open: boolean; onOpenChange: (open: boolean) => void }) {
+function StartDialog({ server, open, onOpenChange }: { server: Switchable; open: boolean; onOpenChange: (open: boolean) => void }) {
   const change = useMaintenanceChange();
   const [reason, setReason] = useState("");
   const [end, setEnd] = useState("");
@@ -104,11 +107,11 @@ function StartDialog({ server, open, onOpenChange }: { server: ServerRow; open: 
 }
 
 /**
- * The switch. Greyed out with `detail` as its tooltip when the deployment
- * cannot write (no admin token): `aria-disabled`, not `disabled`, so the
- * tooltip still shows.
+ * The switch, on a Servers row and on a server's page. Greyed out with
+ * `detail` as its tooltip when the deployment cannot write (no admin token):
+ * `aria-disabled`, not `disabled`, so the tooltip still shows.
  */
-function MaintenanceToggle({ server, available, detail }: { server: ServerRow; available: boolean; detail: string | null }) {
+export function MaintenanceToggle({ server, available, detail }: { server: Switchable; available: boolean; detail: string | null }) {
   const end = useMaintenanceChange();
   const [asking, setAsking] = useState(false);
   const enabled = server.maintenance.enabled;

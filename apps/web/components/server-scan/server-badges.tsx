@@ -1,63 +1,67 @@
-import { formatAge } from "@/lib/server-scan/format";
+import { actorIdLabel } from "@/lib/server-scan/actor";
+import { formatAge } from "@/lib/server-scan/datetime";
+import { reservationDetail } from "@/lib/server-scan/overview";
 import { isDonor } from "@/lib/server-scan/rows";
 import { SEVERITY_GLYPH } from "@/lib/server-scan/vocabulary";
 import { cn, formatDateTime } from "@/lib/utils";
 import type { HealthSeverity, OpenShiftState } from "@/types/server-scan";
-import type { ServerRow } from "@/types/server-scan-servers";
+import type { ReservationState, ServerRow } from "@/types/server-scan-servers";
 
 /**
- * The Servers table's badges, server-scan's words and rules in Wingman's
+ * The Server Scan area's badges, server-scan's words and rules in Wingman's
  * colours (team-redbull/server-scan at 92146d3: `InstallationBadge.tsx`,
- * `ReservationBadge.tsx`, `StateBadge.tsx`, decision 18). The explanation is
- * each badge's tooltip.
+ * `ReservationBadge.tsx`, `StateBadge.tsx`, `HealthBadge.tsx`, decision 18),
+ * shared by the Servers table and a server's page. The explanation is each
+ * badge's tooltip.
  */
 
-const pill = "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-px text-xs font-medium";
+export const pill = "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-px text-xs font-medium";
 
-const INSTALLATION: Record<OpenShiftState, { label: string; tone: string; title: string }> = {
-  AVAILABLE: { label: "Available", tone: "bg-status-ready/15 text-status-ready-fg", title: "No cluster holds it" },
-  INSTALLED: { label: "Installed", tone: "bg-primary/12 text-primary", title: "A cluster's node" },
+const INSTALLATION: Record<OpenShiftState, { label: string; full: string; tone: string; title: string }> = {
+  AVAILABLE: { label: "Available", full: "Available", tone: "bg-status-ready/15 text-status-ready-fg", title: "No cluster holds it" },
+  INSTALLED: { label: "Installed", full: "Installed", tone: "bg-primary/12 text-primary", title: "A cluster's node" },
   INSTALLED_TO_INVENTORY: {
     label: "In inventory",
+    full: "Installed to inventory",
     tone: "bg-status-provisioning/15 text-status-provisioning-fg",
     title: "An MCE's Agent, in no cluster yet",
   },
 };
 
+/** Whether a cluster uses the server: the table's short word, or the page's `full` one. */
+export function InstallationBadge({ state, full = false }: { state: OpenShiftState; full?: boolean }) {
+  const known = INSTALLATION[state] ?? { label: state, full: state, tone: "bg-muted text-muted-foreground", title: "" };
+  return (
+    <span className={cn(pill, known.tone)} title={known.title} data-testid="ss-installation">
+      {full ? known.full : known.label}
+    </span>
+  );
+}
+
 /** Whether a cluster uses the server, and under it which MCE an install is taking it to. */
 export function InstallationCell({ row }: { row: ServerRow }) {
-  const state = INSTALLATION[row.openshift_state] ?? { label: row.openshift_state, tone: "bg-muted text-muted-foreground", title: "" };
   return (
     <span className="inline-flex flex-col items-start gap-1">
-      <span className={cn(pill, state.tone)} title={state.title}>
-        {state.label}
-      </span>
-      <ReservationBadge row={row} />
+      <InstallationBadge state={row.openshift_state} />
+      <ReservationBadge reservation={row.reservation} />
     </span>
   );
 }
 
 /**
- * "→ <MCE>" while an install holds the server: under the state, not in its
- * place, since a server mid-install is still Available to the collectors.
- * Nothing when no lock is held (nearly every row).
+ * "→ <MCE>" (on a server's page "→ Installing to <MCE>") while an install
+ * holds the server: beside the state, not in its place, since a server
+ * mid-install is still Available to the collectors. Nothing when no lock is
+ * held (nearly every server).
  */
-function ReservationBadge({ row }: { row: ServerRow }) {
-  const lock = row.reservation;
-  if (!lock.held) return null;
-  const target = lock.mce_cluster ?? "an unnamed MCE";
-  const detail = [
-    `Installing to ${target}`,
-    lock.infra_env ? `InfraEnv ${lock.infra_env}` : null,
-    lock.holder ? `held by ${lock.holder}` : null,
-    lock.expires_at ? `lock expires ${formatDateTime(lock.expires_at)}` : "lock has no expiry",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+export function ReservationBadge({ reservation, full = false }: { reservation: ReservationState; full?: boolean }) {
+  if (!reservation.held) return null;
+  const target = reservation.mce_cluster ?? "an unnamed MCE";
+  const detail = reservationDetail(reservation);
   return (
     <span title={detail} aria-label={detail} data-testid="ss-reservation" className={cn(pill, "bg-status-provisioning/15 text-status-provisioning-fg")}>
       <span aria-hidden>→</span>
-      {target}
+      {full ? `Installing to ${target}` : target}
     </span>
   );
 }
@@ -70,12 +74,22 @@ const SEVERITY: Record<HealthSeverity, { label: string; tone: string }> = {
   UNKNOWN: { label: "Unknown", tone: "bg-muted text-muted-foreground" },
 };
 
-/** Who put it in maintenance: a static token reads "API token (admin)", anything else as it is. */
-function actorLabel(id: string): string {
-  const personal = /^token:(.+)$/.exec(id);
-  if (personal) return `${personal[1]} (personal token)`;
-  const token = /^api-token-(.+)$/.exec(id);
-  return token ? `API token (${token[1]})` : id;
+/** A severity's tone, for a chip that shows server-scan's own word (History's FROM → TO). */
+export function severityTone(severity: string): string {
+  return SEVERITY[severity as HealthSeverity]?.tone ?? SEVERITY.UNKNOWN.tone;
+}
+
+/** A health as its glyph and word: shape, then word, then colour tell them apart. */
+export function SeverityPill({ severity }: { severity: HealthSeverity }) {
+  const known = SEVERITY[severity] ?? SEVERITY.UNKNOWN;
+  return (
+    <span className={cn(pill, known.tone)} data-health={severity}>
+      <span aria-hidden className="text-[0.7em] leading-none">
+        {SEVERITY_GLYPH[severity] ?? SEVERITY_GLYPH.UNKNOWN}
+      </span>
+      {known.label}
+    </span>
+  );
 }
 
 /**
@@ -83,18 +97,12 @@ function actorLabel(id: string): string {
  * (or a parts donor), stale with its age, OpenShift naming it otherwise.
  */
 export function StateCell({ row }: { row: ServerRow }) {
-  const severity = SEVERITY[row.health] ?? SEVERITY.UNKNOWN;
   const { maintenance } = row;
   const donor = isDonor(maintenance);
-  const why = [maintenance.reason, maintenance.created_by ? `by ${actorLabel(maintenance.created_by)}` : null].filter(Boolean).join(" - ");
+  const why = [maintenance.reason, maintenance.created_by ? `by ${actorIdLabel(maintenance.created_by)}` : null].filter(Boolean).join(" - ");
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5" data-testid="ss-state">
-      <span className={cn(pill, severity.tone)} data-health={row.health}>
-        <span aria-hidden className="text-[0.7em] leading-none">
-          {SEVERITY_GLYPH[row.health] ?? SEVERITY_GLYPH.UNKNOWN}
-        </span>
-        {severity.label}
-      </span>
+      <SeverityPill severity={row.health} />
       {maintenance.enabled && (
         <span
           title={why || undefined}
