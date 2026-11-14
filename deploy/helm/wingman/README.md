@@ -344,9 +344,10 @@ Without the key the toggle is greyed out and says so; against a server-scan with
 (no Secret at all) it works without one. The same toggle sits on a server's own page.
 
 The **Jobs** page (`/server-scan/jobs`) lists server-scan's collector and prune CronJobs,
-their runs and logs. server-scan serves them to its admins only, so day1 reads them with the
-same admin key; without it beside a viewer token the page says Jobs is not set up and names
-the key. Nothing else to set: server-scan's own chart decides which CronJobs it may start
+their runs and logs, and its **Run job** starts one now: the area's second write, a real
+Job, for Wingman's admins only and logged with the person's name. server-scan serves Jobs to
+its admins only, reads included, so day1 reads and starts them with the same admin key;
+without it beside a viewer token the page says Jobs is not set up and names the key. Nothing else to set: server-scan's own chart decides which CronJobs it may start
 (`jobTrigger.enabled`).
 
 Its third page, a **server's page** (`/server-scan/servers/<id>`, opened from a server's

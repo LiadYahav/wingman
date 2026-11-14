@@ -30,7 +30,7 @@ from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
-from wingman_day1.domain.server_scan_jobs import JobsOverview, PodLogs
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -144,6 +144,10 @@ class CachedServerInventory:
     async def job_logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
         """See ServerInventory.job_logs; always read through."""
         return await self._inner.job_logs(cronjob, job, pod, tail=tail)
+
+    async def run_job(self, cronjob: str) -> JobRun:
+        """See ServerInventory.run_job; nothing cached to clear (the Jobs are never cached)."""
+        return await self._inner.run_job(cronjob)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance; clears the rows and sites."""

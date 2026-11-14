@@ -1,7 +1,8 @@
 """HttpServerInventory: server-scan's fleet, one server, its sites and maintenance, over httpx.
 
-Read only (ADR-0038, ADR-0048) but for a server's maintenance, the Server Scan
-area's one write (``server_scan_writes``, ADR-0048's 3.23.0 amendment). Day1
+Read only (ADR-0038, ADR-0048) but for a server's maintenance
+(``server_scan_writes``, ADR-0048's 3.23.0 amendment) and a Job's start
+(``server_scan_jobs``, 3.32.0), the Server Scan area's writes. Day1
 presents a viewer token (``Authorization: Bearer``) on every read, the
 auditor token on the audit trail only (a server's History, the Events page)
 and the admin token on the writes and the Jobs page only, or none for an
@@ -43,7 +44,7 @@ from wingman_day1.domain.errors import ServerNotFoundError, ServerScanUnavailabl
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
-from wingman_day1.domain.server_scan_jobs import JobsOverview, PodLogs
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -55,7 +56,7 @@ from wingman_day1.infrastructure.observed import Observer, ServerScanOperation, 
 from wingman_day1.infrastructure.server_scan_architecture import read_diagram, ui_client
 from wingman_day1.infrastructure.server_scan_confs import read_confs
 from wingman_day1.infrastructure.server_scan_events import read_event_actors, read_fleet_events
-from wingman_day1.infrastructure.server_scan_jobs import read_job_logs, read_jobs
+from wingman_day1.infrastructure.server_scan_jobs import read_job_logs, read_jobs, start_job
 from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_detail
 from wingman_day1.infrastructure.server_scan_record import (
     check,
@@ -218,6 +219,11 @@ class HttpServerInventory:
         headers = self._admin_headers
         read = read_job_logs(self._client, cronjob, job, pod, tail=tail, headers=headers)
         return await self._observer.call(ServerScanOperation.GET_JOB_LOGS, read)
+
+    async def run_job(self, cronjob: str) -> JobRun:
+        """See ServerInventory.run_job."""
+        write = start_job(self._client, cronjob, headers=self._admin_headers)
+        return await self._observer.call(ServerScanOperation.RUN_JOB, write)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance."""

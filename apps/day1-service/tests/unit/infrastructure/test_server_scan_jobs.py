@@ -9,6 +9,7 @@ with the admin token, or with none to a server-scan with auth off.
 from __future__ import annotations
 
 import copy
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -16,11 +17,14 @@ import httpx
 import pytest
 from prometheus_client import CollectorRegistry
 
+from wingman_core.domain.users import Role, User
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_day1.application.server_scan_jobs import ServerScanJobs
 from wingman_day1.domain.errors import (
+    AmbiguousServerScanWriteError,
     ServerScanDeniedError,
     ServerScanJobNotFoundError,
+    ServerScanJobRunningError,
     ServerScanUnavailableError,
     ServerScanWritesOffError,
 )
@@ -28,11 +32,13 @@ from wingman_day1.domain.server_scan_jobs import JOBS_OFF, jobs_detail
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
 from wingman_day1.infrastructure.fake_server_scan_jobs import (
     PRUNE_WARNING,
+    RUN_SECONDS,
     FakeCronJob,
     FakeJobs,
     FakeRun,
     demo_cronjobs,
     demo_jobs,
+    manual_name,
 )
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 
@@ -43,6 +49,8 @@ JOB = f"{CRONJOB}-29386440"
 POD = f"{JOB}-abcde"
 LOGS = f"/api/v1/jobs/{CRONJOB}/runs/{JOB}/pods/{POD}/logs"
 T0 = datetime(2026, 11, 14, 9, 0, tzinfo=UTC)
+RUN = f"/api/v1/jobs/{CRONJOB}/run"
+ALICE = User(username="alice", role=Role.ADMIN)
 
 
 def run(**changes: Any) -> dict[str, Any]:
@@ -357,3 +365,195 @@ async def test_a_fake_fleet_down_fails_the_jobs_too() -> None:
     fake = FakeServerInventory(jobs=demo_jobs(Clock()), unavailable=True)
     with pytest.raises(ServerScanUnavailableError):
         await fake.jobs()
+
+
+# ── Run job: the area's second write ──────────────────────────────────────────
+
+
+def started(**changes: Any) -> dict[str, Any]:
+    """server-scan's answer to a start: the new Job, usually with no pod yet."""
+    manual = f"{CRONJOB}-manual-q7x2ka"
+    return (
+        run(
+            name=manual,
+            state="pending",
+            finished_at=None,
+            succeeded=0,
+            manual=True,
+            triggered_by="api-token-admin",
+            pods=[],
+        )
+        | changes
+    )
+
+
+async def test_a_start_posts_once_with_the_admin_token_and_no_body() -> None:
+    inventory, sent = make(httpx.Response(201, json=started()))
+    job = await inventory.run_job(CRONJOB)
+    (request,) = sent
+    assert (request.method, request.url.path, request.content) == ("POST", RUN, b"")
+    assert request.headers["authorization"] == f"Bearer {ADMIN}"
+    assert (job.name, job.manual, job.triggered_by) == (started()["name"], True, "api-token-admin")
+
+
+async def test_with_no_token_at_all_a_start_goes_without_one() -> None:
+    inventory, sent = make(httpx.Response(201, json=started()), token="", admin_token="")
+    await inventory.run_job(CRONJOB)
+    assert "authorization" not in sent[0].headers
+
+
+async def test_a_running_cronjob_is_refused_in_server_scans_words() -> None:
+    words = {"detail": f"{CRONJOB} already has an unfinished Job ({JOB})."}
+    inventory, sent = make(httpx.Response(409, json=words))
+    with pytest.raises(
+        ServerScanJobRunningError, match=r"^server-scan: .* already has an unfinished"
+    ):
+        await inventory.run_job(CRONJOB)
+    assert len(sent) == 1
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "No triggerable CronJob named 'x'.",
+        "Running jobs from the UI is not enabled on this deployment.",
+    ],
+)
+async def test_a_cronjob_server_scan_may_not_start_is_not_found(words: str) -> None:
+    inventory, _ = make(httpx.Response(404, json={"detail": words}))
+    with pytest.raises(ServerScanJobNotFoundError, match=words.split(" ")[0]):
+        await inventory.run_job("x")
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        httpx.ReadTimeout("lost"),
+        httpx.RemoteProtocolError("closed"),
+        httpx.Response(504, text="gateway timeout"),
+        httpx.Response(201, json={"name": "half"}),
+        httpx.Response(201, text="not json"),
+    ],
+)
+async def test_an_unanswered_start_is_ambiguous_says_to_look_at_the_runs_and_is_sent_once(
+    answer: httpx.Response | Exception,
+) -> None:
+    inventory, sent = make(answer)
+    with pytest.raises(
+        AmbiguousServerScanWriteError, match=r"Look at the runs of .* before starting"
+    ):
+        await inventory.run_job(CRONJOB)
+    assert len(sent) == 1
+
+
+async def test_a_start_never_sent_is_unavailable_and_started_nothing() -> None:
+    inventory, sent = make(httpx.ConnectError("refused"))
+    with pytest.raises(ServerScanUnavailableError, match="nothing changed"):
+        await inventory.run_job(CRONJOB)
+    assert len(sent) == 1
+
+
+@pytest.mark.parametrize("status", [401, 403])
+async def test_a_refused_admin_token_on_a_start_is_denied(status: int) -> None:
+    inventory, _ = make(httpx.Response(status, json={}))
+    with pytest.raises(ServerScanDeniedError, match="SERVER_SCAN_ADMIN_TOKEN"):
+        await inventory.run_job(CRONJOB)
+
+
+async def test_starts_are_counted() -> None:
+    metrics = WingmanMetrics(CollectorRegistry(), component="day1", version="t", commit="t")
+    inventory, _ = make(
+        httpx.Response(201, json=started()),
+        httpx.Response(409, json={}),
+        httpx.ReadTimeout("lost"),
+        metrics=metrics,
+    )
+    await inventory.run_job(CRONJOB)
+    with pytest.raises(ServerScanJobRunningError):
+        await inventory.run_job(CRONJOB)
+    with pytest.raises(AmbiguousServerScanWriteError):
+        await inventory.run_job(CRONJOB)
+
+    def count(outcome: str) -> float | None:
+        labels = {"dependency": "server_scan", "operation": "run_job", "outcome": outcome}
+        return metrics.registry.get_sample_value("wingman_dependency_requests_total", labels)
+
+    assert (count("ok"), count("conflict"), count("ambiguous")) == (1, 1, 1)
+
+
+async def test_a_start_is_logged_with_the_person(caplog: pytest.LogCaptureFixture) -> None:
+    fake = FakeServerInventory(jobs=demo_jobs(Clock()))
+    jobs = ServerScanJobs(fake)
+    with caplog.at_level(logging.INFO, logger="wingman_day1.application.server_scan"):
+        job = await jobs.run("server-scan-prune-events", user=ALICE)
+    (record,) = caplog.records
+    assert record.__dict__["event"] == "server_scan_job_started"
+    assert (record.__dict__["user"], record.__dict__["cronjob"]) == (
+        "alice",
+        "server-scan-prune-events",
+    )
+    assert record.__dict__["job"] == job.name
+    assert "user=alice" in record.getMessage()
+
+
+async def test_an_unanswered_start_is_logged_unconfirmed_and_raised(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    inventory, sent = make(httpx.ReadTimeout("lost"))
+    with (
+        caplog.at_level(logging.INFO, logger="wingman_day1.application.server_scan"),
+        pytest.raises(AmbiguousServerScanWriteError),
+    ):
+        await ServerScanJobs(inventory).run(CRONJOB, user=ALICE)
+    (record,) = caplog.records
+    assert (record.levelno, record.__dict__["event"]) == (
+        logging.WARNING,
+        "server_scan_job_unconfirmed",
+    )
+    assert (record.__dict__["user"], record.__dict__["cronjob"]) == ("alice", CRONJOB)
+    assert len(sent) == 1
+
+
+async def test_without_the_admin_token_nothing_is_started() -> None:
+    fake = FakeServerInventory(jobs=demo_jobs(Clock()))
+    with pytest.raises(ServerScanWritesOffError):
+        await ServerScanJobs(fake, detail=JOBS_OFF).run("server-scan-prune-events", user=ALICE)
+    assert fake.job_starts == []
+
+
+async def test_the_fake_starts_a_run_by_dev_that_runs_20_seconds_then_succeeds() -> None:
+    clock = Clock()
+    fake = FakeServerInventory(jobs=demo_jobs(clock))
+    job = await fake.run_job("server-scan-prune-events")
+    assert (job.state, job.manual, job.triggered_by) == ("active", True, "dev")
+    assert job.name.startswith("server-scan-prune-events-manual-")
+    prune = (await fake.jobs()).cronjobs[2]
+    assert (prune.active, prune.jobs[0].name) == (True, job.name)
+    # A second send while it runs is server-scan's 409
+    with pytest.raises(ServerScanJobRunningError, match=job.name):
+        await fake.run_job("server-scan-prune-events")
+    clock.now = T0 + timedelta(seconds=RUN_SECONDS)
+    prune = (await fake.jobs()).cronjobs[2]
+    assert (prune.active, prune.jobs[0].state) == (False, "succeeded")
+    # Once it has finished, another send is another run
+    again = await fake.run_job("server-scan-prune-events")
+    assert again.name != job.name
+    assert fake.job_starts == ["server-scan-prune-events"] * 3
+
+
+async def test_the_fake_refuses_a_running_cronjob_and_an_unknown_one() -> None:
+    fake = FakeServerInventory(jobs=demo_jobs(Clock()))
+    with pytest.raises(ServerScanJobRunningError, match="unfinished Job"):
+        await fake.run_job("server-scan-collectors-collector-ucs-central")
+    with pytest.raises(ServerScanJobNotFoundError, match="No triggerable CronJob"):
+        await fake.run_job("nope")
+    off = FakeServerInventory(jobs=FakeJobs(demo_cronjobs(), enabled=False))
+    with pytest.raises(ServerScanJobNotFoundError, match="not enabled"):
+        await off.run_job("server-scan-prune-events")
+
+
+def test_a_manual_name_fits_kubernetes_63_characters() -> None:
+    name = manual_name("a" * 70 + "-")
+    assert len(name) == 63
+    assert "-manual-" in name
+    assert manual_name("short").startswith("short-manual-")

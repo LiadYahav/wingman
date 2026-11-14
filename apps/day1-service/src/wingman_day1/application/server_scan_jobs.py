@@ -6,12 +6,20 @@ admin token, or with no token at all (a server-scan with auth off), and is
 off with a viewer token alone (``domain.server_scan_jobs.jobs_detail``, the
 maintenance toggle's rule): every call then raises
 ``ServerScanWritesOffError`` with the line naming the key.
+
+Run job is the area's second write. server-scan writes Wingman's token on
+the Job, never the person, so each start is logged with the person's name
+(``server_scan_audit.recorded``), as maintenance is. Never retried
+(ADR-0006): server-scan has no idempotency key, and refuses a second start
+only while the first is unfinished.
 """
 
 from __future__ import annotations
 
+from wingman_core.domain.users import User
+from wingman_day1.application.server_scan_audit import recorded
 from wingman_day1.domain.errors import ServerScanWritesOffError
-from wingman_day1.domain.server_scan_jobs import JobsOverview, PodLogs
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.ports import ServerInventory
 
 
@@ -33,6 +41,24 @@ class ServerScanJobs:
         self._on()
         return await self._inventory.job_logs(cronjob, job, pod, tail=tail)
 
+    async def run(self, cronjob: str, *, user: User) -> JobRun:
+        """Start a Job of ``cronjob`` now, as server-scan's Run job; logged with ``user``."""
+        self._on()
+        event = {"user": user.username, "cronjob": cronjob}
+        start = self._inventory.run_job(cronjob)
+        return await recorded(
+            start,
+            event,
+            done="server_scan_job_started",
+            unconfirmed="server_scan_job_unconfirmed",
+            answered=_named,
+        )
+
     def _on(self) -> None:
         if self.detail is not None:
             raise ServerScanWritesOffError(self.detail)
+
+
+def _named(job: JobRun) -> dict[str, str]:
+    """What a start's answer adds to its log line: the new Job's name."""
+    return {"job": job.name}

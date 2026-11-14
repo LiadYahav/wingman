@@ -4,23 +4,30 @@ server-scan's own fake runner (team-redbull/server-scan at 92146d3,
 ``backend/app/infrastructure/jobs/fake.py``, decision 18), ported: CronJobs
 with a short history each, every run's state judged on the clock (running
 until its time is up, then succeeded or failed), and log lines that grow
-while a run goes on. ``demo_jobs`` is the local demo's three CronJobs, as a
-deployment of server-scan's charts has them: two collectors (one running
-now) and the events prune. Nothing here is real.
+while a run goes on. A start runs for 20 seconds and then succeeds, named
+as ``kubectl create job --from`` names it, and is refused (server-scan's
+409) while the CronJob has an unfinished Job. ``demo_jobs`` is the local
+demo's three CronJobs, as a deployment of server-scan's charts has them: two
+collectors (one running now) and the events prune. Nothing here is real.
 """
 
 from __future__ import annotations
 
+import secrets
+import string
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Final
 
 from wingman_core.ports.clock import Clock, system_clock
-from wingman_day1.domain.errors import ServerScanJobNotFoundError
+from wingman_day1.domain.errors import ServerScanJobNotFoundError, ServerScanJobRunningError
 from wingman_day1.domain.server_scan_jobs import CronJob, JobPod, JobRun, JobsOverview, PodLogs
 
 NAMESPACE: Final = "server-scan"
+RUN_SECONDS: Final = 20.0
+"""How long a Job started by hand runs, as server-scan's fake."""
+MANUAL_INFIX: Final = "-manual-"
 OPENMANAGE_WARNING: Final = (
     "This run can restart an iDRAC (ADR-0050) when a Dell has every disk or NIC UNKNOWN."
 )
@@ -119,6 +126,22 @@ class FakeJobs:
         lines = self._log(self._cronjobs[cronjob], found)
         return PodLogs(pod=pod, tail=tail, text="\n".join(lines[-tail:]) + "\n")
 
+    def run(self, cronjob: str, *, triggered_by: str) -> JobRun:
+        """Start a Job by hand, ``triggered_by`` on it; refused while one is unfinished (409)."""
+        jobs = self._of(cronjob)
+        if cronjob not in self._cronjobs:
+            raise ServerScanJobNotFoundError(
+                f"server-scan: No triggerable CronJob named {cronjob!r}."
+            )
+        running = next((job for job in jobs if self._running(job)), None)
+        if running is not None:
+            raise ServerScanJobRunningError(
+                f"server-scan: {cronjob} already has an unfinished Job ({running.name})."
+            )
+        job = _Job(manual_name(cronjob), self._clock(), RUN_SECONDS, True, True, triggered_by)
+        jobs.append(job)
+        return self._run(job)
+
     def _of(self, cronjob: str) -> list[_Job]:
         if not self.enabled:
             raise ServerScanJobNotFoundError(FEATURE_OFF)
@@ -202,6 +225,13 @@ def demo_cronjobs() -> list[FakeCronJob]:
             prune=True,
         ),
     ]
+
+
+def manual_name(cronjob: str) -> str:
+    """``<cronjob>-manual-<6 characters>``, cut to Kubernetes' 63, as server-scan names it."""
+    suffix = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(6))
+    room = 63 - len(MANUAL_INFIX) - len(suffix)
+    return f"{cronjob[:room].rstrip('-')}{MANUAL_INFIX}{suffix}"
 
 
 def _steps(cronjob: FakeCronJob) -> tuple[str, ...]:

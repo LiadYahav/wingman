@@ -52,7 +52,7 @@ from wingman_day1.domain.errors import (
 from wingman_day1.domain.server_scan_architecture import ArchitectureDiagram
 from wingman_day1.domain.server_scan_confs import ConfList
 from wingman_day1.domain.server_scan_events import EventActorList, EventPage, EventQuery
-from wingman_day1.domain.server_scan_jobs import JobsOverview, PodLogs
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.domain.server_scan_record import ServerRecord, VmHostAnswer, VmHostServer
 from wingman_day1.domain.server_scan_rules import ClassificationRuleList, HealthPolicyList
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
@@ -131,6 +131,8 @@ class FakeServerInventory:
         """How many times ``server`` was called (the uninstall's fresh read)."""
         self.maintenance_starts: list[tuple[str, MaintenanceStart]] = []
         """Every ``start_maintenance`` that reached a server, in order."""
+        self.job_starts: list[str] = []
+        """Every ``run_job`` that reached the fake server-scan, in order."""
         self._before_read: list[Callable[[], None]] = []
 
     def before_read(self, hook: Callable[[], None]) -> None:
@@ -250,6 +252,12 @@ class FakeServerInventory:
         """See ServerInventory.job_logs."""
         self._read()
         return self._jobs.logs(cronjob, job, pod, tail=tail)
+
+    async def run_job(self, cronjob: str) -> JobRun:
+        """See ServerInventory.run_job: by ``dev``, as a server-scan with auth off records it."""
+        self._read()
+        self.job_starts.append(cronjob)
+        return self._jobs.run(cronjob, triggered_by=FAKE_ACTOR)
 
     async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
         """See ServerInventory.start_maintenance: who stays the first one's, as in server-scan."""

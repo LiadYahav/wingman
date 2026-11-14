@@ -10,6 +10,12 @@ server-scan's shapes (``domain/server_scan_jobs.py``): an answer that does
 not fit is "unavailable", never a blank. server-scan's 404 (no such CronJob,
 Job or pod, or its feature off) is ``ServerScanJobNotFoundError``, in its
 own words.
+
+``POST /api/v1/jobs/{cronjob}/run`` (no body) starts a real Job from the
+CronJob's template and answers it (``201``); its ``409`` (an unfinished Job)
+is ``ServerScanJobRunningError``. Sent once through ``server_scan_writes``
+(ADR-0006): unanswered, or accepted in a shape day1 cannot read, it is
+``AmbiguousServerScanWriteError``, which says to look at the runs first.
 """
 
 from __future__ import annotations
@@ -20,9 +26,10 @@ from urllib.parse import quote
 
 import httpx
 
-from wingman_day1.domain.errors import ServerScanJobNotFoundError
-from wingman_day1.domain.server_scan_jobs import JobsOverview, PodLogs
+from wingman_day1.domain.errors import ServerScanJobNotFoundError, ServerScanJobRunningError
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview, PodLogs
 from wingman_day1.infrastructure.server_scan_record import check, fetch, parsed, problem_detail
+from wingman_day1.infrastructure.server_scan_writes import accepted, refused, send_once
 
 JOBS_PATH: Final = "/api/v1/jobs"
 ADMIN: Final = ("admin token", "SERVER_SCAN_ADMIN_TOKEN")
@@ -61,3 +68,32 @@ async def read_job_logs(
         )
     check(response, what=what, token=ADMIN)
     return parsed(PodLogs, response, f"a malformed log of {pod}")
+
+
+async def start_job(
+    client: httpx.AsyncClient, cronjob: str, *, headers: Mapping[str, str]
+) -> JobRun:
+    """Start a Job of ``cronjob`` now and read it; once, whatever happens."""
+    what = f"starting a run of {cronjob}"
+    check_first = f"Look at the runs of {cronjob} before starting it again."
+    path = job_path(cronjob, "run")
+    response = await send_once(
+        client, "POST", path, what=what, check_first=check_first, headers=headers
+    )
+    status = response.status_code
+    if status in (200, 201):
+        return accepted(response, _job_of, what=what, check_first=check_first)
+    if status == 404:
+        raise ServerScanJobNotFoundError(
+            problem_detail(response) or f"server-scan has no triggerable CronJob {cronjob!r}"
+        )
+    if status == 409:
+        raise ServerScanJobRunningError(
+            problem_detail(response) or f"server-scan: {cronjob} already has an unfinished Job."
+        )
+    raise refused(response, what=what, check_first=check_first)
+
+
+def _job_of(response: httpx.Response) -> JobRun:
+    """The new Job; a shape that does not fit raises ValidationError, a ValueError."""
+    return JobRun.model_validate_json(response.content)

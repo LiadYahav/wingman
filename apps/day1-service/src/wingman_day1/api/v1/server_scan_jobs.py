@@ -7,7 +7,10 @@ beside a viewer token they answer 501 naming the key; with no token at all
 (server-scan with auth off) they work without one. 501 with
 ``SERVER_SCAN_URL`` empty, 404 for a CronJob, Job or pod server-scan does not
 have (or its feature off), 502 when server-scan fails or refuses the token.
-Never cached. The contract: ``docs/notes/2026-11-13-server-scan-area-api.md`` §14.
+Never cached. Run job is the area's second write, as server-scan's Run job:
+never retried, 409 ``JOB_ALREADY_RUNNING`` while the CronJob has an unfinished
+Job, 504 ``AMBIGUOUS_WRITE`` when unanswered, logged with the person's name.
+The contract: ``docs/notes/2026-11-13-server-scan-area-api.md`` §14.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from wingman_day1.domain.server_scan_jobs import (
     K8S_NAME_MAX,
     LOG_TAIL,
     LOG_TAIL_MAX,
+    JobRun,
     JobsOverview,
     PodLogs,
 )
@@ -48,3 +52,9 @@ async def server_scan_job_logs(
 ) -> PodLogs:
     """A pod's last ``tail`` lines, only for a pod of a Job of that CronJob."""
     return await service.jobs.logs(cronjob, job, pod, tail=tail)
+
+
+@router.post("/{cronjob}/run", status_code=201)
+async def run_server_scan_job(cronjob: Name, service: ServerScan, user: AdminUser) -> JobRun:
+    """Start a Job of the CronJob now, from its template; logged with the person's name."""
+    return await service.jobs.run(cronjob, user=user)

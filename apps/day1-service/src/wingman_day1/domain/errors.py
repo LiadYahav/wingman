@@ -156,6 +156,10 @@ class ServerScanAuditOffError(ServerScanError):
     """server-scan's audit trail is off here: a viewer token without its auditor token."""
 
 
+class ServerScanJobRunningError(ServerScanError):
+    """server-scan refused to start a CronJob that has an unfinished Job (its 409); none started."""
+
+
 class ServerScanSkillMissingError(ServerScanError):
     """server-scan carries no Claude Code skill (its ``/api/v1/skill`` answers 404)."""
 
@@ -165,7 +169,7 @@ class ServerScanRefusedError(InvalidInputError):
 
 
 class AmbiguousServerScanWriteError(ServerScanError):
-    """A maintenance write was sent but its outcome is unknown. Never retried (ADR-0006)."""
+    """A write (maintenance, a Job's start) was sent but its outcome is unknown. Never retried."""
 
 
 class NodeNotInClusterError(Day1Error):

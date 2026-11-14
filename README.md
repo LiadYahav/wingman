@@ -279,6 +279,7 @@ server-scan's pages, read through day1 in server-scan's own shapes; `501 FEATURE
 | `GET` | `/api/day1/server-scan/confs` | server-scan's hardware catalog, in its shape: every conf (server configuration) it can read, unpaged, in its natural `conf_id` order, and `unreadable`, the ids of the stored ones it could not read; read now with the viewer token, not cached by day1 |
 | `GET` | `/api/day1/server-scan/jobs` | server-scan's triggerable CronJobs (its collectors and prunes), each with its schedule, warning, `values.yaml` flag and recent Jobs, newest first, and their pods, in its shape; `enabled: false` when server-scan has the feature off. With server-scan's **admin** token (it keeps Jobs for its admins, reads too), none when it runs with auth off; `501` with a viewer token alone; not cached by day1 |
 | `GET` | `/api/day1/server-scan/jobs/{cronjob}/runs/{job}/pods/{pod}/logs?tail=` | A pod's last `tail` lines (default 500; server-scan caps them), only along CronJob → its Job → its pod (else `404`, server-scan's words); the admin token, as above |
+| `POST` | `/api/day1/server-scan/jobs/{cronjob}/run` | Start a Job of the CronJob now (no body; `201`, the new Job), as server-scan's Run job, with its admin token; logged with the person's name. `409 JOB_ALREADY_RUNNING` while it has an unfinished Job, `404` for one server-scan may not start, `504 AMBIGUOUS_WRITE` when unanswered, never retried |
 
 #### Inventory Management (everyone reads, admins add; ADR-0057)
 

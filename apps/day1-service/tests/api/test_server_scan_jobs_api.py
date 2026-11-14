@@ -18,8 +18,8 @@ import pytest
 
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
-from wingman_day1.domain.errors import ServerScanDeniedError
-from wingman_day1.domain.server_scan_jobs import JobsOverview
+from wingman_day1.domain.errors import AmbiguousServerScanWriteError, ServerScanDeniedError
+from wingman_day1.domain.server_scan_jobs import JobRun, JobsOverview
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
 from wingman_day1.infrastructure.fake_server_scan_jobs import demo_jobs
@@ -28,6 +28,8 @@ from wingman_day1.ports import ServerInventory
 Auth = Callable[[User], dict[str, str]]
 JOBS = "/api/day1/server-scan/jobs"
 T0 = datetime(2026, 11, 14, 9, 0, tzinfo=UTC)
+PRUNE = "server-scan-prune-events"
+RUNNING = "server-scan-collectors-collector-ucs-central"
 CRONJOB_FIELDS = {
     "name",
     "schedule",
@@ -81,6 +83,22 @@ def fleet() -> FakeServerInventory:
 
 def logs_path(cronjob: str, job: str, pod: str) -> str:
     return f"{JOBS}/{cronjob}/runs/{job}/pods/{pod}/logs"
+
+
+def run_path(cronjob: str) -> str:
+    return f"{JOBS}/{cronjob}/run"
+
+
+class UnansweredFleet(FakeServerInventory):
+    """A start sent to server-scan whose answer never came back."""
+
+    async def run_job(self, cronjob: str) -> JobRun:
+        self.job_starts.append(cronjob)
+        raise AmbiguousServerScanWriteError(
+            f"starting a run of {cronjob} was sent to server-scan but no answer came back "
+            f"(ReadTimeout): it may have changed. Look at the runs of {cronjob} before starting "
+            "it again."
+        )
 
 
 class DeniedFleet(FakeServerInventory):
@@ -218,3 +236,89 @@ async def test_server_scan_failing_or_refusing_is_502(
     assert (down.status_code, down.json()["code"]) == (502, "DEPENDENCY_UNAVAILABLE")
     assert (denied.status_code, denied.json()["code"]) == (502, "DEPENDENCY_UNAVAILABLE")
     assert "SERVER_SCAN_ADMIN_TOKEN" in denied.json()["detail"]
+
+
+async def test_an_admin_starts_a_job_once_and_it_shows_in_the_list(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    inventory = fleet()
+    async with client(support, gitlab, clock, inventory) as http:
+        response = await http.post(run_path(PRUNE), headers=auth(support.ALICE))
+        listed = (await http.get(JOBS, headers=auth(support.ALICE))).json()
+    assert response.status_code == 201
+    job = response.json()
+    assert set(job) == JOB_FIELDS
+    assert (job["state"], job["manual"], job["triggered_by"]) == ("active", True, "dev")
+    prune = next(c for c in listed["cronjobs"] if c["name"] == PRUNE)
+    assert (prune["active"], prune["jobs"][0]["name"]) == (True, job["name"])
+    assert inventory.job_starts == [PRUNE]
+
+
+async def test_only_admins_start_a_job(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    inventory = fleet()
+    async with client(support, gitlab, clock, inventory) as http:
+        anonymous = await http.post(run_path(PRUNE))
+        viewer = await http.post(run_path(PRUNE), headers=auth(support.VIEWER))
+    assert anonymous.status_code == 401
+    assert (viewer.status_code, viewer.json()["code"]) == (403, "FORBIDDEN")
+    assert inventory.job_starts == []
+
+
+async def test_a_cronjob_with_an_unfinished_job_is_409_in_server_scans_words(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    async with client(support, gitlab, clock, fleet()) as http:
+        response = await http.post(run_path(RUNNING), headers=auth(support.ALICE))
+    assert (response.status_code, response.json()["code"]) == (409, "JOB_ALREADY_RUNNING")
+    assert response.json()["detail"].startswith(f"server-scan: {RUNNING} already has an unfinished")
+
+
+async def test_a_cronjob_server_scan_may_not_start_is_404(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    async with client(support, gitlab, clock, fleet()) as http:
+        response = await http.post(run_path("nope"), headers=auth(support.ALICE))
+        bad = await http.post(run_path("Not_A_Name"), headers=auth(support.ALICE))
+    assert (response.status_code, response.json()["code"]) == (404, "NOT_FOUND")
+    assert "No triggerable CronJob named 'nope'" in response.json()["detail"]
+    assert (bad.status_code, bad.json()["code"]) == (422, "VALIDATION_ERROR")
+
+
+async def test_an_unanswered_start_is_ambiguous_and_never_retried(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    inventory = UnansweredFleet(jobs=demo_jobs(lambda: T0))
+    async with client(support, gitlab, clock, inventory) as http:
+        response = await http.post(run_path(PRUNE), headers=auth(support.ALICE))
+    assert (response.status_code, response.json()["code"]) == (504, "AMBIGUOUS_WRITE")
+    assert "Look at the runs of" in response.json()["detail"]
+    assert inventory.job_starts == [PRUNE]
+
+
+@pytest.mark.parametrize(
+    ("tokens", "on"),
+    [
+        ({}, True),
+        ({"server_scan_admin_token": "admin"}, True),
+        ({"server_scan_token": "viewer"}, False),
+    ],
+)
+async def test_a_start_needs_the_admin_token_unless_server_scan_runs_with_auth_off(
+    support: Any,
+    gitlab: InMemoryGitLab,
+    clock: Any,
+    auth: Auth,
+    tokens: dict[str, str],
+    on: bool,
+) -> None:
+    inventory = fleet()
+    async with client(support, gitlab, clock, inventory, **tokens) as http:
+        response = await http.post(run_path(PRUNE), headers=auth(support.ALICE))
+    if on:
+        assert (response.status_code, inventory.job_starts) == (201, [PRUNE])
+    else:
+        assert (response.status_code, response.json()["code"]) == (501, "FEATURE_DISABLED")
+        assert "SERVER_SCAN_ADMIN_TOKEN" in response.json()["detail"]
+        assert inventory.job_starts == []

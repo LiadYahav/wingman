@@ -16,7 +16,7 @@ what to look at (``check_first``) before trying again.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Final, Literal, NoReturn
+from typing import Final, Literal
 from urllib.parse import quote
 
 import httpx
@@ -25,6 +25,7 @@ from wingman_day1.domain.errors import (
     AmbiguousServerScanWriteError,
     ServerNotFoundError,
     ServerScanDeniedError,
+    ServerScanError,
     ServerScanRefusedError,
     ServerScanUnavailableError,
 )
@@ -85,20 +86,20 @@ def accepted[T](
         ) from exc
 
 
-def refused(response: httpx.Response, *, what: str, check_first: str) -> NoReturn:
-    """What every write does with the answers it has no rule of its own for."""
+def refused(response: httpx.Response, *, what: str, check_first: str) -> ServerScanError:
+    """The error for an answer a write has no rule of its own for, to raise."""
     status = response.status_code
     if status in (401, 403):
-        raise ServerScanDeniedError(
+        return ServerScanDeniedError(
             f"server-scan refused Wingman's admin token ({status}) {what}: "
             "check SERVER_SCAN_ADMIN_TOKEN"
         )
     if status == 504:
-        raise AmbiguousServerScanWriteError(
+        return AmbiguousServerScanWriteError(
             f"a gateway timed out waiting for server-scan {what}: it may have changed. "
             f"{check_first}"
         )
-    raise ServerScanUnavailableError(f"server-scan answered {status} {what}")
+    return ServerScanUnavailableError(f"server-scan answered {status} {what}")
 
 
 async def send_maintenance(
@@ -122,7 +123,7 @@ async def send_maintenance(
         raise ServerNotFoundError(f"server-scan has no server {server_id!r}")
     if status == 422:
         raise ServerScanRefusedError(f"server-scan refused {what}", _problem(response))
-    refused(response, what=what, check_first=CHECK_FIRST)
+    raise refused(response, what=what, check_first=CHECK_FIRST)
 
 
 def server_maintenance(raw: JSON) -> ServerMaintenance:
