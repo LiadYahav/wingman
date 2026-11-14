@@ -1,5 +1,5 @@
 projectNamespace: example-namespace
-repourl: {{GITLAB_URL}}/helm-charts/example-chart.git
+repourl: {{GITLAB_URL}}/redbull/helm-charts/example-chart.git
 targetRevision: main
 syncPolicy:
   syncOptions:

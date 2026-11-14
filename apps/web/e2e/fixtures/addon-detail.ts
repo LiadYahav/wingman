@@ -63,7 +63,7 @@ const commitOf = (team: string) => `${team}-repo-1`;
 
 /** The deploy config of platform/cert-manager, comments and all: the page shows the text, not a re-rendering. */
 export const CERT_MANAGER_YAML =
-  "# Manual sync: cert-manager owns the cluster's CRDs, nobody syncs it by accident.\nrepourl: https://gitlab.example.com/helm-charts/cert-manager.git\nprojectNamespace: cert-manager\nsyncPolicy:\n  syncOptions:\n  - CreateNamespace=true\n";
+  "# Manual sync: cert-manager owns the cluster's CRDs, nobody syncs it by accident.\nrepourl: https://gitlab.example.com/platform/helm-charts/cert-manager.git\nprojectNamespace: cert-manager\nsyncPolicy:\n  syncOptions:\n  - CreateNamespace=true\n";
 
 function repoFile(team: string, path: string, text: string | null, values: Record<string, unknown> = {}): RepoFile {
   return { path, exists: text !== null, text, values, last_commit_id: text !== null ? commitOf(team) : null, problem: null };
@@ -371,7 +371,7 @@ function addonPreview(body: MergePreviewBody): ValuesPreview {
     installed: Boolean(dest?.deployed),
     source: "fleet-default",
     ocp_version: dest?.ocp_version ?? null,
-    chart: { project: `helm-charts/${body.addon}`, revision: detail.catalog?.current_version ?? "HEAD", path: ".", problem: null },
+    chart: { project: `${body.team}/helm-charts/${body.addon}`, revision: detail.catalog?.current_version ?? "HEAD", path: ".", problem: null },
     layers,
     deploy: {
       app_name: dest?.app_name ?? `${body.team}-${dest?.name}-${body.addon}-deploy`,

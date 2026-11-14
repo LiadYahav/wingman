@@ -41,7 +41,7 @@ from wingman_day2.settings import FAKE_GITLAB_URL
 
 HOSTED = DefaultsScope.HOSTED_CLUSTERS
 MCES = DefaultsScope.MCES
-CHART_REPO = f"{FAKE_GITLAB_URL}/helm-charts/example-chart.git"
+CHART_REPO = f"{FAKE_GITLAB_URL}/redbull/helm-charts/example-chart.git"
 AUTO = SyncSettings(auto_sync=True, prune=False, self_heal=True)
 AUTO_NS = SyncSettings(True, False, True, ("CreateNamespace=true",))
 REDBULL_HOSTED = {
@@ -209,8 +209,8 @@ async def test_a_dry_run_plans_everything_and_opens_nothing(
     ("overrides", "rule"),
     [
         ({"chart": "Pod_Info"}, "chart-name"),
-        ({"repourl": "gitlab/helm-charts/x.git"}, "repourl-invalid"),
-        ({"repourl": f"{FAKE_GITLAB_URL}/helm-charts/nope.git"}, "chart-repo-missing"),
+        ({"repourl": "gitlab/redbull/helm-charts/x.git"}, "repourl-invalid"),
+        ({"repourl": f"{FAKE_GITLAB_URL}/redbull/helm-charts/nope.git"}, "chart-repo-missing"),
         ({"target_revision": "9.9.9"}, "revision-unknown"),
         ({"project_namespace": "Pod Info"}, "namespace-invalid"),
         ({"sync": SyncSettings(prune=True)}, "sync-without-auto"),
@@ -295,7 +295,7 @@ async def test_editing_the_team_default_rewrites_only_what_changes(
     text = (await branch_files(gitlab, result))["operators/bmhgen/bmhgen.yaml"]
     assert text == (
         "projectNamespace: metal3-system\n"
-        f"repourl: {FAKE_GITLAB_URL}/helm-charts/bmhgen.git\n"
+        f"repourl: {FAKE_GITLAB_URL}/redbull/helm-charts/bmhgen.git\n"
         "syncPolicy:\n"
         "  syncOptions:\n"
         "    - CreateNamespace=true\n"
@@ -357,7 +357,7 @@ async def test_an_add_on_edit_says_sig_values_and_one_opened_saying_team_default
 async def test_setting_repourl_fixes_a_miscased_one_in_place(
     services: Day2Services, gitlab: InMemoryGitLab, jane_user: User
 ) -> None:
-    url = f"{FAKE_GITLAB_URL}/helm-charts/kyverno.git"
+    url = f"{FAKE_GITLAB_URL}/redbull/helm-charts/kyverno.git"
     result = await confirmed(
         partial(
             services.authoring.update_team_default,
@@ -605,7 +605,7 @@ async def test_a_fleet_default_goes_back_to_the_team_default_sync(
     branch = await branch_files(gitlab, result)
     assert yaml.safe_load(branch["defaults/mces/example-chart/example-chart.yaml"]) == {
         "projectNamespace": "example-namespace",
-        "repourl": f"{FAKE_GITLAB_URL}/helm-charts/example-chart.git",
+        "repourl": f"{FAKE_GITLAB_URL}/redbull/helm-charts/example-chart.git",
         "targetRevision": "main",
     }
     assert yaml.safe_load(branch["defaults/mces/example-chart/values.yaml"]) == {"fleet": True}
@@ -631,7 +631,7 @@ async def test_the_template_copies_the_teams_usual_sync_options_and_repo_folder(
 ) -> None:
     redbull = await services.authoring.template("redbull")
     assert redbull.sync == PLATFORM_DEFAULT and "3 of 3" in redbull.sync_source
-    assert redbull.repourl_prefix == f"{FAKE_GITLAB_URL}/helm-charts/"
+    assert redbull.repourl_prefix == f"{FAKE_GITLAB_URL}/redbull/helm-charts/"
     scopes = {str(s.scope): [r.id for r in s.destinations] for s in redbull.scopes}
     assert len(scopes["hosted-clusters"]) == 4 and scopes["hub"] == ["hub"]
     assert redbull.access.writable

@@ -11,7 +11,7 @@ export function catalogEntry({ team, name, ...rest }: Chart): CatalogEntry {
     name,
     argocd_metadata: {
       projectNamespace: name,
-      repourl: `https://gitlab.example.com/helm-charts/${name}.git`,
+      repourl: `https://gitlab.example.com/${team}/helm-charts/${name}.git`,
       targetRevision: rest.current_version,
       syncPolicy: { syncOptions: ["CreateNamespace=true"] },
       path: ".",
@@ -19,7 +19,7 @@ export function catalogEntry({ team, name, ...rest }: Chart): CatalogEntry {
     dependencies: [],
     ocp_version_pins: [],
     fleet_defaults: [],
-    chart_project: `helm-charts/${name}`,
+    chart_project: `${team}/helm-charts/${name}`,
     warnings: [],
     writable: true,
     read_only_reason: null,

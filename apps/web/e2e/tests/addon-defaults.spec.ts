@@ -119,7 +119,7 @@ test.describe("An add-on's page", () => {
     await go(page, "/addons/platform/cert-manager");
     const addon = page.getByRole("region", { name: "Add-on" });
     await expect(addon.getByLabel("Contents of operators/cert-manager/cert-manager.yaml")).toHaveText(CERT_MANAGER_YAML.trimEnd());
-    await expect(addon).toContainText("https://gitlab.example.com/helm-charts/cert-manager.git");
+    await expect(addon).toContainText("https://gitlab.example.com/platform/helm-charts/cert-manager.git");
     await expect(addon.getByRole("button", { name: "Edit add-on" })).toBeEnabled();
     await addon.getByRole("tab", { name: "Sig values" }).click();
     await expect(addon.getByRole("list", { name: "Values, lowest first" }).locator("[aria-current]")).toHaveText("Sig values");

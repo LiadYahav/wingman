@@ -3,7 +3,7 @@ projectNamespace: example-namespace
 # repourl, all lowercase — that is the key deployApp.yaml reads (`.Values.repourl`).
 # Several deploy configs in this repo write `repoUrl`; that spelling reaches the
 # template as nil and renders an empty repoURL, so do not copy it from them.
-repourl: {{GITLAB_URL}}/helm-charts/example-chart.git
+repourl: {{GITLAB_URL}}/redbull/helm-charts/example-chart.git
 targetRevision: main
 syncPolicy:
   syncOptions:

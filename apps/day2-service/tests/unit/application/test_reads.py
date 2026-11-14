@@ -158,15 +158,15 @@ async def test_catalog_lookups(services: Day2Services, gitlab: InMemoryGitLab) -
 async def test_a_repourl_naming_a_renamed_chart_repo_still_reads_and_says_where_it_went(
     services: Day2Services, gitlab: InMemoryGitLab
 ) -> None:
-    roles = await gitlab.get_project("helm-charts/cluster-roles")
-    gitlab.rename_project(roles.id, "helm-charts/cluster-roles-operator")
+    roles = await gitlab.get_project("redbull/helm-charts/cluster-roles")
+    gitlab.rename_project(roles.id, "redbull/helm-charts/cluster-roles-operator")
     entry = await services.catalog.entry("redbull", "cluster-roles")
     assert entry.versions == ("main", "2.1.5-hotfix", "2.0.0")
     [moved] = [f for f in entry.findings if f.rule is Rule.REPOURL_MOVED]
     assert moved.severity == "warning" and moved.chart == "cluster-roles"
-    assert "helm-charts/cluster-roles-operator" in moved.message
+    assert "redbull/helm-charts/cluster-roles-operator" in moved.message
     assert moved.message.endswith(
-        "set `repourl: http://gitlab.fake/helm-charts/cluster-roles-operator.git`"
+        "set `repourl: http://gitlab.fake/redbull/helm-charts/cluster-roles-operator.git`"
     )
     values = await services.catalog.default_values("redbull", "cluster-roles", "2.0.0")
     assert values.problem is None and "groups" in values.values
@@ -178,9 +178,11 @@ async def test_lints_name_each_file_that_sets_a_moved_repourl_once(
     await commit(
         gitlab,
         "sigs/redbull",
-        {"operators/idle/idle.yaml": "repourl: http://gitlab.fake/helm-charts/bmhgen.git\n"},
+        {
+            "operators/idle/idle.yaml": "repourl: http://gitlab.fake/redbull/helm-charts/bmhgen.git\n"
+        },
     )
-    for path in ("helm-charts/cluster-roles", "helm-charts/bmhgen"):
+    for path in ("redbull/helm-charts/cluster-roles", "redbull/helm-charts/bmhgen"):
         project = await gitlab.get_project(path)
         gitlab.rename_project(project.id, f"{path}-operator")
     found = [f for f in await services.lints.report() if f.rule is Rule.REPOURL_MOVED]
@@ -198,8 +200,10 @@ async def test_one_unreadable_chart_repo_is_that_charts_problem_not_the_pages(
     get_project = gitlab.get_project
 
     async def refuse_cluster_roles(project: int | str) -> Project:
-        if project == "helm-charts/cluster-roles":
-            raise InvalidRequestError("GET /projects/helm-charts%2Fcluster-roles: 301 moved")
+        if project == "redbull/helm-charts/cluster-roles":
+            raise InvalidRequestError(
+                "GET /projects/redbull%2Fhelm-charts%2Fcluster-roles: 301 moved"
+            )
         return await get_project(project)
 
     monkeypatch.setattr(gitlab, "get_project", refuse_cluster_roles)
@@ -216,7 +220,7 @@ async def test_one_unreadable_chart_repo_is_that_charts_problem_not_the_pages(
 async def test_a_chart_repo_whose_branches_are_refused_is_unreadable_too(
     services: Day2Services, gitlab: InMemoryGitLab, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    roles = await gitlab.get_project("helm-charts/cluster-roles")
+    roles = await gitlab.get_project("redbull/helm-charts/cluster-roles")
     list_branches = gitlab.list_branches
 
     async def refuse(project_id: int) -> list[Branch]:
@@ -401,7 +405,7 @@ async def test_a_subchart_path_reads_the_defaults_from_that_folder(
 async def test_a_preview_reports_unreadable_chart_defaults_instead_of_hiding_them(
     services: Day2Services, gitlab: InMemoryGitLab
 ) -> None:
-    pid = (await gitlab.get_project("helm-charts/dhcp-scope-manager")).id
+    pid = (await gitlab.get_project("redbull/helm-charts/dhcp-scope-manager")).id
     await gitlab.commit(
         pid,
         branch="main",

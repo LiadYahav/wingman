@@ -25,7 +25,7 @@ async def test_automated_true_is_an_error_on_the_layer_that_sets_it(
 ) -> None:
     await _write(
         gitlab,
-        "repourl: http://gitlab.fake/helm-charts/sim-day2-helm-charts.git\n"
+        "repourl: http://gitlab.fake/lynx/helm-charts/sim-day2-helm-charts.git\n"
         "syncPolicy:\n  automated: true\n",
     )
     found = [f for f in await services.lints.report("lynx") if f.rule is Rule.SYNC_POLICY_INVALID]
@@ -39,7 +39,7 @@ async def test_enabled_false_is_manual_sync_and_no_error(
 ) -> None:
     await _write(
         gitlab,
-        "repourl: http://gitlab.fake/helm-charts/sim-day2-helm-charts.git\n"
+        "repourl: http://gitlab.fake/lynx/helm-charts/sim-day2-helm-charts.git\n"
         "syncPolicy:\n  automated:\n    enabled: false\n    selfHeal: true\n",
     )
     report = await services.lints.report("lynx")

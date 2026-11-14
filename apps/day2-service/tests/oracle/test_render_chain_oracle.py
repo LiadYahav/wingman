@@ -451,7 +451,7 @@ async def test_a_created_addon_and_its_default_render_as_wingman_says(tmp_path: 
     spec = NewAddon(
         team="redbull",
         chart="podinfo",
-        repourl=f"{URL}/helm-charts/example-chart.git",
+        repourl=f"{URL}/redbull/helm-charts/example-chart.git",
         sync=SyncSettings(True, False, True, ("CreateNamespace=true", "ServerSideApply=true")),
         project_namespace="podinfo",
         values={"replicas": 2},
@@ -473,7 +473,7 @@ async def test_a_created_addon_and_its_default_render_as_wingman_says(tmp_path: 
             "automated": {"prune": False, "selfHeal": True},
             "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"],
         }
-        assert leaf["identity"]["source_repoURL"] == f"{URL}/helm-charts/example-chart.git"
+        assert leaf["identity"]["source_repoURL"] == f"{URL}/redbull/helm-charts/example-chart.git"
         assert leaf["identity"]["destination"] == {"name": "in-cluster", "namespace": "podinfo"}
         assert workload(after_files, "redbull", leaf) == {"replicas": 2, "fleet": True}
     await assert_same_apps(after_files, tmp_path / "again", "redbull")
@@ -571,13 +571,13 @@ async def test_a_create_changes_existing_folders_exactly_as_wingman_lists(tmp_pa
     # Review of 3.8.0: a new team layer under a cluster's own podinfo/ changes what it deploys.
     files = fixture_files()
     folder = "sites/site1/prod/mces/ocp4-prod-mce-site1-a/ocp4-prod-herzi-site1/podinfo"
-    files[RB][f"{folder}/podinfo.yaml"] = f"repourl: {URL}/helm-charts/example-chart.git\n"
+    files[RB][f"{folder}/podinfo.yaml"] = f"repourl: {URL}/redbull/helm-charts/example-chart.git\n"
     files[RB][f"{folder}/values.yaml"] = "replicas: 1\n"
     before = _leaves(oracle(files, tmp_path / "before", "redbull")["apps"])
     spec = NewAddon(
         team="redbull",
         chart="podinfo",
-        repourl=f"{URL}/helm-charts/example-chart.git",
+        repourl=f"{URL}/redbull/helm-charts/example-chart.git",
         sync=SyncSettings(True, True, True, ("CreateNamespace=true",)),
         project_namespace="other-ns",
         values={"resources": {"limits": {"cpu": "1"}}},

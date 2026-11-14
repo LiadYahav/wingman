@@ -1,5 +1,5 @@
 name: cluster-roles.yaml
-repourl: {{GITLAB_URL}}/helm-charts/cluster-roles.git
+repourl: {{GITLAB_URL}}/redbull/helm-charts/cluster-roles.git
 targetRevision: main
 syncPolicy:
   syncOptions:

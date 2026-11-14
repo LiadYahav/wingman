@@ -80,7 +80,7 @@ function template(name: string): AddonTemplate {
     read_only_reason: found?.read_only_reason ?? null,
     sync: MANUAL,
     sync_source: `the sync options most of sigs/${name}'s add-ons use (2 of 2)`,
-    repourl_prefix: "https://gitlab.example.com/helm-charts/",
+    repourl_prefix: `https://gitlab.example.com/${name}/helm-charts/`,
     known_sync_options: KNOWN_SYNC_OPTIONS,
     scopes: SCOPES,
   };
@@ -231,8 +231,8 @@ export function planFor(method: string, url: URL, body: Record<string, unknown>)
       file(
         "update",
         `operators/${chart}/${chart}.yaml`,
-        "# the team default\nrepourl: https://gitlab.example.com/helm-charts/prometheus.git\nsyncPolicy:\n  automated:\n    prune: false\n    selfHeal: true\n  syncOptions:\n  - CreateNamespace=true\n",
-        "# the team default\nrepourl: https://gitlab.example.com/helm-charts/prometheus.git\nsyncPolicy:\n  syncOptions:\n  - CreateNamespace=true\n",
+        `# the team default\nrepourl: https://gitlab.example.com/${teamName}/helm-charts/prometheus.git\nsyncPolicy:\n  automated:\n    prune: false\n    selfHeal: true\n  syncOptions:\n  - CreateNamespace=true\n`,
+        `# the team default\nrepourl: https://gitlab.example.com/${teamName}/helm-charts/prometheus.git\nsyncPolicy:\n  syncOptions:\n  - CreateNamespace=true\n`,
       ),
     ],
     reach: [HOSTED_ID],

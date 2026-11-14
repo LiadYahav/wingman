@@ -216,7 +216,10 @@ async def test_a_miscased_repourl_is_flagged_and_an_install_without_one_refused(
     assert {"repourl-miscased", "repourl-missing"} <= {w["rule"] for w in kyverno["warnings"]}
     fixed = ok(
         await install(
-            jane, "redbull", "kyverno", {"repourl": "http://gitlab.fake/helm-charts/kyverno.git"}
+            jane,
+            "redbull",
+            "kyverno",
+            {"repourl": "http://gitlab.fake/redbull/helm-charts/kyverno.git"},
         ),
         201,
     )
@@ -413,7 +416,8 @@ async def test_the_catalog_keeps_the_legacy_shape(jane: httpx.AsyncClient) -> No
     only = ok(await jane.get("/api/day2/addons?team=lynx"))
     assert {e["team"] for e in only} == {"lynx"}
     one = ok(await jane.get("/api/day2/addons/redbull/cluster-roles"))
-    assert one["name"] == "cluster-roles" and one["chart_project"] == "helm-charts/cluster-roles"
+    assert one["name"] == "cluster-roles"
+    assert one["chart_project"] == "redbull/helm-charts/cluster-roles"
     problem(await jane.get("/api/day2/addons/redbull/nope"), 404, "NOT_FOUND")
 
 
@@ -503,7 +507,7 @@ async def test_merge_preview_shows_edited_cluster_values(jane: httpx.AsyncClient
     )
     assert body["merged"]["aggregateToView"] is False
     assert body["provenance"]["aggregateToView"] == "cluster"
-    assert body["chart"]["project"] == "helm-charts/cluster-roles"
+    assert body["chart"]["project"] == "redbull/helm-charts/cluster-roles"
     assert [layer["role"] for layer in body["layers"]][-1] == "cluster"
     assert body["deploy"]["provenance"]["repourl"] == "operators/cluster-roles/cluster-roles.yaml"
     problem(

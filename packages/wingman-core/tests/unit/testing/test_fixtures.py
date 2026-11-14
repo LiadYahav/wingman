@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -30,19 +31,37 @@ def test_every_production_project_is_present(projects: list[FixtureProject]) -> 
         "wingman/cluster-specs",
         "sigs/redbull",
         "sigs/falcon",
-        "helm-charts/cluster-roles",
+        "redbull/helm-charts/cluster-roles",
+        "falcon/helm-charts/sim-day2-helm-charts",
+        "lynx/helm-charts/sim-day2-helm-charts",
+        "orca/helm-charts/sim-day2-helm-charts",
     } <= paths
+    assert not any(p.startswith("helm-charts/") for p in paths)
 
 
 def test_chart_urls_are_substituted(projects: list[FixtureProject]) -> None:
     redbull = next(p for p in projects if p.path_with_namespace == "sigs/redbull")
     deploy = redbull.files["operators/cluster-roles/cluster-roles.yaml"]
-    assert "repourl: http://gl.test/helm-charts/cluster-roles.git" in deploy
+    assert "repourl: http://gl.test/redbull/helm-charts/cluster-roles.git" in deploy
     assert not any("{{GITLAB_URL}}" in content for p in projects for content in p.files.values())
 
 
+def test_every_chart_url_names_its_own_teams_group(projects: list[FixtureProject]) -> None:
+    """A team's charts sit in ``<team>/helm-charts`` (ADR-0060), the miscased ``repoUrl`` too."""
+    paths = {p.path_with_namespace for p in projects}
+    found = re.compile(r"^repo[uU]rl: http://gl\.test/(\S+)\.git$", re.MULTILINE)
+    for team in (p for p in projects if p.path_with_namespace.startswith("sigs/")):
+        name = team.path_with_namespace.removeprefix("sigs/")
+        urls = [u for content in team.files.values() for u in found.findall(content)]
+        assert urls, team.path_with_namespace
+        for url in urls:
+            assert url.startswith(f"{name}/helm-charts/") and url in paths, (name, url)
+
+
 def test_release_branches_carry_their_version(projects: list[FixtureProject]) -> None:
-    chart = next(p for p in projects if p.path_with_namespace == "helm-charts/cluster-roles")
+    chart = next(
+        p for p in projects if p.path_with_namespace == "redbull/helm-charts/cluster-roles"
+    )
     assert chart.branches == ("2.0.0", "2.1.5-hotfix")
     assert "version: 2.1.5-hotfix" in chart.branch_files("2.1.5-hotfix")["Chart.yaml"]
     assert chart.branch_files("main") == dict(chart.files)
@@ -63,7 +82,7 @@ async def test_seed_fake_creates_projects_and_branches(projects: list[FixturePro
         "sigs/orca",
         "sigs/redbull",
     ]
-    chart = await gitlab.get_project("helm-charts/kyverno")
+    chart = await gitlab.get_project("redbull/helm-charts/kyverno")
     assert [b.name for b in await gitlab.list_branches(chart.id)] == ["3.2.6", "3.3.0", "main"]
 
 
@@ -72,6 +91,27 @@ def test_missing_root_has_no_projects(tmp_path: Path) -> None:
     (tmp_path / "group" / "project" / "a.txt").write_text("a", encoding="utf-8")
     [only] = load_fixture_projects(tmp_path)
     assert only == FixtureProject("group/project", {"a.txt": "a"})
+
+
+def test_a_folder_of_folders_is_a_subgroup(tmp_path: Path) -> None:
+    (tmp_path / "team" / "helm-charts" / "chart" / "templates").mkdir(parents=True)
+    (tmp_path / "team" / "helm-charts" / "chart" / "Chart.yaml").write_text("a", encoding="utf-8")
+    (tmp_path / "team" / "helm-charts" / ".DS_Store").write_text("", encoding="utf-8")
+    (tmp_path / "team" / "repo").mkdir()
+    (tmp_path / "team" / "repo" / "README.md").write_text("b", encoding="utf-8")
+    projects = load_fixture_projects(tmp_path)
+    assert [(p.path_with_namespace, dict(p.files)) for p in projects] == [
+        ("team/helm-charts/chart", {"Chart.yaml": "a"}),
+        ("team/repo", {"README.md": "b"}),
+    ]
+
+
+def test_branches_yaml_refuses_unknown_projects(tmp_path: Path) -> None:
+    (tmp_path / "group" / "project").mkdir(parents=True)
+    (tmp_path / "group" / "project" / "a.txt").write_text("a", encoding="utf-8")
+    (tmp_path / "branches.yaml").write_text('group/ghost: ["1.0.0"]\n', encoding="utf-8")
+    with pytest.raises(ValueError, match=r"^branches\.yaml names projects"):
+        load_fixture_projects(tmp_path)
 
 
 def test_access_yaml_gives_orca_a_reporter_role(projects: list[FixtureProject]) -> None:

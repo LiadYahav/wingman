@@ -23,7 +23,7 @@ AUTO = {
 }
 NEW = {
     "name": "podinfo",
-    "repourl": f"{FAKE_GITLAB_URL}/helm-charts/example-chart.git",
+    "repourl": f"{FAKE_GITLAB_URL}/redbull/helm-charts/example-chart.git",
     "project_namespace": "podinfo",
     "sync": MANUAL,
 }
@@ -95,7 +95,7 @@ async def test_a_read_only_teams_writes_are_403_before_any_other_check(
 async def test_the_template_pre_fills_a_new_addon(jane: httpx.AsyncClient) -> None:
     body = ok(await jane.get("/api/day2/teams/redbull/addon-template"))
     assert body["sync"] == MANUAL and body["writable"] is True
-    assert body["repourl_prefix"] == f"{FAKE_GITLAB_URL}/helm-charts/"
+    assert body["repourl_prefix"] == f"{FAKE_GITLAB_URL}/redbull/helm-charts/"
     assert "ServerSideApply=true" in body["known_sync_options"]
     assert [s["scope"] for s in body["scopes"]] == ["hosted-clusters", "mces", "hub", "upi"]
     assert body["scopes"][0]["label"] == "every hosted cluster"

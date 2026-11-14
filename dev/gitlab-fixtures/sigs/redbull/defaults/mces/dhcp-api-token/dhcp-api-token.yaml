@@ -22,7 +22,7 @@ projectNamespace: dhcp-scope-manager
 # verified against the air-gapped repo. Several deploy configs in this repo write
 # `repoUrl`; that spelling reaches the template as nil and renders an empty
 # repoURL, so do not copy it from them.
-repourl: {{GITLAB_URL}}/helm-charts/dhcp-scope-manager.git
+repourl: {{GITLAB_URL}}/redbull/helm-charts/dhcp-scope-manager.git
 targetRevision: main
 path: charts/dhcp-api-token
 syncPolicy:

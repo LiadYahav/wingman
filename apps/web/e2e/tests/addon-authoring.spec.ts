@@ -63,7 +63,7 @@ test.describe("A new add-on", () => {
 
     await form.getByRole("textbox", { name: /^Name/ }).fill("podinfo");
     // Pre-filled from the template while untouched: the team's chart-repo folder and the name as namespace.
-    await expect(form.getByRole("textbox", { name: /Chart repo URL/ })).toHaveValue("https://gitlab.example.com/helm-charts/podinfo.git");
+    await expect(form.getByRole("textbox", { name: /Chart repo URL/ })).toHaveValue("https://gitlab.example.com/platform/helm-charts/podinfo.git");
     await expect(form.getByRole("textbox", { name: /Project namespace/ })).toHaveValue("podinfo");
     await expect(form.getByText("Pre-filled from the sync options most of sigs/platform's add-ons use (2 of 2).")).toBeVisible();
 
@@ -126,7 +126,7 @@ test.describe("A new add-on", () => {
     );
     const expected = {
       name: "podinfo",
-      repourl: "https://gitlab.example.com/helm-charts/podinfo.git",
+      repourl: "https://gitlab.example.com/platform/helm-charts/podinfo.git",
       target_revision: null,
       path: null,
       project_namespace: "podinfo",

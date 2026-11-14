@@ -77,7 +77,7 @@ function leaf(team: string, chart: string, revision: string, autoSync = false): 
     app_name: `${team}-${HOSTED_NAME}-${chart}-deploy`,
     argo: "mce-a",
     namespace: `gitops-${team}`,
-    repo_url: `https://gitlab.example.com/helm-charts/${chart}.git`,
+    repo_url: `https://gitlab.example.com/${team}/helm-charts/${chart}.git`,
     target_revision: revision,
     path: ".",
     release_name: chart,
@@ -255,7 +255,7 @@ export function previewOf(team: string, chart: string, override?: Values): Value
     installed: Boolean(current),
     source: current?.source ?? "cluster",
     ocp_version: "4.18.22",
-    chart: { project: `helm-charts/${chart}`, revision, path: ".", problem: null },
+    chart: { project: `${team}/helm-charts/${chart}`, revision, path: ".", problem: null },
     layers,
     deploy: {
       ...leaf(team, chart, revision),

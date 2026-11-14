@@ -1,8 +1,9 @@
 # GitLab fixtures
 
 Realistic repo trees for developing and testing Wingman without the air-gapped
-GitLab. Each top-level folder is a GitLab group and each folder under it is a
-project, laid out exactly as production lays them out:
+GitLab. Each top-level folder is a GitLab group; below it, a folder that holds a
+file is a project and a folder of folders is a subgroup (`redbull/helm-charts/`),
+laid out exactly as production lays them out:
 
 | Project | What it is | Source (team-redbull, public) |
 |---|---|---|
@@ -10,7 +11,7 @@ project, laid out exactly as production lays them out:
 | `wingman/cluster-specs` | Wingman's specs repo: `cluster-template.j2`, `nodepool-defaults.yaml`, `specs/*.yaml` | Written for Wingman (no upstream) |
 | `sigs/redbull` | day2 team repo | `gitops-day2-prod/sigs/redbull` @ `979e306` |
 | `sigs/{falcon,lynx,orca}` | day2 team repos (simulation data) | `sim-day2-sigs-{falcon,lynx,orca}` @ 2026-09-29 |
-| `helm-charts/<chart>` | one chart repo per chart; each branch is a frozen release | Stub charts written for Wingman; `sim-day2-helm-charts` @ `c3d8b1e` |
+| `<team>/helm-charts/<chart>` | each team's chart repos, in its own group (ADR-0060): one repo per chart, each branch a frozen release. `redbull/helm-charts/` holds the stub charts redbull's add-ons use; `{falcon,lynx,orca}/helm-charts/sim-day2-helm-charts` are three copies of the sim's one chart, one per team | Stub charts written for Wingman; `sim-day2-helm-charts` @ `c3d8b1e` |
 
 ## Changes made to the upstream content
 
@@ -19,7 +20,7 @@ project, laid out exactly as production lays them out:
 - `mc-files/` is a small made-up tree with placeholder bodies (no real servers, addresses or hostnames), shaped like the real one: static configs at the root and in `kubevirt/`, a `legacy/` file that Wingman must not offer, and three network templates whose hardware types overlap (`dell`, `dell-data`, `cisco`). ADR-0027 has the rule Wingman reads it by.
 - `upgrade/mces/` has a file for every MCE, not only the sandbox's `ocp4-mce-workflow-test`. They are written for Wingman, so that clusters can be created on each MCE: the production MCEs host 4.16 to 4.18 and `ocp4-prep-mce-site1-a` hosts 4.17 to 4.21, so the offered versions differ per MCE (ADR-0034).
 - `sites/site1/mces/ocp4-prod-mce-site1-b` and `-c` are written for MCE placement (ADR-0050): two prod MCEs with no cluster yet, so site1 has three prod candidates. `-c` hosts 4.16 and 4.17 only. With `DAY1_FAKE_FLEET`, `dev/fleet-fixtures/mce.yaml` (`hubs:`) gives every MCE its nodes and pods: `-b` has room, `-a` less, `-c` too little.
-- Chart repo URLs point at the local GitLab: every `repourl` is `{{GITLAB_URL}}/helm-charts/<chart>.git`, and the seed substitutes `{{GITLAB_URL}}`. Upstream had sanitized placeholders (`...helm-charts...`) or the sim's GitHub URL.
+- Chart repo URLs point at the local GitLab and at the team's own group: every `repourl` in `sigs/<team>` is `{{GITLAB_URL}}/<team>/helm-charts/<chart>.git`, and the seed substitutes `{{GITLAB_URL}}`. Upstream had sanitized placeholders (`...helm-charts...`) or the sim's GitHub URL. Until ADR-0060 the fixtures had one shared `helm-charts/<chart>` group; a local GitLab seeded then keeps those projects (the seed deletes nothing).
 - `access.yaml` (not a project) gives Wingman's account a role below owner on some projects:
   `sigs/orca` is `reporter`, so the fake backend and the tests have one team that has not opted in
   to day2 writes (ADR-0043): its pages load and every write to it is refused with `TEAM_READ_ONLY`.

@@ -102,7 +102,7 @@ const CLUSTER_ROLES: InstalledChart = {
   pinned: false,
   deploy: {
     app_name: `redbull-${NAME}-cluster-roles-deploy`, argo: MCE, namespace: "gitops-redbull",
-    repo_url: "https://gitlab.example.com/helm-charts/cluster-roles.git", target_revision: "release-1", path: ".",
+    repo_url: "https://gitlab.example.com/redbull/helm-charts/cluster-roles.git", target_revision: "release-1", path: ".",
     release_name: "cluster-roles", destination: NAME, destination_namespace: "cluster-roles", sync_policy: {}, auto_sync: false,
   },
   warnings: [],

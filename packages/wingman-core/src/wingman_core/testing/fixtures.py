@@ -1,6 +1,9 @@
 """Load repo trees from ``dev/gitlab-fixtures`` and seed a GitLab with them.
 
-The fixture directory is ``<group>/<project>/<files...>``; an optional
+The fixture directory is ``<group>[/<subgroup>...]/<project>/<files...>``:
+every top-level folder is a group, and below it a folder that holds a file
+is a project while one that holds only folders is a subgroup
+(``redbull/helm-charts/bmhgen``, ADR-0060). An optional
 ``branches.yaml`` at its root names extra branches per project, and an
 optional ``access.yaml`` the role Wingman's account has on a project where it
 is not the owner (``sigs/orca: reporter``). One loader feeds both the
@@ -12,7 +15,7 @@ own access (the seed script says so).
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -62,7 +65,7 @@ def default_fixture_root() -> Path:
 def load_fixture_projects(
     root: Path, *, substitutions: Mapping[str, str] | None = None
 ) -> list[FixtureProject]:
-    """Read every ``<group>/<project>`` under ``root``.
+    """Read every project under ``root``, in nested groups too.
 
     ``substitutions`` replaces ``{{KEY}}`` in file contents, e.g. ``GITLAB_URL``.
     """
@@ -71,15 +74,15 @@ def load_fixture_projects(
         path: _access_level(path, role) for path, role in _read_yaml(root / "access.yaml").items()
     }
     projects: list[FixtureProject] = []
-    for group in sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")):
-        for project in sorted(p for p in group.iterdir() if p.is_dir()):
-            path_with_namespace = f"{group.name}/{project.name}"
+    for group in _folders(root):
+        for project in _project_folders(group):
+            path_with_namespace = project.relative_to(root).as_posix()
             files = {
                 file.relative_to(project).as_posix(): _substitute(
                     file.read_text(encoding="utf-8"), substitutions
                 )
                 for file in sorted(project.rglob("*"))
-                if file.is_file() and file.name != ".DS_Store"
+                if _is_fixture_file(file)
             }
             projects.append(
                 FixtureProject(
@@ -91,7 +94,27 @@ def load_fixture_projects(
             )
     if access:
         raise ValueError(f"access.yaml names projects that are not fixtures: {sorted(access)}")
+    unknown = sorted(set(branches) - {p.path_with_namespace for p in projects})
+    if unknown:
+        raise ValueError(f"branches.yaml names projects that are not fixtures: {unknown}")
     return projects
+
+
+def _folders(parent: Path) -> list[Path]:
+    return sorted(p for p in parent.iterdir() if p.is_dir() and not p.name.startswith("."))
+
+
+def _is_fixture_file(path: Path) -> bool:
+    return path.is_file() and path.name != ".DS_Store"
+
+
+def _project_folders(group: Path) -> Iterator[Path]:
+    """The projects below ``group``: a folder with a file is one, one of folders a subgroup."""
+    for folder in _folders(group):
+        if any(_is_fixture_file(entry) for entry in folder.iterdir()):
+            yield folder
+        else:
+            yield from _project_folders(folder)
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
