@@ -7,13 +7,20 @@ import { cn } from "@/lib/utils";
 
 const TAB_LABELS: Record<StatusTab, string> = { all: "All", available: "Available", allocated: "Allocated" };
 
+/**
+ * A toggle: filled when on; off, the text's colour at 80% inside the site
+ * cards' edge (`site-cards.tsx`), so an option reads without being chosen.
+ */
 const pill = (active: boolean) =>
   cn(
     "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
     active
       ? "border-primary bg-primary text-primary-foreground"
-      : "border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground"
+      : "border-foreground/20 bg-card text-foreground/80 hover:border-primary/50 hover:text-foreground"
   );
+
+/** A toggle's count: set apart by weight, not by fading it below the label's contrast. */
+const COUNT = "font-normal tabular-nums";
 
 /** A labelled row of toggles: Status, Site. */
 function PillRow({ label, children }: { label: string; children: ReactNode }) {
@@ -46,7 +53,7 @@ export function SegmentSearch({ value, onChange, onCommit }: { value: string; on
           if (e.key === "Enter") onCommit();
           if (e.key === "Escape" && value) onChange("");
         }}
-        className="w-full rounded-lg border bg-card py-1.5 pl-8 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 [&::-webkit-search-cancel-button]:hidden"
+        className="w-full rounded-lg border border-foreground/20 bg-card py-1.5 pl-8 pr-8 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
         <button
@@ -76,7 +83,7 @@ export function StatusTabs({
       {STATUS_TABS.map((tab) => (
         <button key={tab} type="button" aria-pressed={value === tab} onClick={() => onChange(tab)} className={pill(value === tab)}>
           {TAB_LABELS[tab]}
-          {counts && <span className="tabular-nums opacity-70">{counts[tab]}</span>}
+          {counts && <span className={COUNT}>{counts[tab]}</span>}
         </button>
       ))}
     </PillRow>
@@ -117,7 +124,7 @@ export function MismatchToggle({ count, value, onChange }: { count: number; valu
       )}
     >
       Disagrees with Git
-      <span className="tabular-nums opacity-70">{count}</span>
+      <span className={COUNT}>{count}</span>
     </button>
   );
 }
