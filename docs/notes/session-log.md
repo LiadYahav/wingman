@@ -4,6 +4,46 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-14 — 3.25.0 to 3.34.0: Server Scan complete (option C), chart hardening, a fuller Overview.**
+- **The Server Scan area at parity with server-scan's UI** (ADR-0048's
+  amendments; contract `docs/notes/2026-11-13-server-scan-area-api.md`), one
+  PR per page:
+  - the server's page, its History on server-scan's auditor token (a third
+    optional Secret key; 3.25.0), linked from the cluster's Nodes tab for
+    admins (3.26.0);
+  - Claude (3.27.0), Architecture (3.28.0: server-scan's diagrams read by
+    day1, shown in a sandboxed frame), Confs (3.29.0), Rules & Policies
+    (3.30.0);
+  - Events (3.31.0): the fleet's audit trail, auditor token; Jobs (3.32.0):
+    server-scan's CronJobs, runs and logs, and **Run job**, the area's second
+    write. server-scan's jobs router is admin-only, so every Jobs route uses
+    the admin token, reads included; a start is never retried and is logged
+    with the person.
+  - One token rule (`domain/server_scan_tokens.py`), one write sender, one
+    guard per token; the area's routers mount from `api/v1/server_scan_area.py`.
+- **Chart hardening** (3.33.0, ADR-0058, ADR-0059): nginx stays the one
+  entry point, now Red Hat's UBI nginx-124 pinned by digest, answering an
+  RFC 9457 problem when day1 or day2 does not; every pod restricted
+  (non-root, seccomp, no capabilities, read-only root, no service-account
+  token); `values.schema.json` refuses unknown keys; the Wingman image tags
+  have no default; every `sslVerify` takes a boolean. Operators follow
+  `docs/upgrade/3.32-to-3.33.md`.
+- **Overview** (3.34.0): its buttons beside the title in one style; where
+  clusters run, OpenShift versions with upgrades available and running, free
+  servers per MCE pool, and, for admins with those areas, free segments and
+  the server fleet's health.
+- The sandbox runs 3.34.0; its nginx moved to the UBI image with 3.33.0.
+
+**Next:**
+- Code organisation, later (the user): helpers out of `.tsx`, a typed day2
+  call layer, the design splits; 33 files left in the size baseline.
+- Small: herzi's InfraEnv notes per MCE pool in Inventory Management; the
+  cache-key oddities; base-ui 1.4.0's searchable dropdown keeps its old
+  search when reopened within its close animation (check a newer base-ui at
+  the next dependency pass).
+- The team's questions: the upgrade workflow on the sandbox and its direct
+  pushes, herzi, provision-cluster's 24 characters, RBAC, a shared Git store.
+
 **2026-11-14 — 3.18.5 to 3.24.0: Install servers, upgrades in the list, option C started.**
 - **Web code** (3.18.5): the web calls day1 through `lib/api/day1/`
   (`day1Api`, `day1Keys`; 56 cases pin the keys), plus a readability pass on

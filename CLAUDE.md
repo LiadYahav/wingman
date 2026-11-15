@@ -140,6 +140,9 @@ Explicit user instructions; violating one is a real mistake, not style.
 - Done (2026-11-14): chart hardening: nginx stays the one entry point, on
   UBI nginx by digest (ADR-0058); every pod restricted with a read-only root;
   `values.schema.json` and no default image tag (ADR-0059).
+- Done (2026-11-16): tuning profiles per nodepool from the day1 repo's
+  `tuning/` (ADR-0061); the Grafana dashboard's activity and external-systems
+  rows (3.36.0).
 - **Not done yet, in order:** (1) the architect's
   answers (`docs/ideas/architecture-fit.md`); (2) flavors v2's "Left for
   later"; (3) ecosystem features (`docs/ideas/`).
@@ -296,42 +299,39 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-14 — 3.25.0 to 3.34.0: Server Scan complete (option C), chart hardening, a fuller Overview.**
-- **The Server Scan area at parity with server-scan's UI** (ADR-0048's
-  amendments; contract `docs/notes/2026-11-13-server-scan-area-api.md`), one
-  PR per page:
-  - the server's page, its History on server-scan's auditor token (a third
-    optional Secret key; 3.25.0), linked from the cluster's Nodes tab for
-    admins (3.26.0);
-  - Claude (3.27.0), Architecture (3.28.0: server-scan's diagrams read by
-    day1, shown in a sandboxed frame), Confs (3.29.0), Rules & Policies
-    (3.30.0);
-  - Events (3.31.0): the fleet's audit trail, auditor token; Jobs (3.32.0):
-    server-scan's CronJobs, runs and logs, and **Run job**, the area's second
-    write. server-scan's jobs router is admin-only, so every Jobs route uses
-    the admin token, reads included; a start is never retried and is logged
-    with the person.
-  - One token rule (`domain/server_scan_tokens.py`), one write sender, one
-    guard per token; the area's routers mount from `api/v1/server_scan_area.py`.
-- **Chart hardening** (3.33.0, ADR-0058, ADR-0059): nginx stays the one
-  entry point, now Red Hat's UBI nginx-124 pinned by digest, answering an
-  RFC 9457 problem when day1 or day2 does not; every pod restricted
-  (non-root, seccomp, no capabilities, read-only root, no service-account
-  token); `values.schema.json` refuses unknown keys; the Wingman image tags
-  have no default; every `sslVerify` takes a boolean. Operators follow
-  `docs/upgrade/3.32-to-3.33.md`.
-- **Overview** (3.34.0): its buttons beside the title in one style; where
-  clusters run, OpenShift versions with upgrades available and running, free
-  servers per MCE pool, and, for admins with those areas, free segments and
-  the server fleet's health.
-- The sandbox runs 3.34.0; its nginx moved to the UBI image with 3.33.0.
+**2026-11-16 — 3.35.0 to 3.37.0: team chart groups, the Grafana dashboard, tuning profiles.**
+- **A team's charts sit in `<team>/helm-charts/<chart>`** (3.35.0,
+  ADR-0060): the New add-on form suggests that address; only a suggestion.
+- **The Server Scan Servers page starts higher** (3.35.1): heading, count,
+  search and exports on one row.
+- **The Grafana dashboard** (3.36.0): Overview (MRs opened and merged,
+  approvals, workflow runs, server-scan writes, systems failing), Activity,
+  API, External systems (a `dependency` variable), GitLab write safety; a test
+  ties every label value a panel matches to what the code exports. Checked in
+  Grafana 13 against OpenShift user-workload monitoring (Thanos' tenancy port).
+- **Tuning profiles** (3.37.0, ADR-0061): `tuning/` in the day1 repo holds
+  Tuned and PerformanceProfile manifests; a flavor and the create form pick
+  them per nodepool (`tuningConfig`), lockable as a rule for every nodepool,
+  at most one PerformanceProfile per pool, a Tuned's PerformanceProfile
+  suggested; drift and sync write only the names. The day1 CI injects
+  `tuningConfigmap` (an automation key, ADR-0012's amendment) from the
+  catalogue, keeping a cluster's differing copy and reporting it; that CI
+  patch and the chart's single `tuningConfig` render ship to the air-gap
+  separately. provision-cluster must set `tuningConfigmap` aside like
+  `mcConfigMap` (team-redbull/workflows PR #23).
+- Production creates clusters through provision-cluster now
+  (`day1.provisioner: workflow`, still a switch). Argo CD is synced by a person
+  today, auto-sync later: show "merged" and "applied" for both.
 
 **Next:**
+- cluster-navigator's data on the cluster page and per MCE (running version,
+  status, Git against what runs; `docs/ideas/single-pane.md` workstream 5):
+  the team adds a Wingman entry to its `SERVICE_TOKENS`.
+- Flavors v2's "Left for later": missing add-ons in one MR per team, the
+  cluster-name prefix in the web, a preview of an unsaved flavor.
+- Tuning: a lock per pool (a flavor with GPU pools needing different
+  PerformanceProfiles can preset them but not lock them today).
 - Code organisation, later (the user): helpers out of `.tsx`, a typed day2
-  call layer, the design splits; 33 files left in the size baseline.
-- Small: herzi's InfraEnv notes per MCE pool in Inventory Management; the
-  cache-key oddities; base-ui 1.4.0's searchable dropdown keeps its old
-  search when reopened within its close animation (check a newer base-ui at
-  the next dependency pass).
-- The team's questions: the upgrade workflow on the sandbox and its direct
-  pushes, herzi, provision-cluster's 24 characters, RBAC, a shared Git store.
+  call layer, the design splits; 30 files left in the size baseline.
+- The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
+  shared Git store.
