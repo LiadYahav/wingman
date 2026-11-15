@@ -6,7 +6,8 @@ optional fields such as ``platform: kubevirt``. Automation writes the rest on
 the merge request's branch, after Wingman's commit:
 
 - ``vlanId`` and ``dhcp_values``: the allocate-segment workflow;
-- ``mcFiles`` and ``mcConfigMap``: the day1 CI pipeline.
+- ``mcFiles``, ``mcConfigMap`` and ``tuningConfigmap``: the day1 CI pipeline
+  (``tuningConfigmap`` since ADR-0061: the manifests ``tuningConfig`` names).
 
 Wingman never writes those keys, and never changes them when it edits a
 file. ``clusterName``, ``site`` and ``mce`` come from the file's path; a
@@ -40,7 +41,7 @@ from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.errors import InvalidClusterFileError
 from wingman_day1.domain.upgrades import version_problems
 
-AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap")
+AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap", "tuningConfigmap")
 """Written on the MR branch by the allocate-segment workflow and CI; never by Wingman."""
 PATH_KEYS: Final = ("clusterName", "site", "mce")
 """Passed by the ApplicationSet from the file's path; a rendered file must not set them."""

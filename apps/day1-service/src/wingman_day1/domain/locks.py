@@ -31,6 +31,7 @@ template input                  cluster-file key
 ``nodepools[<i>].configs``      ``nodepool[<i>].configs``
 ``nodepools[<i>].node_labels``  ``nodepool[<i>].nodeLabels``
 ``nodepools[*].configs``        ``nodepool[*].configs``
+``nodepools[*].tuning_config``  ``nodepool[*].tuningConfig``
 ==============================  ============================
 
 A value can differ in form between the two sides: a ``{name: nm-conf,
@@ -51,6 +52,10 @@ the configs every nodepool in ``spec.day1.values.nodepools`` sets, which must
 agree (the hardware of their ``nm-conf`` entries stays a per-nodepool preset
 for create), and it must list ``nm-conf`` once: a rule that left it out would
 remove every nodepool's network config.
+
+``nodepools[*].tuning_config`` is the second rule (ADR-0061): every nodepool
+has exactly these tuning profiles, compared as a set
+(``wingman_day1.domain.tuning_rule``).
 """
 
 from __future__ import annotations
@@ -72,6 +77,8 @@ from wingman_day1.domain.input_paths import (
     lookup,
 )
 from wingman_day1.domain.template import LEGACY_IDENTITY_ALIASES, RESERVED_INPUTS
+from wingman_day1.domain.tuning_profiles import TUNING_INPUT
+from wingman_day1.domain.tuning_rule import rule_conflicts, rule_fill, rule_value
 
 MAX_LOCKS: Final = 100
 NETWORK_ENTRY: Final = "nm-conf"
@@ -131,6 +138,8 @@ def _segment_matches(segment: Segment, want: ShapeSegment) -> bool:
 
 CONFIGS_RULE: Final = InputPath(("nodepools", EVERY, "configs"))
 """``nodepools[*].configs``: every nodepool has exactly these configs (ADR-0029)."""
+TUNING_RULE: Final = InputPath(("nodepools", EVERY, TUNING_INPUT))
+"""``nodepools[*].tuning_config``: every nodepool has exactly these profiles (ADR-0061)."""
 
 LOCKABLE: Final = (
     Lockable(("owner_merkaz",), ("owner", "merkaz")),
@@ -141,6 +150,7 @@ LOCKABLE: Final = (
     Lockable(("nodepools", _ANY_INDEX, "configs"), ("nodepool", _ANY_INDEX, "configs")),
     Lockable(("nodepools", _ANY_INDEX, "node_labels"), ("nodepool", _ANY_INDEX, "nodeLabels")),
     Lockable(("nodepools", EVERY, "configs"), ("nodepool", EVERY, "configs")),
+    Lockable(("nodepools", EVERY, TUNING_INPUT), ("nodepool", EVERY, "tuningConfig")),
 )
 """Every input a flavor can lock, with the cluster-file key the shared template writes."""
 
@@ -244,7 +254,14 @@ def _parse(text: str) -> InputPath | str:
         )
 
 
-def _rule_value(values: Mapping[str, object]) -> list[dict[str, str]] | str:
+def _rule_value(path: InputPath, values: Mapping[str, object]) -> list[object] | str:
+    """A rule's value from the flavor's nodepools, or why it has none."""
+    if path == TUNING_RULE:
+        return cast("list[object] | str", rule_value(values, str(path)))
+    return cast("list[object] | str", _configs_rule_value(values))
+
+
+def _configs_rule_value(values: Mapping[str, object]) -> list[dict[str, str]] | str:
     """The configs rule's value from the flavor's nodepools, or why it has none."""
     pools = values.get("nodepools")
     if not isinstance(pools, (list, tuple)) or not pools:
@@ -305,7 +322,7 @@ def lock_problems(locked_paths: Sequence[str], values: Mapping[str, object]) -> 
             continue
         seen.add(path)
         if path.is_rule:
-            rule = _rule_value(values)
+            rule = _rule_value(path, values)
             if isinstance(rule, str):
                 problems.append(rule)
         elif lookup(values, path) is MISSING:
@@ -336,7 +353,7 @@ def enforced_locks(locked_paths: Sequence[str], values: Mapping[str, object]) ->
         if isinstance(path, str) or _shape_problem(path) is not None:
             continue
         if path.is_rule:
-            rule = _rule_value(values)
+            rule = _rule_value(path, values)
             if not isinstance(rule, str):
                 locks[path] = Lock(path, rule)
             continue
@@ -390,6 +407,10 @@ def lock_conflicts(
     """Each locked path a create sends a different value for."""
     problems: list[str] = []
     for lock in locks:
+        if lock.path == TUNING_RULE:
+            names = cast("Sequence[str]", lock.value)
+            problems += rule_conflicts(variables, names, flavor=flavor)
+            continue
         if lock.is_rule:
             rule = cast("Sequence[object]", lock.value)
             for index, pool in _pools(variables):
@@ -421,11 +442,15 @@ def apply_locks(
     (lists are not merged), so the flavor's value is put back here. A lock
     on ``nodepools[2].replicas`` needs a third nodepool to exist. The configs
     rule fills every nodepool that sends no configs with the rule's entries;
-    their ``nm-conf`` has no hardware yet, so the config check asks for one.
+    their ``nm-conf`` has no hardware yet, so the config check asks for one. The tuning
+    rule fills every nodepool that sends no tuning_config with its names.
     """
     result = dict(inputs)
     problems: list[str] = []
     for lock in locks:
+        if lock.path == TUNING_RULE:
+            result = rule_fill(result, cast("Sequence[str]", lock.value))
+            continue
         if lock.is_rule:
             rule = cast("Sequence[Mapping[str, str]]", lock.value)
             pools = result.get("nodepools")

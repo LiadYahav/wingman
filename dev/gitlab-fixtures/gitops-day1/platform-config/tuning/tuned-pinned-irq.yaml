@@ -1,0 +1,19 @@
+# Placeholder profile for Wingman's tests and local runs; not a real tuning.
+# It builds on the profile performance-pinned generates, so a nodepool that
+# names it should name performance-pinned too.
+apiVersion: tuned.openshift.io/v1
+kind: Tuned
+metadata:
+  name: tuned-pinned-irq
+spec:
+  profile:
+  - name: tuned-pinned-irq
+    data: |
+      [main]
+      summary=Keep interrupts off the pinned CPUs
+      include=openshift-node-performance-performance-pinned
+      [sysctl]
+      kernel.timer_migration=0
+  recommend:
+  - priority: 19
+    profile: tuned-pinned-irq

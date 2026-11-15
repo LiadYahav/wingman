@@ -19,21 +19,32 @@ path it is about (`docs/notes/2026-11-08-flavors-v2-api-changes.md` §2).
       "kind": "PerformanceProfile",
       "summary": null,
       "path": "tuning/performance-pinned.yaml",
-      "clusters": []
+      "clusters": [],
+      "requires_performance_profile": null
     },
     {
       "name": "tuned-network-latency",
       "kind": "Tuned",
       "summary": "Lower network latency on worker nodes",
       "path": "tuning/tuned-network-latency.yaml",
-      "clusters": ["prod-lark-site1"]
+      "clusters": ["prod-lark-site1"],
+      "requires_performance_profile": null
+    },
+    {
+      "name": "tuned-pinned-irq",
+      "kind": "Tuned",
+      "summary": "Keep interrupts off the pinned CPUs",
+      "path": "tuning/tuned-pinned-irq.yaml",
+      "clusters": [],
+      "requires_performance_profile": "performance-pinned"
     },
     {
       "name": "tuned-sysctl-baseline",
       "kind": "Tuned",
       "summary": "Raise the kernel's file and connection limits",
       "path": "tuning/tuned-sysctl-baseline.yaml",
-      "clusters": []
+      "clusters": [],
+      "requires_performance_profile": null
     }
   ],
   "problems": [
@@ -52,6 +63,11 @@ path it is about (`docs/notes/2026-11-08-flavors-v2-api-changes.md` §2).
   `PerformanceProfile`. `summary` is a Tuned's `[main]` `summary=` (first
   profile entry), else `null`. `clusters` are the cluster names (the
   chart's, ADR-0015) that have a variant `tuning/<cluster>/<name>.yaml`.
+  `requires_performance_profile` is, for a Tuned whose `[main]` has
+  `include=openshift-node-performance-<pp>` (in any profile entry's
+  `data`), that `<pp>`; else `null`. The web warns about a nodepool that
+  names the Tuned without `<pp>` and offers "Add `<pp>`"; day1 never
+  refuses it.
 - `problems` are files that are not offered: not `.yaml`, nested deeper
   than one folder, a name that is not a DNS-1123 label of at most 63
   characters, not exactly one YAML mapping, another `apiVersion`/`kind`,
@@ -87,14 +103,19 @@ is never written (ADR-0061; neither provisioner sends it).
   - `nodepools[0].tuning_config[1]: tuned-x is a variant for cluster prod-lark-site1 only; a flavor names shared profiles from tuning/`
   - `nodepools[0].tuning_config[2]: tuned-network-latency is listed twice`
   - `nodepools[0].tuning_config: 17 profiles; the limit is 16`
+  - `nodepools[0].tuning_config: at most one PerformanceProfile per nodepool (HyperShift); it names performance-a, performance-b`
+    (any number of Tuned is fine; the web replaces a pool's PerformanceProfile when another is picked)
 - **Preview and create** (`POST /clusters/preview`, `POST /clusters`, both
   provisioners): the same checks on the merged inputs (flavor presets,
   locks, the request), same messages.
-- **Edit** (`PUT /clusters/{name}`, and the sync below): only names the
+- **Edit** (`PATCH /clusters/{name}`, and the sync below): only names the
   edit adds to the file are checked; each must be a shared profile, a
   variant for this cluster or an entry of the file's `tuningConfigmap`:
   - `nodepool[0].tuningConfig: tuned-x is not in tuning/, in tuning/prod-lark-site1/ or in this file's tuningConfigmap`
   - `nodepool[0].tuningConfig: must be a tuning profile name or a list of names`
+  - `nodepool[0].tuningConfig: at most one PerformanceProfile per nodepool (HyperShift); it names ...`
+    (only for a nodepool whose `tuningConfig` the edit changes; a name's kind
+    is its variant's, else the shared file's, else the file's `tuningConfigmap` entry's)
   - `tuningConfigmap is owned by automation; an edit must leave it as it is`
 
 ## 4. New: the tuning rule `nodepools[*].tuning_config`

@@ -22,8 +22,8 @@ on byte for byte. A file whose layout the editor cannot handle (a flow-style
 ``nodepool``, a value spread over lines) is refused with the reason, never
 written approximately: a person edits it by hand.
 
-Nothing here touches ``vlanId``, ``dhcp_values``, ``mcFiles`` or
-``mcConfigMap``, and nothing at or below the CI marker is ever edited.
+Nothing here touches ``vlanId``, ``dhcp_values``, ``mcFiles``,
+``mcConfigMap`` or ``tuningConfigmap``, and nothing at or below the CI marker is ever edited.
 """
 
 from __future__ import annotations

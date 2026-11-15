@@ -47,7 +47,15 @@ already has the config catalogue reaches it without a new dependency.
   (`*.md`) and dot files are not profiles and are not reported, as in
   `mc-files/` (ADR-0027).
 - A Tuned's summary is the `summary=` line of the `[main]` section of its
-  first profile's `data`; the picker shows it. A day1 repo without
+  first profile's `data`; the picker shows it.
+- **Pairing.** A Tuned that builds on a PerformanceProfile's generated
+  profile has `include=openshift-node-performance-<pp>` in the `[main]`
+  section of a profile's `data`; the catalogue gives that `<pp>` as the
+  Tuned's `requires_performance_profile`. A nodepool that names the Tuned
+  without that PerformanceProfile gets a warning in the web with a
+  one-click "Add `<pp>`"; it is never refused, since the include may be
+  satisfied another way.
+- A day1 repo without
   `tuning/` is an empty catalogue (`found: false`): nothing is offered and
   nothing else changes.
 
@@ -71,11 +79,18 @@ its path, with a "did you mean" for a near miss):
   `spec.day1.values.nodepools[i].tuning_config` must be a shared profile;
 - at preview and create, every name of the merged inputs must be a shared
   profile;
-- at an edit of an existing cluster (`PUT /clusters/{name}`, a sync), every
+- at an edit of an existing cluster (`PATCH /clusters/{name}`, a sync), every
   name the edit adds to the file must be a shared profile, a variant for
   this cluster, or an entry of the file's own `tuningConfigmap`. Names the
   file already had are not re-checked: an edit of something else never
   fails on tuning the cluster already runs.
+- everywhere, **a nodepool names at most one PerformanceProfile**: a
+  HyperShift NodePool references at most one, and its reconciler fails on
+  more. Any number of Tuned is fine. At an edit only a nodepool whose
+  `tuningConfig` the edit changes is checked, and a name's kind is the
+  CI's resolution for this cluster (its variant, else the shared file,
+  else the file's own `tuningConfigmap` entry). In the web, picking a
+  second PerformanceProfile replaces the first and says why.
 
 **The tuning rule.** `nodepools[*].tuning_config` (file key
 `nodepool[*].tuningConfig`) is lockable as a rule for every nodepool, like

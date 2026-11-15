@@ -35,7 +35,6 @@ fields must go through it: one writer per file (architecture rule 4). The
 from __future__ import annotations
 
 import difflib
-from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import cast
@@ -66,44 +65,22 @@ from wingman_day1.domain.errors import (
 from wingman_day1.domain.machine_configs import MachineConfigCatalog, network_choice_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import ClusterSpec
+from wingman_day1.domain.sync_effects import (
+    Rebooting,
+    Removal,
+    confirmation_problems,
+    how,
+    nodes,
+    rebooting,
+    removals,
+)
+from wingman_day1.domain.tuning_profiles import edit_problems as tuning_edit_problems
 from wingman_day1.domain.value_drift import (
-    NodepoolRef,
     ValueDrift,
-    file_nodepools,
     show_value,
     value_drift,
 )
 from wingman_day1.ports import ClusterProvisioner, RepoReads, RolloutMergeRequests
-
-
-@dataclass(frozen=True, slots=True)
-class Removal:
-    """A config a sync removes from a nodepool."""
-
-    nodepool: NodepoolRef
-    name: str
-
-
-@dataclass(frozen=True, slots=True)
-class Rebooting:
-    """A nodepool whose configs a sync changes: merging rolls its nodes.
-
-    How is the nodepool's own ``upgradeType`` (the chart's default is
-    ``InPlace``: each node is drained and rebooted, ``inPlace.maxUnavailable``
-    at a time, one when unset); ``Replace`` provisions new nodes instead.
-    """
-
-    nodepool: NodepoolRef
-    replicas: int | None
-    upgrade_type: str | None = None
-    """The file's ``upgradeType``; ``None`` when unset (the chart's ``InPlace``)."""
-    max_unavailable: int | str | None = None
-    """The file's ``inPlace.maxUnavailable``; ``None`` when unset (one node at a time)."""
-
-    @property
-    def replaces_nodes(self) -> bool:
-        """``upgradeType: Replace``: new nodes are provisioned and the old ones removed."""
-        return self.upgrade_type == "Replace"
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +243,12 @@ class SyncService:
             content = cluster.content
         before = set(edit_problems(cluster.content, cluster.content))
         problems += [p for p in edit_problems(cluster.content, content) if p not in before]
+        problems += tuning_edit_problems(
+            values,
+            values_or_refuse(content),
+            await self._machine_configs.tuning(),
+            cluster_name=self._clusters.chart_cluster_name(cluster.ref),
+        )
         found = await self._drift.against(cluster, spec, catalog) if addons else None
         decided = [d for d in changes if d.needs_decision is None]
         return SyncPlan(
@@ -273,17 +256,8 @@ class SyncService:
             spec=spec,
             changes=changes,
             content=content,
-            removals=tuple(
-                Removal(d.nodepool, removed)
-                for d in decided
-                if d.nodepool is not None
-                for removed in d.removed
-            ),
-            rebooting=tuple(
-                _rebooting(values, d.nodepool)
-                for d in decided
-                if d.is_configs and d.nodepool is not None and (d.added or d.removed)
-            ),
+            removals=removals(decided),
+            rebooting=rebooting(values, decided),
             problems=tuple(problems),
             warnings=tuple(_mc_files_warnings(values, decided)),
             addons_to_install=found.addon_drift if found else (),
@@ -327,7 +301,7 @@ class SyncService:
                 f"{spec.metadata.name} v{spec_version} locks",
                 ["nothing to change in the cluster file; install missing add-ons through day2"],
             )
-        unconfirmed = _confirmation_problems(plan.removals, confirm_removals)
+        unconfirmed = confirmation_problems(plan.removals, confirm_removals)
         if unconfirmed:
             raise InvalidInputError(
                 "the sync removes configs the request does not confirm", unconfirmed
@@ -362,25 +336,6 @@ class SyncService:
         return SyncResult(result, plan)
 
 
-def _rebooting(values: Mapping[str, object], nodepool: NodepoolRef) -> Rebooting:
-    pool = file_nodepools(values)[nodepool.index]
-    found = cast("Mapping[str, object]", pool) if isinstance(pool, Mapping) else {}
-    replicas = found.get("replicas")
-    upgrade = found.get("upgradeType")
-    in_place = found.get("inPlace")
-    limit = (
-        cast("Mapping[str, object]", in_place).get("maxUnavailable")
-        if isinstance(in_place, Mapping)
-        else None
-    )
-    return Rebooting(
-        nodepool,
-        replicas if isinstance(replicas, int) and not isinstance(replicas, bool) else None,
-        upgrade if isinstance(upgrade, str) else None,
-        limit if isinstance(limit, int | str) and not isinstance(limit, bool) else None,
-    )
-
-
 def _mc_files_warnings(values: Mapping[str, object], drift: Sequence[ValueDrift]) -> list[str]:
     """A file with an explicit ``mcFiles`` renders only what it names (the CI's rule)."""
     listed = values.get("mcFiles")
@@ -395,24 +350,6 @@ def _mc_files_warnings(values: Mapping[str, object], drift: Sequence[ValueDrift]
         f"{', '.join(added)} {'is' if len(added) == 1 else 'are'} not among them; Wingman never "
         "writes mcFiles (ADR-0012): check that the CI adds them on the MR branch before merging"
     ]
-
-
-def _confirmation_problems(
-    planned: Sequence[Removal], confirmed: Sequence[tuple[int, str]]
-) -> list[str]:
-    want = Counter((r.nodepool.index, r.name) for r in planned)
-    got = Counter(confirmed)
-    problems = [
-        f"nodepool[{index}].configs: the sync removes {name}; confirm it in confirm_removals"
-        for (index, name), count in sorted(want.items())
-        if got[(index, name)] < count
-    ]
-    problems += [
-        f"nodepool[{index}].configs: confirm_removals names {name}, which the sync does not remove"
-        for (index, name), count in sorted(got.items())
-        if want[(index, name)] < count
-    ]
-    return problems
 
 
 def sync_summary(
@@ -443,7 +380,7 @@ def sync_summary(
         where = f"`{change.file_key}`"
         if change.nodepool is not None:
             where += f" (nodepool `{change.nodepool.name}`)"
-        if change.is_configs:
+        if change.reboots:
             parts = [f"add {', '.join(f'`{n}`' for n in change.added)}"] if change.added else []
             if change.removed:
                 parts.append(f"**remove** {', '.join(f'`{n}`' for n in change.removed)}")
@@ -462,15 +399,7 @@ def sync_summary(
             f"**This removes machine configs:** {removed}. The flavor fixes each nodepool's "
             "configs to exactly its list.",
         ]
-    if plan.rebooting:
-        lines += [
-            "",
-            "**Merging rolls nodes.** The machine configs of these nodepools change, and "
-            "OpenShift applies a MachineConfig change to every node of the nodepool:",
-            *(f"- `{r.nodepool.name}`{_nodes(r.replicas)}: {_how(r)}" for r in plan.rebooting),
-            "",
-            "Merge in a window the cluster's owners accept.",
-        ]
+    lines += _rolling_lines(plan.rebooting)
     if plan.warnings:
         lines += ["", *(f"**Check:** {w}" for w in plan.warnings)]
     if addon_lines is not None:
@@ -490,18 +419,24 @@ def sync_summary(
     return "\n".join(lines)
 
 
-def _nodes(replicas: int | None) -> str:
-    if replicas is None:
-        return ""
-    return f" ({replicas} node{'s' if replicas != 1 else ''})"
-
-
-def _how(rebooting: Rebooting) -> str:
-    if rebooting.replaces_nodes:
-        return "replaced (`upgradeType: Replace`): new nodes are provisioned, then the old removed"
-    at_a_time = (
-        "one node at a time"
-        if rebooting.max_unavailable is None
-        else f"`inPlace.maxUnavailable: {rebooting.max_unavailable}` at a time"
-    )
-    return f"drained and rebooted in place, {at_a_time}"
+def _rolling_lines(rolling: Sequence[Rebooting]) -> list[str]:
+    """The paragraphs on nodes a merge rolls (configs) or may reboot (tuning, ADR-0061)."""
+    configs = [r for r in rolling if r.configs]
+    tuning = [r for r in rolling if r.tuning]
+    lines: list[str] = []
+    if configs:
+        lines += [
+            "",
+            "**Merging rolls nodes.** The machine configs of these nodepools change, and "
+            "OpenShift applies a MachineConfig change to every node of the nodepool:",
+            *(f"- `{r.nodepool.name}`{nodes(r.replicas)}: {how(r)}" for r in configs),
+        ]
+    if tuning:
+        lines += [
+            "",
+            "**Their nodes may reboot.** The tuning profiles of these nodepools change; the CI "
+            "injects the manifests on this branch, and a PerformanceProfile or kernel arguments "
+            "reboot the nodes to apply:",
+            *(f"- `{r.nodepool.name}`{nodes(r.replicas)}" for r in tuning),
+        ]
+    return [*lines, "", "Merge in a window the cluster's owners accept."] if lines else []

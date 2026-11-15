@@ -203,7 +203,7 @@ class ValueDriftOut(BaseModel):
     needs_hardware: bool
     """The decision is the nodepool's network hardware: a sync can send it in ``hardware``."""
     reboots: bool
-    """A nodepool's configs: syncing them rolls its nodes (drain and reboot, or replace)."""
+    """A nodepool's configs (syncing them rolls its nodes) or tuning profiles (they may reboot)."""
 
     @classmethod
     def of(cls, drift: ValueDrift) -> ValueDriftOut:
@@ -222,7 +222,7 @@ class ValueDriftOut(BaseModel):
             removed=list(drift.removed),
             needs_decision=drift.needs_decision,
             needs_hardware=drift.needs_hardware,
-            reboots=drift.is_configs,
+            reboots=drift.reboots,
         )
 
 

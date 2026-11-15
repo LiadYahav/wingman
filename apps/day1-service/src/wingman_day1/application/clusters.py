@@ -9,7 +9,8 @@ naming rules (ADR-0014), and its release against what the MCE can host
 (ADR-0050). The spec's locked values are used and may not be sent different
 (ADR-0026), its owners must be numbers (ADR-0028), its machine configs must
 resolve by the day1 CI's rule, and the cluster's network config entry is
-expanded to the name the CI reads before the template renders (ADR-0027). A
+expanded to the name the CI reads before the template renders (ADR-0027).
+Tuning profiles must be in ``tuning/`` (ADR-0061). A
 file that cannot be parsed is shown with its
 error, never dropped from the list (ADR-0004).
 """
@@ -35,6 +36,7 @@ from wingman_core.domain.users import User
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.parsed_files import ParsedFiles
 from wingman_day1.application.placement import PlacementService
+from wingman_day1.application.placement_log import log_placement
 from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
@@ -84,6 +86,8 @@ from wingman_day1.domain.placement import Admission, Choice, Decision, describe_
 from wingman_day1.domain.sizing import sizing_problems
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
+from wingman_day1.domain.tuning_profiles import TuningCatalog, edit_text_problems, input_problems
+from wingman_day1.domain.tuning_rule import render_inputs, rendered_problems
 from wingman_day1.domain.workflows import ProvisionRun, provision_workflow_id
 from wingman_day1.ports import ClusterProvisioner, ProvisionWorkflow, RepoReads
 
@@ -240,6 +244,10 @@ class ClusterService:
             ref.path, commit_id
         )
 
+    def chart_cluster_name(self, ref: ClusterRef) -> str:
+        """The chart's name from the file name (ADR-0015): ``tuning/<it>/`` holds its variants."""
+        return self._naming.for_file(ref.name).cluster_name
+
     async def web_url(self, ref: ClusterRef) -> str:
         """The file in GitLab's UI, at the default branch."""
         project = await self._day1.project()
@@ -282,7 +290,8 @@ class ClusterService:
             )
         addons = spec.requested_addons(request.addon_overrides)
         catalog = await self._machine_configs.catalog()
-        content = self._render(ref, spec, request.variables, catalog)
+        tuning = await self._machine_configs.tuning()
+        content = self._render(ref, spec, request.variables, catalog, tuning)
         await self._require_hostable(ref.mce, content)
         admission = await self._admit(ref, content, request, counted=counted)
         provenance = Provenance(spec.metadata.name, spec.metadata.version, tuple(addons))
@@ -322,7 +331,7 @@ class ClusterService:
             "`dhcp_values` and `mcConfigMap` to the file; merge once they have."
         )
         if rendered.admission is not None:
-            self._log_placement(rendered.admission, rendered.ref, user)
+            log_placement(rendered.admission, rendered.ref, user)
         result = await self._provisioner.apply(
             ClusterChange(
                 action=ClusterAction.CREATE,
@@ -340,38 +349,6 @@ class ClusterService:
     def _record(self, admission: Admission | None) -> None:
         if admission is not None and self._placement is not None:
             self._placement.record(admission.decision)
-
-    def _log_placement(self, admission: Admission, ref: ClusterRef, user: User) -> None:
-        """The decision and its numbers, as the structured event ``mce_placement_chosen``."""
-        placement = admission.placement
-        event = {
-            "cluster": ref.name,
-            "site": ref.site,
-            "mce": admission.chosen,
-            "pick": placement.pick,
-            "override": admission.override,
-            "reason": admission.reason,
-            "requested_by": user.username,
-            "candidates": [
-                {
-                    "mce": c.mce,
-                    "rank": c.rank,
-                    "clusters": c.picture.clusters,
-                    "owner_clusters": c.picture.owner_clusters,
-                    "spare_usable": c.picture.spare.usable if c.picture.spare else None,
-                    "free_pods": c.picture.pods.free if c.picture.pods else None,
-                    "failures": list(c.failures),
-                }
-                for c in placement.candidates
-            ],
-        }
-        logger.info(
-            "MCE placement for %s: %s%s",
-            ref.name,
-            admission.chosen,
-            f" over the pick {placement.pick}" if admission.override else " (the pick)",
-            extra={"event": "mce_placement_chosen", **event},
-        )
 
     @property
     def creates_by_workflow(self) -> bool:
@@ -397,7 +374,7 @@ class ClusterService:
             ref.site,
         )
         if rendered.admission is not None:
-            self._log_placement(rendered.admission, ref, user)
+            log_placement(rendered.admission, ref, user)
         run = await self._provision.start(
             cluster=ref.name.removeprefix(HOSTED_CLUSTER_PREFIX),
             mce=ref.mce,
@@ -434,6 +411,10 @@ class ClusterService:
         problems = edit_problems(
             current.content, content, versions_by_workflow=self._versions_by_workflow
         )
+        if not problems:
+            tuning = await self._machine_configs.tuning()
+            name = self.chart_cluster_name(ref)
+            problems = edit_text_problems(current.content, content, tuning, cluster_name=name)
         require_valid(problems, message="the edit is not valid")
         return await self._provisioner.apply(
             ClusterChange(
@@ -474,6 +455,7 @@ class ClusterService:
         spec: ClusterSpec,
         variables: Mapping[str, object],
         catalog: MachineConfigCatalog,
+        tuning: TuningCatalog,
     ) -> str:
         locks = spec.locks()
         conflicts = lock_conflicts(variables, locks, flavor=spec.metadata.name)
@@ -493,15 +475,17 @@ class ClusterService:
         problems = [*conflicts, *missing, *owner_problems(inputs)]
         problems += sizing_problems(inputs, spec.sizing_ratio(), flavor=spec.metadata.name)
         problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
+        problems += input_problems(inputs, tuning)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
-        inputs = expand_network_configs(inputs, cluster_name=cluster_name)
+        inputs = render_inputs(expand_network_configs(inputs, cluster_name=cluster_name))
         template = spec.spec.day1.template
         if not template.strip():
             raise RenderError("the specs project has no cluster-template.j2")
         rendered = render_cluster_file(template, inputs)
+        problems = rendered_file_problems(rendered)
         require_valid(
-            rendered_file_problems(rendered),
+            problems or rendered_problems(inputs, load_values(rendered)),
             message="the rendered cluster file breaks the values-file contract",
         )
         return rendered

@@ -4,7 +4,8 @@ A spec that fails to parse is listed with its error rather than dropped
 (ADR-0004: a read error is never swallowed). Every change is a merge request,
 and a spec is saved only when it meets the flavor rules: safe values
 (ADR-0013), locks that fix a value (ADR-0026), machine configs that resolve
-(ADR-0027) and owner numbers (ADR-0028).
+(ADR-0027), tuning profiles from ``tuning/`` (ADR-0061) and owner numbers
+(ADR-0028).
 
 A version, once saved, never changes (ADR-0044): each cluster is measured
 against the version its header names, read from the file's history
@@ -41,6 +42,7 @@ from wingman_day1.domain.specs import (
     with_template,
 )
 from wingman_day1.domain.template import TemplateField, analyze_template
+from wingman_day1.domain.tuning_profiles import input_problems as tuning_problems
 from wingman_day1.ports import RepoReads, SpecChanges
 
 VERSION_HISTORY: Final = 100
@@ -250,6 +252,7 @@ class SpecCatalog:
         problems = rule_problems(spec)
         catalog = await self._machine_configs.catalog()
         problems += flavor_config_problems(spec.spec.day1.values, catalog)
+        problems += tuning_problems(spec.spec.day1.values, await self._machine_configs.tuning())
         if problems:
             raise InvalidSpecError(f"spec {spec.metadata.name!r} cannot be saved", problems)
 

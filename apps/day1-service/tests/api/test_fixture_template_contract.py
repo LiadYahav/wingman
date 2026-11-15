@@ -26,7 +26,16 @@ from wingman_day1.application.clusters import CreateCluster
 NAME = "ocp4-prod-falcon-site1"
 SITE = "site1"
 MCE = "ocp4-prod-mce-site1-a"
-FORBIDDEN = {"vlanId", "dhcp_values", "mcFiles", "mcConfigMap", "clusterName", "site", "mce"}
+FORBIDDEN = {
+    "vlanId",
+    "dhcp_values",
+    "mcFiles",
+    "mcConfigMap",
+    "tuningConfigmap",
+    "clusterName",
+    "site",
+    "mce",
+}
 
 NODEPOOLS = [
     {
@@ -35,7 +44,7 @@ NODEPOOLS = [
         "replicas": 3,
         "configs": [{"name": "worker-kubeletconfig-reserved"}, {"name": "nic-ring-buffer"}],
         "node_labels": {"topology.kubernetes.io/zone": "a"},
-        "tuning_config": "tuned-performance",
+        "tuning_config": ["tuned-network-latency"],
     },
     {
         "infra_env": "hp-gen11-site1-64c",
@@ -85,7 +94,7 @@ async def test_a_rendered_agent_cluster_has_only_the_keys_people_write(
         "labels": {"allowDeletion": False},
         "configs": [{"name": "worker-kubeletconfig-reserved"}, {"name": "nic-ring-buffer"}],
         "nodeLabels": {"topology.kubernetes.io/zone": "a"},
-        "tuningConfig": "tuned-performance",
+        "tuningConfig": "tuned-network-latency",
     }
     assert spare == {
         "infraEnvName": "hp-gen11-site1-64c",
