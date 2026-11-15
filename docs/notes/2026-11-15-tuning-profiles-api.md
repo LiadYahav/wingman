@@ -61,8 +61,10 @@ path it is about (`docs/notes/2026-11-08-flavors-v2-api-changes.md` §2).
 - `profiles` are the **shared** profiles (`tuning/<name>.yaml`), sorted by
   name: the only names a flavor or a create may use. `kind` is `Tuned` or
   `PerformanceProfile`. `summary` is a Tuned's `[main]` `summary=` (first
-  profile entry), else `null`. `clusters` are the cluster names (the
-  chart's, ADR-0015) that have a variant `tuning/<cluster>/<name>.yaml`.
+  profile entry), else `null`. `clusters` are the cluster names with a
+  variant `tuning/<cluster>/<name>.yaml`, named as the CI's
+  `resolve_cluster_name` names them: a file's `clusterName` key when set,
+  else its stem minus the prefix (ADR-0015).
   `requires_performance_profile` is, for a Tuned whose `[main]` has
   `include=openshift-node-performance-<pp>` (in any profile entry's
   `data`), that `<pp>`; else `null`. The web warns about a nodepool that
@@ -70,9 +72,10 @@ path it is about (`docs/notes/2026-11-08-flavors-v2-api-changes.md` §2).
   refuses it.
 - `problems` are files that are not offered: not `.yaml`, nested deeper
   than one folder, a name that is not a DNS-1123 label of at most 63
-  characters, not exactly one YAML mapping, another `apiVersion`/`kind`,
-  `metadata.name` not the file's name. `*.md` and dot files are skipped
-  silently.
+  characters, not exactly one YAML mapping (duplicate keys refused),
+  another `apiVersion`/`kind`, `metadata.name` not the file's name. A
+  `README.md` is a problem too (the CI accepts only `.yaml`); hidden files
+  (`.gitkeep`) are skipped silently.
 - `found: false`: the day1 repo has no `tuning/`; `profiles` and `problems`
   are empty. The picker is then empty and says why.
 - A failed GitLab read fails the request (ADR-0004).

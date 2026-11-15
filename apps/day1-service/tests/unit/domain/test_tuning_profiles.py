@@ -114,9 +114,21 @@ def test_a_file_that_breaks_a_rule_is_a_problem_and_never_offered(
     assert detail in problem
 
 
-def test_documentation_and_dot_files_are_skipped_silently() -> None:
-    found = catalog({"tuning/README.md": "# notes\n", "tuning/.gitkeep": ""})
-    assert (found.shared, found.problems) == ({}, ())
+def test_hidden_files_are_skipped_and_a_readme_is_a_problem_as_the_ci_reads_them() -> None:
+    found = catalog(
+        {"tuning/README.md": "# notes\n", "tuning/.gitkeep": "", "tuning/.x/tuned-a.yaml": ""}
+    )
+    assert found.shared == {}
+    assert [(p.path, p.detail) for p in found.problems] == [
+        ("tuning/README.md", "not a .yaml file")
+    ]
+
+
+def test_duplicate_keys_are_refused() -> None:
+    found = catalog({"tuning/tuned-x.yaml": tuned("tuned-x") + "kind: Tuned\n"})
+    ((problem,),) = [[p.detail for p in found.problems]]
+    assert problem.startswith("not valid YAML: ")
+    assert "duplicate key 'kind'" in problem
 
 
 def test_too_many_files_is_a_problem() -> None:

@@ -49,8 +49,8 @@ async def test_no_tuning_folder_is_an_empty_catalogue_that_says_so(gitlab: InMem
     assert (found.found, found.shared, found.problems) == (False, {}, ())
 
 
-async def test_documentation_is_not_read(gitlab: InMemoryGitLab) -> None:
-    day1 = repo(gitlab, {"tuning/README.md": "# notes\n", "sites/configValues.yaml": "{}\n"})
+async def test_hidden_files_are_not_read(gitlab: InMemoryGitLab) -> None:
+    day1 = repo(gitlab, {"tuning/.gitkeep": "", "sites/configValues.yaml": "{}\n"})
     found = await TuningProfileService(UnreadableFiles(day1)).catalog()  # ty: ignore[invalid-argument-type]
     assert (found.found, found.shared, found.problems) == (True, {}, ())
 

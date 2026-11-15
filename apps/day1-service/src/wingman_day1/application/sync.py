@@ -247,7 +247,7 @@ class SyncService:
             values,
             values_or_refuse(content),
             await self._machine_configs.tuning(),
-            cluster_name=self._clusters.chart_cluster_name(cluster.ref),
+            cluster_name=cluster_name,
         )
         found = await self._drift.against(cluster, spec, catalog) if addons else None
         decided = [d for d in changes if d.needs_decision is None]

@@ -33,19 +33,21 @@ cached like every other read (ADR-0011, ADR-0041), never written. The
 machine-config service reads it beside `mc-files/`, so every use case that
 already has the config catalogue reaches it without a new dependency.
 
-- `tuning/<name>.yaml` is a **shared profile**: exactly one YAML document,
-  a `Tuned` (`apiVersion: tuned.openshift.io/v1`) or a `PerformanceProfile`
+- `tuning/<name>.yaml` is a **shared profile**: exactly one YAML document
+  (duplicate keys refused), a `Tuned` (`apiVersion: tuned.openshift.io/v1`) or a `PerformanceProfile`
   (`apiVersion: performance.openshift.io/v2`), whose `metadata.name` is
   `<name>`. `<name>` is a DNS-1123 label of at most 63 characters (it
   becomes a ConfigMap's name).
 - `tuning/<clusterName>/<name>.yaml` is a **variant** for one cluster: the
   same rules, and for that cluster it wins over the shared file of the same
-  name. `<clusterName>` is the chart's cluster name, the file stem minus
-  `DAY1_CLUSTER_NAME_STRIP_PREFIX` (ADR-0015), which is the CI's reading.
+  name. `<clusterName>` is the CI's `resolve_cluster_name`: the cluster
+  file's own `clusterName` key when it has one, else the file stem minus
+  `DAY1_CLUSTER_NAME_STRIP_PREFIX` (ADR-0015), which is the HostedCluster
+  name day1 already derives.
 - Nothing deeper. A file that breaks a rule is listed in the response's
-  `problems` with its path and why, and is never offered. Documentation
-  (`*.md`) and dot files are not profiles and are not reported, as in
-  `mc-files/` (ADR-0027).
+  `problems` with its path and why, and is never offered, a `README.md`
+  included (unlike `mc-files/`, ADR-0027, the CI accepts only `.yaml`
+  there). Hidden files (`.gitkeep`) are ignored, as the CI ignores them.
 - A Tuned's summary is the `summary=` line of the `[main]` section of its
   first profile's `data`; the picker shows it.
 - **Pairing.** A Tuned that builds on a PerformanceProfile's generated
@@ -158,7 +160,7 @@ configs' `confirm_removals` is about MachineConfigs).
 - `apps/day1-service/tests/unit/domain/test_cluster_file.py`:
   `tuningConfigmap` refused in a rendered file and kept by an edit.
 - `apps/day1-service/tests/unit/application/test_tuning_profiles.py`: the
-  read, a missing `tuning/`, documentation not read, a failed read.
+  read, a missing `tuning/`, hidden files not read, a failed read.
 - `apps/day1-service/tests/unit/application/test_tuning_sync.py`: a sync
   writing only names, a name that does not resolve blocking it, the pools
   that may reboot, `tuningConfigmap` untouched.

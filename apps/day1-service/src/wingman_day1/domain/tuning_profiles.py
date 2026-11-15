@@ -13,8 +13,8 @@ same folder and never writes it:
   a DNS-1123 label of at most 63 characters;
 - ``tuning/<cluster>/<name>.yaml`` is that cluster's variant, by the same
   rules;
-- nothing deeper. Any other file is a problem and is never offered;
-  documentation (``*.md``) and dot files are skipped.
+- nothing deeper. Any other file is a problem and is never offered (a
+  ``README.md`` too, as the CI reads the folder); dot files are skipped.
 
 A nodepool takes at most one PerformanceProfile (a HyperShift NodePool
 references at most one) and any number of Tuned. A Tuned whose data
@@ -40,7 +40,7 @@ from typing import Final, cast
 import yaml
 
 from wingman_core.domain.git import RepoPath
-from wingman_day1.domain.cluster_file import load_values
+from wingman_day1.domain.cluster_file import StrictLoader, load_values
 from wingman_day1.domain.errors import InvalidClusterFileError
 
 TUNING_DIR: Final = RepoPath("tuning")
@@ -119,7 +119,7 @@ class TuningCatalog:
         problems: list[TuningProblem] = []
         for path in sorted(files)[:MAX_TUNING_FILES]:
             parts = path.split("/")[1:]
-            if is_documentation(path):
+            if is_hidden(path):
                 continue
             profile = _profile(path, parts, files[path])
             if isinstance(profile, str):
@@ -160,10 +160,9 @@ class TuningCatalog:
         return f"{where}: {name} is not a tuning profile in {TUNING_DIR}/{hint}"
 
 
-def is_documentation(path: str) -> bool:
-    """``*.md`` and dot files under ``tuning/``: not profiles, and not problems either."""
-    parts = path.split("/")[1:]
-    return any(p.startswith(".") for p in parts) or path.endswith(".md")
+def is_hidden(path: str) -> bool:
+    """A dot file (``.gitkeep``) or a file in a dot folder: the CI ignores it, so does Wingman."""
+    return any(p.startswith(".") for p in path.split("/")[1:])
 
 
 def _profile(path: str, parts: Sequence[str], content: str) -> TuningProfile | str:
@@ -207,7 +206,7 @@ def _profile(path: str, parts: Sequence[str], content: str) -> TuningProfile | s
 def _document(content: str) -> Mapping[str, object] | str:
     """The file's one YAML mapping, or why it has none."""
     try:
-        documents = [d for d in yaml.safe_load_all(content) if d is not None]
+        documents = [d for d in yaml.load_all(content, Loader=StrictLoader) if d is not None]
     except yaml.YAMLError as exc:
         return f"not valid YAML: {str(exc).splitlines()[0]}"
     if len(documents) != 1 or not isinstance(documents[0], dict):

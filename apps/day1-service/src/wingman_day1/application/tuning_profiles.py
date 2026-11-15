@@ -16,7 +16,7 @@ from wingman_day1.domain.tuning_profiles import (
     MAX_TUNING_FILES,
     TUNING_DIR,
     TuningCatalog,
-    is_documentation,
+    is_hidden,
 )
 from wingman_day1.ports import RepoReads
 
@@ -35,9 +35,7 @@ class TuningProfileService:
         except NotFoundError:
             return TuningCatalog(found=False)
         paths = sorted(
-            e.path
-            for e in entries
-            if e.kind is EntryKind.FILE and not is_documentation(str(e.path))
+            e.path for e in entries if e.kind is EntryKind.FILE and not is_hidden(str(e.path))
         )
         files = await asyncio.gather(*(self._day1.read(p) for p in paths[:MAX_TUNING_FILES]))
         return TuningCatalog.from_files(

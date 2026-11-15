@@ -346,3 +346,30 @@ async def test_an_edit_of_something_else_ignores_a_name_the_file_already_had(
         client, auth, support, lambda text: text.replace("replicas: 3", "replicas: 4")
     )
     assert response.status_code in (200, 201), response.text
+
+
+async def test_an_explicit_cluster_name_names_the_variant_folder(
+    client: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    gitlab: InMemoryGitLab,
+    context: Day1Context,
+) -> None:
+    """The CI's ``resolve_cluster_name``: the file's ``clusterName`` key wins over its stem."""
+    pid = await support.project_id(gitlab, support.DAY1)
+    text = (await gitlab.read_file(pid, RepoPath(LARK), "main")).content
+    await support.push(
+        gitlab, support.DAY1, branch="main", file=LARK, content="clusterName: lark-x\n" + text
+    )
+    local = "apiVersion: tuned.openshift.io/v1\nkind: Tuned\nmetadata:\n  name: tuned-local\n"
+    await support.push(
+        gitlab, support.DAY1, branch="main", file="tuning/lark-x/tuned-local.yaml", content=local
+    )
+    context.repos[RepoKey.DAY1].forget_files()
+
+    def add(name: str) -> Callable[[str], str]:
+        return lambda text: text.replace(
+            "tuningConfig: tuned-network-latency", f"tuningConfig: [tuned-network-latency, {name}]"
+        )
+
+    assert (await edit(client, auth, support, add("tuned-local"))).status_code in (200, 201)

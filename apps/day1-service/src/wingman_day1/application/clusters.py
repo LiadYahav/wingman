@@ -244,10 +244,6 @@ class ClusterService:
             ref.path, commit_id
         )
 
-    def chart_cluster_name(self, ref: ClusterRef) -> str:
-        """The chart's name from the file name (ADR-0015): ``tuning/<it>/`` holds its variants."""
-        return self._naming.for_file(ref.name).cluster_name
-
     async def web_url(self, ref: ClusterRef) -> str:
         """The file in GitLab's UI, at the default branch."""
         project = await self._day1.project()
@@ -413,7 +409,7 @@ class ClusterService:
         )
         if not problems:
             tuning = await self._machine_configs.tuning()
-            name = self.chart_cluster_name(ref)
+            name = (await self.hosted_cluster(ref)).cluster_name  # tuning/<it>/: its variants
             problems = edit_text_problems(current.content, content, tuning, cluster_name=name)
         require_valid(problems, message="the edit is not valid")
         return await self._provisioner.apply(
