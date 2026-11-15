@@ -1,6 +1,7 @@
 import { AlertTriangle, Lock, SlidersHorizontal } from "lucide-react";
 import { ConfigEntryList } from "@/components/specs/config-entries";
 import { formatPreset, structureSummary } from "@/lib/specs";
+import { TUNING, TUNING_RULE, showTuning, tuningNames } from "@/lib/tuning-profiles";
 import { isMapping } from "@/lib/values";
 import { cn } from "@/lib/utils";
 import type { SpecEntry } from "@/types";
@@ -97,6 +98,7 @@ function lockOf(path: string, locks: readonly string[]): string | null {
 
 function InputValue({ field, value }: { field: string; value: unknown }) {
   if (field === "configs" && Array.isArray(value)) return <ConfigEntryList value={value} />;
+  if (field === TUNING) return <span className="text-xs font-mono text-foreground/80 break-all">{showTuning(tuningNames(value))}</span>;
   if (isMapping(value)) {
     const pairs = Object.entries(value);
     if (pairs.length === 0) return <span className="text-xs text-muted-foreground">None</span>;
@@ -256,11 +258,17 @@ export function FlavorInputsCard({ spec }: { spec: SpecEntry }) {
         </div>
       )}
 
-      {enforced.some(isRule) && (
+      {enforced.some((lock) => isRule(lock) && lock !== TUNING_RULE) && (
         <p className="text-xs text-muted-foreground" data-testid="flavor-configs-rule">
           <span className="font-mono">nodepools[*].configs</span> is a rule: every nodepool of a cluster has exactly
           these configs, in any order, and <span className="font-mono">nm-conf</span> is each nodepool&apos;s own network
           config for its own hardware. The hardware shown is only the create form&apos;s preset.
+        </p>
+      )}
+      {enforced.includes(TUNING_RULE) && (
+        <p className="text-xs text-muted-foreground" data-testid="flavor-tuning-rule">
+          <span className="font-mono">{TUNING_RULE}</span> is a rule: every nodepool of a cluster has exactly these tuning
+          profiles, in any order. Changing them can reboot a nodepool&apos;s nodes.
         </p>
       )}
 

@@ -1,8 +1,8 @@
 /**
  * What a flavor (a cluster spec) sets on the create form in flavors v2:
- * locked values, presets, the configs rule and the nodepool defaults
- * (docs/notes/2026-11-08-flavors-v2-api-changes.md §1-§6 and §9; ADR-0026 to
- * ADR-0029). Day1 is the authority and checks all of it again: this mirrors
+ * locked values, presets, the configs rule, the tuning rule and the nodepool
+ * defaults (docs/notes/2026-11-08-flavors-v2-api-changes.md §1-§6 and §9;
+ * ADR-0026 to ADR-0029; docs/notes/2026-11-15-tuning-profiles-api.md, ADR-0061). Day1 is the authority and checks all of it again: this mirrors
  * its rules so the form shows what day1 will accept, and every problem day1
  * returns is still shown, at its field when the form has that field.
  */
@@ -19,6 +19,7 @@ import {
   NETWORK_CONFIG,
   withHardware,
 } from "@/lib/machine-configs";
+import { TUNING, TUNING_RULE, isTuningPath, tuningNames, tuningPath, tuningRuleNames } from "@/lib/tuning-profiles";
 import type { ConfigEntry, MachineConfigs, SpecEntry, TemplateField } from "@/types";
 
 /** The template inputs day1's locks know by name (`wingman_day1.domain.locks.LOCKABLE`). */
@@ -80,7 +81,7 @@ function assignExisting(root: Record<string, unknown>, path: string, value: unkn
   return put(root, segments) as Record<string, unknown>;
 }
 
-export const nodepoolConfigsPath = (index: number) => `${NODEPOOLS}[${index}].${CONFIGS}`;
+const nodepoolConfigsPath = (index: number) => `${NODEPOOLS}[${index}].${CONFIGS}`;
 
 /** `nodepools[<i>].configs`: a field the form draws with the machine-config picker. */
 export function isConfigsPath(path: string): boolean {
@@ -101,6 +102,8 @@ export interface FlavorLocks {
   values: ReadonlyMap<string, unknown>;
   /** The configs rule's entries (`{name}` each; `nm-conf` is each nodepool's own); `null` without a rule day1 enforces. */
   rule: ConfigEntry[] | null;
+  /** The tuning rule's names (every nodepool has exactly these); `null` without one day1 enforces. */
+  tuning: string[] | null;
 }
 
 /**
@@ -130,9 +133,14 @@ export function flavorLocks(spec: SpecEntry): FlavorLocks {
   const values = spec.spec.day1.values ?? {};
   const locked = new Map<string, unknown>();
   let rule: ConfigEntry[] | null = null;
+  let tuning: string[] | null = null;
   for (const path of spec.enforced_locks ?? spec.spec.day1.locked_paths ?? []) {
     if (path === CONFIGS_RULE) {
       rule = ruleEntries(values);
+      continue;
+    }
+    if (path === TUNING_RULE) {
+      tuning = tuningRuleNames(values);
       continue;
     }
     if (!LOCKABLE.some((shape) => shape.test(path))) continue;
@@ -141,16 +149,35 @@ export function flavorLocks(spec: SpecEntry): FlavorLocks {
   }
   // The rule covers every nodepool: a position's configs lock beside it is not enforced
   if (rule) for (const path of [...locked.keys()]) if (isConfigsPath(path)) locked.delete(path);
-  return { values: locked, rule };
+  return { values: locked, rule, tuning };
+}
+
+/** The badge under each rule-locked field: configs whose names are fixed, tuning fixed on every nodepool. */
+export function ruleLockLabels(locks: FlavorLocks, nodepools: number): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (let i = 0; i < nodepools; i++) {
+    if (locks.rule) labels[nodepoolConfigsPath(i)] = "names locked";
+    if (locks.tuning) labels[tuningPath(i)] = "locked on every nodepool";
+  }
+  return labels;
 }
 
 // ── Seeding the form ──────────────────────────────────────────────────────────
 
-/** The template's `nodepools` list and its `configs` field, when it has them. */
-function nodepoolFields(schema: TemplateField[]): { fields: TemplateField[]; configs: boolean } | null {
+/** The template's `nodepools` list, its `configs` field and its `tuning_config` field, when it has them. */
+function nodepoolFields(schema: TemplateField[]): { fields: TemplateField[]; configs: boolean; tuning: boolean } | null {
   const pools = schema.find((f) => f.name === NODEPOOLS && f.type === "list" && f.fields?.length);
   if (!pools?.fields) return null;
-  return { fields: pools.fields, configs: pools.fields.some((f) => f.name === CONFIGS && f.type === "list") };
+  return {
+    fields: pools.fields,
+    configs: pools.fields.some((f) => f.name === CONFIGS && f.type === "list"),
+    tuning: pools.fields.some((f) => f.name === TUNING),
+  };
+}
+
+/** A nodepool's tuning as the form keeps it: a list of names; under the rule, the rule's. */
+function withTuning(pool: FieldValueMap, locks: FlavorLocks): FieldValueMap {
+  return { ...pool, [TUNING]: locks.tuning ? [...locks.tuning] : tuningNames(pool[TUNING]) };
 }
 
 /** Config entries as the form keeps them: `hardware` only on a network entry that has one. */
@@ -170,7 +197,8 @@ function startingConfigs(locks: FlavorLocks, catalog: MachineConfigs | undefined
 export function newNodepool(schema: TemplateField[], locks: FlavorLocks, catalog: MachineConfigs | undefined): FieldValueMap {
   const pools = nodepoolFields(schema);
   const pool = seedFromStructure({}, pools?.fields ?? []);
-  return pools?.configs ? { ...pool, [CONFIGS]: startingConfigs(locks, catalog) } : pool;
+  const configured = pools?.configs ? { ...pool, [CONFIGS]: startingConfigs(locks, catalog) } : pool;
+  return pools?.tuning ? withTuning(configured, locks) : configured;
 }
 
 export interface CreateFormSeed {
@@ -218,6 +246,9 @@ export function seedCreateForm(
         : item
     );
   }
+  if (pools?.tuning && Array.isArray(seeded[NODEPOOLS])) {
+    seeded[NODEPOOLS] = (seeded[NODEPOOLS] as FieldValue[]).map((item) => (isMap(item) ? withTuning(item as FieldValueMap, locks) : item));
+  }
   return { values: seeded, fixedNodepools: pools ? items.length : 0 };
 }
 
@@ -230,7 +261,7 @@ export function presetPaths(spec: SpecEntry, schema: TemplateField[], locks: Fla
   const presets = spec.spec.day1.values ?? {};
   const paths = new Set<string>();
   const add = (path: string) => {
-    if (locks.values.has(path) || (locks.rule && isConfigsPath(path))) return;
+    if (locks.values.has(path) || (locks.rule && isConfigsPath(path)) || (locks.tuning && isTuningPath(path))) return;
     paths.add(path);
   };
   for (const field of schema) {
@@ -251,17 +282,21 @@ export function presetPaths(spec: SpecEntry, schema: TemplateField[], locks: Fla
 // ── The request ───────────────────────────────────────────────────────────────
 
 /**
- * The template inputs to send: config entries as §3 writes them, owners as
- * text (§4), and every locked value exactly as the flavor has it (day1
- * compares them as JSON, so `{hardware: null}` would not be the same value).
+ * The template inputs to send: config entries as §3 writes them, tuning
+ * profiles as a list of names (the tuning rule's under it), owners as text
+ * (§4), and every locked value exactly as the flavor has it (day1 compares
+ * them as JSON, so `{hardware: null}` would not be the same value).
  */
 export function requestVariables(form: FormValues, locks: FlavorLocks): Record<string, unknown> {
   let vars: Record<string, unknown> = structuredClone(form);
   const pools = vars[NODEPOOLS];
   if (Array.isArray(pools)) {
-    vars[NODEPOOLS] = pools.map((pool) =>
-      isMap(pool) && Array.isArray(pool[CONFIGS]) ? { ...pool, [CONFIGS]: asEntries(pool[CONFIGS]).map(cleanEntry) } : pool
-    );
+    vars[NODEPOOLS] = pools.map((pool) => {
+      if (!isMap(pool)) return pool;
+      const configured = Array.isArray(pool[CONFIGS]) ? { ...pool, [CONFIGS]: asEntries(pool[CONFIGS]).map(cleanEntry) } : pool;
+      if (locks.tuning) return { ...configured, [TUNING]: [...locks.tuning] };
+      return TUNING in configured ? { ...configured, [TUNING]: tuningNames(configured[TUNING]) } : configured;
+    });
   }
   for (const owner of OWNER_INPUTS) {
     if (typeof vars[owner] === "number" && !locks.values.has(owner)) vars[owner] = String(vars[owner]);
@@ -368,7 +403,7 @@ export function placeProblems(lines: string[], fields: ReadonlySet<string>): Pla
     const cuts = [token.length, ...[...token.matchAll(/[.[]/g)].map((m) => m.index).reverse()];
     const field = match ? cuts.map((cut) => token.slice(0, cut)).find((prefix) => fields.has(prefix)) : undefined;
     // An item of a list the form does not draw (`nodepools[2]` of two) is not about the list's field
-    const item = field !== undefined && !isConfigsPath(field) && /^\[(\d+|\*)\]/.test(token.slice(field.length));
+    const item = field !== undefined && !isConfigsPath(field) && !isTuningPath(field) && /^\[(\d+|\*)\]/.test(token.slice(field.length));
     if (!match || !field || item) {
       placed.rest.push(line);
       continue;

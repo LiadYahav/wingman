@@ -7,11 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Switch } from "@/components/ui/switch";
 import { ConfigListEditor } from "@/components/machine-configs/config-list-editor";
+import { TuningCatalogProblems } from "@/components/tuning/tuning-profiles-picker";
 import { NETWORK_CONFIG, defaultHardware, hardwareOptions, isNetworkEntry } from "@/lib/machine-configs";
 import { cn } from "@/lib/utils";
 import type { ConfigEntry, MachineConfigs, TemplateField } from "@/types";
 import { fieldId, inputCls, NotEnforced, ValueField } from "./controls";
+import { ConfigsModeChoice } from "./configs-mode-choice";
 import { NodeLabelsEditor, PresetInput } from "./inputs";
+import { TuningField } from "./tuning-field";
+import { keepTuningRule } from "./tuning-model";
 import {
   CONFIGS_RULE,
   addNodepool,
@@ -35,70 +39,12 @@ import {
   setSizedReplicas,
   ratioSize,
   setRuleEntries,
-  type ConfigsMode,
   type FlavorDraft,
 } from "./model";
 
 type Update = (change: (draft: FlavorDraft) => FlavorDraft) => void;
 
 const names = (entries: ConfigEntry[]) => entries.map((e) => e.name).join(", ");
-
-/** The two ways a flavor sets machine configs, as two cards to choose from. */
-function ConfigsModeChoice({ mode, onChange }: { mode: ConfigsMode; onChange: (mode: ConfigsMode) => void }) {
-  const choices: { value: ConfigsMode; title: string; body: string }[] = [
-    {
-      value: "each",
-      title: "Each nodepool its own",
-      body: "Set machine configs per nodepool, as presets or locked by position.",
-    },
-    {
-      value: "rule",
-      title: "The same on every nodepool",
-      body: "One list for all nodepools, locked as a rule; each picks its own network hardware.",
-    },
-  ];
-  return (
-    <div role="radiogroup" aria-label="Machine configs" className="grid gap-2 sm:grid-cols-2">
-      {choices.map((choice) => {
-        const selected = choice.value === mode;
-        return (
-          <button
-            key={choice.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(choice.value)}
-            onKeyDown={(e) => {
-              if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
-                e.preventDefault();
-                onChange(mode === "each" ? "rule" : "each");
-              }
-            }}
-            className={cn(
-              "flex items-start gap-3 rounded-xl border p-3.5 text-left outline-none transition-[border-color,background-color,box-shadow] duration-150 focus-visible:ring-3 focus-visible:ring-ring/40",
-              selected ? "border-primary/50 bg-primary/[0.06] shadow-sm" : "border-border hover:border-foreground/20 hover:bg-muted/40"
-            )}
-          >
-            <span
-              aria-hidden
-              className={cn(
-                "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
-                selected ? "border-primary bg-primary" : "border-input"
-              )}
-            >
-              {selected && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-medium">{choice.title}</span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">{choice.body}</span>
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 /** What `nodepool-defaults.yaml` gives a new nodepool, or why it gives nothing. */
 function DefaultsNote({ catalog, rule, defaults }: { catalog: MachineConfigs | undefined; rule: boolean; defaults: ConfigEntry[] }) {
@@ -140,9 +86,10 @@ function DefaultsProblems({ catalog }: { catalog: MachineConfigs | undefined }) 
 
 /**
  * Part 2: how many nodepools a cluster of the flavor starts with and, for
- * each, its replicas, machine configs and node labels, each a preset or
- * locked (by position, §6), or the configs locked for every nodepool as one
- * rule (§9). A new nodepool starts with the nodepool defaults (ADR-0027).
+ * each, its replicas, machine configs, node labels and tuning profiles, each
+ * a preset or locked (by position, §6), or the configs or tuning profiles
+ * locked for every nodepool as one rule (§9, ADR-0061). A new nodepool starts
+ * with the nodepool defaults (ADR-0027).
  */
 export function NodepoolsSection({
   draft,
@@ -179,6 +126,7 @@ export function NodepoolsSection({
       <div className="space-y-2">
         <ConfigsModeChoice mode={mode} onChange={(m) => update((d) => setConfigsMode(d, m, defaults, defaultHardware(catalog)))} />
         <DefaultsProblems catalog={catalog} />
+        <TuningCatalogProblems />
       </div>
 
       {rule && (
@@ -253,7 +201,7 @@ export function NodepoolsSection({
       )}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Button type="button" variant="outline" onClick={() => update((d) => addNodepool(d, defaults, defaultHardware(catalog)))}>
+        <Button type="button" variant="outline" onClick={() => update((d) => keepTuningRule(addNodepool(d, defaults, defaultHardware(catalog))))}>
           <Plus /> Add nodepool
         </Button>
         <p className="text-xs text-muted-foreground">
@@ -512,6 +460,8 @@ function NodepoolCard({
             />
           )}
         </ValueField>
+
+        <TuningField index={index} draft={draft} update={update} problems={problems} notEnforced={notEnforced} />
 
         {others.length > 0 && (
           <div className="space-y-3">

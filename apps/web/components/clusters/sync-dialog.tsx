@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Network, Package, RotateCcw, RotateCw, TriangleAlert } from "lucide-react";
+import { Loader2, Network, Package, RotateCcw, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,8 +17,9 @@ import { defaultHardware, hardwareOptions as hardwareOptionsOf, useMachineConfig
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { cn } from "@/lib/utils";
+import { SyncRolling, SyncSection as Section, TuningRebootNote } from "./sync-rolling";
 import type {
-  AddonDrift, ConfigRemoval, HardwareChoice, MRDetail, NodepoolRef, Rebooting, SyncPreview, SyncPreviewRequest, SyncRequest,
+  AddonDrift, ConfigRemoval, HardwareChoice, MRDetail, NodepoolRef, SyncPreview, SyncPreviewRequest, SyncRequest,
 } from "@/types";
 
 /** A nodepool whose network hardware a person chooses, and what they chose. */
@@ -30,66 +31,6 @@ interface Choice {
 }
 
 const removalKey = (r: ConfigRemoval) => `${r.nodepool.index}\u0000${r.name}`;
-
-function Section({
-  title,
-  icon: Icon,
-  tone = "neutral",
-  children,
-  testId,
-}: {
-  title: string;
-  icon?: typeof Network;
-  tone?: "neutral" | "warning";
-  children: React.ReactNode;
-  testId: string;
-}) {
-  return (
-    <section
-      data-testid={testId}
-      aria-label={title}
-      className={cn(
-        "rounded-lg border p-3.5 space-y-2",
-        tone === "warning" ? "border-status-warning/30 bg-status-warning/5" : "bg-muted/20"
-      )}
-    >
-      <h3
-        className={cn(
-          "flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide",
-          tone === "warning" ? "text-status-warning-fg" : "text-muted-foreground"
-        )}
-      >
-        {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
-        {title}
-      </h3>
-      {children}
-    </section>
-  );
-}
-
-/** `2 nodes`, `25% of the nodes`: an `inPlace.maxUnavailable` as a count. */
-function atATime(maxUnavailable: number | string): string {
-  const n = typeof maxUnavailable === "number" ? maxUnavailable : /^\d+$/.test(maxUnavailable) ? Number(maxUnavailable) : null;
-  if (n !== null) return `${n} node${n === 1 ? "" : "s"}`;
-  return `${maxUnavailable} of the nodes`;
-}
-
-/**
- * How merging a sync rolls a nodepool's nodes (ADR-0037): drained and
- * rebooted in place, one at a time or `inPlace.maxUnavailable` at a time
- * (the chart's default `upgradeType` is `InPlace`), or replaced.
- */
-export function rollText(r: Pick<Rebooting, "replicas" | "max_unavailable" | "replaces_nodes">): string {
-  const nodes = r.replicas === null ? "Its nodes" : `Its ${r.replicas} node${r.replicas === 1 ? "" : "s"}`;
-  const are = r.replicas === 1 ? "is" : "are";
-  if (r.replaces_nodes) {
-    return `${nodes} ${are} replaced with new nodes (upgradeType: Replace): new nodes come up with the new configs, then the old ones are removed.`;
-  }
-  if (r.max_unavailable === null || r.max_unavailable === "") {
-    return `${nodes} ${are} drained and rebooted in place, one node at a time.`;
-  }
-  return `${nodes} ${are} drained and rebooted in place, ${atATime(r.max_unavailable)} at a time (inPlace.maxUnavailable).`;
-}
 
 function PreviewSkeleton() {
   return (
@@ -464,26 +405,7 @@ export function SyncDialog({
                   </Section>
                 )}
 
-                {data.rebooting.length > 0 && (
-                  <Section title="Merging rolls these nodes" icon={RotateCw} tone="warning" testId="sync-rolling">
-                    <p className="text-xs text-muted-foreground">
-                      OpenShift applies changed machine configs by rolling a nodepool&apos;s nodes.
-                    </p>
-                    <ul className="space-y-1.5 text-sm">
-                      {data.rebooting.map((r) => (
-                        <li key={r.nodepool.index} data-testid={`sync-roll-${r.nodepool.index}`}>
-                          <span className="font-medium break-all">{r.nodepool.name}</span>
-                          <span className="text-muted-foreground"> (nodepool[{r.nodepool.index}])</span>
-                          <p>{rollText(r)}</p>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="text-sm font-medium">
-                      Nothing rolls until the MR is merged: merging is what starts it. Merge it in a window the
-                      cluster&apos;s owners accept.
-                    </p>
-                  </Section>
-                )}
+                <SyncRolling rebooting={data.rebooting} />
 
                 {data.warnings.length > 0 && (
                   <Section title="Check before merging" icon={TriangleAlert} tone="warning" testId="sync-warnings">
@@ -532,6 +454,7 @@ export function SyncDialog({
           {blockedBecause && (
             <p className="text-xs text-muted-foreground sm:mr-auto" data-testid="sync-blocked">{blockedBecause}</p>
           )}
+          {!blockedBecause && data && <TuningRebootNote rebooting={data.rebooting} />}
           <button onClick={onClose} disabled={sync.isPending} className={buttonVariants({ variant: "outline" })}>
             Back
           </button>

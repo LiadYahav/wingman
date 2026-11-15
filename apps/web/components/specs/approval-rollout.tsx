@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { GitPullRequestArrow, Package, RotateCw, TriangleAlert, Unplug } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
-import { rollText } from "@/components/clusters/sync-dialog";
+import { rollText } from "@/components/clusters/sync-rolling";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { clusterHref } from "@/lib/clusters";
 import { cn, plural } from "@/lib/utils";

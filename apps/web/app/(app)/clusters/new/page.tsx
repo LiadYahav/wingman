@@ -42,9 +42,11 @@ import {
 } from "@/components/clusters/dynamic-variable-form";
 import { ConfigListEditor } from "@/components/machine-configs/config-list-editor";
 import { asEntries, NETWORK_CONFIG, useMachineConfigs } from "@/lib/machine-configs";
+import { isTuningPath, tuningNames } from "@/lib/tuning-profiles";
+import { TuningProfilesPicker } from "@/components/tuning/tuning-profiles-picker";
 import {
   CONFIGS, NODEPOOLS, fieldPaths, flavorLocks, flavorProblems, formEntries, isConfigsPath, lookup, newNodepool,
-  nodepoolConfigsPath, ownerProblems, OWNER_INPUTS, placeProblems, presetPaths, requestVariables, seedCreateForm,
+  ownerProblems, OWNER_INPUTS, placeProblems, presetPaths, requestVariables, ruleLockLabels, seedCreateForm,
   sizedIndex, sizingRatio, startingSize, withSize, type PlacedProblems,
 } from "./flavor-form";
 
@@ -705,7 +707,7 @@ export default function NewClusterPage() {
 
   // The flavor's locks, presets and starting nodepools (ADR-0026 to ADR-0029)
   const locks = useMemo(
-    () => (selectedSpec ? flavorLocks(selectedSpec) : { values: new Map<string, unknown>(), rule: null }),
+    () => (selectedSpec ? flavorLocks(selectedSpec) : { values: new Map<string, unknown>(), rule: null, tuning: null }),
     [selectedSpec]
   );
   const seed = useMemo(
@@ -724,12 +726,7 @@ export default function NewClusterPage() {
   );
   const lockedPaths = useMemo(() => new Set(locks.values.keys()), [locks]);
   const nodepoolCount = Array.isArray(formValues[NODEPOOLS]) ? formValues[NODEPOOLS].length : 0;
-  // Under the rule each nodepool's config names are fixed, its nm-conf hardware is chosen
-  const lockLabels = useMemo(() => {
-    const labels: Record<string, string> = {};
-    if (locks.rule) for (let i = 0; i < nodepoolCount; i++) labels[nodepoolConfigsPath(i)] = "names locked";
-    return labels;
-  }, [locks, nodepoolCount]);
+  const lockLabels = useMemo(() => ruleLockLabels(locks, nodepoolCount), [locks, nodepoolCount]);
   const growableLists = useMemo(
     () => (nodepoolsField ? { [NODEPOOLS]: { fixed: seed.fixedNodepools, create: () => newNodepool(schema, locks, catalog) } } : undefined),
     [nodepoolsField, seed.fixedNodepools, schema, locks, catalog]
@@ -821,8 +818,11 @@ export default function NewClusterPage() {
     if (OWNER_INPUTS.includes(path) && !locked) {
       return <OwnerInput field={field} value={value} onChange={onChange} invalid={path in liveOwners} />;
     }
-    if (!isConfigsPath(path)) return undefined;
     const index = Number(/\[(\d+)\]/.exec(path)?.[1] ?? 0);
+    if (isTuningPath(path)) {
+      return <TuningProfilesPicker names={tuningNames(value)} onChange={onChange} readOnly={locks.tuning !== null || locked} label={`Nodepool ${index + 1} tuning profiles`} testId={`nodepool-${index}-tuning`} />;
+    }
+    if (!isConfigsPath(path)) return undefined;
     return (
       <ConfigListEditor
         entries={asEntries(value)}

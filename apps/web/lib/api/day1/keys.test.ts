@@ -75,6 +75,7 @@ const cases: [string, readonly unknown[], unknown[]][] = [
   ["fleet.openshiftVersions", day1Keys.fleet.openshiftVersions("mce-prod-1"), ["mce-openshift-versions", "mce-prod-1"]],
   ["fleet.openshiftVersions (no MCE)", day1Keys.fleet.openshiftVersions(undefined), ["mce-openshift-versions", undefined]],
   ["fleet.machineConfigs", day1Keys.fleet.machineConfigs, ["machine-configs"]],
+  ["fleet.tuningProfiles", day1Keys.fleet.tuningProfiles, ["tuning-profiles"]],
   ["fleet.quickLinks", day1Keys.fleet.quickLinks, ["quick-links"]],
   // placement and the rest
   ["placement.all", day1Keys.placement.all, ["placement"]],

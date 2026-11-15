@@ -10,6 +10,7 @@
 
 export * from "./specs";
 export * from "./machine-configs";
+export * from "./tuning-profiles";
 export * from "./sites";
 export * from "./placement";
 export * from "./clusters";

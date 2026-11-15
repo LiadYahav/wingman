@@ -1,5 +1,6 @@
 import { Lock, RotateCw, TriangleAlert } from "lucide-react";
 import { NETWORK_CONFIG } from "@/lib/machine-configs";
+import { TUNING_RULE } from "@/lib/tuning-profiles";
 import { cn } from "@/lib/utils";
 import type { ValueDrift } from "@/types";
 
@@ -57,8 +58,9 @@ function ConfigChips({ names, marked, mark }: { names: string[]; marked: string[
   );
 }
 
-function Value({ value, marked, mark }: { value: unknown; marked: string[]; mark: "added" | "removed" }) {
-  const names = configNames(value);
+function Value({ value, marked, mark, tuning }: { value: unknown; marked: string[]; mark: "added" | "removed"; tuning: boolean }) {
+  // One tuning profile is a string in the file (ADR-0061): still a list of names
+  const names = configNames(tuning && typeof value === "string" ? [value] : value);
   if (names) return <ConfigChips names={names} marked={marked} mark={mark} />;
   return <span className="font-mono break-all">{valueText(value)}</span>;
 }
@@ -67,6 +69,7 @@ function Value({ value, marked, mark }: { value: unknown; marked: string[]; mark
 function ValueDriftItem({ item }: { item: ValueDrift }) {
   const added = item.added ?? [];
   const removed = item.removed ?? [];
+  const tuning = item.path === TUNING_RULE;
   return (
     <li className="py-3 space-y-2 text-sm" data-testid={`value-drift-${item.file_key}`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -76,7 +79,8 @@ function ValueDriftItem({ item }: { item: ValueDrift }) {
         )}
         {item.reboots && (
           <span className="inline-flex items-center gap-1 rounded-full bg-status-warning/10 px-1.5 py-0.5 text-[11px] font-medium text-status-warning-fg">
-            <RotateCw className="h-3 w-3" aria-hidden />Changing it rolls the nodes
+            <RotateCw className="h-3 w-3" aria-hidden />
+            {tuning ? "Changing its tuning profiles may reboot the nodes" : "Changing it rolls the nodes"}
           </span>
         )}
         <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground" title="The flavor's lock">
@@ -86,11 +90,11 @@ function ValueDriftItem({ item }: { item: ValueDrift }) {
       </div>
       <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
         <dt className="text-muted-foreground pt-0.5">Flavor</dt>
-        <dd><Value value={item.flavor_value} marked={added} mark="added" /></dd>
+        <dd><Value value={item.flavor_value} marked={added} mark="added" tuning={tuning} /></dd>
         <dt className="text-muted-foreground pt-0.5">Cluster</dt>
         <dd>
           {item.in_file ? (
-            <Value value={item.cluster_value} marked={removed} mark="removed" />
+            <Value value={item.cluster_value} marked={removed} mark="removed" tuning={tuning} />
           ) : (
             <span className="italic text-muted-foreground">absent from the file</span>
           )}

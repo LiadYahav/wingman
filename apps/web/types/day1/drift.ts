@@ -29,7 +29,7 @@ export interface NodepoolRef {
 
 /** A locked value the cluster file does not hold (§10, ADR-0036). */
 export interface ValueDrift {
-  /** The flavor's lock: `owner_anaf`, `nodepools[0].configs` or the rule `nodepools[*].configs`. */
+  /** The flavor's lock: `owner_anaf`, `nodepools[0].configs`, or a rule: `nodepools[*].configs`, `nodepools[*].tuning_config`. */
   path: string;
   /** Where the file holds it: `owner.anaf`, `nodepool[1].configs`. */
   file_key: string;
@@ -39,15 +39,15 @@ export interface ValueDrift {
   /** What the file holds; `null` with `in_file: false` when the key is absent. */
   cluster_value: unknown;
   in_file: boolean;
-  /** Configs only: the names a sync adds. */
+  /** Configs and tuning profiles: the names a sync adds. */
   added: string[];
-  /** Configs only: the names a sync removes. */
+  /** Configs and tuning profiles: the names a sync removes. */
   removed: string[];
   /** Why a sync cannot set this value until a person decides; `null` when it can. */
   needs_decision: string | null;
   /** The decision is the nodepool's network hardware type: a sync request can choose it. */
   needs_hardware: boolean;
-  /** A nodepool's configs: syncing them rolls its nodes. */
+  /** A nodepool's configs or tuning profiles: syncing them rolls (or may reboot) its nodes. */
   reboots: boolean;
 }
 

@@ -10,6 +10,7 @@ import { ClusterSegmentsLink } from "@/components/clusters/segments-link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClusterNetwork } from "@/lib/network";
 import { useClusterNodes } from "@/lib/nodes";
+import { showTuning as tuningText, tuningNames } from "@/lib/tuning-profiles";
 import { cn, formatDate } from "@/lib/utils";
 import type { ClusterDetail, ClusterNetworkRead, ClusterValues, NodePoolNodes } from "@/types";
 
@@ -212,7 +213,7 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
     if (!matched.has(pool.name)) rows.push({ key: `mce-${pool.name}`, kind: "mce", pool });
   }
   // Tuning only when a nodepool sets it: a column of dashes says nothing
-  const showTuning = values.nodepools.some((np) => Boolean(np.tuning_config));
+  const showTuning = values.nodepools.some((np) => tuningNames(np.tuning_config).length > 0);
   const columns = 3 + (nodes ? 1 : 0) + (showTuning ? 1 : 0);
   const liveKnown = Boolean(read && !read.off);
 
@@ -237,7 +238,7 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                   <th className="text-right font-medium px-3 py-2">Replicas</th>
                   {nodes && <th className="text-left font-medium px-3 py-2">Live</th>}
                   <th className="text-left font-medium px-3 py-2">Configs</th>
-                  {showTuning && <th className="text-left font-medium px-3 py-2">Tuning</th>}
+                  {showTuning && <th className="text-left font-medium px-3 py-2" title="Tuning profiles (ADR-0061): the CI injects their manifests">Tuning</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -326,7 +327,7 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                             </td>
                             {showTuning && (
                               <td className="px-3 py-2.5 font-mono break-words">
-                                {row.np.tuning_config ? String(row.np.tuning_config) : <span className="text-muted-foreground">—</span>}
+                                {tuningNames(row.np.tuning_config).length > 0 ? tuningText(tuningNames(row.np.tuning_config)) : <span className="text-muted-foreground">—</span>}
                               </td>
                             )}
                           </>
