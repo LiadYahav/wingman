@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyCell } from "@/components/data-table/copy-cell";
+import { Badge } from "@/components/ui/badge";
 import { MismatchMarker } from "./mismatch-marker";
 import { clusterHref } from "@/lib/clusters";
 import { COLUMN_LABELS, cellText, dhcpLabel, isAllocated, statusLabel, type ColumnId } from "@/lib/segments/columns";
@@ -11,18 +12,28 @@ import type { Segment } from "@/types/segments";
 
 const Empty = () => <span className="text-muted-foreground">—</span>;
 
+/** A segment's type, outlined: the table's and the site cards' (`TypeLabel`). */
 function TypeBadge({ type }: { type: string | null }) {
   if (!type) return <Empty />;
+  return <TypeLabel type={type} />;
+}
+
+/**
+ * A type as a label, in the text's colour with an edge of 3:1 (an outlined
+ * chip has no other edge), so HC and INVENTORY read at 100% in both themes.
+ */
+export function TypeLabel({ type }: { type: string }) {
   return (
-    <span className="inline-flex rounded-md border px-1.5 py-px font-mono text-[11px] font-medium tracking-wide text-foreground/80">
+    <Badge variant="outline" className="rounded-md border-muted-foreground/70 px-1.5 font-semibold tracking-wide dark:border-muted-foreground/60">
       {type}
-    </span>
+    </Badge>
   );
 }
 
+/** A site as Wingman's neutral badge: the text's colour on a tint, not grey on grey. */
 function SiteChip({ site }: { site: string | null }) {
   if (!site) return <Empty />;
-  return <span className="inline-flex rounded-full bg-muted px-2 py-px text-xs text-muted-foreground">{site}</span>;
+  return <Badge variant="secondary">{site}</Badge>;
 }
 
 function Dhcp({ segment }: { segment: Segment }) {
@@ -50,12 +61,12 @@ function Holders({ segment }: { segment: Segment }) {
           <Link
             key={holder.name}
             href={clusterHref({ name: holder.name, site: holder.day1.site, mce: holder.day1.mce })}
-            className="font-mono text-xs text-primary underline-offset-2 hover:underline"
+            className="font-mono text-[13px] text-primary underline-offset-2 hover:underline"
           >
             {holder.name}
           </Link>
         ) : (
-          <span key={holder.name} className="font-mono text-xs">
+          <span key={holder.name} className="font-mono text-[13px]">
             {holder.name}
           </span>
         )
@@ -70,7 +81,7 @@ function Status({ segment }: { segment: Segment }) {
     <span
       className={cn(
         "inline-flex rounded-full px-2 py-px text-xs font-medium",
-        allocated ? "bg-primary/12 text-primary" : "bg-status-ready/15 text-status-ready-fg"
+        allocated ? "bg-primary/8 text-primary" : "bg-status-ready/15 text-status-ready-fg"
       )}
     >
       {statusLabel(segment)}
@@ -103,12 +114,12 @@ export const SEGMENT_COLUMNS = [
   column.accessor("epg_name", {
     header: COLUMN_LABELS.epg_name,
     meta: meta("epg_name"),
-    cell: (c) => <CopyCell value={c.getValue()} label="EPG name" className="font-mono text-xs" />,
+    cell: (c) => <CopyCell value={c.getValue()} label="EPG name" className="font-mono text-[13px]" />,
   }),
   column.accessor("segment", {
     header: COLUMN_LABELS.segment,
     meta: meta("segment"),
-    cell: (c) => <CopyCell value={c.getValue()} label="Segment" className="font-mono text-xs" />,
+    cell: (c) => <CopyCell value={c.getValue()} label="Segment" className="font-mono text-[13px]" />,
   }),
   column.accessor("dhcp", { header: COLUMN_LABELS.dhcp, meta: meta("dhcp"), cell: (c) => <Dhcp segment={c.row.original} /> }),
   column.accessor((s) => s.holders.map((h) => h.name).join(", "), {

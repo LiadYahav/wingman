@@ -5,6 +5,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { siteCard } from "@/lib/segments/sites";
 import { cn } from "@/lib/utils";
 import type { SiteSegmentStats } from "@/types/segments";
+import { TypeLabel } from "./segment-columns";
+
+/**
+ * A card is a surface above the page: the theme's card shadow and an edge
+ * from the foreground (about 1.5:1 light, 1.7:1 dark; the theme's border is
+ * 1.2-1.35:1 against the page), 3:1 when the system asks for more contrast.
+ */
+const SURFACE = "rounded-xl border border-foreground/20 bg-card shadow-card contrast-more:border-foreground/50";
 
 /**
  * One card per site: allocated out of total, then the allocated count of each
@@ -34,8 +42,9 @@ export function SiteCards({
             aria-pressed={active}
             onClick={() => onSite(active ? null : card.site)}
             className={cn(
-              "flex flex-col gap-2.5 rounded-xl border bg-card p-3.5 text-left outline-none transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-ring/50",
-              active && "border-primary ring-1 ring-primary/40"
+              SURFACE,
+              "flex flex-col gap-2.5 p-3.5 text-left outline-none transition-colors hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/50",
+              active && "border-primary ring-1 ring-primary/40 contrast-more:border-primary"
             )}
           >
             <span className="flex items-center justify-between gap-2">
@@ -48,7 +57,7 @@ export function SiteCards({
                 title={`${card.allocated} of ${card.total} segments allocated`}
                 className={cn(
                   "shrink-0 rounded-full px-2 py-px text-xs font-medium tabular-nums",
-                  card.full ? "bg-status-warning/15 text-status-warning-fg" : "bg-muted text-muted-foreground"
+                  card.full ? "bg-status-warning/15 text-status-warning-fg" : "bg-secondary text-secondary-foreground"
                 )}
               >
                 {card.allocated} / {card.total} used
@@ -57,11 +66,11 @@ export function SiteCards({
             {card.types.length === 0 ? (
               <span className="text-xs text-muted-foreground">No allocated segments</span>
             ) : (
-              <span className="flex flex-wrap gap-x-3 gap-y-1" aria-label="Allocated segments per type">
+              <span className="flex flex-wrap gap-x-3 gap-y-1.5" aria-label="Allocated segments per type">
                 {card.types.map((t) => (
-                  <span key={t.type} className="inline-flex items-baseline gap-1 text-xs">
-                    <span className="font-mono text-[11px] text-muted-foreground">{t.type}</span>
-                    <span className="font-semibold tabular-nums">{t.count}</span>
+                  <span key={t.type} className="inline-flex items-center gap-1.5">
+                    <TypeLabel type={t.type} />
+                    <span className="text-sm font-semibold tabular-nums">{t.count}</span>
                   </span>
                 ))}
               </span>
@@ -77,7 +86,7 @@ export function SiteCardsSkeleton() {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true">
       {Array.from({ length: 3 }, (_, i) => (
-        <div key={i} className="space-y-3 rounded-xl border bg-card p-3.5">
+        <div key={i} className={cn(SURFACE, "space-y-3 p-3.5")}>
           <div className="flex justify-between">
             <Skeleton className="h-4 w-20" />
             <Skeleton className="h-4 w-16 rounded-full" />
