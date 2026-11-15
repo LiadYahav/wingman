@@ -56,7 +56,7 @@ path it is about (`docs/notes/2026-11-08-flavors-v2-api-changes.md` §2).
 }
 ```
 
-(That is the response on the fixtures.)
+(An excerpt of the response on the fixtures, which also hold a PerformanceProfile per GPU worker class, `performance-gpu-{h100,h200,b200}`, each with a `tuned-gpu-<gpu>` that requires it, and `tuned-readahead` and `tuned-conntrack`; the flavor `agent-gpu` locks `performance-gpu-h200`, `tuned-gpu-h200` and `tuned-readahead`.)
 
 - `profiles` are the **shared** profiles (`tuning/<name>.yaml`), sorted by
   name: the only names a flavor or a create may use. `kind` is `Tuned` or

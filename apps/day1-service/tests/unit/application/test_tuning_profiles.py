@@ -36,9 +36,17 @@ async def test_the_service_reads_the_fixture_catalogue(context: Day1Context) -> 
     found = await context.machine_configs.tuning()
     assert found.found
     assert sorted(found.shared) == [
+        "performance-gpu-b200",
+        "performance-gpu-h100",
+        "performance-gpu-h200",
         "performance-pinned",
+        "tuned-conntrack",
+        "tuned-gpu-b200",
+        "tuned-gpu-h100",
+        "tuned-gpu-h200",
         "tuned-network-latency",
         "tuned-pinned-irq",
+        "tuned-readahead",
         "tuned-sysctl-baseline",
     ]
     assert list(found.variants) == ["prod-lark-site1"]

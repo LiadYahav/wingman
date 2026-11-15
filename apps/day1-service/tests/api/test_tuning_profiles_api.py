@@ -86,7 +86,29 @@ async def test_the_catalogue_from_the_fixture_repo(
         "folder": "tuning",
         "found": True,
         "profiles": [
+            *(
+                profile(f"performance-gpu-{gpu}", "PerformanceProfile", None)
+                for gpu in ("b200", "h100", "h200")
+            ),
             profile("performance-pinned", "PerformanceProfile", None),
+            profile(
+                "tuned-conntrack",
+                "Tuned",
+                "A larger connection-tracking table, with shorter idle timeouts",
+            ),
+            *(
+                profile(
+                    f"tuned-gpu-{gpu}",
+                    "Tuned",
+                    f"{model} workers: no NUMA balancing, memory kept resident",
+                    requires_performance_profile=f"performance-gpu-{gpu}",
+                )
+                for gpu, model in (
+                    ("b200", "Blackwell B200"),
+                    ("h100", "Hopper H100"),
+                    ("h200", "Hopper H200"),
+                )
+            ),
             profile(
                 "tuned-network-latency",
                 "Tuned",
@@ -98,6 +120,11 @@ async def test_the_catalogue_from_the_fixture_repo(
                 "Tuned",
                 "Keep interrupts off the pinned CPUs",
                 requires_performance_profile="performance-pinned",
+            ),
+            profile(
+                "tuned-readahead",
+                "Tuned",
+                "Raise the block devices' read-ahead for streaming reads",
             ),
             profile(
                 "tuned-sysctl-baseline", "Tuned", "Raise the kernel's file and connection limits"
@@ -373,3 +400,30 @@ async def test_an_explicit_cluster_name_names_the_variant_folder(
         )
 
     assert (await edit(client, auth, support, add("tuned-local"))).status_code in (200, 201)
+
+
+async def test_a_create_from_the_gpu_flavor_gets_its_locked_profiles_on_every_nodepool(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    """``agent-gpu`` locks the H200 PerformanceProfile, its Tuned and the read-ahead raise."""
+    body = support.create_body(spec_name="agent-gpu")
+    body["variables"]["nodepools"] = [
+        {"infra_env": "dell-r660-site1-128c-1024gb-5tb", "replicas": 2},
+        {"infra_env": "hp-gen11-site1-64c", "replicas": 1},
+    ]
+    response = await client.post(
+        "/api/day1/clusters/preview", json=body, headers=auth(support.ALICE)
+    )
+    assert response.status_code == 200, response.text
+    pools = yaml.safe_load(response.json()["yaml"])["nodepool"]
+    assert [p["tuningConfig"] for p in pools] == [
+        ["performance-gpu-h200", "tuned-gpu-h200", "tuned-readahead"]
+    ] * 2
+
+    body["variables"]["nodepools"][1]["tuning_config"] = ["performance-gpu-b200"]
+    refused = await client.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
+    assert await problems(refused) == [
+        "nodepools[1].tuning_config: locked by flavor agent-gpu: every nodepool has "
+        '["performance-gpu-h200", "tuned-gpu-h200", "tuned-readahead"], in any order; the '
+        'request sends ["performance-gpu-b200"]'
+    ]

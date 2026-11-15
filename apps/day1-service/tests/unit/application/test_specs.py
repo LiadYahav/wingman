@@ -34,6 +34,7 @@ async def test_the_catalog_lists_every_spec_with_the_shared_template(
     assert [e.name for e in entries] == [
         "agent-baseline",
         "agent-dell",
+        "agent-gpu",
         "agent-single",
         "agent-standard",
     ]

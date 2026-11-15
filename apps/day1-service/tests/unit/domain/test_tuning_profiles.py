@@ -68,9 +68,17 @@ SMALL = catalog(
 def test_the_fixture_catalogue() -> None:
     found = fixture_catalog()
     assert [(p.name, p.kind, p.requires_performance_profile) for p in found.profiles()] == [
+        ("performance-gpu-b200", TuningKind.PERFORMANCE_PROFILE, None),
+        ("performance-gpu-h100", TuningKind.PERFORMANCE_PROFILE, None),
+        ("performance-gpu-h200", TuningKind.PERFORMANCE_PROFILE, None),
         ("performance-pinned", TuningKind.PERFORMANCE_PROFILE, None),
+        ("tuned-conntrack", TuningKind.TUNED, None),
+        ("tuned-gpu-b200", TuningKind.TUNED, "performance-gpu-b200"),
+        ("tuned-gpu-h100", TuningKind.TUNED, "performance-gpu-h100"),
+        ("tuned-gpu-h200", TuningKind.TUNED, "performance-gpu-h200"),
         ("tuned-network-latency", TuningKind.TUNED, None),
         ("tuned-pinned-irq", TuningKind.TUNED, "performance-pinned"),
+        ("tuned-readahead", TuningKind.TUNED, None),
         ("tuned-sysctl-baseline", TuningKind.TUNED, None),
     ]
     assert found.shared["tuned-network-latency"].summary == "Lower network latency on worker nodes"

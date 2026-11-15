@@ -1,0 +1,29 @@
+# Example profile for Wingman's tests and local runs: a GPU worker of the
+# Hopper H200 (HGX, 8 GPUs, 141 GB each) class. The CPU sets and page counts are placeholders, not
+# measured on any real server; copy the shape, size it for your hardware.
+# A PerformanceProfile changes kernel arguments: applying it reboots the nodes.
+apiVersion: performance.openshift.io/v2
+kind: PerformanceProfile
+metadata:
+  name: performance-gpu-h200
+spec:
+  cpu:
+    reserved: "0-3,56-59"
+    isolated: "4-55,60-111"
+  hugepages:
+    defaultHugepagesSize: 1G
+    pages:
+    - count: 96
+      size: 1G
+  numa:
+    topologyPolicy: single-numa-node
+  realTimeKernel:
+    enabled: false
+  workloadHints:
+    realTime: false
+    highPowerConsumption: true
+    perPodPowerManagement: false
+  additionalKernelArgs:
+  - iommu=pt
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
