@@ -148,17 +148,24 @@ configs' `confirm_removals` is about MachineConfigs).
 ## Verification
 
 - `apps/day1-service/tests/unit/domain/test_tuning_profiles.py`: the
-  catalogue rules (shared, variants, every problem, summaries), the input
-  and file forms, and the save, create and edit checks.
-- `apps/day1-service/tests/unit/domain/test_locks.py` and
-  `test_value_drift.py`: the tuning rule's save rules, enforcement, fill
-  and drift as a set.
+  catalogue rules (shared, variants, every problem, summaries, the
+  PerformanceProfile a Tuned builds on), the input and file forms, and the
+  save, create and edit checks, one PerformanceProfile per nodepool
+  included.
+- `apps/day1-service/tests/unit/domain/test_tuning_rule.py`: the tuning
+  rule's save rules, enforcement and fill at create, the render form, drift
+  as a set, and the rebooting pools.
+- `apps/day1-service/tests/unit/domain/test_cluster_file.py`:
+  `tuningConfigmap` refused in a rendered file and kept by an edit.
+- `apps/day1-service/tests/unit/application/test_tuning_profiles.py`: the
+  read, a missing `tuning/`, documentation not read, a failed read.
 - `apps/day1-service/tests/unit/application/test_tuning_sync.py`: a sync
-  writing only names, the edit check, the rebooting pools, `tuningConfigmap`
-  untouched.
+  writing only names, a name that does not resolve blocking it, the pools
+  that may reboot, `tuningConfigmap` untouched.
 - `apps/day1-service/tests/api/test_tuning_profiles_api.py`: the endpoint on
   the fixtures, the 422s at save, create and edit, and a create through
-  both provisioners never sending `tuningConfigmap`.
+  both provisioners carrying the names and never `tuningConfigmap`.
 - `apps/web/e2e/tests/flavor-tuning.spec.ts`: picking, locking, creating
-  with a locked profile, an unknown name's 422, drift and the sync
+  with a locked profile, an unknown name's 422, a second PerformanceProfile
+  replacing the first, the pairing warning, drift and the sync
   confirmation.
