@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, AlertTriangle, ArrowLeft, Eye, RotateCcw, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowLeft, Eye, X } from "lucide-react";
 import jsYaml from "js-yaml";
-import { ApiError, errorMessages, isApiError } from "@/lib/api-client";
+import { isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ReviewDialog } from "@/components/common/review-dialog";
@@ -14,9 +14,9 @@ import { ProblemList } from "@/components/common/problem-list";
 import { configProblems } from "@/components/machine-configs/config-list-editor";
 import { asNewFile, computeLineDiff } from "@/lib/diff";
 import { defaultConfigs, useMachineConfigs } from "@/lib/machine-configs";
+import { useTuningProfiles } from "@/lib/tuning-profiles";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { editVersionProblem, specNameProblem, specVersionProblem } from "@/lib/specs";
-import { writeErrorTitle } from "@/lib/write-errors";
 import { cn } from "@/lib/utils";
 import type { ClusterSpec, SpecDetail, TemplateField } from "@/types";
 import { AddonsSection } from "./addons-section";
@@ -47,10 +47,12 @@ import {
 } from "./model";
 import { NodepoolsSection } from "./nodepools-section";
 import { ReviewSection } from "./review-section";
+import { SaveProblems } from "./save-problems";
+import { tuningFields, tuningIssues } from "./tuning-model";
 
 const SECTIONS = [
   { id: "basics", title: "Basics", description: "What the flavor is, and the owner and platform of its clusters." },
-  { id: "nodepools", title: "Nodepools", description: "The nodepools a cluster starts with, and their machine configs." },
+  { id: "nodepools", title: "Nodepools", description: "The nodepools a cluster starts with, their machine configs and tuning profiles." },
   { id: "addons", title: "Add-ons", description: "The day2 charts every cluster of the flavor gets, in install order." },
   { id: "review", title: "Review", description: "What every cluster gets, the flavor file, and the cluster file it gives." },
 ] as const;
@@ -139,6 +141,7 @@ export function FlavorEditor({
 
   const { data: catalog, isLoading: catalogLoading, error: catalogError } = useMachineConfigs();
   const defaults = useMemo(() => defaultConfigs(catalog), [catalog]);
+  const { data: tuning } = useTuningProfiles();
   const { data: schema, error: schemaError } = useQuery<TemplateField[]>({
     queryKey: day1Keys.specs.templateSchema,
     queryFn: day1Api.specs.templateSchema,
@@ -160,13 +163,15 @@ export function FlavorEditor({
   const otherTop = useMemo(() => otherTopInputs(schema ?? [], draft.values), [schema, draft.values]);
 
   const issues = useMemo(
-    () =>
-      draftIssues(draft, catalog, {
+    () => [
+      ...draftIssues(draft, catalog, {
         name: isNew ? specNameProblem : undefined,
         // An edit needs a new version: each cluster is measured against the one it is on (ADR-0044)
         version: spec ? (v) => editVersionProblem(v, spec.metadata.version) : specVersionProblem,
       }),
-    [draft, catalog, isNew, spec]
+      ...tuningIssues(draft, tuning),
+    ],
+    [draft, catalog, tuning, isNew, spec]
   );
 
   const save = useMutation({
@@ -193,7 +198,7 @@ export function FlavorEditor({
   const fields = useMemo(() => {
     const list = ["metadata.version", "metadata.description", ...OWNERS.map((o) => o.path), PLATFORM, ...otherTop.map((i) => i.name)];
     if (isNew) list.push("metadata.name");
-    if (configsMode(draft) === "rule") list.push(CONFIGS_RULE);
+    list.push(...(configsMode(draft) === "rule" ? [CONFIGS_RULE] : []), ...tuningFields(draft));
     for (let i = 0; i < nodepoolCount(draft); i++) {
       list.push(nodepoolPath(i, "replicas"), nodepoolPath(i, "configs"), nodepoolPath(i, "node_labels"));
       for (const input of otherPoolInputs(schema ?? [], nodepoolValues(draft, i))) list.push(nodepoolPath(i, input.name));
@@ -452,49 +457,4 @@ export function FlavorEditor({
       </ReviewDialog>
     </div>
   );
-}
-
-/** Why a save did not go through, at the top; a 422's problems that have a field are shown there instead. */
-function SaveProblems({
-  error,
-  unmatched,
-  routed,
-  name,
-  onReload,
-}: {
-  error: unknown;
-  unmatched: string[];
-  routed: number;
-  name: string;
-  onReload?: () => void;
-}) {
-  if (isApiError(error, "REVISION_CONFLICT")) {
-    return (
-      <div className="space-y-2">
-        <ProblemList error={error} title="This flavor changed since you opened it. Reload it and make your edits again." />
-        {onReload && (
-          <Button variant="outline" size="sm" onClick={onReload}>
-            <RotateCcw /> Reload flavor
-          </Button>
-        )}
-      </div>
-    );
-  }
-  if (isApiError(error, "ALREADY_EXISTS")) {
-    return (
-      <div className="space-y-2">
-        <ProblemList error={error} title={`A flavor named "${name}" already exists. Pick another name, or edit that flavor.`} />
-        <Link href={`/specs/${encodeURIComponent(name)}`} className="text-sm text-primary hover:underline">
-          Open the existing flavor
-        </Link>
-      </div>
-    );
-  }
-  if (isApiError(error, "VALIDATION_ERROR")) {
-    const title = (error as ApiError).message;
-    const lines = [...unmatched];
-    if (routed > 0) lines.push(routed === 1 ? "One more is shown at its field below." : `${routed} more are shown at their fields below.`);
-    return <ProblemList error={error} lines={lines.length > 0 ? lines : errorMessages(error)} title={title} />;
-  }
-  return <ProblemList error={error} title={writeErrorTitle(error, "The flavor was not saved")} />;
 }

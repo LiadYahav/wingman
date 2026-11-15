@@ -10,11 +10,9 @@
 # Recorded 2026-11-13 from the code-organisation audit: 21 Python and 19
 # TypeScript source files, and one test.
 
-  588  apps/day1-service/src/wingman_day1/application/clusters.py
+  568  apps/day1-service/src/wingman_day1/application/clusters.py
   720  apps/day1-service/src/wingman_day1/application/rollouts.py
-  507  apps/day1-service/src/wingman_day1/application/sync.py
   706  apps/day1-service/src/wingman_day1/domain/cluster_text.py
-  596  apps/day1-service/src/wingman_day1/domain/locks.py
   540  apps/day1-service/src/wingman_day1/domain/machine_configs.py
   668  apps/day1-service/src/wingman_day1/domain/node_pools.py
   590  apps/day1-service/src/wingman_day1/domain/placement.py
@@ -35,9 +33,8 @@
   722  apps/web/components/clusters/dynamic-variable-form.tsx
   529  apps/web/components/clusters/mce-placement.tsx
   541  apps/web/components/clusters/node-pools.tsx
-  554  apps/web/components/clusters/sync-dialog.tsx
-  866  apps/web/components/specs/flavor-editor/model.ts
-  551  apps/web/components/specs/flavor-editor/nodepools-section.tsx
+  719  apps/web/components/specs/flavor-editor/model.ts
+  501  apps/web/components/specs/flavor-editor/nodepools-section.tsx
   818  apps/web/e2e/tests/mce-placement.spec.ts
   771  packages/wingman-core/src/wingman_core/infrastructure/fake_gitlab/gitlab.py
   665  packages/wingman-core/src/wingman_core/infrastructure/gitlab/adapter.py

@@ -1,0 +1,28 @@
+apiVersion: wingman.io/v1
+kind: ClusterSpec
+metadata:
+  name: agent-gpu
+  description: "H200 GPU workers: every nodepool gets the H200 PerformanceProfile, its Tuned and the read-ahead raise"
+  version: "1.0.0"
+  labels:
+    platform: agent
+spec:
+  day1:
+    # Locked as a rule (ADR-0061): every nodepool of the cluster has exactly
+    # these tuning profiles, in any order. The configs are presets.
+    locked_paths:
+      - nodepools[*].tuning_config
+    values:
+      nodepools:
+        - replicas: 2
+          configs:
+            - name: nm-conf
+              hardware: generic
+            - name: workers-chrony-configuration
+            - name: nic-ring-buffer
+          tuning_config:
+            - performance-gpu-h200
+            - tuned-gpu-h200
+            - tuned-readahead
+  day2:
+    addons: []

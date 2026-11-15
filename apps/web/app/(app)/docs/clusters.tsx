@@ -64,7 +64,8 @@ export function ClustersSection() {
         <Step n={3} title="Cluster configuration">
           The fields are the inputs of the shared template. With the default template: the owner numbers
           (merkaz, anaf, mador: digits only) and, per nodepool, its InfraEnv, replicas, machine configs, node
-          labels and tuning config. InfraEnvs are picked from the MCE&apos;s list when this deployment reads the
+          labels and tuning profiles (picked from <InlineCode>tuning/</InlineCode> in the day1 repo, each with its
+          kind and summary; read-only when the flavor locks them). InfraEnvs are picked from the MCE&apos;s list when this deployment reads the
           MCE. A flavor that sizes its nodepools by a ratio (<InlineCode>1:2:1</InlineCode>) asks for one size
           instead, and each sized nodepool gets its part times that size. A field the flavor <strong>presets</strong> is filled in and can be changed;
           a field it <strong>locks</strong> is shown read-only with the flavor&apos;s value. Machine configs come
@@ -125,7 +126,7 @@ nodepool:
           },
           {
             who: "Automation, on the MR branch",
-            keys: "vlanId and dhcp_values (the allocate-segment workflow); mcConfigMap and mcFiles (the day1 CI). Wingman never writes them, and an edit that changes or removes one is refused.",
+            keys: "vlanId and dhcp_values (the allocate-segment workflow); mcConfigMap, mcFiles and tuningConfigmap (the day1 CI, from mc-files/ and tuning/). Wingman never writes them, and an edit that changes or removes one is refused.",
           },
           {
             who: "The file's path",

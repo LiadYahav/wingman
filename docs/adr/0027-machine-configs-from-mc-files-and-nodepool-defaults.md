@@ -165,3 +165,11 @@ Verified in `test_machine_configs.py` (catalogue, reserved name, entry
 checks, expansion, the sync choice), `test_value_drift.py` (read back), the
 API tests (`generic: true`, a preview writing plain `nm-conf`), and the
 mocked flavor editor, create form and sync dialog.
+
+## Cross-reference (2026-11-15): tuning profiles
+
+ADR-0061 reads `tuning/` in the day1 repo the same way (one tree listing
+of the snapshot, cached, never written), through the same service, and
+checks a nodepool's `tuning_config` at flavor save and at create as this
+ADR checks its `configs`. The two catalogues are separate endpoints:
+`GET /machine-configs` and `GET /tuning-profiles`.

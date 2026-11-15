@@ -251,7 +251,7 @@ def test_the_fixture_template_asks_for_exactly_the_values_file_inputs() -> None:
                     ],
                 },
                 {"name": "node_labels", "type": "object", "required": False, "default": {}},
-                {"name": "tuning_config", "type": "string", "required": False, "default": ""},
+                {"name": "tuning_config", "type": "list", "required": False, "default": []},
             ],
         },
     ]

@@ -1,7 +1,7 @@
 # ADR-0029: A flavor can lock every nodepool's configs as one rule, compared exactly by name
 
 Date: 2026-11-08
-Status: Accepted
+Status: Accepted (a second rule, `nodepools[*].tuning_config`, since 2026-11-15: ADR-0061)
 
 ## Context
 
@@ -97,3 +97,12 @@ working as in ADR-0026, compared exactly as JSON.
 - `apps/day1-service/tests/unit/application/test_flavor_rules.py`: creates
   from `agent-baseline` in any order and hardware, a nodepool that breaks
   the rule, one that sends none, and a rule whose nodepools disagree.
+
+## Cross-reference (2026-11-15): the tuning rule
+
+ADR-0061 adds a second rule with the same grammar, `nodepools[*].tuning_config`
+(file key `nodepool[*].tuningConfig`): every nodepool has exactly these
+tuning profiles. It is compared as a set (order and repetition do not
+count), its value is what every flavor nodepool sets, and it may not be
+empty. It has no `nm-conf`-like entry and no positional form. "It is the
+only rule" above is no longer true; everything else here stands.

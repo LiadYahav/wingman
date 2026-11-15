@@ -55,7 +55,6 @@ from wingman_day1.api.v1 import audit as audit_api
 from wingman_day1.api.v1 import auth as auth_api
 from wingman_day1.api.v1 import clusters as clusters_api
 from wingman_day1.api.v1 import inventory as inventory_api
-from wingman_day1.api.v1 import machine_configs as machine_configs_api
 from wingman_day1.api.v1 import placement as placement_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
 from wingman_day1.api.v1 import segments as segments_api
@@ -63,6 +62,7 @@ from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import upgrades as upgrades_api
 from wingman_day1.api.v1 import webhooks as webhooks_api
+from wingman_day1.api.v1.nodepool_catalogs import ROUTERS as NODEPOOL_CATALOG_ROUTERS
 from wingman_day1.api.v1.server_scan_area import ROUTERS as SERVER_SCAN_ROUTERS
 from wingman_day1.application.approvals import ApprovalService, RepoKey
 from wingman_day1.application.audit import AuditService
@@ -133,7 +133,7 @@ ROUTERS: Final = (
     sites_api.sites_router,
     sites_api.mces_router,
     specs_api.router,
-    machine_configs_api.router,
+    *NODEPOOL_CATALOG_ROUTERS,
     placement_api.router,
     quick_links_api.router,
     inventory_api.router,

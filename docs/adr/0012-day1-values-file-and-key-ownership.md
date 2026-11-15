@@ -1,7 +1,7 @@
 # ADR-0012: A cluster file is a chart values file; people and automation own disjoint keys
 
 Date: 2026-11-07
-Status: Accepted; amended by ADR-0055 (with `DAY1_UPGRADES` on, `mastertag`, every `workertag` and `pausedUntil` belong to the upgrade-cluster workflow: an edit may not change them, except to remove `pausedUntil`)
+Status: Accepted; amended by ADR-0055 (with `DAY1_UPGRADES` on, `mastertag`, every `workertag` and `pausedUntil` belong to the upgrade-cluster workflow: an edit may not change them, except to remove `pausedUntil`); amended by ADR-0061 (`tuningConfigmap` is an automation key)
 
 ## Context
 
@@ -69,3 +69,17 @@ the MR branch: the allocate-segment workflow adds `vlanId` and
   `vlanId` is refused with 422.
 - `apps/day1-service/tests/unit/test_guards.py`: every path the provisioner
   writes is a cluster file.
+
+## Amendment (2026-11-15, ADR-0061): `tuningConfigmap` is an automation key
+
+The day1 CI now injects the tuning manifests a cluster's nodepools name
+(`nodepool[].tuningConfig`, read from `tuning/` in the day1 repo) into the
+top-level `tuningConfigmap`, under the `# === Added by CI ===` header after
+`mcConfigMap`. So automation owns `vlanId`, `dhcp_values`, `mcFiles`,
+`mcConfigMap` and `tuningConfigmap`: a rendered file may not contain it, and
+an edit may not change or remove it. People and Wingman keep writing only
+the names, `tuningConfig`. Entries written by hand before the CI step are
+valid input and stay as they are.
+
+Verified in `apps/day1-service/tests/unit/domain/test_cluster_file.py` (the
+key refused in a rendered file and kept by an edit).

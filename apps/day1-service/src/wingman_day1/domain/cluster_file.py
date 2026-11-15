@@ -6,7 +6,8 @@ optional fields such as ``platform: kubevirt``. Automation writes the rest on
 the merge request's branch, after Wingman's commit:
 
 - ``vlanId`` and ``dhcp_values``: the allocate-segment workflow;
-- ``mcFiles`` and ``mcConfigMap``: the day1 CI pipeline.
+- ``mcFiles``, ``mcConfigMap`` and ``tuningConfigmap``: the day1 CI pipeline
+  (``tuningConfigmap`` since ADR-0061: the manifests ``tuningConfig`` names).
 
 Wingman never writes those keys, and never changes them when it edits a
 file. ``clusterName``, ``site`` and ``mce`` come from the file's path; a
@@ -40,7 +41,7 @@ from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.errors import InvalidClusterFileError
 from wingman_day1.domain.upgrades import version_problems
 
-AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap")
+AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap", "tuningConfigmap")
 """Written on the MR branch by the allocate-segment workflow and CI; never by Wingman."""
 PATH_KEYS: Final = ("clusterName", "site", "mce")
 """Passed by the ApplicationSet from the file's path; a rendered file must not set them."""
@@ -53,11 +54,14 @@ _PLATFORM_KUBEVIRT: Final = "kubevirt"
 # ── Strict YAML: one document, no duplicate keys ─────────────────────────────
 
 
-class _StrictLoader(yaml.SafeLoader):
-    """SafeLoader that refuses duplicate mapping keys, which PyYAML would silently collapse."""
+class StrictLoader(yaml.SafeLoader):
+    """SafeLoader that refuses duplicate mapping keys, which PyYAML would silently collapse.
+
+    Also the loader of a tuning profile (ADR-0061), as the day1 CI reads them.
+    """
 
 
-def _construct_mapping(loader: _StrictLoader, node: yaml.MappingNode) -> dict[Hashable, object]:
+def _construct_mapping(loader: StrictLoader, node: yaml.MappingNode) -> dict[Hashable, object]:
     seen: set[object] = set()
     for key_node, _ in node.value:
         key = loader.construct_object(key_node)
@@ -67,7 +71,7 @@ def _construct_mapping(loader: _StrictLoader, node: yaml.MappingNode) -> dict[Ha
     return loader.construct_mapping(node)
 
 
-_StrictLoader.add_constructor(BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
+StrictLoader.add_constructor(BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping)
 
 
 def load_values(content: str) -> dict[str, object]:
@@ -77,7 +81,7 @@ def load_values(content: str) -> dict[str, object]:
     the line and column of a syntax error.
     """
     try:
-        documents = [d for d in yaml.load_all(content, Loader=_StrictLoader) if d is not None]
+        documents = [d for d in yaml.load_all(content, Loader=StrictLoader) if d is not None]
     except yaml.MarkedYAMLError as exc:
         mark = exc.problem_mark
         where = f" at line {mark.line + 1}, column {mark.column + 1}" if mark else ""

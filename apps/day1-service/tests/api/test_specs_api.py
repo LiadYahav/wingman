@@ -42,10 +42,11 @@ async def test_the_list_carries_the_legacy_spec_shape_and_the_template(
     assert [s["metadata"]["name"] for s in specs] == [
         "agent-baseline",
         "agent-dell",
+        "agent-gpu",
         "agent-single",
         "agent-standard",
     ]
-    single = specs[2]
+    single = specs[3]
     assert set(single) >= {"apiVersion", "kind", "metadata", "spec", "load_error", "warnings"}
     assert single["load_error"] is None
     assert single["spec"]["day1"]["template"].startswith("{#-")

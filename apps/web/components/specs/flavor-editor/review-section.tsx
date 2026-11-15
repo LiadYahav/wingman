@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils";
 import { useDebounced } from "@/hooks/use-debounced";
 import type { ClusterPreview, ClusterSpec, Mce, OpenShiftVersions, TemplateField } from "@/types";
 import { inputCls } from "./controls";
-import { pathLabel, previewPlan, previewRelease, sampleClusterName, type FlavorDraft, type ValueLine } from "./model";
+import { pathLabel, type FlavorDraft, type ValueLine } from "./model";
+import { previewPlan, previewRelease, sampleClusterName } from "./preview-plan";
 
 const codeCls =
   "max-h-[32rem] overflow-auto rounded-lg border bg-muted/40 p-4 font-mono text-xs leading-5 text-foreground/90 dark:bg-black/30";

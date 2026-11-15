@@ -16,7 +16,7 @@ export function FlavorsSection() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
         {[
           { title: "Preset", desc: "Prefilled in the create form; a cluster may change it. A preset never drifts." },
-          { title: "Locked", desc: "Fixed: every cluster gets exactly this value, the create form shows it read-only and day1 refuses another, and a later edit of the file shows as drift. Lockable: the owner numbers, the platform, and per nodepool its replicas, machine configs and node labels." },
+          { title: "Locked", desc: "Fixed: every cluster gets exactly this value, the create form shows it read-only and day1 refuses another, and a later edit of the file shows as drift. Lockable: the owner numbers, the platform, per nodepool its replicas, machine configs and node labels, and the tuning profiles of every nodepool." },
         ].map(({ title, desc }) => (
           <TermCard key={title} title={title} desc={desc} />
         ))}
@@ -46,6 +46,8 @@ export function FlavorsSection() {
           the rule, each nodepool picks its own). The type starts at <strong>generic</strong> when the day1 repo has
           the generic template (<InlineCode>nm-conf-template.bu</InlineCode>, for any hardware, written as plain{" "}
           <InlineCode>nm-conf</InlineCode>). Replicas and node labels are preset or locked per nodepool.
+          <strong> Tuning profiles</strong> are picked per nodepool from <InlineCode>tuning/</InlineCode> in the
+          day1 repo (see Tuning profiles below); locking them locks the same profiles on every nodepool.
         </Step>
         <Step n={3} title="Add-ons">
           Pick charts from the catalog and put them in order. The gear opens{" "}
@@ -89,6 +91,24 @@ spec:
         version: main
         overrideable: []       # the values a creator may set`}
       </CodeBlock>
+
+      <h3 className="text-base font-semibold mt-6 mb-3" id="tuning-profiles">Tuning profiles</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+        A nodepool can carry node tuning: OpenShift <InlineCode>Tuned</InlineCode> and{" "}
+        <InlineCode>PerformanceProfile</InlineCode> manifests kept in <InlineCode>tuning/</InlineCode> at the day1
+        repo&apos;s root, one file per profile (<InlineCode>tuning/&lt;name&gt;.yaml</InlineCode>), and a variant for one
+        cluster in <InlineCode>tuning/&lt;cluster&gt;/&lt;name&gt;.yaml</InlineCode>. Wingman reads them and never writes
+        there. A nodepool&apos;s <strong>Tuning profiles</strong> picker offers the shared profiles, each with its kind and
+        summary; the cluster file gets only the names (<InlineCode>tuningConfig</InlineCode>), and the day1 CI injects
+        the manifests (<InlineCode>tuningConfigmap</InlineCode>, which Wingman never writes). A nodepool takes any number
+        of Tuned profiles but at most one PerformanceProfile (a NodePool references one): picking another replaces it.
+        A Tuned that builds on a PerformanceProfile the nodepool lacks shows a warning with a button that adds it. Locked, every nodepool of
+        every cluster has exactly these profiles, in any order; a cluster whose nodepools name others shows drift, and
+        a sync writes the names. Changing a nodepool&apos;s tuning can reboot its nodes (a PerformanceProfile, kernel
+        arguments), so the sync names those nodepools before it opens its MR. Files in{" "}
+        <InlineCode>tuning/</InlineCode> that break the rules are listed for admins and never offered; without the
+        folder the picker is empty and nothing else changes.
+      </p>
 
       <h3 className="text-base font-semibold mt-6 mb-3">Adding existing clusters to a flavor</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">

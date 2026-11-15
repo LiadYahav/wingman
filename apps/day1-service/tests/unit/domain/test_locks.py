@@ -186,6 +186,7 @@ def test_the_lockable_table_reads_as_the_docs_write_it() -> None:
         "nodepools[<i>].configs",
         "nodepools[<i>].node_labels",
         "nodepools[*].configs",
+        "nodepools[*].tuning_config",
     ]
 
 

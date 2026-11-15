@@ -14,7 +14,9 @@ own form:
   ``{name: nm-conf, hardware: <hw>}`` is the file's
   ``nm-conf-<clusterName>-<hw>``. Where the hardware is the nodepool's own
   (the configs rule, or a lock with no hardware), it is read from the one
-  network config the nodepool lists; none or several needs a person.
+  network config the nodepool lists; none or several needs a person;
+- tuning profiles (the tuning rule, ADR-0061) compare as a set of names; a
+  file's ``tuningConfig`` is a string for one name or a list.
 
 Presets are never compared: overriding them is allowed. Each difference is
 a :class:`ValueDrift` with the flavor's value and the file's, and for
@@ -31,6 +33,7 @@ from typing import Final, cast
 from wingman_day1.domain.locks import (
     MISSING,
     NETWORK_ENTRY,
+    TUNING_RULE,
     InputPath,
     Lock,
     entry_key,
@@ -40,6 +43,8 @@ from wingman_day1.domain.locks import (
     same_value,
 )
 from wingman_day1.domain.machine_configs import MachineConfigCatalog, network_config_name
+from wingman_day1.domain.tuning_profiles import TUNING_FILE_KEY, file_value, tuning_names
+from wingman_day1.domain.tuning_rule import compare
 
 _KUBEVIRT: Final = "kubevirt"
 _AGENT: Final = "agent"
@@ -68,9 +73,9 @@ class ValueDrift:
     """What the file holds there; ``MISSING`` when it has no such key."""
     nodepool: NodepoolRef | None = None
     added: tuple[str, ...] = ()
-    """Configs only: the names a sync adds."""
+    """Configs and tuning profiles: the names a sync adds."""
     removed: tuple[str, ...] = ()
-    """Configs only: the names a sync removes (exact, ADR-0029)."""
+    """Configs and tuning profiles: the names a sync removes (configs exactly, ADR-0029)."""
     needs_decision: str | None = None
     """Why a sync cannot set this value until a person decides; ``None`` when it can."""
     needs_hardware: bool = False
@@ -80,6 +85,16 @@ class ValueDrift:
     def is_configs(self) -> bool:
         """Whether this is a nodepool's configs: changing them rolls the nodepool's nodes."""
         return self.file_key.segments[-1] == "configs"
+
+    @property
+    def is_tuning(self) -> bool:
+        """Whether this is a nodepool's tuning profiles (ADR-0061)."""
+        return self.file_key.segments[-1] == TUNING_FILE_KEY
+
+    @property
+    def reboots(self) -> bool:
+        """Configs or tuning: syncing them can roll or reboot the nodepool's nodes."""
+        return self.is_configs or self.is_tuning
 
 
 def file_nodepools(values: Mapping[str, object]) -> list[object]:
@@ -278,6 +293,34 @@ def _top_level_drift(lock: Lock, file_key: InputPath, context: _Context) -> Valu
     return ValueDrift(lock.path, file_key, want, have)
 
 
+def _tuning_drift(lock: Lock, values: Mapping[str, object], cluster_name: str) -> list[ValueDrift]:
+    """Each nodepool whose tuning profiles are not the rule's, compared as a set."""
+    want = [str(n) for n in cast("Sequence[object]", lock.value)]
+    found: list[ValueDrift] = []
+    for index, pool in enumerate(file_nodepools(values)):
+        if not isinstance(pool, Mapping):
+            continue
+        have_value = cast("Mapping[str, object]", pool).get(TUNING_FILE_KEY, MISSING)
+        have = tuning_names(None if have_value is MISSING else have_value) or []
+        added, removed = compare(want, have)
+        if not added and not removed and tuning_names(have_value) is not None:
+            continue
+        ref = NodepoolRef(index, nodepool_name(pool, index, cluster_name=cluster_name))
+        file_key = InputPath(("nodepool", index, TUNING_FILE_KEY))
+        found.append(
+            ValueDrift(
+                lock.path,
+                file_key,
+                file_value(want),
+                have_value,
+                nodepool=ref,
+                added=tuple(added),
+                removed=tuple(removed),
+            )
+        )
+    return found
+
+
 def value_drift(
     locks: Sequence[Lock],
     values: Mapping[str, object],
@@ -295,6 +338,9 @@ def value_drift(
     context = _Context(values, cluster_name, catalog, hardware or {})
     found: list[ValueDrift] = []
     for lock in locks:
+        if lock.path == TUNING_RULE:
+            found += _tuning_drift(lock, values, cluster_name)
+            continue
         if lock.is_rule:
             for index, pool in enumerate(file_nodepools(values)):
                 if not isinstance(pool, Mapping):

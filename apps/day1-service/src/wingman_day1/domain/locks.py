@@ -9,17 +9,10 @@ path is refused, and a cluster file that holds another value has drifted.
 Paths
 =====
 
-A path names one template input the way the create form addresses it::
-
-    path  := name ( "." name | "[" index "]" )*
-    name  := [A-Za-z_][A-Za-z0-9_]*       an identifier, as every input name is
-    index := "0" | [1-9][0-9]{0,2} | "*"  a list position (no leading zero, below 1000),
-                                          or every position
-
-at most 253 characters, with no spaces: ``owner_merkaz``,
-``nodepools[0].configs``, ``nodepools[*].configs``. :class:`InputPath`
-parses and prints it; cluster file keys (``nodepool[0].nodeLabels``) are
-written the same way.
+A path names one template input the way the create form addresses it
+(``owner_merkaz``, ``nodepools[0].configs``, ``nodepools[*].configs``); the
+grammar, :class:`InputPath`, :func:`lookup` and :func:`assigned` are in
+``wingman_day1.domain.input_paths``.
 
 What can be locked
 ==================
@@ -38,6 +31,7 @@ template input                  cluster-file key
 ``nodepools[<i>].configs``      ``nodepool[<i>].configs``
 ``nodepools[<i>].node_labels``  ``nodepool[<i>].nodeLabels``
 ``nodepools[*].configs``        ``nodepool[*].configs``
+``nodepools[*].tuning_config``  ``nodepool[*].tuningConfig``
 ==============================  ============================
 
 A value can differ in form between the two sides: a ``{name: nm-conf,
@@ -58,179 +52,44 @@ the configs every nodepool in ``spec.day1.values.nodepools`` sets, which must
 agree (the hardware of their ``nm-conf`` entries stays a per-nodepool preset
 for create), and it must list ``nm-conf`` once: a rule that left it out would
 remove every nodepool's network config.
+
+``nodepools[*].tuning_config`` is the second rule (ADR-0061): every nodepool
+has exactly these tuning profiles, compared as a set
+(``wingman_day1.domain.tuning_rule``).
 """
 
 from __future__ import annotations
 
 import json
-import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, cast
 
+from wingman_day1.domain.input_paths import (
+    EVERY,
+    MISSING,
+    Every,
+    InputPath,
+    InvalidPathError,
+    Segment,
+    assigned,
+    lookup,
+)
 from wingman_day1.domain.template import LEGACY_IDENTITY_ALIASES, RESERVED_INPUTS
+from wingman_day1.domain.tuning_profiles import TUNING_INPUT
+from wingman_day1.domain.tuning_rule import rule_conflicts, rule_fill, rule_value
 
-MAX_PATH_LENGTH: Final = 253
 MAX_LOCKS: Final = 100
 NETWORK_ENTRY: Final = "nm-conf"
 """The config entry that stands for a nodepool's own network config (ADR-0027)."""
-
-_HEAD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-_STEP = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)|\[(0|[1-9][0-9]{0,2}|\*)\]")
-
-
-class _Every:
-    """The ``[*]`` of a rule: every position of a list."""
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "EVERY"
-
-
-EVERY: Final = _Every()
-"""The segment ``[*]`` parses to."""
-
-Segment = str | int | _Every
-
-
-class InvalidPathError(ValueError):
-    """A string that is not a template-input path."""
-
-
-@dataclass(frozen=True, slots=True)
-class InputPath:
-    """A path to one template input (or one cluster-file key): names and list positions."""
-
-    segments: tuple[Segment, ...]
-
-    @classmethod
-    def parse(cls, text: str) -> InputPath:
-        """``nodepools[0].configs`` → ``("nodepools", 0, "configs")``; ``[*]`` is ``EVERY``.
-
-        Raises ``InvalidPathError`` with the reason.
-        """
-        if len(text) > MAX_PATH_LENGTH:
-            raise InvalidPathError(f"longer than {MAX_PATH_LENGTH} characters")
-        head = _HEAD.match(text)
-        if head is None:
-            raise InvalidPathError("must start with an input name")
-        segments: list[Segment] = [head.group()]
-        position = head.end()
-        while position < len(text):
-            step = _STEP.match(text, position)
-            if step is None:
-                raise InvalidPathError(f"unexpected {text[position]!r} at character {position + 1}")
-            name, index = step.groups()
-            if name is not None:
-                segments.append(name)
-            else:
-                segments.append(EVERY if index == "*" else int(index))
-            position = step.end()
-        return cls(tuple(segments))
-
-    def __str__(self) -> str:
-        """The path as written: ``nodepools[0].configs``, ``nodepools[*].configs``."""
-        out = ""
-        for segment in self.segments:
-            if segment is EVERY:
-                out += "[*]"
-            elif isinstance(segment, int):
-                out += f"[{segment}]"
-            else:
-                out += f".{segment}" if out else str(segment)
-        return out
-
-    @property
-    def parent(self) -> InputPath:
-        """The path without its last segment."""
-        return InputPath(self.segments[:-1])
-
-    @property
-    def is_rule(self) -> bool:
-        """Whether the path has a ``[*]``: it names every position, not one."""
-        return any(segment is EVERY for segment in self.segments)
-
-
-class _Missing:
-    def __repr__(self) -> str:
-        return "MISSING"
-
-
-MISSING: Final = _Missing()
-"""What :func:`lookup` returns for a path that leads nowhere."""
-
-
-def lookup(root: Mapping[str, object], path: InputPath) -> object:
-    """The value at ``path``, or ``MISSING`` (always for a rule: it has no single value)."""
-    current: object = root
-    for segment in path.segments:
-        if segment is EVERY:
-            return MISSING
-        if isinstance(segment, int):
-            if not isinstance(current, (list, tuple)):
-                return MISSING
-            items = cast("Sequence[object]", current)
-            if segment >= len(items):
-                return MISSING
-            current = items[segment]
-        else:
-            if not isinstance(current, Mapping):
-                return MISSING
-            mapping = cast("Mapping[str, object]", current)
-            key = str(segment)
-            if key not in mapping:
-                return MISSING
-            current = mapping[key]
-    return current
-
-
-def assigned(
-    root: Mapping[str, object], path: InputPath, value: object
-) -> dict[str, object] | None:
-    """A copy of ``root`` with ``value`` at ``path``; ``None`` when the path's parent is missing.
-
-    Only the containers along the path are copied; ``root`` is not changed. A
-    rule path is never assigned this way.
-    """
-
-    def put(node: object, segments: tuple[Segment, ...]) -> object:
-        segment, rest = segments[0], segments[1:]
-        if segment is EVERY:
-            return MISSING
-        if isinstance(segment, int):
-            if not isinstance(node, (list, tuple)):
-                return MISSING
-            items = list(cast("Sequence[object]", node))
-            if segment >= len(items):
-                return MISSING
-            child = put(items[segment], rest) if rest else value
-            if child is MISSING:
-                return MISSING
-            items[segment] = child
-            return items
-        if not isinstance(node, Mapping):
-            return MISSING
-        mapping = dict(cast("Mapping[str, object]", node))
-        key = str(segment)
-        if rest and key not in mapping:
-            return MISSING
-        child = put(mapping[key], rest) if rest else value
-        if child is MISSING:
-            return MISSING
-        mapping[key] = child
-        return mapping
-
-    result = put(root, path.segments)
-    return None if result is MISSING else cast("dict[str, object]", result)
 
 
 # ── The lockable inputs and their cluster-file keys ──────────────────────────
 
 _ANY_INDEX: Final = None
 
-ShapeSegment = str | _Every | None
+ShapeSegment = str | Every | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,6 +138,8 @@ def _segment_matches(segment: Segment, want: ShapeSegment) -> bool:
 
 CONFIGS_RULE: Final = InputPath(("nodepools", EVERY, "configs"))
 """``nodepools[*].configs``: every nodepool has exactly these configs (ADR-0029)."""
+TUNING_RULE: Final = InputPath(("nodepools", EVERY, TUNING_INPUT))
+"""``nodepools[*].tuning_config``: every nodepool has exactly these profiles (ADR-0061)."""
 
 LOCKABLE: Final = (
     Lockable(("owner_merkaz",), ("owner", "merkaz")),
@@ -289,6 +150,7 @@ LOCKABLE: Final = (
     Lockable(("nodepools", _ANY_INDEX, "configs"), ("nodepool", _ANY_INDEX, "configs")),
     Lockable(("nodepools", _ANY_INDEX, "node_labels"), ("nodepool", _ANY_INDEX, "nodeLabels")),
     Lockable(("nodepools", EVERY, "configs"), ("nodepool", EVERY, "configs")),
+    Lockable(("nodepools", EVERY, TUNING_INPUT), ("nodepool", EVERY, "tuningConfig")),
 )
 """Every input a flavor can lock, with the cluster-file key the shared template writes."""
 
@@ -392,7 +254,14 @@ def _parse(text: str) -> InputPath | str:
         )
 
 
-def _rule_value(values: Mapping[str, object]) -> list[dict[str, str]] | str:
+def _rule_value(path: InputPath, values: Mapping[str, object]) -> list[object] | str:
+    """A rule's value from the flavor's nodepools, or why it has none."""
+    if path == TUNING_RULE:
+        return cast("list[object] | str", rule_value(values, str(path)))
+    return cast("list[object] | str", _configs_rule_value(values))
+
+
+def _configs_rule_value(values: Mapping[str, object]) -> list[dict[str, str]] | str:
     """The configs rule's value from the flavor's nodepools, or why it has none."""
     pools = values.get("nodepools")
     if not isinstance(pools, (list, tuple)) or not pools:
@@ -453,7 +322,7 @@ def lock_problems(locked_paths: Sequence[str], values: Mapping[str, object]) -> 
             continue
         seen.add(path)
         if path.is_rule:
-            rule = _rule_value(values)
+            rule = _rule_value(path, values)
             if isinstance(rule, str):
                 problems.append(rule)
         elif lookup(values, path) is MISSING:
@@ -484,7 +353,7 @@ def enforced_locks(locked_paths: Sequence[str], values: Mapping[str, object]) ->
         if isinstance(path, str) or _shape_problem(path) is not None:
             continue
         if path.is_rule:
-            rule = _rule_value(values)
+            rule = _rule_value(path, values)
             if not isinstance(rule, str):
                 locks[path] = Lock(path, rule)
             continue
@@ -538,6 +407,10 @@ def lock_conflicts(
     """Each locked path a create sends a different value for."""
     problems: list[str] = []
     for lock in locks:
+        if lock.path == TUNING_RULE:
+            names = cast("Sequence[str]", lock.value)
+            problems += rule_conflicts(variables, names, flavor=flavor)
+            continue
         if lock.is_rule:
             rule = cast("Sequence[object]", lock.value)
             for index, pool in _pools(variables):
@@ -569,11 +442,15 @@ def apply_locks(
     (lists are not merged), so the flavor's value is put back here. A lock
     on ``nodepools[2].replicas`` needs a third nodepool to exist. The configs
     rule fills every nodepool that sends no configs with the rule's entries;
-    their ``nm-conf`` has no hardware yet, so the config check asks for one.
+    their ``nm-conf`` has no hardware yet, so the config check asks for one. The tuning
+    rule fills every nodepool that sends no tuning_config with its names.
     """
     result = dict(inputs)
     problems: list[str] = []
     for lock in locks:
+        if lock.path == TUNING_RULE:
+            result = rule_fill(result, cast("Sequence[str]", lock.value))
+            continue
         if lock.is_rule:
             rule = cast("Sequence[Mapping[str, str]]", lock.value)
             pools = result.get("nodepools")

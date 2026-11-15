@@ -1,0 +1,18 @@
+# Placeholder profile for Wingman's tests and local runs; not a real tuning.
+apiVersion: tuned.openshift.io/v1
+kind: Tuned
+metadata:
+  name: tuned-sysctl-baseline
+spec:
+  profile:
+  - name: tuned-sysctl-baseline
+    data: |
+      [main]
+      summary=Raise the kernel's file and connection limits
+      include=openshift-node
+      [sysctl]
+      fs.inotify.max_user_watches=65536
+      net.core.somaxconn=4096
+  recommend:
+  - priority: 30
+    profile: tuned-sysctl-baseline

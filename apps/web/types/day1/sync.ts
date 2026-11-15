@@ -19,7 +19,7 @@ export interface ConfigRemoval {
   name: string;
 }
 
-/** A nodepool whose configs change: merging rolls its nodes. */
+/** A nodepool whose configs or tuning profiles change: merging rolls (or may reboot) its nodes. */
 export interface Rebooting {
   nodepool: NodepoolRef;
   replicas: number | null;
@@ -29,6 +29,10 @@ export interface Rebooting {
   max_unavailable: number | string | null;
   /** `upgradeType: Replace`: new nodes are provisioned and the old ones removed. */
   replaces_nodes: boolean;
+  /** Its machine configs change (ADR-0061; absent from a day1 that predates it). */
+  configs?: boolean;
+  /** Its tuning profiles change: a PerformanceProfile or kernel arguments may reboot its nodes. */
+  tuning?: boolean;
 }
 
 /** `POST /clusters/{name}/sync/preview`. */

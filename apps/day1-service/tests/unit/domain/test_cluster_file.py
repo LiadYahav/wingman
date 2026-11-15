@@ -267,7 +267,7 @@ def test_changing_or_dropping_what_automation_wrote_is_refused(old: str, new: st
     assert any("owned by automation" in p for p in problems)
 
 
-@pytest.mark.parametrize("key", ["mcFiles", "mcConfigMap"])
+@pytest.mark.parametrize("key", ["mcFiles", "mcConfigMap", "tuningConfigmap"])
 def test_adding_a_ci_key_in_an_edit_is_refused(key: str) -> None:
     problems = edit_problems(ALLOCATED, ALLOCATED + f"{key}: []\n")
     assert any(p.startswith(f"{key} is owned by automation") for p in problems)

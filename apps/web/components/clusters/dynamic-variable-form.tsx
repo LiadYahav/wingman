@@ -114,7 +114,7 @@ export function seedFromStructure(structure: Record<string, unknown>, schema: Te
 }
 
 function toLabel(name: string): string {
-  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return name === "tuning_config" ? "Tuning Profiles" : name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // ── Shared styles ─────────────────────────────────────────────────────────────

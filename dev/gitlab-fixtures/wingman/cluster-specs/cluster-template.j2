@@ -21,6 +21,8 @@
                                the MR branch
     mcFiles, mcConfigMap       the day1 CI pipeline renders them from
                                nodepool[].configs
+    tuningConfigmap            the day1 CI pipeline injects it from tuning/
+                               for the names in nodepool[].tuningConfig
     baseDomain, DNS, secrets, registries
                                MCE, site or global values layers
 
@@ -65,7 +67,12 @@ nodepool:
 {% if np.node_labels | default({}) %}
     nodeLabels: {{ np.node_labels | default({}) | tojson }}
 {% endif %}
-{% if np.tuning_config | default("") %}
+{% if np.tuning_config | default([]) %}
+{#- Wingman passes one profile name as a string, several as a list. #}
+{% if np.tuning_config is string %}
     tuningConfig: {{ np.tuning_config }}
+{% else %}
+    tuningConfig: {{ np.tuning_config | tojson }}
+{% endif %}
 {% endif %}
 {% endfor %}

@@ -87,6 +87,7 @@ const fleet = {
   infraEnvs: (mce: string) => ["mce-infraenvs", mce] as const,
   openshiftVersions: (mce: string | undefined) => ["mce-openshift-versions", mce] as const,
   machineConfigs: ["machine-configs"] as const,
+  tuningProfiles: ["tuning-profiles"] as const,
   quickLinks: ["quick-links"] as const,
 };
 

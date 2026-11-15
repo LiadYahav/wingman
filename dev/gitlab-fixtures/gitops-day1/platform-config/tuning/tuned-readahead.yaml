@@ -1,0 +1,19 @@
+# Example profile for Wingman's tests and local runs: the read-ahead raise a
+# fleet repeats most, for nodes that stream large files (datasets,
+# checkpoints, images). The value is a placeholder; size it for your disks.
+apiVersion: tuned.openshift.io/v1
+kind: Tuned
+metadata:
+  name: tuned-readahead
+spec:
+  profile:
+  - name: tuned-readahead
+    data: |
+      [main]
+      summary=Raise the block devices' read-ahead for streaming reads
+      include=openshift-node
+      [disk]
+      readahead=>4096
+  recommend:
+  - priority: 25
+    profile: tuned-readahead

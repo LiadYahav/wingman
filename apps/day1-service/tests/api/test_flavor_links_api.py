@@ -430,6 +430,8 @@ async def test_the_sync_preview_says_what_changes_what_is_removed_and_what_rolls
             "upgrade_type": None,
             "max_unavailable": None,
             "replaces_nodes": False,
+            "configs": True,
+            "tuning": False,
         },
         {
             "nodepool": pools[1],
@@ -437,6 +439,8 @@ async def test_the_sync_preview_says_what_changes_what_is_removed_and_what_rolls
             "upgrade_type": None,
             "max_unavailable": None,
             "replaces_nodes": False,
+            "configs": True,
+            "tuning": False,
         },
     ]
     assert (preview["problems"], preview["warnings"], preview["can_sync"]) == ([], [], True)

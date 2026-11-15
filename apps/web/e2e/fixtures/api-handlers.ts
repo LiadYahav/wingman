@@ -1,5 +1,6 @@
 import { Page, Route } from "@playwright/test";
 import { mockAddons, mockSpecs } from "./addons";
+import { mockTuningProfiles } from "./tuning";
 import type {
   ApprovalRollout, ClusterNetworkRead, ClusterNodes, MRDetail, MachineConfigs, Mce, MergeRequestLink, NodePoolNodes, Placement,
   PlacementCandidate, PoolNode, Problem, ErrorCode, RolloutCluster, RolloutStatus, ServerRecord, WorkflowRun,
@@ -623,6 +624,7 @@ export async function mockDashboardApis(page: Page) {
   );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
+  await page.route("**/api/day1/tuning-profiles", (route: Route) => json(route, mockTuningProfiles));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));
   await page.route("**/api/day2/approvals", (route: Route) => json(route, []));
   // Every team of the fixtures is writable unless a test sets its own list (mockAuthoring). The web
@@ -769,6 +771,7 @@ async function mockDay1Api(page: Page) {
   await page.route("**/api/day1/sites", (route: Route) => json(route, ["site1", "site2"]));
 
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
+  await page.route("**/api/day1/tuning-profiles", (route: Route) => json(route, mockTuningProfiles));
 }
 
 export async function mockAllApis(page: Page) {

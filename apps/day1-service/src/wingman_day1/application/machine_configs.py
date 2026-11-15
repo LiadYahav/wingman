@@ -6,6 +6,10 @@ Both reads are the cached default-branch reads every other day1 read uses
 (ADR-0011). A missing ``mc-files/`` is an empty catalogue that says so, and
 a missing defaults file means no defaults; a defaults file that does not
 parse is reported with its error, never treated as empty (ADR-0004).
+
+The same service reads the tuning-profile catalogue, ``tuning/`` in the day1
+repo (ADR-0061), so every use case that checks a nodepool's configs can
+check its tuning profiles too.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from dataclasses import dataclass
 
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import EntryKind
+from wingman_day1.application.tuning_profiles import TuningProfileService
 from wingman_day1.domain import paths
 from wingman_day1.domain.errors import InvalidNodepoolDefaultsError
 from wingman_day1.domain.machine_configs import (
@@ -23,6 +28,7 @@ from wingman_day1.domain.machine_configs import (
     defaults_problems,
     parse_nodepool_defaults,
 )
+from wingman_day1.domain.tuning_profiles import TuningCatalog
 from wingman_day1.ports import RepoReads
 
 
@@ -51,6 +57,11 @@ class MachineConfigService:
         """Read ``mc-files/`` through ``day1`` and the defaults through ``specs``, both cached."""
         self._day1 = day1
         self._specs = specs
+        self._tuning = TuningProfileService(day1)
+
+    async def tuning(self) -> TuningCatalog:
+        """The tuning profiles ``tuning/`` offers (ADR-0061)."""
+        return await self._tuning.catalog()
 
     async def catalog(self) -> MachineConfigCatalog:
         """Every config ``mc-files/`` offers, by the CI's rule."""

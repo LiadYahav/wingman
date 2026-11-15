@@ -55,7 +55,7 @@ class ConfigRemovalOut(BaseModel):
 
 
 class RebootingOut(BaseModel):
-    """A nodepool whose configs a sync changes: merging rolls its nodes."""
+    """A nodepool whose configs or tuning a sync changes: merging rolls or reboots its nodes."""
 
     nodepool: NodepoolRefOut
     replicas: int | None
@@ -65,6 +65,10 @@ class RebootingOut(BaseModel):
     """The nodepool's ``inPlace.maxUnavailable``; ``null`` when unset (one node at a time)."""
     replaces_nodes: bool
     """``upgradeType: Replace``: new nodes are provisioned and the old ones removed."""
+    configs: bool
+    """Its machine configs change."""
+    tuning: bool
+    """Its tuning profiles change (ADR-0061): its nodes may reboot."""
 
 
 class SyncPreviewOut(BaseModel):
@@ -131,6 +135,8 @@ class SyncPreviewOut(BaseModel):
                     upgrade_type=r.upgrade_type,
                     max_unavailable=r.max_unavailable,
                     replaces_nodes=r.replaces_nodes,
+                    configs=r.configs,
+                    tuning=r.tuning,
                 )
                 for r in plan.rebooting
             ],
