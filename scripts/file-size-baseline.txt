@@ -10,7 +10,7 @@
 # Recorded 2026-11-13 from the code-organisation audit: 21 Python and 19
 # TypeScript source files, and one test.
 
-  572  apps/day1-service/src/wingman_day1/application/clusters.py
+  568  apps/day1-service/src/wingman_day1/application/clusters.py
   720  apps/day1-service/src/wingman_day1/application/rollouts.py
   706  apps/day1-service/src/wingman_day1/domain/cluster_text.py
   540  apps/day1-service/src/wingman_day1/domain/machine_configs.py
