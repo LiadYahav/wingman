@@ -1,0 +1,18 @@
+# Placeholder profile for Wingman's tests and local runs; not a real tuning.
+apiVersion: tuned.openshift.io/v1
+kind: Tuned
+metadata:
+  name: tuned-network-latency
+spec:
+  profile:
+  - name: tuned-network-latency
+    data: |
+      [main]
+      summary=Lower network latency on worker nodes
+      include=openshift-node
+      [sysctl]
+      net.core.busy_read=50
+      net.core.busy_poll=50
+  recommend:
+  - priority: 20
+    profile: tuned-network-latency

@@ -17,6 +17,7 @@ nodepool:
   - name: worker-kubeletconfig-reserved
   - name: nic-ring-buffer
   - name: workers-chrony-configuration
+  tuningConfig: tuned-network-latency
 
 # Storage nodes: their data NICs have their own network config.
 - infraEnvName: dell-r760-site1-64c-512gb-20tb
@@ -57,3 +58,24 @@ mcConfigMap:
   config: PLACEHOLDER-gzip-base64-5
 - name: restored-example-config
   config: PLACEHOLDER-gzip-base64-6
+
+tuningConfigmap:
+- name: tuned-network-latency
+  tuning: |
+    apiVersion: tuned.openshift.io/v1
+    kind: Tuned
+    metadata:
+      name: tuned-network-latency
+    spec:
+      profile:
+      - name: tuned-network-latency
+        data: |
+          [main]
+          summary=Lower network latency on worker nodes (lark's busier NICs)
+          include=openshift-node
+          [sysctl]
+          net.core.busy_read=100
+          net.core.busy_poll=100
+      recommend:
+      - priority: 20
+        profile: tuned-network-latency

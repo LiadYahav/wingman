@@ -1,0 +1,19 @@
+# Placeholder variant for one cluster (prod-lark-site1): it wins over the shared
+# tuned-network-latency.yaml for that cluster only.
+apiVersion: tuned.openshift.io/v1
+kind: Tuned
+metadata:
+  name: tuned-network-latency
+spec:
+  profile:
+  - name: tuned-network-latency
+    data: |
+      [main]
+      summary=Lower network latency on worker nodes (lark's busier NICs)
+      include=openshift-node
+      [sysctl]
+      net.core.busy_read=100
+      net.core.busy_poll=100
+  recommend:
+  - priority: 20
+    profile: tuned-network-latency

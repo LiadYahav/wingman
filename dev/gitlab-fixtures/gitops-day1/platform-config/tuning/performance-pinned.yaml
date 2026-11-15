@@ -1,0 +1,17 @@
+# Placeholder profile for Wingman's tests and local runs; not a real tuning.
+# A PerformanceProfile changes kernel arguments: applying it reboots the nodes.
+apiVersion: performance.openshift.io/v2
+kind: PerformanceProfile
+metadata:
+  name: performance-pinned
+spec:
+  cpu:
+    isolated: "4-31"
+    reserved: "0-3"
+  hugepages:
+    defaultHugepagesSize: 1G
+    pages:
+    - count: 4
+      size: 1G
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
