@@ -21,6 +21,17 @@ declare module "@tanstack/react-table" {
   }
 }
 
+/**
+ * The lines between rows, and the firmer one under the header, from the
+ * foreground so they show in both themes (1.4-1.5:1 and 1.5-1.8:1, about
+ * Apple's separators; the theme's `border` at 60% was 1.15:1), and 3:1 or
+ * more when the system asks for more contrast.
+ */
+const DIVIDER = {
+  rows: "divide-foreground/15 contrast-more:divide-foreground/50",
+  header: "border-foreground/20 contrast-more:border-foreground/55",
+};
+
 export interface DataTableSort {
   id: string;
   desc: boolean;
@@ -78,16 +89,16 @@ export function DataTable<T>({
   return (
     <div className={cn("overflow-auto rounded-xl border bg-card", className)}>
       <table aria-label={label} className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur supports-[backdrop-filter]:bg-muted/40">
+        <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur supports-[backdrop-filter]:bg-muted/75">
           {table.getHeaderGroups().map((group) => (
-            <tr key={group.id} className="border-b">
+            <tr key={group.id} className={cn("border-b", DIVIDER.header)}>
               {group.headers.map((header) => (
                 <HeaderCell key={header.id} header={header} sort={sort} onSort={onSort} filters={filters} />
               ))}
             </tr>
           ))}
         </thead>
-        <tbody className="divide-y divide-border/60">
+        <tbody className={cn("divide-y", DIVIDER.rows)}>
           {rows.length === 0 ? (
             <tr>
               <td colSpan={columns}>{empty}</td>
@@ -137,7 +148,7 @@ function HeaderCell<T>({
       scope="col"
       aria-sort={sorted}
       data-column={header.column.id}
-      className={cn("whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-muted-foreground", meta?.className)}
+      className={cn("whitespace-nowrap px-3 py-2 text-left text-xs font-semibold tracking-[0.01em] text-foreground/75", meta?.className)}
     >
       <span className="inline-flex items-center gap-1">
         {onSort && header.column.getCanSort() ? (
