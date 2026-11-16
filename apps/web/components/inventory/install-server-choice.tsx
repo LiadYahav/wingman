@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Hint } from "@/components/common/hint";
 import { useCandidates } from "@/lib/api/inventory";
 import { MAX_SERVERS, toggled, type AddMode } from "@/lib/inventory/start";
+import type { PoolCount } from "@/types/inventory";
 import { CandidateList } from "./candidate-list";
 
 /** One true sentence, its detail in a tooltip. */
@@ -41,14 +42,32 @@ export function InstallTruths() {
 const inputClass =
   "w-20 rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
+/** What a pool draw could pick here, and what it never picks, as server-scan counts them. */
+function PoolFree({ counts }: { counts: PoolCount }) {
+  const fix = counts.needs_fix ?? 0;
+  return (
+    <span className="text-xs text-muted-foreground" data-testid="add-servers-ready">
+      {counts.ready ?? 0} ready in server-scan
+      {fix > 0 && (
+        <span className="text-status-warning-fg">
+          {" · "}
+          {fix} {fix === 1 ? "needs" : "need"} a fix: choose by name
+        </span>
+      )}
+    </span>
+  );
+}
+
 /**
  * Which servers: let the pool pick N, or name them from the pool's servers in
- * server-scan (a locked, maintenance or contested one cannot be picked).
- * `pool` is `null` until a pool is chosen.
+ * server-scan (a locked, maintenance or contested one cannot be picked; one
+ * that needs a fix can, and the dialog then asks to waive its health checks).
+ * `pool` is `null` until a pool is chosen; a pool draw never waives anything.
  */
 export function InstallServerChoice({
   pool,
-  drawable,
+  counts,
+  needsFix,
   mode,
   count,
   names,
@@ -58,8 +77,10 @@ export function InstallServerChoice({
   disabled,
 }: {
   pool: { mce: string; infraEnv: string } | null;
-  /** What a pool draw could pick, as server-scan counts it. */
-  drawable: number | null;
+  /** The pool's counts, when the page knows the pool. */
+  counts: PoolCount | null;
+  /** How many of the chosen servers need a fix. */
+  needsFix: number;
   mode: AddMode;
   count: number;
   names: string[];
@@ -90,11 +111,7 @@ export function InstallServerChoice({
             disabled={disabled}
             className={inputClass}
           />
-          {drawable !== null && (
-            <span className="text-xs text-muted-foreground" data-testid="add-servers-drawable">
-              {drawable} free in server-scan
-            </span>
-          )}
+          {counts !== null && counts.ready !== null && <PoolFree counts={counts} />}
         </label>
       ) : pool === null ? (
         <p className="text-xs text-muted-foreground">Choose the MCE and the pool to list its servers.</p>
@@ -110,6 +127,14 @@ export function InstallServerChoice({
           />
           <p className="text-xs text-muted-foreground">
             {names.length} of {MAX_SERVERS} at most
+            {needsFix > 0 && (
+              <span className="text-status-warning-fg" data-testid="add-servers-needs-fix">
+                {" · "}
+                {needsFix === 1
+                  ? "1 needs a fix: you confirm its health checks are waived next"
+                  : `${needsFix} need a fix: you confirm their health checks are waived next`}
+              </span>
+            )}
           </p>
         </div>
       )}

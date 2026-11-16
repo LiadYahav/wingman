@@ -3,25 +3,27 @@ import type { InventoryRun, MceInventory, PoolCount } from "@/types/inventory";
 import {
   OTHER_INFRA_ENV,
   chosenInfraEnv,
-  drawableIn,
   infraEnvOptions,
   infraEnvProblem,
   knownInfraEnvs,
   mceOptions,
+  poolIn,
 } from "./install";
 
 const pool = (infraEnv: string | null, overrides: Partial<PoolCount> = {}): PoolCount => ({
-  infra_env: infraEnv, available: 1, usable: 1, hardware: [], drawable: infraEnv ? 2 : null, ...overrides,
+  infra_env: infraEnv, available: 1, usable: 1, hardware: [], ready: infraEnv ? 2 : null, needs_fix: infraEnv ? 0 : null,
+  total: infraEnv ? 3 : 1, ...overrides,
 });
 
 const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
   site: "site1", mce: name, known: true, servers: 3, in_clusters: 1, available: 2, usable: 2,
-  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ...overrides,
+  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 2, ...overrides,
 });
 
 const run = (mceName: string, infraEnv: string | null): InventoryRun => ({
   workflow_id: `add-server-to-mce-${mceName}_${infraEnv}_1`, status: "running", started_at: null, closed_at: null,
   mce: mceName, infra_env: infraEnv, slot: 1, server_name: null, server_id: null, origin: "pool", phase: null, error: null,
+  health_checks_waived: [],
 });
 
 describe("an InfraEnv name", () => {
@@ -64,11 +66,11 @@ describe("the InfraEnvs the page knows", () => {
   });
 
   it("say what a pool draw could pick only for a pool server-scan counts", () => {
-    const site1a = mce("a", { pools: [pool("r760", { drawable: 3 })] });
-    expect(drawableIn(site1a, "r760")).toBe(3);
-    expect(drawableIn(site1a, "typed")).toBeNull();
-    expect(drawableIn(undefined, "r760")).toBeNull();
-    expect(drawableIn(site1a, null)).toBeNull();
+    const site1a = mce("a", { pools: [pool("r760", { ready: 3, needs_fix: 1 })] });
+    expect(poolIn(site1a, "r760")).toMatchObject({ ready: 3, needs_fix: 1 });
+    expect(poolIn(site1a, "typed")).toBeNull();
+    expect(poolIn(undefined, "r760")).toBeNull();
+    expect(poolIn(site1a, null)).toBeNull();
   });
 });
 

@@ -49,12 +49,25 @@ function Origin({ run }: { run: InventoryRun }) {
   );
 }
 
+/** The health checks a named install waived on request (`allow_unhealthy`), listed in its tooltip. */
+function Waived({ run }: { run: InventoryRun }) {
+  if (run.health_checks_waived.length === 0) return null;
+  return (
+    <Hint hint={`Installed with health checks waived: ${run.health_checks_waived.join("; ")}.`} label="Health checks waived: which">
+      <span data-testid="run-waived" className="whitespace-nowrap rounded-full bg-status-warning/15 px-2 py-px text-xs text-status-warning-fg">
+        checks waived
+      </span>
+    </Hint>
+  );
+}
+
 function Status({ run }: { run: InventoryRun }) {
   const phase = readablePhase(run.phase, run.status);
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       <span className={cn("rounded-full px-2 py-px text-xs font-medium", TONE[runTone(run.status)])}>{run.status}</span>
       {phase && <span className="text-xs text-muted-foreground">{phase}</span>}
+      <Waived run={run} />
     </span>
   );
 }

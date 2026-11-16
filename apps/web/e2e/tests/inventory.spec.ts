@@ -53,8 +53,8 @@ test.describe("Who sees it", () => {
     await expect(page.getByRole("button", { name: /Install servers/ })).toHaveCount(0);
     await expect(page.getByTestId("install-servers")).toHaveCount(0);
     await expect(page.getByTestId("install-servers-off")).toHaveCount(0);
-    await pool(page, R650).getByRole("button", { name: `1 free in server-scan for ${R650}` }).click();
-    await expect(page.getByTestId("candidate")).toHaveCount(3);
+    await pool(page, R650).getByRole("button", { name: `1 ready in server-scan for ${R650}` }).click();
+    await expect(page.getByTestId("candidate")).toHaveCount(4);
     expect(calls.starts).toEqual([]);
   });
 
@@ -88,9 +88,9 @@ test.describe("The pools", () => {
     page.on("request", (r) => { if (r.url().includes("/candidates")) reads += 1; });
     await go(page, "/inventory");
     expect(reads).toBe(0);
-    await pool(page, R650).getByRole("button", { name: `1 free in server-scan for ${R650}` }).click();
+    await pool(page, R650).getByRole("button", { name: `1 ready in server-scan for ${R650}` }).click();
     const servers = page.getByTestId("candidate");
-    await expect(servers).toHaveCount(3);
+    await expect(servers).toHaveCount(4);
     await expect(page.locator(`[data-server="${LOCKED}"]`)).toHaveAttribute("data-offered", "false");
     await expect(page.locator(`[data-server="${LOCKED}"]`).getByRole("button", { name: /Not offered: locked by add-server-to-mce/ })).toBeVisible();
     await expect(page.locator(`[data-server="${DONOR}"]`).getByRole("button", { name: "Not offered: in maintenance" })).toBeVisible();
@@ -128,7 +128,7 @@ test.describe("Adding servers", () => {
     await expect(dialog(page)).toContainText("Joins the MCE's pool, not one cluster.");
     await expect(dialog(page)).toContainText("One run per server.");
     await expect(dialog(page)).toContainText("Sending again installs more.");
-    await expect(page.getByTestId("add-servers-drawable")).toHaveText("1 free in server-scan");
+    await expect(page.getByTestId("add-servers-ready")).toContainText("1 ready in server-scan");
     await dialog(page).getByRole("spinbutton", { name: "How many servers" }).fill("2");
     await dialog(page).getByRole("button", { name: "Install 2" }).click();
     await expect(dialog(page)).toHaveCount(0);
@@ -216,7 +216,7 @@ test.describe("Install servers from the header", () => {
     await expect(dialog(page).getByRole("combobox", { name: "InfraEnv" })).toBeDisabled();
     await choose(page, dialog(page).getByRole("combobox", { name: "MCE" }), SITE1_B);
     await choose(page, dialog(page).getByRole("combobox", { name: "InfraEnv" }), SITE1_B_POOL);
-    await expect(page.getByTestId("add-servers-drawable")).toHaveText("2 free in server-scan");
+    await expect(page.getByTestId("add-servers-ready")).toHaveText("2 ready in server-scan");
     await submit.click();
     await expect(dialog(page)).toHaveCount(0);
     expect(calls.starts).toEqual([{ count: 1 }]);
@@ -256,10 +256,12 @@ test.describe("Inventory Management links to a server's page", () => {
       {
         workflow_id: `add-server-to-mce-${SITE1_A}_${FREE.toLowerCase()}`, status: "running", started_at: "2026-11-13T12:00:00+00:00", closed_at: null,
         mce: SITE1_A, infra_env: null, slot: null, server_name: FREE, server_id: "srv_0811", origin: "named" as const, phase: "waiting-for-agent", error: null,
+        health_checks_waived: [],
       },
       {
         workflow_id: `add-server-to-mce-${SITE1_A}_${R650}_1`, status: "running", started_at: "2026-11-13T12:00:00+00:00", closed_at: null,
         mce: SITE1_A, infra_env: R650, slot: 1, server_name: null, server_id: null, origin: "pool" as const, phase: "acquiring-server", error: null,
+        health_checks_waived: [],
       },
     ],
   };
@@ -271,7 +273,7 @@ test.describe("Inventory Management links to a server's page", () => {
     const run = page.getByTestId("run-row").nth(0);
     await expect(run.getByRole("link", { name: FREE })).toHaveAttribute("href", "/server-scan/servers/srv_0811");
     await expect(page.getByTestId("run-row").nth(1).getByTestId("ss-server-link")).toHaveCount(0);
-    await pool(page, R650).getByRole("button", { name: `1 free in server-scan for ${R650}` }).click();
+    await pool(page, R650).getByRole("button", { name: `1 ready in server-scan for ${R650}` }).click();
     const candidate = page.locator(`[data-testid="candidate"][data-server="${FREE}"]`);
     await expect(candidate.getByTestId("ss-server-link")).toHaveAttribute("href", "/server-scan/servers/srv_0811");
     await expect(candidate.getByTestId("ss-server-link")).not.toHaveAttribute("target", "_blank");
@@ -287,8 +289,8 @@ test.describe("Inventory Management links to a server's page", () => {
     await setUpInventory(page, { runs: RUNS });
     await go(page, "/inventory");
     await expect(page.getByTestId("run-row").nth(0)).toContainText(FREE);
-    await pool(page, R650).getByRole("button", { name: `1 free in server-scan for ${R650}` }).click();
-    await expect(page.getByTestId("candidate")).toHaveCount(3);
+    await pool(page, R650).getByRole("button", { name: `1 ready in server-scan for ${R650}` }).click();
+    await expect(page.getByTestId("candidate")).toHaveCount(4);
     await expect(page.getByTestId("ss-server-link")).toHaveCount(0);
   });
 });
