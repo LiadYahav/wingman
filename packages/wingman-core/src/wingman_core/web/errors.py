@@ -66,6 +66,7 @@ class ErrorCode(StrEnum):
     UPGRADE_TARGETS_REFUSED = "UPGRADE_TARGETS_REFUSED"
     ADD_SERVER_ALREADY_RUNNING = "ADD_SERVER_ALREADY_RUNNING"
     JOB_ALREADY_RUNNING = "JOB_ALREADY_RUNNING"
+    SCALE_ALREADY_RUNNING = "SCALE_ALREADY_RUNNING"
 
     @property
     def slug(self) -> str:
@@ -243,6 +244,13 @@ class JobAlreadyRunning(AppError):
 
     status = 409
     code = ErrorCode.JOB_ALREADY_RUNNING
+
+
+class ScaleAlreadyRunning(AppError):
+    """The orchestrator runs update-nodepool, or upgrade-cluster, on the cluster (ADR-0062)."""
+
+    status = 409
+    code = ErrorCode.SCALE_ALREADY_RUNNING
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (

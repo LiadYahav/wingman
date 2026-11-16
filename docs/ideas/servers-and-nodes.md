@@ -2,7 +2,10 @@
 
 **Status:** a hosted cluster's nodes by NodePool, and why a pool waits for
 workers, **built** 2026-11-11 (ADR-0038), with uninstalling one node through
-the platform's workflow; the rest proposed.
+the platform's workflow; scaling a cluster's NodePools through the
+update-nodepool workflow **built** 2026-11-16 (ADR-0062, behind
+`DAY1_SCALE_NODEPOOLS`: Scale on the Nodes tab, by InfraEnv kind or one
+NodePool, the run in place); the rest proposed.
 Checked against [architecture-fit.md](architecture-fit.md): server-scan is
 the platform's state tracker for servers and VMs (AD15), and nodes come from
 shared pools, not from named servers (AD21).
@@ -57,7 +60,7 @@ and indifferent to who claims a node. Moving capacity is therefore:
 2. raise B's total.
 
 That is two absolute requests through the scale workflow (update-nodepool,
-procedure 04), one per cluster. The released node goes back to the pool,
+procedure 04, which Wingman starts since ADR-0062), one per cluster. The released node goes back to the pool,
 after its disk is reset because it held A's data, and B's NodePool claims
 whatever is spare. If the pool is short, the inventory controller adds a
 server.

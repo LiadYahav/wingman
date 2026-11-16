@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from wingman_day1.api.v1.scale_schemas import HeldReplicasOut
 from wingman_day1.api.v1.schemas import (
     AddonDriftOut,
+    MRDetailOut,
     NodepoolRefOut,
     ValueDriftOut,
     VersionDifferenceOut,
@@ -104,6 +106,9 @@ class SyncPreviewOut(BaseModel):
     version_differences: list[VersionDifferenceOut]
     addons_error: str | None
     """Set when day2 did not answer: missing add-ons are unknown."""
+    held_replicas: list[HeldReplicasOut]
+    """Drifted locked replicas the MR leaves to update-nodepool (``DAY1_SCALE_NODEPOOLS``):
+    restore each with ``POST /clusters/{name}/scale`` (ADR-0062). Off: always empty."""
 
     @classmethod
     def of(cls, plan: SyncPlan) -> SyncPreviewOut:
@@ -146,4 +151,12 @@ class SyncPreviewOut(BaseModel):
             addons_to_install=[AddonDriftOut.of(a) for a in plan.addons_to_install],
             version_differences=[VersionDifferenceOut.of(d) for d in plan.version_differences],
             addons_error=plan.addons_error,
+            held_replicas=[HeldReplicasOut.of(h) for h in plan.held_replicas],
         )
+
+
+class SyncOut(MRDetailOut):
+    """``POST /clusters/{name}/sync``: the MR it opened, and the replicas it left out (ADR-0062)."""
+
+    held_replicas: list[HeldReplicasOut] = Field(default_factory=list)
+    """As the preview's: each is restored through update-nodepool, not by this MR."""

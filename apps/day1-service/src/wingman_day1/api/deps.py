@@ -26,6 +26,7 @@ from wingman_day1.application.nodes import NodeService
 from wingman_day1.application.placement import PlacementService
 from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.rollouts import RolloutService
+from wingman_day1.application.scale import ScaleService
 from wingman_day1.application.segments import SegmentsService
 from wingman_day1.application.server_scan import ServerScanService
 from wingman_day1.application.sites import SiteCatalog
@@ -80,6 +81,8 @@ class Day1Context:
     """Inventory Management (ADR-0057); ``None`` when ``SERVER_SCAN_URL`` is empty: 501."""
     server_scan: ServerScanService | None = None
     """The Server Scan area (ADR-0048); ``None`` when ``SERVER_SCAN_URL`` is empty: 501."""
+    scale: ScaleService | None = None
+    """``None`` when ``DAY1_SCALE_NODEPOOLS`` is off: the scale routes answer 501 (ADR-0062)."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -166,6 +169,19 @@ def upgrade_service(context: Annotated[Day1Context, Depends(day1_context)]) -> U
     return context.upgrades
 
 
+SCALE_NOT_AVAILABLE = (
+    "Scaling NodePools is not turned on in this deployment (DAY1_SCALE_NODEPOOLS=false): "
+    "a NodePool's replicas change by editing its cluster file."
+)
+
+
+def scale_service(context: Annotated[Day1Context, Depends(day1_context)]) -> ScaleService:
+    """The scale use case, or 501 when ``DAY1_SCALE_NODEPOOLS`` is off (ADR-0062)."""
+    if context.scale is None:
+        raise FeatureDisabled(SCALE_NOT_AVAILABLE)
+    return context.scale
+
+
 INVENTORY_NOT_AVAILABLE = (
     "Inventory Management is not set up in this deployment: it counts server-scan's servers, "
     "and SERVER_SCAN_URL is empty."
@@ -201,6 +217,7 @@ Inventory = Annotated[InventoryService, Depends(inventory_service)]
 Nodes = Annotated[NodeService, Depends(node_service)]
 Placements = Annotated[PlacementService, Depends(placement_service)]
 QuickLinks = Annotated[QuickLinksService, Depends(quick_links_service)]
+Scale = Annotated[ScaleService, Depends(scale_service)]
 Segments = Annotated[SegmentsService, Depends(segments_service)]
 ServerScan = Annotated[ServerScanService, Depends(server_scan_service)]
 Status = Annotated[StatusService, Depends(status_service)]

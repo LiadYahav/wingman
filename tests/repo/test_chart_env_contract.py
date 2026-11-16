@@ -271,6 +271,23 @@ def test_adding_servers_is_off_unless_enabled_and_needs_the_orchestrator() -> No
     assert "day1.addServers.enabled needs workflows.url" in refused.stderr
 
 
+def test_scaling_nodepools_is_off_unless_enabled_and_needs_the_orchestrator() -> None:
+    """ADR-0062: ``day1.scaleNodepools.enabled`` sets DAY1_SCALE_NODEPOOLS, also off for values
+    kept from 3.39 that have no such key; on, it needs ``workflows.url``; not a boolean, the
+    schema refuses it."""
+    assert render()["wingman-config"]["data"]["DAY1_SCALE_NODEPOOLS"] == "false"
+    kept = render("--set", "day1.scaleNodepools=null")["wingman-config"]["data"]
+    assert kept["DAY1_SCALE_NODEPOOLS"] == "false"
+    on = render(*ALL_ON, "--set", "day1.scaleNodepools.enabled=true")["wingman-config"]["data"]
+    assert on["DAY1_SCALE_NODEPOOLS"] == "true"
+    refused = template("--set", "day1.scaleNodepools.enabled=true")
+    assert refused.returncode != 0
+    assert "day1.scaleNodepools.enabled needs workflows.url" in refused.stderr
+    wrong = template(*ALL_ON, "--set-string", "day1.scaleNodepools.enabled=yes")
+    assert wrong.returncode != 0
+    assert "scaleNodepools" in wrong.stderr
+
+
 TLS_VERIFY = {
     "auth.sslVerify": "OPENSHIFT_SSL_VERIFY",
     "clusterStatus.sslVerify": "MCE_SSL_VERIFY",

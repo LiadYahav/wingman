@@ -44,8 +44,10 @@ from wingman_day1.application.tree import read_tree
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.changes import ClusterAction, ClusterChange, ProvisionResult
 from wingman_day1.domain.cluster_file import (
+    NO_WORKFLOW_KEYS,
     ClusterValues,
     Provenance,
+    WorkflowKeys,
     describe_for_review,
     edit_problems,
     load_values,
@@ -154,7 +156,7 @@ class ClusterService:
         naming: HostedClusterNaming,
         provision: ProvisionWorkflow | None = None,
         placement: PlacementService | None = None,
-        versions_by_workflow: bool = False,
+        owned: WorkflowKeys = NO_WORKFLOW_KEYS,
     ) -> None:
         """Read through ``day1`` (cached), write through ``provisioner``.
 
@@ -162,8 +164,8 @@ class ClusterService:
         instead of opening a merge request (``DAY1_PROVISIONER=workflow``,
         ADR-0042); every other change still goes through ``provisioner``.
         With ``placement``, a new cluster's MCE must pass the placement rule
-        (ADR-0050). With ``versions_by_workflow`` (``DAY1_UPGRADES``), a modify
-        may not change the versions the upgrade workflow owns (ADR-0055).
+        (ADR-0050). With ``owned``, a modify may not change the keys a
+        workflow owns: versions (ADR-0055), NodePool replicas (ADR-0062).
         """
         self._day1 = day1
         self._sites = sites
@@ -174,7 +176,7 @@ class ClusterService:
         self._provision = provision
         self._placement = placement
         self._parsed = ParsedFiles()
-        self._versions_by_workflow = versions_by_workflow
+        self._owned = owned
 
     # ── Reads ───────────────────────────────────────────────────────────────
 
@@ -404,9 +406,7 @@ class ClusterService:
         expected = await self._expect(ref, current, last_commit_id)
         if content == current.content:
             raise InvalidInputError("the edit changes nothing", ["the content is identical"])
-        problems = edit_problems(
-            current.content, content, versions_by_workflow=self._versions_by_workflow
-        )
+        problems = edit_problems(current.content, content, owned=self._owned)
         if not problems:
             tuning = await self._machine_configs.tuning()
             name = (await self.hosted_cluster(ref)).cluster_name  # tuning/<it>/: its variants

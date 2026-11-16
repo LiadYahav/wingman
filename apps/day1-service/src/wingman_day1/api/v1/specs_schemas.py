@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from wingman_day1.api.v1.scale_schemas import HeldReplicasOut
 from wingman_day1.api.v1.schemas import DriftStateOut, FlavorUpdateOut, MergeRequestLinkOut, _iso
 from wingman_day1.application.rollouts import (
     ClusterRollout,
@@ -113,6 +114,8 @@ class RolloutClusterOut(BaseModel):
     """The open MR (``merge_request_open``) or the closed one (``declined``)."""
     reasons: list[str]
     """Why it needs a decision, failed or is unknown."""
+    held_replicas: list[HeldReplicasOut]
+    """Drifted locked replicas its MR leaves to update-nodepool (ADR-0062); off: empty."""
 
     @classmethod
     def of(cls, item: ClusterRollout) -> RolloutClusterOut:
@@ -128,6 +131,9 @@ class RolloutClusterOut(BaseModel):
             state=item.state.value,
             merge_request=MergeRequestLinkOut.of(mr) if mr is not None else None,
             reasons=list(item.reasons),
+            held_replicas=[HeldReplicasOut.of(h) for h in item.plan.held_replicas]
+            if item.plan is not None
+            else [],
         )
 
 

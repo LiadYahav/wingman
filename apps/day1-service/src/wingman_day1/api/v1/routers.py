@@ -18,6 +18,7 @@ from wingman_day1.api.v1 import clusters as clusters_api
 from wingman_day1.api.v1 import inventory as inventory_api
 from wingman_day1.api.v1 import placement as placement_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
+from wingman_day1.api.v1 import scale as scale_api
 from wingman_day1.api.v1 import segments as segments_api
 from wingman_day1.api.v1 import sites as sites_api
 from wingman_day1.api.v1 import specs as specs_api
@@ -39,6 +40,7 @@ ROUTERS: Final[tuple[APIRouter, ...]] = (
     segments_api.router,
     *SERVER_SCAN_ROUTERS,
     upgrades_api.router,
+    scale_api.router,
     approvals_api.router,
     audit_api.router,
     webhooks_api.router,

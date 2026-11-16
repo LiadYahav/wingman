@@ -19,6 +19,7 @@ from wingman_core.web.errors import (
     FeatureDisabled,
     JobAlreadyRunning,
     NodeNotInCluster,
+    ScaleAlreadyRunning,
     UninstallAlreadyRunning,
     UpgradeAlreadyRunning,
     UpgradeDecisionRefused,
@@ -135,6 +136,7 @@ async def test_unexpected_errors_hide_internals_and_mint_a_request_id(
         (UpgradeTargetsRefused("no rules"), 409, "UPGRADE_TARGETS_REFUSED"),
         (AddServerAlreadyRunning("running"), 409, "ADD_SERVER_ALREADY_RUNNING"),
         (JobAlreadyRunning("unfinished"), 409, "JOB_ALREADY_RUNNING"),
+        (ScaleAlreadyRunning("in flight"), 409, "SCALE_ALREADY_RUNNING"),
     ],
 )
 async def test_non_git_errors_have_their_own_codes(error: AppError, status: int, code: str) -> None:

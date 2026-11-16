@@ -31,6 +31,8 @@ from wingman_day1.domain.errors import (
     ProvisionAlreadyRunningError,
     ProvisionRefusedError,
     ResourceNotFoundError,
+    ScaleAlreadyRunningError,
+    ScaleRefusedError,
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanDeniedError,
@@ -151,6 +153,8 @@ class WorkflowsOperation(StrEnum):
     """Every decision on an upgrade run, and on its agent's proposals (no decision label)."""
     START_ADD_SERVER = "start_add_server"
     """Adding servers to an MCE's InfraEnv pool (ADR-0057), by count or by name."""
+    START_UPDATE_NODEPOOL = "start_update_nodepool"
+    """Scaling a cluster's NodePools (ADR-0062), by InfraEnv kind or one NodePool."""
 
 
 _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
@@ -180,6 +184,8 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (ResourceNotFoundError, Outcome.NOT_FOUND),
     (AddServerAlreadyRunningError, Outcome.CONFLICT),
     (AddServerRefusedError, Outcome.REJECTED),
+    (ScaleAlreadyRunningError, Outcome.CONFLICT),
+    (ScaleRefusedError, Outcome.REJECTED),
     (AmbiguousStartError, Outcome.AMBIGUOUS),
     (AmbiguousDecisionError, Outcome.AMBIGUOUS),
     (WorkflowRefusedError, Outcome.REJECTED),

@@ -160,6 +160,7 @@ All of these are registered in `workflow_domains/main_worker_init.py` and routed
 | | `release-segment` `{cluster}` | Delete a leftover DHCP scope, then release the segment |
 | Servers into an MCE (worker inside each MCE, queue `server-lifecycle-activity-<mce>`) | `add-server-to-mce` | Pick a server from server-scan and lock it, create the BMC Secret, BareMetalHost and NMStateConfig, then wait up to 1 h for the Agent. herzi calls this |
 | | `remove-server-from-mce`, `uninstall-server-from-hc`, `publish-infraenv-to-pxe-server` | Reverse paths and PXE publishing |
+| | `update-nodepool` (children `scale-up-nodepool`, `scale-down-nodepool`; branch `feat/update-nodepool`, not merged) | How many workers a hosted cluster runs: a total over the NodePools of one InfraEnv kind, or one NodePool's replicas. Commits only `replicas:` to day1 `main`, syncs the cluster's ArgoCD Application, checks the NodePools; on a scale-down a NodePool's `redbull.io/scale-down-policy` picks the servers that leave. One run per cluster, none while its upgrade runs. Its rule: NodePool replicas change only through it. Wingman starts it from the Nodes tab (ADR-0062) |
 | Servers (not deployed) | `provision-dell-server` | iDRAC IP to configured server (OME template, RAID, naming) |
 | KubeVirt (not on redbull-platform main yet) | `create-vm` | One KubeVirt VM per InfraEnv slot |
 | Cluster upgrade (sandbox only) | `upgrade-cluster` (child `upgrade-control-plane`), `upgrade-targets` (synchronous GET) | Changes only day1 git, then syncs ArgoCD. People make 10 kinds of decisions on a run, each sent as a Temporal Update. Also calls an LLM agent service and writes to a "Brain" repo |
@@ -315,6 +316,7 @@ This is a proposal to discuss, not a decision. Each phase is usable on its own.
    - Proxy the orchestrator through Wingman's backend and generate forms from its OpenAPI.
    - Run pages.
    - `upgrade-cluster` with its decision buttons on the cluster page.
+   - `update-nodepool` (Scale) on the cluster page's Nodes tab (built: ADR-0062).
    - Add, remove or uninstall servers, `publish-infraenv` and `create-vm` on the MCE page.
 4. **Day2 v2 on the new gitops-day2 layout:**
    - Discover clusters by directory plus day1 `mastertag`, and model the four cluster kinds.
