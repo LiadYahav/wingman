@@ -18,6 +18,7 @@ from wingman_day1.domain.scale import (
     kind_choices,
     replicas_locks,
     restore_lines,
+    scale_down_policy,
     scale_name,
     scale_workflow_id,
 )
@@ -72,6 +73,30 @@ def test_the_files_nodepools_carry_their_infraenv_replicas_and_lock() -> None:
     assert found[4].label == "nodepool[4]"
     assert found[4].unnamed is not None and "cannot be named" in found[4].unnamed
     assert found[0].unnamed is None
+
+
+def test_a_nodepools_scale_down_policy_is_its_entrys_annotation_as_written() -> None:
+    text = """\
+nodepool:
+- infraEnvName: dell-r660-zone-a
+  annotations:
+    redbull.io/scale-down-policy: fewest-pods
+- infraEnvName: dell-r660-zone-b
+  annotations:
+    redbull.io/scale-down-policy: newest-first
+    example.com/other: x
+- infraEnvName: dell-r660-zone-c
+  labels:
+    redbull.io/scale-down-policy: least-utilized
+"""
+    assert [p.scale_down_policy for p in pools(text)] == ["fewest-pods", "newest-first", None]
+    requested = {"annotations": {"redbull.io/scale-down-policy": "least-requested"}}
+    assert scale_down_policy(requested) == "least-requested"
+    assert scale_down_policy({"annotations": None}) is None
+    assert scale_down_policy({"annotations": ["redbull.io/scale-down-policy"]}) is None
+    assert scale_down_policy({"annotations": {"redbull.io/scale-down-policy": None}}) is None
+    assert scale_down_policy({}) is None
+    assert [p.scale_down_policy for p in pools()] == [None] * 5
 
 
 @pytest.mark.parametrize(

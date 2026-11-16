@@ -70,7 +70,8 @@ the cluster file on `main`, so it works without live status.
 { "cluster": "ocp4-prod-lark-site1", "mce": "ocp4-prod-mce-site1-a", "flavor": "agent-sized",
   "nodepools": [ { "index": 0, "name": "prod-lark-site1-dell-r660-site1-128c-1024gb-5tb",
                    "infra_env": "dell-r660-site1-128c-1024gb-5tb", "replicas": 3,
-                   "locked_by": "agent-sized", "locked_replicas": 3, "unnamed": null } ],
+                   "locked_by": "agent-sized", "locked_replicas": 3, "unnamed": null,
+                   "scale_down_policy": "fewest-pods" } ],
   "kinds": [ { "kind": "dell-r660-site1-128c-1024gb-5tb",
                "nodepools": ["prod-lark-site1-dell-r660-site1-128c-1024gb-5tb"],
                "total": 3, "locked": ["prod-lark-site1-dell-r660-site1-128c-1024gb-5tb"] } ] }
@@ -82,6 +83,15 @@ the cluster file on `main`, so it works without live status.
 - `replicas` is the file's (1 when absent, the chart's default; `null` when
   not a whole number). `locked_by`/`locked_replicas`: the cluster's flavor
   locks `nodepools[<index>].replicas`.
+- `scale_down_policy` (2026-11-16, 3.42.0): the entry's
+  `annotations["redbull.io/scale-down-policy"]` as written, which the
+  hostedclusters-setup chart renders onto the NodePool; `null` without one.
+  Not checked: the workflow refuses a value other than `fewest-pods`,
+  `least-requested` and `least-utilized`, and the web says so before the
+  run. A label or annotation set by hand on the MCE's NodePool (the
+  air-gapped chart copy renders no entry annotations yet) is not in the file:
+  the run reads it, and its result's `scale_down_policy` shows what it used.
+  The scale confirmation says which nodes leave from it.
 - `kinds`: this cluster's InfraEnvs, and the common start of sibling
   InfraEnvs (those differing only in their last dash segment); `nodepools`
   are those of this file the kind selects, `locked` those a flavor locks (the
