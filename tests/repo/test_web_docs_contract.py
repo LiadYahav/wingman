@@ -19,8 +19,8 @@ These tests read the docs' source and compare what they name with the code:
 - and nothing the rewrite removed (``REMOVED``) comes back.
 
 Guarded: ``README.md``, ``DEVELOPMENT.md``, ``deploy/helm/wingman/README.md``,
-``apps/web/README.md``, ``docs/ops/*.md`` and every file under
-``apps/web/app/(app)/docs/``. Left out on purpose: ``docs/adr/`` and
+``apps/web/README.md``, ``docs/architecture.md``, ``docs/ops/*.md`` and every
+file under ``apps/web/app/(app)/docs/``. Left out on purpose: ``docs/adr/`` and
 ``docs/notes/`` (history: they name what was true when they were written) and
 ``docs/upgrade/`` (a migration guide that names the removed settings on
 purpose); so are ``CLAUDE.md`` and ``docs/ecosystem/README.md``, which name the
@@ -65,6 +65,7 @@ MARKDOWN: tuple[Path, ...] = (
     ROOT / "DEVELOPMENT.md",
     CHART_README,
     ROOT / "apps/web/README.md",
+    ROOT / "docs/architecture.md",
     *sorted((ROOT / "docs/ops").glob("*.md")),
 )
 PAGE_FILES: tuple[Path, ...] = tuple(sorted(p for p in PAGE_DIR.rglob("*") if p.is_file()))
@@ -551,6 +552,7 @@ SENTINEL_NAMES: Mapping[str, frozenset[str]] = {
     "DEVELOPMENT.md": frozenset({"DAY2_SERVICE_URL", "WINGMAN_GIT_BACKEND", "ROUTERS"}),
     "deploy/helm/wingman/README.md": frozenset({"GITLAB_TOKEN", "OPENSHIFT_OAUTH_CLIENT_SECRET"}),
     "apps/web/README.md": frozenset({"WINGMAN_DEV_DAY1_URL", "DEV_AUTH_SECRET"}),
+    "docs/architecture.md": frozenset({"JWT_SECRET_KEY", "WORKFLOWS_API_URL", "DAY1_PROVISIONER"}),
     "docs/ops/images.md": frozenset({"WINGMAN_VERSION", "PYTHON_BUILD_STANDALONE_URL", "VERSION"}),
     "docs/ops/metrics.md": frozenset({"GITLAB_TOKEN"}),
     "docs/ops/runbook.md": frozenset({"GITLAB_TOKEN", "GITLAB_VERIFY_TLS"}),
