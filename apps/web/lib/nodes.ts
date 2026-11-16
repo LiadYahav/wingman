@@ -43,10 +43,14 @@ export const STALE_LIST_CODES = ["NODE_NOT_IN_CLUSTER", "UNINSTALL_ALREADY_RUNNI
 /**
  * Another system's own string in words, with no list of them kept:
  * `awaiting-machine-deletion` → "Awaiting machine deletion", `timed_out` →
- * "Timed out". Upper-case states (server-scan's) are lowered first.
+ * "Timed out". Upper-case states (server-scan's) are lowered first; the
+ * product name in `syncing-argo` reads "Argo CD".
  */
 export function humanize(slug: string): string {
-  const words = (slug === slug.toUpperCase() ? slug.toLowerCase() : slug).replace(/[-_\s]+/g, " ").trim();
+  const words = (slug === slug.toUpperCase() ? slug.toLowerCase() : slug)
+    .replace(/[-_\s]+/g, " ")
+    .trim()
+    .replace(/\bargo\b/gi, "Argo CD");
   return words ? words[0].toUpperCase() + words.slice(1) : slug;
 }
 

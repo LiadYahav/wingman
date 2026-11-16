@@ -134,7 +134,7 @@ export function ScaleRunCard({ run }: { run: ScaleRun }) {
         <span role="status" data-testid="scale-run-phase" title={run.phase ?? undefined} className="text-sm font-medium text-muted-foreground">
           {stateWord(run)}
         </span>
-        {direction && direction !== "none" && running && (
+        {direction && direction !== "none" && running && !stateWord(run).startsWith(DIRECTION[direction] ?? "\0") && (
           <span className="text-xs text-muted-foreground" data-testid="scale-run-direction">{DIRECTION[direction] ?? humanize(direction)}</span>
         )}
       </div>

@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Lock, Scaling } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { ProblemList } from "@/components/common/problem-list";
-import { day1Keys } from "@/lib/api/day1";
 import { useScaleBusy, useScaleOptions, useScaleRun } from "@/lib/scale";
-import { isRunning, needsRestore } from "@/lib/scale-model";
+import { needsRestore } from "@/lib/scale-model";
 import { cn } from "@/lib/utils";
 import type { ScaleNodePool, ScaleOptions } from "@/types";
 import { RestoreReplicas } from "./restore-replicas";
@@ -101,20 +99,11 @@ function Header({
  * Nothing at all while scaling is off. Mount it where it is shown.
  */
 export function ScalePanel({ name, where, isAdmin, enabled = true }: { name: string; where: string; isAdmin: boolean; enabled?: boolean }) {
-  const queryClient = useQueryClient();
   const options = useScaleOptions(name, where, { enabled });
   const run = useScaleRun(name, where, { enabled });
   const busy = useScaleBusy(name, where);
   const [scaling, setScaling] = useState<{ trigger: HTMLElement } | null>(null);
   const shown = run.data?.state === "run" ? run.data.run : null;
-  const running = isRunning(shown);
-
-  // A run that ends changed the day1 file, and so the sizes, the drift and the nodes: read them again
-  const wasRunning = useRef(false);
-  useEffect(() => {
-    if (wasRunning.current && !running) void queryClient.invalidateQueries({ queryKey: day1Keys.clusters.one(name) });
-    wasRunning.current = running;
-  }, [running, name, queryClient]);
 
   if (options.error) {
     return (

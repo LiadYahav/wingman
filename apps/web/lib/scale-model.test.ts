@@ -56,6 +56,13 @@ describe("phaseWords", () => {
     expect(phaseWords(run({ phase: null }))).toBe("Starting");
   });
 
+  it("names Argo CD in words", () => {
+    expect(phaseWords(run({ phase: "syncing-argo" }))).toBe("Syncing Argo CD");
+    expect(phaseWords(run({ phase: "argo_sync" }))).toBe("Argo CD sync");
+    expect(phaseWords(run({ phase: "SYNCING_ARGO" }))).toBe("Syncing Argo CD");
+    expect(phaseWords(run({ phase: "argocd-refresh" }))).toBe("Argocd refresh");
+  });
+
   it("drops a child that completed", () => {
     const child = { workflow_id: "scale-up-nodepool-x", status: "completed", phase: "completed", error: null };
     expect(phaseWords(run({ phase: "scaling-up", child }))).toBe("Scaling up");
