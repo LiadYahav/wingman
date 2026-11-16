@@ -68,8 +68,15 @@ async def add_servers(
     """Start add-server-to-mce: one run per server. Never retried; sent again, it installs more.
 
     Needs no live status: whether the InfraEnv is on the MCE is the workflow's first check.
+    ``allow_unhealthy`` waives the workflow's health checks for the named servers only (422
+    on a pool draw).
     """
     result = await service.add_servers(
-        mce, infra_env, count=body.count, server_names=body.server_names or (), user=user
+        mce,
+        infra_env,
+        count=body.count,
+        server_names=body.server_names or (),
+        user=user,
+        allow_unhealthy=body.allow_unhealthy,
     )
     return AddServersOut.of(result)

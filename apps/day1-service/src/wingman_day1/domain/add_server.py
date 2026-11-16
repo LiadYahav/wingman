@@ -12,6 +12,11 @@ and a named install ``add-server-to-mce-<mce>_<server, lowercased>``; the
 orchestrator adds ``ocp4-`` to the MCE. herzi only ever sends a count, and
 the orchestrator records no ``requested_by``: a named run is a person's, a
 pool draw is herzi's or a person's, and nothing tells which.
+
+``allow_unhealthy`` is the workflow's hidden waiver (ADR-0057's 3.38.0
+amendment): install the named servers although they fail a health check,
+never past a safety refusal. Only with server names: the orchestrator
+refuses it on a pool draw (422), and so does day1, before anything is sent.
 """
 
 from __future__ import annotations
@@ -29,6 +34,10 @@ MCE_PREFIX: Final = "ocp4-"
 MAX_SERVERS: Final = 20
 """The most servers one request may ask for, by count or by name (the orchestrator's limit)."""
 MAX_SLOT: Final = 100
+WAIVER_NEEDS_NAMES: Final = (
+    "allow_unhealthy waives health checks only for servers named in server_names: "
+    "a pool draw would take whichever unhealthy server came first"
+)
 
 
 class Origin(StrEnum):
@@ -84,6 +93,13 @@ class AddServerRequest:
     """The InfraEnv's namespace; ``None``: the orchestrator's default (``inventory``)."""
     count: int | None = None
     server_names: tuple[str, ...] = ()
+    allow_unhealthy: bool = False
+    """Waive the workflow's health checks for ``server_names`` (never on a pool draw)."""
+
+    def __post_init__(self) -> None:
+        """A waiver names its servers: the workflow refuses it on a pool draw."""
+        if self.allow_unhealthy and not self.server_names:
+            raise ValueError(WAIVER_NEEDS_NAMES)
 
     @property
     def size(self) -> int:
@@ -140,3 +156,5 @@ class AddServerRun:
     server_name: str | None = None
     """The server the run took, once chosen."""
     error: str | None = None
+    waived: tuple[str, ...] = ()
+    """The health checks the run waived (``allow_unhealthy``), each ``check: observed``."""

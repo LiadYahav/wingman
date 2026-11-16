@@ -4,7 +4,10 @@ The workflow makes servers Agents in an MCE's InfraEnv pool. Day1 starts runs
 and reads them:
 
 - ``POST /workflows/server-lifecycle/add-server-to-mce`` with
-  ``{"infra_env", "mce_cluster", "namespace"?, "count" | "server_names"}``.
+  ``{"infra_env", "mce_cluster", "namespace"?, "count" | "server_names",
+  "allow_unhealthy"?}``; ``allow_unhealthy`` (the workflow's hidden health
+  waiver) only with ``server_names`` and only when true, as the workflow
+  leaves it out of its own payloads while false.
   Day1 always sends a count or a list, so the orchestrator answers ``202
   {"started", "already_running", "failed", "results": [{"workflow_id",
   "status", "server_name"?, "slot"?, "error"?}]}`` (a lone run's ``202
@@ -13,7 +16,8 @@ and reads them:
   Temporal refuses. Every other refusal is a FAILED run, never a 4xx here.
 - ``GET /workflows/runs?workflow_type=AddServerToMceWorkflow&limit=200``
   lists the fleet's newest runs; ``GET /workflows/runs/{id}`` is one run,
-  with ``progress.phase`` and ``progress.server_name`` (404: no run).
+  with ``progress.phase``, ``progress.server_name`` and the health checks it
+  waived, ``progress.allowed_unhealthy`` (or the result's; 404: no run).
 
 A start is a write and is never retried (ADR-0006): sent twice, a pool draw
 installs twice. Refused before it was sent (no connection), it is
@@ -189,6 +193,8 @@ def start_body(request: AddServerRequest) -> dict[str, object]:
         body["count"] = request.count
     else:
         body["server_names"] = list(request.server_names)
+        if request.allow_unhealthy:
+            body["allow_unhealthy"] = True
     return body
 
 
@@ -224,6 +230,19 @@ def _error(raw: Mapping[str, JSON]) -> str | None:
         return None
     text = error if isinstance(error, str) else json.dumps(error, separators=(",", ":"))
     return text[:MAX_ERROR]
+
+
+def _waived(*sources: Mapping[str, JSON]) -> tuple[str, ...]:
+    """The run's ``allowed_unhealthy`` as ``check: observed``: its progress's, else its result's."""
+    for source in sources:
+        items = source.get("allowed_unhealthy")
+        if isinstance(items, list) and items:
+            found = (item for item in items if isinstance(item, dict))
+            return tuple(
+                f"{_text(item, 'check') or 'health'}: {_text(item, 'observed') or '?'}"[:MAX_ERROR]
+                for item in found
+            )
+    return ()
 
 
 def started(raw: JSON) -> AddServerStart:
@@ -296,4 +315,5 @@ def add_server_run(raw: JSON) -> AddServerRun:
         phase=_text(progress, "phase"),
         server_name=_text(progress, "server_name") or _text(result, "server_name"),
         error=_error(raw),
+        waived=_waived(progress, result),
     )
