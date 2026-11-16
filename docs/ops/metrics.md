@@ -42,7 +42,7 @@ Operations of the other dependencies (day1):
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
 | `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `list_events`, `list_event_actors`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs`, `list_classification_rules`, `list_health_policies`, `list_jobs`, `get_job_logs`, `run_job` |
-| `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server` |
+| `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server`, `start_update_nodepool` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
 ## The dashboard
@@ -214,6 +214,16 @@ start. Time-series legends list only the series with something to show.
   slot of the pool busy. `rejected`: a body the orchestrator refused (its
   422). Inventory's run list is `list_runs` and `get_run` (the 20 newest
   runs, each kept 10 seconds).
+- `workflows` `start_update_nodepool` is an admin scaling a cluster's
+  NodePools from its Nodes tab, by InfraEnv kind or one NodePool, through
+  the update-nodepool workflow (`DAY1_SCALE_NODEPOOLS`, ADR-0062); a
+  restore of a flavor's locked replicas after a sync is one too. `conflict`:
+  a run of that cluster is going, or an upgrade-cluster run of it (the
+  orchestrator's 409, shown in its words). `rejected`: a body the
+  orchestrator refused (its 422). `ambiguous`: sent, answer lost; look at the
+  cluster's scale run before asking again (never retried). Reading the run
+  is `get_run`, twice while its scale-up or scale-down child runs (the
+  child's phase is read by its id). No cluster and no NodePool in the labels.
 - `segments_manager` `get_segment` is one cluster's segment, read for its
   EPG (ADR-0039). A segment segments-manager does not have is `ok`: that is
   an answer, shown as a warning. `unavailable` means it could not be reached

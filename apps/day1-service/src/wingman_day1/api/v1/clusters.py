@@ -20,7 +20,7 @@ from wingman_day1.api.deps import Context, DeleteWorkflow, Nodes, Status
 from wingman_day1.api.v1.cluster_network_schemas import ClusterNetworkOut
 from wingman_day1.api.v1.cluster_nodes_schemas import ClusterNodesOut, UninstallNodeIn
 from wingman_day1.api.v1.cluster_status_schemas import BulkStatusIn, ClusterLiveStatusOut
-from wingman_day1.api.v1.cluster_sync_schemas import SyncIn, SyncPreviewIn, SyncPreviewOut
+from wingman_day1.api.v1.cluster_sync_schemas import SyncIn, SyncOut, SyncPreviewIn, SyncPreviewOut
 from wingman_day1.api.v1.cluster_workflows_schemas import (
     DeleteWorkflowOut,
     ProvisionerOut,
@@ -37,6 +37,7 @@ from wingman_day1.api.v1.clusters_schemas import (
     PreviewOut,
     cluster_detail,
 )
+from wingman_day1.api.v1.scale_schemas import HeldReplicasOut
 from wingman_day1.api.v1.schemas import (
     ClusterDriftOut,
     CommitOut,
@@ -251,7 +252,7 @@ async def sync_cluster(
     user: AdminUser,
     site: Site = None,
     mce: Mce = None,
-) -> MRDetailOut:
+) -> SyncOut:
     """Open one day1 MR that sets every locked value the file does not hold to the flavor's."""
     ref = await _ref(context, name, site, mce)
     result = await context.sync.sync(
@@ -262,7 +263,9 @@ async def sync_cluster(
         confirm_removals=[(r.nodepool, r.name) for r in body.confirm_removals],
         user=user,
     )
-    return change_out(RepoKey.DAY1, result.provision.merge_request)
+    opened = change_out(RepoKey.DAY1, result.provision.merge_request)
+    held = [HeldReplicasOut.of(h) for h in result.plan.held_replicas]
+    return SyncOut(**opened.model_dump(), held_replicas=held)
 
 
 @router.get("/{name}")

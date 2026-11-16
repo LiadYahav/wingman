@@ -1,7 +1,7 @@
 # ADR-0037: Existing clusters join a flavor by one MR that writes only the link, and sync to it by one MR each; Wingman edits a cluster file's text, never a YAML round trip
 
 Date: 2026-11-08
-Status: Accepted; superseded in part by ADR-0044 (an import opens one MR per cluster; a new flavor version opens each cluster's sync MR automatically)
+Status: Accepted; superseded in part by ADR-0044 (an import opens one MR per cluster; a new flavor version opens each cluster's sync MR automatically); amended by ADR-0062 (with `DAY1_SCALE_NODEPOOLS` on, a sync leaves drifted locked replicas out of its MR, for update-nodepool)
 
 Since ADR-0044 (2026-11-12, the architect's decision, confirmed by the
 user) an import opens one day1 MR per picked cluster, each the link-only
@@ -157,3 +157,16 @@ day2). `POST /clusters/{name}/sync` opens the MR
   changing (not stale), nothing to sync, a header-only version move.
 - `apps/day1-service/tests/api/test_flavor_links_api.py`: the JSON of drift,
   import and sync.
+
+## Amendment (2026-11-16, ADR-0062): a sync leaves replicas to update-nodepool
+
+With `DAY1_SCALE_NODEPOOLS` on, a sync no longer writes a NodePool's
+drifted locked `replicas`: its MR carries the rest (configs, tuning, labels,
+the header's version), and the preview and the answer list each such
+NodePool in `held_replicas` with its replicas and the flavor's. The sync
+dialog offers "Restore with update-nodepool" for each, a by-name run to the
+locked value; the MR description names them. When replicas are the only
+drift and the version is the same, nothing is left to sync. Off, a sync is
+as before.
+
+Verified in `apps/day1-service/tests/api/test_replicas_ownership_api.py`.

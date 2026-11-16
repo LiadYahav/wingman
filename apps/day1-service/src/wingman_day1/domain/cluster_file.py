@@ -39,6 +39,7 @@ from yaml.resolver import BaseResolver
 
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.errors import InvalidClusterFileError
+from wingman_day1.domain.replicas_ownership import replicas_problems
 from wingman_day1.domain.upgrades import version_problems
 
 AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap", "tuningConfigmap")
@@ -335,22 +336,39 @@ def rendered_file_problems(content: str) -> list[str]:
     return problems
 
 
-def edit_problems(current: str, edited: str, *, versions_by_workflow: bool = False) -> list[str]:
+@dataclass(frozen=True, slots=True)
+class WorkflowKeys:
+    """The keys a platform workflow owns in this deployment: an edit may not change them."""
+
+    versions: bool = False
+    """``DAY1_UPGRADES`` (ADR-0055): ``mastertag``, the workertags, ``pausedUntil``."""
+    replicas: bool = False
+    """``DAY1_SCALE_NODEPOOLS`` (ADR-0062): the replicas of each NodePool already on ``main``."""
+
+
+NO_WORKFLOW_KEYS: Final = WorkflowKeys()
+"""Both settings off: people own every key automation does not."""
+
+
+def edit_problems(
+    current: str, edited: str, *, owned: WorkflowKeys = NO_WORKFLOW_KEYS, main: str | None = None
+) -> list[str]:
     """Why an edit of an existing cluster file may not be proposed; empty when it may.
 
-    Keys owned by automation, and ``clusterName`` (which would rename the
-    cluster), must keep exactly the values they have in ``current``. With
-    ``versions_by_workflow`` (``DAY1_UPGRADES``, ADR-0055), so must the version
-    keys the upgrade workflow owns (``upgrades.version_problems``).
+    Every write of an existing cluster file is checked here: a modify, an
+    edit of a pending merge request, a flavor's sync and a rollout's merge
+    request. Keys owned by automation, and ``clusterName`` (which would rename
+    the cluster), must keep exactly the values they have in ``current``. With
+    ``owned.versions`` so must the version keys the upgrade workflow owns
+    (``upgrades.version_problems``), and with ``owned.replicas`` each
+    NodePool's replicas as ``main`` (the file on the default branch, when it
+    is not ``current``) has them (``replicas_ownership.replicas_problems``).
     """
     try:
         new = load_values(edited)
     except InvalidClusterFileError as exc:
         return list(exc.problems)
-    try:
-        old = load_values(current)
-    except InvalidClusterFileError:
-        old = {}
+    old = _lenient_values(current)
     problems = _mastertag_problems(new) + _nodepool_problems(new, required=False)
     for key in (*AUTOMATION_KEYS, "clusterName"):
         if old.get(key) != new.get(key):
@@ -361,9 +379,19 @@ def edit_problems(current: str, edited: str, *, versions_by_workflow: bool = Fal
         for key in ("site", "mce")
         if key in new and old.get(key) != new.get(key)
     ]
-    if versions_by_workflow:
+    if owned.versions:
         problems += version_problems(old, new)
+    if owned.replicas:
+        problems += replicas_problems(old if main is None else _lenient_values(main), new)
     return problems
+
+
+def _lenient_values(content: str) -> dict[str, object]:
+    """The parsed file, or nothing when it does not parse (its problems are reported elsewhere)."""
+    try:
+        return load_values(content)
+    except InvalidClusterFileError:
+        return {}
 
 
 def require_valid(problems: Sequence[str], *, message: str) -> None:

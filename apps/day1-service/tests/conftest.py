@@ -38,6 +38,7 @@ from wingman_day1.ports import (
     AddServerWorkflow,
     HubApi,
     ProvisionWorkflow,
+    ScaleWorkflow,
     SegmentLedger,
     ServerInventory,
     UninstallWorkflow,
@@ -223,6 +224,7 @@ def build_app(
     provision: ProvisionWorkflow | None = None,
     upgrade: UpgradeWorkflow | None = None,
     add_server: AddServerWorkflow | None = None,
+    scale: ScaleWorkflow | None = None,
     **settings: object,
 ) -> FastAPI:
     return create_app(
@@ -241,6 +243,7 @@ def build_app(
             upgrade=upgrade,
             day2_installs=day2,
             add_server=add_server,
+            scale=scale,
         ),
         clock=clock,
     )

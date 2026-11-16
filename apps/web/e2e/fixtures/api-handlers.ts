@@ -595,6 +595,10 @@ export async function mockDashboardApis(page: Page) {
   await page.route("**/api/day1/clusters/*/upgrade-run**", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Upgrades are off in this deployment (DAY1_UPGRADES=false).")
   );
+  // Scaling is off unless a test turns it on (cluster-scale.spec.ts, ADR-0062): no Scale, no run
+  await page.route("**/api/day1/clusters/*/scale**", (route: Route) =>
+    fulfillProblem(route, 501, "FEATURE_DISABLED", "Scaling NodePools is off in this deployment (DAY1_SCALE_NODEPOOLS=false).")
+  );
   await page.route("**/api/day1/upgrades", (route: Route) =>
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Upgrades are off in this deployment (DAY1_UPGRADES=false).")
   );

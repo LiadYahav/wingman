@@ -35,7 +35,9 @@ export type ErrorCode =
   /** 409: a named server is already being added, or every slot of the pool is busy (ADR-0057). */
   | "ADD_SERVER_ALREADY_RUNNING"
   /** 409: server-scan refuses to start a CronJob that has an unfinished Job (ADR-0048, 3.32.0). */
-  | "JOB_ALREADY_RUNNING";
+  | "JOB_ALREADY_RUNNING"
+  /** 409: an update-nodepool run, or an upgrade-cluster run, of the cluster is running (ADR-0062). */
+  | "SCALE_ALREADY_RUNNING";
 
 /** One entry of FastAPI's own request validation (`details.errors`). */
 export interface RequestFieldError {

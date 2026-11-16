@@ -1,3 +1,4 @@
+import type { HeldReplicas } from "../scale";
 import type { MergeRequestLink } from "./drift";
 
 // ── A flavor's rollout: one MR per cluster (ADR-0044) ───────────────────────
@@ -37,6 +38,8 @@ export interface RolloutCluster {
   /** The MR for the version: open (`merge_request_open`) or closed (`declined`). */
   merge_request: MergeRequestLink | null;
   reasons: string[];
+  /** Drifted locked replicas its MR leaves out: restored with update-nodepool on its Nodes tab (ADR-0062). */
+  held_replicas?: HeldReplicas[];
 }
 
 /** What started a reconcile: the flavor MR's merge, the specs webhook, Reconcile now, or a read with work pending. */

@@ -418,6 +418,22 @@ test.describe("The flavor's rollout", () => {
     await expect(page.getByRole("button", { name: "Reconcile now" })).toHaveCount(0);
   });
 
+  test("a cluster whose MR leaves locked replicas out says which, and links its Nodes tab to restore them", async ({ page }) => {
+    const pool = "prod-held-site1-dell-r760-site1";
+    const held = mockRolloutCluster("ocp4-prod-held-site1", "pending", {
+      held_replicas: [{ index: 1, name: pool, replicas: 3, flavor_replicas: 2 }],
+    });
+    await openFlavor(page, { rollout: mockRollout({ spec_name: FLAVOR, version: "1.1.0", clusters: [held] }) });
+    await clustersTab(page);
+
+    const row = page.getByTestId("rollout-cluster-ocp4-prod-held-site1").getByTestId("held-replicas");
+    await expect(row).toContainText(`Not in its merge request, restored with update-nodepool: ${pool} 3 → 2.`);
+    await expect(row.getByRole("link", { name: "Restore on its Nodes tab" })).toHaveAttribute(
+      "href",
+      "/clusters/ocp4-prod-held-site1?site=site1&mce=ocp4-prod-mce-site1-a&tab=nodes"
+    );
+  });
+
   test("with no cluster following the flavor it says so, and offers nothing to reconcile", async ({ page }) => {
     await openFlavor(page, { rollout: mockRollout({ spec_name: FLAVOR, version: "1.1.0" }) });
     await clustersTab(page);

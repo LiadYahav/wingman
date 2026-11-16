@@ -1,7 +1,7 @@
 # ADR-0044: A flavor's changes reach each cluster through its own MR, which the customer takes when ready; a cluster is measured against its own version
 
 Date: 2026-11-12
-Status: Accepted (supersedes in part ADR-0016, ADR-0036 and ADR-0037)
+Status: Accepted (supersedes in part ADR-0016, ADR-0036 and ADR-0037); amended by ADR-0062 (with `DAY1_SCALE_NODEPOOLS` on, a rollout's MR leaves drifted locked replicas out)
 
 ## Context
 
@@ -235,3 +235,15 @@ button. `docs/notes/2026-11-12-flavor-rollout-api.md` has the JSON.
   on the fake and on GitLab CE), `test_metrics_catalogue.py`.
 - `apps/web/e2e/tests/flavor-import.spec.ts` and the rollout and drift-state
   specs.
+
+## Amendment (2026-11-16, ADR-0062): a rollout's MR leaves replicas to update-nodepool
+
+With `DAY1_SCALE_NODEPOOLS` on, a rollout's per-cluster MR is the sync's
+plan without the NodePools' drifted locked `replicas` (ADR-0037's
+amendment): each cluster's item in the rollout status lists them in
+`held_replicas`, its MR description names them, and the flavor page's
+rollout panel links each cluster to its Nodes tab, where they are restored
+through update-nodepool, one run per cluster.
+
+Verified in `apps/day1-service/tests/api/test_replicas_ownership_api.py` and
+`apps/web/e2e/tests/flavor-rollout.spec.ts`.

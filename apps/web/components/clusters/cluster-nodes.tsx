@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { NodePoolCard, UnassignedServers, type NodeActions } from "@/components/clusters/node-pools";
 import { UninstallNodeDialog, type UninstallTarget } from "@/components/clusters/uninstall-node-dialog";
+import { ScalePanel } from "@/components/clusters/scale/scale-panel";
 import { useClusterNodes } from "@/lib/nodes";
 import { cn } from "@/lib/utils";
 import type { ClusterNodes as Nodes, ServerRecord, WorkflowRun } from "@/types";
@@ -104,6 +105,8 @@ function Notes({ data, isAdmin }: { data: Nodes; isAdmin: boolean }) {
  * An admin starts the platform's `uninstall-server-from-hc` workflow on a
  * server from here (§2); Wingman starts it and shows its run, and the
  * workflow does its own checks, so a contested server keeps its button.
+ * Above them, the NodePool sizes from the day1 file and Scale (ADR-0062),
+ * which need no live status, so they stay when the MCE cannot be read.
  *
  * Mount it where it is shown: it reads the nodes when mounted.
  */
@@ -161,16 +164,20 @@ export function ClusterNodes({
     </div>
   ) : null;
 
+  const scale = <ScalePanel name={name} where={where} isAdmin={isAdmin} enabled={enabled} />;
   if (read?.off) {
     return (
-      <p
-        data-testid="cluster-nodes-off"
-        title={read.detail}
-        className="flex items-center gap-1.5 rounded-xl border border-dashed bg-card/40 px-4 py-3 text-xs text-muted-foreground"
-      >
-        <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        Nodes need live status from the MCE (CLUSTER_STATUS_ENABLED).
-      </p>
+      <div className="space-y-4">
+        {scale}
+        <p
+          data-testid="cluster-nodes-off"
+          title={read.detail}
+          className="flex items-center gap-1.5 rounded-xl border border-dashed bg-card/40 px-4 py-3 text-xs text-muted-foreground"
+        >
+          <Info className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Nodes need live status from the MCE (CLUSTER_STATUS_ENABLED).
+        </p>
+      </div>
     );
   }
 
@@ -187,68 +194,71 @@ export function ClusterNodes({
   const nodes = data?.node_pools.reduce((n, p) => n + p.nodes.filter((x) => x.state !== "missing").length, 0) ?? 0;
 
   return (
-    <section aria-label={`Nodes of ${name}`} aria-busy={isPending && !error} data-testid="cluster-nodes" className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold">Nodes</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground break-words">
-            {data ? (
-              <>
-                {pools} NodePool{pools !== 1 ? "s" : ""} · {nodes} Machine{nodes !== 1 ? "s" : ""}, as the MCE reports them for{" "}
-                <span className="font-mono">{data.hosted_cluster}</span>; each server&apos;s name opens it in server-scan.
-              </>
-            ) : (
-              "Each NodePool's Machines, as the MCE reports them, with the server behind each."
-            )}
-          </p>
+    <div className="space-y-4">
+      {scale}
+      <section aria-label={`Nodes of ${name}`} aria-busy={isPending && !error} data-testid="cluster-nodes" className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Nodes</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground break-words">
+              {data ? (
+                <>
+                  {pools} NodePool{pools !== 1 ? "s" : ""} · {nodes} Machine{nodes !== 1 ? "s" : ""}, as the MCE reports them for{" "}
+                  <span className="font-mono">{data.hosted_cluster}</span>; each server&apos;s name opens it in server-scan.
+                </>
+              ) : (
+                "Each NodePool's Machines, as the MCE reports them, with the server behind each."
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching || !enabled}
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0 text-muted-foreground")}
+            aria-label="Refresh nodes"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin motion-reduce:animate-none")} aria-hidden />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => refetch()}
-          disabled={isFetching || !enabled}
-          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0 text-muted-foreground")}
-          aria-label="Refresh nodes"
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin motion-reduce:animate-none")} aria-hidden />
-          <span className="hidden sm:inline">Refresh</span>
-        </button>
-      </div>
 
-      {failure}
+        {failure}
 
-      {!data ? (
-        !failure && <NodesSkeleton />
-      ) : (
-        <>
-          <Notes data={data} isAdmin={isAdmin} />
-          {data.node_pools.length === 0 && data.unassigned.length === 0 ? (
-            <EmptyState
-              icon={Layers}
-              title="The MCE lists no NodePool for this cluster"
-              description="NodePools show here once the MCE has them, with their Machines and servers."
-              bordered
-              data-testid="cluster-nodes-empty"
-            />
-          ) : (
-            <>
-              {data.node_pools.map((pool) => (
-                <NodePoolCard key={pool.name} pool={pool} actions={actions} />
-              ))}
-              <UnassignedServers servers={data.unassigned} actions={actions} />
-            </>
-          )}
-        </>
-      )}
+        {!data ? (
+          !failure && <NodesSkeleton />
+        ) : (
+          <>
+            <Notes data={data} isAdmin={isAdmin} />
+            {data.node_pools.length === 0 && data.unassigned.length === 0 ? (
+              <EmptyState
+                icon={Layers}
+                title="The MCE lists no NodePool for this cluster"
+                description="NodePools show here once the MCE has them, with their Machines and servers."
+                bordered
+                data-testid="cluster-nodes-empty"
+              />
+            ) : (
+              <>
+                {data.node_pools.map((pool) => (
+                  <NodePoolCard key={pool.name} pool={pool} actions={actions} />
+                ))}
+                <UnassignedServers servers={data.unassigned} actions={actions} />
+              </>
+            )}
+          </>
+        )}
 
-      {uninstalling && (
-        <UninstallNodeDialog
-          cluster={name}
-          where={where}
-          target={uninstalling.target}
-          onClose={closeDialog}
-          onStarted={onStarted}
-        />
-      )}
-    </section>
+        {uninstalling && (
+          <UninstallNodeDialog
+            cluster={name}
+            where={where}
+            target={uninstalling.target}
+            onClose={closeDialog}
+            onStarted={onStarted}
+          />
+        )}
+      </section>
+    </div>
   );
 }

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from wingman_day1.domain.cluster_file import edit_problems
+from wingman_day1.domain.cluster_file import WorkflowKeys, edit_problems
 from wingman_day1.domain.upgrades import (
     VERSIONS_BY_UPGRADE,
     UpgradeDecision,
@@ -33,7 +33,7 @@ ABORTED = FILE + 'pausedUntil: "true"\n'
 
 
 def problems(edited: str, current: str = FILE) -> list[str]:
-    return edit_problems(current, edited, versions_by_workflow=True)
+    return edit_problems(current, edited, owned=WorkflowKeys(versions=True))
 
 
 def test_the_run_id_is_the_file_stem_with_the_workflows_prefix() -> None:

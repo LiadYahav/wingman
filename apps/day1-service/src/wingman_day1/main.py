@@ -50,20 +50,7 @@ from wingman_core.web.app_factory import create_base_app, ready_once
 from wingman_day1 import platform_adapters as platform
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.api.errors import register_day1_error_handlers
-from wingman_day1.api.v1 import approvals as approvals_api
-from wingman_day1.api.v1 import audit as audit_api
-from wingman_day1.api.v1 import auth as auth_api
-from wingman_day1.api.v1 import clusters as clusters_api
-from wingman_day1.api.v1 import inventory as inventory_api
-from wingman_day1.api.v1 import placement as placement_api
-from wingman_day1.api.v1 import quick_links as quick_links_api
-from wingman_day1.api.v1 import segments as segments_api
-from wingman_day1.api.v1 import sites as sites_api
-from wingman_day1.api.v1 import specs as specs_api
-from wingman_day1.api.v1 import upgrades as upgrades_api
-from wingman_day1.api.v1 import webhooks as webhooks_api
-from wingman_day1.api.v1.nodepool_catalogs import ROUTERS as NODEPOOL_CATALOG_ROUTERS
-from wingman_day1.api.v1.server_scan_area import ROUTERS as SERVER_SCAN_ROUTERS
+from wingman_day1.api.v1.routers import ROUTERS
 from wingman_day1.application.approvals import ApprovalService, RepoKey
 from wingman_day1.application.audit import AuditService
 from wingman_day1.application.auth import AuthService
@@ -81,8 +68,10 @@ from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
 from wingman_day1.compose_inventory import add_server_workflow, inventory_service
 from wingman_day1.compose_quick_links import quick_links_service
+from wingman_day1.compose_scale import scale_service, scale_workflow
 from wingman_day1.compose_segments import segment_ledger, segments_service
 from wingman_day1.compose_server_scan import cached_inventory, server_scan_service, server_scan_ui
+from wingman_day1.domain.cluster_file import WorkflowKeys
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
@@ -108,6 +97,7 @@ from wingman_day1.ports import (
     HubApi,
     IdentityProvider,
     ProvisionWorkflow,
+    ScaleWorkflow,
     SegmentLedger,
     ServerInventory,
     UninstallWorkflow,
@@ -127,23 +117,6 @@ PLACEMENT_TTL_SECONDS: Final = 5.0
 """The longest placement keeps an MCE's nodes and pods: read when a create asks (ADR-0050)."""
 FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
 """Where the fake fleet's segments-manager links point when no segments-manager URL is set."""
-ROUTERS: Final = (
-    auth_api.router,
-    clusters_api.router,
-    sites_api.sites_router,
-    sites_api.mces_router,
-    specs_api.router,
-    *NODEPOOL_CATALOG_ROUTERS,
-    placement_api.router,
-    quick_links_api.router,
-    inventory_api.router,
-    segments_api.router,
-    *SERVER_SCAN_ROUTERS,
-    upgrades_api.router,
-    approvals_api.router,
-    audit_api.router,
-    webhooks_api.router,
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,11 +140,13 @@ class Adapters:
     provision: ProvisionWorkflow | None = None
     """The provision-cluster workflow; ``None`` unless ``DAY1_PROVISIONER=workflow`` (ADR-0042)."""
     day2_installs: Day2Installs | None = None
+    """Day2 opening a rollout's add-on MRs (ADR-0044); ``None``: listed for a person instead."""
     add_server: AddServerWorkflow | None = None
     """The add-server-to-mce workflow wherever the orchestrator is (ADR-0057)."""
-    """Day2 opening a rollout's add-on MRs (ADR-0044); ``None``: listed for a person instead."""
     upgrade: UpgradeWorkflow | None = None
     """The upgrade-cluster workflow; ``None`` unless ``DAY1_UPGRADES`` (ADR-0055)."""
+    scale: ScaleWorkflow | None = None
+    """The update-nodepool workflow; ``None`` unless ``DAY1_SCALE_NODEPOOLS`` (ADR-0062)."""
     closers: tuple[Close, ...] = field(default=())
 
 
@@ -264,6 +239,7 @@ def build_adapters(
             settings, metrics=metrics, clock=clock, closers=closers
         ),
         upgrade=platform.upgrade_workflow(settings, metrics=metrics, clock=clock, closers=closers),
+        scale=scale_workflow(settings, metrics=metrics, clock=clock, closers=closers),
         add_server=add_server_workflow(
             settings, inventory=inventory, metrics=metrics, clock=clock, closers=closers
         ),
@@ -303,6 +279,7 @@ def build_context(
         snapshots=snapshots,
     )
     naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
+    owned = WorkflowKeys(versions=settings.day1_upgrades, replicas=settings.day1_scale_nodepools)
     site_catalog = SiteCatalog(day1)
     machine_configs = MachineConfigService(day1, specs_repo)
     spec_catalog = SpecCatalog(
@@ -343,7 +320,7 @@ def build_context(
         naming=naming,
         provision=adapters.provision,
         placement=placement,
-        versions_by_workflow=settings.day1_upgrades,
+        owned=owned,
     )
     drift = DriftService(
         cluster_service,
@@ -387,7 +364,14 @@ def build_context(
         else None,
     )
     sync = SyncService(
-        cluster_service, spec_catalog, drift, machine_configs, provisioner, day1, rollout_writer
+        cluster_service,
+        spec_catalog,
+        drift,
+        machine_configs,
+        provisioner,
+        day1,
+        rollout_writer,
+        owned=owned,
     )
     rollouts = RolloutService(
         cluster_service,
@@ -408,7 +392,7 @@ def build_context(
         clusters=cluster_service,
         sites=site_catalog,
         specs=spec_catalog,
-        approvals=ApprovalService(gitlab, repos, versions_by_workflow=settings.day1_upgrades),
+        approvals=ApprovalService(gitlab, repos, owned=owned),
         audit=AuditService(repos),
         drift=drift,
         imports=ImportService(cluster_service, spec_catalog, drift, machine_configs, provisioner),
@@ -444,6 +428,7 @@ def build_context(
         quick_links=quick_links,
         segments=segments_service(adapters.ledger, cache, cluster_service, ttl=ttl),
         upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service, cache),
+        scale=scale_service(settings, adapters.scale, cluster_service, spec_catalog),
         inventory=inventory_service(
             settings,
             site_catalog,

@@ -37,6 +37,8 @@ const cases: [string, readonly unknown[], unknown[]][] = [
   ["clusters.upgradeRun", day1Keys.clusters.upgradeRun(name), ["clusters", name, "upgrade-run"]],
   ["clusters.upgradeTargets", day1Keys.clusters.upgradeTargets(name), ["clusters", name, "upgrade-targets"]],
   ["clusters.upgrades", day1Keys.clusters.upgrades, ["clusters", "upgrades"]],
+  ["clusters.scaleOptions", day1Keys.clusters.scaleOptions(name), ["clusters", name, "scale"]],
+  ["clusters.scaleRun", day1Keys.clusters.scaleRun(name), ["clusters", name, "scale-run"]],
   // specs
   ["specs.all", day1Keys.specs.all, ["specs"]],
   ["specs.one", day1Keys.specs.one("web"), ["specs", "web"]],

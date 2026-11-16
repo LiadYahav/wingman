@@ -236,6 +236,14 @@ class AddServerRefusedError(InvalidInputError):
     """The orchestrator refused a request to add servers (its 422); nothing started (ADR-0057)."""
 
 
+class ScaleAlreadyRunningError(WorkflowsError):
+    """The orchestrator's 409 to a scale: a run, or an upgrade, of the cluster runs (ADR-0062)."""
+
+
+class ScaleRefusedError(InvalidInputError):
+    """The orchestrator refused a scale's body (its 422); nothing started (ADR-0062)."""
+
+
 # ── segments-manager (a cluster's EPG, checked against Git; ADR-0039) ────────
 
 

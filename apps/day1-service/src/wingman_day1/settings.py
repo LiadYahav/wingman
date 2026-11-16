@@ -141,6 +141,15 @@ class Day1Settings(BaseSettings):
     # DAY1_FAKE_FLEET in development). The page itself needs SERVER_SCAN_URL.
     day1_add_servers: bool = False
 
+    # ── Scaling NodePools through the update-nodepool workflow (ADR-0062) ────
+    # Off by default. On: an admin scales a cluster's NodePools from its Nodes
+    # tab by starting the platform's update-nodepool workflow (it commits the
+    # replicas to day1 main and syncs Argo CD itself), and while it is on no
+    # Wingman merge request changes an existing NodePool's replicas: an edit
+    # that does is refused, a flavor's sync leaves them out. Needs
+    # WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development).
+    day1_scale_nodepools: bool = False
+
     # ── MCE placement (ADR-0050): always on; this needs the hubs ─────────────
     # The cost of one hosted control plane: with CLUSTER_STATUS_ENABLED, an MCE
     # is offered for a new cluster only with at least this many free pods
@@ -266,6 +275,16 @@ class Day1Settings(BaseSettings):
             raise ValueError(
                 "DAY1_ADD_SERVERS=true needs WORKFLOWS_API_URL: adding servers starts the "
                 "add-server-to-mce workflow there"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _scaling_has_an_orchestrator(self) -> Self:
+        """Scaling starts update-nodepool; without the orchestrator no scale could start."""
+        if self.day1_scale_nodepools and not self.workflows_api_url and not self.day1_fake_fleet:
+            raise ValueError(
+                "DAY1_SCALE_NODEPOOLS=true needs WORKFLOWS_API_URL: scaling starts the "
+                "update-nodepool workflow there"
             )
         return self
 

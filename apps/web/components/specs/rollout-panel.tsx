@@ -11,6 +11,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
+import { HeldReplicasLinks } from "@/components/clusters/scale/restore-replicas";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { approvalHref } from "@/lib/approvals";
 import { clusterHref } from "@/lib/clusters";
@@ -132,6 +133,7 @@ function ClusterRow({ cluster: c }: { cluster: RolloutCluster }) {
             {c.reasons.map((r, i) => <li key={i} className="break-words">{withoutName(r, c.name)}</li>)}
           </ul>
         )}
+        <HeldReplicasLinks held={c.held_replicas} nodesHref={`${clusterHref(c)}&tab=nodes`} className="pt-0.5" />
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <MergeRequestLinks cluster={c} />

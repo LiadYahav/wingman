@@ -34,7 +34,7 @@ from wingman_core.domain.users import User
 from wingman_core.ports.gitlab import GitLabPort
 from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.domain import paths
-from wingman_day1.domain.cluster_file import edit_problems
+from wingman_day1.domain.cluster_file import NO_WORKFLOW_KEYS, WorkflowKeys, edit_problems
 from wingman_day1.domain.errors import InvalidInputError, InvalidSpecError, StaleError
 from wingman_day1.domain.specs import parse_spec
 from wingman_day1.domain.workflows import (
@@ -76,17 +76,19 @@ class ApprovalService:
         gitlab: GitLabPort,
         repos: Mapping[RepoKey, RepoReads],
         *,
-        versions_by_workflow: bool = False,
+        owned: WorkflowKeys = NO_WORKFLOW_KEYS,
     ) -> None:
         """Act through ``gitlab``; ``repos`` give each project and its cached MR lists.
 
-        ``versions_by_workflow`` (``DAY1_UPGRADES``): a cluster's versions are
-        the upgrade workflow's, and a review edit may not change them (ADR-0055).
+        ``owned``: the keys a workflow owns, which a review edit of a cluster
+        already on the target branch may not change: its versions
+        (``DAY1_UPGRADES``, ADR-0055), its NodePools' replicas as the target
+        branch has them (``DAY1_SCALE_NODEPOOLS``, ADR-0062).
         """
         self._gitlab = gitlab
         self._approvals = Approvals(gitlab)
         self._repos = dict(repos)
-        self._versions_by_workflow = versions_by_workflow
+        self._owned = owned
 
     async def pending(self) -> list[Change]:
         """Open Wingman MRs in both projects, newest first, whatever branch they target.
@@ -206,13 +208,12 @@ class ApprovalService:
             return []
         return [p.merge_request for p in await provision_merge_requests(day1)]
 
-    async def _exists(self, ref: MergeRequestRef, path: RepoPath, branch: str) -> bool:
-        """Whether ``path`` is on ``branch``: a create MR's cluster does not exist yet."""
+    async def _on_target(self, ref: MergeRequestRef, path: RepoPath, branch: str) -> str | None:
+        """``path`` on ``branch``; ``None`` when it is not there (a create MR's cluster)."""
         try:
-            await self._gitlab.read_file(ref.project_id, path, branch)
+            return (await self._gitlab.read_file(ref.project_id, path, branch)).content
         except NotFoundError:
-            return False
-        return True
+            return None
 
     async def _ref(self, repo: RepoKey, iid: int) -> MergeRequestRef:
         return MergeRequestRef((await self._repos[repo].project()).id, iid)
@@ -236,8 +237,14 @@ class ApprovalService:
         except NotFoundError:
             return FileChange.create(path, content)
         if repo is RepoKey.DAY1 and paths.parse_hosted_clusters_path(path) is not None:
-            versions = self._versions_by_workflow and await self._exists(ref, path, target)
-            problems = edit_problems(current.content, content, versions_by_workflow=versions)
+            main = (
+                await self._on_target(ref, path, target)
+                if self._owned != NO_WORKFLOW_KEYS
+                else None
+            )
+            # A cluster not on the target branch yet is a create: no workflow owns its keys
+            owned = self._owned if main is not None else NO_WORKFLOW_KEYS
+            problems = edit_problems(current.content, content, owned=owned, main=main)
             if problems:
                 raise InvalidInputError(f"the edit of {path} is not valid", problems)
         if repo is RepoKey.SPECS and str(path).endswith(paths.SPEC_SUFFIX):

@@ -48,6 +48,12 @@ data:
   {{- fail "day1.addServers.enabled needs workflows.url: adding servers starts the add-server-to-mce workflow there" }}
   {{- end }}
   DAY1_ADD_SERVERS: {{ if and .Values.day1.addServers .Values.day1.addServers.enabled }}"true"{{ else }}"false"{{ end }}
+  # Scaling NodePools through update-nodepool (ADR-0062; needs workflows.url).
+  # Off for values kept from a release before it.
+  {{- if and .Values.day1.scaleNodepools .Values.day1.scaleNodepools.enabled (not (and .Values.workflows .Values.workflows.url)) }}
+  {{- fail "day1.scaleNodepools.enabled needs workflows.url: scaling starts the update-nodepool workflow there" }}
+  {{- end }}
+  DAY1_SCALE_NODEPOOLS: {{ if and .Values.day1.scaleNodepools .Values.day1.scaleNodepools.enabled }}"true"{{ else }}"false"{{ end }}
   DAY2_SERVICE_URL: "http://wingman-day2:8002"
 
   # ── day2 ─────────────────────────────────────────────────────────────────────

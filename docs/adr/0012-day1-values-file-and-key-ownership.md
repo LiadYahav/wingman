@@ -1,7 +1,7 @@
 # ADR-0012: A cluster file is a chart values file; people and automation own disjoint keys
 
 Date: 2026-11-07
-Status: Accepted; amended by ADR-0055 (with `DAY1_UPGRADES` on, `mastertag`, every `workertag` and `pausedUntil` belong to the upgrade-cluster workflow: an edit may not change them, except to remove `pausedUntil`); amended by ADR-0061 (`tuningConfigmap` is an automation key)
+Status: Accepted; amended by ADR-0055 (with `DAY1_UPGRADES` on, `mastertag`, every `workertag` and `pausedUntil` belong to the upgrade-cluster workflow: an edit may not change them, except to remove `pausedUntil`); amended by ADR-0061 (`tuningConfigmap` is an automation key); amended by ADR-0062 (with `DAY1_SCALE_NODEPOOLS` on, the replicas of each NodePool already on `main` belong to the update-nodepool workflow)
 
 ## Context
 
@@ -83,3 +83,17 @@ valid input and stay as they are.
 
 Verified in `apps/day1-service/tests/unit/domain/test_cluster_file.py` (the
 key refused in a rendered file and kept by an edit).
+
+## Amendment (2026-11-16, ADR-0062): with scaling on, NodePool replicas are update-nodepool's
+
+With `DAY1_SCALE_NODEPOOLS` on, the `replicas` of every `nodepool[]` entry
+already on `main` belong to the platform's update-nodepool workflow, which
+commits them to `main` and has Argo CD apply them (the platform's rule: they
+change only through it). A person's edit (a modify, a review edit) that
+changes one is refused, pointing to Scale; a sync or a rollout leaves them
+out of its MR. People keep writing a new cluster's and a new entry's first
+replicas, and may remove an entry. Off, nothing changes. One rule,
+`replicas_ownership.replicas_changes`, applied by `edit_problems`.
+
+Verified in `apps/day1-service/tests/unit/domain/test_replicas_ownership.py`
+and `apps/day1-service/tests/api/test_replicas_ownership_api.py`.

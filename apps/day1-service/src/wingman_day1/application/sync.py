@@ -27,9 +27,10 @@ rollout opened it, and one to an older version is closed, with a comment,
 when the new one opens. :meth:`SyncService.plan` is the same plan against
 any version of the flavor: the rollout and the approve page use it.
 
-When the update-nodepool workflow owns the NodePool files, a sync of their
-fields must go through it: one writer per file (architecture rule 4). The
-``ClusterProvisioner`` port is where that switch happens.
+With ``DAY1_SCALE_NODEPOOLS`` the update-nodepool workflow owns each
+existing NodePool's replicas (ADR-0062): a sync leaves drifted locked replicas
+out of its MR (``held_replicas``, by ``replicas_ownership.replicas_changes``)
+and each is restored through update-nodepool; its MR carries the rest.
 """
 
 from __future__ import annotations
@@ -47,7 +48,13 @@ from wingman_day1.application.open_syncs import open_syncs, supersede
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.domain.addons import AddonDrift, VersionDifference
 from wingman_day1.domain.changes import ClusterAction, ClusterChange, ProvisionResult
-from wingman_day1.domain.cluster_file import AUTOMATION_KEYS, Provenance, edit_problems
+from wingman_day1.domain.cluster_file import (
+    AUTOMATION_KEYS,
+    NO_WORKFLOW_KEYS,
+    Provenance,
+    WorkflowKeys,
+    edit_problems,
+)
 from wingman_day1.domain.cluster_text import (
     Edit,
     SetConfigs,
@@ -64,6 +71,7 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.machine_configs import MachineConfigCatalog, network_choice_problems
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.domain.scale import HeldReplicas, held_back, restore_lines
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.sync_effects import (
     Rebooting,
@@ -102,6 +110,8 @@ class SyncPlan:
     version_differences: tuple[VersionDifference, ...]
     addons_error: str | None
     """Set when day2 did not answer, so missing add-ons are unknown."""
+    held_replicas: tuple[HeldReplicas, ...] = ()
+    """Drifted locked replicas the MR leaves to update-nodepool (``DAY1_SCALE_NODEPOOLS``)."""
 
     @property
     def changes_file(self) -> bool:
@@ -174,10 +184,14 @@ class SyncService:
         provisioner: ClusterProvisioner,
         day1: RepoReads,
         rollouts: RolloutMergeRequests,
+        *,
+        owned: WorkflowKeys = NO_WORKFLOW_KEYS,
     ) -> None:
         """Read the cluster, its flavor and the catalogue; propose through ``provisioner``.
 
-        ``day1`` gives the open sync MRs; ``rollouts`` closes one a new sync supersedes.
+        ``day1`` gives the open sync MRs; ``rollouts`` closes one a new sync
+        supersedes. ``owned``: the keys a workflow owns (the NodePools'
+        replicas with ``DAY1_SCALE_NODEPOOLS``), which the MR leaves alone.
         """
         self._clusters = clusters
         self._specs = specs
@@ -186,6 +200,7 @@ class SyncService:
         self._provisioner = provisioner
         self._day1 = day1
         self._rollouts = rollouts
+        self._owned = owned
 
     async def preview(self, ref: ClusterRef, *, hardware: Mapping[int, str]) -> SyncPlan:
         """What a sync would write, the removals and reboots it means, and what blocks it."""
@@ -232,17 +247,20 @@ class SyncService:
             spec.locks(), values, cluster_name=cluster_name, catalog=catalog, hardware=hardware
         )
         problems = [f"{d.file_key}: {d.needs_decision}" for d in changes if d.needs_decision]
-        content = cluster.content
+        provenance = Provenance(name, spec.metadata.version, cluster.provenance.requested_addons)
+        held: tuple[HeldReplicas, ...] = ()
         try:
-            content = with_header(
-                edit_values(cluster.content, sync_edits(changes)),
-                Provenance(name, spec.metadata.version, cluster.provenance.requested_addons),
-            )
+            content = with_header(edit_values(cluster.content, sync_edits(changes)), provenance)
+            if self._owned.replicas:  # the NodePools' replicas are update-nodepool's (ADR-0062)
+                written = values_or_refuse(content)
+                changes, held = held_back(values, written, changes, cluster_name=cluster_name)
+                content = with_header(edit_values(cluster.content, sync_edits(changes)), provenance)
         except UneditableFileError as exc:
             problems += [f"{exc}: {problem}" for problem in exc.problems]
             content = cluster.content
-        before = set(edit_problems(cluster.content, cluster.content))
-        problems += [p for p in edit_problems(cluster.content, content) if p not in before]
+        before = set(edit_problems(cluster.content, cluster.content, owned=self._owned))
+        edited = edit_problems(cluster.content, content, owned=self._owned)
+        problems += [p for p in edited if p not in before]
         problems += tuning_edit_problems(
             values,
             values_or_refuse(content),
@@ -263,6 +281,7 @@ class SyncService:
             addons_to_install=found.addon_drift if found else (),
             version_differences=found.version_differences if found else (),
             addons_error=found.error if found else None,
+            held_replicas=held,
         )
 
     async def sync(
@@ -298,8 +317,12 @@ class SyncService:
         if not plan.changes_file:
             raise InvalidInputError(
                 f"cluster {ref.name!r} already holds every value flavor "
-                f"{spec.metadata.name} v{spec_version} locks",
-                ["nothing to change in the cluster file; install missing add-ons through day2"],
+                f"{spec.metadata.name} v{spec_version} locks"
+                + (", but for replicas update-nodepool restores" if plan.held_replicas else ""),
+                [
+                    "nothing to change in the cluster file; install missing add-ons through day2",
+                    *restore_lines(plan.held_replicas),
+                ],
             )
         unconfirmed = confirmation_problems(plan.removals, confirm_removals)
         if unconfirmed:
@@ -400,6 +423,13 @@ def sync_summary(
             "configs to exactly its list.",
         ]
     lines += _rolling_lines(plan.rebooting)
+    if plan.held_replicas:
+        lines += [
+            "",
+            "**Not in this MR: NodePool replicas.** They change only through the platform's "
+            "update-nodepool workflow; restore each from the cluster's Nodes tab:",
+            *(f"- {line}" for line in restore_lines(plan.held_replicas)),
+        ]
     if plan.warnings:
         lines += ["", *(f"**Check:** {w}" for w in plan.warnings)]
     if addon_lines is not None:

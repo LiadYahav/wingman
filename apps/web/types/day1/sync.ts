@@ -1,3 +1,4 @@
+import type { HeldReplicas } from "../scale";
 import type { AddonDrift, NodepoolRef, ValueDrift, VersionDifference } from "./drift";
 
 // ── Sync a cluster to its flavor (§12, ADR-0037) ────────────────────────────
@@ -64,6 +65,8 @@ export interface SyncPreview {
   version_differences: VersionDifference[];
   /** Set when day2 did not answer: missing add-ons are unknown. */
   addons_error: string | null;
+  /** With DAY1_SCALE_NODEPOOLS: drifted locked replicas the MR leaves out, restored with update-nodepool (ADR-0062). */
+  held_replicas?: HeldReplicas[];
 }
 
 /** `POST /clusters/{name}/sync` body: what the preview showed, the removals confirmed. */
