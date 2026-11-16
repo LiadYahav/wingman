@@ -23,6 +23,8 @@ export function RolesSection() {
               "Install, edit and remove charts",
               "Install a flavor's missing add-ons from a cluster's Drift tab",
               "Approve, edit or reject other people's MRs",
+              "Start the platform's workflows: Upgrade, Uninstall a server, Install servers and Scale, each where it is set up",
+              "Open Quick Links, Segments and Server Scan; switch a server's maintenance and run server-scan's jobs",
               "Everything a Viewer can do",
             ].map((item) => (
               <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -46,6 +48,7 @@ export function RolesSection() {
             {[
               "Browse clusters, flavors and add-ons",
               "See drift, lints and live status",
+              "Read Inventory Management: each MCE's pools and the add-server runs",
               "Read pending approvals and their diffs",
               "Read the audit log",
               "Open anything in GitLab",
@@ -66,6 +69,12 @@ export function RolesSection() {
           (<InlineCode>WINGMAN_VIEWER_GROUPS</InlineCode>) a Viewer; Admin wins if you are in both. Someone in
           neither is turned away: &quot;You are not in a Wingman group&quot;. The role is fixed when you sign
           in, so after a group change sign out and in again (a session lasts 8 hours by default).
+        </Callout>
+        <Callout type="info" title="For admins only, for now">
+          <strong>Quick Links</strong>, <strong>Segments</strong> and <strong>Server Scan</strong> are for Wingman&apos;s
+          admins until Wingman has finer roles. A viewer does not see them in the sidebar or the top bar, a page opened by
+          its address says it is for admins, and the Overview shows Free Segments and Server Fleet Health only to those
+          who have the area. Segments and Server Scan also appear only once your operator has set them up.
         </Callout>
         <Callout type="warning" title="Dev login is for local development only">
           A local stack can run without OpenShift: the login page then shows a <strong>Dev mode</strong> banner,
