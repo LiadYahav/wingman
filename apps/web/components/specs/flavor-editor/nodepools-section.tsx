@@ -1,23 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronRight, Lock, Network, Plus, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { AlertTriangle, ChevronRight, Network, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Switch } from "@/components/ui/switch";
 import { ConfigListEditor } from "@/components/machine-configs/config-list-editor";
 import { TuningCatalogProblems } from "@/components/tuning/tuning-profiles-picker";
+import { useTuningProfiles } from "@/lib/tuning-profiles";
 import { NETWORK_CONFIG, defaultHardware, hardwareOptions, isNetworkEntry } from "@/lib/machine-configs";
 import { cn } from "@/lib/utils";
 import type { ConfigEntry, MachineConfigs, TemplateField } from "@/types";
-import { fieldId, inputCls, NotEnforced, ValueField } from "./controls";
+import { fieldId, inputCls, ValueField } from "./controls";
 import { ConfigsModeChoice } from "./configs-mode-choice";
+import { EveryNodepoolPanel } from "./every-nodepool-panel";
 import { NodeLabelsEditor, PresetInput } from "./inputs";
 import { TuningField } from "./tuning-field";
-import { keepTuningRule } from "./tuning-model";
+import { chooseConfigsMode, isTuningRule, keepTuningRule } from "./tuning-model";
 import {
-  CONFIGS_RULE,
   addNodepool,
   configsMode,
   hardwareOf,
@@ -29,8 +29,6 @@ import {
   poolConfigs,
   ratioLabel,
   removeNodepool,
-  ruleEntries,
-  setConfigsMode,
   setLocked,
   setNodepoolValue,
   setPoolHardware,
@@ -38,7 +36,6 @@ import {
   setRatioOn,
   setSizedReplicas,
   ratioSize,
-  setRuleEntries,
   type FlavorDraft,
 } from "./model";
 
@@ -47,12 +44,13 @@ type Update = (change: (draft: FlavorDraft) => FlavorDraft) => void;
 const names = (entries: ConfigEntry[]) => entries.map((e) => e.name).join(", ");
 
 /** What `nodepool-defaults.yaml` gives a new nodepool, or why it gives nothing. */
-function DefaultsNote({ catalog, rule, defaults }: { catalog: MachineConfigs | undefined; rule: boolean; defaults: ConfigEntry[] }) {
+function DefaultsNote({ catalog, rule, tuning, defaults }: { catalog: MachineConfigs | undefined; rule: boolean; tuning: boolean; defaults: ConfigEntry[] }) {
   if (rule) {
+    const gets = tuning ? "configs and tuning profiles" : "configs";
     return defaultHardware(catalog) ? (
-      <>A new nodepool gets the rule&apos;s configs, its network hardware at generic (any hardware); change it if it needs its own.</>
+      <>A new nodepool gets the rule&apos;s {gets}, its network hardware at generic (any hardware); change it if it needs its own.</>
     ) : (
-      <>A new nodepool gets the rule&apos;s configs; choose its network hardware.</>
+      <>A new nodepool gets the rule&apos;s {gets}; choose its network hardware.</>
     );
   }
   const nd = catalog?.nodepool_defaults;
@@ -87,9 +85,9 @@ function DefaultsProblems({ catalog }: { catalog: MachineConfigs | undefined }) 
 /**
  * Part 2: how many nodepools a cluster of the flavor starts with and, for
  * each, its replicas, machine configs, node labels and tuning profiles, each
- * a preset or locked (by position, §6), or the configs or tuning profiles
- * locked for every nodepool as one rule (§9, ADR-0061). A new nodepool starts
- * with the nodepool defaults (ADR-0027).
+ * a preset or locked (by position, §6), or the configs and tuning profiles
+ * locked for every nodepool as rules in one panel (§9, ADR-0061). A new
+ * nodepool starts with the nodepool defaults (ADR-0027).
  */
 export function NodepoolsSection({
   draft,
@@ -119,58 +117,29 @@ export function NodepoolsSection({
   const mode = configsMode(draft);
   const rule = mode === "rule";
   const count = nodepoolCount(draft);
-  const shared = rule ? ruleEntries(draft) : [];
+  // Entering the rule includes the tuning rule only when tuning/ offers profiles
+  const offered = (useTuningProfiles().data?.profiles.length ?? 0) > 0;
 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <ConfigsModeChoice mode={mode} onChange={(m) => update((d) => setConfigsMode(d, m, defaults, defaultHardware(catalog)))} />
+        <ConfigsModeChoice
+          mode={mode}
+          onChange={(m) => update((d) => chooseConfigsMode(d, m, defaults, defaultHardware(catalog), offered))}
+        />
         <DefaultsProblems catalog={catalog} />
         <TuningCatalogProblems />
       </div>
 
       {rule && (
-        <div id={fieldId(CONFIGS_RULE)} className="scroll-mt-28 space-y-3 rounded-xl border border-primary/25 bg-primary/[0.04] p-4" data-testid="configs-rule">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold">Machine configs on every nodepool</h3>
-              <p className="text-xs text-muted-foreground">
-                Every nodepool of every cluster has exactly these, in any order. {NETWORK_CONFIG} is each nodepool&apos;s own
-                network config.
-              </p>
-            </div>
-            <Badge
-              className={cn(
-                "gap-1",
-                notEnforced(CONFIGS_RULE) && "bg-status-warning/15 text-status-warning-fg ring-status-warning/30"
-              )}
-            >
-              <Lock aria-hidden /> Locked as a rule{notEnforced(CONFIGS_RULE) ? ", not enforced" : ""}
-            </Badge>
-          </div>
-          {notEnforced(CONFIGS_RULE) && (
-            <div className="text-xs">
-              <NotEnforced reason={notEnforced(CONFIGS_RULE)!} />
-            </div>
-          )}
-          <ConfigListEditor
-            entries={shared}
-            onChange={(entries) => update((d) => setRuleEntries(d, entries))}
-            catalog={catalog}
-            loading={catalogLoading}
-            networkHardware="per-nodepool"
-            label="Machine configs on every nodepool"
-            hideLabel
-            testId="rule-configs"
-          />
-          {problems(CONFIGS_RULE).length > 0 && (
-            <ul role="alert" className="space-y-0.5 text-xs text-destructive">
-              {problems(CONFIGS_RULE).map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <EveryNodepoolPanel
+          draft={draft}
+          update={update}
+          catalog={catalog}
+          catalogLoading={catalogLoading}
+          problems={problems}
+          notEnforced={notEnforced}
+        />
       )}
 
       {count > 1 && <RatioChoice draft={draft} update={update} />}
@@ -205,7 +174,7 @@ export function NodepoolsSection({
           <Plus /> Add nodepool
         </Button>
         <p className="text-xs text-muted-foreground">
-          <DefaultsNote catalog={catalog} rule={rule} defaults={defaults} />
+          <DefaultsNote catalog={catalog} rule={rule} tuning={isTuningRule(draft)} defaults={defaults} />
         </p>
       </div>
     </div>
