@@ -4,8 +4,9 @@
  * Nodes tab: a stepper on each NodePool's card from the MCE (its exact
  * replicas, matched by name), or on its NodePool sizes row when there are no
  * cards (live status off); a hardware type's total in a small dialog; one
- * change at a time, Scale up at once and Scale down after a question in
- * place; the run in place (the workflow's phases, its child's, the plan and
+ * change at a time; Scale up and Scale down each confirmed first, a
+ * scale-down with the nodes its NodePool's scale-down policy removes; the
+ * run in place (the workflow's phases, its child's, the plan and
  * the servers a scale-down chose), refusals and failures in words, a
  * NodePool whose replicas a flavor locks, and a flavor sync's replicas
  * restored by their own run. Scaling off, or a viewer: no steppers. Every
@@ -168,6 +169,10 @@ const more = (page: Page, name: string) => page.getByRole("button", { name: `One
 const fewer = (page: Page, name: string) => page.getByRole("button", { name: `One replica fewer for ${name}`, exact: true });
 const ZONES = "dell-r660-site1-zone";
 const card = (page: Page, name: string) => page.getByTestId(`node-pool-${name}`);
+/** The confirmation every scale opens, and its Yes. */
+const confirmation = (page: Page) => page.getByTestId("scale-confirm");
+const yes = (page: Page) => page.getByTestId("scale-confirm-yes");
+const UNHEALTHY = "Unhealthy machines always go first.";
 
 /** The MCE's NodePools as cards: the two zones, the locked r760, and one the day1 file does not name. */
 const CARDS = mockNodes({
@@ -194,7 +199,7 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(page.getByTestId("restore-replicas")).toHaveCount(0);
   });
 
-  test("live status off: each NodePool scales on its sizes row; Scale up sends its exact replicas, once", async ({ page }) => {
+  test("live status off: each NodePool scales on its sizes row; Scale up asks first, then sends its exact replicas, once", async ({ page }) => {
     const scale = scaleOf();
     await openNodes(page, scale);
     await expect(page.getByTestId("cluster-nodes-off")).toBeVisible();
@@ -209,9 +214,25 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(page.getByTestId("scale-announce")).toHaveAttribute("role", "status");
     await expect(pending.getByTestId("scale-start")).toHaveText("Scale up");
 
-    // A scale-up starts at once; the second click of a double-click sends nothing
-    await pending.getByTestId("scale-start").dblclick();
+    // Scale up asks first: what the run does, in a few lines; Yes arms after half a second
+    const opened = Date.now();
+    await pending.getByTestId("scale-start").click();
+    const confirm = confirmation(page);
+    await expect(confirm.getByRole("heading", { name: `Scale up ${ZONE_A}?` })).toBeVisible();
+    await expect(confirm.getByTestId("scale-confirm-change")).toHaveText("3 → 4 replicas (+1)");
+    const points = confirm.getByTestId("scale-confirm-points");
+    await expect(points).toContainText("Adds 1 node: it takes a free server of the NodePool's hardware; with none free, it waits until one is added.");
+    await expect(points).toContainText("One commit to day1 main, no merge request; the workflow has Argo CD apply it.");
+    await expect(points).toContainText("Done when the NodePool shows the new size; new nodes join after they install.");
+    await expect(yes(page)).toHaveText("Yes, scale up");
+    await expect(yes(page)).toBeEnabled();
+    expect(Date.now() - opened).toBeGreaterThanOrEqual(450);
+    expect(scale.starts).toEqual([]);
+
+    // Yes sends it; the second click of a double-click sends nothing
+    await yes(page).dblclick();
     await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
+    await expect(confirm).toHaveCount(0);
     expect(scale.starts).toEqual([{ nodepool: ZONE_A, replicas: 4 }]);
     await expect(page.getByTestId("scale-run")).toBeFocused();
     // The run holds every stepper, and says why once
@@ -277,35 +298,78 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(field(page, ZONE_A)).toBeFocused();
   });
 
-  test("a scale-down asks first, in place, and is sent only from there", async ({ page }) => {
+  test("the confirmation's Cancel and Escape send nothing, and the change stays where it was", async ({ page }) => {
+    const scale = scaleOf();
+    await openNodes(page, scale);
+    await more(page, ZONE_A).click();
+    const start = page.getByTestId("scale-pool-0").getByTestId("scale-start");
+    await start.click();
+    await expect(confirmation(page)).toBeVisible();
+    // Focus starts on Cancel: Enter alone confirms nothing
+    await expect(page.getByTestId("scale-confirm-cancel")).toBeFocused();
+    await page.getByTestId("scale-confirm-cancel").click();
+    await expect(confirmation(page)).toHaveCount(0);
+    await expect(start).toBeFocused();
+    await expect(field(page, ZONE_A)).toHaveValue("4");
+    await expect(page.getByTestId("scale-change")).toHaveText("Replicas 3 → 4 (+1)");
+
+    await start.click();
+    await expect(confirmation(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(confirmation(page)).toHaveCount(0);
+    await expect(start).toBeFocused();
+    await expect(field(page, ZONE_A)).toHaveValue("4");
+    expect(scale.starts).toEqual([]);
+  });
+
+  test("a scale-down asks first, with the nodes its NodePool's policy removes, and is sent only from there", async ({ page }) => {
     const scale = scaleOf();
     await openNodes(page, scale);
     await fewer(page, ZONE_B).click();
     const pending = page.getByTestId("scale-pending");
     await expect(pending.getByTestId("scale-start")).toHaveText("Scale down");
     await pending.getByTestId("scale-start").click();
-    const confirm = pending.getByTestId("scale-confirm");
-    await expect(confirm).toBeFocused();
-    await expect(confirm).toContainText("Scale down by 1 replica?");
-    const truths = confirm.getByTestId("scale-truths");
-    await expect(truths).toContainText("chosen by each NodePool's redbull.io/scale-down-policy; without one, CAPI picks them at random.");
-    await expect(truths).toContainText("The freed servers stay in the MCE's inventory, as free Agents.");
+    const confirm = confirmation(page);
+    await expect(confirm).toHaveAttribute("data-direction", "down");
+    await expect(confirm.getByRole("heading", { name: `Scale down ${ZONE_B}?` })).toBeVisible();
+    await expect(confirm.getByTestId("scale-confirm-change")).toHaveText("3 → 2 replicas (\u22121)");
+    await expect(confirm.getByTestId("scale-confirm-leaving")).toHaveText(`Removes the node running the fewest pods (fewest-pods). ${UNHEALTHY}`);
+    const points = confirm.getByTestId("scale-confirm-points");
+    await expect(points).toContainText("Their pods move to the remaining nodes; the servers stay in the MCE's inventory, free.");
+    await expect(points).toContainText("One commit to day1 main, applied by Argo CD.");
+    await expect(yes(page)).toHaveText("Yes, scale down");
     expect(scale.starts).toEqual([]);
 
-    // Back, or Escape, returns with nothing sent
-    await confirm.getByTestId("scale-back").click();
-    await expect(confirm).toHaveCount(0);
-    await expect(pending.getByTestId("scale-start")).toBeFocused();
-    await pending.getByTestId("scale-start").click();
-    await expect(confirm).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(confirm).toHaveCount(0);
+    await expect(pending.getByTestId("scale-start")).toBeFocused();
     expect(scale.starts).toEqual([]);
 
     await pending.getByTestId("scale-start").click();
-    await confirm.getByTestId("scale-confirm-start").click();
+    await yes(page).click();
     await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
     expect(scale.starts).toEqual([{ nodepool: ZONE_B, replicas: 2 }]);
+  });
+
+  test("a scale-down's confirmation names what each policy removes, CAPI's at random without one, and an unknown one refused", async ({ page }) => {
+    const policies: [string | null, string][] = [
+      ["fewest-pods", `Removes the 2 nodes running the fewest pods (fewest-pods). ${UNHEALTHY}`],
+      ["least-requested", `Removes the 2 nodes with the lowest requested CPU or memory (least-requested). ${UNHEALTHY}`],
+      ["least-utilized", `Removes the 2 nodes with the lowest live CPU or memory use (least-utilized). ${UNHEALTHY}`],
+      [null, `Removes 2 nodes, picked at random by CAPI: the day1 file sets no scale-down policy. ${UNHEALTHY}`],
+      ["newest-first", "Would remove 2 nodes by the scale-down policy “newest-first”, which the workflow does not know: the workflow will refuse it."],
+    ];
+    const nodepools = policies.map(([policy], index) => ({ ...OPTIONS.nodepools[0], index, name: `${ZONE_A}-${index}`, scale_down_policy: policy }));
+    const scale = scaleOf({ options: { ...OPTIONS, nodepools, kinds: [] } });
+    await openNodes(page, scale);
+    for (const [index, [, words]] of policies.entries()) {
+      await field(page, `${ZONE_A}-${index}`).fill("1");
+      await page.getByTestId(`scale-pool-${index}`).getByTestId("scale-start").click();
+      await expect(page.getByTestId("scale-confirm-leaving")).toHaveText(words);
+      await page.getByTestId("scale-confirm-cancel").click();
+      await expect(confirmation(page)).toHaveCount(0);
+    }
+    expect(scale.starts).toEqual([]);
   });
 
   test("a locked NodePool has no stepper: its size as text, why and a restore; an unnamed one has none either", async ({ page }) => {
@@ -335,25 +399,53 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await more(page, ZONES).click();
     await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 8 (+2)");
     await dialog.getByTestId("scale-start").click();
+    // Confirmed over the dialog: the total, and that the workflow spreads it
+    const confirm = confirmation(page);
+    await expect(confirm.getByRole("heading", { name: `Scale up ${ZONES}?` })).toBeVisible();
+    await expect(confirm.getByTestId("scale-confirm-change")).toHaveText("6 → 8 in total over 2 NodePools; the workflow spreads it");
+    const points = confirm.getByTestId("scale-confirm-points");
+    await expect(points).toContainText("Adds 2 nodes: each takes a free server of this hardware type; with none free, it waits until one is added.");
+    await expect(points).toContainText("Done when the NodePools show the new sizes; new nodes join after they install.");
+    expect(scale.starts).toEqual([]);
+    await yes(page).click();
+    await expect(confirm).toHaveCount(0);
     await expect(dialog).toHaveCount(0);
     await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
     expect(scale.starts).toEqual([{ infra_env_kind: ZONES, replicas: 8 }]);
     await expect(page.getByTestId("scale-run")).toBeFocused();
   });
 
-  test("a hardware type's scale-down asks in the same dialog", async ({ page }) => {
+  test("a hardware type's scale-down is confirmed over its dialog, with each NodePool's policy; Escape closes only the confirmation", async ({ page }) => {
     const scale = scaleOf();
     await openNodes(page, scale);
     await page.getByTestId("scale-kind-action").click();
     const dialog = page.getByTestId("scale-kind-dialog");
     await field(page, ZONES).fill("5");
-    await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 5 (−1)");
+    await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 5 (\u22121)");
     await dialog.getByTestId("scale-start").click();
-    const confirm = dialog.getByTestId("scale-confirm");
-    await expect(confirm).toContainText(`Scale down ${ZONES} by 1 replica?`);
-    await expect(confirm.getByTestId("scale-truths")).toContainText("scale-down-policy");
+    const confirm = confirmation(page);
+    await expect(confirm.getByRole("heading", { name: `Scale down ${ZONES}?` })).toBeVisible();
+    await expect(confirm.getByTestId("scale-confirm-change")).toHaveText("6 → 5 in total over 2 NodePools; the workflow spreads it");
+    // The zones' policies differ: each one's, under the line
+    await expect(confirm.getByTestId("scale-confirm-leaving")).toContainText(
+      `Removes 1 node; in each NodePool that loses one, its own scale-down policy picks which. ${UNHEALTHY}`
+    );
+    await expect(confirm.getByTestId("scale-confirm-pool")).toHaveText([
+      `${ZONE_A}: picked at random by CAPI (the day1 file sets no policy)`,
+      `${ZONE_B}: the nodes running the fewest pods (fewest-pods)`,
+    ]);
     expect(scale.starts).toEqual([]);
-    await confirm.getByTestId("scale-confirm-start").click();
+
+    // Escape closes the confirmation only: the dialog keeps its total
+    await page.keyboard.press("Escape");
+    await expect(confirm).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(field(page, ZONES)).toHaveValue("5");
+    await expect(dialog.getByTestId("scale-start")).toBeFocused();
+    expect(scale.starts).toEqual([]);
+
+    await dialog.getByTestId("scale-start").click();
+    await yes(page).click();
     await expect(dialog).toHaveCount(0);
     expect(scale.starts).toEqual([{ infra_env_kind: ZONES, replicas: 5 }]);
   });
@@ -403,6 +495,8 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(a.getByTestId("scale-pending")).toHaveCount(0);
     await expect(field(page, ZONE_A)).toHaveValue("3");
     await card(page, ZONE_B).getByTestId("scale-start").click();
+    await expect(confirmation(page).getByRole("heading", { name: `Scale up ${ZONE_B}?` })).toBeVisible();
+    await yes(page).click();
     await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
     expect(scale.starts).toEqual([{ nodepool: ZONE_B, replicas: 4 }]);
   });
@@ -465,9 +559,15 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await more(page, ZONE_A).click();
     const reads = scale.runReads;
     await page.getByTestId("scale-start").click();
-    const error = page.getByTestId("scale-error");
-    await expect(error).toContainText("update-nodepool refused to start: a run of this cluster is going.");
-    await expect(error).toContainText(words);
+    await yes(page).click();
+    const refused = confirmation(page).getByTestId("scale-error");
+    await expect(refused).toContainText("update-nodepool refused to start: a run of this cluster is going.");
+    await expect(refused).toContainText(words);
+    await expect(yes(page)).toBeDisabled();
+    // Nothing more can be sent from it: Close leaves the change, its refusal shown under it
+    await page.getByTestId("scale-confirm-cancel").filter({ hasText: "Close" }).click();
+    await expect(confirmation(page)).toHaveCount(0);
+    await expect(page.getByTestId("scale-pending").getByTestId("scale-error")).toContainText(words);
     await expect(page.getByTestId("scale-start")).toBeDisabled();
     await expect(page.getByTestId("scale-cancel")).toBeEnabled();
     await expect.poll(() => scale.runReads).toBeGreaterThan(reads);
@@ -545,13 +645,23 @@ test.describe("A flavor sync leaves locked replicas to update-nodepool", () => {
   });
 });
 
-// Screenshots for the review (SCALE_SCREENSHOTS=<dir>): a card's change, the hardware type dialog, the rows' scale-down
-// question and a done run, light and dark.
+// Screenshots for the review (SCALE_SCREENSHOTS=<dir>): a card's change, the hardware type dialog and its
+// scale-down's confirmation, a row's scale-up and scale-down confirmations and a done run, light and dark.
 const SHOTS = process.env.SCALE_SCREENSHOTS;
+
+/** Once the confirmation has armed and every finite animation (the dialog's, its backdrop's) has finished. */
+async function settledConfirmation(page: Page) {
+  await expect(yes(page)).toBeEnabled();
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished))
+  );
+  await page.mouse.move(0, 0);
+}
+
 test.describe("Scale screenshots", () => {
   test.skip(!SHOTS, "only with SCALE_SCREENSHOTS");
   for (const scheme of ["light", "dark"] as const) {
-    test(`a card's change and the hardware type dialog, ${scheme}`, async ({ page }) => {
+    test(`a card's change, the hardware type dialog and its scale-down's confirmation, ${scheme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 1000 });
       // The app starts dark (next-themes' defaultTheme); the person's choice is kept under `theme`
       await page.addInitScript((theme) => localStorage.setItem("theme", theme), scheme);
@@ -570,17 +680,28 @@ test.describe("Scale screenshots", () => {
       await more(page, ZONES).click();
       await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 8 (+2)");
       await page.screenshot({ path: `${SHOTS}/scale-dialog-${scheme}.png` });
+      await field(page, ZONES).fill("5");
+      await dialog.getByTestId("scale-start").click();
+      await settledConfirmation(page);
+      await page.screenshot({ path: `${SHOTS}/scale-confirm-kind-down-${scheme}.png` });
     });
 
-    test(`the rows without live status, a scale-down's question and a done run, ${scheme}`, async ({ page }) => {
+    test(`a row's scale-up and scale-down confirmations and a done run, ${scheme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 1000 });
       await page.addInitScript((theme) => localStorage.setItem("theme", theme), scheme);
       await openNodes(page, scaleOf({ run: DONE }));
+      await more(page, ZONE_A).click();
+      await page.getByTestId("scale-start").click();
+      await settledConfirmation(page);
+      await page.screenshot({ path: `${SHOTS}/scale-confirm-up-${scheme}.png` });
+      await page.keyboard.press("Escape");
+      await expect(confirmation(page)).toHaveCount(0);
       await fewer(page, ZONE_B).click();
       await page.getByTestId("scale-start").click();
-      await expect(page.getByTestId("scale-confirm-start")).toBeEnabled();
-      await page.mouse.move(0, 0);
-      await page.getByTestId("scale-panel").screenshot({ path: `${SHOTS}/scale-rows-down-${scheme}.png` });
+      await settledConfirmation(page);
+      await page.screenshot({ path: `${SHOTS}/scale-confirm-down-${scheme}.png` });
+      await page.keyboard.press("Escape");
+      await expect(confirmation(page)).toHaveCount(0);
       await page.getByTestId("scale-run").screenshot({ path: `${SHOTS}/scale-run-${scheme}.png` });
     });
   }
