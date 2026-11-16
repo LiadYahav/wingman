@@ -2,10 +2,9 @@
 
 import { CircleCheck, CircleX, Loader2 } from "lucide-react";
 import { humanize } from "@/lib/nodes";
-import { isRunning, stateWord } from "@/lib/scale-model";
+import { fromTo, isRunning, stateWord } from "@/lib/scale-model";
 import { cn } from "@/lib/utils";
 import type { ScaleResult, ScaleRun } from "@/types";
-import { fromTo } from "./restore-replicas";
 
 const DIRECTION: Record<string, string> = { up: "Scaling up", down: "Scaling down", none: "Nothing to change" };
 
@@ -110,11 +109,13 @@ export function ScaleRunCard({ run }: { run: ScaleRun }) {
   const direction = result?.direction ?? run.direction;
   return (
     <section
+      id="scale-run"
+      tabIndex={-1}
       data-testid="scale-run"
       data-status={run.status}
       aria-labelledby="scale-run-title"
       className={cn(
-        "rounded-xl border p-4 space-y-3",
+        "rounded-xl border p-4 space-y-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
         running && "border-status-provisioning/30 bg-status-provisioning/5",
         done && "border-status-ready/30 bg-status-ready/5",
         !running && !done && "border-status-error/30 bg-status-error/5"

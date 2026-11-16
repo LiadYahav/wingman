@@ -55,12 +55,35 @@ export function kindBlock(kind: ScaleKind, flavor: string | null): string | null
 export function nodepoolBlock(pool: ScaleNodePool): string | null {
   if (pool.name === null) return pool.unnamed ?? "Its NodePool cannot be named from the day1 file.";
   if (pool.locked_by !== null) return `Locked by flavor ${pool.locked_by} at ${pool.locked_replicas ?? "its value"}.`;
+  if (pool.replicas === null) return "Its replicas in the day1 file are not a number.";
   return null;
+}
+
+/** The hardware types whose total can be scaled: over two or more NodePools (with one, the NodePool's own does the same). */
+export const totalKinds = (kinds: ScaleKind[]): ScaleKind[] => kinds.filter((k) => k.nodepools.length >= 2);
+
+/** The one change waiting to be sent: a kind's new total, or one NodePool's new replicas. */
+export interface ScaleChange {
+  mode: ScaleMode;
+  target: string;
+  /** As typed: `NaN` while the field is empty. */
+  replicas: number;
 }
 
 /** A locked NodePool whose replicas differ from the flavor's: restored with update-nodepool. */
 export function needsRestore(pool: ScaleNodePool): boolean {
   return pool.locked_by !== null && pool.locked_replicas !== null && pool.name !== null && pool.replicas !== pool.locked_replicas;
+}
+
+/** What a replicas field holds: its digits as a number, `NaN` when it has none. */
+export function typedReplicas(text: string): number {
+  const digits = text.replace(/\D/g, "");
+  return digits === "" ? NaN : Number(digits);
+}
+
+/** One step (or `by`) from the value shown, kept from 0 to MAX_REPLICAS. */
+export function stepped(value: number, by: number): number {
+  return Math.min(MAX_REPLICAS, Math.max(0, (Number.isNaN(value) ? 0 : value) + by));
 }
 
 /** A whole number from 0 to MAX_REPLICAS; `null` for anything else. */
@@ -85,6 +108,19 @@ export function currentOf(
   if (!target) return null;
   if (mode === "kind") return kinds.find((k) => k.kind === target)?.total ?? null;
   return nodepools.find((p) => p.name === target)?.replicas ?? null;
+}
+
+/** `3 → 5`, with an unknown side as a dash. */
+export const fromTo = (before: number | null, after: number | null) => `${before ?? "—"} → ${after ?? "—"}`;
+
+/** What a change is of, in words: a NodePool, or `<kind> total`. */
+export const changeLabel = ({ mode, target }: Pick<ScaleChange, "mode" | "target">) => (mode === "kind" ? `${target} total` : target);
+
+/** `2 → 3 (+1)`, `4 → 1 (−3)`: a change and its difference. */
+export function changeWords(current: number | null, asked: number | null): string {
+  if (current === null || asked === null || asked === current) return fromTo(current, asked);
+  const delta = asked - current;
+  return `${fromTo(current, asked)} (${delta > 0 ? "+" : "\u2212"}${Math.abs(delta)})`;
 }
 
 /** `up`, `down` or `none` from where it is to what is asked; `null` when where it is is unknown. */

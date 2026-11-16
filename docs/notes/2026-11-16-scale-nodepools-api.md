@@ -62,7 +62,8 @@ own refusals name no type.
 All under `/api/day1/clusters/{name}`, with the page's `?site=&mce=`. `501
 FEATURE_DISABLED` on all three while `DAY1_SCALE_NODEPOOLS` is off.
 
-**`GET .../scale`** (any signed-in user): what the Scale dialog offers, from
+**`GET .../scale`** (any signed-in user): what Scale offers (the Nodes tab's
+steppers and its hardware type dialog, ADR-0062's 2026-11-16 amendment), from
 the cluster file on `main`, so it works without live status.
 
 ```json

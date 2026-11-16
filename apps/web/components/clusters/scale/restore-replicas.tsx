@@ -8,13 +8,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { ProblemList } from "@/components/common/problem-list";
 import { SyncSection } from "@/components/clusters/sync-rolling";
 import { useScaleBusy, useStartScale } from "@/lib/scale";
-import { refusalTitle } from "@/lib/scale-model";
+import { fromTo, refusalTitle } from "@/lib/scale-model";
 import { cn } from "@/lib/utils";
 import type { HeldReplicas } from "@/types";
 import { ScaleTruths } from "./scale-truths";
-
-/** `3 → 5`, with an unknown side as a dash. */
-export const fromTo = (before: number | null, after: number | null) => `${before ?? "—"} → ${after ?? "—"}`;
 
 /**
  * "Restore with update-nodepool": one NodePool set back to the replicas its
@@ -30,6 +27,7 @@ export function RestoreReplicas({
   current,
   target,
   runShows = "on the cluster's Nodes tab",
+  busyId,
 }: {
   name: string;
   where: string;
@@ -38,6 +36,8 @@ export function RestoreReplicas({
   target: number;
   /** Where its run shows, said once it started. */
   runShows?: string;
+  /** Where the page already says why it waits: the button points there and says it no second time. */
+  busyId?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [started, setStarted] = useState<string | null>(null);
@@ -65,13 +65,13 @@ export function RestoreReplicas({
           onClick={() => setConfirming(true)}
           disabled={busy !== null}
           aria-label={label}
-          aria-describedby={busy ? `restore-busy-${nodepool}` : undefined}
+          aria-describedby={busy ? (busyId ?? `restore-busy-${nodepool}`) : undefined}
           className={buttonVariants({ variant: "outline", size: "xs" })}
         >
           <Undo2 aria-hidden />
           Restore to {target}
         </button>
-        {busy && (
+        {busy && !busyId && (
           <span id={`restore-busy-${nodepool}`} className="text-xs text-muted-foreground" data-testid="restore-busy">
             {busy}
           </span>

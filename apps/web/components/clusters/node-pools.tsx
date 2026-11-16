@@ -290,16 +290,21 @@ const UPGRADE_HINT = {
  * One NodePool as a card: its summary in the header (ready count, version,
  * how it updates, its Agent selector), an update in progress as a banner, its
  * problems, then its nodes. The node being worked on and any missing piece
- * stand out; ready nodes stay quiet.
+ * stand out; ready nodes stay quiet. `scale` (ADR-0062) puts its replicas
+ * beside the ready count and its change under the header.
  */
-export function NodePoolCard({ pool, actions }: { pool: NodePoolNodes; actions: NodeActions }) {
+export function NodePoolCard({ pool, actions, scale }: {
+  pool: NodePoolNodes;
+  actions: NodeActions;
+  scale?: { control: React.ReactNode; below: React.ReactNode };
+}) {
   const short = pool.nodes.some((n) => n.state === "waiting" || n.state === "missing");
   const slug = pool.name.replace(/[^A-Za-z0-9_-]/g, "-");
   return (
     <section
       aria-labelledby={`pool-${slug}`}
       data-testid={`node-pool-${pool.name}`}
-      className="overflow-hidden rounded-xl border bg-card shadow-sm"
+      className="group/pool overflow-hidden rounded-xl border bg-card shadow-sm"
     >
       <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 px-4 pb-3 pt-3.5">
         <div className="min-w-0 space-y-1">
@@ -338,8 +343,12 @@ export function NodePoolCard({ pool, actions }: { pool: NodePoolNodes; actions: 
             </p>
           )}
         </div>
-        <ReadySummary pool={pool} />
+        <div className="ml-auto flex items-start gap-5">
+          {scale?.control}
+          <ReadySummary pool={pool} />
+        </div>
       </header>
+      {scale?.below}
 
       {pool.update && <UpdateBanner update={pool.update} />}
       <NodePoolProblems problems={pool.problems} id={`pool-${slug}-problems`} />

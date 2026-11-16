@@ -8,7 +8,9 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { NodePoolCard, UnassignedServers, type NodeActions } from "@/components/clusters/node-pools";
 import { UninstallNodeDialog, type UninstallTarget } from "@/components/clusters/uninstall-node-dialog";
-import { ScalePanel } from "@/components/clusters/scale/scale-panel";
+import { ScalePanel, type LiveCards } from "@/components/clusters/scale/scale-panel";
+import { CardScaleBelow, CardScaleControl } from "@/components/clusters/scale/scale-pool";
+import { ScaleTab } from "@/components/clusters/scale/scale-tab";
 import { useClusterNodes } from "@/lib/nodes";
 import { cn } from "@/lib/utils";
 import type { ClusterNodes as Nodes, ServerRecord, WorkflowRun } from "@/types";
@@ -105,8 +107,9 @@ function Notes({ data, isAdmin }: { data: Nodes; isAdmin: boolean }) {
  * An admin starts the platform's `uninstall-server-from-hc` workflow on a
  * server from here (§2); Wingman starts it and shows its run, and the
  * workflow does its own checks, so a contested server keeps its button.
- * Above them, the NodePool sizes from the day1 file and Scale (ADR-0062),
- * which need no live status, so they stay when the MCE cannot be read.
+ * Above them, the NodePool sizes from the day1 file and Scale (ADR-0062):
+ * each card scales its own NodePool, and without cards (live status off, the
+ * MCE unread) the sizes' rows do, so Scale needs no live status.
  *
  * Mount it where it is shown: it reads the nodes when mounted.
  */
@@ -164,9 +167,17 @@ export function ClusterNodes({
     </div>
   ) : null;
 
-  const scale = <ScalePanel name={name} where={where} isAdmin={isAdmin} enabled={enabled} />;
+  // Each NodePool the MCE shows as a card scales on it; without cards, on the sizes' rows
+  const cards = read && !read.off ? read.data.node_pools : [];
+  const live: LiveCards = cards.length > 0 ? new Set(cards.map((p) => p.name)) : read || error ? "none" : "loading";
+  const scale = <ScalePanel name={name} where={where} enabled={enabled} live={live} />;
+  const tab = (children: React.ReactNode) => (
+    <ScaleTab name={name} where={where} isAdmin={isAdmin} enabled={enabled}>
+      {children}
+    </ScaleTab>
+  );
   if (read?.off) {
-    return (
+    return tab(
       <div className="space-y-4">
         {scale}
         <p
@@ -193,7 +204,7 @@ export function ClusterNodes({
   const pools = data?.node_pools.length ?? 0;
   const nodes = data?.node_pools.reduce((n, p) => n + p.nodes.filter((x) => x.state !== "missing").length, 0) ?? 0;
 
-  return (
+  return tab(
     <div className="space-y-4">
       {scale}
       <section aria-label={`Nodes of ${name}`} aria-busy={isPending && !error} data-testid="cluster-nodes" className="space-y-4">
@@ -241,7 +252,12 @@ export function ClusterNodes({
             ) : (
               <>
                 {data.node_pools.map((pool) => (
-                  <NodePoolCard key={pool.name} pool={pool} actions={actions} />
+                  <NodePoolCard
+                    key={pool.name}
+                    pool={pool}
+                    actions={actions}
+                    scale={{ control: <CardScaleControl nodepool={pool.name} />, below: <CardScaleBelow nodepool={pool.name} /> }}
+                  />
                 ))}
                 <UnassignedServers servers={data.unassigned} actions={actions} />
               </>

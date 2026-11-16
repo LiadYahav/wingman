@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   busyReason,
+  changeLabel,
+  changeWords,
   currentOf,
   directionOf,
   kindBlock,
@@ -10,6 +12,9 @@ import {
   replicasOf,
   startBody,
   stateWord,
+  stepped,
+  totalKinds,
+  typedReplicas,
 } from "./scale-model";
 import type { ScaleKind, ScaleNodePool, ScaleRun } from "@/types";
 
@@ -100,6 +105,7 @@ describe("what can be scaled", () => {
       "nodepool[2] has neither name nor infraEnvName"
     );
     expect(nodepoolBlock(pool({ locked_by: "agent-standard", locked_replicas: 5 }))).toBe("Locked by flavor agent-standard at 5.");
+    expect(nodepoolBlock(pool({ replicas: null }))).toBe("Its replicas in the day1 file are not a number.");
   });
 
   it("offers a restore only for a named, locked NodePool whose replicas differ", () => {
@@ -134,5 +140,42 @@ describe("the start", () => {
     expect(directionOf(9, 8)).toBe("down");
     expect(directionOf(9, 9)).toBe("none");
     expect(directionOf(null, 9)).toBeNull();
+  });
+});
+
+describe("hardware types with a total", () => {
+  it("are those over two or more NodePools", () => {
+    const zones = kind({ kind: "dell-r660-zone", nodepools: ["lark-zone-a", "lark-zone-b"], total: 6 });
+    expect(totalKinds([kind(), zones, kind({ kind: "dell-r760" })])).toEqual([zones]);
+    expect(totalKinds([kind()])).toEqual([]);
+  });
+
+  it("name a change: a NodePool, or a kind's total", () => {
+    expect(changeLabel({ mode: "nodepool", target: "lark-zone-a" })).toBe("lark-zone-a");
+    expect(changeLabel({ mode: "kind", target: "dell-r660-zone" })).toBe("dell-r660-zone total");
+  });
+});
+
+describe("a stepper's number", () => {
+  it("reads only the digits typed, and nothing as NaN", () => {
+    expect(typedReplicas("12")).toBe(12);
+    expect(typedReplicas(" 0 7x")).toBe(7);
+    expect(typedReplicas("")).toBeNaN();
+    expect(typedReplicas("-")).toBeNaN();
+  });
+
+  it("steps by one from the value shown, from 0 to the most", () => {
+    expect(stepped(3, 1)).toBe(4);
+    expect(stepped(0, -1)).toBe(0);
+    expect(stepped(NaN, 1)).toBe(1);
+    expect(stepped(500, 1)).toBe(500);
+    expect(stepped(900, -1)).toBe(500);
+  });
+
+  it("says a change with its difference", () => {
+    expect(changeWords(2, 3)).toBe("2 → 3 (+1)");
+    expect(changeWords(4, 1)).toBe("4 → 1 (\u22123)");
+    expect(changeWords(3, 3)).toBe("3 → 3");
+    expect(changeWords(null, 3)).toBe("— → 3");
   });
 });
