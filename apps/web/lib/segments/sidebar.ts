@@ -10,8 +10,8 @@ import type { SiteSegmentStats } from "@/types/segments";
 import { siteCard } from "./sites";
 import { viewHref, type SegmentsView, type StatusTab } from "./view";
 
-/** Where the Documentation entry goes: Wingman's docs page (it has no Segments part yet). */
-const DOCS_HREF = "/docs";
+/** Where the Documentation entry goes: the Segments part of Wingman's docs page. */
+const DOCS_HREF = "/docs#segments";
 
 /** The sites' counts: read, still loading, or failed. */
 export type SitesState = { sites: SiteSegmentStats[] } | "loading" | "error";

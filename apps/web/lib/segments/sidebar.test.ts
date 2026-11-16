@@ -53,9 +53,9 @@ describe("the Segments sidebar", () => {
     expect(section(DEFAULT_VIEW, "Sites", "error").note).toBe("The sites could not be read.");
   });
 
-  it("links Documentation to Wingman's docs page", () => {
+  it("links Documentation to the Segments part of Wingman's docs page", () => {
     expect(section(DEFAULT_VIEW, "Help").items).toEqual([
-      { key: "docs", label: "Documentation", icon: "docs", href: "/docs", active: false },
+      { key: "docs", label: "Documentation", icon: "docs", href: "/docs#segments", active: false },
     ]);
   });
 });

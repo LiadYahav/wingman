@@ -37,7 +37,7 @@ test.describe("Each area's chrome", () => {
       /^site1\s*4\/5/, /^site2\s*1\/3/, /^site3\s*0\/0/,
       "Documentation",
     ]);
-    await expect(nav.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", "/docs");
+    await expect(nav.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", "/docs#segments");
 
     await brand(page).click();
     await expect(page).toHaveURL(/\/segments$/);
