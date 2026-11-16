@@ -11,7 +11,7 @@ const ACCENT = "#5b78b8";
 const CONSOLE_SIGNATURE = [
   "\n%c  /\\  /\\  \n /  \\/  \\ \n/ Wingman \\\n",
   `color:${ACCENT};font-family:monospace;font-size:13px;font-weight:bold;`,
-  `%cWingman Platform — Internal Developer Platform\nBuilt by ${areaById("wingman").credits.by.join(" & ")}\n`,
+  `%cWingman Platform — Internal Developer Platform\nBuilt by ${areaById("wingman").credits.map((c) => c.name).join(" & ")}\n`,
   "font-family:monospace;font-size:11px;color:#888;",
 ];
 
@@ -65,19 +65,21 @@ function SignatureCard({ area, onClose }: { area: AreaId; onClose: () => void })
         <div className="text-[10px] uppercase tracking-widest mb-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>
           Built by
         </div>
-        <div
-          className="text-xl leading-snug text-white"
-          style={{ fontFamily: "var(--font-grotesk)", fontWeight: 500, letterSpacing: "-0.03em" }}
-        >
-          {credits.by.map((name, i) => (
-            <div key={name}>
-              {i > 0 && <span style={{ color: ACCENT }}>&amp; </span>}
-              {name}
+        <div className="space-y-1.5">
+          {credits.map(({ name, years }, i) => (
+            <div key={name} data-testid="credit">
+              <div
+                className="text-xl leading-snug text-white"
+                style={{ fontFamily: "var(--font-grotesk)", fontWeight: 500, letterSpacing: "-0.03em" }}
+              >
+                {i > 0 && <span style={{ color: ACCENT }}>&amp; </span>}
+                {name}
+              </div>
+              <div className="text-[10px]" style={{ color: "rgba(255,255,255,0.3)" }}>
+                {years}
+              </div>
             </div>
           ))}
-        </div>
-        <div className="text-[10px] mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>
-          {credits.years}
         </div>
       </div>
     </div>
