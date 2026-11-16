@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronRight, Lock, Network, Plus, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { AlertTriangle, ChevronRight, Network, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Switch } from "@/components/ui/switch";
@@ -11,13 +10,13 @@ import { TuningCatalogProblems } from "@/components/tuning/tuning-profiles-picke
 import { NETWORK_CONFIG, defaultHardware, hardwareOptions, isNetworkEntry } from "@/lib/machine-configs";
 import { cn } from "@/lib/utils";
 import type { ConfigEntry, MachineConfigs, TemplateField } from "@/types";
-import { fieldId, inputCls, NotEnforced, ValueField } from "./controls";
+import { fieldId, inputCls, ValueField } from "./controls";
 import { ConfigsModeChoice } from "./configs-mode-choice";
+import { EveryNodepoolPanel } from "./every-nodepool-panel";
 import { NodeLabelsEditor, PresetInput } from "./inputs";
 import { TuningField } from "./tuning-field";
 import { keepTuningRule } from "./tuning-model";
 import {
-  CONFIGS_RULE,
   addNodepool,
   configsMode,
   hardwareOf,
@@ -29,7 +28,6 @@ import {
   poolConfigs,
   ratioLabel,
   removeNodepool,
-  ruleEntries,
   setConfigsMode,
   setLocked,
   setNodepoolValue,
@@ -38,7 +36,6 @@ import {
   setRatioOn,
   setSizedReplicas,
   ratioSize,
-  setRuleEntries,
   type FlavorDraft,
 } from "./model";
 
@@ -119,7 +116,6 @@ export function NodepoolsSection({
   const mode = configsMode(draft);
   const rule = mode === "rule";
   const count = nodepoolCount(draft);
-  const shared = rule ? ruleEntries(draft) : [];
 
   return (
     <div className="space-y-6">
@@ -130,47 +126,14 @@ export function NodepoolsSection({
       </div>
 
       {rule && (
-        <div id={fieldId(CONFIGS_RULE)} className="scroll-mt-28 space-y-3 rounded-xl border border-primary/25 bg-primary/[0.04] p-4" data-testid="configs-rule">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold">Machine configs on every nodepool</h3>
-              <p className="text-xs text-muted-foreground">
-                Every nodepool of every cluster has exactly these, in any order. {NETWORK_CONFIG} is each nodepool&apos;s own
-                network config.
-              </p>
-            </div>
-            <Badge
-              className={cn(
-                "gap-1",
-                notEnforced(CONFIGS_RULE) && "bg-status-warning/15 text-status-warning-fg ring-status-warning/30"
-              )}
-            >
-              <Lock aria-hidden /> Locked as a rule{notEnforced(CONFIGS_RULE) ? ", not enforced" : ""}
-            </Badge>
-          </div>
-          {notEnforced(CONFIGS_RULE) && (
-            <div className="text-xs">
-              <NotEnforced reason={notEnforced(CONFIGS_RULE)!} />
-            </div>
-          )}
-          <ConfigListEditor
-            entries={shared}
-            onChange={(entries) => update((d) => setRuleEntries(d, entries))}
-            catalog={catalog}
-            loading={catalogLoading}
-            networkHardware="per-nodepool"
-            label="Machine configs on every nodepool"
-            hideLabel
-            testId="rule-configs"
-          />
-          {problems(CONFIGS_RULE).length > 0 && (
-            <ul role="alert" className="space-y-0.5 text-xs text-destructive">
-              {problems(CONFIGS_RULE).map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <EveryNodepoolPanel
+          draft={draft}
+          update={update}
+          catalog={catalog}
+          catalogLoading={catalogLoading}
+          problems={problems}
+          notEnforced={notEnforced}
+        />
       )}
 
       {count > 1 && <RatioChoice draft={draft} update={update} />}

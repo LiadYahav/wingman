@@ -34,7 +34,6 @@
   529  apps/web/components/clusters/mce-placement.tsx
   541  apps/web/components/clusters/node-pools.tsx
   719  apps/web/components/specs/flavor-editor/model.ts
-  501  apps/web/components/specs/flavor-editor/nodepools-section.tsx
   818  apps/web/e2e/tests/mce-placement.spec.ts
   771  packages/wingman-core/src/wingman_core/infrastructure/fake_gitlab/gitlab.py
   665  packages/wingman-core/src/wingman_core/infrastructure/gitlab/adapter.py
