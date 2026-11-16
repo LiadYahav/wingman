@@ -302,7 +302,7 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-16 — 3.38.0 to 3.41.0: Inventory Ready/Needs fix, tuning in the every-nodepool rule, Scale through update-nodepool.**
+**2026-11-16 — 3.38.0 to 3.42.0: Inventory Ready/Needs fix, tuning in the every-nodepool rule, Scale through update-nodepool.**
 - **Inventory Management** (3.38.0, ADR-0057's amendment): a pool's free
   servers split into Ready and Needs fix, a Total per pool and MCE,
   collapsible MCEs; an admin may install a Needs-fix server by name with
@@ -320,6 +320,11 @@ and write yours here.
   "Restore to N". A flavor-locked NodePool is not scaled; the lock is
   Wingman's rule, not the platform's (a direct GitLab edit or a direct
   workflow call can still move it, shown as drift).
+- **3.42.0**: a short confirmation before every scale, both ways, saying on a
+  scale-down which nodes leave by the NodePool's `redbull.io/scale-down-policy`
+  (read from the nodepool entry's `annotations` in the day1 file); the cluster
+  page's first render matches the server's (no hydration error). Turning Scale
+  on: `docs/upgrade/3.39-to-3.40.md`.
 - The workflow is on team-redbull/workflows' branch `feat/update-nodepool`
   (not merged when this was written): Wingman follows its contract and has
   not run against it live. The day1 CI tuning patch went to the user as a zip
@@ -327,10 +332,11 @@ and write yours here.
   `tuningConfigmap` aside) is merged.
 
 **Next:**
-- Scale, when the workflow is deployed: turn the switch on, a first live run,
-  and the extras the user is choosing between (hints before a scale: busy,
-  unapplied merges, free Ready servers; removing a nodepool as scale to 0
-  then the MR).
+- Scale's scale-down policy per NodePool (the user): a flavor and
+  create-form choice that `cluster-template.j2` writes as the entry's
+  annotation (the specs project's template needs it too); more in
+  `CLAUDE.local.md`. Then, when the workflow is deployed: turn Scale on and
+  a first live run.
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).
 - Flavors v2's "Left for later": missing add-ons in one MR per team, the
