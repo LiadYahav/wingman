@@ -74,6 +74,15 @@ describe("a BMC the collector could not read", () => {
     expect(collectionText("auth_rejected", "2026-08-13T10:00:00Z")).toMatch(/^Wrong credentials since 13\/08\/2026, 13:00:00/);
     expect(collectionText(null, "2026-08-13T10:00:00Z")).toMatch(/^Unreachable since/);
   });
+
+  it("names a record server-scan could not process, as its v5.3.1 does (8c0771a)", () => {
+    expect(collectionText("collection_error", null)).toBe("Collection error");
+    expect(collectionText("collection_error", "2026-11-15T17:50:03Z")).toMatch(/^Collection error since 15\/11\/2026, 19:50:03/);
+  });
+
+  it("shows a reason a newer server-scan adds as it is sent, never blank", () => {
+    expect(collectionText("brand_new_reason" as never, null)).toBe("brand_new_reason");
+  });
 });
 
 describe("the matched rule", () => {

@@ -97,6 +97,36 @@ test.describe("The Servers page", () => {
     await expect(chips(page)).toHaveText(["Maintenance only"]);
   });
 
+  test("server-scan v6.0.0: Healthy leaves out servers in maintenance unless Maintenance is ticked too, and its count follows", async ({ page }) => {
+    const healthy = FLEET.filter((s) => s.health === "HEALTHY");
+    const inService = healthy.filter((s) => !s.maintenance.enabled).map((s) => s.name);
+    const DONOR = "ocp-dell-r660-site1-node-04";
+    expect(healthy.filter((s) => s.maintenance.enabled).map((s) => s.name)).toEqual([DONOR]);
+    await setUpServers(page);
+    await go(page, PAGE);
+    await dropdown(page, "Health").click();
+    await expect(option(page, "Health", "HEALTHY")).toHaveText(`HEALTHY${inService.length}`);
+    await expect(option(page, "Health", "Maintenance")).toHaveText("Maintenance2");
+    await page.keyboard.press("Escape");
+    await tick(page, "Health", "HEALTHY");
+    await expect.poll(() => query(page)).toBe("health_overall=HEALTHY");
+    await expect.poll(async () => (await names(page)).sort()).toEqual([...inService].sort());
+    await expect(summary(page)).toHaveText(`${inService.length} servers`);
+    await expect(row(page, DONOR)).toHaveCount(0);
+    // Ticking Maintenance adds the Healthy server in maintenance, and its count said so
+    await dropdown(page, "Health").click();
+    await expect(option(page, "Health", "HEALTHY")).toHaveText(`HEALTHY${inService.length}`);
+    await expect(option(page, "Health", "Maintenance")).toHaveText("Maintenance1");
+    await page.keyboard.press("Escape");
+    await tick(page, "Health", "Maintenance");
+    await expect.poll(() => query(page)).toBe("health_overall=HEALTHY&maintenance=true");
+    await expect.poll(() => names(page)).toEqual([DONOR]);
+    // Every other severity keeps its servers in maintenance
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await tick(page, "Health", "WARNING");
+    await expect(row(page, "ocp-dell-r660-site1-node-03")).toBeVisible();
+  });
+
   test("the toggles, with server-scan's tooltips and counts", async ({ page }) => {
     await setUpServers(page);
     await go(page, PAGE);

@@ -141,6 +141,48 @@ describe("filterRows", () => {
     expect(counts.total).toBe(1);
   });
 
+  // server-scan v6.0.0's cases (its 2bb2fb2): Healthy means healthy and in service.
+  it("Healthy means healthy and in service: a Healthy server in maintenance needs Maintenance ticked too", () => {
+    const fleet = [
+      row({ name: "ok", health: "HEALTHY" }),
+      row({ name: "paused", health: "HEALTHY", maintenance: { enabled: true, reason: "psu" } }),
+      row({ name: "bad-paused", health: "CRITICAL", maintenance: { enabled: true, reason: "disk" } }),
+    ];
+    const names = (f: Parameters<typeof filterRows>[1]) => filterRows(fleet, f).map((r) => r.name);
+    expect(names({ health: ["HEALTHY"] })).toEqual(["ok"]);
+    expect(names({ health: ["HEALTHY"], maintenance: "only" })).toEqual(["paused"]);
+    // Other severities still include their servers in maintenance (and still AND with Maintenance).
+    expect(names({ health: ["CRITICAL"] })).toEqual(["bad-paused"]);
+    expect(names({ health: ["CRITICAL"], maintenance: "only" })).toEqual(["bad-paused"]);
+    // Without a severity nothing changes: the unfiltered list still shows every server.
+    expect(names({})).toEqual(["ok", "paused", "bad-paused"]);
+    expect(names({ health: ["HEALTHY", "CRITICAL"] })).toEqual(["ok", "bad-paused"]);
+  });
+
+  it("counts Healthy the way the list shows it, so the number matches the rows", () => {
+    const fleet = [
+      row({ name: "ok-1", health: "HEALTHY" }),
+      row({ name: "ok-2", health: "HEALTHY" }),
+      row({ name: "paused", health: "HEALTHY", maintenance: { enabled: true, reason: "psu" } }),
+    ];
+    expect(dropdownFacetCounts(fleet, {}).health).toEqual({ HEALTHY: 2 });
+    const ticked = dropdownFacetCounts(fleet, { health: ["HEALTHY"] });
+    expect(ticked.health).toEqual({ HEALTHY: 2 });
+    expect(ticked.total).toBe(filterRows(fleet, { health: ["HEALTHY"] }).length);
+    expect(dropdownFacetCounts(fleet, { maintenance: "only" }).health).toEqual({ HEALTHY: 1 });
+  });
+
+  it("still counts a Healthy server in maintenance under Maintenance, since ticking it adds the server", () => {
+    const fleet = [
+      row({ name: "ok", health: "HEALTHY" }),
+      row({ name: "paused", health: "HEALTHY", maintenance: { enabled: true, reason: "psu" } }),
+    ];
+    const counts = dropdownFacetCounts(fleet, { health: ["HEALTHY"] });
+    expect(counts.maintenance).toEqual({ false: 1, true: 1 });
+    const ticked = dropdownFacetCounts(fleet, { health: ["HEALTHY"], maintenance: "only" });
+    expect(ticked.total).toBe(counts.maintenance.true);
+  });
+
   it("maps the unassigned site to a null site_id", () => {
     expect(
       filterRows(FLEET, { site_id: ["unassigned"] }).map((r) => r.name),

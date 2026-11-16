@@ -192,8 +192,9 @@ const VM_HOST: VmHostAnswer = {
   },
 };
 
+/** An event of the node, from a server-scan that snapshots its serial and BMC host (v5.4.0). */
 const event = (id: string, event_type: string, created_at: string, data: Record<string, unknown>, actor: AuditEvent["actor"] = { type: "SYSTEM", id: "ingest", display: null }): AuditEvent => ({
-  id, event_type, server_id: NODE_ID, server_name: NODE, actor, request_id: null, created_at, data,
+  id, event_type, server_id: NODE_ID, server_name: NODE, server_serial: "DL0101", server_bmc: "192.0.2.101", actor, request_id: null, created_at, data,
 });
 
 /** Two pages of the node's History, newest first: a Wingman maintenance, a health change, then its discovery. */

@@ -3,7 +3,8 @@
  * typed so a shape change fails `tsc`: two pages of server-scan's audit trail
  * in its `GET /api/v1/events` shape (a job run by hand with no server, a
  * Wingman maintenance on a server, a pruned server; then a health change and
- * a discovery), and its actors, busiest first. The server is the server
+ * a discovery) from a server-scan before v5.4.0 (no serial or BMC), a page
+ * from one after it, and its actors, busiest first. The server is the server
  * page's fixture, so its link opens that page.
  */
 
@@ -55,6 +56,20 @@ const EVENT_PAGES: AuditEventPage[] = [
 ];
 
 export const NO_EVENTS: AuditEventPage = { items: [], page: { next_cursor: null, has_more: false, page_size: 50, total: 0 } };
+
+/** One page from server-scan v5.4.0, which snapshots a server's serial and BMC host: a maintenance, then a pruned server's older event (null). */
+export const SNAPSHOT_PAGE: AuditEventPage = {
+  items: [
+    event("s2", "MAINTENANCE_ENABLED", "2026-11-16T09:00:00Z", {
+      server_serial: "DL0101",
+      server_bmc: "192.0.2.101",
+      actor: { type: "USER", id: "alice", display: "Alice Cohen" },
+      data: { reason: "PSU swap" },
+    }),
+    event("s1", "SERVER_PRUNED", "2026-10-27T06:00:00Z", { server_id: PRUNED_ID, server_name: null, server_serial: null, server_bmc: null }),
+  ],
+  page: { next_cursor: null, has_more: false, page_size: 50, total: 2 },
+};
 
 const ACTORS: EventActorList = {
   items: [

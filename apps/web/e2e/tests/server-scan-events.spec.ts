@@ -10,7 +10,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, json } from "../fixtures/api-handlers";
 import { forbidden, off } from "../fixtures/server-scan";
-import { AUDITOR_OFF, NO_EVENTS, PRUNED_ID, auditorOff, setUpEvents } from "../fixtures/server-scan-events";
+import { AUDITOR_OFF, NO_EVENTS, PRUNED_ID, SNAPSHOT_PAGE, auditorOff, setUpEvents } from "../fixtures/server-scan-events";
 import { NODE, NODE_ID } from "../fixtures/server-scan-server";
 
 const PAGE = "/server-scan/events";
@@ -68,6 +68,39 @@ test.describe("The Events page", () => {
     await maintenance.getByRole("link", { name: NODE }).click();
     await expect(page).toHaveURL(new RegExp(`/server-scan/servers/${NODE_ID}$`));
     await expect(page.getByRole("heading", { level: 1, name: NODE })).toBeVisible();
+  });
+
+  test("server-scan v5.4.0: the Server box takes a name, serial or BMC, and a server's details lead with all four", async ({ page }) => {
+    const calls = await setUpEvents(page, { events: [SNAPSHOT_PAGE, SNAPSHOT_PAGE] });
+    await go(page, PAGE);
+    const box = page.getByLabel("Server", { exact: true });
+    await expect(box).toHaveAttribute("placeholder", "Name, serial or BMC");
+    await expect(box).toHaveAttribute("title", "A part of the server's name, serial or BMC host, in any case");
+    await box.fill("192.0.2.101");
+    await expect(page).toHaveURL(/server_name=192\.0\.2\.101/);
+    await expect.poll(() => calls.lists.at(-1)?.server_name).toBe("192.0.2.101");
+    const [maintenance, pruned] = [events(page).nth(0), events(page).nth(1)];
+    // The table still shows the name only
+    await expect(page.getByRole("table", { name: "Events" })).not.toContainText("DL0101");
+    await maintenance.getByRole("button", { name: "▸ Details" }).click();
+    await expect(page.getByTestId("ss-event-details").locator("pre")).toHaveText(
+      `{\n  "server_id": "${NODE_ID}",\n  "server_name": "${NODE}",\n  "server_serial": "DL0101",\n  "server_bmc": "192.0.2.101",\n  "reason": "PSU swap"\n}`
+    );
+    await maintenance.getByRole("button", { name: "▾ Hide details" }).click();
+    // An event written before the snapshots: server-scan sends null, and so does the page
+    await pruned.getByRole("button", { name: "▸ Details" }).click();
+    await expect(page.getByTestId("ss-event-details").locator("pre")).toHaveText(
+      `{\n  "server_id": "${PRUNED_ID}",\n  "server_name": null,\n  "server_serial": null,\n  "server_bmc": null\n}`
+    );
+  });
+
+  test("an older server-scan sends no serial or BMC, and the details write none", async ({ page }) => {
+    await setUpEvents(page);
+    await go(page, PAGE);
+    await events(page).nth(1).getByRole("button", { name: "▸ Details" }).click();
+    await expect(page.getByTestId("ss-event-details").locator("pre")).toHaveText(
+      `{\n  "server_id": "${NODE_ID}",\n  "server_name": "${NODE}",\n  "reason": "Replacing PSU 2 — INC-4417"\n}`
+    );
   });
 
   test("Next and Previous over server-scan's cursors, Page X of Y from the first page's total", async ({ page }) => {

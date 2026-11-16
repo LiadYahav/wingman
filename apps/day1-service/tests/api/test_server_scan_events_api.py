@@ -2,7 +2,8 @@
 
 ``GET /api/day1/server-scan/events`` and ``/events/actors``: server-scan's
 audit trail of the fleet in its shape, filtered and paged as there, with
-History's auditor token and guard. Admins only; 422 for a parameter outside
+History's auditor token and guard; an event's serial and BMC (server-scan
+v5.4.0) only when server-scan sent them. Admins only; 422 for a parameter outside
 its checks or a cursor server-scan refuses; 501 without server-scan, or
 without the auditor token (naming it in ``details.setting``); 502 when
 server-scan fails or refuses the token. Built on the fake fleet's trail.
@@ -10,6 +11,7 @@ server-scan fails or refuses the token. Built on the fake fleet's trail.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -44,6 +46,8 @@ EVENT_FIELDS = {
     "event_type",
     "server_id",
     "server_name",
+    "server_serial",
+    "server_bmc",
     "actor",
     "request_id",
     "created_at",
@@ -255,3 +259,49 @@ async def test_server_scan_refusing_or_failing_is_502(
     assert (events.status_code, events.json()["code"]) == (502, "DEPENDENCY_UNAVAILABLE")
     assert "SERVER_SCAN_AUDITOR_TOKEN" in events.json()["detail"]
     assert (actors.status_code, actors.json()["code"]) == (502, "DEPENDENCY_UNAVAILABLE")
+
+
+class SnapshotFleet(FakeServerInventory):
+    """Three events as server-scan sends them: v5.4.0's snapshots, a legacy event, an older API."""
+
+    def _page(self) -> EventPage:
+        base = {
+            "event_type": "MAINTENANCE_ENABLED",
+            "server_id": "srv_1",
+            "server_name": "ocp-dell-r660-site1-a",
+            "actor": {"type": "USER", "id": "alice", "display": "Alice Cohen"},
+            "request_id": None,
+            "created_at": "2026-11-16T09:00:00Z",
+            "data": {"reason": "PSU"},
+        }
+        items = [
+            base | {"id": "new", "server_serial": "DLFAKE0101", "server_bmc": "192.0.2.101"},
+            base | {"id": "legacy", "server_serial": None, "server_bmc": None},
+            base | {"id": "older"},
+        ]
+        page = {"next_cursor": None, "has_more": False, "page_size": 50, "total": 3}
+        return EventPage.model_validate_json(json.dumps({"items": items, "page": page}))
+
+    async def events(self, query: EventQuery) -> EventPage:
+        return self._page()
+
+    async def server_events(
+        self, server_id: str, *, cursor: str | None, page_size: int
+    ) -> EventPage:
+        return self._page()
+
+
+async def test_both_routes_send_a_serial_and_bmc_only_as_server_scan_sent_them(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    rows, _ = load_fleet(default_fleet_file())
+    history = "/api/day1/server-scan/servers/srv_1/events"
+    async with client(support, gitlab, clock, SnapshotFleet(rows)) as http:
+        answers = [await http.get(path, headers=auth(support.ALICE)) for path in (EVENTS, history)]
+    pages = [answer.json() for answer in answers]
+    for page in pages:
+        new, legacy, older = page["items"]
+        assert (new["server_serial"], new["server_bmc"]) == ("DLFAKE0101", "192.0.2.101")
+        assert (legacy["server_serial"], legacy["server_bmc"]) == (None, None)
+        assert set(older) == EVENT_FIELDS - {"server_serial", "server_bmc"}, "an older server-scan"
+        assert page["page"] == {"next_cursor": None, "has_more": False, "page_size": 50, "total": 3}

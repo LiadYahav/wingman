@@ -1,7 +1,8 @@
 """The Events page: the fleet's audit trail and its actors (ADR-0048, 3.31.0).
 
 The adapter against server-scan's answers (MockTransport), in the shape its
-``backend/app/api/v1/events_schemas.py`` sends at 92146d3: the filters and
+``backend/app/api/v1/events_schemas.py`` sends at 92146d3, and the serial and
+BMC v5.4.0 added (absent before, and kept absent): the filters and
 cursor sent as given, the auditor token on both reads only, a refused cursor
 or token, malformed answers, the metrics. The use case keeps Events off
 without the auditor token, as History; the fake filters and pages its trail
@@ -35,7 +36,11 @@ from wingman_day1.infrastructure.fake_fleet import (
     load_fleet,
 )
 from wingman_day1.infrastructure.fake_server_records import default_records_file, load_records
-from wingman_day1.infrastructure.fake_server_scan_events import default_events_file, load_events
+from wingman_day1.infrastructure.fake_server_scan_events import (
+    default_events_file,
+    event_page,
+    load_events,
+)
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 
 VIEWER = "server-scan-viewer-token-never-shown-0002"
@@ -147,6 +152,23 @@ async def test_only_the_filters_given_are_sent() -> None:
     assert dict(sent[0].url.params) == {"page_size": "50"}
 
 
+async def test_an_events_serial_and_bmc_are_read_and_their_absence_is_kept() -> None:
+    """server-scan v5.4.0 (its 29682c4) sends both, ``null`` on an older event; before, neither."""
+    current = events_page()
+    current["items"][0] |= {"server_id": "srv_1", "server_name": "ocp-dell-r660-site1-a"}
+    current["items"][0] |= {"server_serial": "DLFAKE0101", "server_bmc": "192.0.2.101"}
+    legacy = events_page()
+    legacy["items"][0] |= {"server_serial": None, "server_bmc": None}
+    inventory, _ = make(*(httpx.Response(200, json=a) for a in (current, legacy, events_page())))
+    (new,) = (await inventory.events(EventQuery())).items
+    (old,) = (await inventory.events(EventQuery())).items
+    (before,) = (await inventory.events(EventQuery())).items
+    assert (new.server_serial, new.server_bmc) == ("DLFAKE0101", "192.0.2.101")
+    assert old.model_dump(exclude_unset=True)["server_serial"] is None, "sent as null: kept"
+    assert (before.server_serial, before.server_bmc) == (None, None)
+    assert {"server_serial", "server_bmc"}.isdisjoint(before.model_dump(exclude_unset=True))
+
+
 async def test_the_actors_are_read_with_the_auditor_token_only() -> None:
     inventory, sent = make(httpx.Response(200, json=actors_answer()))
     actors = await inventory.event_actors()
@@ -194,9 +216,16 @@ def malformed() -> list[tuple[str, dict[str, Any]]]:
     no_time["items"][0]["created_at"] = None
     no_page = events_page()
     del no_page["page"]
+    numbered_serial = events_page()
+    numbered_serial["items"][0]["server_serial"] = 101
     worded_count = actors_answer()
     worded_count["items"][0]["event_count"] = "many"
-    return [("events", no_time), ("events", no_page), ("actors", worded_count)]
+    return [
+        ("events", no_time),
+        ("events", no_page),
+        ("events", numbered_serial),
+        ("actors", worded_count),
+    ]
 
 
 @pytest.mark.parametrize(("read", "raw"), malformed())
@@ -336,6 +365,44 @@ async def test_a_pruned_servers_events_keep_its_id_and_lose_its_name() -> None:
     fleet = fixture_fleet()
     (pruned,) = (await fleet.events(EventQuery(event_type="SERVER_PRUNED"))).items
     assert (pruned.server_id, pruned.server_name) == ("srv_00000000000000000000000000000999", None)
+    assert (pruned.server_serial, pruned.server_bmc) == (None, None), "written before v5.4.0"
+
+
+async def test_the_fakes_events_carry_their_servers_serial_and_bmc() -> None:
+    fleet = fixture_fleet()
+    cisco = next(r for r in fleet.snapshot() if r.name == CISCO)
+    history = (await fleet.server_events(cisco.id, cursor=None, page_size=200)).items
+    trail = (await fleet.events(EventQuery(server_id=cisco.id, page_size=200))).items
+    assert {(e.server_serial, e.server_bmc) for e in (*history, *trail)} == {
+        (cisco.serial, cisco.bmc_host)
+    }
+
+
+async def test_the_fakes_server_box_matches_a_name_a_serial_or_a_bmc_host() -> None:
+    fleet = fixture_fleet()
+    cisco = next(r for r in fleet.snapshot() if r.name == CISCO)
+    assert cisco.bmc_host and cisco.bmc_host not in cisco.name
+
+    async def servers(needle: str) -> set[str | None]:
+        page = await fleet.events(EventQuery(server_name=needle, page_size=200))
+        return {e.server_id for e in page.items}
+
+    assert await servers(cisco.bmc_host) == {cisco.id}
+    assert await servers(" csFAKE0302 ") == {cisco.id}
+
+
+def test_the_server_box_also_reads_a_pruned_servers_data() -> None:
+    """server-scan looks in the event's snapshots and its data's ``serial`` and ``bmc``."""
+    at = datetime(2026, 11, 16, tzinfo=UTC)
+    event: dict[str, Any] = {"id": "e", "server_id": "srv_gone", "server_name": None}
+    event |= {"server_serial": None, "server_bmc": None, "event_type": "SERVER_PRUNED"}
+    event |= {"actor": {"type": "SYSTEM", "id": "prune", "display": None}, "created_at": at}
+    event |= {"request_id": None}
+    pruned = event | {"data": {"serial": "GONE42", "bmc": "192.0.2.250"}}
+    kept = event | {"id": "f", "server_serial": "SNAP7", "data": {}}
+    for needle, ids in (("gone4", {"e"}), ("192.0.2.25", {"e"}), ("snap7", {"f"}), ("x", set())):
+        page = event_page([pruned, kept], EventQuery(server_name=needle))
+        assert {e.id for e in page.items} == ids, needle
 
 
 async def test_a_maintenance_change_in_the_fake_is_the_trails_newest_event() -> None:

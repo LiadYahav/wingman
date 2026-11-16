@@ -2,7 +2,8 @@
 
 The adapter against server-scan's answers (MockTransport), in the shape its
 ``backend/app/api/v1/schemas.py`` and ``events_schemas.py`` send at 92146d3,
-internals included: read and typed, malformed answers refused, the viewer
+internals included, and the collection's cause v5.3.1 added (an older answer
+without it still reads): read and typed, malformed answers refused, the viewer
 token on the record and the host, the auditor token on History only, the
 metrics. The cache reads every one through; the fake builds them from its
 fixture; the use case keeps History off without the auditor token
@@ -350,13 +351,37 @@ async def test_an_older_document_without_reasons_controllers_or_raid_reads() -> 
     assert record.hardware.storage.raid is None
 
 
+async def test_a_collection_error_is_read_with_its_cause_in_words() -> None:
+    """server-scan v5.3.1 (its 8c0771a): a server it could not process is a stub that says why."""
+    cause = "mapping the server summary: KeyError: 'AlarmSummary'"
+    raw = server_scan_detail(
+        reachable=False,
+        unreachable_since="2026-11-15T17:50:03Z",
+        unreachable_reason="collection_error",
+        unreachable_detail=cause,
+    )
+    inventory, _ = make(httpx.Response(200, json=raw))
+    record = await inventory.record(SERVER_ID)
+    assert (record.reachable, record.unreachable_reason) == (False, "collection_error")
+    assert record.unreachable_detail == cause
+
+
+async def test_a_record_of_a_server_scan_before_the_cause_reads_without_one() -> None:
+    raw = server_scan_detail(reachable=False, unreachable_reason="timeout")
+    assert "unreachable_detail" not in raw
+    inventory, _ = make(httpx.Response(200, json=raw))
+    record = await inventory.record(SERVER_ID)
+    assert (record.unreachable_reason, record.unreachable_detail) == ("timeout", None)
+
+
 def malformed() -> list[dict[str, Any]]:
     count_as_text = server_scan_detail()
     count_as_text["hardware"]["cpu"]["cores"] = "64"
     missing = server_scan_detail()
     del missing["openshift"]
     bad_time = server_scan_detail(updated_at="yesterday")
-    return [count_as_text, missing, bad_time]
+    cause_as_number = server_scan_detail(reachable=False, unreachable_detail=500)
+    return [count_as_text, missing, bad_time, cause_as_number]
 
 
 @pytest.mark.parametrize("raw", malformed())
@@ -570,7 +595,10 @@ async def test_the_fixtures_special_servers_show_their_states() -> None:
     fleet = fixture_fleet()
     cisco = next(row for row in fleet.snapshot() if row.name.endswith("CSFAKE0302"))
     record = await fleet.record(cisco.id)
-    assert (record.reachable, record.unreachable_reason) == (False, "timeout")
+    assert (record.reachable, record.unreachable_reason) == (False, "collection_error")
+    assert record.unreachable_detail == "mapping the server summary: KeyError: 'AlarmSummary'"
+    reachable = await fleet.record(fleet.snapshot()[0].id)
+    assert (reachable.reachable, reachable.unreachable_detail) == (True, None)
     assert record.connectivity.facts.fabric_paths_down == 2
     assert record.health.connectivity == "CRITICAL"
     assert "hardware.power.psus" in record.unread_fields
