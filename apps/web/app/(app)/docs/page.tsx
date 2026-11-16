@@ -90,11 +90,11 @@ export default function DocsPage() {
         <div className="sticky top-6">
           <div className="rounded-xl border bg-card p-3 shadow-sm max-h-[calc(100vh-3rem)] overflow-y-auto">
             <p className="px-2 mb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Contents</p>
-            <div className="space-y-0.5">
+            <nav aria-label="Contents" className="space-y-0.5">
               {NAV_SECTIONS.map(({ id, label }) => (
                 <NavLink key={id} href={`#${id}`} label={label} active={activeSection === id} />
               ))}
-            </div>
+            </nav>
           </div>
         </div>
       </aside>
