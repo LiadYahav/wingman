@@ -38,16 +38,19 @@ export function FlavorsSection() {
         </Step>
         <Step n={2} title="Nodepools">
           Add nodepools: each starts with the team&apos;s defaults (<InlineCode>nodepool-defaults.yaml</InlineCode>{" "}
-          in the specs repo). Then choose how machine configs work: <strong>Each nodepool its own</strong> (a list
-          per nodepool, preset or locked by position), or <strong>The same on every nodepool</strong>: one list,
-          locked as a rule, so every nodepool of every cluster has exactly these configs, whatever its number or
-          order. Configs come from the picker: a file of <InlineCode>mc-files/</InlineCode> by name, or{" "}
+          in the specs repo). Then choose how machine configs and tuning profiles work:{" "}
+          <strong>Each nodepool its own</strong> (configs per nodepool, preset or locked by position, and tuning
+          profiles per nodepool), or <strong>The same on every nodepool</strong>: one panel,{" "}
+          <strong>On every nodepool</strong>, with one list of configs locked as a rule, so every nodepool of every
+          cluster has exactly these configs, whatever its number or order, and, while its tuning switch is on, the
+          tuning profiles every nodepool gets, locked the same way. Configs come from the picker: a file of{" "}
+          <InlineCode>mc-files/</InlineCode> by name, or{" "}
           <InlineCode>nm-conf</InlineCode>, the cluster&apos;s own network config, with a hardware type (under
           the rule, each nodepool picks its own). The type starts at <strong>generic</strong> when the day1 repo has
           the generic template (<InlineCode>nm-conf-template.bu</InlineCode>, for any hardware, written as plain{" "}
           <InlineCode>nm-conf</InlineCode>). Replicas and node labels are preset or locked per nodepool.
-          <strong> Tuning profiles</strong> are picked per nodepool from <InlineCode>tuning/</InlineCode> in the
-          day1 repo (see Tuning profiles below); locking them locks the same profiles on every nodepool.
+          <strong> Tuning profiles</strong> come from <InlineCode>tuning/</InlineCode> in the day1 repo (see Tuning
+          profiles below); locking them locks the same profiles on every nodepool.
         </Step>
         <Step n={3} title="Add-ons">
           Pick charts from the catalog and put them in order. The gear opens{" "}
@@ -108,6 +111,17 @@ spec:
         arguments), so the sync names those nodepools before it opens its MR. Files in{" "}
         <InlineCode>tuning/</InlineCode> that break the rules are listed for admins and never offered; without the
         folder the picker is empty and nothing else changes.
+      </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+        With the configs <strong>The same on every nodepool</strong>, the tuning profiles are part of the{" "}
+        <strong>On every nodepool</strong> panel, behind its <strong>Same tuning profiles on every nodepool</strong>{" "}
+        switch. Choosing that mode turns it on with Nodepool 1&apos;s profiles for every nodepool, unless the
+        nodepools already name different ones (it then starts off and nothing is overwritten; turning it on gives
+        every nodepool Nodepool 1&apos;s) or <InlineCode>tuning/</InlineCode> offers none. On, the panel&apos;s picker
+        sets every nodepool&apos;s profiles, locked as the rule, and each nodepool names them; a rule with no profile
+        is refused, so pick some or turn the switch off. Off, each nodepool keeps its own picker, as a preset. Going
+        back to <strong>Each nodepool its own</strong> drops both rules: every nodepool keeps its configs and its
+        profiles as presets.
       </p>
 
       <h3 className="text-base font-semibold mt-6 mb-3">Adding existing clusters to a flavor</h3>

@@ -3,22 +3,22 @@
 import { cn } from "@/lib/utils";
 import type { ConfigsMode } from "./model";
 
-/** The two ways a flavor sets machine configs, as two cards to choose from. */
+/** The two ways a flavor sets machine configs and tuning profiles, as two cards to choose from. */
 export function ConfigsModeChoice({ mode, onChange }: { mode: ConfigsMode; onChange: (mode: ConfigsMode) => void }) {
   const choices: { value: ConfigsMode; title: string; body: string }[] = [
     {
       value: "each",
       title: "Each nodepool its own",
-      body: "Set machine configs per nodepool, as presets or locked by position.",
+      body: "Set machine configs and tuning profiles per nodepool, as presets or locked.",
     },
     {
       value: "rule",
       title: "The same on every nodepool",
-      body: "One list for all nodepools, locked as a rule; each picks its own network hardware.",
+      body: "One list of machine configs and, if you choose, tuning profiles for all nodepools, locked as a rule; each picks its own network hardware.",
     },
   ];
   return (
-    <div role="radiogroup" aria-label="Machine configs" className="grid gap-2 sm:grid-cols-2">
+    <div role="radiogroup" aria-label="Machine configs and tuning profiles" className="grid gap-2 sm:grid-cols-2">
       {choices.map((choice) => {
         const selected = choice.value === mode;
         return (

@@ -171,3 +171,47 @@ configs' `confirm_removals` is about MachineConfigs).
   with a locked profile, an unknown name's 422, a second PerformanceProfile
   replacing the first, the pairing warning, drift and the sync
   confirmation.
+
+## Amendment (2026-11-16): tuning in the flavor's every-nodepool panel
+
+The user (2026-11-16): when a flavor gives every nodepool the same machine
+configs, the tuning profiles are in most cases the same too, so they belong
+to that choice, optional. The web editor changes; day1, the create form,
+drift and sync do not (the rule, its save checks and its enforcement stay
+as decided above).
+
+- **One panel.** With the configs "The same on every nodepool" (ADR-0029),
+  the panel "On every nodepool" holds the configs rule and a switch, "Same
+  tuning profiles on every nodepool". On is the tuning rule
+  `nodepools[*].tuning_config`: the panel's picker sets every nodepool's
+  names, and each nodepool card shows them read-only ("Gets the rule's
+  tuning profiles: …"). Off, each card keeps its own picker as a preset,
+  with no lock of its own: in this mode the panel's switch is the lock.
+- **The default.** Choosing the mode turns the switch on, starting from
+  Nodepool 1's names, unless the nodepools name different profiles
+  (compared as a set) or the catalogue offers none: it then stays off and
+  nothing is overwritten, and the panel says that turning it on gives
+  every nodepool Nodepool 1's. On with no names yet is an editing state:
+  the rule may not be empty, so the save is refused at the panel ("Choose
+  the profiles every nodepool gets, or turn off the same tuning
+  profiles"). In the panel the rule's names are checked once, there,
+  instead of on every card.
+- **Leaving the mode.** "Each nodepool its own" drops both rules; every
+  nodepool keeps its configs and its names as presets. In that mode the
+  card's lock still means the every-nodepool rule, as in 3.37.0, so a
+  flavor saved that way loads and edits unchanged.
+- **Loading.** A saved flavor shows the switch on exactly when its
+  `locked_paths` holds the tuning rule beside the configs rule; nothing is
+  turned on when a flavor is opened.
+
+Rejected: always including tuning in the panel (a flavor whose nodepools
+differ would have them overwritten, and a fleet without tuning could not
+use the configs rule, since the tuning rule may not be empty); a lock on
+each card in this mode beside the switch (two controls for one rule).
+
+Verified in `apps/web/components/specs/flavor-editor/tuning-model.test.ts`
+(the default, differing nodepools, the empty rule's message, leaving the
+mode, a 3.37.0 lock kept) and `apps/web/e2e/tests/flavor-tuning.spec.ts`
+(the panel's switch from Nodepool 1, differing nodepools kept, the empty
+rule refused, the cards' pickers back when off, the saved body, and saved
+flavors loading as they were saved).

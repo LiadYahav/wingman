@@ -7,6 +7,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Switch } from "@/components/ui/switch";
 import { ConfigListEditor } from "@/components/machine-configs/config-list-editor";
 import { TuningCatalogProblems } from "@/components/tuning/tuning-profiles-picker";
+import { useTuningProfiles } from "@/lib/tuning-profiles";
 import { NETWORK_CONFIG, defaultHardware, hardwareOptions, isNetworkEntry } from "@/lib/machine-configs";
 import { cn } from "@/lib/utils";
 import type { ConfigEntry, MachineConfigs, TemplateField } from "@/types";
@@ -15,7 +16,7 @@ import { ConfigsModeChoice } from "./configs-mode-choice";
 import { EveryNodepoolPanel } from "./every-nodepool-panel";
 import { NodeLabelsEditor, PresetInput } from "./inputs";
 import { TuningField } from "./tuning-field";
-import { keepTuningRule } from "./tuning-model";
+import { chooseConfigsMode, isTuningRule, keepTuningRule } from "./tuning-model";
 import {
   addNodepool,
   configsMode,
@@ -28,7 +29,6 @@ import {
   poolConfigs,
   ratioLabel,
   removeNodepool,
-  setConfigsMode,
   setLocked,
   setNodepoolValue,
   setPoolHardware,
@@ -44,12 +44,13 @@ type Update = (change: (draft: FlavorDraft) => FlavorDraft) => void;
 const names = (entries: ConfigEntry[]) => entries.map((e) => e.name).join(", ");
 
 /** What `nodepool-defaults.yaml` gives a new nodepool, or why it gives nothing. */
-function DefaultsNote({ catalog, rule, defaults }: { catalog: MachineConfigs | undefined; rule: boolean; defaults: ConfigEntry[] }) {
+function DefaultsNote({ catalog, rule, tuning, defaults }: { catalog: MachineConfigs | undefined; rule: boolean; tuning: boolean; defaults: ConfigEntry[] }) {
   if (rule) {
+    const gets = tuning ? "configs and tuning profiles" : "configs";
     return defaultHardware(catalog) ? (
-      <>A new nodepool gets the rule&apos;s configs, its network hardware at generic (any hardware); change it if it needs its own.</>
+      <>A new nodepool gets the rule&apos;s {gets}, its network hardware at generic (any hardware); change it if it needs its own.</>
     ) : (
-      <>A new nodepool gets the rule&apos;s configs; choose its network hardware.</>
+      <>A new nodepool gets the rule&apos;s {gets}; choose its network hardware.</>
     );
   }
   const nd = catalog?.nodepool_defaults;
@@ -84,9 +85,9 @@ function DefaultsProblems({ catalog }: { catalog: MachineConfigs | undefined }) 
 /**
  * Part 2: how many nodepools a cluster of the flavor starts with and, for
  * each, its replicas, machine configs, node labels and tuning profiles, each
- * a preset or locked (by position, §6), or the configs or tuning profiles
- * locked for every nodepool as one rule (§9, ADR-0061). A new nodepool starts
- * with the nodepool defaults (ADR-0027).
+ * a preset or locked (by position, §6), or the configs and tuning profiles
+ * locked for every nodepool as rules in one panel (§9, ADR-0061). A new
+ * nodepool starts with the nodepool defaults (ADR-0027).
  */
 export function NodepoolsSection({
   draft,
@@ -116,11 +117,16 @@ export function NodepoolsSection({
   const mode = configsMode(draft);
   const rule = mode === "rule";
   const count = nodepoolCount(draft);
+  // Entering the rule includes the tuning rule only when tuning/ offers profiles
+  const offered = (useTuningProfiles().data?.profiles.length ?? 0) > 0;
 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <ConfigsModeChoice mode={mode} onChange={(m) => update((d) => setConfigsMode(d, m, defaults, defaultHardware(catalog)))} />
+        <ConfigsModeChoice
+          mode={mode}
+          onChange={(m) => update((d) => chooseConfigsMode(d, m, defaults, defaultHardware(catalog), offered))}
+        />
         <DefaultsProblems catalog={catalog} />
         <TuningCatalogProblems />
       </div>
@@ -168,7 +174,7 @@ export function NodepoolsSection({
           <Plus /> Add nodepool
         </Button>
         <p className="text-xs text-muted-foreground">
-          <DefaultsNote catalog={catalog} rule={rule} defaults={defaults} />
+          <DefaultsNote catalog={catalog} rule={rule} tuning={isTuningRule(draft)} defaults={defaults} />
         </p>
       </div>
     </div>

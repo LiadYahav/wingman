@@ -165,6 +165,13 @@ async function openNew(
   return writes;
 }
 
+/** The every-nodepool panel's tuning switch, on by default when the panel is chosen (ADR-0061, 2026-11-16): turned off. */
+async function noRuleTuning(page: Page) {
+  const tuning = page.getByRole("switch", { name: "Same tuning profiles on every nodepool" });
+  await tuning.click();
+  await expect(tuning).not.toBeChecked();
+}
+
 async function reviewAndConfirm(page: Page, button: RegExp = /review & create/i) {
   await page.getByRole("button", { name: button }).click();
   await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
@@ -195,6 +202,8 @@ test.describe("Flavor editor: the generic network config (ADR-0027, 2026-11-12)"
     await expect(page.getByTestId("nodepool-1-configs").getByRole("combobox", { name: /entry 1 hardware type$/ })).toContainText("generic");
     await page.getByRole("radio", { name: /The same on every nodepool/ }).click();
     await expect(page.getByRole("combobox", { name: "Nodepool 2 network hardware" })).toContainText("generic");
+    // Tuning is flavor-tuning.spec.ts's: off here, so the save needs no profile
+    await noRuleTuning(page);
 
     await reviewAndConfirm(page);
     await expect(page.getByText("Flavor MR !21 opened")).toBeVisible();
@@ -321,9 +330,10 @@ test.describe("Flavor editor: a new flavor", () => {
     const pool0 = page.getByTestId("nodepool-0");
     await lock(page, "Machine configs");
 
-    await page.getByRole("radiogroup", { name: "Machine configs", exact: true }).getByRole("radio", { name: /The same on every nodepool/ }).click();
+    await page.getByRole("radiogroup", { name: "Machine configs and tuning profiles", exact: true }).getByRole("radio", { name: /The same on every nodepool/ }).click();
     const rule = page.getByTestId("configs-rule");
     await expect(rule).toContainText("Locked as a rule");
+    await noRuleTuning(page);
     // The rule's list is the defaults; nm-conf takes each nodepool's hardware, so it has none here
     await expect(rule.getByRole("combobox", { name: /entry 1$/ })).toContainText("nm-conf");
     await expect(rule.getByRole("combobox", { name: /hardware type$/ })).toHaveCount(0);
@@ -355,7 +365,7 @@ test.describe("Flavor editor: a new flavor", () => {
   test("the rule must list nm-conf once", async ({ page }) => {
     const writes = await openNew(page);
     await page.getByTestId("spec-name-input").fill("agent-no-network");
-    await page.getByRole("radiogroup", { name: "Machine configs", exact: true }).getByRole("radio", { name: /The same on every nodepool/ }).click();
+    await page.getByRole("radiogroup", { name: "Machine configs and tuning profiles", exact: true }).getByRole("radio", { name: /The same on every nodepool/ }).click();
     const rule = page.getByTestId("configs-rule");
     await rule.getByRole("button", { name: "Remove nm-conf (entry 1)" }).click();
     await expect(rule).toContainText("List nm-conf exactly once: every nodepool needs its own network config");
