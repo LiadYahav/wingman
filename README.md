@@ -65,22 +65,27 @@ wingman/
 ├── apps/
 │   ├── web/                       # Next.js frontend (apps/web/README.md)
 │   │   ├── app/                   # App Router: login/, and the signed-in pages in (app)/:
-│   │   │                          #   clusters, specs, addons, lints, quick-links,
-│   │   │                          #   approvals, audit, docs, settings
-│   │   ├── components/            # ui, common, layout, clusters, specs, addons
+│   │   │                          #   the Overview (page.tsx, at /), clusters, specs, addons,
+│   │   │                          #   lints, inventory, quick-links, approvals, audit, docs,
+│   │   │                          #   settings, and the segments and server-scan areas
+│   │   ├── components/            # ui, common, layout, data-table, and one folder per area:
+│   │   │                          #   overview, clusters, specs, addons, machine-configs, tuning,
+│   │   │                          #   inventory, quick-links, segments, server-scan
 │   │   ├── hooks/ lib/ stores/    # query hooks, the API client and helpers, the auth store
-│   │   ├── types/                 # day1.ts, day2.ts, problem.ts (index.ts re-exports them)
+│   │   ├── types/                 # day1/, day2/, one file per area, problem.ts (index.ts re-exports them)
 │   │   └── e2e/                   # Playwright: the mocked and live projects
 │   │
 │   ├── day1-service/              # Hosted clusters, specs, approvals, audit, login (port 8001)
 │   │   ├── src/wingman_day1/
 │   │   │   ├── domain/            # Pure rules: names, paths, the template, cluster files
 │   │   │   ├── application/       # Use cases, over ports only
-│   │   │   ├── infrastructure/    # Adapters (day2, MCE hubs, OpenShift OAuth) and their fakes
+│   │   │   ├── infrastructure/    # Adapters (the GitLab-backed repositories, day2, MCE hubs,
+│   │   │   │                      #   OpenShift OAuth, server-scan, segments-manager, the
+│   │   │   │                      #   workflows orchestrator) and their fakes
 │   │   │   ├── api/               # deps.py, errors.py, v1/ (the FastAPI routers)
 │   │   │   ├── ports/             # day1's own ports (server-scan's in server_scan.py)
 │   │   │   ├── settings.py        # Every variable day1 reads
-│   │   │   └── main.py            # The composition root
+│   │   │   └── main.py            # The composition root, with platform_adapters.py and compose_*.py
 │   │   └── tests/
 │   │
 │   └── day2-service/              # Charts on destinations (port 8002): the same layout,
@@ -94,10 +99,13 @@ wingman/
 │   ├── helm/wingman/              # Helm chart (deploy/helm/wingman/README.md)
 │   │   ├── templates/             # Kubernetes manifests
 │   │   ├── values.yaml            # Production defaults
+│   │   ├── values.schema.json     # Every value's schema; unknown keys are refused (ADR-0059)
 │   │   └── values.minikube.yaml   # Local development overrides
 │   └── python/                    # Hash-pinned requirement exports the images install from
 ├── dev/gitlab-fixtures/           # Production-shaped repo trees: the fake backend's and the local GitLab's seed
-├── docs/                          # adr/, ecosystem/, ops/, notes/
+├── dev/fleet-fixtures/            # The fake MCE, server-scan, orchestrator and segments-manager (DAY1_FAKE_FLEET)
+├── docs/                          # docs/README.md indexes them: architecture.md, adr/, ecosystem/,
+│                                  #   ops/, upgrade/, ideas/, notes/
 ├── tests/repo/                    # Repository contracts: chart env, docs, CI scripts, observability
 │
 └── scripts/                       # Development & build scripts
