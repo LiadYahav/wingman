@@ -32,7 +32,7 @@ export function DriftSection() {
       <h3 className="text-base font-semibold mb-3">Viewing and resolving drift</h3>
       <div className="space-y-3 mb-5">
         <Step n={1} title="Find drifted clusters">
-          The <strong>Clusters</strong> list shows each cluster&apos;s state and filters by it; the dashboard counts
+          The <strong>Clusters</strong> list shows each cluster&apos;s state and filters by it; the Overview counts
           drifted clusters, and beside them the unknown ones and those with an update. A flavor&apos;s{" "}
           <strong>Drift</strong> tab lists every cluster that follows it.
         </Step>

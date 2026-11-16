@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, GitPullRequest, Layers, Package, RefreshCw } from "lucide-react";
+import { ArrowRight, BookOpen, GitPullRequest, Layers, Package, RefreshCw, Server, Workflow } from "lucide-react";
 import { Callout, InlineCode, SectionHeader } from "./docs-parts";
 
 function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
@@ -23,7 +23,9 @@ export function OverviewSection() {
       <p className="text-sm text-muted-foreground leading-relaxed mb-6">
         Wingman covers <strong>Day1</strong>, creating, editing and deleting a hosted cluster, and{" "}
         <strong>Day2</strong>, installing and configuring teams&apos; charts on the hub, the MCEs and the
-        clusters. There is no application database: all state lives in Git repositories on GitLab.
+        clusters. There is no application database: all state lives in Git repositories on GitLab. Around them it
+        shows the platform (each MCE&apos;s server pools and, for admins, segments-manager&apos;s segments and
+        server-scan&apos;s fleet) and starts the platform&apos;s workflows for what a merge request does not do.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <FeatureCard
@@ -45,6 +47,16 @@ export function OverviewSection() {
           icon={GitPullRequest}
           title="Approval Workflow"
           description="The Approvals page lists the open merge requests of the day1, specs and team repos. Approving merges exactly the commit you reviewed, and nobody approves their own change."
+        />
+        <FeatureCard
+          icon={Workflow}
+          title="Platform Workflows"
+          description="Where your operator turns them on: create through provision-cluster, upgrade a cluster, scale a NodePool, uninstall a server, install servers into an MCE's pool. Wingman starts the platform's workflow and shows its run in the workflow's own words."
+        />
+        <FeatureCard
+          icon={Server}
+          title="Servers and Segments"
+          description="Inventory Management counts each MCE's free servers, for everyone. Admins also get the Segments and Server Scan areas in the top bar: segments-manager's segments and server-scan's fleet, inside Wingman."
         />
       </div>
 
@@ -75,11 +87,13 @@ export function OverviewSection() {
         </div>
       </div>
 
-      <Callout type="info" title="Provisioning today, and what is planned">
-        Today Wingman provisions a cluster by merge request: it opens the MR, the day1 CI runs the
-        allocate-segment workflow on the MR branch, and a person&apos;s merge is the approval. The team
-        plans a <InlineCode>create-cluster</InlineCode> workflow (on Temporal) to take this over. It does
-        not exist yet; when it does, Wingman will start that workflow instead of committing the file itself.
+      <Callout type="info" title="How a new cluster is proposed">
+        By default Wingman opens the merge request itself: the day1 CI runs the allocate-segment workflow on the MR
+        branch, and a person&apos;s merge is the approval. Your operator can switch creates to the platform&apos;s{" "}
+        <InlineCode>provision-cluster</InlineCode> workflow (<InlineCode>DAY1_PROVISIONER=workflow</InlineCode>): Wingman
+        then hands it the same file, and the workflow reserves the segment and opens the merge request. Either way
+        the cluster is built only once a person merges. See{" "}
+        <a href="#cluster-workflows" className="text-primary hover:underline">Cluster Workflows</a>.
       </Callout>
     </section>
   );

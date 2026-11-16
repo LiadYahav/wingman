@@ -36,13 +36,13 @@ export function SpecialFeaturesSection() {
 
       <div className="space-y-5">
 
-        <FeaturePanel icon={RefreshCw} tint="bg-emerald-500/10 text-emerald-500" title="Live cluster status" where="Cluster page, Clusters list, Dashboard — only when the deployment turns it on">
+        <FeaturePanel icon={RefreshCw} tint="bg-emerald-500/10 text-emerald-500" title="Live cluster status" where="Cluster page, Clusters list, Overview — only when the deployment turns it on">
           <p>
             When the deployment reads HostedClusters from the MCE hubs (<InlineCode>CLUSTER_STATUS_ENABLED</InlineCode>),
             the cluster page&apos;s <strong>Live Status</strong> card shows the HostedCluster&apos;s phase, OCP
             version and problems, and each node pool&apos;s ready replicas. It updates itself (every 30 seconds
             by default) and reconnects after a network blip, up to 5 times. The Clusters list shows each
-            cluster&apos;s health, and the Dashboard counts them.
+            cluster&apos;s health, and the Overview counts them.
           </p>
           <p>
             The HostedCluster of <InlineCode>ocp4-prod-herzi-site1</InlineCode> is{" "}
@@ -51,7 +51,7 @@ export function SpecialFeaturesSection() {
             (<InlineCode>ocp4-</InlineCode> by default).
           </p>
           <Callout type="tip">
-            When live status is off, the Dashboard says <strong>Live status is off</strong>, the list shows a dash
+            When live status is off, the Overview says <strong>Live status is off</strong>, the list shows a dash
             (&quot;Live status is off in this deployment&quot;), and the cluster page has no Live Status card.
             That is a deployment choice, not an error.
           </Callout>

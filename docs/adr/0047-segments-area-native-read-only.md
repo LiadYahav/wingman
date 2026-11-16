@@ -112,7 +112,8 @@ not Wingman's, and the top left should say which platform you are in.
   **Segments** (All, Available, Allocated, Disagrees with Git), **Sites**
   (every site with used out of total, from the same stats query and cache
   as the cards; a site without segments too) and **Help** (Documentation:
-  Wingman's docs page, which has no Segments part yet).
+  Wingman's docs page, which has no Segments part yet; since 2026-11-17
+  its Segments section, `/docs#segments`).
 - **The top bar's switch** is the "Platform" landmark, the current one
   marked with `aria-current`; no text was added.
 - **Data, not layout.** `apps/web/lib/areas.ts` holds each area's switch

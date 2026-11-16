@@ -5,15 +5,21 @@ import { BookOpen, Boxes, ChevronRight, GitBranch, RefreshCw, Shield } from "luc
 import { AddonsSection } from "./addons";
 import { ApprovalsSection } from "./approvals";
 import { AuditSection } from "./audit";
+import { ClusterWorkflowsSection } from "./cluster-workflows";
 import { ClustersSection } from "./clusters";
 import { ConceptsSection } from "./concepts";
 import { DriftSection } from "./drift";
 import { FileLocationsSection } from "./file-locations";
 import { FlavorsSection } from "./flavors";
 import { GitOpsSection } from "./gitops";
+import { HomeSection } from "./home";
+import { InventorySection } from "./inventory";
 import { OverviewSection } from "./overview";
+import { QuickLinksSection } from "./quick-links";
 import { RefusalsSection } from "./refusals";
 import { RolesSection } from "./roles";
+import { SegmentsSection } from "./segments";
+import { ServerScanSection } from "./server-scan";
 import { SpecialFeaturesSection } from "./special-features";
 import { TroubleshootingSection } from "./troubleshooting";
 
@@ -40,12 +46,18 @@ const NAV_SECTIONS = [
   { id: "concepts", label: "Core Concepts" },
   { id: "roles", label: "Roles & Access" },
   { id: "gitops", label: "GitOps Workflow" },
+  { id: "home", label: "The Overview Page" },
   { id: "specs", label: "Flavors" },
   { id: "clusters", label: "Clusters" },
+  { id: "cluster-workflows", label: "Cluster Workflows" },
+  { id: "inventory", label: "Inventory Management" },
   { id: "addons", label: "Day2 Addons" },
   { id: "drift", label: "Drift Detection" },
   { id: "approvals", label: "Approvals" },
   { id: "audit", label: "Audit Log" },
+  { id: "quick-links", label: "Quick Links" },
+  { id: "segments", label: "Segments" },
+  { id: "server-scan", label: "Server Scan" },
   { id: "errors", label: "When a Change Is Refused" },
   { id: "special-features", label: "Special Features" },
   { id: "filelocations", label: "File Locations" },
@@ -76,13 +88,13 @@ export default function DocsPage() {
       {/* Left sticky nav */}
       <aside className="hidden xl:block w-56 shrink-0">
         <div className="sticky top-6">
-          <div className="rounded-xl border bg-card p-3 shadow-sm">
+          <div className="rounded-xl border bg-card p-3 shadow-sm max-h-[calc(100vh-3rem)] overflow-y-auto">
             <p className="px-2 mb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Contents</p>
-            <div className="space-y-0.5">
+            <nav aria-label="Contents" className="space-y-0.5">
               {NAV_SECTIONS.map(({ id, label }) => (
                 <NavLink key={id} href={`#${id}`} label={label} active={activeSection === id} />
               ))}
-            </div>
+            </nav>
           </div>
         </div>
       </aside>
@@ -101,8 +113,9 @@ export default function DocsPage() {
             <h1 className="text-3xl font-bold mb-3">Wingman Platform</h1>
             <p className="text-muted-foreground max-w-2xl leading-relaxed mb-5">
               The team&apos;s self-service portal for OpenShift hosted clusters. GitLab is Wingman&apos;s only
-              store: every action you take in the UI opens a merge request, and nothing changes until another
-              admin approves it and it is merged. ArgoCD applies what is merged.
+              store: a change you make opens a merge request, and nothing changes until another admin approves it
+              and it is merged. ArgoCD applies what is merged. A few actions start one of the platform&apos;s
+              workflows instead, which does the work and its own checks.
             </p>
             <div className="flex flex-wrap gap-3">
               {[
@@ -124,12 +137,18 @@ export default function DocsPage() {
         <ConceptsSection />
         <RolesSection />
         <GitOpsSection />
+        <HomeSection />
         <FlavorsSection />
         <ClustersSection />
+        <ClusterWorkflowsSection />
+        <InventorySection />
         <AddonsSection />
         <DriftSection />
         <ApprovalsSection />
         <AuditSection />
+        <QuickLinksSection />
+        <SegmentsSection />
+        <ServerScanSection />
         <RefusalsSection />
         <SpecialFeaturesSection />
         <FileLocationsSection />
