@@ -43,6 +43,12 @@ describe("the areas", () => {
     expect(areaById("server-scan").href).toBe("/server-scan");
   });
 
+  it("credits each area to the people who built it", () => {
+    expect(areaById("wingman").credits).toEqual({ by: ["Liad Yahav", "Roi Blum"], years: "2024 – 2028" });
+    expect(areaById("segments").credits).toEqual({ by: ["Roi Blum", "Itay Herzberg"], years: "2024 – 2028" });
+    expect(areaById("server-scan").credits).toEqual({ by: ["Roi Blum", "Tomer Karniol"], years: "2024 – 2028" });
+  });
+
   it("dresses a page in its area's chrome only for someone who has the area", () => {
     expect(chromeArea("/segments", { segments: true })).toBe("segments");
     expect(chromeArea("/segments", { segments: undefined })).toBe("segments");
