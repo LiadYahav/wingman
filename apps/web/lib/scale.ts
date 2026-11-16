@@ -41,13 +41,26 @@ export function useScaleOptions(name: string, where: string, { enabled = true }:
   });
 }
 
-/** `GET /clusters/{name}/scale-run{where}`, shared by the panel and every restore. Read again every 10 s while running. */
+/**
+ * `GET /clusters/{name}/scale-run{where}`, shared by the panel and every restore. Read again every 10 s while running.
+ * When a run seen running has ended, the cluster's other reads (its sizes, its nodes) are read again.
+ */
 export function useScaleRun(name: string, where: string, { enabled = true }: { enabled?: boolean } = {}) {
+  const queryClient = useQueryClient();
+  const runKey = day1Keys.clusters.scaleRun(name);
   return useQuery<ScaleRunRead>({
-    queryKey: day1Keys.clusters.scaleRun(name),
+    queryKey: runKey,
     queryFn: async () => {
       try {
-        return { state: "run", run: await day1Api.clusters.scaleRun(name, where) };
+        const before = queryClient.getQueryData<ScaleRunRead>(runKey);
+        const run = await day1Api.clusters.scaleRun(name, where);
+        if (before?.state === "run" && isRunning(before.run) && !isRunning(run)) {
+          void queryClient.invalidateQueries({
+            queryKey: day1Keys.clusters.one(name),
+            predicate: (query) => query.queryKey[2] !== runKey[2],
+          });
+        }
+        return { state: "run", run };
       } catch (e) {
         if (isApiError(e, "FEATURE_DISABLED")) return { state: "off" };
         if (isApiError(e, "NOT_FOUND")) return { state: "none" };

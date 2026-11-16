@@ -1,120 +1,57 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Lock, Scaling } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { Scaling } from "lucide-react";
 import { ProblemList } from "@/components/common/problem-list";
-import { day1Keys } from "@/lib/api/day1";
-import { useScaleBusy, useScaleOptions, useScaleRun } from "@/lib/scale";
-import { isRunning, needsRestore } from "@/lib/scale-model";
-import { cn } from "@/lib/utils";
+import { useScaleOptions, useScaleRun } from "@/lib/scale";
+import { plural } from "@/lib/utils";
 import type { ScaleNodePool, ScaleOptions } from "@/types";
-import { RestoreReplicas } from "./restore-replicas";
-import { ScaleDialog } from "./scale-dialog";
+import { ScaleKindButton } from "./scale-kind-dialog";
+import { SizeRow } from "./scale-pool";
 import { ScaleRunCard } from "./scale-run-card";
+import { BUSY_ID, useScaleTab } from "./scale-tab";
 
-function PoolRow({ pool, name, where, isAdmin }: { pool: ScaleNodePool; name: string; where: string; isAdmin: boolean }) {
-  const restore = needsRestore(pool);
+/**
+ * Which NodePools the Nodes tab shows as cards from the MCE: their names,
+ * `none` (live status off, the nodes unreadable or none listed), or
+ * `loading`. Each card scales its own NodePool; the rest are rows here.
+ */
+export type LiveCards = ReadonlySet<string> | "none" | "loading";
+
+function Subtitle({ options, cards }: { options: ScaleOptions; cards: ReadonlySet<string> | null }) {
+  const lock = options.flavor ? <>; replicas flavor {options.flavor} locks stay as it sets them</> : null;
+  if (!cards) {
+    return <>As the day1 file sets them. Only the platform&apos;s update-nodepool workflow changes them{lock}.</>;
+  }
+  const total = options.nodepools.every((p) => p.replicas !== null) ? options.nodepools.reduce((n, p) => n + (p.replicas ?? 0), 0) : null;
   return (
-    <li data-testid={`scale-pool-${pool.index}`} className="grid gap-x-4 gap-y-1 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_5.5rem]">
-      <div className="min-w-0">
-        <p className="font-mono text-sm font-medium break-all">{pool.name ?? `nodepool[${pool.index}]`}</p>
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-          {pool.infra_env && <span className="font-mono break-all">{pool.infra_env}</span>}
-          {pool.locked_by && (
-            <span className="inline-flex items-center gap-1" data-testid="scale-pool-locked">
-              <Lock className="h-3 w-3 shrink-0" aria-hidden />
-              Locked by flavor {pool.locked_by} at {pool.locked_replicas ?? "—"}
-            </span>
-          )}
-          {pool.unnamed && <span className="break-words">{pool.unnamed}</span>}
-        </p>
-        {restore && isAdmin && pool.name && pool.locked_replicas !== null && (
-          <div className="mt-1.5">
-            <RestoreReplicas
-              name={name}
-              where={where}
-              nodepool={pool.name}
-              current={pool.replicas}
-              target={pool.locked_replicas}
-              runShows="below"
-            />
-          </div>
-        )}
-      </div>
-      <p className={cn("text-sm tabular-nums sm:text-right", restore && "font-medium text-status-warning-fg")}>
-        {pool.replicas ?? "—"}
-        <span className="text-xs font-normal text-muted-foreground"> replica{pool.replicas === 1 ? "" : "s"}</span>
-      </p>
-    </li>
+    <>
+      {plural(options.nodepools.length, "NodePool")}
+      {total !== null && <>, {plural(total, "replica")}</>}, as the day1 file sets them; each card below scales its own. Only the
+      platform&apos;s update-nodepool workflow changes them{lock}.
+    </>
   );
 }
 
-function Header({
-  options,
-  isAdmin,
-  busy,
-  onScale,
-}: {
-  options: ScaleOptions;
-  isAdmin: boolean;
-  busy: string | null;
-  onScale: (trigger: HTMLElement) => void;
-}) {
-  return (
-    <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 px-4 pb-3 pt-3.5">
-      <div className="min-w-0 space-y-1">
-        <h2 id="scale-heading" className="flex items-center gap-2 text-sm font-semibold">
-          <Scaling className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-          NodePool sizes
-        </h2>
-        <p className="text-xs text-muted-foreground max-w-2xl">
-          As the day1 file sets them. They change only through the platform&apos;s update-nodepool workflow: one commit to day1
-          main, applied by Argo CD{options.flavor ? <>; replicas flavor {options.flavor} locks stay as it sets them</> : null}.
-        </p>
-      </div>
-      {isAdmin && (
-        <button
-          type="button"
-          data-testid="scale-action"
-          onClick={(e) => onScale(e.currentTarget)}
-          disabled={busy !== null}
-          aria-describedby={busy ? "scale-busy-reason" : undefined}
-          title="Start the platform's update-nodepool workflow"
-          className={buttonVariants({ variant: "outline", size: "sm" })}
-        >
-          <Scaling aria-hidden />
-          Scale
-        </button>
-      )}
-    </header>
-  );
+/** The NodePools the cards do not show: all of them without cards, none while the cards load. */
+function rowsOf(nodepools: ScaleNodePool[], live: LiveCards): ScaleNodePool[] {
+  if (live === "none") return nodepools;
+  if (live === "loading") return [];
+  return nodepools.filter((p) => p.name === null || !live.has(p.name));
 }
 
 /**
- * The Nodes tab's NodePool sizes, from the cluster's day1 file, and Scale
- * (ADR-0062): an admin starts the platform's update-nodepool workflow on a
- * hardware kind or one NodePool, and the run shows here for everyone. It
- * needs no live status: the file names the NodePools as the chart does. A
- * locked NodePool whose replicas drifted from its flavor offers a restore.
- * Nothing at all while scaling is off. Mount it where it is shown.
+ * The Nodes tab's NodePool sizes, from the cluster's day1 file (ADR-0062,
+ * its 2026-11-16 amendment): with the MCE's cards shown, a line, since each
+ * card scales its own NodePool; without them, a row per NodePool, an
+ * admin's a stepper. "Scale hardware type" opens a hardware type's total.
+ * Why nothing can change now is said here, once. The cluster's run shows
+ * below it for everyone. Nothing at all while scaling is off.
  */
-export function ScalePanel({ name, where, isAdmin, enabled = true }: { name: string; where: string; isAdmin: boolean; enabled?: boolean }) {
-  const queryClient = useQueryClient();
+export function ScalePanel({ name, where, enabled = true, live }: { name: string; where: string; enabled?: boolean; live: LiveCards }) {
+  const tab = useScaleTab();
   const options = useScaleOptions(name, where, { enabled });
   const run = useScaleRun(name, where, { enabled });
-  const busy = useScaleBusy(name, where);
-  const [scaling, setScaling] = useState<{ trigger: HTMLElement } | null>(null);
   const shown = run.data?.state === "run" ? run.data.run : null;
-  const running = isRunning(shown);
-
-  // A run that ends changed the day1 file, and so the sizes, the drift and the nodes: read them again
-  const wasRunning = useRef(false);
-  useEffect(() => {
-    if (wasRunning.current && !running) void queryClient.invalidateQueries({ queryKey: day1Keys.clusters.one(name) });
-    wasRunning.current = running;
-  }, [running, name, queryClient]);
 
   if (options.error) {
     return (
@@ -123,34 +60,42 @@ export function ScalePanel({ name, where, isAdmin, enabled = true }: { name: str
       </div>
     );
   }
-  if (options.data?.state !== "on") return null;
-  const read = options.data.options;
-
-  const close = () => {
-    const trigger = scaling?.trigger;
-    setScaling(null);
-    requestAnimationFrame(() => {
-      if (trigger?.isConnected) trigger.focus();
-    });
-  };
+  if (!tab) return null;
+  const read = tab.options;
+  const empty = read.nodepools.length === 0;
+  const rows = rowsOf(read.nodepools, live);
+  const cards = typeof live === "string" ? null : live;
 
   return (
     <div className="space-y-3">
       <section aria-labelledby="scale-heading" data-testid="scale-panel" className="overflow-hidden rounded-xl border bg-card shadow-sm">
-        <Header options={read} isAdmin={isAdmin} busy={busy} onScale={(trigger) => setScaling({ trigger })} />
-        {isAdmin && busy && (
-          <p id="scale-busy-reason" data-testid="scale-busy-reason" className="border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-            {busy}
+        <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 px-4 pb-3 pt-3.5">
+          <div className="min-w-0 space-y-1">
+            <h2 id="scale-heading" className="flex items-center gap-2 text-sm font-semibold">
+              <Scaling className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              NodePool sizes
+            </h2>
+            <p className="max-w-2xl text-xs text-muted-foreground" data-testid="scale-summary">
+              <Subtitle options={read} cards={cards} />
+            </p>
+          </div>
+          <ScaleKindButton />
+        </header>
+        {tab.isAdmin && tab.busy && !empty && (
+          <p id={BUSY_ID} data-testid="scale-busy-reason" className="border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+            {tab.busy}
           </p>
         )}
-        {read.nodepools.length === 0 ? (
+        {empty ? (
           <p className="border-t px-4 py-3 text-xs text-muted-foreground">The cluster file has no NodePool.</p>
         ) : (
-          <ul className="divide-y border-t" aria-label="NodePools in the day1 file">
-            {read.nodepools.map((p) => (
-              <PoolRow key={p.index} pool={p} name={name} where={where} isAdmin={isAdmin} />
-            ))}
-          </ul>
+          rows.length > 0 && (
+            <ul className="divide-y border-t" aria-label={cards ? "NodePools of the day1 file without a card below" : "NodePools in the day1 file"}>
+              {rows.map((p) => (
+                <SizeRow key={p.index} tab={tab} pool={p} />
+              ))}
+            </ul>
+          )
         )}
       </section>
       {run.error ? (
@@ -158,7 +103,6 @@ export function ScalePanel({ name, where, isAdmin, enabled = true }: { name: str
       ) : (
         shown && <ScaleRunCard run={shown} />
       )}
-      {scaling && <ScaleDialog name={name} where={where} options={read} onClose={close} />}
     </div>
   );
 }

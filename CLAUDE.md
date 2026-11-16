@@ -143,6 +143,9 @@ Explicit user instructions; violating one is a real mistake, not style.
 - Done (2026-11-16): tuning profiles per nodepool from the day1 repo's
   `tuning/` (ADR-0061); the Grafana dashboard's activity and external-systems
   rows (3.36.0).
+- Done (2026-11-16): scaling NodePools through the platform's update-nodepool
+  workflow, off by default; while on, it alone changes an existing
+  NodePool's replicas (ADR-0062).
 - **Not done yet, in order:** (1) the architect's
   answers (`docs/ideas/architecture-fit.md`); (2) flavors v2's "Left for
   later"; (3) ecosystem features (`docs/ideas/`).
@@ -299,39 +302,40 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-16 — 3.35.0 to 3.37.0: team chart groups, the Grafana dashboard, tuning profiles.**
-- **A team's charts sit in `<team>/helm-charts/<chart>`** (3.35.0,
-  ADR-0060): the New add-on form suggests that address; only a suggestion.
-- **The Server Scan Servers page starts higher** (3.35.1): heading, count,
-  search and exports on one row.
-- **The Grafana dashboard** (3.36.0): Overview (MRs opened and merged,
-  approvals, workflow runs, server-scan writes, systems failing), Activity,
-  API, External systems (a `dependency` variable), GitLab write safety; a test
-  ties every label value a panel matches to what the code exports. Checked in
-  Grafana 13 against OpenShift user-workload monitoring (Thanos' tenancy port).
-- **Tuning profiles** (3.37.0, ADR-0061): `tuning/` in the day1 repo holds
-  Tuned and PerformanceProfile manifests; a flavor and the create form pick
-  them per nodepool (`tuningConfig`), lockable as a rule for every nodepool,
-  at most one PerformanceProfile per pool, a Tuned's PerformanceProfile
-  suggested; drift and sync write only the names. The day1 CI injects
-  `tuningConfigmap` (an automation key, ADR-0012's amendment) from the
-  catalogue, keeping a cluster's differing copy and reporting it; that CI
-  patch and the chart's single `tuningConfig` render ship to the air-gap
-  separately. provision-cluster must set `tuningConfigmap` aside like
-  `mcConfigMap` (team-redbull/workflows PR #23).
-- Production creates clusters through provision-cluster now
-  (`day1.provisioner: workflow`, still a switch). Argo CD is synced by a person
-  today, auto-sync later: show "merged" and "applied" for both.
+**2026-11-16 — 3.38.0 to 3.41.0: Inventory Ready/Needs fix, tuning in the every-nodepool rule, Scale through update-nodepool.**
+- **Inventory Management** (3.38.0, ADR-0057's amendment): a pool's free
+  servers split into Ready and Needs fix, a Total per pool and MCE,
+  collapsible MCEs; an admin may install a Needs-fix server by name with
+  `allow_unhealthy`, after a confirmation.
+- **Tuning in the flavor's "same on every nodepool"** (3.39.0, ADR-0061's
+  amendment): a switch beside the configs rule locks the same profiles on
+  every nodepool, on by default unless the nodepools differ.
+- **Scale through the platform's update-nodepool workflow** (3.40.0, 3.41.0;
+  ADR-0062 and its amendment), behind `day1.scaleNodepools.enabled`, off by
+  default and off on the sandbox: a − N + on each NodePool card of the Nodes
+  tab (one NodePool, exact), a hardware type's total in a small dialog (kinds
+  with 2+ NodePools), one change at a time, the run in place. While on, a
+  NodePool's replicas change only through the workflow: an edit that changes
+  them is refused, a flavor's sync or rollout leaves them out and offers
+  "Restore to N". A flavor-locked NodePool is not scaled; the lock is
+  Wingman's rule, not the platform's (a direct GitLab edit or a direct
+  workflow call can still move it, shown as drift).
+- The workflow is on team-redbull/workflows' branch `feat/update-nodepool`
+  (not merged when this was written): Wingman follows its contract and has
+  not run against it live. The day1 CI tuning patch went to the user as a zip
+  for the air-gap; workflows PR #23 (provision-cluster sets
+  `tuningConfigmap` aside) is merged.
 
 **Next:**
-- cluster-navigator's data on the cluster page and per MCE (running version,
-  status, Git against what runs; `docs/ideas/single-pane.md` workstream 5):
-  the team adds a Wingman entry to its `SERVICE_TOKENS`.
+- Scale, when the workflow is deployed: turn the switch on, a first live run,
+  and the extras the user is choosing between (hints before a scale: busy,
+  unapplied merges, free Ready servers; removing a nodepool as scale to 0
+  then the MR).
+- cluster-navigator's data on the cluster page and per MCE
+  (`docs/ideas/single-pane.md` workstream 5).
 - Flavors v2's "Left for later": missing add-ons in one MR per team, the
   cluster-name prefix in the web, a preview of an unsaved flavor.
-- Tuning: a lock per pool (a flavor with GPU pools needing different
-  PerformanceProfiles can preset them but not lock them today).
-- Code organisation, later (the user): helpers out of `.tsx`, a typed day2
-  call layer, the design splits; 30 files left in the size baseline.
+- Tuning: a lock per pool.
+- Code organisation, later (the user): 28 files left in the size baseline.
 - The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
   shared Git store.

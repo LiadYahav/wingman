@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog)
 
 ## Context
 
@@ -193,3 +193,67 @@ change only through update-nodepool.**
   viewers; by kind and by NodePool post the right body; the run's phases,
   plan and chosen servers; a 409 and a failed run in words; a locked
   NodePool and a kind selecting one cannot be scaled; the sync's restore.
+
+## Amendment (2026-11-16): each NodePool scales where it is shown
+
+The user (2026-11-16) found the Scale dialog of decision 2 (two tabs, a
+radio list, a typed total, a review step) heavy, and asked that a NodePool
+scale where it is shown, with a hardware type's total apart, without making
+the Nodes tab busier. The API, the workflow, the locks (4), the ownership
+rule (5) and the run in place do not change; only the web's controls do.
+
+- **On the NodePool's card.** Each card of the Nodes section (a NodePool as
+  the MCE reports it, "2 / 3 ready") has, for an admin, a − N + stepper
+  beside its ready count: the replicas the day1 file sets, matched to the
+  card by NodePool name. It starts at them; the buttons and the arrow keys
+  move it by one, and it can be typed. A change opens under the card's
+  header: `Replicas 3 → 4 (+1)`, one line on what the run does, Cancel and
+  Scale up or Scale down; it sends `{nodepool, replicas}`. A control that
+  cannot act never looks editable: a NodePool its flavor locks (or whose
+  replicas are not a number) has no stepper, only its size as text
+  (`3 replicas`), the lock in one line under the header and its Restore
+  beside it; a card the day1 file does not name has no stepper either.
+  The stepper stays quiet (the number at full strength, the frame and the
+  − + faint) until the card is hovered or the stepper focused, and always
+  shows on a touch screen.
+- **Without cards, on the NodePool sizes rows.** While live status is off
+  (`CLUSTER_STATUS_ENABLED`), the MCE cannot be read or lists no NodePool,
+  there are no cards: the same stepper and change sit on each row of the
+  "NodePool sizes" panel. With cards, the panel folds to a line (how many
+  NodePools and replicas the file sets) and keeps a row only for an entry no
+  card shows, such as one the file cannot name, so no NodePool is editable
+  twice.
+- **A hardware type in a dialog.** "Scale hardware type", beside the
+  NodePool sizes heading, opens a small dialog: the hardware types (the
+  kinds the API offers) over two or more NodePools, one chosen, a locked one
+  listed but not offered, with why and its total as text; a − N + total
+  starting at its total now;
+  the change (`6 → 8 (+2)`); Cancel and Scale up or Scale down. It sends
+  `{infra_env_kind, replicas}`. With one NodePool a total would do what the
+  NodePool's own stepper does, so such a type is not listed; with none over
+  two, there is no button.
+- **One change at a time** (one run per cluster): the cards, the rows and
+  the dialog share one change. Changing a stepper makes it the change and
+  puts every other back at its value now; a stepper set back to its value
+  leaves nothing to send. The change is announced from one polite live
+  region.
+- **Scale-up starts at once** (guarded against a double click); **scale-down
+  asks first**, in place (in the card, the row or the dialog): the servers
+  that leave are the NodePool's `redbull.io/scale-down-policy`'s, else
+  CAPI's at random, and they stay in the MCE's inventory. Start scale-down
+  waits half a second, so the click that asked cannot start it. Once a run
+  starts, focus moves to the run, which shows under NodePool sizes as
+  before.
+- **While a run of the cluster is going** (scale or upgrade), no stepper
+  shows: each size is text, the dialog's button waits, and the reason shows
+  once, at the top of NodePool sizes; the waiting buttons point to it.
+
+Verification: `apps/web/lib/scale-model.test.ts` (the hardware types with a
+total, a change in words, a typed number and a step);
+`apps/web/e2e/tests/cluster-scale.spec.ts` (a card's stepper and a row's
+post the exact body once; a typed number and the arrow keys; one change at
+a time across rows and the dialog; scale-down's question with Back and
+Escape; a locked NodePool on a row and on its card, as text with its
+restore; a card the file does not name; the dialog's total and its
+scale-down; a locked type as text, and no button without one; while busy no
+stepper and one reason; a viewer sees no stepper).

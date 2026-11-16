@@ -236,17 +236,25 @@ function ClusterPageDocs() {
       <h3 className="text-base font-semibold mt-6 mb-3">Scale</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
         With <InlineCode>DAY1_SCALE_NODEPOOLS</InlineCode> on (the chart&apos;s <InlineCode>day1.scaleNodepools.enabled</InlineCode>,
-        off by default), the Nodes tab starts with <strong>NodePool sizes</strong>, read from the day1 file, so it shows
-        without live status too. An admin&apos;s <strong>Scale</strong> starts the platform&apos;s{" "}
-        <InlineCode>update-nodepool</InlineCode> workflow, two ways: <strong>by hardware kind</strong>, a total over the
-        cluster&apos;s NodePools whose InfraEnv is the kind or starts with it (the workflow spreads it so no two are more
-        than one replica apart), or <strong>one NodePool</strong>, its replicas set exactly. The run is one commit to day1{" "}
-        <InlineCode>main</InlineCode>, with no merge request; the workflow syncs the cluster&apos;s Argo CD Application
-        itself and checks the NodePools show the new replicas. On a scale-down, the servers that leave are chosen by the
-        NodePool&apos;s <InlineCode>redbull.io/scale-down-policy</InlineCode>, else CAPI picks at random, and they stay in
-        the MCE&apos;s inventory as free Agents. The run shows in place for everyone: its phase in the workflow&apos;s words,
-        then each NodePool before and after and the servers chosen, or why it failed. Scale waits while a run of the
-        cluster, update-nodepool&apos;s or an upgrade&apos;s, is going: one at a time.
+        off by default), an admin scales through the platform&apos;s <InlineCode>update-nodepool</InlineCode> workflow, in
+        place. Each NodePool card has a <strong>− N +</strong> beside its ready count: the replicas the day1 file sets,
+        matched to the card by name. Step it, use the arrow keys or type a number, and the change opens under the
+        card&apos;s header (<InlineCode>Replicas 3 → 4 (+1)</InlineCode>) with Cancel and <strong>Scale up</strong> or{" "}
+        <strong>Scale down</strong>; the NodePool is set exactly. Without cards (live status off, or the MCE unread), the
+        same steppers sit on the rows of <strong>NodePool sizes</strong>, read from the day1 file; with cards, that panel
+        is one line. <strong>Scale hardware type</strong> opens a small dialog for a total over the NodePools of one
+        InfraEnv kind (only kinds with two or more): the workflow spreads it so no two are more than one replica apart.
+      </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+        One change at a time: changing any stepper puts every other back. A scale-up starts at once; a scale-down asks
+        first, in place, since the servers that leave are chosen by the NodePool&apos;s{" "}
+        <InlineCode>redbull.io/scale-down-policy</InlineCode>, else CAPI picks at random, and they stay in the MCE&apos;s
+        inventory as free Agents. The run is one commit to day1 <InlineCode>main</InlineCode>, with no merge request; the
+        workflow syncs the cluster&apos;s Argo CD Application itself and checks the NodePools show the new replicas. The run
+        shows under NodePool sizes for everyone: its phase in the workflow&apos;s words, then each NodePool before and after
+        and the servers chosen, or why it failed. While a run of the cluster is going, update-nodepool&apos;s or an
+        upgrade&apos;s, the sizes show as numbers with no stepper, and the reason shows once. A NodePool its flavor locks
+        has no stepper either: its size, the lock and <strong>Restore</strong>.
       </p>
       <Callout type="info" title="With Scale on, replicas change only through it">
         A raw YAML edit, or an edit on the approval page, that changes an existing NodePool&apos;s{" "}
