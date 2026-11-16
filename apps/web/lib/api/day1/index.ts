@@ -4,10 +4,11 @@
  * hooks name no `/api/day1` path and spell no key themselves.
  *
  * One file per area, each under the size limit: clusters.ts (a cluster's file
- * and its reads) and cluster-workflows.ts (the workflows day1 starts on it)
- * are both `day1Api.clusters`. The review and audit routes cover day2's MRs
- * too (approvals.ts says why). The calls answer what day1 answers: a page
- * keeps its own handling of a 501 FEATURE_DISABLED or a 404.
+ * and its reads), cluster-workflows.ts (the workflows day1 starts on it) and
+ * scale.ts (its NodePools through update-nodepool) are all `day1Api.clusters`.
+ * The review and audit routes cover day2's MRs too (approvals.ts says why).
+ * The calls answer what day1 answers: a page keeps its own handling of a 501
+ * FEATURE_DISABLED or a 404.
  */
 
 import { approvalsApi } from "./approvals";
@@ -16,12 +17,13 @@ import { authApi, serviceBuild } from "./auth";
 import { clusterWorkflowsApi } from "./cluster-workflows";
 import { clustersApi } from "./clusters";
 import { fleetApi } from "./fleet";
+import { scaleApi } from "./scale";
 import { specsApi } from "./specs";
 
 export const day1Api = {
   auth: authApi,
   build: serviceBuild,
-  clusters: { ...clustersApi, ...clusterWorkflowsApi },
+  clusters: { ...clustersApi, ...clusterWorkflowsApi, ...scaleApi },
   specs: specsApi,
   approvals: approvalsApi,
   audit: auditApi,

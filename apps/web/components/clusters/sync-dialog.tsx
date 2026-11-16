@@ -18,6 +18,7 @@ import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
 import { cn } from "@/lib/utils";
 import { SyncRolling, SyncSection as Section, TuningRebootNote } from "./sync-rolling";
+import { SyncHeldReplicas } from "./scale/restore-replicas";
 import type {
   AddonDrift, ConfigRemoval, HardwareChoice, MRDetail, NodepoolRef, SyncPreview, SyncPreviewRequest, SyncRequest,
 } from "@/types";
@@ -111,7 +112,8 @@ export function SyncDialog({
     onSuccess: (mr, p) => {
       toastMrOpened(mr, router.push, "Sync MR");
       queryClient.invalidateQueries({ queryKey: day1Keys.approvals.all });
-      if (p.addons_to_install.length > 0 || p.addons_error) setOpened({ mr, preview: p });
+      // What is left: day2's add-ons, and replicas only update-nodepool restores (ADR-0062)
+      if (p.addons_to_install.length > 0 || p.addons_error || (p.held_replicas?.length ?? 0) > 0) setOpened({ mr, preview: p });
       else onClose();
     },
     onError: (e) => {
@@ -188,6 +190,8 @@ export function SyncDialog({
     ? null
     : data.problems.length > 0
     ? "Resolve the problems above to sync."
+    : !data.can_sync && (data.held_replicas?.length ?? 0) > 0
+    ? "Nothing else to sync: the replicas above change through update-nodepool."
     : !data.can_sync
     ? "Nothing to sync: the file holds every locked value and names the flavor's newest version."
     : !allConfirmed
@@ -241,6 +245,7 @@ export function SyncDialog({
                 </ul>
               </Section>
             )}
+            <SyncHeldReplicas name={name} where={where} held={done.held_replicas} />
             {done.addons_error && (
               <p className="flex items-start gap-1.5 text-sm text-status-warning-fg">
                 <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
@@ -406,6 +411,7 @@ export function SyncDialog({
                 )}
 
                 <SyncRolling rebooting={data.rebooting} />
+                <SyncHeldReplicas name={name} where={where} held={data.held_replicas} />
 
                 {data.warnings.length > 0 && (
                   <Section title="Check before merging" icon={TriangleAlert} tone="warning" testId="sync-warnings">

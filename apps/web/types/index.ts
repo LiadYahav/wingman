@@ -112,3 +112,4 @@ export * from "./problem";
 export * from "./day1";
 export * from "./quick-links";
 export * from "./upgrade";
+export * from "./scale";

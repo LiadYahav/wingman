@@ -46,6 +46,8 @@ const clusters = {
     ["clusters", name, "sync-preview", where, hardware] as const,
   upgradeRun: (name: string) => ["clusters", name, "upgrade-run"] as const,
   upgradeTargets: (name: string) => ["clusters", name, "upgrade-targets"] as const,
+  scaleOptions: (name: string) => ["clusters", name, "scale"] as const,
+  scaleRun: (name: string) => ["clusters", name, "scale-run"] as const,
 };
 
 const specs = {
