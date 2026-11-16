@@ -5,7 +5,9 @@
  * away), locking them on every nodepool, creating a cluster from a flavor
  * that locks them, day1's 422 for a name `tuning/` does not have shown at its
  * field, and drift plus a sync whose confirmation names the nodepools that
- * may reboot.
+ * may reboot. With configs the same on every nodepool, the panel's tuning
+ * switch: on from Nodepool 1's names, off when the nodepools differ, an empty
+ * rule refused, and saved flavors loading as they were saved.
  */
 
 import { test, expect, type Page, type Request, type Route } from "@playwright/test";
@@ -13,7 +15,7 @@ import { fulfillProblem, go, injectAdminAuth, json, mockDashboardApis, mockMachi
 import { mockTuningProfiles } from "../fixtures/tuning";
 import { ClusterNewPage } from "../pages/cluster-new.page";
 import type {
-  ClusterDetail, ClusterDrift, ClusterPreview, ClusterSpec, CreateClusterRequest, Mce, SpecEntry, SyncPreview, TemplateField,
+  ClusterDetail, ClusterDrift, ClusterPreview, ClusterSpec, CreateClusterRequest, Mce, SpecDetail, SpecEntry, SyncPreview, TemplateField,
   TuningProfiles, ValueDrift,
 } from "../../types";
 
@@ -142,6 +144,191 @@ test.describe("Tuning profiles in a flavor", () => {
       ["tuned-network-latency", "performance-pinned"],
       ["tuned-network-latency", "performance-pinned"],
     ]);
+  });
+});
+
+// ── The every-nodepool panel (ADR-0061's 2026-11-16 amendment) ────────────────
+
+const CONFIGS_RULE = "nodepools[*].configs";
+const ruleSwitch = (page: Page) => page.getByRole("switch", { name: "Same tuning profiles on every nodepool" });
+const rulePicker = (page: Page) => page.getByTestId("rule-tuning");
+const ruleAdd = (page: Page) => page.getByRole("combobox", { name: "Tuning profiles on every nodepool: add a profile" });
+const ruleLine = (page: Page, index: number) => page.getByTestId(`nodepool-${index}-tuning-rule`);
+const cardLocks = (page: Page) => page.getByRole("radiogroup", { name: "Tuning profiles: preset or locked" });
+const EMPTY_RULE = "Choose the profiles every nodepool gets, or turn off the same tuning profiles";
+
+async function configsMode(page: Page, mode: RegExp) {
+  await page.getByRole("radiogroup", { name: "Machine configs and tuning profiles", exact: true }).getByRole("radio", { name: mode }).click();
+}
+
+/** A new flavor named `name`; its creates are collected. */
+async function newFlavor(page: Page, name: string) {
+  await base(page);
+  const writes: ClusterSpec[] = [];
+  await page.route("**/api/day1/specs", (r) => {
+    if (r.request().method() !== "POST") return json(r, []);
+    writes.push(r.request().postDataJSON());
+    return json(r, mockMR({ repo: "specs", iid: 32 }), 201);
+  });
+  await go(page, "/specs/new");
+  await page.getByTestId("spec-name-input").fill(name);
+  return writes;
+}
+
+async function create(page: Page) {
+  await page.getByRole("button", { name: /review & create/i }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
+  await expect(page.getByText("Flavor MR !32 opened")).toBeVisible();
+}
+
+const tuningOf = (spec: ClusterSpec) => (spec.spec.day1.values?.nodepools as { tuning_config?: unknown }[]).map((p) => p.tuning_config);
+
+test.describe("Tuning profiles in the every-nodepool panel", () => {
+  test("the same on every nodepool includes Nodepool 1's profiles, locked as a rule, on every nodepool", async ({ page }) => {
+    const writes = await newFlavor(page, "agent-rule-tuned");
+    await choose(page, addBox(page, 0), "tuned-network-latency");
+    await choose(page, addBox(page, 0), "performance-pinned");
+
+    await configsMode(page, /The same on every nodepool/);
+    await expect(ruleSwitch(page)).toBeChecked();
+    await expect(page.getByTestId("rule-tuning-part")).toContainText("Locked as a rule");
+    await expect(rulePicker(page).locator("[data-testid^=tuning-profile-]")).toHaveText([/^tuned-network-latency/, /^performance-pinned/]);
+    // The card names the rule's profiles: no picker or lock of its own
+    await expect(ruleLine(page, 0)).toHaveText("Gets the rule's tuning profiles: tuned-network-latency, performance-pinned");
+    await expect(picker(page, 0)).toHaveCount(0);
+    await expect(cardLocks(page)).toHaveCount(0);
+
+    // A nodepool added under the rule gets the rule's profiles; the panel's picker edits every nodepool's
+    await page.getByRole("button", { name: "Add nodepool" }).click();
+    await expect(ruleLine(page, 1)).toHaveText("Gets the rule's tuning profiles: tuned-network-latency, performance-pinned");
+    await choose(page, ruleAdd(page), "tuned-pinned-irq");
+    await expect(ruleLine(page, 1)).toHaveText("Gets the rule's tuning profiles: tuned-network-latency, performance-pinned, tuned-pinned-irq");
+
+    await create(page);
+    expect(writes[0].spec.day1.locked_paths).toEqual([CONFIGS_RULE, RULE]);
+    const names = ["tuned-network-latency", "performance-pinned", "tuned-pinned-irq"];
+    expect(tuningOf(writes[0])).toEqual([names, names]);
+  });
+
+  test("nodepools with different profiles keep them: the switch starts off and nothing is overwritten", async ({ page }) => {
+    const writes = await newFlavor(page, "agent-rule-own");
+    await choose(page, addBox(page, 0), "tuned-network-latency");
+    await page.getByRole("button", { name: "Add nodepool" }).click();
+    await choose(page, addBox(page, 1), "tuned-sysctl-baseline");
+
+    await configsMode(page, /The same on every nodepool/);
+    await expect(ruleSwitch(page)).not.toBeChecked();
+    await expect(page.getByTestId("rule-tuning-differ")).toHaveText(
+      "The nodepools name different tuning profiles, so each keeps its own. Turning this on gives every nodepool Nodepool 1's: tuned-network-latency."
+    );
+    // Each card keeps its picker, a preset; the lock is the panel's switch
+    await expect(chips(page, 0)).toHaveText([/^tuned-network-latency/]);
+    await expect(chips(page, 1)).toHaveText([/^tuned-sysctl-baseline/]);
+    await expect(cardLocks(page)).toHaveCount(0);
+    await expect(page.locator('[data-field="nodepools[1].tuning_config"]')).toContainText(
+      "Prefilled: a cluster may change them. To lock them on every nodepool, use the switch under On every nodepool."
+    );
+
+    await create(page);
+    expect(writes[0].spec.day1.locked_paths).toEqual([CONFIGS_RULE]);
+    expect(tuningOf(writes[0])).toEqual([["tuned-network-latency"], ["tuned-sysctl-baseline"]]);
+  });
+
+  test("on with nothing picked blocks the save; off gives the cards their pickers back; each nodepool its own keeps the names", async ({ page }) => {
+    const writes = await newFlavor(page, "agent-rule-switch");
+    await page.getByRole("button", { name: "Add nodepool" }).click();
+
+    // No nodepool names a profile yet: the same on every one, so the panel includes tuning
+    await configsMode(page, /The same on every nodepool/);
+    await expect(ruleSwitch(page)).toBeChecked();
+    await expect(rulePicker(page)).toContainText("No tuning profiles.");
+    await expect(ruleLine(page, 1)).toHaveText("Gets the rule's tuning profiles: none");
+    await expect(rulePicker(page)).toContainText(EMPTY_RULE);
+    await page.getByRole("button", { name: /review & create/i }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("alert").filter({ hasText: "before saving" })).toContainText(`Every nodepool · Tuning profiles: ${EMPTY_RULE}`);
+    expect(writes).toHaveLength(0);
+
+    await choose(page, ruleAdd(page), "tuned-network-latency");
+    await expect(rulePicker(page)).not.toContainText(EMPTY_RULE);
+
+    // Off: each card has its picker again, the rule's names its preset
+    await ruleSwitch(page).click();
+    await expect(ruleSwitch(page)).not.toBeChecked();
+    await expect(chips(page, 0)).toHaveText([/^tuned-network-latency/]);
+    await expect(chips(page, 1)).toHaveText([/^tuned-network-latency/]);
+    // Once they differ, turning it on gives every nodepool Nodepool 1's
+    await picker(page, 1).getByRole("button", { name: "Remove tuning profile tuned-network-latency" }).click();
+    await expect(page.getByTestId("rule-tuning-differ")).toContainText("Nodepool 1's: tuned-network-latency.");
+    await ruleSwitch(page).click();
+    await expect(ruleLine(page, 1)).toHaveText("Gets the rule's tuning profiles: tuned-network-latency");
+
+    // Each nodepool its own: both rules go, each nodepool keeps its configs and names as presets
+    await configsMode(page, /Each nodepool its own/);
+    await expect(page.getByTestId("configs-rule")).toHaveCount(0);
+    await expect(chips(page, 1)).toHaveText([/^tuned-network-latency/]);
+    await expect(cardLocks(page)).toHaveCount(2);
+    await expect(cardLocks(page).nth(1).getByRole("radio", { name: "Preset" })).toHaveAttribute("aria-checked", "true");
+
+    await create(page);
+    expect(writes[0].spec.day1.locked_paths).toEqual([]);
+    expect(tuningOf(writes[0])).toEqual([["tuned-network-latency"], ["tuned-network-latency"]]);
+  });
+
+  test("a saved flavor loads as it was saved: the panel's switch off without the rule, on with it, and the 3.37.0 card lock", async ({ page }) => {
+    const configs = [{ name: "nm-conf", hardware: "generic" }, { name: "workers-chrony-configuration" }];
+    const saved = (name: string, locked: string[]): SpecDetail => ({
+      apiVersion: "wingman.io/v1",
+      kind: "ClusterSpec",
+      metadata: { name, description: `The ${name} flavor`, version: "1.0.0", labels: {} },
+      spec: {
+        day1: {
+          variables: [],
+          structure: { nodepools: [{}, {}] },
+          locked_paths: locked,
+          template: "# cluster-template.j2",
+          values: { nodepools: [0, 1].map(() => ({ configs, tuning_config: ["tuned-network-latency"] })) },
+        },
+        day2: { addons: [] },
+      },
+      load_error: null,
+      load_problems: [],
+      warnings: [],
+      last_commit_id: "cccccccc33333333cccccccc33333333cccccccc",
+    });
+    const flavors = [saved("rule-preset", [CONFIGS_RULE]), saved("rule-locked", [CONFIGS_RULE, RULE]), saved("card-locked", [RULE])];
+    const writes: ClusterSpec[] = [];
+    await base(page);
+    await page.route("**/api/day1/mces/*/openshift-versions", (r) => json(r, { mce: MCES[0].name, versions: ["4.16.27"], problems: [] }));
+    await page.route("**/api/day1/clusters/preview", (r) => json(r, { yaml: "", path: "" }));
+    await page.route(/\/api\/day1\/specs\/[a-z-]+(\?.*)?$/, (r) => {
+      const name = new URL(r.request().url()).pathname.split("/").at(-1);
+      if (r.request().method() !== "PUT") return json(r, flavors.find((f) => f.metadata.name === name));
+      writes.push(r.request().postDataJSON());
+      return json(r, mockMR({ repo: "specs", iid: 33 }));
+    });
+
+    // The configs rule without the tuning rule: the switch is off though the nodepools agree
+    await go(page, "/specs/rule-preset/edit");
+    await expect(ruleSwitch(page)).not.toBeChecked();
+    await expect(chips(page, 1)).toHaveText([/^tuned-network-latency/]);
+    await page.getByTestId("spec-version-input").fill("1.1.0");
+    await page.getByRole("button", { name: /review & update/i }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /confirm/i }).click();
+    await expect(page.getByText("Update MR !33 opened")).toBeVisible();
+    expect(writes[0].spec.day1.locked_paths).toEqual([CONFIGS_RULE]);
+    expect(tuningOf(writes[0])).toEqual([["tuned-network-latency"], ["tuned-network-latency"]]);
+
+    // With it: on, the cards name the rule's profiles
+    await go(page, "/specs/rule-locked/edit");
+    await expect(ruleSwitch(page)).toBeChecked();
+    await expect(ruleLine(page, 1)).toHaveText("Gets the rule's tuning profiles: tuned-network-latency");
+
+    // Configs per nodepool with the tuning rule (3.37.0): the card's lock, as before
+    await go(page, "/specs/card-locked/edit");
+    await expect(page.getByTestId("configs-rule")).toHaveCount(0);
+    await expect(cardLocks(page).first().getByRole("radio", { name: "Locked" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator('[data-field="nodepools[1].tuning_config"]')).toContainText("Locked on every nodepool");
   });
 });
 
