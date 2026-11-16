@@ -18,6 +18,7 @@ import { InstallServersButton } from "./install-servers-button";
 import { InstallServersDialog } from "./install-servers-dialog";
 import { MceCard } from "./mce-card";
 import { RunsTable } from "./runs-table";
+import { useCollapsedMces } from "./use-collapsed-mces";
 
 /** Why the page cannot show anything: no server-scan. */
 function Blocked() {
@@ -71,7 +72,9 @@ function RunsSection({ availability }: { availability: Availability }) {
 
 /**
  * Inventory Management (ADR-0057): each MCE's available Agents by InfraEnv
- * pool, as server-scan counts them; installing servers into a pool through
+ * pool, as server-scan counts them, with the free servers ready to install
+ * and those that need a fix (each card collapses, kept per viewer);
+ * installing servers into a pool through
  * the platform's add-server-to-mce workflow, from the header or a pool's row;
  * and its runs, herzi's included. Not a fleet view: a server's record is
  * server-scan's. Everyone signed in reads it; only an admin sees Install
@@ -83,6 +86,7 @@ export function InventoryPage() {
   const admin = useIsAdmin();
   const mounted = useMounted();
   const [target, setTarget] = useState<InstallTarget | null>(null);
+  const [collapsed, toggleCollapsed] = useCollapsedMces();
   const data = overview.data;
   const runs = useInventoryRuns({ enabled: data?.runs.available ?? false });
 
@@ -135,7 +139,14 @@ export function InventoryPage() {
           <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{group.site}</h2>
           <div className="grid gap-3">
             {group.mces.map((mce) => (
-              <MceCard key={mce.mce} mce={mce} canAdd={canAdd} onAdd={setTarget} />
+              <MceCard
+                key={mce.mce}
+                mce={mce}
+                canAdd={canAdd}
+                onAdd={setTarget}
+                collapsed={collapsed.has(mce.mce)}
+                onToggle={() => toggleCollapsed(mce.mce)}
+              />
             ))}
           </div>
           {group.quiet.length > 0 && (

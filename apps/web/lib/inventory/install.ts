@@ -6,7 +6,7 @@
  * workflow's first check (`validating-infraenv`), a failed run otherwise.
  */
 
-import type { InventoryRun, MceInventory } from "@/types/inventory";
+import type { InventoryRun, MceInventory, PoolCount } from "@/types/inventory";
 
 /** One choice of a picker (the shape the shared `Combobox` takes). */
 export interface PickerOption {
@@ -72,10 +72,10 @@ export function infraEnvOptions(known: readonly string[], mce: MceInventory | un
   ];
 }
 
-/** What a pool draw could pick in this pool, as server-scan counts it; `null` when not known. */
-export function drawableIn(mce: MceInventory | undefined, infraEnv: string | null): number | null {
+/** The pool's counts on this MCE (ready, needs fix), as server-scan counts them; `null` when not known. */
+export function poolIn(mce: MceInventory | undefined, infraEnv: string | null): PoolCount | null {
   if (!mce || !infraEnv) return null;
-  return mce.pools.find((p) => p.infra_env === infraEnv)?.drawable ?? null;
+  return mce.pools.find((p) => p.infra_env === infraEnv) ?? null;
 }
 
 /** The InfraEnv the dialog would send: the picked one, or the typed one once it is a DNS label. */

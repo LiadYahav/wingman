@@ -1,15 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight, FileText, Info, Plus } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { useId } from "react";
+import { ChevronRight, FileText, Info } from "lucide-react";
 import { Hint } from "@/components/common/hint";
-import { useCandidates } from "@/lib/api/inventory";
-import { hardwareLabel } from "@/lib/inventory/pools";
 import { cn } from "@/lib/utils";
+import { totalSum } from "@/lib/inventory/waiver";
 import type { InstallTarget } from "@/lib/inventory/install";
-import type { MceInventory, PoolCount } from "@/types/inventory";
-import { CandidateList } from "./candidate-list";
+import type { MceInventory } from "@/types/inventory";
+import { PoolRow } from "./pool-row";
 
 function HeaderHint({ label, hint }: { label: string; hint: string }) {
   return (
@@ -22,89 +20,12 @@ function HeaderHint({ label, hint }: { label: string; hint: string }) {
   );
 }
 
-function Available({ pool }: { pool: PoolCount }) {
-  const unusable = pool.available - pool.usable;
-  return (
-    <span className="inline-flex items-center gap-1 tabular-nums">
-      {pool.available}
-      {unusable > 0 && (
-        <Hint
-          hint="Counted as available, but server-scan says it cannot be used now: in maintenance, unreachable, stale, unhealthy or contested."
-          label={`${unusable} not usable: why`}
-        >
-          <span className="text-[11px] text-status-warning-fg">{unusable} not usable</span>
-        </Hint>
-      )}
-    </span>
-  );
-}
-
-/** The pool's servers in no MCE, read when opened. */
-function PoolServers({ mce, infraEnv }: { mce: string; infraEnv: string }) {
-  const read = useCandidates(mce, infraEnv, { enabled: true });
-  return <CandidateList infraEnv={infraEnv} candidates={read.data?.candidates} isLoading={read.isLoading} error={read.error} />;
-}
-
-function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolCount; canAdd: boolean; onAdd: (t: InstallTarget) => void }) {
-  const [open, setOpen] = useState(false);
-  const infraEnv = pool.infra_env;
-  const Chevron = open ? ChevronDown : ChevronRight;
-  return (
-    <>
-      <tr data-testid="pool-row" data-pool={infraEnv ?? ""} className="align-middle">
-        <td className="whitespace-nowrap py-1.5 pr-3 font-mono text-xs">
-          {infraEnv ?? (
-            <span className="inline-flex items-center gap-1 font-sans text-muted-foreground">
-              No InfraEnv
-              <Hint hint="Available in server-scan, but the server's name starts with no InfraEnv on this MCE." label="About no InfraEnv">
-                <Info aria-hidden className="h-3 w-3" />
-              </Hint>
-            </span>
-          )}
-        </td>
-        <td className="py-1.5 pr-3" data-testid="pool-available"><Available pool={pool} /></td>
-        <td className="py-1.5 pr-3 text-xs text-muted-foreground">
-          {pool.hardware.map((h) => `${hardwareLabel(h)} ×${h.available}`).join(", ") || "—"}
-        </td>
-        <td className="py-1.5 pr-3 text-xs">
-          {infraEnv !== null && pool.drawable !== null ? (
-            <button
-              type="button"
-              onClick={() => setOpen((now) => !now)}
-              aria-expanded={open}
-              aria-label={`${pool.drawable} free in server-scan for ${infraEnv}`}
-              className="inline-flex items-center gap-0.5 rounded tabular-nums hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 outline-none"
-            >
-              <Chevron aria-hidden className="h-3 w-3" />
-              {pool.drawable}
-            </button>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
-        </td>
-        <td className="py-1.5 text-right">
-          {canAdd && infraEnv !== null && (
-            <button
-              type="button"
-              onClick={() => onAdd({ mce, infraEnv })}
-              className={buttonVariants({ variant: "outline", size: "xs" })}
-              aria-label={`Install servers into ${infraEnv}`}
-            >
-              <Plus aria-hidden className="h-3 w-3" /> Install
-            </button>
-          )}
-        </td>
-      </tr>
-      {open && infraEnv !== null && (
-        <tr>
-          <td colSpan={5} className="pb-2">
-            <PoolServers mce={mce} infraEnv={infraEnv} />
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
+const READY_HINT =
+  "Free servers in server-scan named for this pool that a pool draw could pick today: healthy and reachable, unlocked, out of maintenance. The workflow still checks each one itself (its NICs' links, a live recheck), so a run may still refuse one.";
+const NEEDS_FIX_HINT =
+  "Free servers named for this pool that a pool draw never picks: server-scan does not call them healthy, or cannot reach their BMC. An admin may install one by name, with the workflow's health checks waived, after confirming.";
+const TOTAL_HINT =
+  "Available + Ready + Needs fix: what this pool reaches once every free server named for it is fixed and installed. Locked, in-maintenance and contested servers are not counted.";
 
 /**
  * Where the pools come from when the MCE's own InfraEnv list is unknown (live
@@ -127,50 +48,119 @@ function PoolsFromDay1({ mce }: { mce: MceInventory }) {
   );
 }
 
-/** One MCE: its available Agents, then a row per InfraEnv pool. */
-export function MceCard({ mce, canAdd, onAdd }: { mce: MceInventory; canAdd: boolean; onAdd: (t: InstallTarget) => void }) {
+/** The card's counts line: shown collapsed too, so a collapsed MCE still says what it has. */
+function Counts({ mce }: { mce: MceInventory }) {
+  if (!mce.known) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        <Hint hint="server-scan names no server on this MCE, so its counts are unknown." label="Unknown in server-scan">
+          <span>not in server-scan</span>
+        </Hint>
+      </p>
+    );
+  }
   return (
-    <section data-testid="mce-card" data-mce={mce.mce} aria-label={mce.mce} className="rounded-xl border bg-card px-4 py-3">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="font-mono text-sm font-medium">{mce.mce}</h3>
-        <p className="flex items-baseline gap-3 text-xs text-muted-foreground">
-          {mce.known ? (
-            <>
-              <span data-testid="mce-available">
-                <span className="text-lg font-semibold tabular-nums text-foreground">{mce.available}</span> available
-              </span>
-              <span>{mce.in_clusters} in clusters</span>
-            </>
-          ) : (
-            <Hint hint="server-scan names no server on this MCE, so its counts are unknown." label="Unknown in server-scan">
-              <span>not in server-scan</span>
-            </Hint>
-          )}
-        </p>
+    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+      <span data-testid="mce-available">
+        <span className="text-lg font-semibold tabular-nums text-foreground">{mce.available}</span> available
+      </span>
+      <span>{mce.in_clusters} in clusters</span>
+      <span className="inline-flex items-center gap-0.5" data-testid="mce-total">
+        <span>
+          <span className="font-semibold tabular-nums text-foreground">{mce.total}</span> total
+        </span>
+        <Hint
+          hint={`${totalSum(mce)}: what this MCE's pools reach once every free server named for them is fixed and installed. A free server named for two of its pools counts once; locked, in-maintenance and contested servers are not counted.`}
+          label="About the total"
+        >
+          <Info aria-hidden className="h-3 w-3" />
+        </Hint>
+      </span>
+    </p>
+  );
+}
+
+/**
+ * One MCE: its counts, then a row per InfraEnv pool. Its title collapses the
+ * pools (`collapsed`, kept per viewer by the page) so the other MCEs fit.
+ */
+export function MceCard({
+  mce,
+  canAdd,
+  onAdd,
+  collapsed,
+  onToggle,
+}: {
+  mce: MceInventory;
+  canAdd: boolean;
+  onAdd: (t: InstallTarget) => void;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const bodyId = useId();
+  return (
+    <section
+      data-testid="mce-card"
+      data-mce={mce.mce}
+      data-collapsed={collapsed}
+      aria-label={mce.mce}
+      className="rounded-xl border bg-card px-4 py-3"
+    >
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <h3>
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            aria-controls={bodyId}
+            data-testid="mce-toggle"
+            className="-mx-1.5 inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-left font-mono text-sm font-medium outline-none transition-colors hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <ChevronRight
+              aria-hidden
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 ease-out motion-reduce:transition-none",
+                !collapsed && "rotate-90"
+              )}
+            />
+            <span>{mce.mce}</span>
+          </button>
+        </h3>
+        <Counts mce={mce} />
       </header>
-      <PoolsFromDay1 mce={mce} />
-      {mce.pools.length > 0 && (
-        <table className="mt-2 w-full text-sm" aria-label={`Pools on ${mce.mce}`}>
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-              <th className="pb-1 pr-3 font-medium">InfraEnv</th>
-              <th className="pb-1 pr-3 font-medium">
-                <HeaderHint label="Available" hint="Agents in this MCE's inventory and in no cluster (server-scan's INSTALLED_TO_INVENTORY)." />
-              </th>
-              <th className="pb-1 pr-3 font-medium">Hardware</th>
-              <th className="pb-1 pr-3 font-medium">
-                <HeaderHint label="Free" hint="Servers in server-scan, not yet in this pool, that an install could pick." />
-              </th>
-              <th className={cn("pb-1", !canAdd && "w-0")}><span className="sr-only">Install</span></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {mce.pools.map((pool) => (
-              <PoolRow key={pool.infra_env ?? ""} mce={mce.mce} pool={pool} canAdd={canAdd} onAdd={onAdd} />
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div id={bodyId} hidden={collapsed}>
+        <PoolsFromDay1 mce={mce} />
+        {mce.pools.length > 0 && (
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-sm" aria-label={`Pools on ${mce.mce}`}>
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <th className="pb-1 pr-3 font-medium">InfraEnv</th>
+                  <th className="pb-1 pr-3 font-medium">
+                    <HeaderHint label="Available" hint="Agents in this MCE's inventory and in no cluster (server-scan's INSTALLED_TO_INVENTORY)." />
+                  </th>
+                  <th className="pb-1 pr-3 font-medium">Hardware</th>
+                  <th className="pb-1 pr-3 font-medium">
+                    <HeaderHint label="Ready" hint={READY_HINT} />
+                  </th>
+                  <th className="pb-1 pr-3 font-medium">
+                    <HeaderHint label="Needs fix" hint={NEEDS_FIX_HINT} />
+                  </th>
+                  <th className="pb-1 pr-3 font-medium">
+                    <HeaderHint label="Total" hint={TOTAL_HINT} />
+                  </th>
+                  <th className={cn("pb-1", !canAdd && "w-0")}><span className="sr-only">Install</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {mce.pools.map((pool) => (
+                  <PoolRow key={pool.infra_env ?? ""} mce={mce.mce} pool={pool} canAdd={canAdd} onAdd={onAdd} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

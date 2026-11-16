@@ -137,9 +137,11 @@ async def test_every_mce_is_counted_by_pool_as_server_scan_reports_it(
         "available": 2,
         "usable": 2,
         "hardware": [{"vendor": "dell", "model": "PowerEdge R650", "available": 2, "usable": 2}],
-        "drawable": 1,
+        "ready": 1,
+        "needs_fix": 1,
+        "total": 4,
     }
-    assert pools["dell-r760-site1-64c-512gb-20tb"]["drawable"] == 3, "herzi's pool can grow"
+    assert pools["dell-r760-site1-64c-512gb-20tb"]["ready"] == 3, "herzi's pool can grow"
     assert pools[None]["available"] == 1, "a name that matches no InfraEnv is not guessed"
     unknown = next(m for m in body["mces"] if m["mce"] == "ocp4-prod-mce-site1-c")
     assert unknown["known"] is False
@@ -161,7 +163,8 @@ async def test_a_pools_candidates_show_the_lock_and_offer_no_locked_server(
     }
     assert found[DONOR]["why_not"] == "in maintenance"
     assert set(found[FREE]) == {
-        "id", "name", "vendor", "model", "health", "lock", "offered", "why_not",
+        "id", "name", "vendor", "model", "health", "lock", "offered", "why_not", "ready",
+        "health_problems",
     }  # fmt: skip
 
 

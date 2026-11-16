@@ -9,8 +9,10 @@ it takes a server in the fake server-scan, as the workflow takes server-scan's
 lock: a pool draw the first ``AVAILABLE``, healthy, reachable, unlocked server
 out of maintenance named ``ocp-<infraEnv>``; a named install its server, and
 it fails as the workflow fails (locked, in maintenance, contested, not
-``AVAILABLE``). Done, the server is in the MCE's inventory. The phases are a
-sample for the demo, nothing more: day1 passes the real workflow's through.
+``AVAILABLE``, or unhealthy or unreachable unless the start asked for
+``allow_unhealthy``, which it then records as waived on the run). Done, the
+server is in the MCE's inventory. The phases are a sample for the demo,
+nothing more: day1 passes the real workflow's through.
 
 The fake herzi starts a pool draw on one pool now and then; after a run of
 its fails for want of servers, it waits longer (as herzi's probe mode). Its
@@ -41,7 +43,14 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
     WorkflowsUnavailableError,
 )
-from wingman_day1.domain.inventory import AVAILABLE_STATE, drawable, named_for, why_not
+from wingman_day1.domain.inventory import (
+    AVAILABLE_STATE,
+    UNREACHABLE,
+    drawable,
+    health_problems,
+    named_for,
+    why_not,
+)
 from wingman_day1.domain.mce_capacity import SPARE_STATE
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
@@ -87,6 +96,9 @@ class FakeRun:
     herzi: bool = False
     taken: bool = False
     """Whether it has taken its server (server-scan's lock)."""
+    allow_unhealthy: bool = False
+    waived: tuple[str, ...] = ()
+    """The health checks waived for its server, in the workflow's ``check: observed`` form."""
 
 
 class FakeAddServerWorkflow:
@@ -132,7 +144,9 @@ class FakeAddServerWorkflow:
         found = next((r for r in reversed(self._runs) if r.workflow_id == workflow_id), None)
         if found is None:
             return None
-        return AddServerRun(found.workflow_id, found.status, found.phase, found.server, found.error)
+        return AddServerRun(
+            found.workflow_id, found.status, found.phase, found.server, found.error, found.waived
+        )
 
     async def start(self, request: AddServerRequest) -> AddServerStart:
         """See AddServerWorkflow.start."""
@@ -164,7 +178,10 @@ class FakeAddServerWorkflow:
         workflow_id = f"{ADD_SERVER_WORKFLOW_PREFIX}{mce}_{name.lower()}"
         if any(r.workflow_id == workflow_id and r.status == "running" for r in self._runs):
             return StartedRun(workflow_id, "already_running", server_name=name)
-        run = FakeRun(workflow_id, mce, request.infra_env, now, server=name, named=True)
+        run = FakeRun(
+            workflow_id, mce, request.infra_env, now, server=name, named=True,
+            allow_unhealthy=request.allow_unhealthy,
+        )  # fmt: skip
         self._add(run)
         return StartedRun(workflow_id, "started", server_name=name)
 
@@ -261,6 +278,11 @@ class FakeAddServerWorkflow:
             return f"ServerReservedError: {run.server} is {reason} (fake)"
         if reason is not None:
             return f"ServerNotAvailableError: {run.server} is {reason} (fake)"
+        problems = health_problems(row)
+        if problems and not run.allow_unhealthy:
+            sick = ", ".join(problems)
+            return f"ServerNotAvailableError: {run.server} is not healthy: {sick} (fake)"
+        run.waived = tuple(_waiver(row, problem) for problem in problems)
         return row
 
     def _fail(self, run: FakeRun, at: datetime, error: str) -> None:
@@ -277,6 +299,13 @@ class FakeAddServerWorkflow:
                     row, state=SPARE_STATE, mce=run.mce, reserved_until=at + DONE_LOCK
                 )
             )
+
+
+def _waiver(row: ServerRow, problem: str) -> str:
+    """One waived check as the workflow records it (``allowed_unhealthy``)."""
+    if problem == UNREACHABLE:
+        return "bmc-reachable: server-scan cannot reach its BMC"
+    return f"server-scan-health: overall {row.health}"
 
 
 def _start(run: FakeRun) -> datetime:

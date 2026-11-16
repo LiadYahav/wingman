@@ -2,8 +2,8 @@
  * Inventory Management mocks (docs/notes/2026-11-13-inventory-management-api.md),
  * typed so a shape change fails `tsc`. Made up: two MCEs at site1, one with a
  * pool whose names match no InfraEnv, one MCE server-scan does not know; a
- * pool's servers with a free one, a locked one and one in maintenance; runs
- * of both origins, one failed.
+ * pool's servers with a ready one, one that needs a fix, a locked one and one
+ * in maintenance; runs of both origins, one failed.
  */
 
 import type { Page, Route } from "@playwright/test";
@@ -23,6 +23,8 @@ export const R650 = "dell-r650-site1-96c-768gb";
 export const FREE = `ocp-${R650}-DLFAKE0811`;
 export const LOCKED = `ocp-${R650}-DLFAKE0812`;
 export const DONOR = `ocp-${R650}-DLFAKE0813`;
+/** CRITICAL and unreachable: offered, but a pool draw never picks it (needs a fix). */
+export const SICK = `ocp-${R650}-DLFAKE0815`;
 export const SITE1_B = "ocp4-prod-mce-site1-b";
 /** The one InfraEnv site1-b's cluster files name: its own list could not be read. */
 export const SITE1_B_POOL = "dell-r760-site1-64c-512gb-20tb";
@@ -31,11 +33,12 @@ export const OVERVIEW: InventoryOverview = {
   mces: [
     {
       site: "site1", mce: SITE1_A, known: true, servers: 16, in_clusters: 10, available: 6, usable: 5,
+      ready: 1, needs_fix: 1, total: 8,
       pools: [
-        { infra_env: R650, available: 2, usable: 1, drawable: 1,
+        { infra_env: R650, available: 2, usable: 1, ready: 1, needs_fix: 1, total: 4,
           hardware: [{ vendor: "dell", model: "PowerEdge R650", available: 2, usable: 1 }] },
-        { infra_env: "hp-gen12-site1-64c-512gb", available: 0, usable: 0, drawable: 0, hardware: [] },
-        { infra_env: null, available: 4, usable: 4, drawable: null,
+        { infra_env: "hp-gen12-site1-64c-512gb", available: 0, usable: 0, ready: 0, needs_fix: 0, total: 0, hardware: [] },
+        { infra_env: null, available: 4, usable: 4, ready: null, needs_fix: null, total: 4,
           hardware: [{ vendor: "dell", model: "PowerEdge R760", available: 4, usable: 4 }] },
       ],
       infra_envs: [R650, "hp-gen12-site1-64c-512gb"],
@@ -43,13 +46,14 @@ export const OVERVIEW: InventoryOverview = {
     },
     {
       site: "site1", mce: "ocp4-prod-mce-site1-b", known: true, servers: 4, in_clusters: 0, available: 4, usable: 4,
-      pools: [{ infra_env: SITE1_B_POOL, available: 0, usable: 0, drawable: 2, hardware: [] }],
+      ready: 2, needs_fix: 0, total: 6,
+      pools: [{ infra_env: SITE1_B_POOL, available: 0, usable: 0, ready: 2, needs_fix: 0, total: 2, hardware: [] }],
       infra_envs: [SITE1_B_POOL], infra_envs_from: "day1",
       infra_envs_error: "HubUnavailable: MCE 'ocp4-prod-mce-site1-b' hub API unreachable",
     },
     {
       site: "site1", mce: "ocp4-prod-mce-site1-c", known: false, servers: 0, in_clusters: 0, available: 0, usable: 0,
-      pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce",
+      ready: 0, needs_fix: 0, total: 0, pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce",
     },
   ],
   add_servers: { available: true, detail: null },
@@ -58,7 +62,7 @@ export const OVERVIEW: InventoryOverview = {
 
 const candidate = (name: string, overrides: Partial<Candidate> = {}): Candidate => ({
   id: `srv_${name.slice(-4)}`, name, vendor: "dell", model: "PowerEdge R650", health: "HEALTHY",
-  lock: null, offered: true, why_not: null, ...overrides,
+  lock: null, offered: true, why_not: null, ready: true, health_problems: [], ...overrides,
 });
 
 const CANDIDATES: Candidates = {
@@ -66,19 +70,20 @@ const CANDIDATES: Candidates = {
   infra_env: R650,
   candidates: [
     candidate(FREE),
+    candidate(SICK, { health: "CRITICAL", ready: false, health_problems: ["health CRITICAL", "BMC unreachable"] }),
     candidate(LOCKED, {
-      offered: false,
+      offered: false, ready: false,
       why_not: "locked by add-server-to-mce until 2026-11-13T18:00:00+00:00",
       lock: { holder: "add-server-to-mce", mce: "ocp4-prod-mce-site1-b", infra_env: R650, expires_at: "2026-11-13T18:00:00+00:00" },
     }),
-    candidate(DONOR, { offered: false, why_not: "in maintenance" }),
+    candidate(DONOR, { offered: false, ready: false, why_not: "in maintenance" }),
   ],
 };
 
 const run = (overrides: Partial<InventoryRun>): InventoryRun => ({
   workflow_id: `add-server-to-mce-${SITE1_A}_${R650}_1`, status: "running", started_at: "2026-11-13T12:00:00+00:00",
   closed_at: null, mce: SITE1_A, infra_env: R650, slot: 1, server_name: null, server_id: null, origin: "pool", phase: "acquiring-server",
-  error: null, ...overrides,
+  error: null, health_checks_waived: [], ...overrides,
 });
 
 const RUNS: InventoryRuns = {

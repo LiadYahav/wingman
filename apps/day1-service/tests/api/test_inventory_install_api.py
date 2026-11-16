@@ -127,7 +127,7 @@ async def test_without_live_status_the_pools_are_the_ones_the_day1_files_name(
     named = [p["infra_env"] for p in site1_a["pools"] if p["infra_env"] is not None]
     assert named == DAY1_POOLS
     r760 = next(p for p in site1_a["pools"] if p["infra_env"] == DAY1_POOLS[1])
-    assert r760["drawable"] == 3, "server-scan's free servers named for the pool"
+    assert r760["ready"] == 3, "server-scan's free servers named for the pool"
     assert site1_a["available"] == 6, "the counts stay server-scan's"
 
 

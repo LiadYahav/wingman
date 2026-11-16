@@ -15,6 +15,9 @@ page offered (an ``AVAILABLE`` server named for the pool, not locked, out of
 maintenance, not contested). Whether the InfraEnv exists on the MCE is the
 workflow's first check (``validating-infraenv``), as on the orchestrator's
 own form. A start is never retried (ADR-0006) and is logged with who asked.
+``allow_unhealthy`` (the workflow's health waiver, ADR-0057's 3.38.0
+amendment) is refused without server names, before anything is sent, and a
+start that carries it is logged as one with health checks waived.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ from wingman_core.domain.users import User
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.domain.add_server import (
+    WAIVER_NEEDS_NAMES,
     AddServerRequest,
     AddServerRun,
     AddServerStart,
@@ -221,35 +225,49 @@ class InventoryService:
         count: int | None,
         server_names: Sequence[str],
         user: User,
+        allow_unhealthy: bool = False,
     ) -> AddServerStart:
-        """Start ``add-server-to-mce`` for ``count`` servers, or these. Never retried (ADR-0006)."""
+        """Start ``add-server-to-mce`` for ``count`` servers, or these. Never retried (ADR-0006).
+
+        ``allow_unhealthy`` waives the workflow's health checks for the named
+        servers, never its safety refusals; a pool draw may not carry it.
+        """
         availability = self.add_availability
         if not availability.available or self._workflows is None:
             raise WorkflowsNotConfiguredError(availability.detail or ADD_SERVERS_OFF)
         if (count is None) == (not server_names):
             raise InvalidInputError("give either count or server_names", ["count or server_names"])
+        if allow_unhealthy and not server_names:
+            raise InvalidInputError(WAIVER_NEEDS_NAMES, ["allow_unhealthy: needs server_names"])
         await self._require_pool(mce, infra_env)
         names = await self._offered(server_names, infra_env) if server_names else ()
-        request = AddServerRequest(mce, infra_env, self._namespace, count, names)
+        request = AddServerRequest(
+            mce, infra_env, self._namespace, count, names, allow_unhealthy=allow_unhealthy
+        )
         event = {
             "user": user.username,
             "mce": mce,
             "infra_env": infra_env,
             "count": str(count) if count is not None else "",
             "server_names": ",".join(names),
+            "allow_unhealthy": "true" if allow_unhealthy else "",
         }
+        waived = " with health checks waived" if allow_unhealthy else ""
         try:
             result = await self._workflows.start(request)
         except AmbiguousStartError:
             logger.warning(
-                "servers add start unconfirmed: %s",
+                "servers add start%s unconfirmed: %s",
+                waived,
                 _fields(event),
                 extra={"event": "servers_add_unconfirmed", **event},
             )
             raise
         ids = ",".join(result.workflow_ids)
-        logger.info(
-            "servers add started: %s",
+        logger.log(
+            logging.WARNING if allow_unhealthy else logging.INFO,
+            "servers add started%s: %s",
+            waived,
             _fields({**event, "workflow_ids": ids}),
             extra={"event": "servers_add_started", **event, "workflow_ids": ids},
         )

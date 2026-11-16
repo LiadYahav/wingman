@@ -79,16 +79,18 @@ def test_an_mce_is_counted_by_state_pool_and_hardware() -> None:
     assert [p.infra_env for p in found.pools] == [R650, R760, "empty-pool", None]
     by_env = {p.infra_env: p for p in found.pools}
     assert by_env[R650] == PoolCount(
-        R650, 2, 1, (HardwareCount("dell", "PowerEdge R650", 2, 1),), drawable=1
+        R650, 2, 1, (HardwareCount("dell", "PowerEdge R650", 2, 1),), ready=1, needs_fix=0
     )
-    assert by_env["empty-pool"] == PoolCount("empty-pool", 0, 0, (), drawable=0)
-    assert by_env[None] == PoolCount(None, 1, 1, (HardwareCount("hp", "DL360", 1, 1),), None)
+    assert by_env["empty-pool"] == PoolCount("empty-pool", 0, 0, (), ready=0, needs_fix=0)
+    assert by_env[None] == PoolCount(
+        None, 1, 1, (HardwareCount("hp", "DL360", 1, 1),), ready=None, needs_fix=None
+    )
 
 
 def test_an_mce_server_scan_names_nothing_on_is_unknown_not_zero() -> None:
     found = mce_inventory("site1", MCE, [row("x", mce="ocp4-other")], infra_envs=[R650])
     assert not found.known
-    assert found.pools == (PoolCount(R650, 0, 0, (), drawable=0),)
+    assert found.pools == (PoolCount(R650, 0, 0, (), ready=0, needs_fix=0),)
 
 
 def test_unknown_infra_envs_leave_every_server_under_none_and_say_why() -> None:
@@ -99,7 +101,7 @@ def test_unknown_infra_envs_leave_every_server_under_none_and_say_why() -> None:
     assert found.infra_envs_error == "hub down"
 
 
-def test_drawable_is_what_a_pool_draw_could_pick() -> None:
+def test_ready_is_what_a_pool_draw_could_pick() -> None:
     free = [
         row(f"ocp-{R650}-ok", state="AVAILABLE"),
         row(f"ocp-{R650}-sick", state="AVAILABLE", health="WARNING"),
@@ -108,7 +110,7 @@ def test_drawable_is_what_a_pool_draw_could_pick() -> None:
         row(f"ocp-{R760}-other", state="AVAILABLE"),
     ]
     found = mce_inventory("site1", MCE, free, infra_envs=[R650])
-    assert found.pools[0].drawable == 1
+    assert (found.pools[0].ready, found.pools[0].needs_fix) == (1, 2), "maintenance is neither"
 
 
 # ── Named installs ───────────────────────────────────────────────────────────

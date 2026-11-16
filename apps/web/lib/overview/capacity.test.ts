@@ -4,12 +4,13 @@ import type { SiteSegmentStats } from "@/types/segments";
 import { segmentCapacity, serverCapacity } from "./capacity";
 
 const pool = (infra_env: string | null, available: number): PoolCount => ({
-  infra_env, available, usable: available, hardware: [], drawable: infra_env ? 0 : null,
+  infra_env, available, usable: available, hardware: [], ready: infra_env ? 0 : null, needs_fix: infra_env ? 0 : null,
+  total: available,
 });
 
 const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
   site: "site1", mce: name, known: true, servers: 10, in_clusters: 6, available: 4, usable: 4,
-  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ...overrides,
+  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 0, ...overrides,
 });
 
 const site = (name: string, total_segments: number, allocated: number): SiteSegmentStats => ({

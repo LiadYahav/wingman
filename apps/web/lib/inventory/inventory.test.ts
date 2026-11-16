@@ -8,13 +8,13 @@ import { MAX_SERVERS, addRequest, isSettled, refusalTitle, startSummary, toggled
 
 const mce = (name: string, site: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
   site, mce: name, known: true, servers: 3, in_clusters: 1, available: 2, usable: 2,
-  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ...overrides,
+  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 0, ...overrides,
 });
 
 const run = (overrides: Partial<InventoryRun> = {}): InventoryRun => ({
   workflow_id: "add-server-to-mce-ocp4-prod-mce-site1-a_pool_1", status: "running",
   started_at: null, closed_at: null, mce: "ocp4-prod-mce-site1-a", infra_env: "pool", slot: 1,
-  server_name: null, server_id: null, origin: "pool", phase: null, error: null, ...overrides,
+  server_name: null, server_id: null, origin: "pool", phase: null, error: null, health_checks_waived: [], ...overrides,
 });
 
 const problem = (status: number, code: ErrorCode) =>
@@ -26,7 +26,7 @@ describe("the pools", () => {
       mce("a", "site1"),
       mce("b", "site2"),
       mce("c", "site1", { known: false }),
-      mce("d", "site1", { known: false, pools: [{ infra_env: "p", available: 0, usable: 0, hardware: [], drawable: 0 }] }),
+      mce("d", "site1", { known: false, pools: [{ infra_env: "p", available: 0, usable: 0, hardware: [], ready: 0, needs_fix: 0, total: 0 }] }),
     ]);
     expect(groups.map((g) => [g.site, g.mces.map((m) => m.mce), g.quiet.map((m) => m.mce)])).toEqual([
       ["site1", ["a", "d"], ["c"]],

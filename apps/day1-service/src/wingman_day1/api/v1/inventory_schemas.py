@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from wingman_day1.application.inventory import Availability, InventoryOverview, ShownRun
 from wingman_day1.domain.add_server import (
     MAX_SERVERS,
+    WAIVER_NEEDS_NAMES,
     AddServerRun,
     AddServerStart,
     Origin,
@@ -65,7 +66,12 @@ class PoolOut(BaseModel):
     available: int
     usable: int
     hardware: list[HardwareOut]
-    drawable: int | None
+    ready: int | None
+    """Free servers a pool draw could pick (server-scan's view); null without an InfraEnv."""
+    needs_fix: int | None
+    """Offered free servers a pool draw would not pick: unhealthy or unreachable."""
+    total: int
+    """``available`` + ``ready`` + ``needs_fix``."""
 
     @classmethod
     def of(cls, pool: PoolCount) -> PoolOut:
@@ -75,7 +81,9 @@ class PoolOut(BaseModel):
             available=pool.available,
             usable=pool.usable,
             hardware=[HardwareOut.of(h) for h in pool.hardware],
-            drawable=pool.drawable,
+            ready=pool.ready,
+            needs_fix=pool.needs_fix,
+            total=pool.total,
         )
 
 
@@ -95,6 +103,10 @@ class MceInventoryOut(BaseModel):
     """Why the MCE's own InfraEnv list is unknown (live status off, the hub unreadable)."""
     infra_envs_from: Literal["mce", "day1"]
     """``mce``: its own list. ``day1``: the InfraEnvs its day1 cluster files name."""
+    ready: int
+    needs_fix: int
+    """The pools' ready and needing a fix, each free server counted once."""
+    total: int
 
     @classmethod
     def of(cls, mce: MceInventory) -> MceInventoryOut:
@@ -111,6 +123,9 @@ class MceInventoryOut(BaseModel):
             infra_envs=list(mce.infra_envs),
             infra_envs_error=mce.infra_envs_error,
             infra_envs_from="day1" if mce.infra_envs_from == FROM_DAY1 else "mce",
+            ready=mce.ready,
+            needs_fix=mce.needs_fix,
+            total=mce.total,
         )
 
 
@@ -163,6 +178,10 @@ class CandidateOut(BaseModel):
     lock: LockOut | None
     offered: bool
     why_not: str | None
+    ready: bool
+    """Offered and healthy: a pool draw could pick it. Offered and not ready: it needs a fix."""
+    health_problems: list[str]
+    """Why a pool draw would not pick it (``health CRITICAL``, ``BMC unreachable``)."""
 
     @classmethod
     def of(cls, candidate: Candidate) -> CandidateOut:
@@ -177,6 +196,8 @@ class CandidateOut(BaseModel):
             lock=LockOut.of(row),
             offered=candidate.offered,
             why_not=candidate.why_not,
+            ready=candidate.ready,
+            health_problems=list(candidate.health_problems),
         )
 
 
@@ -205,6 +226,8 @@ class InventoryRunOut(BaseModel):
     """``named``: a person. ``pool``: herzi or a person (nothing tells which)."""
     phase: str | None
     error: str | None
+    health_checks_waived: list[str]
+    """The health checks the run waived (``allow_unhealthy``); empty for every other run."""
 
     @classmethod
     def of(cls, shown: ShownRun) -> InventoryRunOut:
@@ -226,6 +249,7 @@ class InventoryRunOut(BaseModel):
             origin=origin,
             phase=detail.phase,
             error=detail.error,
+            health_checks_waived=list(detail.waived),
         )
 
 
@@ -242,11 +266,15 @@ class AddServersIn(BaseModel):
 
     count: int | None = Field(default=None, ge=1, le=MAX_SERVERS)
     server_names: list[str] | None = Field(default=None, min_length=1, max_length=MAX_SERVERS)
+    allow_unhealthy: bool = False
+    """Waive the workflow's health checks for ``server_names``; never on a pool draw."""
 
     @model_validator(mode="after")
     def _exactly_one(self) -> Self:
         if (self.count is None) == (self.server_names is None):
             raise ValueError("give either count or server_names")
+        if self.allow_unhealthy and self.server_names is None:
+            raise ValueError(WAIVER_NEEDS_NAMES)
         if self.server_names is not None and not all(
             0 < len(name.strip()) <= 253 for name in self.server_names
         ):

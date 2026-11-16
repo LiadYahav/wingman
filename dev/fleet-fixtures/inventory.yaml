@@ -9,9 +9,11 @@
 #
 # - dell-r760-site1-64c-512gb-20tb: three servers for the fake herzi's pool
 #   (ocp4-prod-lark-site1's short NodePool on ocp4-prod-mce-site1-a).
-# - dell-r650-site1-96c-768gb: one a named install may pick, one locked by
-#   another add-server run, one in maintenance (a donor).
-# - hp-gen12-site1-64c-512gb: one in WARNING health (shown, still offered).
+# - dell-r650-site1-96c-768gb: one a named install may pick (ready), one
+#   locked by another add-server run, one in maintenance (a donor), one
+#   CRITICAL and unreachable (needs a fix: installed only with the health
+#   checks waived).
+# - hp-gen12-site1-64c-512gb: one in WARNING health (needs a fix).
 #
 # `phases` are a sample of the real workflow's steps, each `phase_seconds`
 # long; day1 passes the real ones through and keeps no list of them.
@@ -208,3 +210,25 @@ items:
     serial: HPFAKE0814
     bmc_host: 192.0.2.94
     macs: ["02:00:00:00:08:17", "02:00:00:00:08:18"]
+  - id: srv_00000000000000000000000000000815
+    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0815
+    vendor: dell
+    model: PowerEdge R650
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: CRITICAL
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: AVAILABLE
+    cluster_name: null
+    mce_name: null
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R650-Standard
+    last_seen_at: "2026-11-13T08:00:03Z"
+    stale: false
+    reachable: false
+    serial: DLFAKE0815
+    bmc_host: 192.0.2.95
+    macs: ["02:00:00:00:08:19", "02:00:00:00:08:1a"]

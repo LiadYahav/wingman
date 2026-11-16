@@ -26,8 +26,12 @@ export interface PoolCount {
   available: number;
   usable: number;
   hardware: HardwareCount[];
-  /** Servers in no MCE that a pool draw could pick (server-scan's view); `null` without an InfraEnv. */
-  drawable: number | null;
+  /** Servers in no MCE that a pool draw could pick today (server-scan's view); `null` without an InfraEnv. */
+  ready: number | null;
+  /** Servers in no MCE, offered, that a pool draw never picks: unhealthy or unreachable; `null` without an InfraEnv. */
+  needs_fix: number | null;
+  /** `available` + `ready` + `needs_fix`: what the pool reaches once every one is fixed and installed. */
+  total: number;
 }
 
 export interface MceInventory {
@@ -45,6 +49,10 @@ export interface MceInventory {
   infra_envs_error: string | null;
   /** `mce`: the MCE's own list. `day1`: the InfraEnvs its day1 cluster files name. */
   infra_envs_from: "mce" | "day1";
+  /** Its pools' ready and needs-fix servers, a server named for two pools counted once. */
+  ready: number;
+  needs_fix: number;
+  total: number;
 }
 
 export interface InventoryOverview {
@@ -73,6 +81,10 @@ export interface Candidate {
   offered: boolean;
   /** Why a named install would fail on it: locked, in maintenance, contested. */
   why_not: string | null;
+  /** Offered and healthy: a pool draw could pick it. Offered and not ready: it needs a fix. */
+  ready: boolean;
+  /** Why a pool draw would not pick it, from server-scan's row (`health CRITICAL`, `BMC unreachable`). */
+  health_problems: string[];
 }
 
 export interface Candidates {
@@ -105,6 +117,8 @@ export interface InventoryRun {
   /** The workflow's own word, passed through. */
   phase: string | null;
   error: string | null;
+  /** The health checks the run waived (`allow_unhealthy`), each `check: observed`. */
+  health_checks_waived: string[];
 }
 
 export interface InventoryRuns {
@@ -113,7 +127,12 @@ export interface InventoryRuns {
 
 // ── POST .../add-servers ──────────────────────────────────────────────────────
 
-export type AddServersRequest = { count: number } | { server_names: string[] };
+/**
+ * Let the pool pick `count`, or install these servers. `allow_unhealthy` waives
+ * the workflow's health checks for the named servers only: a pool draw has no
+ * such field (day1 answers 422 to one).
+ */
+export type AddServersRequest = { count: number } | { server_names: string[]; allow_unhealthy?: true };
 
 export interface StartedRun {
   workflow_id: string;
