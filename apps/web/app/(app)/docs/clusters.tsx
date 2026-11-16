@@ -1,5 +1,4 @@
 import { Pencil, Server, XCircle } from "lucide-react";
-import { ClusterWorkflowsDocs } from "./cluster-workflows";
 import { Callout, CodeBlock, InlineCode, SectionHeader, Step, TermCard } from "./docs-parts";
 
 /** The docs page's "Clusters" section, `#clusters`. */
@@ -85,7 +84,9 @@ export function ClustersSection() {
         <Step n={5} title="Review and open the MR">
           <strong>Review &amp; Create</strong> runs every check a create runs and opens{" "}
           <strong>Review: Create Cluster</strong>, which shows the exact file the MR adds.{" "}
-          <strong>Confirm — Create Cluster MR</strong> opens it and takes you to its approval page.
+          <strong>Confirm — Create Cluster MR</strong> opens it and takes you to its approval page. Where your operator
+          sends creates through the platform&apos;s workflow, the button starts it instead:{" "}
+          <a href="#cluster-workflows" className="text-primary hover:underline">Create through provision-cluster</a>.
         </Step>
       </div>
 
@@ -98,7 +99,7 @@ owner:
   anaf: "56"
   mador: "7"
 
-mastertag: 4.16.27-x86_64
+mastertag: 4.18.56
 
 nodepool:
   - infraEnvName: dell-r660-site1-128c-1024gb-5tb
@@ -146,8 +147,6 @@ nodepool:
       </Callout>
 
       <ClusterPageDocs />
-
-      <ClusterWorkflowsDocs />
     </section>
   );
 }
@@ -164,11 +163,7 @@ function ClusterPageDocs() {
         The header has <strong>GitLab</strong> (the file), <strong>Addons</strong> (its charts) and, for admins,{" "}
         <strong>Edit</strong> and <strong>Delete</strong>. A name off the naming convention is flagged{" "}
         <strong>Off the naming convention</strong>, here and in the list, never hidden: existing clusters keep
-        working, and only new names are refused. When segments-manager is configured
-        (<InlineCode>SEGMENTS_MANAGER_UI_URL</InlineCode>), the <strong>HostedCluster &amp; network</strong> card
-        links to it. Its UI opens no single cluster, so the card names the cluster to search for there, with a
-        copy button, and <strong>this cluster&apos;s segment (JSON)</strong> opens its search for the
-        cluster&apos;s segment.
+        working, and only new names are refused.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex gap-4 rounded-xl border bg-card p-4">
@@ -198,14 +193,36 @@ function ClusterPageDocs() {
         </div>
       </div>
 
+      <h3 className="text-base font-semibold mt-6 mb-3">The network and its EPG</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+        The Overview tab&apos;s <strong>HostedCluster &amp; network</strong> card shows the HostedCluster&apos;s name and
+        namespace, the <InlineCode>clusterName</InlineCode>, and the file&apos;s <strong>VLAN</strong> and{" "}
+        <strong>Segment</strong>, which are pending until the allocate-segment workflow writes them. When segments-manager
+        is configured (<InlineCode>SEGMENTS_MANAGER_URL</InlineCode>), the card adds the segment&apos;s{" "}
+        <strong>EPG</strong> from segments-manager and checks its record against the file. Each disagreement is a warning
+        line under the rows: segments-manager has no such segment, or does not mark it Allocated, or gives it to
+        another cluster, or has another VLAN for it. The file is what the cluster runs with, so the warnings are for
+        you to look into; nothing is written to either side. The EPG shows a dash when there is none, and{" "}
+        <strong>unknown</strong>, with why in its tooltip, when segments-manager did not answer.
+      </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+        Under the card, an admin with the Segments area gets <strong>This cluster&apos;s segments</strong>, the{" "}
+        <a href="#segments" className="text-primary hover:underline">Segments</a> page filtered to this cluster. Anyone
+        else gets a link to segments-manager&apos;s own UI (<InlineCode>SEGMENTS_MANAGER_UI_URL</InlineCode>), which opens
+        no single cluster: the card names the cluster to search for, with a copy button, and{" "}
+        <strong>this cluster&apos;s segment (JSON)</strong>.
+      </p>
+
       <h3 className="text-base font-semibold mt-6 mb-3">Nodes</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
         The cluster page&apos;s <strong>Nodes</strong> tab shows each NodePool as the cluster&apos;s MCE reports it.
         Its header sums it up: how many nodes are ready of how many it wants (or the range it autoscales in), the
         version it last finished updating to, whether an update reboots its nodes in place (<strong>InPlace</strong>)
         or replaces them (<strong>Replace</strong>), and which Agents it takes. Under it is one row per Machine: the
-        server behind it, linked to its page in server-scan, with its serial, hardware, Machine, Agent, state and
-        health, and flags for a server in maintenance, stale, unreachable or contested (claimed by two clusters).
+        server behind it, with its serial, hardware, Machine, Agent, state and health, and flags for a server in
+        maintenance, stale, unreachable or contested (claimed by two clusters). The server&apos;s name opens its page:
+        for an admin with the Server Scan area, its page in <a href="#server-scan" className="text-primary hover:underline">Server Scan</a>,
+        here in Wingman; for everyone else, its page in server-scan&apos;s own UI, in a new tab.
         Health server-scan could not determine shows as <strong>Unknown</strong>, never as healthy. Ready, healthy
         rows stay quiet, so what needs a look stands out.
       </p>
@@ -230,47 +247,10 @@ function ClusterPageDocs() {
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
         The tab reads the MCE as live status does, so it needs <InlineCode>CLUSTER_STATUS_ENABLED</InlineCode>; without
         it, the tab says so (<InlineCode>501 FEATURE_DISABLED</InlineCode>). When server-scan does not answer, the
-        Machines are still listed, without links or health.
+        Machines are still listed, without links or health. An admin&apos;s <strong>Uninstall</strong> beside a server,
+        and <strong>Scale</strong> when it is on, are under{" "}
+        <a href="#cluster-workflows" className="text-primary hover:underline">Cluster Workflows</a>.
       </p>
-
-      <h3 className="text-base font-semibold mt-6 mb-3">Scale</h3>
-      <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        With <InlineCode>DAY1_SCALE_NODEPOOLS</InlineCode> on (the chart&apos;s <InlineCode>day1.scaleNodepools.enabled</InlineCode>,
-        off by default), an admin scales through the platform&apos;s <InlineCode>update-nodepool</InlineCode> workflow, in
-        place. Each NodePool card has a <strong>− N +</strong> beside its ready count: the replicas the day1 file sets,
-        matched to the card by name. Step it, use the arrow keys or type a number, and the change opens under the
-        card&apos;s header (<InlineCode>Replicas 3 → 4 (+1)</InlineCode>) with Cancel and <strong>Scale up</strong> or{" "}
-        <strong>Scale down</strong>; the NodePool is set exactly. Without cards (live status off, or the MCE unread), the
-        same steppers sit on the rows of <strong>NodePool sizes</strong>, read from the day1 file; with cards, that panel
-        is one line. <strong>Scale hardware type</strong> opens a small dialog for a total over the NodePools of one
-        InfraEnv kind (only kinds with two or more): the workflow spreads it so no two are more than one replica apart.
-      </p>
-      <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        One change at a time: changing any stepper puts every other back. <strong>Scale up</strong> and{" "}
-        <strong>Scale down</strong> each ask first, in a short confirmation: the change (
-        <InlineCode>3 → 4 replicas (+1)</InlineCode>, or a hardware type&apos;s total, which the workflow spreads) and what
-        the run does. A scale-up&apos;s new nodes each take a free server of that hardware, or wait until one is added. A
-        scale-down says which nodes leave, by the NodePool&apos;s <InlineCode>redbull.io/scale-down-policy</InlineCode>{" "}
-        annotation in the day1 file: <InlineCode>fewest-pods</InlineCode> the fewest pods,{" "}
-        <InlineCode>least-requested</InlineCode> the lowest requested CPU or memory, <InlineCode>least-utilized</InlineCode>{" "}
-        the lowest live CPU or memory use, else CAPI picks at random; unhealthy machines always go first, and any other
-        value is shown with a warning, since the workflow refuses it. Their pods move to the remaining nodes and the servers
-        stay in the MCE&apos;s inventory, free. A policy set by hand on the MCE&apos;s NodePool is not in the file: the run
-        still reads it, and its result shows the policy it used. Cancel or Escape leaves the change as it was;{" "}
-        <strong>Yes</strong> arms after half a second. The run is one commit to day1 <InlineCode>main</InlineCode>, with no merge request; the
-        workflow syncs the cluster&apos;s Argo CD Application itself and checks the NodePools show the new replicas. The run
-        shows under NodePool sizes for everyone: its phase in the workflow&apos;s words, then each NodePool before and after
-        and the servers chosen, or why it failed. While a run of the cluster is going, update-nodepool&apos;s or an
-        upgrade&apos;s, the sizes show as numbers with no stepper, and the reason shows once. A NodePool its flavor locks
-        has no stepper either: its size, the lock and <strong>Restore</strong>.
-      </p>
-      <Callout type="info" title="With Scale on, replicas change only through it">
-        A raw YAML edit, or an edit on the approval page, that changes an existing NodePool&apos;s{" "}
-        <InlineCode>replicas</InlineCode> is refused and points here; a new cluster and a new NodePool still set their
-        first replicas. A NodePool whose replicas its flavor locks is not scaled (&ldquo;locked by flavor&rdquo;), and a
-        flavor sync no longer writes replicas: its merge request carries the rest, and each such NodePool gets{" "}
-        <strong>Restore</strong>, its own update-nodepool run to the flavor&apos;s value.
-      </Callout>
     </>
   );
 }
