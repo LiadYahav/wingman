@@ -1,16 +1,21 @@
 /**
  * Scaling a cluster's NodePools through the platform's update-nodepool
- * workflow (ADR-0062), on the cluster page's Nodes tab: the NodePool sizes
- * from the day1 file, an admin's Scale by hardware kind (a total) or one
- * NodePool (its replicas), a review that says what the run does, the run in
- * place (the workflow's phases, its child's, the plan and the servers a
- * scale-down chose), refusals and failures in words, a NodePool whose
- * replicas a flavor locks, and a flavor sync's replicas restored by their own
- * run. Scaling off, or a viewer: no Scale. Every API is mocked.
+ * workflow (ADR-0062 and its 2026-11-16 amendment), on the cluster page's
+ * Nodes tab: a stepper on each NodePool's card from the MCE (its exact
+ * replicas, matched by name), or on its NodePool sizes row when there are no
+ * cards (live status off); a hardware type's total in a small dialog; one
+ * change at a time, Scale up at once and Scale down after a question in
+ * place; the run in place (the workflow's phases, its child's, the plan and
+ * the servers a scale-down chose), refusals and failures in words, a
+ * NodePool whose replicas a flavor locks, and a flavor sync's replicas
+ * restored by their own run. Scaling off, or a viewer: no steppers. Every
+ * API is mocked.
  */
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
-import type { ClusterDetail, ClusterDrift, ScaleOptions, ScaleRun, SyncPreview, UpgradeRun } from "../../types";
+import {
+  fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockClusterNodes, mockDashboardApis, mockNodePool, mockNodes,
+} from "../fixtures/api-handlers";
+import type { ClusterDetail, ClusterDrift, ClusterNodes, ScaleOptions, ScaleRun, SyncPreview, UpgradeRun } from "../../types";
 
 const SITE = "site1";
 const MCE = "ocp4-prod-mce-site1-a";
@@ -114,11 +119,17 @@ async function mockScale(page: Page, scale: Scale) {
   });
 }
 
-/** The cluster page with scaling on (unless `scale` is `null`: day1's 501, the dashboard mocks' default), on its Nodes tab. */
+/**
+ * The cluster page with scaling on (unless `scale` is `null`: day1's 501, the
+ * dashboard mocks' default), on its Nodes tab. Live status is off unless
+ * `nodes` gives the MCE's NodePools, shown as cards.
+ */
 async function openNodes(
   page: Page,
   scale: Scale | null,
-  { viewer = false, upgrade, drift = notDrifted, tab = "nodes" }: { viewer?: boolean; upgrade?: UpgradeRun; drift?: ClusterDrift; tab?: string } = {}
+  { viewer = false, upgrade, drift = notDrifted, tab = "nodes", nodes }: {
+    viewer?: boolean; upgrade?: UpgradeRun; drift?: ClusterDrift; tab?: string; nodes?: ClusterNodes;
+  } = {}
 ) {
   await injectAdminAuth(page);
   if (viewer) await injectViewerAuth(page);
@@ -134,90 +145,279 @@ async function openNodes(
   await page.route("**/api/day2/addons", (r) => json(r, []));
   if (upgrade) await page.route(/\/api\/day1\/clusters\/[^/]+\/upgrade-run(\?.*)?$/, (r) => json(r, upgrade));
   if (scale) await mockScale(page, scale);
+  if (nodes) await mockClusterNodes(page, LARK, nodes);
   await go(page, `/clusters/${LARK}?site=${SITE}&mce=${MCE}&tab=${tab}`);
 }
 
+/** A NodePool's or a hardware type's stepper, by the name its group says. */
+const stepper = (page: Page, name: string) => page.getByRole("group", { name: `${name} replicas`, exact: true });
+const field = (page: Page, name: string) => stepper(page, name).getByRole("spinbutton");
+const more = (page: Page, name: string) => page.getByRole("button", { name: `One replica more for ${name}`, exact: true });
+const fewer = (page: Page, name: string) => page.getByRole("button", { name: `One replica fewer for ${name}`, exact: true });
+const ZONES = "dell-r660-site1-zone";
+const card = (page: Page, name: string) => page.getByTestId(`node-pool-${name}`);
+
+/** The MCE's NodePools as cards: the two zones, the locked r760, and one the day1 file does not name. */
+const CARDS = mockNodes({
+  hosted_cluster: "prod-lark-site1",
+  node_pools: [ZONE_A, ZONE_B, R760, "prod-lark-site1-extra"].map((name) => mockNodePool({ name, ready: 3, wanted: 3 })),
+});
+
 test.describe("Scale a cluster's NodePools through update-nodepool", () => {
-  test("scaling off: no sizes and no Scale, and the Nodes tab is as before", async ({ page }) => {
+  test("scaling off: no sizes and no steppers, and the Nodes tab is as before", async ({ page }) => {
     await openNodes(page, null);
     await expect(page.getByTestId("cluster-nodes-off")).toHaveText("Nodes need live status from the MCE (CLUSTER_STATUS_ENABLED).");
     await expect(page.getByTestId("scale-panel")).toHaveCount(0);
-    await expect(page.getByTestId("scale-action")).toHaveCount(0);
+    await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
   });
 
-  test("a viewer sees the sizes and the run, with no Scale and no Restore", async ({ page }) => {
+  test("a viewer sees the sizes and the run, with no steppers, no Restore and no hardware type", async ({ page }) => {
     await openNodes(page, scaleOf({ run: DONE }), { viewer: true });
-    await expect(page.getByTestId("scale-panel")).toBeVisible();
+    await expect(page.getByTestId("scale-pool-0")).toContainText("3 replicas");
     await expect(page.getByTestId("scale-pool-2")).toContainText(`Locked by flavor ${FLAVOR} at 2`);
+    await expect(page.getByTestId("scale-pool-3")).toContainText(/1 replica(?!s)/);
     await expect(page.getByTestId("scale-run")).toBeVisible();
-    await expect(page.getByTestId("scale-action")).toHaveCount(0);
+    await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(page.getByTestId("scale-kind-action")).toHaveCount(0);
     await expect(page.getByTestId("restore-replicas")).toHaveCount(0);
   });
 
-  test("by hardware kind: a total over the NodePools it selects, sent as the kind's", async ({ page }) => {
+  test("live status off: each NodePool scales on its sizes row; Scale up sends its exact replicas, once", async ({ page }) => {
     const scale = scaleOf();
     await openNodes(page, scale);
-    // Live status is off: the sizes and Scale stay, from the day1 file
     await expect(page.getByTestId("cluster-nodes-off")).toBeVisible();
-    await page.getByTestId("scale-action").click();
-    const dialog = page.getByTestId("scale-dialog");
-    // The first kind that can be scaled is chosen: the two zones together
-    const zones = dialog.locator('[data-testid="scale-kind"][data-kind="dell-r660-site1-zone"]');
-    await expect(zones.getByRole("radio")).toBeChecked();
-    await expect(zones.getByRole("radio")).toHaveAccessibleName(/^dell-r660-site1-zone\s/);
-    await expect(zones).toContainText("2 NodePools · 6 replicas");
-    await expect(zones).toContainText(`${ZONE_A}, ${ZONE_B}`);
-    // A kind that selects a locked NodePool is shown, not offered
-    const locked = dialog.locator('[data-testid="scale-kind"][data-kind="dell-r760-site1"]');
-    await expect(locked.getByRole("radio")).toBeDisabled();
-    await expect(locked).toContainText(`Locked by flavor ${FLAVOR}: it selects ${R760}, whose replicas the flavor fixes.`);
+    await expect(field(page, ZONE_A)).toHaveValue("3");
+    await more(page, ZONE_A).click();
+    await expect(field(page, ZONE_A)).toHaveValue("4");
+    await expect(stepper(page, ZONE_A)).toHaveAttribute("data-changed", "true");
+    const pending = page.getByTestId("scale-pool-0").getByTestId("scale-pending");
+    await expect(pending.getByTestId("scale-change")).toHaveText("Replicas 3 → 4 (+1)");
+    await expect(pending).toContainText("One commit to day1 main; the workflow syncs Argo CD itself.");
+    await expect(page.getByTestId("scale-announce")).toHaveText(`${ZONE_A}: 3 → 4 (+1)`);
+    await expect(page.getByTestId("scale-announce")).toHaveAttribute("role", "status");
+    await expect(pending.getByTestId("scale-start")).toHaveText("Scale up");
 
-    await dialog.getByTestId("scale-replicas").fill("8");
-    await expect(dialog.getByText("now 6")).toBeVisible();
-    await dialog.getByTestId("scale-review").click();
-    await expect(dialog.getByRole("heading", { name: "Scale up?" })).toBeVisible();
-    await expect(dialog.getByTestId("scale-change")).toContainText("6 → 8 replicas in total over 2 NodePools");
-    const truths = dialog.getByTestId("scale-truths");
-    await expect(truths).toContainText("One commit to day1 main that changes only the replicas lines, with no merge request.");
-    await expect(truths).toContainText("syncs the cluster's Argo CD Application itself");
-    await expect(truths).not.toContainText("scale-down-policy");
-    await dialog.getByTestId("scale-start").click();
-
-    await expect(dialog).toHaveCount(0);
-    expect(scale.starts).toEqual([{ infra_env_kind: "dell-r660-site1-zone", replicas: 8 }]);
+    // A scale-up starts at once; the second click of a double-click sends nothing
+    await pending.getByTestId("scale-start").dblclick();
     await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
-    await expect(page.getByTestId("scale-action")).toBeDisabled();
-    await expect(page.getByTestId("scale-busy-reason")).toContainText("An update-nodepool run of this cluster is running");
+    expect(scale.starts).toEqual([{ nodepool: ZONE_A, replicas: 4 }]);
+    await expect(page.getByTestId("scale-run")).toBeFocused();
+    // The run holds every stepper, and says why once
+    const why = "An update-nodepool run of this cluster is running";
+    await expect(page.getByTestId("scale-busy-reason")).toContainText(why);
+    await expect(page.getByText(why)).toHaveCount(1);
+    // Nothing looks editable while it runs: each size is text
+    await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(page.getByTestId("scale-pool-0")).toContainText("3 replicas");
+    await expect(page.getByTestId("scale-pending")).toHaveCount(0);
+    await expect(page.getByTestId("scale-kind-action")).toBeDisabled();
   });
 
-  test("one NodePool: its exact replicas; a locked or unnamed one cannot be chosen", async ({ page }) => {
+  test("a number can be typed, and the arrow keys step it by one", async ({ page }) => {
+    await openNodes(page, scaleOf());
+    const b = field(page, ZONE_B);
+    const change = page.getByTestId("scale-change");
+    await b.fill("5");
+    await expect(change).toHaveText("Replicas 3 → 5 (+2)");
+    await b.press("ArrowDown");
+    await expect(b).toHaveValue("4");
+    await b.press("ArrowUp");
+    await b.press("ArrowUp");
+    await expect(b).toHaveValue("6");
+    await expect(change).toHaveText("Replicas 3 → 6 (+3)");
+    await b.fill("");
+    await expect(change).toHaveText("Replicas are a whole number from 0 to 500.");
+    await expect(b).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByTestId("scale-start")).toBeDisabled();
+    // Back at its value now: nothing to send
+    await b.fill("3");
+    await expect(page.getByTestId("scale-pending")).toHaveCount(0);
+  });
+
+  test("one change at a time: changing a stepper, or a hardware type's total, puts every other back", async ({ page }) => {
+    await openNodes(page, scaleOf());
+    await more(page, ZONE_A).click();
+    await fewer(page, ZONE_B).click();
+    await expect(field(page, ZONE_A)).toHaveValue("3");
+    await expect(field(page, ZONE_B)).toHaveValue("2");
+    await expect(page.getByTestId("scale-pending")).toHaveCount(1);
+    await expect(page.getByTestId("scale-pool-1").getByTestId("scale-change")).toHaveText("Replicas 3 → 2 (−1)");
+
+    // The hardware type's total is the change now
+    await page.getByTestId("scale-kind-action").click();
+    const dialog = page.getByTestId("scale-kind-dialog");
+    await more(page, ZONES).click();
+    await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 7 (+1)");
+    await expect(page.getByTestId("scale-announce")).toHaveText(`${ZONES} total: 6 → 7 (+1)`);
+    await expect(page.locator('[data-testid="scale-stepper"][data-changed="true"]')).toHaveCount(1);
+    await expect(page.getByTestId("scale-pending")).toHaveCount(0);
+    // Cancel drops it, and returns to the button that opened it
+    await dialog.getByTestId("scale-kind-cancel").click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId("scale-kind-action")).toBeFocused();
+    await expect(field(page, ZONE_B)).toHaveValue("3");
+    await expect(page.locator('[data-testid="scale-stepper"][data-changed="true"]')).toHaveCount(0);
+
+    // A NodePool's Cancel returns to its field
+    await more(page, ZONE_A).click();
+    await page.getByTestId("scale-cancel").click();
+    await expect(field(page, ZONE_A)).toHaveValue("3");
+    await expect(field(page, ZONE_A)).toBeFocused();
+  });
+
+  test("a scale-down asks first, in place, and is sent only from there", async ({ page }) => {
     const scale = scaleOf();
     await openNodes(page, scale);
-    await page.getByTestId("scale-action").click();
-    const dialog = page.getByTestId("scale-dialog");
-    await dialog.getByTestId("scale-mode-nodepool").click();
-    const r760 = dialog.locator(`[data-testid="scale-nodepool"][data-nodepool="${R760}"]`);
-    await expect(r760.getByRole("radio")).toBeDisabled();
-    await expect(r760).toContainText(`Locked by flavor ${FLAVOR} at 2.`);
-    const unnamed = dialog.locator('[data-testid="scale-nodepool"][data-nodepool=""]');
-    await expect(unnamed.getByRole("radio")).toBeDisabled();
-    await expect(unnamed).toContainText("its NodePool cannot be named");
-
-    await dialog.getByRole("radio", { name: new RegExp(ZONE_B) }).check();
-    await dialog.getByTestId("scale-replicas").fill("3");
-    await expect(dialog.getByTestId("scale-unchanged")).toHaveText("It already has 3 replicas: nothing to change.");
-    await expect(dialog.getByTestId("scale-review")).toBeDisabled();
-    await dialog.getByTestId("scale-replicas").fill("2");
-    await dialog.getByTestId("scale-review").click();
-    await expect(dialog.getByRole("heading", { name: "Scale down?" })).toBeVisible();
-    await expect(dialog.getByTestId("scale-change")).toContainText(ZONE_B);
-    await expect(dialog.getByTestId("scale-change")).toContainText("3 → 2 replicas");
-    const truths = dialog.getByTestId("scale-truths");
+    await fewer(page, ZONE_B).click();
+    const pending = page.getByTestId("scale-pending");
+    await expect(pending.getByTestId("scale-start")).toHaveText("Scale down");
+    await pending.getByTestId("scale-start").click();
+    const confirm = pending.getByTestId("scale-confirm");
+    await expect(confirm).toBeFocused();
+    await expect(confirm).toContainText("Scale down by 1 replica?");
+    const truths = confirm.getByTestId("scale-truths");
     await expect(truths).toContainText("chosen by each NodePool's redbull.io/scale-down-policy; without one, CAPI picks them at random.");
     await expect(truths).toContainText("The freed servers stay in the MCE's inventory, as free Agents.");
+    expect(scale.starts).toEqual([]);
+
+    // Back, or Escape, returns with nothing sent
+    await confirm.getByTestId("scale-back").click();
+    await expect(confirm).toHaveCount(0);
+    await expect(pending.getByTestId("scale-start")).toBeFocused();
+    await pending.getByTestId("scale-start").click();
+    await expect(confirm).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(confirm).toHaveCount(0);
+    expect(scale.starts).toEqual([]);
+
+    await pending.getByTestId("scale-start").click();
+    await confirm.getByTestId("scale-confirm-start").click();
+    await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
+    expect(scale.starts).toEqual([{ nodepool: ZONE_B, replicas: 2 }]);
+  });
+
+  test("a locked NodePool has no stepper: its size as text, why and a restore; an unnamed one has none either", async ({ page }) => {
+    await openNodes(page, scaleOf());
+    const row = page.getByTestId("scale-pool-2");
+    await expect(row.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(row).toContainText("3 replicas");
+    await expect(row.getByTestId("scale-pool-locked")).toHaveText(`Locked by flavor ${FLAVOR} at 2.`);
+    await expect(row.getByRole("button", { name: `Restore ${R760} to 2 replicas with update-nodepool` })).toBeVisible();
+    const unnamed = page.getByTestId("scale-pool-3");
+    await expect(unnamed.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(unnamed).toContainText("its NodePool cannot be named");
+  });
+
+  test("a hardware type's total, in its dialog: spread by the workflow, sent as the kind's", async ({ page }) => {
+    const scale = scaleOf();
+    await openNodes(page, scale);
+    await page.getByTestId("scale-kind-action").click();
+    const dialog = page.getByTestId("scale-kind-dialog");
+    await expect(dialog.getByRole("heading", { name: "Scale a hardware type" })).toBeVisible();
+    // Only the types over two or more NodePools: the r760's has one
+    await expect(dialog.getByTestId("scale-kind")).toHaveCount(1);
+    await expect(dialog.getByRole("radio", { name: new RegExp(`^${ZONES}`) })).toBeChecked();
+    await expect(dialog.getByTestId("scale-kind")).toContainText("2 NodePools · 6 replicas");
+    await expect(field(page, ZONES)).toHaveValue("6");
+    await more(page, ZONES).click();
+    await more(page, ZONES).click();
+    await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 8 (+2)");
     await dialog.getByTestId("scale-start").click();
     await expect(dialog).toHaveCount(0);
-    expect(scale.starts).toEqual([{ nodepool: ZONE_B, replicas: 2 }]);
+    await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
+    expect(scale.starts).toEqual([{ infra_env_kind: ZONES, replicas: 8 }]);
+    await expect(page.getByTestId("scale-run")).toBeFocused();
+  });
+
+  test("a hardware type's scale-down asks in the same dialog", async ({ page }) => {
+    const scale = scaleOf();
+    await openNodes(page, scale);
+    await page.getByTestId("scale-kind-action").click();
+    const dialog = page.getByTestId("scale-kind-dialog");
+    await field(page, ZONES).fill("5");
+    await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 5 (−1)");
+    await dialog.getByTestId("scale-start").click();
+    const confirm = dialog.getByTestId("scale-confirm");
+    await expect(confirm).toContainText(`Scale down ${ZONES} by 1 replica?`);
+    await expect(confirm.getByTestId("scale-truths")).toContainText("scale-down-policy");
+    expect(scale.starts).toEqual([]);
+    await confirm.getByTestId("scale-confirm-start").click();
+    await expect(dialog).toHaveCount(0);
+    expect(scale.starts).toEqual([{ infra_env_kind: ZONES, replicas: 5 }]);
+  });
+
+  test("a hardware type that selects a locked NodePool cannot be scaled; with none over two NodePools, no button", async ({ page }) => {
+    const lockedB: ScaleOptions = {
+      ...OPTIONS,
+      nodepools: OPTIONS.nodepools.map((p) => (p.name === ZONE_B ? { ...p, locked_by: FLAVOR, locked_replicas: 3 } : p)),
+      kinds: OPTIONS.kinds.map((k) => (k.kind === ZONES ? { ...k, locked: [ZONE_B] } : k)),
+    };
+    const scale = scaleOf({ options: lockedB });
+    await openNodes(page, scale);
+    await page.getByTestId("scale-kind-action").click();
+    const dialog = page.getByTestId("scale-kind-dialog");
+    const radio = dialog.getByRole("radio", { name: new RegExp(`^${ZONES}`) });
+    await expect(radio).toBeDisabled();
+    await expect(radio).toHaveAccessibleDescription(`Locked by flavor ${FLAVOR}: it selects ${ZONE_B}, whose replicas the flavor fixes.`);
+    // Listed, not offered: its total as text, no stepper
+    await expect(dialog.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(dialog.getByTestId("scale-kind-total")).toHaveText("Total 6 replicas");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+
+    scale.options = { ...OPTIONS, kinds: OPTIONS.kinds.filter((k) => k.nodepools.length < 2) };
+    await page.reload();
+    await page.waitForLoadState("domcontentloaded");
+    await expect(stepper(page, ZONE_A)).toBeVisible();
+    await expect(page.getByTestId("scale-kind-action")).toHaveCount(0);
+  });
+
+  test("live status on: each NodePool scales on its card, and the sizes fold to a line", async ({ page }) => {
+    const scale = scaleOf();
+    await openNodes(page, scale, { nodes: CARDS });
+    await expect(page.getByTestId("scale-summary")).toContainText("4 NodePools, 10 replicas, as the day1 file sets them; each card below scales its own.");
+    // Only the entry no card shows stays a row
+    await expect(page.getByTestId("scale-pool-0")).toHaveCount(0);
+    await expect(page.getByTestId("scale-pool-3")).toContainText("its NodePool cannot be named");
+    await expect(stepper(page, ZONE_A)).toHaveCount(1);
+
+    const a = card(page, ZONE_A);
+    await expect(a.getByTestId("scale-card-control")).toContainText("Replicas");
+    await expect(a.getByTestId("node-pool-ready")).toContainText("3 / 3 ready");
+    await a.getByRole("button", { name: `One replica more for ${ZONE_A}` }).click();
+    await expect(a.getByTestId("scale-change")).toHaveText("Replicas 3 → 4 (+1)");
+    // One change at a time, across the cards
+    await card(page, ZONE_B).getByRole("button", { name: `One replica more for ${ZONE_B}` }).click();
+    await expect(a.getByTestId("scale-pending")).toHaveCount(0);
+    await expect(field(page, ZONE_A)).toHaveValue("3");
+    await card(page, ZONE_B).getByTestId("scale-start").click();
+    await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
+    expect(scale.starts).toEqual([{ nodepool: ZONE_B, replicas: 4 }]);
+  });
+
+  test("on the cards: a locked NodePool says why and restores there; one the file does not name has no stepper", async ({ page }) => {
+    const scale = scaleOf();
+    await openNodes(page, scale, { nodes: CARDS });
+    const r760 = card(page, R760);
+    await expect(r760.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(r760.getByTestId("scale-card-control")).toHaveText("3 replicas");
+    await expect(r760.getByTestId("scale-pool-locked")).toHaveText(`Locked by flavor ${FLAVOR} at 2.`);
+    await r760.getByRole("button", { name: `Restore ${R760} to 2 replicas with update-nodepool` }).click();
+    await r760.getByTestId("restore-start").click();
+    await expect(r760.getByTestId("restore-started")).toContainText(`update-nodepool started (${RUN_ID}): its run shows under NodePool sizes.`);
+    expect(scale.starts).toEqual([{ nodepool: R760, replicas: 2 }]);
+
+    const extra = card(page, "prod-lark-site1-extra");
+    await expect(extra.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(extra.getByTestId("scale-card-unmatched")).toHaveText("Not named in the day1 file");
+  });
+
+  test("on the cards, a viewer sees the lock and the ready count, with no stepper", async ({ page }) => {
+    await openNodes(page, scaleOf(), { viewer: true, nodes: CARDS });
+    await expect(card(page, R760).getByTestId("scale-pool-locked")).toHaveText(`Locked by flavor ${FLAVOR} at 2.`);
+    await expect(card(page, ZONE_A).getByTestId("node-pool-ready")).toContainText("3 / 3 ready");
+    await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(page.getByTestId("restore-replicas")).toHaveCount(0);
   });
 
   test("the run in place: the workflow's phase and its child's, then the plan and the servers chosen", async ({ page }) => {
@@ -235,9 +435,9 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     scale.run = DONE;
     await page.reload();
     await page.waitForLoadState("domcontentloaded");
-    const card = page.getByTestId("scale-run");
+    const runCard = page.getByTestId("scale-run");
     await expect(page.getByTestId("scale-run-phase")).toHaveText("Completed");
-    await expect(card.getByRole("heading", { level: 3, name: "Scale kind dell-r660-site1-zone" })).toBeVisible();
+    await expect(runCard.getByRole("heading", { level: 3, name: "Scale kind dell-r660-site1-zone" })).toBeVisible();
     await expect(page.getByTestId(`scale-run-pool-${ZONE_B}`)).toContainText("3 → 2");
     await expect(page.getByTestId(`scale-run-pool-${ZONE_B}`)).toContainText("fewest-pods");
     await expect(page.getByTestId(`scale-run-pool-${ZONE_A}`)).toContainText("none: CAPI picks at random");
@@ -250,17 +450,14 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     const words = `An update-nodepool run is already in flight for cluster ${LARK}`;
     const scale = scaleOf({ start: (route) => fulfillProblem(route, 409, "SCALE_ALREADY_RUNNING", words) });
     await openNodes(page, scale);
-    await page.getByTestId("scale-action").click();
-    const dialog = page.getByTestId("scale-dialog");
-    await dialog.getByTestId("scale-replicas").fill("4");
-    await dialog.getByTestId("scale-review").click();
+    await more(page, ZONE_A).click();
     const reads = scale.runReads;
-    await dialog.getByTestId("scale-start").click();
-    const error = dialog.getByTestId("scale-error");
+    await page.getByTestId("scale-start").click();
+    const error = page.getByTestId("scale-error");
     await expect(error).toContainText("update-nodepool refused to start: a run of this cluster is going.");
     await expect(error).toContainText(words);
-    await expect(dialog.getByTestId("scale-start")).toBeDisabled();
-    await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible();
+    await expect(page.getByTestId("scale-start")).toBeDisabled();
+    await expect(page.getByTestId("scale-cancel")).toBeEnabled();
     await expect.poll(() => scale.runReads).toBeGreaterThan(reads);
     expect(scale.starts).toHaveLength(1);
   });
@@ -272,15 +469,21 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     const error = page.getByTestId("scale-run-error");
     await expect(error).toContainText("ArgoSyncRefusedError");
     await expect(error).toContainText(words);
-    // A closed run does not hold Scale back
-    await expect(page.getByTestId("scale-action")).toBeEnabled();
+    // A closed run does not hold the steppers back
+    await expect(field(page, ZONE_A)).toBeEnabled();
+    await expect(page.getByTestId("scale-busy-reason")).toHaveCount(0);
   });
 
-  test("an open upgrade of the cluster holds Scale back, with why", async ({ page }) => {
+  test("an open upgrade of the cluster leaves no stepper, holds the hardware type, and says why once", async ({ page }) => {
     const upgrade = { workflow_id: `upgrade-cluster-${LARK}`, status: "running", phase: "awaiting-approval" } as UpgradeRun;
-    await openNodes(page, scaleOf(), { upgrade });
-    await expect(page.getByTestId("scale-action")).toBeDisabled();
-    await expect(page.getByTestId("scale-busy-reason")).toContainText("An upgrade-cluster run of this cluster is open");
+    await openNodes(page, scaleOf(), { upgrade, nodes: CARDS });
+    const why = "An upgrade-cluster run of this cluster is open";
+    await expect(page.getByTestId("scale-busy-reason")).toContainText(why);
+    await expect(page.getByText(why)).toHaveCount(1);
+    // Nothing looks editable: every size is text
+    await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
+    await expect(card(page, ZONE_A).getByTestId("scale-card-control")).toHaveText("3 replicas");
+    await expect(page.getByTestId("scale-kind-action")).toBeDisabled();
   });
 
   test("a locked NodePool that drifted is restored to its flavor's value by its own run", async ({ page }) => {
@@ -293,7 +496,7 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(confirm).toContainText(`Set NodePool ${R760} from 3 → 2 replicas, the value its flavor locks?`);
     await expect(confirm.getByTestId("scale-truths")).toContainText("scale-down-policy");
     await confirm.getByTestId("restore-start").click();
-    await expect(row.getByTestId("restore-started")).toContainText(`update-nodepool started (${RUN_ID}): its run shows below.`);
+    await expect(row.getByTestId("restore-started")).toContainText(`update-nodepool started (${RUN_ID}): its run shows under NodePool sizes.`);
     expect(scale.starts).toEqual([{ nodepool: R760, replicas: 2 }]);
   });
 });
@@ -330,28 +533,43 @@ test.describe("A flavor sync leaves locked replicas to update-nodepool", () => {
   });
 });
 
-// Screenshots for the review (SCALE_SCREENSHOTS=<dir>): the Scale dialog's review and a done run, light and dark.
+// Screenshots for the review (SCALE_SCREENSHOTS=<dir>): a card's change, the hardware type dialog, the rows' scale-down
+// question and a done run, light and dark.
 const SHOTS = process.env.SCALE_SCREENSHOTS;
 test.describe("Scale screenshots", () => {
   test.skip(!SHOTS, "only with SCALE_SCREENSHOTS");
   for (const scheme of ["light", "dark"] as const) {
-    test(`dialog and run, ${scheme}`, async ({ page }) => {
-      await page.setViewportSize({ width: 1440, height: 900 });
+    test(`a card's change and the hardware type dialog, ${scheme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 1000 });
       // The app starts dark (next-themes' defaultTheme); the person's choice is kept under `theme`
       await page.addInitScript((theme) => localStorage.setItem("theme", theme), scheme);
+      await openNodes(page, scaleOf(), { nodes: CARDS });
+      const a = card(page, ZONE_A);
+      await more(page, ZONE_A).click();
+      await expect(a.getByTestId("scale-change")).toHaveText("Replicas 3 → 4 (+1)");
+      await page.mouse.move(0, 0);
+      await page.getByTestId("scale-panel").scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `${SHOTS}/scale-card-change-${scheme}.png` });
+      await a.screenshot({ path: `${SHOTS}/scale-card-${scheme}.png` });
+      await page.getByTestId("scale-kind-action").click();
+      const dialog = page.getByTestId("scale-kind-dialog");
+      await dialog.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((x) => x.finished)));
+      await more(page, ZONES).click();
+      await more(page, ZONES).click();
+      await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 8 (+2)");
+      await page.screenshot({ path: `${SHOTS}/scale-dialog-${scheme}.png` });
+    });
+
+    test(`the rows without live status, a scale-down's question and a done run, ${scheme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 1000 });
+      await page.addInitScript((theme) => localStorage.setItem("theme", theme), scheme);
       await openNodes(page, scaleOf({ run: DONE }));
-      await expect(page.getByTestId("scale-run")).toBeVisible();
-      await page.getByTestId("scale-run").scrollIntoViewIfNeeded();
-      await page.screenshot({ path: `${SHOTS}/scale-run-${scheme}.png` });
-      await page.getByTestId("scale-action").click();
-      const dialog = page.getByTestId("scale-dialog");
-      // After its enter animation, so the shot shows the dialog as a person reads it
-      await dialog.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
-      await page.screenshot({ path: `${SHOTS}/scale-dialog-choose-${scheme}.png` });
-      await dialog.getByTestId("scale-replicas").fill("5");
-      await dialog.getByTestId("scale-review").click();
-      await expect(dialog.getByTestId("scale-start")).toBeEnabled();
-      await page.screenshot({ path: `${SHOTS}/scale-dialog-review-${scheme}.png` });
+      await fewer(page, ZONE_B).click();
+      await page.getByTestId("scale-start").click();
+      await expect(page.getByTestId("scale-confirm-start")).toBeEnabled();
+      await page.mouse.move(0, 0);
+      await page.getByTestId("scale-panel").screenshot({ path: `${SHOTS}/scale-rows-down-${scheme}.png` });
+      await page.getByTestId("scale-run").screenshot({ path: `${SHOTS}/scale-run-${scheme}.png` });
     });
   }
 });
