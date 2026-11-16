@@ -278,7 +278,12 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   from `/sites`), Classification (`installation_type`), Installation
   (Installed, In inventory, Available) and Health (the five severities, then
   Maintenance, which keeps only servers in maintenance). Several values of one
-  dropdown are OR, the dropdowns AND.
+  dropdown are OR, the dropdowns AND. **Healthy means healthy and in
+  service** (server-scan v6.0.0, its `2bb2fb2`; Wingman 3.43.0): a Healthy
+  server in maintenance shows only with Maintenance ticked too, while every
+  other severity keeps its servers in maintenance; Healthy's count is the
+  rows it shows, and Maintenance's still counts them, since ticking it adds
+  them.
 - **Toggles**, each with a tooltip and, while on, its count: Stale, Duplicate
   Name (the name is another server's too), Duplicate Server (claimed by two
   clusters), Name mismatch (OpenShift reports another hostname) and Donor (in
@@ -557,8 +562,11 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/server
     **Maintenance** ("<reason> - by <who>", a static token read as "API
     token (admin)", or "Not in maintenance"), **read only** on server-scan's
     page; **Collection**, only when the BMC was unreachable ("Wrong
-    credentials since <time>", "Timed out", "TLS error", "Not an iDRAC", …);
-    **Last changed**.
+    credentials since <time>", "Timed out", "TLS error", "Not an iDRAC", …,
+    and since v5.3.1 "Collection error": the manager listed the server but
+    its record could not be processed, its `8c0771a`), with the cause in
+    words under the badge when server-scan recorded one
+    (`unreachable_detail`); **Last changed**.
 - **Hardware**: CPU (Model, Sockets, Cores, Threads); Memory ("512.0 GiB
   total (16 modules)", binary units); Storage (the total in decimal TB or
   GB, then the drives smallest first, an unread capacity last: Model,
@@ -669,7 +677,7 @@ plus whether the maintenance toggle and History work here:
   "vm_host": null,
   "unread_fields": [], "nic_os_names": {"NIC.Integrated.1-1-1": "eno12399np0"}, "tags": [],
   "last_seen_at": "2026-11-11T08:00:03Z", "stale": false, "reachable": true,
-  "unreachable_since": null, "unreachable_reason": null,
+  "unreachable_since": null, "unreachable_reason": null, "unreachable_detail": null,
   "updated_at": "2026-11-11T08:00:03Z", "created_at": "2026-09-01T06:00:00Z",
   "maintenance_available": true, "maintenance_detail": null,
   "history_available": true, "history_detail": null
@@ -690,6 +698,12 @@ plus whether the maintenance toggle and History work here:
   A list or object server-scan leaves out on an older document
   (`health.reasons`, `storage.controllers`, `storage.raid`) is sent as empty
   or `null`.
+- **`unreachable_reason`** is server-scan's word for why the last collection
+  failed (`network_unreachable`, `auth_rejected`, `tls_error`, `timeout`,
+  `protocol_error`, `not_an_idrac`, and since v5.3.1 `collection_error`),
+  kept as sent; **`unreachable_detail`** (v5.3.1, 3.43.0) is the cause in
+  words, `null` while reachable, when none was recorded, or from an older
+  server-scan, which does not send it.
 - **`maintenance`** carries server-scan's `created_at`, `updated_at` and
   `expected_end` too: Wingman's dialog sets an expected end (§8.5), so the
   record shows it.
@@ -734,6 +748,7 @@ with server-scan's **auditor token**:
     {
       "id": "evt_…", "event_type": "MAINTENANCE_ENABLED",
       "server_id": "srv_…", "server_name": "ocp-dell-r660-site1-…",
+      "server_serial": "…", "server_bmc": "192.0.2.101",
       "actor": {"type": "TOKEN", "id": "api-token-admin", "display": null},
       "request_id": "…", "created_at": "2026-11-12T09:14:00Z",
       "data": {"reason": "Replacing PSU 2 — INC-4417"}
@@ -747,6 +762,15 @@ with server-scan's **auditor token**:
   `next_cursor` (at most 512 characters), both passed through. An event's
   `data` is whatever its writer recorded, passed through as JSON; every
   other field is typed. `event_type` is kept as server-scan sends it.
+- **`server_serial`** and **`server_bmc`** (server-scan v5.4.0, its
+  `29682c4`; 3.43.0) are the server's serial and BMC host when the event was
+  written, `null` on an event written before (server-scan fills them from
+  the server while it exists) or with none, such as a VM's BMC. An older
+  server-scan sends neither, and **day1 leaves them out then**
+  (`response_model_exclude_unset` on this route and §14.4's), so a page
+  tells "not sent" from `null`. A row's details lead with `server_id`,
+  `server_name`, `server_serial` and `server_bmc`, then the data, as
+  server-scan's `detailsJson`; one not sent is not written.
 - **The person behind a Wingman write is not in it**: server-scan records
   the admin token (`api-token-admin`), so its History says "API token
   (admin)". Wingman's own log names the person (§8.5).
@@ -805,11 +829,13 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
   `dev/fleet-fixtures/servers.yaml` and the hardware of its model from
   `dev/fleet-fixtures/server-records.yaml` (CPU, memory, drives, RAID,
   PSUs and NICs per model; GPUs on one model; Cisco's fabric uplinks), with
-  a few servers' health reasons, unread fields and an unreachable BMC to
-  show those states. No fake server is a VM, so `/vm-host` answers `404`.
+  a few servers' health reasons, unread fields and a collection error with
+  its cause (the one unreachable server, a v5.3.1 stub) to show those
+  states. No fake server is a VM, so `/vm-host` answers `404`.
   Its History is made from the row (discovered, classified, installed,
   health, maintenance) and every maintenance change made in the fake since it
-  started, by `dev` as server-scan with auth off records it. No token is
+  started, by `dev` as server-scan with auth off records it, each event with
+  the server's serial and BMC host, as v5.4.0 writes them. No token is
   needed, as on the sandbox.
 
 ### 9.8 The web
@@ -1560,7 +1586,7 @@ navigation, after Confs, at `/events`, for an auditor or an admin only.
   | Filter | Control | URL parameter | Sent to server-scan |
   |---|---|---|---|
   | Event type | a dropdown: "All", then the 19 types server-scan writes, in its menu's order (`WRITTEN_EVENT_TYPES`) | `event_type` (a bookmarked `HEALTH_STATUS_CHANGED` or "Health changes" reads as `HEALTH_CHANGED`) | `event_type` |
-  | Server | a text box, "Server name" | `server_name` | `server_name`, trimmed: a case-insensitive substring of the server's current name, or of the name recorded on the event (so a pruned server still matches) |
+  | Server | a text box, "Name, serial or BMC" (since v5.4.0, its `29682c4`; "Server name" before) | `server_name` | `server_name`, trimmed: a case-insensitive substring of the server's current name, serial or BMC host, or of the name, serial or BMC recorded on the event or in its data (so a pruned server still matches); the name alone before v5.4.0 |
   | User | a searchable list (`ActorCombobox`): "All" first, then every actor busiest first, each as `actorLabel` names it ("Alice A", "API token (admin)", "System (ingest)") with its event count; typing narrows it by the label or the raw id, Enter or a click picks one, "All" (or an emptied box) clears it, "No matching user" when nothing matches; closed, it shows the picked actor's label | `actor_id` | `actor_id`, exact |
   | Time range | a dropdown: "Any time", "Last hour", "Last 24 hours", "Last 7 days", "Last 30 days", "Custom" | `range` (`1h`, `24h`, `7d`, `30d`, `custom`) | `since`: now, rounded down to the minute, less the range |
 
@@ -1575,7 +1601,10 @@ navigation, after Confs, at `/events`, for an auditor or an admin only.
   server's page; "Unknown server", its id on hover, for a server since
   pruned; "-" for an event of no server), **What happened**, **When**,
   **User**, and a row's **▸ Details**: §9.1's History columns and details,
-  with the Server column first.
+  with the Server column first. The table shows the name only; since
+  v5.4.0 a server's event's details JSON leads with `server_id`,
+  `server_name`, `server_serial` and `server_bmc`, then the data (§9.4),
+  on this page and in History alike.
 - **Paging**: Previous, "Page X of Y" (Y from the first page's total) and
   Next, over server-scan's cursors; a change of filters starts again at page 1.
 - **Fresh**: the events are read when the page opens and again when it is
@@ -1604,7 +1633,7 @@ server's History has its own route, §9.3).
 
 | Call | Token | Answer |
 |---|---|---|
-| `GET /api/v1/events?server_id=&event_type=&actor_id=&since=&until=&server_name=&cursor=&page_size=` | **auditor or admin** (`require_audit_access`; a viewer token is `403`) | `{items: AuditEventResponse[], page: {next_cursor, has_more, page_size, total}}`, newest first, keyset pages: `page_size` 1 to 200 (50), `since` inclusive and `until` exclusive (ISO 8601), the legacy `HEALTH_STATUS_CHANGED` matched as `HEALTH_CHANGED`, `server_name` resolved against at most 5,000 current servers' ids and the names recorded on events, `total` on the first page only. A malformed cursor is `400 CURSOR_INVALID` |
+| `GET /api/v1/events?server_id=&event_type=&actor_id=&since=&until=&server_name=&cursor=&page_size=` | **auditor or admin** (`require_audit_access`; a viewer token is `403`) | `{items: AuditEventResponse[], page: {next_cursor, has_more, page_size, total}}`, newest first, keyset pages: `page_size` 1 to 200 (50), `since` inclusive and `until` exclusive (ISO 8601), the legacy `HEALTH_STATUS_CHANGED` matched as `HEALTH_CHANGED`, `server_name` resolved against at most 5,000 current servers' ids and the names recorded on events (since v5.4.0 also their serials and BMC hosts, and the events' `server_serial`, `server_bmc`, `data.serial` and `data.bmc`), `total` on the first page only. A malformed cursor is `400 CURSOR_INVALID` |
 | `GET /api/v1/events/actors` | **auditor or admin** | `{items: [{id, type, display, event_count}]}`: each distinct `actor.id`, its type and display from its newest event, busiest first, then by id, at most 200 |
 
 Neither is cached by server-scan: the list is a count and a find, the actors
@@ -1631,7 +1660,7 @@ when given, each checked first:
   "items": [
     {
       "id": "evt_…", "event_type": "JOB_TRIGGERED",
-      "server_id": null, "server_name": null,
+      "server_id": null, "server_name": null, "server_serial": null, "server_bmc": null,
       "actor": {"type": "USER", "id": "alice", "display": "Alice Cohen"},
       "request_id": "…", "created_at": "2026-11-14T08:05:00Z",
       "data": {"cronjob": "collector-openmanage-site1", "job": "collector-openmanage-site1-manual-8kq2d"}
@@ -1652,6 +1681,10 @@ server-scan's answer, typed, in its shape:
   every other field is typed (`domain/server_scan_events.py`). `event_type`
   and an actor's `type` stay strings, so a word server-scan adds later still
   shows.
+- `server_serial` and `server_bmc` as §9.4 says: from server-scan v5.4.0,
+  `null` included; left out of day1's answer when an older server-scan does
+  not send them. Against an older server-scan, `server_name` matches the
+  name alone.
 - **Not cached by day1** (§14.7).
 
 ### 14.5 The token
@@ -1699,9 +1732,11 @@ On each route:
   released with the admin token, and a pruned server whose name is gone.
   About 100 events from those two fixtures, two pages (three with the
   Inventory Management demo's servers, which `DAY1_FAKE_FLEET` adds). Filtered and paged as
-  server-scan does (`since` inclusive, `until` exclusive, `server_name` a
-  case-insensitive substring of the current name, the legacy event type,
-  keyset cursors, the total on the first page); the actors counted, busiest
+  server-scan v5.4.0 does (`since` inclusive, `until` exclusive, `server_name`
+  a case-insensitive substring of the name, serial or BMC host, or of a
+  pruned server's `data.serial` and `data.bmc`, the legacy event type,
+  keyset cursors, the total on the first page); each event on a server
+  carries its serial and BMC host, a pruned server's neither; the actors counted, busiest
   first. A server's History is the same trail filtered by its id, so the
   fixture's events on a server show there too. No token is needed, as on
   the sandbox.

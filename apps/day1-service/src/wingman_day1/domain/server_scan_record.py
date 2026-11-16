@@ -11,6 +11,8 @@ strictly; its internals the UI never reads are left out
 Two differences from server-scan's answer: the maintenance keeps its dates
 (Wingman's dialog sets an expected end), and the reservation says whether it
 is ``held``, which server-scan computes for its rows only (``ReservationState``).
+A field server-scan added later (``unreachable_detail``, v5.3.1) has a
+default, so an older server-scan's record still reads.
 """
 
 from __future__ import annotations
@@ -249,6 +251,9 @@ class ServerRecord(BaseModel):
     reachable: bool
     unreachable_since: datetime | None
     unreachable_reason: str | None
+    """Why the last collection failed (``timeout``, v5.3.1's ``collection_error``), as sent."""
+    unreachable_detail: str | None = None
+    """That failure's cause in words (server-scan v5.3.1, its ADR-0062); ``None`` before it."""
     updated_at: datetime
     created_at: datetime
 

@@ -317,6 +317,7 @@ def _times(row: ServerRow, extra: Mapping[str, Any]) -> JSONish:
         "unreachable_reason": None
         if row.reachable
         else extra.get("unreachable_reason", "network_unreachable"),
+        "unreachable_detail": None if row.reachable else extra.get("unreachable_detail"),
         "updated_at": seen,
         "created_at": CREATED_AT,
     }
@@ -374,6 +375,8 @@ def _event(
         "event_type": kind,
         "server_id": row.id,
         "server_name": row.name,
+        "server_serial": row.serial,
+        "server_bmc": row.bmc_host,
         "actor": {"display": None, **actor},
         "request_id": None,
         "created_at": at,

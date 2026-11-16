@@ -9,6 +9,12 @@ recorded and is passed through as JSON; everything else is typed. Its
 ``event_type`` and an actor's ``type`` stay strings, so a word server-scan
 adds later still shows. Whether the audit trail can be read here is
 ``audit_detail``'s rule.
+
+An event's ``server_serial`` and ``server_bmc`` (server-scan v5.4.0, its
+29682c4) are absent from an older server-scan's answer, and day1's two event
+routes leave them out then (``response_model_exclude_unset``): the details
+JSON shows them only when server-scan sent them, ``null`` included, as its
+``detailsJson`` does.
 """
 
 from __future__ import annotations
@@ -77,6 +83,10 @@ class AuditEvent(BaseModel):
     event_type: str
     server_id: str | None
     server_name: str | None
+    server_serial: str | None = None
+    """The serial when the event was written; ``None`` on an older event, unset before v5.4.0."""
+    server_bmc: str | None = None
+    """The BMC host when the event was written; as ``server_serial``."""
     actor: Actor
     request_id: str | None
     created_at: datetime
@@ -109,7 +119,8 @@ class EventQuery:
 
     ``None`` leaves a filter out; they combine with AND. ``since`` is
     inclusive and ``until`` exclusive; ``server_name`` is a case-insensitive
-    part of the server's name; ``cursor`` is the previous page's
+    part of the server's name, serial or BMC host (the name only before
+    server-scan v5.4.0); ``cursor`` is the previous page's
     ``next_cursor`` (``None``: the first page, which carries the total).
     """
 
