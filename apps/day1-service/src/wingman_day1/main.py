@@ -50,20 +50,7 @@ from wingman_core.web.app_factory import create_base_app, ready_once
 from wingman_day1 import platform_adapters as platform
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.api.errors import register_day1_error_handlers
-from wingman_day1.api.v1 import approvals as approvals_api
-from wingman_day1.api.v1 import audit as audit_api
-from wingman_day1.api.v1 import auth as auth_api
-from wingman_day1.api.v1 import clusters as clusters_api
-from wingman_day1.api.v1 import inventory as inventory_api
-from wingman_day1.api.v1 import placement as placement_api
-from wingman_day1.api.v1 import quick_links as quick_links_api
-from wingman_day1.api.v1 import segments as segments_api
-from wingman_day1.api.v1 import sites as sites_api
-from wingman_day1.api.v1 import specs as specs_api
-from wingman_day1.api.v1 import upgrades as upgrades_api
-from wingman_day1.api.v1 import webhooks as webhooks_api
-from wingman_day1.api.v1.nodepool_catalogs import ROUTERS as NODEPOOL_CATALOG_ROUTERS
-from wingman_day1.api.v1.server_scan_area import ROUTERS as SERVER_SCAN_ROUTERS
+from wingman_day1.api.v1.routers import ROUTERS
 from wingman_day1.application.approvals import ApprovalService, RepoKey
 from wingman_day1.application.audit import AuditService
 from wingman_day1.application.auth import AuthService
@@ -127,23 +114,6 @@ PLACEMENT_TTL_SECONDS: Final = 5.0
 """The longest placement keeps an MCE's nodes and pods: read when a create asks (ADR-0050)."""
 FAKE_SEGMENTS_MANAGER_UI: Final = "http://segments-manager.example"
 """Where the fake fleet's segments-manager links point when no segments-manager URL is set."""
-ROUTERS: Final = (
-    auth_api.router,
-    clusters_api.router,
-    sites_api.sites_router,
-    sites_api.mces_router,
-    specs_api.router,
-    *NODEPOOL_CATALOG_ROUTERS,
-    placement_api.router,
-    quick_links_api.router,
-    inventory_api.router,
-    segments_api.router,
-    *SERVER_SCAN_ROUTERS,
-    upgrades_api.router,
-    approvals_api.router,
-    audit_api.router,
-    webhooks_api.router,
-)
 
 
 @dataclass(frozen=True, slots=True)
