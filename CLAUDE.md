@@ -302,7 +302,7 @@ ADR-0032). The pass:
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-16 — 3.38.0 to 3.42.0: Inventory Ready/Needs fix, tuning in the every-nodepool rule, Scale through update-nodepool.**
+**2026-11-16 — 3.38.0 to 3.43.0: Inventory Ready/Needs fix, tuning in the every-nodepool rule, Scale through update-nodepool, Server Scan at server-scan v6.1.0.**
 - **Inventory Management** (3.38.0, ADR-0057's amendment): a pool's free
   servers split into Ready and Needs fix, a Total per pool and MCE,
   collapsible MCEs; an admin may install a Needs-fix server by name with
@@ -325,6 +325,10 @@ and write yours here.
   (read from the nodepool entry's `annotations` in the day1 file); the cluster
   page's first render matches the server's (no hydration error). Turning Scale
   on: `docs/upgrade/3.39-to-3.40.md`.
+- **Server Scan at parity with server-scan v6.1.0** (3.43.0, ADR-0048's
+  2026-11-16 amendment): Collection error with its cause, an event's serial
+  and BMC (details and the Server box), Healthy without servers in
+  maintenance; an older server-scan still works.
 - The workflow is on team-redbull/workflows' branch `feat/update-nodepool`
   (not merged when this was written): Wingman follows its contract and has
   not run against it live. The day1 CI tuning patch went to the user as a zip

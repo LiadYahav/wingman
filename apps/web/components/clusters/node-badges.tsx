@@ -122,7 +122,13 @@ function flagsOf(server: ServerRecord | null, outdated: boolean | null): Flag[] 
     });
   }
   if (!server.reachable) {
-    flags.push({ key: "unreachable", label: "Unreachable", icon: WifiOff, tone: "error", hint: "server-scan could not reach this server." });
+    flags.push({
+      key: "unreachable",
+      label: "Unreachable",
+      icon: WifiOff,
+      tone: "error",
+      hint: "server-scan's last collection could not reach or read this server; its server page says why.",
+    });
   }
   if (server.contested) {
     flags.push({ key: "contested", label: "Contested", icon: Split, tone: "warning", hint: "Two clusters' jobs claim this server in server-scan." });

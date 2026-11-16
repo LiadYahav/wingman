@@ -619,3 +619,79 @@ tokens' table, 501, 502, 409, 404, 504, logged with the person),
 `apps/web/lib/server-scan/jobs.test.ts` (server-scan's cases),
 `apps/web/lib/server-scan/sidebar.test.ts` and
 `apps/web/e2e/tests/server-scan-jobs.spec.ts`.
+
+**2026-11-16, 3.43.0: back to parity with server-scan v6.1.0.** The pages
+were matched to server-scan at `92146d3` (v5.3.0). Of what it shipped up to
+v6.1.0 (`876dd16`), three commits change what the area shows; Wingman
+follows each, and still works against a server-scan without them. The
+contract's §8.1, §9 and §14 of
+`docs/notes/2026-11-13-server-scan-area-api.md` say what changed.
+
+- **`8c0771a` (v5.3.1): a failed collection is kept as a stub.** One server
+  a collector cannot process no longer aborts its run: it is written
+  unreachable with `unreachable_reason: "collection_error"` and the cause in
+  words, `unreachable_detail`. The server page's **Collection** says
+  "Collection error" and shows the cause under its badge, whole and wrapped,
+  as server-scan's Overview. day1's record reads `unreachable_detail`
+  (`null` from an older server-scan); the fake's unreachable Cisco server is
+  such a stub.
+- **`29682c4` (v5.4.0): an event names its server's serial and BMC.**
+  server-scan snapshots `server_serial` and `server_bmc` on every server
+  event, and the Events page's `server_name` also matches them. The Server
+  box says "Name, serial or BMC"; a row's details, on Events and on a
+  server's History (one component), lead with `server_id`, `server_name`,
+  `server_serial` and `server_bmc`, then the data, as its `detailsJson`; the
+  table still shows the name only. day1 reads both, and its two event routes
+  leave out what server-scan did not send (`response_model_exclude_unset`),
+  so against an older server-scan the details show neither, while v5.4.0's
+  `null` (an older event, a VM's BMC) shows as `null`, as there. The fake
+  snapshots both and matches a name, serial or BMC host, and a pruned
+  server's `data.serial` and `data.bmc`, as server-scan's query does.
+- **`2bb2fb2` (v6.0.0): Healthy means healthy and in service.** The Servers
+  page's Health dropdown leaves Healthy servers in maintenance out of
+  Healthy unless Maintenance is ticked too; every other severity keeps its
+  servers in maintenance. Healthy's count is the rows it shows; Maintenance's
+  still counts them, since ticking it adds them (`rows.ts`'s
+  `matchesHealth` and `dropdownFacetCounts`, server-scan's cases). The Sites
+  cards are unchanged: none links to Healthy.
+- **Where else Wingman shows an unreachable server**, from the fleet rows,
+  whose `ServerRow` (server-scan's too) carries `reachable` only, not why:
+  the Servers list shows nothing, as server-scan's; Inventory Management's
+  "BMC unreachable" stays, since it is the add-server workflow's
+  `bmc-reachable` check, which fires on `reachable: false` and records "cannot
+  reach its BMC" for a collection error too; the cluster page's Unreachable
+  flag now says server-scan could not reach **or read** the server, and its
+  server page (linked from the name) says why.
+- **Not for Wingman**: `85a58b4` (v6.0.0, breaking: `GET
+  /servers/available` takes `max_health`, `POST` locks and live-checks one
+  server) is the add-server workflows' call; Wingman never calls
+  `/servers/available` (Inventory reads the rows). `a2ba3ee` (v6.1.0) is
+  server-scan's collectors chart only.
+- **No new value, Secret, token or grant**; day1's routes and the web change
+  in the same release. Against an older server-scan the area works as before:
+  no cause under Collection, no serial or BMC in the details, and the Server
+  box matches the name alone.
+
+Rejected: **reading a record per unreachable server for its reason** on the
+lists (a read per server for what server-scan's own lists do not show);
+**day1 sending a missing serial and BMC as `null`** (against an older
+server-scan every server event's details would gain two `null` lines, and a
+page could not tell them from v5.4.0's); **the web dropping `null` ones
+instead** (it would hide what server-scan shows, such as a VM's BMC, always
+`null`); **a model serializer in day1 to drop them** (the OpenAPI schema
+of an event would lose its fields; the route's flag keeps them);
+**rewording Inventory's "BMC unreachable"** (the workflow's check and its
+words, which the run records).
+
+Verification: `apps/day1-service/tests/unit/infrastructure/test_server_scan_record.py`
+(the cause read, an older record without it, a malformed one, the fake's
+stub), `test_server_scan_events.py` (the serial and BMC read and an older
+answer's absence kept, the fake's snapshots and its name, serial, BMC and
+pruned-data matches), `apps/day1-service/tests/api/test_server_scan_record_api.py`
+and `test_server_scan_events_api.py` (both routes send them only as
+server-scan sent them), `apps/web/lib/server-scan/overview.test.ts`,
+`events.test.ts` and `rows.test.ts` (server-scan's cases), and
+`apps/web/e2e/tests/server-scan-server.spec.ts` (the collection error and
+its cause; History's details), `server-scan-events.spec.ts` (the box, the
+details from v5.4.0 and from an older server-scan) and
+`server-scan-servers.spec.ts` (Healthy and its count).

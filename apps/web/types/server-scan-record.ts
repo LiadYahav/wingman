@@ -6,8 +6,10 @@
  *
  * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
  * single-pane plan): `frontend/src/types/server.ts` (`ServerDetail`,
- * `VmHostResponse`) and `frontend/src/types/events.ts`. As there, `X | null`
- * means "always sent, may be null". day1 adds the maintenance's dates,
+ * `VmHostResponse`) and `frontend/src/types/events.ts`, with what v6.1.0
+ * added (`collection_error`, `unreachable_detail`, an event's serial and BMC).
+ * As there, `X | null` means "always sent, may be null"; `X?` is what an
+ * older server-scan does not send. day1 adds the maintenance's dates,
  * `reservation.held` and whether the toggle and History work here.
  */
 
@@ -22,7 +24,9 @@ export type UnreachableReason =
   | "tls_error"
   | "timeout"
   | "protocol_error"
-  | "not_an_idrac";
+  | "not_an_idrac"
+  /** server-scan v5.3.1 (its 8c0771a): the manager listed the server but its record could not be processed. */
+  | "collection_error";
 
 /** Not narrowed to a severity: Cisco and the Redfish PSU path report UP, DOWN, DISABLED or UNKNOWN. */
 export type ComponentHealth = string | null;
@@ -286,6 +290,8 @@ export interface ServerRecord {
   reachable: boolean;
   unreachable_since: string | null;
   unreachable_reason: UnreachableReason | null;
+  /** The last failed collection's cause, in words; null when none was recorded (or before server-scan v5.3.1). */
+  unreachable_detail: string | null;
   updated_at: string;
   created_at: string;
   /** Whether the maintenance toggle works here (§8.4), and why not in one line. */
@@ -338,6 +344,13 @@ export interface AuditEvent {
   event_type: string;
   server_id: string | null;
   server_name: string | null;
+  /**
+   * The serial and BMC host when the event was written (server-scan v5.4.0's
+   * 29682c4): null on an older event, absent from an older server-scan's
+   * answer, which day1 leaves out.
+   */
+  server_serial?: string | null;
+  server_bmc?: string | null;
   actor: Actor;
   request_id: string | null;
   created_at: string;

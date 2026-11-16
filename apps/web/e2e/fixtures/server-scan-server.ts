@@ -84,6 +84,7 @@ export function nodeRecord(overrides: Partial<ServerRecord> = {}): ServerRecord 
     reachable: true,
     unreachable_since: null,
     unreachable_reason: null,
+    unreachable_detail: null,
     updated_at: "2026-11-13T08:00:00Z",
     created_at: "2026-09-01T06:00:00Z",
     maintenance_available: true,

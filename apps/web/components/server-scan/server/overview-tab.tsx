@@ -12,6 +12,7 @@ import { HealthBreakdown, HostValue, LastSeen, MaintenanceValue, ModelValue, Ope
  * at 92146d3, decision 18; docs/notes/2026-11-13-server-scan-area-api.md
  * §9.1): two columns of fields, kept apart so a field only some vendors have
  * (the template, Collection) never moves the others into the other column.
+ * Collection's cause, in words, sits under its badge (v5.3.1's 8c0771a).
  * Its one control is the maintenance toggle (§9.8).
  */
 export function OverviewTab({ record }: { record: ServerRecord }) {
@@ -57,7 +58,14 @@ export function OverviewTab({ record }: { record: ServerRecord }) {
         </Field>
         {!record.reachable && (
           <Field label="Collection" testId="ss-collection">
-            <Tag tone="warning">{collectionText(record.unreachable_reason, record.unreachable_since)}</Tag>
+            <span className="flex min-w-0 flex-col items-start gap-1">
+              <Tag tone="warning">{collectionText(record.unreachable_reason, record.unreachable_since)}</Tag>
+              {record.unreachable_detail && (
+                <span className="max-w-full wrap-anywhere text-muted-foreground" data-testid="ss-collection-detail">
+                  {record.unreachable_detail}
+                </span>
+              )}
+            </span>
           </Field>
         )}
         <Field label="Last changed">{formatTimestamp(record.updated_at)}</Field>
