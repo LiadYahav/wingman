@@ -125,6 +125,51 @@ async def test_names_are_always_sent_as_a_list_and_no_namespace_when_unset() -> 
     assert result.runs == (StartedRun(named, "already_running", server_name=SERVER),)
 
 
+async def test_a_named_start_sends_allow_unhealthy_only_when_asked() -> None:
+    """ADR-0057's 3.38.0 amendment: the workflow's hidden waiver, never sent while false."""
+    workflow, requests = make(answer(202, BATCH))
+    await workflow.start(
+        AddServerRequest(MCE, POOL, None, server_names=(SERVER,), allow_unhealthy=True)
+    )
+    await workflow.start(BY_NAME)
+    await workflow.start(BY_COUNT)
+    waived, named, counted = (json.loads(r.content) for r in requests)
+    assert waived == {
+        "infra_env": POOL,
+        "mce_cluster": MCE,
+        "server_names": [SERVER],
+        "allow_unhealthy": True,
+    }
+    assert "allow_unhealthy" not in named
+    assert "allow_unhealthy" not in counted
+
+
+async def test_a_runs_waived_health_checks_are_read_from_its_progress_else_its_result() -> None:
+    waived = [
+        {"check": "server-scan-health", "observed": "overall CRITICAL (raid=CRITICAL)"},
+        {"check": "bmc-reachable", "observed": "server-scan cannot reach its BMC"},
+    ]
+    running = {"workflow_id": SLOT_1, "status": "RUNNING",
+               "progress": {"phase": "waiting-for-agent", "allowed_unhealthy": waived}}  # fmt: skip
+    done = {"workflow_id": SLOT_1, "status": "COMPLETED", "progress": {"phase": "completed"},
+            "result": {"server_name": SERVER, "allowed_unhealthy": waived[:1]}}  # fmt: skip
+    plain = {"workflow_id": SLOT_1, "status": "RUNNING", "progress": {"phase": "acquiring-server"}}
+    found = []
+    for body in (running, done, plain):
+        workflow, _ = make(answer(200, body))
+        run = await workflow.run(SLOT_1)
+        assert run is not None
+        found.append(run.waived)
+    assert found == [
+        (
+            "server-scan-health: overall CRITICAL (raid=CRITICAL)",
+            "bmc-reachable: server-scan cannot reach its BMC",
+        ),
+        ("server-scan-health: overall CRITICAL (raid=CRITICAL)",),
+        (),
+    ]
+
+
 async def test_a_lone_runs_answer_is_read_too() -> None:
     workflow, _ = make(answer(202, {"workflow_id": SLOT_1, "run_id": "r1"}))
     assert await workflow.start(BY_COUNT) == AddServerStart(
@@ -249,6 +294,7 @@ def test_the_orchestrators_openapi_takes_the_body_day1_sends() -> None:
     assert {"infra_env", "mce_cluster", "namespace", "count", "server_names"} <= set(
         schema["properties"]
     )
+    assert "allow_unhealthy" not in schema["properties"], "hidden on purpose (workflows §4)"
     assert "202" in operation["responses"]
     batch = document["components"]["schemas"]["AddServerToMceBatchResponse"]
     assert set(batch["required"]) == {"started", "already_running", "failed", "results"}

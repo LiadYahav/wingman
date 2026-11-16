@@ -24,7 +24,7 @@ export const FREE = `ocp-${R650}-DLFAKE0811`;
 export const LOCKED = `ocp-${R650}-DLFAKE0812`;
 export const DONOR = `ocp-${R650}-DLFAKE0813`;
 /** CRITICAL and unreachable: offered, but a pool draw never picks it (needs a fix). */
-const SICK = `ocp-${R650}-DLFAKE0815`;
+export const SICK = `ocp-${R650}-DLFAKE0815`;
 export const SITE1_B = "ocp4-prod-mce-site1-b";
 /** The one InfraEnv site1-b's cluster files name: its own list could not be read. */
 export const SITE1_B_POOL = "dell-r760-site1-64c-512gb-20tb";
