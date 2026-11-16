@@ -20,6 +20,12 @@ export interface ScaleNodePool {
   locked_replicas: number | null;
   /** Why it cannot be named (and so not scaled by name); `null` when it can. */
   unnamed: string | null;
+  /**
+   * The entry's `redbull.io/scale-down-policy` annotation as written (`fewest-pods`, `least-requested`,
+   * `least-utilized`; the workflow refuses any other), which picks the nodes a scale-down removes; `null`
+   * without one: CAPI picks at random.
+   */
+  scale_down_policy: string | null;
 }
 
 /** A hardware kind: the NodePools of this cluster whose InfraEnv is it or starts with it and a dash. */

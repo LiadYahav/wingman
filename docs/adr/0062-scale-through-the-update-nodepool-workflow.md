@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy)
 
 ## Context
 
@@ -238,7 +238,8 @@ rule (5) and the run in place do not change; only the web's controls do.
   leaves nothing to send. The change is announced from one polite live
   region.
 - **Scale-up starts at once** (guarded against a double click); **scale-down
-  asks first**, in place (in the card, the row or the dialog): the servers
+  asks first**, in place (in the card, the row or the dialog). *Superseded
+  later on 2026-11-16 (below): both ask first, in one confirmation.* The servers
   that leave are the NodePool's `redbull.io/scale-down-policy`'s, else
   CAPI's at random, and they stay in the MCE's inventory. Start scale-down
   waits half a second, so the click that asked cannot start it. Once a run
@@ -247,13 +248,48 @@ rule (5) and the run in place do not change; only the web's controls do.
 - **While a run of the cluster is going** (scale or upgrade), no stepper
   shows: each size is text, the dialog's button waits, and the reason shows
   once, at the top of NodePool sizes; the waiting buttons point to it.
+- **2026-11-16 (3.42.0): every scale is confirmed first** (the user: "a
+  confirmation that gives a short explanation, like the uninstall workflow
+  ... avoids unwanted scale up / scale down"). Scale up and Scale down, on a
+  card, a row or in the hardware type dialog (over it, as its child: Escape
+  closes only the confirmation), open one short dialog shaped like the
+  uninstall's: `Scale up <NodePool or hardware type>?`, the change
+  (`3 → 4 replicas (+1)`, or `5 → 7 in total over 2 NodePools; the workflow
+  spreads it`), and a few lines from the workflow's design page. Up: each new
+  node takes a free server of that hardware, or waits until one is added;
+  one commit to day1 `main`, no merge request, which the workflow has Argo CD
+  apply; done when the NodePool shows the new size, new nodes joining after
+  they install. Down: which nodes leave by the NodePool's scale-down policy
+  (`fewest-pods` the fewest pods, `least-requested` the lowest requested CPU
+  or memory, `least-utilized` the lowest live use; without one CAPI picks at
+  random; unhealthy machines always first), an unknown value shown as
+  written with "the workflow will refuse it", each NodePool's when a
+  hardware type's differ; their pods move to the remaining nodes and the
+  servers stay in the MCE's inventory, free; one commit to day1 `main`,
+  applied by Argo CD. No typed name: Cancel, or **Yes, scale up** (default)
+  or **Yes, scale down** (destructive), armed after half a second. Cancel
+  and Escape send nothing and leave the change where it was; a refusal shows
+  in the confirmation, then under the change. The in-place scale-down
+  question is gone. The policy is `GET .../scale`'s new per-NodePool
+  `scale_down_policy`: the `nodepool[]` entry's
+  `annotations["redbull.io/scale-down-policy"]` as written, else `null`
+  (`docs/notes/2026-11-16-scale-nodepools-api.md`). One set by hand on the
+  MCE's NodePool is not in the file; the run reads it, and its result shows
+  the policy it used. A Restore keeps its own question in place.
 
 Verification: `apps/web/lib/scale-model.test.ts` (the hardware types with a
 total, a change in words, a typed number and a step);
+`apps/web/lib/scale-confirm.test.ts` (the confirmation's lines: each
+policy, none, an unknown one, a hardware type's alike or differing);
+`apps/day1-service/tests/unit/domain/test_scale.py` and
+`tests/api/test_scale_api.py` (the policy read from an entry's annotations);
 `apps/web/e2e/tests/cluster-scale.spec.ts` (a card's stepper and a row's
-post the exact body once; a typed number and the arrow keys; one change at
-a time across rows and the dialog; scale-down's question with Back and
-Escape; a locked NodePool on a row and on its card, as text with its
+post the exact body once, after the confirmation's Yes, armed after half a
+second; a typed number and the arrow keys; one change at a time across rows
+and the dialog; the confirmation's Cancel and Escape send nothing and keep
+the change; a scale-down's lines for each policy, none and an unknown one;
+the hardware type's confirmation over its dialog, each NodePool's policy,
+Escape closing only it; a refusal in the confirmation; a locked NodePool on a row and on its card, as text with its
 restore; a card the file does not name; the dialog's total and its
 scale-down; a locked type as text, and no button without one; while busy no
 stepper and one reason; a viewer sees no stepper).

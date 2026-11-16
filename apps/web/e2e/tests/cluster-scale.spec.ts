@@ -47,16 +47,28 @@ const DETAIL: ClusterDetail = {
   segments_manager: null,
 };
 
-/** Two zones of one kind, a locked NodePool whose file holds 3 (the flavor locks 2), and one that cannot be named. */
+/**
+ * Two zones of one kind (zone-b removes its nodes by fewest-pods, zone-a has no policy), a locked NodePool whose
+ * file holds 3 (the flavor locks 2), and one that cannot be named.
+ */
 const OPTIONS: ScaleOptions = {
   cluster: LARK, mce: MCE, flavor: FLAVOR,
   nodepools: [
-    { index: 0, name: ZONE_A, infra_env: "dell-r660-site1-zone-a", replicas: 3, locked_by: null, locked_replicas: null, unnamed: null },
-    { index: 1, name: ZONE_B, infra_env: "dell-r660-site1-zone-b", replicas: 3, locked_by: null, locked_replicas: null, unnamed: null },
-    { index: 2, name: R760, infra_env: "dell-r760-site1", replicas: 3, locked_by: FLAVOR, locked_replicas: 2, unnamed: null },
+    {
+      index: 0, name: ZONE_A, infra_env: "dell-r660-site1-zone-a", replicas: 3, locked_by: null, locked_replicas: null, unnamed: null,
+      scale_down_policy: null,
+    },
+    {
+      index: 1, name: ZONE_B, infra_env: "dell-r660-site1-zone-b", replicas: 3, locked_by: null, locked_replicas: null, unnamed: null,
+      scale_down_policy: "fewest-pods",
+    },
+    {
+      index: 2, name: R760, infra_env: "dell-r760-site1", replicas: 3, locked_by: FLAVOR, locked_replicas: 2, unnamed: null,
+      scale_down_policy: null,
+    },
     {
       index: 3, name: null, infra_env: null, replicas: 1, locked_by: null, locked_replicas: null,
-      unnamed: "nodepool[3] has neither name nor infraEnvName: its NodePool cannot be named",
+      unnamed: "nodepool[3] has neither name nor infraEnvName: its NodePool cannot be named", scale_down_policy: null,
     },
   ],
   kinds: [

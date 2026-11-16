@@ -246,10 +246,18 @@ function ClusterPageDocs() {
         InfraEnv kind (only kinds with two or more): the workflow spreads it so no two are more than one replica apart.
       </p>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        One change at a time: changing any stepper puts every other back. A scale-up starts at once; a scale-down asks
-        first, in place, since the servers that leave are chosen by the NodePool&apos;s{" "}
-        <InlineCode>redbull.io/scale-down-policy</InlineCode>, else CAPI picks at random, and they stay in the MCE&apos;s
-        inventory as free Agents. The run is one commit to day1 <InlineCode>main</InlineCode>, with no merge request; the
+        One change at a time: changing any stepper puts every other back. <strong>Scale up</strong> and{" "}
+        <strong>Scale down</strong> each ask first, in a short confirmation: the change (
+        <InlineCode>3 → 4 replicas (+1)</InlineCode>, or a hardware type&apos;s total, which the workflow spreads) and what
+        the run does. A scale-up&apos;s new nodes each take a free server of that hardware, or wait until one is added. A
+        scale-down says which nodes leave, by the NodePool&apos;s <InlineCode>redbull.io/scale-down-policy</InlineCode>{" "}
+        annotation in the day1 file: <InlineCode>fewest-pods</InlineCode> the fewest pods,{" "}
+        <InlineCode>least-requested</InlineCode> the lowest requested CPU or memory, <InlineCode>least-utilized</InlineCode>{" "}
+        the lowest live CPU or memory use, else CAPI picks at random; unhealthy machines always go first, and any other
+        value is shown with a warning, since the workflow refuses it. Their pods move to the remaining nodes and the servers
+        stay in the MCE&apos;s inventory, free. A policy set by hand on the MCE&apos;s NodePool is not in the file: the run
+        still reads it, and its result shows the policy it used. Cancel or Escape leaves the change as it was;{" "}
+        <strong>Yes</strong> arms after half a second. The run is one commit to day1 <InlineCode>main</InlineCode>, with no merge request; the
         workflow syncs the cluster&apos;s Argo CD Application itself and checks the NodePools show the new replicas. The run
         shows under NodePool sizes for everyone: its phase in the workflow&apos;s words, then each NodePool before and after
         and the servers chosen, or why it failed. While a run of the cluster is going, update-nodepool&apos;s or an
