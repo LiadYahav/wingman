@@ -104,10 +104,10 @@ test.describe("Each area's chrome", () => {
     await expect(platform(page)).toHaveCount(0);
   });
 
-  for (const { area, path, setUp, names } of [
-    { area: "wingman", path: "/", setUp: setUpSegments, names: ["Liad Yahav", "& Roi Blum"] },
-    { area: "segments", path: "/segments", setUp: setUpSegments, names: ["Roi Blum", "& Itay Herzberg"] },
-    { area: "server-scan", path: "/server-scan", setUp: setUpServerScan, names: ["Roi Blum", "& Tomer Karniol"] },
+  for (const { area, path, setUp, credits: expected } of [
+    { area: "wingman", path: "/", setUp: setUpSegments, credits: [/^Liad Yahav\s*2024 – 2026$/, /^& Roi Blum\s*2024 – 2028$/] },
+    { area: "segments", path: "/segments", setUp: setUpSegments, credits: [/^Roi Blum\s*2024 – 2028$/, /^& Itay Herzberg\s*2026 – 2028$/] },
+    { area: "server-scan", path: "/server-scan", setUp: setUpServerScan, credits: [/^Roi Blum\s*2024 – 2028$/, /^& Tomer Karniol\s*2025 – 2042$/] },
   ] as const) {
     test(`five quick clicks on ${area}'s brand show who built it`, async ({ page }) => {
       await setUp(page);
@@ -119,8 +119,7 @@ test.describe("Each area's chrome", () => {
       await expect(credits).toHaveCount(0);
       await brand(page).click();
       await expect(credits).toHaveAttribute("data-area", area);
-      await expect(credits.locator(".text-xl > div")).toHaveText([...names]);
-      await expect(credits).toContainText("2024 – 2028");
+      await expect(credits.getByTestId("credit")).toHaveText([...expected]);
 
       await credits.click();
       await expect(credits).toHaveCount(0);

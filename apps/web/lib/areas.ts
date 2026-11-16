@@ -25,21 +25,23 @@ export interface Area {
   href: string;
   /** What the top left shows while you are in it. */
   brand: { name: string; mark: BrandMark };
-  /** Who built it: five quick clicks on the brand show them. */
-  credits: Credits;
+  /** Who built it, each with their years: five quick clicks on the brand show them. */
+  credits: Credit[];
 }
 
-export interface Credits {
-  by: string[];
+export interface Credit {
+  name: string;
   years: string;
 }
+
+const ROI_BLUM: Credit = { name: "Roi Blum", years: "2024 – 2028" };
 
 const WINGMAN: Area = {
   id: "wingman",
   label: "Wingman",
   href: "/",
   brand: { name: "Wingman", mark: "wingman-logo" },
-  credits: { by: ["Liad Yahav", "Roi Blum"], years: "2024 – 2028" },
+  credits: [{ name: "Liad Yahav", years: "2024 – 2026" }, ROI_BLUM],
 };
 /** The original's header: a server-rack mark and "Segments Manager". */
 const SEGMENTS: Area = {
@@ -47,7 +49,7 @@ const SEGMENTS: Area = {
   label: "Segments",
   href: "/segments",
   brand: { name: "Segments Manager", mark: "server" },
-  credits: { by: ["Roi Blum", "Itay Herzberg"], years: "2024 – 2028" },
+  credits: [ROI_BLUM, { name: "Itay Herzberg", years: "2026 – 2028" }],
 };
 
 /** server-scan's own app icon (its header shows the team's logo, not server-scan's) and its page title (ADR-0048). */
@@ -56,7 +58,7 @@ const SERVER_SCAN: Area = {
   label: "Server Scan",
   href: "/server-scan",
   brand: { name: "Server Scan", mark: "server-scan-icon" },
-  credits: { by: ["Roi Blum", "Tomer Karniol"], years: "2024 – 2028" },
+  credits: [ROI_BLUM, { name: "Tomer Karniol", years: "2025 – 2042" }],
 };
 
 const AREAS: Record<AreaId, Area> = { wingman: WINGMAN, segments: SEGMENTS, "server-scan": SERVER_SCAN };
