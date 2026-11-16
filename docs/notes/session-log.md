@@ -4,6 +4,43 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-16 — 3.35.0 to 3.37.0: team chart groups, the Grafana dashboard, tuning profiles.**
+- **A team's charts sit in `<team>/helm-charts/<chart>`** (3.35.0,
+  ADR-0060): the New add-on form suggests that address; only a suggestion.
+- **The Server Scan Servers page starts higher** (3.35.1): heading, count,
+  search and exports on one row.
+- **The Grafana dashboard** (3.36.0): Overview (MRs opened and merged,
+  approvals, workflow runs, server-scan writes, systems failing), Activity,
+  API, External systems (a `dependency` variable), GitLab write safety; a test
+  ties every label value a panel matches to what the code exports. Checked in
+  Grafana 13 against OpenShift user-workload monitoring (Thanos' tenancy port).
+- **Tuning profiles** (3.37.0, ADR-0061): `tuning/` in the day1 repo holds
+  Tuned and PerformanceProfile manifests; a flavor and the create form pick
+  them per nodepool (`tuningConfig`), lockable as a rule for every nodepool,
+  at most one PerformanceProfile per pool, a Tuned's PerformanceProfile
+  suggested; drift and sync write only the names. The day1 CI injects
+  `tuningConfigmap` (an automation key, ADR-0012's amendment) from the
+  catalogue, keeping a cluster's differing copy and reporting it; that CI
+  patch and the chart's single `tuningConfig` render ship to the air-gap
+  separately. provision-cluster must set `tuningConfigmap` aside like
+  `mcConfigMap` (team-redbull/workflows PR #23).
+- Production creates clusters through provision-cluster now
+  (`day1.provisioner: workflow`, still a switch). Argo CD is synced by a person
+  today, auto-sync later: show "merged" and "applied" for both.
+
+**Next:**
+- cluster-navigator's data on the cluster page and per MCE (running version,
+  status, Git against what runs; `docs/ideas/single-pane.md` workstream 5):
+  the team adds a Wingman entry to its `SERVICE_TOKENS`.
+- Flavors v2's "Left for later": missing add-ons in one MR per team, the
+  cluster-name prefix in the web, a preview of an unsaved flavor.
+- Tuning: a lock per pool (a flavor with GPU pools needing different
+  PerformanceProfiles can preset them but not lock them today).
+- Code organisation, later (the user): helpers out of `.tsx`, a typed day2
+  call layer, the design splits; 30 files left in the size baseline.
+- The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
+  shared Git store.
+
 **2026-11-14 — 3.25.0 to 3.34.0: Server Scan complete (option C), chart hardening, a fuller Overview.**
 - **The Server Scan area at parity with server-scan's UI** (ADR-0048's
   amendments; contract `docs/notes/2026-11-13-server-scan-area-api.md`), one
