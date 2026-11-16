@@ -25,15 +25,29 @@ export interface Area {
   href: string;
   /** What the top left shows while you are in it. */
   brand: { name: string; mark: BrandMark };
+  /** Who built it: five quick clicks on the brand show them. */
+  credits: Credits;
 }
 
-const WINGMAN: Area = { id: "wingman", label: "Wingman", href: "/", brand: { name: "Wingman", mark: "wingman-logo" } };
+export interface Credits {
+  by: string[];
+  years: string;
+}
+
+const WINGMAN: Area = {
+  id: "wingman",
+  label: "Wingman",
+  href: "/",
+  brand: { name: "Wingman", mark: "wingman-logo" },
+  credits: { by: ["Liad Yahav", "Roi Blum"], years: "2024 – 2028" },
+};
 /** The original's header: a server-rack mark and "Segments Manager". */
 const SEGMENTS: Area = {
   id: "segments",
   label: "Segments",
   href: "/segments",
   brand: { name: "Segments Manager", mark: "server" },
+  credits: { by: ["Roi Blum", "Itay Herzberg"], years: "2024 – 2028" },
 };
 
 /** server-scan's own app icon (its header shows the team's logo, not server-scan's) and its page title (ADR-0048). */
@@ -42,6 +56,7 @@ const SERVER_SCAN: Area = {
   label: "Server Scan",
   href: "/server-scan",
   brand: { name: "Server Scan", mark: "server-scan-icon" },
+  credits: { by: ["Roi Blum", "Tomer Karniol"], years: "2024 – 2028" },
 };
 
 const AREAS: Record<AreaId, Area> = { wingman: WINGMAN, segments: SEGMENTS, "server-scan": SERVER_SCAN };

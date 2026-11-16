@@ -4,12 +4,14 @@
  * name, and a sidebar of the page's own options (status presets, every site
  * with used out of total, Documentation), each a link that sets the URL
  * filters and is marked from the URL. Wingman's pages keep Wingman's logo and
- * sidebar; a viewer never sees the Segments chrome.
+ * sidebar; a viewer never sees the Segments chrome. Five quick clicks on an
+ * area's brand show who built it.
  */
 
 import { test, expect, type Page } from "@playwright/test";
 import { go } from "../fixtures/api-handlers";
 import { forbidden, setUpSegments } from "../fixtures/segments";
+import { setUpServerScan } from "../fixtures/server-scan";
 
 const brand = (page: Page) => page.getByTestId("brand");
 const segmentsNav = (page: Page) => page.getByRole("navigation", { name: "Segments" });
@@ -101,4 +103,27 @@ test.describe("Each area's chrome", () => {
     await expect(segmentsNav(page)).toHaveCount(0);
     await expect(platform(page)).toHaveCount(0);
   });
+
+  for (const { area, path, setUp, names } of [
+    { area: "wingman", path: "/", setUp: setUpSegments, names: ["Liad Yahav", "& Roi Blum"] },
+    { area: "segments", path: "/segments", setUp: setUpSegments, names: ["Roi Blum", "& Itay Herzberg"] },
+    { area: "server-scan", path: "/server-scan", setUp: setUpServerScan, names: ["Roi Blum", "& Tomer Karniol"] },
+  ] as const) {
+    test(`five quick clicks on ${area}'s brand show who built it`, async ({ page }) => {
+      await setUp(page);
+      await go(page, path);
+      await expect(brand(page)).toHaveAttribute("data-area", area);
+      const credits = page.getByTestId("credits");
+
+      for (let i = 0; i < 4; i += 1) await brand(page).click();
+      await expect(credits).toHaveCount(0);
+      await brand(page).click();
+      await expect(credits).toHaveAttribute("data-area", area);
+      await expect(credits.locator(".text-xl > div")).toHaveText([...names]);
+      await expect(credits).toContainText("2024 – 2028");
+
+      await credits.click();
+      await expect(credits).toHaveCount(0);
+    });
+  }
 });
