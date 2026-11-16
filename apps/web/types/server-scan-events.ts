@@ -19,7 +19,7 @@ export interface EventActorList {
 
 /** `GET /api/day1/server-scan/events`'s filters, under server-scan's names; a filter left out is not sent. */
 export interface EventListParams {
-  /** A case-insensitive part of the server's name. */
+  /** A case-insensitive part of the server's name, serial or BMC host (the name only before server-scan v5.4.0). */
   server_name?: string;
   /** ISO 8601 in UTC, inclusive. */
   since?: string;

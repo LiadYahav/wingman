@@ -7,8 +7,11 @@ name (its id and current name are filled in) or, for a server since pruned,
 by an id alone. ``event_page`` filters and pages them as server-scan's
 ``GET /api/v1/events`` does (ADR-0048's 3.31.0 amendment): newest first,
 ``since`` inclusive, ``until`` exclusive, ``server_name`` a case-insensitive
-part of the current name, the legacy event type, keyset cursors, the total
-on the first page. A server's History is the same trail by its id, so both
+part of the server's name, serial or BMC host (server-scan v5.4.0's
+29682c4: the event's snapshots and its data's ``serial`` and ``bmc``), the
+legacy event type, keyset cursors, the total on the first page. An event on
+a server carries its serial and BMC host; a pruned server's has neither, as
+server-scan's events written before v5.4.0. A server's History is the same trail by its id, so both
 pages agree. Answers are built in server-scan's JSON shape and read by the
 same strict models as the real ones. Nothing here is real.
 """
@@ -92,10 +95,16 @@ def _matches(event: Mapping[str, Any], query: EventQuery) -> bool:
     return all(checks)
 
 
+SEARCHED: Final = ("server_name", "server_serial", "server_bmc")
+"""The event's fields server-scan's ``server_name`` reads, and its data's ``serial`` and ``bmc``."""
+
+
 def _named(event: Mapping[str, Any], needle: str | None) -> bool:
-    """server-scan's ``server_name``: lower case, spaces collapsed, part of the name."""
+    """server-scan's ``server_name``: lower case, spaces collapsed, in a name, serial or BMC."""
     wanted = " ".join((needle or "").lower().split())
-    return not wanted or wanted in (event["server_name"] or "").lower()
+    data = event["data"]
+    values = [event[key] for key in SEARCHED] + [data.get("serial"), data.get("bmc")]
+    return not wanted or any(isinstance(v, str) and wanted in v.lower() for v in values)
 
 
 def _order(event: Mapping[str, Any]) -> tuple[datetime, str]:
@@ -153,17 +162,19 @@ def load_events(path: Path, rows: Sequence[ServerRow]) -> tuple[JSONish, ...]:
 def _event(
     item: Mapping[str, Any], index: int, rows: Mapping[str, ServerRow], path: Path
 ) -> JSONish:
-    server_id, server_name = item.get("server_id"), None
+    server_id, row = item.get("server_id"), None
     if "server" in item:
         row = rows.get(item["server"])
         if row is None:
             raise ValueError(f"{path}: an event names {item['server']!r}, which is not a server")
-        server_id, server_name = row.id, row.name
+        server_id = row.id
     return {
         "id": f"evt_fixture_{index:04d}",
         "event_type": item["event_type"],
         "server_id": server_id,
-        "server_name": server_name,
+        "server_name": row.name if row else None,
+        "server_serial": row.serial if row else None,
+        "server_bmc": row.bmc_host if row else None,
         "actor": {"display": None, **item["actor"]},
         "request_id": item.get("request_id"),
         "created_at": _moment(item["created_at"]),

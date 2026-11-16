@@ -7,7 +7,8 @@
  *
  * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
  * single-pane plan): `frontend/src/features/events/describeEvent.ts`,
- * `EventTimeline.tsx` (the tints) and `EventList.tsx` (the pager).
+ * `EventTimeline.tsx` (the tints) and `EventList.tsx` (the pager); the
+ * details JSON from v5.4.0's `EventTimeline.tsx` (its 29682c4).
  */
 
 import type { AuditEvent, AuditEventPage } from "@/types/server-scan-record";
@@ -167,6 +168,19 @@ const LEGACY_DATA_KEYS = ["ticket", "matched_rule_id"];
 /** The event's data without legacy keys (a removed ticket, an internal rule id); the event is untouched. */
 export function visibleData(event: AuditEvent): Record<string, unknown> {
   return Object.fromEntries(Object.entries(event.data).filter(([k]) => !LEGACY_DATA_KEYS.includes(k)));
+}
+
+/**
+ * The details JSON, as server-scan v5.4.0's `detailsJson` (its 29682c4): for a
+ * server's event the server's id, name, serial and BMC first, then the data.
+ * A serial or BMC an older server-scan does not send is absent, so it is not
+ * written (`JSON.stringify` leaves `undefined` out); one sent as null is.
+ */
+export function detailsJson(event: AuditEvent): string {
+  const server = event.server_id
+    ? { server_id: event.server_id, server_name: event.server_name, server_serial: event.server_serial, server_bmc: event.server_bmc }
+    : {};
+  return JSON.stringify({ ...server, ...visibleData(event) }, null, 2);
 }
 
 /** A CLASSIFICATION_CHANGED's rule, readable; `null` for a legacy or unmatched one. */

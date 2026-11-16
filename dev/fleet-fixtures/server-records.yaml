@@ -11,7 +11,9 @@
 #     (`-128c-1024gb-`) when it has them.
 #   - `rules`: the classification rule that matched each installation type.
 #   - `servers`: what differs for one server: its health per category and
-#     why, the fields the last collection could not read, an unreachable BMC.
+#     why, the fields the last collection could not read, why the last
+#     collection failed (`unreachable_reason`, and `unreachable_detail` in
+#     words) for a server that is not reachable.
 #
 # Nothing here is real: the models' parts, serials and MACs are invented.
 
@@ -183,7 +185,9 @@ servers:
     reasons:
       - {policy_key: connectivity.fabric_paths_down, policy_name: Fabric paths down, category: connectivity, severity: CRITICAL, message: "0 of 2 fabric paths up"}
     uplinks_down: true
-    unreachable_reason: timeout
+    # A collection error (server-scan v5.3.1): kept as a stub, its cause in words.
+    unreachable_reason: collection_error
+    unreachable_detail: "mapping the server summary: KeyError: 'AlarmSummary'"
     unread_fields: [hardware.memory.total_bytes, hardware.power.psus, network.interfaces]
   ocp-dell-r660-site2-64c-256gb-DLFAKE0402:
     unevaluated: true

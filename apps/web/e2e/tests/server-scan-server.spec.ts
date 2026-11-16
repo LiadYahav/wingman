@@ -81,9 +81,27 @@ test.describe("The server's page", () => {
     await expect(field(page, "Server profile template")).toHaveText("upi-worker-spt");
     await expect(field(page, "Last seen")).toContainText("Stale");
     await expect(page.getByTestId("ss-collection")).toContainText(/Wrong credentials since 12\/11\/2026, 08:00:00/);
+    await expect(page.getByTestId("ss-collection-detail")).toHaveCount(0);
     const maintenance = page.getByTestId("ss-maintenance");
     await expect(maintenance).toContainText("PSU swap - by API token (admin)");
     await expect(maintenance.getByText("PSU swap - by API token (admin)")).toHaveAttribute("title", /^Since 12\/11\/2026, 11:00:00.*expected to end 14\/11\/2026, 16:00:00/);
+  });
+
+  test("a collection error, server-scan v5.3.1's stub: its label, and the cause in words under it", async ({ page }) => {
+    const summary = `https://intersight.example/api/v1/compute/PhysicalSummaries/${"0123456789abcdef".repeat(6)}`;
+    const cause = `mapping the server summary: KeyError: 'AlarmSummary' (${summary})`;
+    const stub = ciscoRecord({ unreachable_reason: "collection_error", unreachable_since: "2026-11-15T17:50:03Z", unreachable_detail: cause });
+    await setUpServer(page, { records: [stub] });
+    await go(page, `/server-scan/servers/${CISCO_ID}`);
+    const collection = page.getByTestId("ss-collection");
+    await expect(collection.locator("dd")).toHaveText(/^Collection error since 15\/11\/2026, 19:50:03/);
+    await expect(collection.getByTestId("ss-collection-detail")).toHaveText(cause);
+    // A long token wraps inside the field instead of widening the page
+    const box = await collection.getByTestId("ss-collection-detail").boundingBox();
+    const overview = await page.getByTestId("ss-overview").boundingBox();
+    expect(box && overview && box.x + box.width <= overview.x + overview.width).toBe(true);
+    // The other fields stay where they are
+    await expect(field(page, "Last changed")).toBeVisible();
   });
 
   test("a VM's Host: its node and cluster, and the server it runs on linked to its page", async ({ page }) => {
@@ -179,6 +197,10 @@ test.describe("History", () => {
     await expect(events.nth(1).getByRole("group", { name: "HEALTHY → WARNING" })).toBeVisible();
     await events.nth(0).getByRole("button", { name: "▸ Details" }).click();
     await expect(page.getByTestId("ss-event-details")).toContainText("Put into maintenance by API token (admin): Replacing PSU 2 — INC-4417");
+    // server-scan v5.4.0: the details lead with the server's id, name, serial and BMC, then the data
+    await expect(page.getByTestId("ss-event-details").locator("pre")).toHaveText(
+      `{\n  "server_id": "${NODE_ID}",\n  "server_name": "${NODE}",\n  "server_serial": "DL0101",\n  "server_bmc": "192.0.2.101",\n  "reason": "Replacing PSU 2 — INC-4417"\n}`
+    );
     await events.nth(1).getByRole("button", { name: "▸ Details" }).click();
     const health = page.getByTestId("ss-event-details").nth(1);
     await expect(health.getByRole("region", { name: "FROM" })).toContainText("nothing failing");

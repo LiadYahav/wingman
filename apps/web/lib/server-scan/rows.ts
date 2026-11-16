@@ -7,6 +7,8 @@
  * single-pane plan): `frontend/src/features/inventory/rows.ts`,
  * `frontend/src/features/inventory/sorting.ts` and `frontend/src/lib/donor.ts`,
  * with their behaviour unchanged; `rows.test.ts` holds server-scan's cases.
+ * Healthy without servers in maintenance (`matchesHealth`, its counts) is
+ * v6.0.0's (its 2bb2fb2).
  */
 
 import type { MaintenanceState, ServerRow } from "@/types/server-scan-servers";
@@ -27,7 +29,10 @@ export interface RowFilters {
   installation_type?: string[];
   openshift_state?: string[];
   health?: string[];
-  /** Unset shows servers in maintenance with the rest; "only" keeps just them, "exclude" hides them. */
+  /**
+   * Unset shows servers in maintenance with the rest; "only" keeps just them, "exclude" hides them.
+   * Healthy servers in maintenance are the exception: `health` HEALTHY shows them only with "only".
+   */
   maintenance?: "only" | "exclude";
   /** Only servers an install currently holds a lock on. */
   reserved?: true;
@@ -92,6 +97,20 @@ function nameCounts(rows: readonly ServerRow[]): Map<string, number> {
 
 const anyOf = (wanted: string[] | undefined, value: string | null) => !wanted?.length || (value !== null && wanted.includes(value));
 
+/** A Healthy server in maintenance: healthy, but not in service. */
+const pausedHealthy = (row: ServerRow) => row.health === "HEALTHY" && row.maintenance.enabled;
+
+/**
+ * Whether a row passes the Health dropdown. Healthy means healthy and in
+ * service: a Healthy server in maintenance shows only with Maintenance ticked
+ * too (`maintenance: "only"`), so it never hides among the healthy rows on a
+ * later page. Every other severity still includes its servers in maintenance.
+ */
+function matchesHealth(row: ServerRow, filters: RowFilters): boolean {
+  if (!anyOf(filters.health, row.health)) return false;
+  return !filters.health?.length || !pausedHealthy(row) || filters.maintenance === "only";
+}
+
 /** Whether a row passes the six dropdowns. */
 function passesDropdowns(row: ServerRow, filters: RowFilters): boolean {
   return (
@@ -100,7 +119,7 @@ function passesDropdowns(row: ServerRow, filters: RowFilters): boolean {
     anyOf(filters.source_provider, row.source_provider) &&
     anyOf(filters.installation_type, row.installation_type) &&
     anyOf(filters.openshift_state, row.openshift_state) &&
-    anyOf(filters.health, row.health)
+    matchesHealth(row, filters)
   );
 }
 
@@ -269,14 +288,21 @@ function without(filters: RowFilters, key: keyof RowFilters): RowFilters {
  * The dropdowns' counts: each dimension over the rows every *other* filter
  * leaves, so an option's number is what ticking it would show. `total` and
  * the toggles' counts are over the fully filtered rows; `maintenance` is
- * counted without the maintenance filter.
+ * counted without the maintenance filter. Healthy follows `matchesHealth`:
+ * it leaves out Healthy servers in maintenance unless Maintenance is ticked,
+ * so its number is the rows it shows; Maintenance still counts them, since
+ * ticking it adds them.
  */
 export function dropdownFacetCounts(rows: readonly ServerRow[], filters: RowFilters): FacetCounts {
   const facets = facetCounts(filterRows(rows, filters));
   for (const [filterKey, facetKey] of DIMENSIONS) {
     facets[facetKey] = facetCounts(filterRows(rows, without(filters, filterKey)))[facetKey];
   }
-  facets.maintenance = facetCounts(filterRows(rows, without(filters, "maintenance"))).maintenance;
+  const severities = filters.health ?? [];
+  const ignoringBoth = filterRows(rows, without(without(filters, "maintenance"), "health"));
+  facets.maintenance = facetCounts(ignoringBoth.filter((row) => anyOf(severities, row.health))).maintenance;
+  const healthBase = filterRows(rows, without(filters, "health"));
+  facets.health = facetCounts(filters.maintenance === "only" ? healthBase : healthBase.filter((row) => !pausedHealthy(row))).health;
   return facets;
 }
 

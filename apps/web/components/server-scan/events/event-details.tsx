@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { actorLabel, type ActorKind } from "@/lib/server-scan/actor";
 import {
-  describeEvent, healthSections, matchedRule, topReason, transition, transitionSides, visibleData, type EventReason, type EventTone,
+  describeEvent, detailsJson, healthSections, matchedRule, topReason, transition, transitionSides, type EventReason, type EventTone,
 } from "@/lib/server-scan/events";
 import { cn } from "@/lib/utils";
 import type { AuditEvent } from "@/types/server-scan-record";
@@ -129,7 +129,7 @@ function ClassificationWhy({ data }: { data: Record<string, unknown> }) {
   );
 }
 
-/** What a row opens: the sentence (a health change: each side's worst reason), a classification's rule, the data. */
+/** What a row opens: the sentence (a health change: each side's worst reason), a classification's rule, the details JSON. */
 export function EventDetails({ event }: { event: AuditEvent }) {
   return (
     <div data-testid="ss-event-details">
@@ -139,7 +139,7 @@ export function EventDetails({ event }: { event: AuditEvent }) {
         <p className="mb-2 text-xs">{describeEvent(event)}</p>
       )}
       {event.event_type === "CLASSIFICATION_CHANGED" && <ClassificationWhy data={event.data} />}
-      <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">{JSON.stringify(visibleData(event), null, 2)}</pre>
+      <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">{detailsJson(event)}</pre>
     </div>
   );
 }

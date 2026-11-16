@@ -7,7 +7,8 @@
 import { describe, expect, it } from "vitest";
 import type { AuditEvent, AuditEventPage } from "@/types/server-scan-record";
 import {
-  WRITTEN_EVENT_TYPES, describeEvent, eventTone, healthSections, eventPager, matchedRule, topReason, transition, transitionSides, visibleData,
+  WRITTEN_EVENT_TYPES, describeEvent, detailsJson, eventTone, healthSections, eventPager, matchedRule, topReason, transition, transitionSides,
+  visibleData,
 } from "./events";
 import { auditEvent as ev } from "./testing";
 
@@ -129,6 +130,30 @@ describe("the details", () => {
     const e = ev("CLASSIFICATION_CHANGED", { to: "UPI", ticket: "T", matched_rule_id: "r" });
     expect(visibleData(e)).toEqual({ to: "UPI" });
     expect(e.data).toHaveProperty("ticket");
+  });
+
+  // server-scan v5.4.0's case (its 29682c4, EventTimeline.test.tsx "server details").
+  it("lead with the server's id, name, serial and BMC, then the data", () => {
+    const e = { ...ev("MAINTENANCE_ENABLED", { reason: "psu", ticket: "T" }), server_serial: "JKD123", server_bmc: "10.1.2.3" };
+    const json = detailsJson(e);
+    expect(JSON.parse(json)).toEqual({
+      server_id: "srv_1", server_name: "ocp-worker-001", server_serial: "JKD123", server_bmc: "10.1.2.3", reason: "psu",
+    });
+    expect(Object.keys(JSON.parse(json))).toEqual(["server_id", "server_name", "server_serial", "server_bmc", "reason"]);
+  });
+
+  it("keep a serial or BMC sent as null, and write nothing for one an older server-scan does not send", () => {
+    const legacy = { ...ev("MAINTENANCE_ENABLED", { reason: "psu" }), server_serial: null, server_bmc: null };
+    expect(JSON.parse(detailsJson(legacy))).toEqual({
+      server_id: "srv_1", server_name: "ocp-worker-001", server_serial: null, server_bmc: null, reason: "psu",
+    });
+    const older = ev("MAINTENANCE_ENABLED", { reason: "psu" });
+    expect(Object.keys(JSON.parse(detailsJson(older)))).toEqual(["server_id", "server_name", "reason"]);
+  });
+
+  it("are the data alone for an event of no server", () => {
+    const e = { ...ev("JOB_TRIGGERED", { cronjob: "collector" }), server_id: null, server_name: null, server_serial: null, server_bmc: null };
+    expect(JSON.parse(detailsJson(e))).toEqual({ cronjob: "collector" });
   });
 
   it("show the rule name and what it matched on; nothing for a legacy event with only a rule id", () => {

@@ -7,7 +7,8 @@
  *
  * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
  * single-pane plan): `frontend/src/features/servers/OverviewTab.tsx` and
- * `frontend/src/components/ReservationBadge.tsx`.
+ * `frontend/src/components/ReservationBadge.tsx`; the "Collection error"
+ * label from v5.3.1 (its 8c0771a).
  */
 
 import type { HealthSeverity } from "@/types/server-scan";
@@ -38,6 +39,7 @@ const UNREACHABLE_LABELS: Record<UnreachableReason, string> = {
   timeout: "Timed out",
   protocol_error: "Protocol error",
   not_an_idrac: "Not an iDRAC",
+  collection_error: "Collection error",
 };
 
 /** "Wrong credentials since <time>": why the last collection could not read the BMC. */

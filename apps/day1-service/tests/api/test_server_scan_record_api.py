@@ -57,6 +57,7 @@ RECORD_FIELDS = {
     "reachable",
     "unreachable_since",
     "unreachable_reason",
+    "unreachable_detail",
     "updated_at",
     "created_at",
     "maintenance_available",
@@ -137,6 +138,18 @@ async def test_the_record_is_server_scans_shape_with_the_two_switches(
     assert body["hardware"]["cpu"]["threads"] > 0
     assert (body["maintenance_available"], body["history_available"]) == (True, True)
     assert (body["maintenance_detail"], body["history_detail"]) == (None, None)
+    assert (body["reachable"], body["unreachable_detail"]) == (True, None)
+
+
+async def test_a_collection_error_reaches_the_page_with_its_cause(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    inventory = fleet()
+    cisco = next(row for row in inventory.snapshot() if row.name.endswith("CSFAKE0302"))
+    async with client(support, gitlab, clock, inventory) as http:
+        body = (await http.get(f"{SERVERS}/{cisco.id}", headers=auth(support.ALICE))).json()
+    assert (body["reachable"], body["unreachable_reason"]) == (False, "collection_error")
+    assert body["unreachable_detail"] == "mapping the server summary: KeyError: 'AlarmSummary'"
 
 
 async def test_an_unknown_server_is_404(
@@ -176,6 +189,8 @@ async def test_history_pages_newest_first(
         "event_type",
         "server_id",
         "server_name",
+        "server_serial",
+        "server_bmc",
         "actor",
         "request_id",
         "created_at",

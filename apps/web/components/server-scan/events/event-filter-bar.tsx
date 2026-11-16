@@ -92,8 +92,8 @@ export function EventFilterBar({
           id="ss-events-server"
           type="text"
           value={filters.server}
-          placeholder="Server name"
-          title="A part of the server's name, in any case"
+          placeholder="Name, serial or BMC"
+          title="A part of the server's name, serial or BMC host, in any case"
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => onChange("server", e.target.value)}

@@ -99,6 +99,7 @@ export function serverRecord(overrides: Partial<ServerRecord> = {}): ServerRecor
     reachable: true,
     unreachable_since: null,
     unreachable_reason: null,
+    unreachable_detail: null,
     updated_at: "2026-08-13T10:00:00Z",
     created_at: "2026-08-13T10:00:00Z",
     maintenance_available: true,
