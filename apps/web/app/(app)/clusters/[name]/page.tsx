@@ -1,23 +1,23 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Trash2, Package, Edit2, Eye, X, ExternalLink, Lock } from "lucide-react";
+import { Edit2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { api, errorMessages, isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
+import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
-import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReviewDialog } from "@/components/common/review-dialog";
 import { ProblemList } from "@/components/common/problem-list";
 import { StaleAlert } from "@/components/common/stale-alert";
-import { FlavorStateBadge } from "@/components/clusters/drift-badge";
-import { ClusterDriftPanel, updateOf } from "@/components/clusters/cluster-drift";
+import { ClusterDriftPanel } from "@/components/clusters/cluster-drift";
+import { ClusterHeader } from "@/components/clusters/cluster-header";
+import { FixAddonDialog } from "@/components/clusters/fix-addon-dialog";
 import { SyncDialog } from "@/components/clusters/sync-dialog";
 import { DeleteWorkflowPanel } from "@/components/clusters/delete-workflow-panel";
 import { ClusterNodes } from "@/components/clusters/cluster-nodes";
@@ -29,7 +29,7 @@ import { ClusterInfoCard, HostedClusterCard, NodePoolsCard, SpecCard } from "@/c
 import { FileProblems, NamingNotice } from "@/components/clusters/cluster-notices";
 import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
-import { chartsHref, day2Api, day2Keys } from "@/lib/day2";
+import { day2Api, day2Keys } from "@/lib/day2";
 import { useClusterLiveStatus } from "@/lib/live-status";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { writeErrorTitle } from "@/lib/write-errors";
@@ -50,9 +50,13 @@ function ClusterDetailContent() {
   const name = params.name as string;
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+  // The server has no cache, and providers.tsx restores one from localStorage that can land before this
+  // Suspense boundary hydrates (React hydrates it after the shell): until mounted, every read below is
+  // drawn as the server drew it, loading, so the first render is the server's.
+  const mounted = useMounted();
 
   // site/mce are optional (cluster names are unique); the detail answers both.
-  const { data: cluster, isLoading, error: detailError, refetch: refetchDetail } = useQuery<ClusterDetail>({
+  const detail = useQuery<ClusterDetail>({
     queryKey: day1Keys.clusters.detail(name),
     queryFn: () =>
       day1Api.clusters.detail(name, clusterQuery(searchParams.get("site") ?? "", searchParams.get("mce") ?? "")),
@@ -62,6 +66,9 @@ function ClusterDetailContent() {
     refetchOnMount: "always",
     retry: (count, error) => !isApiError(error, 404) && !isApiError(error, 422) && count < 2,
   });
+  const cluster = mounted ? detail.data : undefined;
+  const isLoading = !mounted || detail.isLoading;
+  const { error: detailError, refetch: refetchDetail } = detail;
 
   const site = cluster?.site ?? searchParams.get("site") ?? "";
   const mce = cluster?.mce ?? searchParams.get("mce") ?? "";
@@ -71,7 +78,7 @@ function ClusterDetailContent() {
   const { data: liveStatus, isLoading: liveStatusLoading, error: liveStatusError } = useClusterLiveStatus(name, mce);
   const statusOn = liveStatus !== null && liveStatus !== undefined;
 
-  const { data: drift, isLoading: driftLoading, error: driftError } = useQuery<ClusterDrift>({
+  const driftRead = useQuery<ClusterDrift>({
     queryKey: day1Keys.clusters.drift(name),
     queryFn: () => day1Api.clusters.drift(name, where),
     enabled: Boolean(cluster),
@@ -80,6 +87,7 @@ function ClusterDetailContent() {
     // refetchOnMount: the query is still disabled when the page mounts.
     staleTime: 0,
   });
+  const drift = mounted ? driftRead.data : undefined;
 
   // The cluster's charts as day2 lists them (a bare name, narrowed by its MCE):
   // the entry its charts page reads, and what a drift fix writes against.
@@ -113,14 +121,14 @@ function ClusterDetailContent() {
   const isEditing = editBase !== null;
   const [writeError, setWriteError] = useState<unknown>(null);
 
-  const { data: clusterHistory, isLoading: clusterHistoryLoading, error: clusterHistoryError } = useQuery<CommitEntry[]>({
+  const day1History = useQuery<CommitEntry[]>({
     queryKey: day1Keys.clusters.history(name),
     queryFn: () => day1Api.clusters.history(name, where),
     enabled: Boolean(cluster) && activeTab === "history",
     staleTime: 60_000,
   });
 
-  const { data: addonHistory, isLoading: addonHistoryLoading, error: addonHistoryError } = useQuery<CommitEntry[]>({
+  const day2History = useQuery<CommitEntry[]>({
     queryKey: day2Keys.history(name, mce),
     queryFn: () => api.get(day2Api.history(name, mce)),
     enabled: Boolean(mce) && activeTab === "history",
@@ -237,12 +245,7 @@ function ClusterDetailContent() {
   if (detailError) {
     return (
       <div className="p-6 max-w-5xl mx-auto space-y-4">
-        <div className="flex items-center gap-3">
-          <Link href="/clusters" className={buttonVariants({ variant: "ghost", size: "icon" })}>
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <h1 className="text-2xl font-bold tracking-tight break-all">{name}</h1>
-        </div>
+        <ClusterHeader name={name} />
         <ProblemList
           error={detailError}
           title={isApiError(detailError, 404) ? "This cluster does not exist (an MR may have deleted it)" : "The cluster could not be loaded"}
@@ -253,70 +256,23 @@ function ClusterDetailContent() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-3 flex-wrap">
-        <Link href="/clusters" className={buttonVariants({ variant: "ghost", size: "icon" })}>
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          {isLoading ? (
-            <Skeleton className="h-7 w-48" />
-          ) : (
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight break-all">{name}</h1>
-              {drift && drift.state !== "not_linked" && <FlavorStateBadge row={{ ...drift, update: updateOf(drift) }} />}
-            </div>
-          )}
-        </div>
-        {!isLoading && cluster && (
-          <div className="flex items-center gap-2 flex-wrap">
-            {cluster.gitlab_url && (
-              <a
-                href={cluster.gitlab_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-                title="View in GitLab"
-              >
-                <ExternalLink className="h-4 w-4 mr-1.5" />GitLab
-              </a>
-            )}
-            <Link href={chartsHref(name, mce)} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              <Package className="h-4 w-4 mr-1.5" />Addons
-            </Link>
-
-            {isAdmin && isEditing ? (
-              <>
-                <button onClick={handleCancelEdit} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  <X className="h-4 w-4 mr-1.5" />Cancel
-                </button>
-                <button
-                  onClick={() => { setWriteError(null); setReviewOpen(true); }}
-                  disabled={unchanged}
-                  title={unchanged ? "No changes to submit" : undefined}
-                  className={buttonVariants({ size: "sm" })}
-                >
-                  <Eye className="h-4 w-4 mr-1.5" />
-                  {unchanged ? "No Changes" : "Review & Submit"}
-                </button>
-              </>
-            ) : isAdmin ? (
-              <>
-                <button className={buttonVariants({ variant: "outline", size: "sm" })} onClick={handleStartEdit}>
-                  <Edit2 className="h-4 w-4 mr-1.5" />Edit
-                </button>
-                <button
-                  className={buttonVariants({ variant: "destructive", size: "sm" })}
-                  onClick={() => { setWriteError(null); setDeleteReviewOpen(true); }}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 className="h-4 w-4 mr-1.5" />Delete
-                </button>
-              </>
-            ) : null}
-          </div>
-        )}
-      </div>
+      <ClusterHeader
+        name={name}
+        mce={mce}
+        loading={isLoading}
+        cluster={cluster}
+        drift={drift}
+        isAdmin={isAdmin}
+        actions={{
+          editing: isEditing,
+          unchanged,
+          onEdit: handleStartEdit,
+          onCancelEdit: handleCancelEdit,
+          onReview: () => { setWriteError(null); setReviewOpen(true); },
+          onDelete: () => { setWriteError(null); setDeleteReviewOpen(true); },
+          deleting: deleteMutation.isPending,
+        }}
+      />
 
       {Boolean(writeError) && (
         isApiError(writeError, "REVISION_CONFLICT") ? (
@@ -399,7 +355,11 @@ function ClusterDetailContent() {
 
         {/* The servers server-scan places in the cluster; read when the tab opens (inactive panels unmount) */}
         <TabsContent value="nodes" className="mt-4">
-          <ClusterNodes name={name} where={where} isAdmin={isAdmin} enabled={activeTab === "nodes"} />
+          {mounted ? (
+            <ClusterNodes name={name} where={where} isAdmin={isAdmin} enabled={activeTab === "nodes"} />
+          ) : (
+            <Skeleton className="h-40 w-full rounded-xl" />
+          )}
         </TabsContent>
 
         <TabsContent value="yaml" className="mt-4">
@@ -429,8 +389,8 @@ function ClusterDetailContent() {
         <TabsContent value="drift" className="mt-4 space-y-4">
           <ClusterDriftPanel
             drift={drift}
-            isLoading={isLoading || driftLoading}
-            error={driftError}
+            isLoading={isLoading || driftRead.isLoading}
+            error={driftRead.error}
             isAdmin={isAdmin}
             onFix={setFixingAddon}
             onFixAll={() => fixAllMutation.mutate(drift?.addon_drift ?? [])}
@@ -445,9 +405,9 @@ function ClusterDetailContent() {
               Cluster file (day1 repo)
             </h3>
             <CommitList
-              commits={clusterHistory}
-              isLoading={clusterHistoryLoading}
-              error={clusterHistoryError}
+              commits={mounted ? day1History.data : undefined}
+              isLoading={!mounted || day1History.isLoading}
+              error={day1History.error}
               errorTitle="The cluster file's history could not be loaded"
               empty={{
                 title: "No history yet",
@@ -461,9 +421,9 @@ function ClusterDetailContent() {
               Addon values (day2 team repos)
             </h3>
             <CommitList
-              commits={addonHistory}
-              isLoading={addonHistoryLoading}
-              error={addonHistoryError}
+              commits={mounted ? day2History.data : undefined}
+              isLoading={!mounted || day2History.isLoading}
+              error={day2History.error}
               errorTitle="The addon values' history could not be loaded"
               empty={{
                 title: "No addon value changes yet",
@@ -517,38 +477,12 @@ function ClusterDetailContent() {
       )}
 
       {fixingAddon && (
-        <ReviewDialog
-          open
-          onOpenChange={(open) => { if (!open) setFixingAddon(null); }}
-          title={`Fix: Install ${fixingAddon.addon_name}`}
-          description={`Install ${fixingAddon.addon_name} of ${fixingAddon.team} at the add-on's revision, with the values requested at create. Opens a GitLab MR for approval.`}
+        <FixAddonDialog
+          entry={fixingAddon}
+          onClose={() => setFixingAddon(null)}
           onConfirm={() => addonFixMutation.mutate(fixingAddon)}
-          isPending={addonFixMutation.isPending}
-          confirmLabel="Confirm — Create Install MR"
-        >
-          <div className="rounded-lg border bg-muted/30 p-4 text-sm space-y-2">
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-24 shrink-0">Addon</span>
-              <span className="font-semibold font-mono break-all">{fixingAddon.addon_name}</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-24 shrink-0">Team</span>
-              <span className="font-medium">{fixingAddon.team}</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-24 shrink-0">Version</span>
-              <span className="font-medium">the add-on&apos;s revision</span>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-muted-foreground w-24 shrink-0">Values</span>
-              <span className="font-medium">
-                {Object.keys(fixingAddon.override_values).length > 0
-                  ? `${Object.keys(fixingAddon.override_values).length} requested at create`
-                  : "chart and Sig values"}
-              </span>
-            </div>
-          </div>
-        </ReviewDialog>
+          pending={addonFixMutation.isPending}
+        />
       )}
     </div>
   );
