@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 type Line = { icon: LucideIcon; text: React.ReactNode; emphasis?: boolean };
 
 /**
- * What update-nodepool does, said before anything is sent (its design doc is
- * the authority; Wingman starts it and shows its run). A scale-down adds
- * which servers leave and where they go.
+ * What update-nodepool does, said before a Restore is sent (its design doc
+ * is the authority; Wingman starts it and shows its run). A scale-down adds
+ * which servers leave and where they go. A scale from a stepper says it in
+ * its confirmation (scale-confirm-dialog.tsx).
  */
 const WRITE: Line[] = [
   {
@@ -58,9 +59,4 @@ function Lines({ lines, compact }: { lines: Line[]; compact: boolean }) {
 /** The truths of a scale, as a list; `down` adds the scale-down's own. */
 export function ScaleTruths({ down, compact = false }: { down: boolean; compact?: boolean }) {
   return <Lines lines={[...WRITE, ...(down ? DOWN : []), DONE]} compact={compact} />;
-}
-
-/** Only a scale-down's own: which servers leave and where they go. */
-export function ScaleDownTruths() {
-  return <Lines lines={DOWN} compact />;
 }

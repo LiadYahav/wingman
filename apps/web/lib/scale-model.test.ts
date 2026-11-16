@@ -38,6 +38,7 @@ const pool = (overrides: Partial<ScaleNodePool> = {}): ScaleNodePool => ({
   locked_by: null,
   locked_replicas: null,
   unnamed: null,
+  scale_down_policy: null,
   ...overrides,
 });
 

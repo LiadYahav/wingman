@@ -63,6 +63,8 @@ class ScaleNodePoolOut(BaseModel):
     locked_replicas: int | None
     unnamed: str | None
     """Why it cannot be scaled by name."""
+    scale_down_policy: str | None
+    """The entry's ``redbull.io/scale-down-policy`` annotation as written; ``null`` without one."""
 
     @classmethod
     def of(cls, pool: FileNodePool) -> ScaleNodePoolOut:
@@ -75,6 +77,7 @@ class ScaleNodePoolOut(BaseModel):
             locked_by=pool.locked_by,
             locked_replicas=pool.locked_replicas,
             unnamed=pool.unnamed,
+            scale_down_policy=pool.scale_down_policy,
         )
 
 

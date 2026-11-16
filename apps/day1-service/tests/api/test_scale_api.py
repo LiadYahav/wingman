@@ -153,6 +153,7 @@ async def test_the_options_are_the_files_nodepools_and_their_kinds(
             "locked_by": None,
             "locked_replicas": None,
             "unnamed": None,
+            "scale_down_policy": None,
         },
         {
             "index": 1,
@@ -162,6 +163,7 @@ async def test_the_options_are_the_files_nodepools_and_their_kinds(
             "locked_by": None,
             "locked_replicas": None,
             "unnamed": None,
+            "scale_down_policy": None,
         },
     ]
     assert body["kinds"] == [
@@ -172,6 +174,27 @@ async def test_the_options_are_the_files_nodepools_and_their_kinds(
             "total": 2,
             "locked": [],
         },
+    ]
+
+
+async def test_each_nodepools_scale_down_policy_is_read_from_its_annotations(
+    on: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+) -> None:
+    day1 = await support.project_id(gitlab, support.DAY1)
+    path = f"{HOSTED}/{LARK}.yaml"
+    current = (await gitlab.read_file(day1, RepoPath(path), "main")).content
+    small, storage = "  replicas: 3\n", "  replicas: 2\n"
+    assert current.count(small) == 1 and current.count(storage) == 1
+    annotated = current.replace(
+        small, small + "  annotations:\n    redbull.io/scale-down-policy: newest-first\n"
+    ).replace(storage, storage + "  annotations:\n    redbull.io/scale-down-policy: fewest-pods\n")
+    await support.push(gitlab, support.DAY1, branch="main", file=path, content=annotated)
+    await on.post("/api/webhooks/gitlab", json={"project": {"id": day1}}, headers=WEBHOOK)
+    body = (await on.get(f"{BASE}/scale", headers=auth(support.VIEWER))).json()
+    # As written, a value the workflow does not know too: it refuses that one itself
+    assert [(p["name"], p["scale_down_policy"]) for p in body["nodepools"]] == [
+        (SMALL, "newest-first"),
+        (STORAGE, "fewest-pods"),
     ]
 
 

@@ -8,9 +8,10 @@ import { changeWords, kindBlock, MAX_REPLICAS, totalKinds } from "@/lib/scale-mo
 import { cn, plural } from "@/lib/utils";
 import type { ScaleKind } from "@/types";
 import { ReplicasStepper, stepperInputId } from "./replicas-stepper";
-import { ConfirmDown, focusSoon, ScaleButton, sendable, sendChange, StartError } from "./scale-pending";
+import { ScaleConfirmDialog } from "./scale-confirm-dialog";
+import { ScaleButton } from "./scale-pending";
+import { focusSoon, StartError } from "./scale-start";
 import { BUSY_ID, useScaleTab, type ScaleTabValue } from "./scale-tab";
-import { ScaleDownTruths } from "./scale-truths";
 
 const sizeOf = (k: ScaleKind) => `${plural(k.nodepools.length, "NodePool")} · ${k.total === null ? "—" : plural(k.total, "replica")}`;
 
@@ -107,14 +108,15 @@ function Total({ tab, kind, held, pending }: { tab: ScaleTabValue; kind: ScaleKi
 
 /**
  * A hardware type's total in a small dialog: choose the type (over two or
- * more NodePools), set its total, and Scale up or Scale down; a scale-down
- * asks first, in the same dialog. The change is the tab's one change.
+ * more NodePools), set its total, and Scale up or Scale down, which opens
+ * the confirmation over it (its child: Escape closes only the
+ * confirmation). The change is the tab's one change.
  */
 function ScaleKindDialog({ tab, kinds, onClose }: { tab: ScaleTabValue; kinds: ScaleKind[]; onClose: (returnFocus: boolean) => void }) {
   const { flavor } = tab.options;
   const [chosen, setChosen] = useState(() => (kinds.find((k) => kindBlock(k, flavor) === null) ?? kinds[0]).kind);
   const kind = kinds.find((k) => k.kind === chosen) ?? kinds[0];
-  const { change, current, asked, direction, confirming, start } = tab.state;
+  const { change, confirming, start } = tab.state;
   const mine = change?.mode === "kind" && change.target === kind.kind;
   const block = kindBlock(kind, flavor);
   const dropKindChange = () => {
@@ -145,36 +147,29 @@ function ScaleKindDialog({ tab, kinds, onClose }: { tab: ScaleTabValue; kinds: S
           />
           <Total tab={tab} kind={kind} held={block !== null || tab.busy !== null} pending={start.isPending} />
           {tab.busy && <p className="text-xs text-status-warning-fg">{tab.busy}</p>}
-          {mine && confirming && direction === "down" && current !== null && asked !== null && (
-            <ConfirmDown
-              question={`Scale down ${kind.kind} by ${plural(current - asked, "replica")}?`}
-              pending={start.isPending}
-              blocked={!sendable(tab)}
-              onBack={() => {
-                start.reset();
-                tab.state.setConfirming(false);
-                focusSoon("scale-kind-primary");
-              }}
-              onStart={() => sendChange(tab, () => onClose(false))}
-            >
-              <ScaleDownTruths />
-            </ConfirmDown>
-          )}
-          {mine && <StartError tab={tab} />}
+          {mine && !confirming && <StartError tab={tab} />}
         </div>
-        {!confirming && (
-          <DialogFooter>
-            <button type="button" onClick={close} disabled={start.isPending} className={buttonVariants({ variant: "outline" })} data-testid="scale-kind-cancel">
-              Cancel
+        <DialogFooter>
+          <button type="button" onClick={close} disabled={start.isPending} className={buttonVariants({ variant: "outline" })} data-testid="scale-kind-cancel">
+            Cancel
+          </button>
+          {mine ? (
+            <ScaleButton tab={tab} id="scale-kind-primary" size="default" />
+          ) : (
+            <button type="button" disabled className={buttonVariants()}>
+              Scale
             </button>
-            {mine ? (
-              <ScaleButton tab={tab} id="scale-kind-primary" size="default" onStarted={() => onClose(false)} />
-            ) : (
-              <button type="button" disabled className={buttonVariants()}>
-                Scale
-              </button>
-            )}
-          </DialogFooter>
+          )}
+        </DialogFooter>
+        {mine && confirming && (
+          <ScaleConfirmDialog
+            tab={tab}
+            onCancel={() => {
+              tab.state.setConfirming(false);
+              focusSoon("scale-kind-primary");
+            }}
+            onStarted={() => onClose(false)}
+          />
         )}
       </DialogContent>
     </Dialog>

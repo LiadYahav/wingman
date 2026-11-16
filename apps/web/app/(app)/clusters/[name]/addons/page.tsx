@@ -17,6 +17,7 @@ import {
   teamAccess,
 } from "@/lib/day2";
 import { cn } from "@/lib/utils";
+import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -139,6 +140,9 @@ function ClusterCharts() {
   const key = keyFromParam(params.name);
   const mce = searchParams.get("mce") ?? undefined;
   const isAdmin = useIsAdmin();
+  // The cache providers.tsx restores can land before this Suspense boundary hydrates: until mounted,
+  // the reads are drawn as the server drew them (nothing read yet), so the first render is the server's.
+  const mounted = useMounted();
 
   const [opened, setOpened] = useState<OpenedChanges | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -182,7 +186,9 @@ function ClusterCharts() {
     staleTime: 60_000,
   });
 
-  const data = charts.data;
+  const data = mounted ? charts.data : undefined;
+  const dest = mounted ? destination.data : undefined;
+  const groupUrl = mounted ? gitlabInfo.data?.sigs_group_url : undefined;
   const installed = data?.installed ?? [];
   const installedKeys = new Set(installed.map(chartKey));
   const available = (catalog.data ?? []).filter((e) => !installedKeys.has(chartKey(e)));
@@ -193,11 +199,11 @@ function ClusterCharts() {
   const ref: DestinationRef | null = data ? { id: data.id, name: data.cluster, kind: data.kind } : null;
   const selectable = available.filter((e) => accessOf(e.team).writable);
   const selectedEntries = available.filter((e) => selected.has(chartKey(e)));
-  const isFetching = charts.isFetching || catalog.isFetching;
+  const isFetching = !mounted || charts.isFetching || catalog.isFetching;
 
-  const home = homeOf(data?.kind ?? destination.data?.kind, key);
+  const home = homeOf(data?.kind ?? dest?.kind, key);
   const backHref =
-    data?.kind === "hosted" && destination.data?.in_day1 !== false
+    data?.kind === "hosted" && dest?.in_day1 !== false
       ? `/clusters/${encodeURIComponent(data.cluster)}?site=${encodeURIComponent(data.site)}&mce=${encodeURIComponent(data.mce)}`
       : home.href;
 
@@ -394,15 +400,15 @@ function ClusterCharts() {
             <span className="text-muted-foreground"> · Charts</span>
           </h1>
           {data ? (
-            <DestinationFacts charts={data} destination={destination.data} />
+            <DestinationFacts charts={data} destination={dest} />
           ) : (
             !charts.error && <Skeleton className="h-4 w-72" />
           )}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {gitlabInfo.data?.sigs_group_url && (
+          {groupUrl && (
             <a
-              href={gitlabInfo.data.sigs_group_url}
+              href={groupUrl}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}

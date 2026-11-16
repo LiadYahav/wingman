@@ -52,7 +52,7 @@ def scale_service(
 ) -> ScaleService | None:
     """The scale use case while ``DAY1_SCALE_NODEPOOLS`` is on; else ``None`` (the routes' 501).
 
-    The fake fleet's workflow reads each cluster's NodePools from its day1 file.
+    The fake fleet's workflow reads each cluster's NodePools and policies from its day1 file.
     """
     if not settings.day1_scale_nodepools or workflow is None:
         return None
@@ -64,7 +64,7 @@ def scale_service(
             async def pools(cluster: str) -> list[FakePool]:
                 found = await clusters.get(await clusters.locate(cluster))
                 return [
-                    FakePool(p.name, p.infra_env, p.replicas or 0)
+                    FakePool(p.name, p.infra_env, p.replicas or 0, p.scale_down_policy)
                     for p in file_nodepools(
                         load_values(found.content), cluster_name=found.hosted_cluster.cluster_name
                     )

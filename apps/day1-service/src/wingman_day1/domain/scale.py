@@ -32,6 +32,8 @@ SCALE_WORKFLOW_PREFIX: Final = "update-nodepool-"
 """A cluster's run is ``update-nodepool-<file stem>``, one at a time (the orchestrator's id)."""
 DEFAULT_REPLICAS: Final = 1
 """What the chart renders for a ``nodepool[]`` entry without ``replicas``."""
+SCALE_DOWN_POLICY: Final = "redbull.io/scale-down-policy"
+"""The key update-nodepool reads off a NodePool to choose the servers a scale-down removes."""
 _ERROR_TYPE: Final = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Error|Exception)):\s")
 
 
@@ -166,6 +168,8 @@ class FileNodePool:
     """The replicas a flavor locks this NodePool to; ``None`` when none does."""
     locked_by: str | None = None
     """That flavor."""
+    scale_down_policy: str | None = None
+    """The entry's ``annotations[SCALE_DOWN_POLICY]`` as written; ``None`` without one."""
 
     @property
     def label(self) -> str:
@@ -261,9 +265,25 @@ def file_nodepools(
                 replicas=_replicas(entry),
                 locked_replicas=lock,
                 locked_by=flavor if lock is not None else None,
+                scale_down_policy=scale_down_policy(entry),
             )
         )
     return tuple(pools)
+
+
+def scale_down_policy(entry: Mapping[str, object]) -> str | None:
+    """The scale-down policy an entry's ``annotations`` name, as written; ``None`` without one.
+
+    The chart renders an entry's annotations onto its NodePool, where
+    update-nodepool reads the key (a label or an annotation set by hand on
+    the MCE is read there too; the file cannot show it). The value is not
+    checked here: the workflow refuses one it does not know.
+    """
+    annotations = entry.get("annotations")
+    if not isinstance(annotations, Mapping):
+        return None
+    value = cast("Mapping[str, object]", annotations).get(SCALE_DOWN_POLICY)
+    return None if value is None else str(value)
 
 
 def belongs_to_kind(infra_env: str | None, kind: str) -> bool:
