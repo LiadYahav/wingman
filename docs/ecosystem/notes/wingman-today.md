@@ -1,5 +1,7 @@
 # Wingman today — precise map (as of branch roiblum/feat-web-modern-ui, HEAD 47b0e02)
 
+> **A snapshot of the code at `47b0e02` (2026-11-07), before the day1 and day2 rewrite. For Wingman today, read [`docs/architecture.md`](../../architecture.md).**
+
 Repo: this repository. Paths below are relative to it.
 Last real feature work: May 2026 (PR #1 infraenv dropdown merged ~2026-05-22). Nov 2026 commits are UI-theme + e2e only.
 

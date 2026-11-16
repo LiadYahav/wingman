@@ -2,7 +2,9 @@
 
 What we learned on 2026-11-07 when we re-read the platform the team built over the last 6 months, so that Wingman can come back on top of it. The detailed notes per system are in [`notes/`](notes/). Commits read are listed under [Sources](#sources).
 
-> **Day1 status: there is no Day1 (create-cluster) workflow yet. It is planned and in progress.** Nothing about it exists in code, queues or the orchestrator API. Only the design exists (see [Day1 workflow: planned](#day1-workflow-planned-not-built)).
+> **Day1 status on 2026-11-07: there is no Day1 (create-cluster) workflow yet. It is planned and in progress.** Nothing about it exists in code, queues or the orchestrator API. Only the design exists (see [Day1 workflow: planned](#day1-workflow-planned-not-built)).
+>
+> **Since then:** the day1 workflow exists as `provision-cluster`, and Wingman's Create can start it, behind `DAY1_PROVISIONER=workflow`, off by default (2026-11-12, ADR-0042). Wingman also starts `upgrade-cluster` (2026-11-13, ADR-0055) and other platform workflows, and reads server-scan and segments-manager. This page stays the 2026-11-07 picture; Wingman as it is today is [`../architecture.md`](../architecture.md).
 
 ## TL;DR
 
@@ -73,6 +75,7 @@ This flow is git plus CI, not one workflow.
 
 ### Day1 workflow: planned, not built
 
+- **Since then (2026-11-12):** built as `provision-cluster`, started through the orchestrator (`POST /workflows/cluster-lifecycle/provision-cluster`). It takes the cluster file, reserves the segment, pushes the file with the allocation on its own branch, opens the merge request, waits for the merge, then registers the cluster in day2's sig repos. It only creates. Wingman starts it behind `DAY1_PROVISIONER=workflow`, off by default (ADR-0042, [`../notes/2026-11-12-provision-cluster-workflow-api.md`](../notes/2026-11-12-provision-cluster-workflow-api.md)). Wingman starts no delete workflow yet: ADR-0033's contract waits for one. The rest of this section is the 2026-11-07 picture.
 - **Status:** no code, task queue or API route. We checked the live orchestrator API on 2026-11-07, and the user confirmed the work is in progress.
 - **Planned in the workflows repo:**
   - `create-cluster` (`workflows/CLAUDE.md:818-843`, `shared/models/segment_lifecycle.py:287,365`): runs `allocate-segment` as a child workflow, merges after it returns, then checks the DHCP scope after the merge.
