@@ -17,7 +17,10 @@ herzi or the orchestrator. `<mce>` is a day1 MCE folder
 label). Since 3.19.0 day1 does not check the InfraEnv against the MCE's
 list: the workflow's first phase (`validating-infraenv`) does, as on the
 orchestrator's own "Install servers" form, so nothing here needs live
-status (ADR-0057's amendment).
+status (ADR-0057's amendment). Since 3.38.0 a pool's free servers are
+split into **Ready** and **Needs fix**, with a **Total**, and a named
+install may waive the workflow's health checks (`allow_unhealthy`, §5)
+after the dialog's confirmation (ADR-0057's 3.38.0 amendment).
 
 ## 0. Where the numbers come from
 
@@ -30,7 +33,9 @@ status (ADR-0057's amendment).
 | The pools (InfraEnvs) | the MCE's InfraEnv list (hub, cached as for the create form); without it (live status off, or the hub unreadable), the InfraEnvs the MCE's day1 cluster files name (`nodepool[].infraEnvName`) | `infra_envs_from` says which: `mce` or `day1` |
 | A server's InfraEnv | the pools above | the InfraEnv `<e>` for which the server's name starts with `ocp-<e>` (the add-server workflow draws a pool with `^ocp-<infraEnv>`), the longest when several do; else the InfraEnv of a live lock on this MCE; else none (`infra_env: null`) |
 | Hardware | the rows | `vendor` and `model` |
-| Drawable (the page's **Free**) | the rows | `AVAILABLE` servers named `ocp-<infraEnv>…`, healthy, reachable, unlocked, out of maintenance: "servers in server-scan, not yet in this pool, that Add could pick". server-scan's count; the workflow decides |
+| **Ready** (since 3.38.0; was `drawable`, the page's Free) | the rows | `AVAILABLE` servers named `ocp-<infraEnv>…`, unlocked, out of maintenance, not contested, `HEALTHY` and reachable: what a pool draw could pick today, by the rule the workflow asks server-scan with (`/servers/available?health=HEALTHY`). server-scan's view; the workflow decides (it also checks the network category, two link-up NICs and a live recheck, which the rows do not carry) |
+| **Needs fix** | the rows | the same, offered (unlocked, out of maintenance, not contested), but server-scan's health is not `HEALTHY` or the BMC is unreachable: a pool draw never picks it; a named install takes it only with `allow_unhealthy` (§5) |
+| **Total** | the counts above | available + ready + needs fix: what the pool reaches once every free server is fixed and installed. On the MCE, each free server named for any of its pools is counted once. Locked, in-maintenance and contested servers are not counted |
 
 An MCE that no row names is **unknown** (`known: false`), never zero.
 server-scan unreadable: the route answers 502. The MCE's own InfraEnv list
@@ -64,19 +69,26 @@ run) are in its metrics and logs only, which Wingman cannot read.
           "available": 2,
           "usable": 2,
           "hardware": [{"vendor": "dell", "model": "PowerEdge R650", "available": 2, "usable": 2}],
-          "drawable": 1
+          "ready": 1,
+          "needs_fix": 1,
+          "total": 4
         },
         {
           "infra_env": null,
           "available": 1,
           "usable": 1,
           "hardware": [{"vendor": "dell", "model": "PowerEdge R760", "available": 1, "usable": 1}],
-          "drawable": null
+          "ready": null,
+          "needs_fix": null,
+          "total": 1
         }
       ],
       "infra_envs": ["dell-r650-site1-96c-768gb", "dell-r760-site1-64c-512gb-20tb"],
       "infra_envs_error": null,
-      "infra_envs_from": "mce"
+      "infra_envs_from": "mce",
+      "ready": 1,
+      "needs_fix": 1,
+      "total": 8
     }
   ],
   "add_servers": {"available": true, "detail": null},
@@ -92,6 +104,9 @@ run) are in its metrics and logs only, which Wingman cannot read.
 - `infra_envs_from`: `mce` (the MCE's own list) or `day1` (the InfraEnvs its
   day1 cluster files name, while its own list is unknown; `infra_envs_error`
   says why).
+- `ready`, `needs_fix` (§0; `null` on the `infra_env: null` row) and `total`
+  (always a number) per pool, and per MCE (a free server named for two of
+  its pools counted once). Since 3.38.0; `drawable` is gone (it was `ready`).
 - `add_servers.available` is `false`, with `detail` (one line, the web's
   tooltip on its disabled Install servers), when `DAY1_ADD_SERVERS` is off
   or there is no orchestrator. Live status is not needed (3.19.0).
@@ -121,7 +136,21 @@ server's full record belongs to the future Server Scan area.
       "health": "HEALTHY",
       "lock": null,
       "offered": true,
-      "why_not": null
+      "why_not": null,
+      "ready": true,
+      "health_problems": []
+    },
+    {
+      "id": "srv_…",
+      "name": "ocp-dell-r650-site1-96c-768gb-<serial>",
+      "vendor": "dell",
+      "model": "PowerEdge R650",
+      "health": "CRITICAL",
+      "lock": null,
+      "offered": true,
+      "why_not": null,
+      "ready": false,
+      "health_problems": ["health CRITICAL", "BMC unreachable"]
     },
     {
       "id": "srv_…",
@@ -131,7 +160,9 @@ server's full record belongs to the future Server Scan area.
       "health": "HEALTHY",
       "lock": {"holder": "add-server-to-mce", "mce": "ocp4-prod-mce-site1-b", "infra_env": "dell-r650-site1-96c-768gb", "expires_at": "2026-11-13T18:00:00Z"},
       "offered": false,
-      "why_not": "locked by add-server-to-mce until 2026-11-13T18:00:00+00:00"
+      "why_not": "locked by add-server-to-mce until 2026-11-13T18:00:00+00:00",
+      "ready": false,
+      "health_problems": []
     }
   ]
 }
@@ -141,9 +172,14 @@ server's full record belongs to the future Server Scan area.
   reservation is held (§3), else `null`.
 - `why_not`, the first that applies: locked (by anyone), in maintenance,
   contested. The workflow fails a named run for each of these (§3), so
-  Wingman does not offer them. Health is shown and not refused (a named
-  install may waive it).
-- Offered first, then by name.
+  Wingman does not offer them: its safety refusals, which nothing waives.
+- `ready` (since 3.38.0): offered, `HEALTHY` and reachable, what a pool draw
+  could pick. Offered and not ready: it **needs a fix**, and
+  `health_problems` says why from the row (`health <tier>`,
+  `BMC unreachable`); a named install takes it only with `allow_unhealthy`
+  (§5), and fails in the workflow without it.
+- The ready ones first, then those that need a fix, then the ones not
+  offered; by name in each.
 
 | Status | `code` | When |
 |---|---|---|
@@ -179,6 +215,14 @@ Read 2026-11-13 from team-redbull's public repositories.
   (`ServerReservedError`). The workflow does not check a named server's
   name against the InfraEnv: Wingman offers only servers named
   `ocp-<infraEnv>…`.
+- **Health** (read 2026-11-16, team-redbull/workflows `health_waiver.py`):
+  a named server `/servers/available` refuses is read once more and its
+  reasons sorted. Safety (unknown to server-scan, claimed, contested, in
+  maintenance, another run's lock) fails the run whatever was asked. Health
+  (its tier not `HEALTHY`, its network category not `HEALTHY`, the BMC
+  unreachable, the live recheck, a bond member whose link is not up) fails
+  it too, unless the start asked for `allow_unhealthy`: then each is waived
+  and recorded in the run's `allowed_unhealthy`.
 
 ## 4. `GET /api/day1/inventory/runs`: the add-server runs
 
@@ -197,7 +241,8 @@ Read 2026-11-13 from team-redbull's public repositories.
       "server_id": "srv_…",
       "origin": "pool",
       "phase": "waiting-for-agent",
-      "error": null
+      "error": null,
+      "health_checks_waived": []
     }
   ]
 }
@@ -218,6 +263,10 @@ Read 2026-11-13 from team-redbull's public repositories.
   "herzi or a person". The orchestrator records no `requested_by`, so a
   pool draw's author cannot be told. Never guessed.
 - `phase` is the workflow's own word, passed through; Wingman keeps no list.
+- **`health_checks_waived`** (since 3.38.0): the run's `allowed_unhealthy`
+  (its progress's, else its result's), each `check: observed`
+  (`server-scan-health: overall CRITICAL (raid=CRITICAL)`); empty for a run
+  that waived nothing, and for an older entry of a reused id.
 - **`server_id`** (since 3.25.0) is server-scan's id for `server_name`,
   for the link to the server's page in the Server Scan area
   (`docs/notes/2026-11-13-server-scan-area-api.md` §9.8): looked up in the
@@ -235,7 +284,12 @@ Read 2026-11-13 from team-redbull's public repositories.
 ## 5. `POST /api/day1/inventory/mces/{mce}/infra-envs/{infra_env}/add-servers`
 
 Body: `{"count": N}` (1-20, let the pool pick) or `{"server_names": [..]}`
-(1-20 distinct names from §2's offered candidates); exactly one.
+(1-20 distinct names from §2's offered candidates); exactly one. With
+`server_names`, `"allow_unhealthy": true` (since 3.38.0) waives the
+workflow's health checks for every named server, never its safety
+refusals; the page sends it only after the person confirms the servers
+that need a fix. On a pool draw it is refused (`422`) before the workflow
+is called, as the orchestrator refuses it.
 
 Day1 checks that the MCE is a day1 MCE, the InfraEnv is a DNS label and
 every named server is offered (§2); it does not read the MCE (since 3.19.0:
@@ -244,8 +298,10 @@ FAILED run naming it otherwise, as on the orchestrator's own form). Then it
 starts
 `POST <orchestrator>/workflows/server-lifecycle/add-server-to-mce` with
 `{infra_env, mce_cluster: <mce>, namespace?: MCE_INFRAENV_NAMESPACE,
-count | server_names}`, logs `servers_add_started` (who, MCE, InfraEnv,
-count or names, workflow ids), and answers:
+count | server_names, allow_unhealthy?}` (`allow_unhealthy` only when
+true), logs `servers_add_started` (who, MCE, InfraEnv, count or names,
+`allow_unhealthy=true` when asked, at warning and "with health checks
+waived", workflow ids), and answers:
 
 ```json
 {
@@ -266,7 +322,7 @@ start is never retried (ADR-0006).
 | 403 | `FORBIDDEN` | Not an admin |
 | 404 | `NOT_FOUND` | No such MCE in the day1 repo |
 | 409 | `ADD_SERVER_ALREADY_RUNNING` | The orchestrator's 409: a named server already installing, or every slot of the pool busy |
-| 422 | `VALIDATION_ERROR` | Neither or both of `count` and `server_names`; the InfraEnv not a DNS label; a named server not offered (each in `details.problems`); the orchestrator's 422 |
+| 422 | `VALIDATION_ERROR` | Neither or both of `count` and `server_names`; `allow_unhealthy` without `server_names`; the InfraEnv not a DNS label; a named server not offered (each in `details.problems`); the orchestrator's 422 |
 | 501 | `FEATURE_DISABLED` | `DAY1_ADD_SERVERS` off, or no orchestrator |
 | 502 | `DEPENDENCY_UNAVAILABLE` | Nothing was started: the orchestrator was not reached, or refused |
 | 504 | `AMBIGUOUS_WRITE` | Sent, no answer: some may have started. Look at the runs before sending again |
@@ -285,13 +341,16 @@ InfraEnvs (ADR-0040).
 
 `DAY1_FAKE_FLEET=true` (development) fakes the add-server runs too: they walk
 a few sample phases on the fake fleet, and a fake herzi starts a pool draw
-now and then on one short pool (`dev/fleet-fixtures/inventory.yaml`).
+now and then on one short pool (`dev/fleet-fixtures/inventory.yaml`). A
+named run of a server that needs a fix fails unless the start asked for
+`allow_unhealthy`, and then records the waived checks, as the workflow does.
 
 ## 7. Metrics
 
 `workflows` operation `start_add_server` (outcomes `ok`, `conflict`,
-`rejected`, `unavailable`, `ambiguous`); the runs reuse `list_runs` and
-`get_run`. No MCE, InfraEnv or server in a label (ADR-0010).
+`rejected`, `unavailable`, `ambiguous`), with or without `allow_unhealthy`;
+the runs reuse `list_runs` and `get_run`. No MCE, InfraEnv or server in a
+label (ADR-0010).
 
 ## 8. Left for later
 

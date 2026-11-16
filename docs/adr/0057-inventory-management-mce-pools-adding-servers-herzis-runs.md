@@ -1,7 +1,9 @@
 # ADR-0057: Inventory Management: MCE pools, adding servers, herzi's runs
 
 Date: 2026-11-13
-Status: Accepted; amended 2026-11-13 (3.19.0: Install servers without live status)
+Status: Accepted; amended 2026-11-13 (3.19.0: Install servers without live status); amended
+2026-11-16 (3.38.0: Ready and Needs fix, a pool's total, collapsing an MCE, installing a
+server with its health checks waived)
 
 ## Context
 
@@ -175,3 +177,120 @@ unknown MCE `404`, a failing hub falling back to the day1 files);
 InfraEnvs, the pickers); `apps/web/e2e/tests/inventory.spec.ts` (the header
 button, a picked and a typed pool, the row's preselected dialog, the
 disabled button and its tooltip, a viewer's page with no button).
+
+## Amendment (2026-11-16, 3.38.0): Ready and Needs fix, a pool's total, collapsing an MCE, installing a server with its health checks waived
+
+The user (2026-11-16): each MCE should collapse so the others can be seen;
+a pool's "free" count should say what can be installed today and what needs
+fixing first; a pool should say what it could reach in all; and an admin
+should be able to install a server that fails a health check, after
+confirming. The platform's `add-server-to-mce` has that last one already, as
+a hidden `allow_unhealthy` (team-redbull/workflows, CLAUDE.md §4,
+`AddServerToMceInput`): install the **named** server although its own
+condition fails a health check, never past a safety refusal, and refused
+(422, `AllowUnhealthyNeedsServerNameError` inside a run) on a pool draw.
+
+- **Ready and Needs fix replace Free.** A pool's free servers are the
+  `AVAILABLE` ones named `ocp-<infraEnv>…`. Those Wingman offers (no safety
+  refusal: unlocked, out of maintenance, not contested) are split by
+  server-scan's row with the rule the workflow's pool draw asks server-scan
+  for (`/servers/available?health=HEALTHY`: unclaimed, healthy, reachable,
+  unreserved, out of maintenance):
+  - **Ready**: `HEALTHY` and reachable, what a pool draw could pick today;
+  - **Needs fix**: server-scan's health is anything else (`WARNING`,
+    `MAJOR`, `CRITICAL`, `UNKNOWN`) or it cannot reach the BMC, each with
+    why (`health CRITICAL`, `BMC unreachable`). A pool draw never picks one.
+
+  Locked, in-maintenance and contested servers are neither: those are the
+  workflow's safety refusals, which nothing waives. They stay listed with
+  why, as before. One rule, `domain/inventory.py`'s `health_problems`; the
+  existing `drawable` is that rule now, which also leaves a contested server
+  out of Ready (the workflow refuses it).
+- **How close that is to the workflow.** Wingman reads only the row
+  (overall health, reachability). The workflow also judges what the row
+  does not carry: server-scan's network category and its live recheck of
+  each candidate, two link-up NICs on distinct ports at bond selection, a
+  known BMC vendor and address. So a Ready server's run may still be
+  refused, and the column's tooltip says so; a Needs fix server is one a
+  pool draw certainly skips. Wingman keeps no copy of those checks: they
+  stay the workflow's (Wingman starts runs and shows them).
+- **Total** = Available + Ready + Needs fix: what the pool reaches once
+  every free server is fixed and installed. Per pool, and on each MCE's
+  card, where a free server named for two of its pools is counted once.
+  Locked, in-maintenance and contested servers are not counted; a free
+  server named for pools on two MCEs counts on both, as it is in neither
+  yet. The "No InfraEnv" row's total is its available. Explanations are in
+  the tooltips.
+- **Each MCE collapses.** The card's title is a disclosure button
+  (`aria-expanded`, `aria-controls`, Enter and Space); collapsed, the card
+  keeps its counts line and hides its pools. Expanded by default. The
+  collapsed MCEs are a per-viewer convenience in `localStorage`
+  (`wingman-inventory-collapsed`), read and written in `try`/`catch`:
+  with storage blocked the choice lasts for the page.
+- **Installing a server that needs a fix**, after a confirmation. In the
+  dialog's "Choose servers", a Needs fix server can be checked (a locked,
+  in-maintenance or contested one still cannot). Install then opens a
+  confirmation step that lists each such server with what server-scan
+  shows wrong, says that the workflow's health checks are waived for every
+  server of the request (its health tier, its network, the BMC's
+  reachability, the live recheck, a bond member whose link is down), and
+  that its safety refusals still apply (claimed, contested, in maintenance,
+  another run's lock, an InfraEnv the MCE lacks). Only "Install with checks
+  waived" sends `{"server_names": [...], "allow_unhealthy": true}`; Back and
+  Cancel send nothing. A pool draw never sends it, and day1 refuses
+  `allow_unhealthy` without `server_names` (`422 VALIDATION_ERROR`) before
+  calling the workflow, as the orchestrator does. Admins only, as every
+  install; the start is logged `servers_add_started` with
+  `allow_unhealthy=true`, at warning, "with health checks waived". Metrics:
+  the same `start_add_server` operation and outcomes (ADR-0010), no label.
+- **The runs say what was waived.** A run's `allowed_unhealthy` (its
+  progress's, else its result's) is the run's `health_checks_waived`, each
+  `check: observed`, shown in the runs table as "checks waived" with the
+  list in a tooltip. There is no MR and no other record of an install.
+- **The fake fleet** fails a named install of a server that needs a fix
+  unless the start asked for `allow_unhealthy`, then records the waived
+  checks on the run, as the workflow does. Its fixture has a CRITICAL,
+  unreachable server in `dell-r650-site1-96c-768gb`.
+
+The workflow keeps `allow_unhealthy` out of its OpenAPI, its docs and every
+UI on purpose (the operator's "easter egg", 2026-10-31, after an incident
+that had to install servers with one NIC up and no RAID). Wingman shows it
+at the user's request, to admins only, behind a step that names what is
+waived; to tell the team.
+
+Rejected:
+
+- **Locked or in-maintenance servers as Needs fix.** Neither is the
+  server's health: maintenance is a person's "do not touch", a lock a run in
+  flight, and the waiver passes neither.
+- **Reading each server's full record** for its health categories and
+  reasons: a read per server, for what the row's tier and reachability
+  already decide (the draw filters on them); the server's page in the
+  Server Scan area has the rest.
+- **Splitting a mixed choice into two starts** (the Ready servers without
+  the waiver, the others with it): two writes from one click, the second
+  lost if the first is unanswered. One request; the confirmation says the
+  waiver covers every server named in it.
+- **A stricter day1 rule** (every named server must need a fix): a second
+  rule beside the workflow's, which takes the waiver with any named server.
+  The dialog sends it only after a Needs fix server is confirmed.
+- **Offering the waiver for a Ready server** the workflow then refuses on a
+  check Wingman cannot see: Wingman could not say what would be waived. Its
+  FAILED run says why, in the workflow's words.
+
+Consequences: a pool says what an install takes today and what waits for a
+repair; a server installed with its checks waived may join a NodePool with
+one NIC up or a RAID fault, which the confirmation says and the run
+records; Ready stays server-scan's view, so a run may still fail.
+
+Verification: `tests/unit/domain/test_inventory_ready.py` (the split, the
+totals, the order); `tests/api/test_inventory_waiver_api.py` (the counts,
+the candidates' groups and reasons, the `422` before the workflow, the
+payload, the fake's refusal and its record, the log);
+`tests/unit/infrastructure/test_add_server_workflow.py` (the body, the
+run's waived checks); `apps/web/lib/inventory/waiver.test.ts` and
+`collapsed.test.ts` (Vitest); `apps/web/e2e/tests/inventory-ready.spec.ts`
+(collapsing and its memory, the counts and totals, the list's groups, a pool
+draw never sending the waiver, the confirmation, Back sending nothing, the
+`422`).
+
