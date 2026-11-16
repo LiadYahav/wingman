@@ -107,14 +107,14 @@ export function MceCard({
       className="rounded-xl border bg-card px-4 py-3"
     >
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h3 className="min-w-0">
+        <h3>
           <button
             type="button"
             onClick={onToggle}
             aria-expanded={!collapsed}
             aria-controls={bodyId}
             data-testid="mce-toggle"
-            className="-mx-1.5 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-md px-1.5 font-mono text-sm font-medium outline-none transition-colors hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="-mx-1.5 inline-flex min-h-8 items-center gap-1.5 rounded-md px-1.5 text-left font-mono text-sm font-medium outline-none transition-colors hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             <ChevronRight
               aria-hidden
@@ -123,7 +123,7 @@ export function MceCard({
                 !collapsed && "rotate-90"
               )}
             />
-            <span className="truncate">{mce.mce}</span>
+            <span>{mce.mce}</span>
           </button>
         </h3>
         <Counts mce={mce} />
