@@ -2,7 +2,14 @@
 
 Wingman is an Internal Developer Platform (IDP) for managing OpenShift HostedControlPlane (HCP) clusters via GitOps. It provides a web UI for cluster provisioning, addon management, and approval workflows, with all changes committed to GitLab and applied via ArgoCD.
 
+Every doc, by folder and by when to read it: **[docs/README.md](docs/README.md)**.
+
 ## Architecture Overview
+
+The picture below is the GitOps core. The full one, with nginx, the platform
+systems day1 talks to (MCE hubs, server-scan, segments-manager, the workflows
+orchestrator), auth, the layers and three requests end to end, is
+**[docs/architecture.md](docs/architecture.md)**.
 
 ```
 ┌───────────────────────────────────────────────────────┐
@@ -517,7 +524,7 @@ are required. In a deployment nginx routes them to the services; locally, `next 
 
 ## Development Setup
 
-See **[DEVELOPMENT.md](DEVELOPMENT.md)** for running the stack locally, the architecture, testing and contributing.
+See **[DEVELOPMENT.md](DEVELOPMENT.md)** for running the stack locally, the code's layout, testing and contributing, and **[docs/architecture.md](docs/architecture.md)** for how the pieces fit.
 
 ### Prerequisites
 
