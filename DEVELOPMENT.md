@@ -3,8 +3,12 @@
 How the code is laid out, how to run it locally, and how to add to it. The decisions behind
 it, with their reasons, are the ADRs in `docs/adr/`; this guide links them rather than
 repeating them. How Wingman fits the rest of the platform is `docs/ecosystem/README.md`.
+Every doc is indexed in [docs/README.md](docs/README.md).
 
 ## Architecture
+
+This is the short version. [docs/architecture.md](docs/architecture.md) adds the systems
+day1 talks to beside GitLab, login, the read and write rules, and three requests end to end.
 
 GitLab is Wingman's only store: there is no database. Every change is a merge request into
 the day1 project, the specs project or a team's project in the sigs group, and ArgoCD applies

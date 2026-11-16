@@ -1,7 +1,7 @@
 # server-scan — notes for the Wingman modernization
 
 Repo: `team-redbull/server-scan` (read-only clone, `team-redbull/server-scan`, last commit f140914).
-All paths below are relative to that repo unless they start with `apps/` (= Wingman).
+All paths below are relative to that repo unless they start with `apps/` (= Wingman), and every ADR number is server-scan's own (its `docs/adr/`), not Wingman's.
 Live: `<sandbox URL, see CLAUDE.local.md>` (probed with GET only).
 
 ---
@@ -133,7 +133,7 @@ RFC 9457 `application/problem+json` documents with a stable `code`. For example,
 | Endpoint | Use for Wingman |
 |---|---|
 | `GET /api/v1/sites` | `{items:[{site_id, name, total, by_vendor, by_health, in_maintenance, by_installation_type, by_openshift_state}], fleet}`. **This is the site list for dropdowns.** |
-| `GET /api/v1/servers` | Keyset-paginated list. Filters (exact set, AND-combined): `site_id`, `vendor`, `manager_id`, `installation_type`, `health_overall`, `maintenance`, `source_provider`, `openshift_state`, `cluster_name`, `stale`. Also `search` (word-boundary token search over name/serial/model; `"exact"` and `/regex/` forms per ADR-0046), `sort` (`name`, `serial`, `model`, `updated_at`, `last_seen_at`, `openshift_state`, `cluster_name`, `mce_name`), `sort_desc`, `page_size` (≤200), `cursor`, `with_count`. **There is no `mce_name` filter.** For that, use `/servers/rows` and filter on the client. |
+| `GET /api/v1/servers` | Keyset-paginated list. Filters (exact set, AND-combined): `site_id`, `vendor`, `manager_id`, `installation_type`, `health_overall`, `maintenance`, `source_provider`, `openshift_state`, `cluster_name`, `stale`. Also `search` (word-boundary token search over name/serial/model; `"exact"` and `/regex/` forms per server-scan's ADR-0046), `sort` (`name`, `serial`, `model`, `updated_at`, `last_seen_at`, `openshift_state`, `cluster_name`, `mce_name`), `sort_desc`, `page_size` (≤200), `cursor`, `with_count`. **There is no `mce_name` filter.** For that, use `/servers/rows` and filter on the client. |
 | `GET /api/v1/servers/rows` | The whole fleet as flat rows (about 238 KB gzipped for 3,008 servers on the live instance), with a weak ETag so `If-None-Match` gets a 304. The server-scan UI polls it every 30 s. Best source for MCE, cluster and capacity rollups. |
 | `GET /api/v1/servers/{id}` | Full detail. |
 | `GET /api/v1/servers/{id}/events`, `GET /api/v1/events` | Audit trail. **Auditor or admin only**; a viewer gets 403. |

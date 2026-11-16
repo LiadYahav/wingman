@@ -128,7 +128,7 @@ is when it is needed.
   its own timeout and concurrency; `QUICK_LINKS_STATUS_ENABLED=false` turns
   the dots, and those requests, off.
 - A viewer does not see the page until RBAC (the plan's workstream 8,
-  ADR-0051 when it is built) says who may.
+  a later ADR when it is built) says who may.
 - Adding a brand icon is a web change (vendored data), not a setting.
 
 ## Amendments

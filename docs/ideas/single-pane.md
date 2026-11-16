@@ -80,20 +80,22 @@ division of the work. Two of them change, and its first question is answered:
 Each workstream is a branch and a PR, built in its own worktree, with its ADR
 number fixed in advance so parallel work never collides. Every merge to main
 is a release (ADR-0031), so PRs merge one at a time, each after the previous
-tag exists.
+tag exists. Three numbers have no file: 0046 was never used (the single
+pane's groundwork was decided in ADR-0047), and 0049 and 0051 stay reserved
+until their workstreams are built.
 
 | # | Workstream | ADR | Size | Waits on |
 |---|---|---|---|---|
 | 0a | Day2: create add-ons, sync options, fleet defaults, per-team opt-in | 0043 | L | In progress |
 | 0b | Changes reach each cluster through its own MR: import, and every flavor version rolled out per cluster | 0044 | L | In progress (PR #32) |
 | 1 | Wingman on the sandbox; a per-MCE API address | 0045 | S, plus ops | In progress |
-| 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0046 | M | 1 for a place to show it |
+| 2 | The single pane: areas, the top-bar switch, the design pass, shared table and states | 0047 (0046 unused) | M | 1 for a place to show it |
 | 3 | Segments Manager area | 0047 | M + M | Alpha live (3.15.0); its own sidebar and brand (3.17.0); full parity (decision 22) built for 3.21.0 |
 | 4 | Server Scan area | 0048 | L–XL | Sites, Servers (with maintenance on/off and the admin token), a server's page (History, the auditor token), Claude, Architecture, Confs, Rules & Policies, Events and Jobs built (ADR-0048 and its amendments, 3.22.0 to 3.32.0); Jobs has run now, with the admin token on its reads too |
-| 5 | Hosted clusters and MCEs from cluster-navigator | 0049 | M–L | The team: collectors and a token |
+| 5 | Hosted clusters and MCEs from cluster-navigator | 0049 (reserved, not written) | M–L | The team: collectors and a token |
 | 6 | MCE placement | 0050 | M + M | 1 (per-MCE address), MCE read rights |
 | 7 | Docs, upgrade guides, ecosystem notes | — | S each | Every workstream |
-| 8 | RBAC with Keycloak: permissions per group, scoped visibility | 0051 | L | Its design before code; 2 for the areas it guards |
+| 8 | RBAC with Keycloak: permissions per group, scoped visibility | 0051 (reserved, not written) | L | Its design before code; 2 for the areas it guards |
 | 9 | Quick Links page | 0052 | M | Nothing; built alongside 6 |
 | 10 | Inventory Management: MCE pools, adding servers, herzi's runs (a Wingman sidebar page) | 0057 | M | In progress |
 
@@ -183,7 +185,7 @@ Still to do:
   Large images must go to the roomiest worker, with an ephemeral-storage
   request, while someone watches free disk.
 
-### 2. The single pane (ADR-0046)
+### 2. The single pane (its groundwork in ADR-0047; 0046 unused)
 
 The groundwork every area needs, built once:
 
@@ -363,7 +365,7 @@ date formatting, its types) is reused as it is, with its unit tests.
 folders and site names, or the joins fail. In production they are the same
 (the user, 2026-11-13); only the sandbox differs (`mce-<site>`).
 
-### 5. Hosted clusters and MCEs from cluster-navigator (ADR-0049)
+### 5. Hosted clusters and MCEs from cluster-navigator (ADR-0049, reserved, not written)
 
 What cluster-navigator has, and what it does not:
 
@@ -454,7 +456,7 @@ cluster-navigator would need must not see the same number.
 spare count; production is being checked. Until then an MCE server-scan does
 not know shows "spare: unknown" and placement still works on the rest.
 
-### 8. RBAC with Keycloak (ADR-0051)
+### 8. RBAC with Keycloak (ADR-0051, reserved, not written)
 
 Today Wingman has two roles, admin and viewer, from OpenShift groups (ADR-0009,
 `WINGMAN_ADMIN_GROUPS` / `WINGMAN_VIEWER_GROUPS`). Decision 17 replaces that
