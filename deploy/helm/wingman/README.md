@@ -69,7 +69,7 @@ a new `auth.jwtSecret` signs everyone out.
 
 Every variable the services read is set from these (`templates/configmap.yaml`, `templates/secret.yaml`,
 and day1's `env` in `templates/day1-deployment.yaml` for the server-scan token);
-the names are explained in the root README's [Environment Variables](../README.md#environment-variables).
+the names are explained in the root README's [Environment Variables](../../../README.md#environment-variables).
 
 | Key | Sets | Default | Description |
 |-----|------|---------|-------------|
