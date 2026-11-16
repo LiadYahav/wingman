@@ -131,7 +131,7 @@ There are also 38 Vitest files and 6 Playwright specs in the frontend.
   - HTTP adapters are tested with `httpx.MockTransport` handlers (9 files, e.g. `tests/unit/infrastructure/openshift/test_client.py:37-40`).
 - **Real backing services, with clean skips.**
   - CI runs `mongo:8` and `redis:8-alpine` as service containers (`ci.yml:194-214`).
-  - Each xdist worker gets its own database (`tests/conftest.py:14-30`, ADR-0049).
+  - Each xdist worker gets its own database (`tests/conftest.py:14-30`, SS ADR-0049).
   - If the stack is down, tests *skip* rather than hang (`tests/_stack_availability.py`, `tests/api/conftest.py`).
   - `testcontainers` is a dev dependency but no test imports it.
 - **Markers.** `unit` and `integration` (`pyproject.toml:135-138`), with `asyncio_mode = "auto"`.

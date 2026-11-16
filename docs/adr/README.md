@@ -2,7 +2,9 @@
 
 One file per decision, numbered, never deleted. A decision that changes is
 superseded by a new ADR that says so; the old one stays and gets a
-`Superseded by` status line. Every ADR uses the template below. The
+`Superseded by` status line. Three numbers have no file: 0046, 0049 and 0051
+were reserved for planned workstreams (`docs/ideas/single-pane.md`); 0046 was
+never used, and the other two wait for their work to be built. Every ADR uses the template below. The
 **Verification** section names the test or measurement that pins the
 decision, so the next person can tell it is still true.
 
