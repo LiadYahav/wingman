@@ -7,7 +7,7 @@ import { Empty, LinkState, Reported, SectionTitle } from "./fields";
  * The Network and Connectivity tabs, as server-scan's `NetworkTab.tsx` and
  * `ConnectivityTab.tsx` (team-redbull/server-scan at 92146d3, decision 18;
  * docs/notes/2026-11-13-server-scan-area-api.md §9.1); the rules are
- * `lib/server-scan/network.ts`.
+ * `features/server-scan/lib/network.ts`.
  */
 
 /** The BMC and every interface in server-scan's order: where it is, its MAC's number, speed, link, OS name. */

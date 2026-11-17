@@ -2,8 +2,8 @@
  * server-scan's fleet health for the Overview: per site, how many servers
  * each severity holds and how many are in maintenance, each count with the
  * Servers page's filter for it. The numbers and the filters are the Sites
- * page's (lib/server-scan/sites.ts, server-scan's own model); this only adds
- * the healthy count and the bar's parts.
+ * page's (features/server-scan/lib/sites.ts, server-scan's own model); this
+ * only adds the healthy count and the bar's parts.
  */
 
 import { cardCounts, fleetCards, siteCards, sitesSummary, withFilter, type CardCount, type SiteCard } from "@/features/server-scan/lib/sites";

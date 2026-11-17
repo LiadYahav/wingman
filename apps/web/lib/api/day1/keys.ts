@@ -1,9 +1,9 @@
 /**
- * Every query key outside `day2` (lib/day2.ts) and the Segments and Inventory
- * areas (lib/api/segments.ts, inventory.ts), in one place. TanStack matches a
- * key by value and by prefix, so these arrays are exactly the ones the pages
- * spelled inline before 3.18.5 (but a flavor's history, moved under it in
- * 3.19.1): keys.test.ts holds each to its literal.
+ * Every query key outside `day2` (lib/day2.ts), Inventory (lib/api/inventory.ts)
+ * and the Server Scan and Segments areas (features/<area>/api/), in one
+ * place. TanStack matches a key by value and by prefix, so these arrays are
+ * exactly the ones the pages spelled inline before 3.18.5 (but a flavor's
+ * history, moved under it in 3.19.1): keys.test.ts holds each to its literal.
  *
  * The prefixes a write invalidates:
  * - `clusters.all`: every cluster read, the list and each cluster's;

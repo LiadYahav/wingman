@@ -8,7 +8,7 @@ import { ComponentHealthValue, Empty, Reported, SectionTitle, Unconfirmed } from
  * at 92146d3, decision 18; docs/notes/2026-11-13-server-scan-area-api.md
  * §9.1): CPU, memory, storage with its drives, GPUs and PSUs. A field the
  * last collection could not read says so (`unread_fields`); the numbers and
- * words are `lib/server-scan/hardware.ts`.
+ * words are `features/server-scan/lib/hardware.ts`.
  */
 
 const TABLE = "min-w-full text-sm";
