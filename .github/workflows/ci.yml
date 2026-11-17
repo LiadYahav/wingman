@@ -6,7 +6,7 @@
 # (server-scan ADR-0013): a tag can be re-pointed at new code, a SHA cannot.
 # zizmor (the `workflows` job) refuses an unpinned `uses:` and a comment that
 # names a different tag. Pins never update themselves: bump them by hand,
-# verifying the new tag resolves first (CLAUDE.md, "Keeping CI current").
+# verifying the new tag resolves first (docs/ops/ci-maintenance.md).
 #
 # Every job states its own permissions; the workflow default is none.
 # Pull requests build every image without pushing. Every push to main is a
