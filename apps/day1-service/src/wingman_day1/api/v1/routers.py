@@ -25,7 +25,7 @@ from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import upgrades as upgrades_api
 from wingman_day1.api.v1 import webhooks as webhooks_api
 from wingman_day1.api.v1.nodepool_catalogs import ROUTERS as NODEPOOL_CATALOG_ROUTERS
-from wingman_day1.api.v1.server_scan_area import ROUTERS as SERVER_SCAN_ROUTERS
+from wingman_day1.integrations.server_scan.api.routers import ROUTERS as SERVER_SCAN_ROUTERS
 
 ROUTERS: Final[tuple[APIRouter, ...]] = (
     auth_api.router,

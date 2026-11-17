@@ -20,7 +20,8 @@ from wingman_day1.application.inventory import InventoryService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.infrastructure.add_server_workflow import HttpAddServerWorkflow
 from wingman_day1.infrastructure.cached_workflows import CachedAddServerWorkflow
-from wingman_day1.ports import AddServerWorkflow, HubApi, ServerInventory
+from wingman_day1.integrations.server_scan.ports import ServerInventory
+from wingman_day1.ports import AddServerWorkflow, HubApi
 from wingman_day1.settings import Day1Settings
 
 RUNS_TTL_SECONDS: Final = 10.0
@@ -74,7 +75,9 @@ def add_server_workflow(
     """
     if settings.day1_fake_fleet:
         from wingman_day1.infrastructure.fake_inventory_demo import fake_add_server
-        from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
+        from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+            FakeServerInventory,
+        )
 
         if not isinstance(inventory, FakeServerInventory):
             raise TypeError("the fake fleet's add-server workflow needs its fake server-scan")

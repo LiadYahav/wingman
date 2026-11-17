@@ -28,12 +28,12 @@ from wingman_day1.application.quick_links import QuickLinksService
 from wingman_day1.application.rollouts import RolloutService
 from wingman_day1.application.scale import ScaleService
 from wingman_day1.application.segments import SegmentsService
-from wingman_day1.application.server_scan import ServerScanService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
 from wingman_day1.application.upgrades import UpgradeService
+from wingman_day1.integrations.server_scan.application.area import ServerScanService
 from wingman_day1.ports import ClusterDeleteWorkflow, RepoReads
 
 

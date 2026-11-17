@@ -28,7 +28,7 @@ from wingman_day1.infrastructure.fake_inventory_demo import (
     load_inventory_demo,
 )
 from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
-from wingman_day1.infrastructure.fake_server_inventory import (
+from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
     FakeServerInventory,
     default_fleet_file,
 )

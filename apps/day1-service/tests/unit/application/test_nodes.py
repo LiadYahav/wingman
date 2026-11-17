@@ -43,11 +43,12 @@ from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeUninstallWorkflow, load_fleet
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
-from wingman_day1.infrastructure.fake_server_inventory import (
+from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
     FakeServerInventory,
     default_fleet_file,
 )
-from wingman_day1.ports import HubApi, ServerInventory, UninstallWorkflow
+from wingman_day1.integrations.server_scan.ports import ServerInventory
+from wingman_day1.ports import HubApi, UninstallWorkflow
 
 SITE1_A = "ocp4-prod-mce-site1-a"
 LARK = ClusterRef("site1", SITE1_A, "ocp4-prod-lark-site1")

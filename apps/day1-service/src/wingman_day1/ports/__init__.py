@@ -3,9 +3,9 @@
 Each has an adapter in ``wingman_day1.infrastructure`` and a fake used by
 tests and by ``WINGMAN_GIT_BACKEND=fake``. GitLab itself is
 ``wingman_core.ports.gitlab.GitLabPort``; :class:`RepoReads` is the cached
-read side of one project on top of it. server-scan's port is in
-:mod:`wingman_day1.ports.server_scan` (ADR-0048) and update-nodepool's in
-:mod:`wingman_day1.ports.scale` (ADR-0062), re-exported here.
+read side of one project on top of it. update-nodepool's port is in
+:mod:`wingman_day1.ports.scale` (ADR-0062), re-exported here. server-scan's
+is :mod:`wingman_day1.integrations.server_scan.ports` (ADR-0048).
 """
 
 from __future__ import annotations
@@ -46,7 +46,6 @@ from wingman_day1.domain.status import HostedClusterObservation, NodePoolObserva
 from wingman_day1.domain.upgrades import UpgradeDecision, UpgradeRequest, UpgradeRun, UpgradeTargets
 from wingman_day1.domain.workflows import ProvisionRun, WorkflowRun
 from wingman_day1.ports.scale import ScaleWorkflow as ScaleWorkflow
-from wingman_day1.ports.server_scan import ServerInventory as ServerInventory
 
 
 class RepoReads(Protocol):

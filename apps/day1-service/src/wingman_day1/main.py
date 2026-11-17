@@ -70,7 +70,6 @@ from wingman_day1.compose_inventory import add_server_workflow, inventory_servic
 from wingman_day1.compose_quick_links import quick_links_service
 from wingman_day1.compose_scale import scale_service, scale_workflow
 from wingman_day1.compose_segments import network_ledger, segment_ledger, segments_service
-from wingman_day1.compose_server_scan import cached_inventory, server_scan_service, server_scan_ui
 from wingman_day1.domain.cluster_file import WorkflowKeys
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
@@ -87,6 +86,12 @@ from wingman_day1.infrastructure.merge_requests import (
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.repositories import CachedRepository
 from wingman_day1.infrastructure.rollout_events import MetricRolloutEvents
+from wingman_day1.integrations.server_scan.compose import (
+    cached_inventory,
+    server_scan_service,
+    server_scan_ui,
+)
+from wingman_day1.integrations.server_scan.ports import ServerInventory
 from wingman_day1.platform_adapters import Close
 from wingman_day1.ports import (
     AddServerWorkflow,
@@ -98,7 +103,6 @@ from wingman_day1.ports import (
     ProvisionWorkflow,
     ScaleWorkflow,
     SegmentLedger,
-    ServerInventory,
     UninstallWorkflow,
     UpgradeWorkflow,
 )

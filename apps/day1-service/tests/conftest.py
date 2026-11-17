@@ -33,6 +33,7 @@ from wingman_day1.domain.status import Condition, HostedClusterObservation, Node
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
+from wingman_day1.integrations.server_scan.ports import ServerInventory
 from wingman_day1.main import Adapters, create_app
 from wingman_day1.ports import (
     AddServerWorkflow,
@@ -40,7 +41,6 @@ from wingman_day1.ports import (
     ProvisionWorkflow,
     ScaleWorkflow,
     SegmentLedger,
-    ServerInventory,
     UninstallWorkflow,
     UpgradeWorkflow,
 )

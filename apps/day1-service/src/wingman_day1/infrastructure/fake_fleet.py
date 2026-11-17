@@ -40,8 +40,8 @@ from wingman_day1.domain.servers import (
     uninstall_workflow_id,
 )
 from wingman_day1.domain.workflows import WorkflowRun
-from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
-from wingman_day1.infrastructure.server_scan_parse import server_row
+from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
+from wingman_day1.integrations.server_scan.infrastructure.parse import server_row
 
 DEMO_PHASES: Final = (
     "checking-inventory",

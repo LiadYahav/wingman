@@ -25,7 +25,7 @@ from wingman_day1.infrastructure.fake_fleet import (
     FakeUninstallWorkflow,
     load_fleet,
 )
-from wingman_day1.infrastructure.fake_server_inventory import (
+from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
     FakeServerInventory,
     default_fleet_file,
 )

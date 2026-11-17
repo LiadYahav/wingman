@@ -82,7 +82,8 @@ from wingman_day1.domain.placement import (
     place,
 )
 from wingman_day1.domain.servers import ServerRow
-from wingman_day1.ports import HubApi, RepoReads, ServerInventory
+from wingman_day1.integrations.server_scan.ports import ServerInventory
+from wingman_day1.ports import HubApi, RepoReads
 
 MAX_OWNERS: Final = 4096
 """Owners kept, by file content; a production repo has a few hundred cluster files."""

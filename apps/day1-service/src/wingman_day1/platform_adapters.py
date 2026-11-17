@@ -18,19 +18,14 @@ from wingman_core.observability.metrics import WingmanMetrics
 from wingman_core.ports.clock import Clock
 from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.upgrades import UpgradeService
-from wingman_day1.compose_server_scan import http_inventory
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_workflows import CachedUpgradeWorkflow
 from wingman_day1.infrastructure.provision_workflow import HttpProvisionWorkflow
 from wingman_day1.infrastructure.upgrade_workflow import HttpUpgradeWorkflow
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
-from wingman_day1.ports import (
-    HubApi,
-    ProvisionWorkflow,
-    ServerInventory,
-    UninstallWorkflow,
-    UpgradeWorkflow,
-)
+from wingman_day1.integrations.server_scan.compose import http_inventory
+from wingman_day1.integrations.server_scan.ports import ServerInventory
+from wingman_day1.ports import HubApi, ProvisionWorkflow, UninstallWorkflow, UpgradeWorkflow
 from wingman_day1.settings import Day1Settings
 
 Close = Callable[[], Awaitable[None]]
@@ -69,8 +64,10 @@ def fleet_adapters(
     if settings.day1_fake_fleet:
         from wingman_day1.infrastructure.fake_fleet import FakeUninstallWorkflow, load_fleet
         from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
-        from wingman_day1.infrastructure.fake_server_inventory import default_fleet_file
-        from wingman_day1.infrastructure.fake_server_scan_fleet import fleet_inventory
+        from wingman_day1.integrations.server_scan.infrastructure.fakes.fleet import fleet_inventory
+        from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+            default_fleet_file,
+        )
 
         rows, runs = load_fleet(default_fleet_file())
         fake = fleet_inventory(rows, clock=clock)
