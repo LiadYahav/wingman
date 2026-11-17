@@ -53,7 +53,7 @@ from wingman_day1.domain.inventory import (
 )
 from wingman_day1.domain.mce_capacity import SPARE_STATE
 from wingman_day1.domain.servers import ServerRow
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 
 HOLDER: Final = "add-server-to-mce"
 DEMO_PHASES: Final = ("validating-infraenv", "acquiring-server", "registering-bmh")

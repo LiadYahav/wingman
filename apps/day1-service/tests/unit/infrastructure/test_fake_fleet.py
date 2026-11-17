@@ -22,10 +22,12 @@ from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.infrastructure.fake_fleet import (
     DEMO_PHASES,
     PHASE_SECONDS,
-    FakeServerInventory,
     FakeUninstallWorkflow,
-    default_fleet_file,
     load_fleet,
+)
+from wingman_day1.infrastructure.fake_server_inventory import (
+    FakeServerInventory,
+    default_fleet_file,
 )
 
 MCE = "ocp4-prod-mce-site1-a"

@@ -16,7 +16,7 @@ import pytest
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.fake_server_scan_architecture import FakeDiagrams
 from wingman_day1.ports import ServerInventory
 

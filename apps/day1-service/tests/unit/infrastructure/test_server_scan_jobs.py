@@ -29,7 +29,7 @@ from wingman_day1.domain.errors import (
     ServerScanWritesOffError,
 )
 from wingman_day1.domain.server_scan_jobs import JOBS_OFF, jobs_detail
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.fake_server_scan_jobs import (
     PRUNE_WARNING,
     RUN_SECONDS,

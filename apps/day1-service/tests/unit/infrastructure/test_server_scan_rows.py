@@ -20,7 +20,7 @@ from wingman_day1.api.conditional import etag_matches, weak_etag
 from wingman_day1.domain.errors import ServerScanUnavailableError
 from wingman_day1.domain.server_scan_servers import FleetRows
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.infrastructure.server_scan_parse import fleet_rows, server_row
 

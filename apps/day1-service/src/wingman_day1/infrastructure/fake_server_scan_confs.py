@@ -15,7 +15,7 @@ from typing import Final
 import yaml
 
 from wingman_day1.domain.server_scan_confs import ConfList
-from wingman_day1.infrastructure.fake_fleet import default_fleet_file
+from wingman_day1.infrastructure.fake_server_inventory import default_fleet_file
 
 CONFS_FILE_NAME: Final = "confs.yaml"
 

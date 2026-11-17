@@ -24,7 +24,7 @@ from wingman_day1.infrastructure.fake_add_server import (
     FakeRun,
     HerziScript,
 )
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.server_scan_parse import server_row
 
 INVENTORY_FILE: Final = Path("dev/fleet-fixtures/inventory.yaml")

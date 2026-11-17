@@ -23,7 +23,7 @@ from wingman_day1.domain.server_scan_architecture import (
     is_diagram,
 )
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.fake_server_scan_architecture import (
     FakeDiagrams,
     default_diagram_file,

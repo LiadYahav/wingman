@@ -32,10 +32,10 @@ from wingman_day1.domain.server_scan_events import HISTORY_OFF, EventPage, audit
 from wingman_day1.domain.server_scan_record import ServerRecord
 from wingman_day1.domain.server_scan_servers import MaintenanceStart
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
-from wingman_day1.infrastructure.fake_fleet import (
+from wingman_day1.infrastructure.fake_fleet import load_fleet
+from wingman_day1.infrastructure.fake_server_inventory import (
     FakeServerInventory,
     default_fleet_file,
-    load_fleet,
 )
 from wingman_day1.infrastructure.fake_server_records import (
     FakeRecords,

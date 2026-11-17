@@ -66,13 +66,12 @@ def fleet_adapters(
     status and InfraEnvs.
     """
     if settings.day1_fake_fleet:
-        from wingman_day1.infrastructure.fake_fleet import (
-            FakeServerInventory,
-            FakeUninstallWorkflow,
-            default_fleet_file,
-            load_fleet,
-        )
+        from wingman_day1.infrastructure.fake_fleet import FakeUninstallWorkflow, load_fleet
         from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
+        from wingman_day1.infrastructure.fake_server_inventory import (
+            FakeServerInventory,
+            default_fleet_file,
+        )
         from wingman_day1.infrastructure.fake_server_records import (
             default_records_file,
             load_records,

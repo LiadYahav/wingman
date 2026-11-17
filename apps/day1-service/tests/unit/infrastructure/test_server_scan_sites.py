@@ -20,10 +20,10 @@ from wingman_core.observability.metrics import WingmanMetrics
 from wingman_day1.domain.errors import ServerScanDeniedError, ServerScanUnavailableError
 from wingman_day1.domain.server_scan_sites import Breakdown, FleetSites, VendorCount
 from wingman_day1.domain.servers import ServerRow
-from wingman_day1.infrastructure.fake_fleet import (
+from wingman_day1.infrastructure.fake_fleet import load_fleet
+from wingman_day1.infrastructure.fake_server_inventory import (
     FakeServerInventory,
     default_fleet_file,
-    load_fleet,
 )
 from wingman_day1.infrastructure.fake_server_scan_sites import count_sites, load_site_catalog
 from wingman_day1.infrastructure.server_scan import HttpServerInventory

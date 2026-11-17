@@ -25,15 +25,13 @@ from wingman_day1.domain.node_pools import (
     nodes_by_pool,
 )
 from wingman_day1.domain.servers import ServerRow
-from wingman_day1.infrastructure.fake_fleet import (
-    PHASE_SECONDS,
-    FakeServerInventory,
-    FakeUninstallWorkflow,
-    default_fleet_file,
-    load_fleet,
-)
+from wingman_day1.infrastructure.fake_fleet import PHASE_SECONDS, FakeUninstallWorkflow, load_fleet
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
+from wingman_day1.infrastructure.fake_server_inventory import (
+    FakeServerInventory,
+    default_fleet_file,
+)
 
 SITE1_A = "ocp4-prod-mce-site1-a"
 NAMING = HostedClusterNaming()

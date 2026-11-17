@@ -28,7 +28,7 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.server_scan_skill import Skill, SkillZip, token_line
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.fake_server_scan_skill import (
     default_skill_dir,
     load_skill,

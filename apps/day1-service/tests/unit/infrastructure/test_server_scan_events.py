@@ -30,10 +30,10 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.server_scan_events import EVENTS_OFF, HISTORY_OFF, EventQuery, audit_detail
 from wingman_day1.domain.server_scan_servers import MaintenanceStart
-from wingman_day1.infrastructure.fake_fleet import (
+from wingman_day1.infrastructure.fake_fleet import load_fleet
+from wingman_day1.infrastructure.fake_server_inventory import (
     FakeServerInventory,
     default_fleet_file,
-    load_fleet,
 )
 from wingman_day1.infrastructure.fake_server_records import default_records_file, load_records
 from wingman_day1.infrastructure.fake_server_scan_events import (

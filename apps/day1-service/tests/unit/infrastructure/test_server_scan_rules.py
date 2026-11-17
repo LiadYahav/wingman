@@ -19,7 +19,7 @@ from prometheus_client import CollectorRegistry
 
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_day1.domain.errors import ServerScanDeniedError, ServerScanUnavailableError
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.fake_server_records import default_records_file
 from wingman_day1.infrastructure.fake_server_scan_rules import default_rules_file, load_rules
 from wingman_day1.infrastructure.server_scan import HttpServerInventory

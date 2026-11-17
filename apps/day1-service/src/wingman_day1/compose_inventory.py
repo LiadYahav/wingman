@@ -73,8 +73,8 @@ def add_server_workflow(
     and adds the demo's servers to it (``dev/fleet-fixtures/inventory.yaml``).
     """
     if settings.day1_fake_fleet:
-        from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
         from wingman_day1.infrastructure.fake_inventory_demo import fake_add_server
+        from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 
         if not isinstance(inventory, FakeServerInventory):
             raise TypeError("the fake fleet's add-server workflow needs its fake server-scan")

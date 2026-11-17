@@ -21,7 +21,7 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.domain.errors import ServerScanDeniedError
 from wingman_day1.domain.server_scan_skill import Skill
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.fake_server_scan_skill import default_skill_dir, load_skill
 from wingman_day1.ports import ServerInventory
 

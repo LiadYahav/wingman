@@ -20,9 +20,10 @@ from wingman_core.testing.fixtures import default_fixture_root, load_fixture_pro
 from wingman_day1.infrastructure.add_server_workflow import HttpAddServerWorkflow
 from wingman_day1.infrastructure.fake_add_server import FakeAddServerWorkflow
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
-from wingman_day1.infrastructure.fake_fleet import FakeServerInventory, FakeUninstallWorkflow
+from wingman_day1.infrastructure.fake_fleet import FakeUninstallWorkflow
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_segments import FakeSegmentLedger
+from wingman_day1.infrastructure.fake_server_inventory import FakeServerInventory
 from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth

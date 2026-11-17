@@ -21,10 +21,10 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.domain.errors import AmbiguousServerScanWriteError, ServerScanDeniedError
 from wingman_day1.domain.server_scan_servers import FleetRows, MaintenanceStart, ServerMaintenance
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
-from wingman_day1.infrastructure.fake_fleet import (
+from wingman_day1.infrastructure.fake_fleet import load_fleet
+from wingman_day1.infrastructure.fake_server_inventory import (
     FakeServerInventory,
     default_fleet_file,
-    load_fleet,
 )
 from wingman_day1.ports import ServerInventory
 
