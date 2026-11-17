@@ -5,11 +5,13 @@
  * adds one parameter, the Model column's value filter (`f.model`). Parsing
  * never throws: a value it does not know is dropped, and the default stands.
  *
- * The rules are server-scan's (team-redbull/server-scan at 92146d3,
+ * The rules are server-scan's (team-redbull/server-scan,
  * `frontend/src/features/inventory/InventoryPage.tsx`): repeated parameters
  * for several values, `maintenance=true` (or `only`) keeps only servers in
  * maintenance and `exclude` hides them, a filter change goes back to page 1,
  * and the sort is never removed (`name`, ascending, by default).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describeFilter, hasColumnFilters, readColumnFilters, writeColumnFilters, type ColumnFilters } from "@/lib/table/column-filters";

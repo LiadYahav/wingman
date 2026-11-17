@@ -5,9 +5,11 @@
  * such and never as a zero, and the search over ids, component models and
  * disk types, keeping server-scan's order.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/confs/format.ts` and the RAM and
  * count words of `ConfsPage.tsx`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { Conf } from "@/features/server-scan/types/server-scan-confs";

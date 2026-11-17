@@ -1,7 +1,9 @@
 /**
  * server-scan's `describeEvent.test.ts`, `EventTimeline.test.tsx` and
- * `EventList` cases at 92146d3 (decision 18), on the pure functions the
+ * `EventList` cases (decision 18), on the pure functions the
  * History tab renders.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

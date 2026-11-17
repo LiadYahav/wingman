@@ -10,6 +10,8 @@ the matching segments as JSON, which is the second link.
 Both search by the cluster file's stem: it is the ``cluster_name`` the
 allocate-segment workflow gives segments-manager (notes §4 and §5, ADR-0014),
 not the chart's ``clusterName``.
+
+What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 """
 
 from __future__ import annotations

@@ -3,6 +3,8 @@
 In server-scan's own shapes (its ``backend/app/api/v1/sites_schemas.py``), so
 server-scan's TypeScript types and pure functions apply as they are
 (ADR-0048, decision 18 of the single-pane plan).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

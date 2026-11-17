@@ -9,8 +9,9 @@ allowed-tools: Bash(curl *) Bash(jq *)
 
 A short stand-in for server-scan's own skill (`.claude/skills/server-scan-api`
 in team-redbull/server-scan), served by Wingman's fake server-scan
-(`DAY1_FAKE_FLEET=true`) so the Claude page has something to show. You answer
-fleet questions by building `curl` requests, never by guessing.
+(`DAY1_FAKE_FLEET=true`) so the Claude page has something to show; its format
+follows the version in docs/integrations/server-scan.yaml. You answer fleet
+questions by building `curl` requests, never by guessing.
 
 ## Connection - edit these two lines for your environment
 

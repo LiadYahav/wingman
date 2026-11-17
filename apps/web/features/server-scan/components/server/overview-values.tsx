@@ -13,8 +13,10 @@ import { Tag } from "./fields";
 
 /**
  * The Overview's richer values, as server-scan's `OverviewTab.tsx`
- * (team-redbull/server-scan at 92146d3, decision 18) shows them; the rules
+ * (team-redbull/server-scan, decision 18) shows them; the rules
  * are `features/server-scan/lib/overview.ts`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 /** The chassis's model, else the GPUs' short name marked "(from GPU)", else a dash. */

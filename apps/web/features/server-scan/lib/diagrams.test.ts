@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ARCHITECTURE_HREF, DIAGRAMS, diagramHref, diagramOf, withTheme } from "./diagrams";
 
-// server-scan's ArchitecturePage.test.tsx cases (92146d3), as its picker's logic.
+// server-scan's ArchitecturePage.test.tsx cases, as its picker's logic.
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 describe("the diagram picker", () => {
   it("defaults to the full-flow diagram", () => {
     expect(diagramOf(null)).toEqual(DIAGRAMS[0]);

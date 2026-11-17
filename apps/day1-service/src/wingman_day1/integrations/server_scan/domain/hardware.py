@@ -1,13 +1,15 @@
 """A server's hardware, as server-scan's server page shows it (ADR-0048's 3.25.0 amendment).
 
 The shapes are server-scan's (``backend/app/domain/models/hardware.py`` and
-its UI's ``frontend/src/types/server.ts`` in team-redbull/server-scan at
-92146d3), holding the fields its UI reads, so day1 answers in server-scan's
+its UI's ``frontend/src/types/server.ts`` in team-redbull/server-scan),
+holding the fields its UI reads, so day1 answers in server-scan's
 own shape and server-scan's TypeScript applies as it is (decision 18 of
 ``docs/ideas/single-pane.md``). Read strictly (``SHAPE``): a value of the
 wrong type fails the read, never becomes a blank. Words server-scan picks
 (a health, a media type, a controller's kind) stay strings, so a word it adds
 later still reaches the page. ``record`` holds the rest.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

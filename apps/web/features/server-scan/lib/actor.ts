@@ -5,8 +5,10 @@
  * admin token, so it reads "API token (admin)"; Wingman's own log names the
  * person (docs/notes/2026-11-13-server-scan-area-api.md §8.5).
  *
- * Ported from team-redbull/server-scan at 92146d3, `frontend/src/lib/actor.ts`
+ * Ported from team-redbull/server-scan, `frontend/src/lib/actor.ts`
  * (decision 18 of the single-pane plan).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { Actor } from "@/features/server-scan/types/server-scan-record";

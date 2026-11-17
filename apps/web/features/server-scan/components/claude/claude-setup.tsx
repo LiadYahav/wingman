@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import { ExternalLink } from "lucide-react";
 import { CopyButton, copyValue } from "@/components/data-table/copy-cell";
 import { extractPrompts } from "@/features/server-scan/lib/skill-text";

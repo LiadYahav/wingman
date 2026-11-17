@@ -14,6 +14,8 @@ a server carries its serial and BMC host; a pruned server's has neither, as
 server-scan's events written before v5.4.0. A server's History is the same trail by its id, so both
 pages agree. Answers are built in server-scan's JSON shape and read by the
 same strict models as the real ones. Nothing here is real.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

@@ -1,8 +1,10 @@
 /**
  * The Sites cards. The cases and the fixture are server-scan's own
- * (`frontend/src/features/sites/SitesOverviewPage.test.tsx` at 92146d3,
+ * (`frontend/src/features/sites/SitesOverviewPage.test.tsx`,
  * decision 18), asked of the pure model instead of the rendered page; a
  * link's `href` there is a card's or count's `filter` here.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

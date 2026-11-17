@@ -9,12 +9,14 @@ import type { CronJob, JobRun, JobState } from "@/features/server-scan/types/ser
 
 /**
  * One of server-scan's CronJobs on the Jobs page, as its `CronJobCard` and
- * `JobRow` (team-redbull/server-scan at 92146d3,
+ * `JobRow` (team-redbull/server-scan,
  * `frontend/src/features/jobs/JobsPage.tsx`, decision 18): its name,
  * schedule, values.yaml flag and recent Jobs, newest first, each with its
  * state, who started it by hand, when, and a button per pod for its log;
  * and Run job, off (with why as its tooltip) while a Job of it is unfinished
  * or when it is not deployed.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const STATE_TONE: Record<JobState, string> = {

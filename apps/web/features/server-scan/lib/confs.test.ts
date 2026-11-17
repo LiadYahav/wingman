@@ -1,7 +1,9 @@
 /**
- * server-scan's Confs page cases at 92146d3 (`ConfsPage.test.tsx`; decision
+ * server-scan's Confs page cases (`ConfsPage.test.tsx`; decision
  * 18), on the pure functions the page renders: its formatting tests as they
  * are, and its page tests' cases where they decide a word or a row.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

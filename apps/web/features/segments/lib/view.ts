@@ -3,6 +3,8 @@
  * linked (docs/notes/2026-11-13-segments-area-api.md §5): the status tab, the
  * site, the column filters, the search, one holder and the sort. Parsing
  * never throws: a value it does not know is dropped, and the default stands.
+ *
+ * What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
  */
 
 import { hasColumnFilters, readColumnFilters, sortValues, writeColumnFilters, type ColumnFilters } from "@/lib/table/column-filters";

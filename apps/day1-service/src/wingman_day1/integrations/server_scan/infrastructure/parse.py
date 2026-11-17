@@ -1,13 +1,15 @@
 """server-scan's server answers, read into the domain (ADR-0038, ADR-0048).
 
 The shapes are server-scan's ``ServerRowsResponse`` and ``ServerDetail``
-(``backend/app/api/v1/schemas.py`` in team-redbull/server-scan at 92146d3).
+(``backend/app/api/v1/schemas.py`` in team-redbull/server-scan).
 A row is read whole, all 22 fields the Servers page shows, searches or
 exports (docs/notes/2026-11-13-server-scan-area-api.md §8.3). Read strictly:
 a missing required field or a value of the wrong type raises
 Type/Key/ValueError, which the adapter turns into "unavailable", never into a
 blank. ``server_row`` is also how the fake fleet reads its fixture, so the
 fixture has server-scan's own shape.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

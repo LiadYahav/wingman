@@ -6,9 +6,11 @@ import type { ComponentHealth } from "@/features/server-scan/types/server-scan-r
 import { SeverityPill, pill } from "../server-badges";
 
 /**
- * The server page's small parts, server-scan's (team-redbull/server-scan at
- * 92146d3: `Badge.tsx`, `Reported.tsx`, `LinkStateBadge.tsx`, the tabs'
+ * The server page's small parts, server-scan's (team-redbull/server-scan:
+ * `Badge.tsx`, `Reported.tsx`, `LinkStateBadge.tsx`, the tabs'
  * `Field`, `Stat` and `Health`; decision 18) in Wingman's design.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 /** A tab's section heading: small, uppercase, quiet. */

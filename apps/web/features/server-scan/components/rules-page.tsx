@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import type { ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { Info } from "lucide-react";

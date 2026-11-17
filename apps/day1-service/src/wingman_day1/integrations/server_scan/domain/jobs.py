@@ -2,7 +2,7 @@
 
 server-scan's ``GET /api/v1/jobs`` and a pod's log (its ``JobsOverview``,
 ``CronJobOut``, ``JobOut``, ``PodOut`` and ``PodLogs`` in
-``backend/app/api/v1/job_schemas.py``, team-redbull/server-scan at 92146d3,
+``backend/app/api/v1/job_schemas.py``, team-redbull/server-scan,
 its ADR-0055): the CronJobs it may start (labelled
 ``server-scan.io/triggerable``), each with its recent Jobs, newest first, and
 their pods. ``POST /api/v1/jobs/{cronjob}/run`` answers the new Job in the
@@ -13,6 +13,8 @@ TypeScript reads day1's answer as it is. Read strictly (``SHAPE``): a value
 of the wrong type fails the read, never becomes a blank. server-scan's words
 (a state, a phase, a backend) and Kubernetes' timestamps stay strings, so a
 word it adds later still reaches the page.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

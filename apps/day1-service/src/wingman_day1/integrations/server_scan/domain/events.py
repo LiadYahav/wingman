@@ -1,7 +1,7 @@
 """server-scan's audit trail: a server's History and the Events page (ADR-0048, 3.25.0, 3.31.0).
 
 server-scan's ``GET /api/v1/servers/{id}/events`` and ``GET /api/v1/events``
-(its ``AuditEventListResponse`` in team-redbull/server-scan at 92146d3):
+(its ``AuditEventListResponse`` in team-redbull/server-scan):
 newest first, in keyset pages, read only with its auditor token; the Events
 page filters the whole trail (``EventQuery``) and lists who wrote it
 (``/api/v1/events/actors``). An event's ``data`` is whatever its writer
@@ -15,6 +15,8 @@ An event's ``server_serial`` and ``server_bmc`` (server-scan v5.4.0, its
 routes leave them out then (``response_model_exclude_unset``): the details
 JSON shows them only when server-scan sent them, ``null`` included, as its
 ``detailsJson`` does.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

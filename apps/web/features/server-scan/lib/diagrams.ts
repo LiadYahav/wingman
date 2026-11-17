@@ -4,10 +4,12 @@
  * read through day1 from its UI each time, never copied; this is only the
  * picker's list, which server-scan keeps in its frontend and serves nowhere.
  *
- * Reused from team-redbull/server-scan at 92146d3 (decision 18):
+ * Reused from team-redbull/server-scan (decision 18):
  * `frontend/src/features/architecture/diagrams.ts`, its slugs, labels and
  * descriptions as they are. A diagram server-scan adds is one entry here; one
  * it drops answers 404 and its tab says so.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { areaById } from "@/lib/areas";

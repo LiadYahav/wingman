@@ -1,8 +1,10 @@
 /**
  * The Servers page's pure functions, continued: sort, facets, paging, the
  * cluster lists, the install lock, donors. The cases are server-scan's own
- * (`frontend/src/features/inventory/rows.test.ts` at 92146d3, decision 18),
+ * (`frontend/src/features/inventory/rows.test.ts`, decision 18),
  * ported as they are; `rows.test.ts` has the filters and the search.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

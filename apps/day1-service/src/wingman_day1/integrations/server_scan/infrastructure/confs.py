@@ -5,6 +5,8 @@ authenticated caller): every conf, unpaged, in server-scan's natural
 ``conf_id`` order, and the ids it could not read. Read strictly into the
 domain's model of server-scan's shape (``domain/confs.py``): an
 answer that does not fit is "unavailable", never a blank.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

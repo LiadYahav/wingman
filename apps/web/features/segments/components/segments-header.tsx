@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
+
 import { useEffect, useState } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";

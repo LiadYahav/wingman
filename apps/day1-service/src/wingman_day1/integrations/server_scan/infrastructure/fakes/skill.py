@@ -4,11 +4,13 @@
 ``dev/fleet-fixtures/skill/``: a short stand-in for server-scan's
 ``.claude/skills/server-scan-api``, read the way server-scan's
 ``backend/app/application/services/skill_bundle.py`` reads its own
-(team-redbull/server-scan at 92146d3, ported): ``SKILL.md`` and then
+(team-redbull/server-scan, ported): ``SKILL.md`` and then
 ``references/*.md``, the frontmatter's ``key: value`` lines, a short hash as
 the version. Its zip writes the address over the ``BASE_URL=`` line and never
 fills the token in; a server-scan with auth off (the fake's) gives every
 caller an admin's copy, so the token line stays ``AUDITOR_TOKEN``.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

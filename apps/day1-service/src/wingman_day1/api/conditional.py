@@ -6,7 +6,9 @@ no-cache``, asks again with ``If-None-Match``; an unchanged answer is a 304
 with no body. Weak, because nginx gzips the bytes on the wire without
 changing the representation, and keeps a weak validator when it does. The
 rule is server-scan's own (``_weak_etag`` and ``_etag_matches`` in its
-``backend/app/api/v1/servers.py`` at 92146d3).
+``backend/app/api/v1/servers.py``).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

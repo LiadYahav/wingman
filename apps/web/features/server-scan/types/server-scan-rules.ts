@@ -4,10 +4,12 @@
  * (docs/notes/2026-11-13-server-scan-area-api.md §13, ADR-0048's 3.30.0
  * amendment). Read only: both ship in server-scan's code.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/types/classification.ts` and
  * `frontend/src/types/health.ts`, their response types and guards. A word
  * server-scan adds later (a collector, an operator) still arrives as a string.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { HealthSeverity, InstallationType } from "./server-scan";

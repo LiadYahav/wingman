@@ -1,13 +1,15 @@
 """server-scan's ``GET /api/v1/sites``, read into the domain (ADR-0048).
 
 The shape is server-scan's ``SiteStatsListResponse``
-(``backend/app/api/v1/sites_schemas.py`` in team-redbull/server-scan at
-92146d3): ``{items: [SiteStats], fleet: FleetSummary}``, where every site, the
+(``backend/app/api/v1/sites_schemas.py`` in team-redbull/server-scan):
+``{items: [SiteStats], fleet: FleetSummary}``, where every site, the
 fleet and each slice is a breakdown (``total``, ``by_vendor``, ``by_health``,
 ``in_maintenance``). Read strictly: a count that is not a whole number, a map
 that is not ``str`` to a count or a breakdown, a missing field, all raise
 Type/Key/ValueError, which the adapter turns into "unavailable", never into
 zeroes. Every key is kept, in server-scan's order.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

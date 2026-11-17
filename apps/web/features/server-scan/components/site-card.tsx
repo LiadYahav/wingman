@@ -1,3 +1,5 @@
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { serversHref } from "@/features/server-scan/lib/servers-view";

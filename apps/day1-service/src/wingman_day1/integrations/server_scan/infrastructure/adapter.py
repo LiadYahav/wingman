@@ -28,6 +28,8 @@ server) and ``sites``. The Rules & Policies page reads the enabled
 classification rules and health policies (``rules``, ADR-0048's
 3.30.0 amendment); the Events page the fleet's audit trail and its actors
 (``events``, 3.31.0).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

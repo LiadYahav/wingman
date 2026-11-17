@@ -3,7 +3,7 @@
 server-scan's ``GET /api/v1/classification-rules`` and ``/health-policies``
 (their ``ClassificationRuleResponse`` and ``HealthPolicyResponse`` in
 ``backend/app/api/v1/classification_schemas.py`` and ``health_policy_schemas.py``,
-team-redbull/server-scan at 92146d3): the rules that give a server its
+team-redbull/server-scan): the rules that give a server its
 installation type from its own fields, and the policies that judge its
 health. Both ship in server-scan's code and are seeded at its start-up;
 nothing writes them through its API. Typed in its shape, with its domain
@@ -13,6 +13,8 @@ the read, never becomes a blank. server-scan's words (an installation type,
 a severity, a source, a collector, an operator) stay strings, so a word it
 adds later still reaches the page; a condition's ``value`` and ``equals`` are
 whatever JSON the policy holds.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

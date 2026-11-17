@@ -4,11 +4,13 @@ import type { HardwareInfo } from "@/features/server-scan/types/server-scan-reco
 import { ComponentHealthValue, Empty, Reported, SectionTitle, Unconfirmed } from "./fields";
 
 /**
- * The Hardware tab, as server-scan's `HardwareTab.tsx` (team-redbull/server-scan
- * at 92146d3, decision 18; docs/notes/2026-11-13-server-scan-area-api.md
+ * The Hardware tab, as server-scan's `HardwareTab.tsx` (team-redbull/server-scan,
+ * decision 18; docs/notes/2026-11-13-server-scan-area-api.md
  * §9.1): CPU, memory, storage with its drives, GPUs and PSUs. A field the
  * last collection could not read says so (`unread_fields`); the numbers and
  * words are `features/server-scan/lib/hardware.ts`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const TABLE = "min-w-full text-sm";

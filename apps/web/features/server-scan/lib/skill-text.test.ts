@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { allowedTools, extractPrompts, outline } from "./skill-text";
 import { mcpCommand, skillFolder, tokenPage, unzipCommand } from "./skill-setup";
 
-// server-scan's own cases (frontend/src/features/skill/skillText.test.ts, McpSection.test.tsx at 92146d3)
+// server-scan's own cases (frontend/src/features/skill/skillText.test.ts, McpSection.test.tsx)
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 describe("extractPrompts", () => {
   it("lifts the quoted examples out of the description", () => {
     const prompts = extractPrompts('Use for ("all Dell servers in tlv", "which servers are available").');

@@ -3,12 +3,14 @@
  * fleet's rows: pure functions, so the Servers page is `useMemo` glue
  * (docs/notes/2026-11-13-server-scan-area-api.md §8, ADR-0048).
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/inventory/rows.ts`,
  * `frontend/src/features/inventory/sorting.ts` and `frontend/src/lib/donor.ts`,
  * with their behaviour unchanged; `rows.test.ts` holds server-scan's cases.
  * Healthy without servers in maintenance (`matchesHealth`, its counts) is
  * v6.0.0's (its 2bb2fb2).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { MaintenanceState, ServerRow } from "@/features/server-scan/types/server-scan-servers";

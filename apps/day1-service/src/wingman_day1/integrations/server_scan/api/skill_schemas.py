@@ -5,6 +5,8 @@ server-scan's skill is the domain's model of its own shape
 applies (ADR-0048, decision 18 of the single-pane plan). Two additions: where
 server-scan is for people, which its page takes from its own origin, and
 the token line Wingman's copy of the zip names.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

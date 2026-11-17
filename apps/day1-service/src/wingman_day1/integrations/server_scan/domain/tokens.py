@@ -5,6 +5,8 @@ holds the viewer token for its reads, and optionally the auditor token (a
 server's History, the Events page) and the admin token (maintenance, the
 Jobs page). One rule decides, for every page that needs the auditor's or
 the admin's role, whether it works in this deployment.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

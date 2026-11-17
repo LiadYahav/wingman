@@ -6,6 +6,8 @@ adapter passes, as a server's History (``record``). Each answer
 is read strictly into the domain's models (``domain/events.py``): one that
 does not fit is "unavailable", never a blank. A cursor server-scan refuses
 (its ``400 CURSOR_INVALID``) is the caller's mistake, not server-scan failing.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

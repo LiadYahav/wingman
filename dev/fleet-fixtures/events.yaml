@@ -10,8 +10,10 @@
 # `server` names a server of servers.yaml (its id and current name are
 # filled in); `server_id` alone is a server server-scan no longer lists,
 # whose name is gone. `data` is what server-scan's writer records for the
-# type (team-redbull/server-scan at 92146d3). Times are UTC. Nothing here is
+# type (team-redbull/server-scan). Times are UTC. Nothing here is
 # real: the people, jobs and tickets are invented.
+#
+# What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 
 items:
   # ── People ───────────────────────────────────────────────────────────────

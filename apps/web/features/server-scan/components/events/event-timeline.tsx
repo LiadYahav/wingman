@@ -12,10 +12,12 @@ import { ActorCell, EventDetails, Transition, eventToneClass } from "./event-det
 
 /**
  * A newest-first table of audit events, as server-scan's `EventTimeline.tsx`
- * (team-redbull/server-scan at 92146d3, decision 18): Server (the Events
+ * (team-redbull/server-scan, decision 18): Server (the Events
  * page's; a server's History is that server), What happened, When, User, and
  * a row's details in their own full-width row, so opening one never moves
  * another column.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 /** The event's server: its page here; "Unknown server" for one since pruned (its id on hover); "-" for none. */

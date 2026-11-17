@@ -1,7 +1,9 @@
 /**
  * The Events page's filters: server-scan's `features/events/filters.test.ts`
- * cases and the User list's from `EventsUi.test.tsx` at 92146d3 (decision 18),
+ * cases and the User list's from `EventsUi.test.tsx` (decision 18),
  * plus the URL Wingman keeps them in.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
+
 import Link from "next/link";
 import { createColumnHelper } from "@tanstack/react-table";
 import { CopyCell } from "@/components/data-table/copy-cell";

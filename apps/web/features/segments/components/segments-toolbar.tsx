@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
+
 import type { ReactNode } from "react";
 import { Funnel, Search, X } from "lucide-react";
 import { STATUS_TABS, type StatusTab } from "@/features/segments/lib/view";

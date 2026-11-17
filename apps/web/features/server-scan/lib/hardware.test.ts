@@ -1,7 +1,9 @@
 /**
- * server-scan's Hardware tab, drives and GPU-model cases at 92146d3
+ * server-scan's Hardware tab, drives and GPU-model cases
  * (`HardwareTab.test.tsx`, `drives.test.ts`, `gpuModel.test.ts`; decision 18),
  * on the pure functions the tab renders.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

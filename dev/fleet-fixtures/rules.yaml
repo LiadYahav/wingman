@@ -10,9 +10,11 @@
 #     them in step), in server-scan's order (priority, then order).
 #   - `health_policies`: server-scan's own seeded system defaults,
 #     transcribed from `backend/app/domain/services/health/health_policy_defaults.py`
-#     (team-redbull/server-scan at 92146d3, decision 18), their descriptions
+#     (team-redbull/server-scan, decision 18), their descriptions
 #     shortened. A condition lists only the fields it sets.
 # Nothing here is real.
+#
+# What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 classification_rules:
   items:
     - id: rule-hc

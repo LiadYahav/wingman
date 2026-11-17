@@ -2,6 +2,8 @@
 
 Apart from ``schemas.py`` so the area's shapes read as one contract.
 segments-manager's values pass through unchanged; Wingman adds the holders.
+
+What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 """
 
 from __future__ import annotations

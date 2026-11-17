@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
+
 import { useMemo, useState } from "react";
 import type { VisibilityState } from "@tanstack/react-table";
 import { Info, Lock, Network, TriangleAlert, Unplug } from "lucide-react";

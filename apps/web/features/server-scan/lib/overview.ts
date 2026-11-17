@@ -5,10 +5,12 @@
  * vendor's own name, why a BMC could not be read, the matched rule, an
  * install lock's details and a maintenance in words.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/servers/OverviewTab.tsx` and
  * `frontend/src/components/ReservationBadge.tsx`; the "Collection error"
  * label from v5.3.1 (its 8c0771a).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { HealthSeverity } from "@/features/server-scan/types/server-scan";

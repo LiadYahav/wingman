@@ -2,6 +2,8 @@
  * Servers for the unit tests (made up), in server-scan's shapes: a row
  * (docs/notes/2026-11-13-server-scan-area-api.md §8.3), a record and an
  * event (§9.4), the record as server-scan's own `OverviewTab.test.tsx` makes it.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { AuditEvent, GpuInfo, ServerRecord } from "@/features/server-scan/types/server-scan-record";

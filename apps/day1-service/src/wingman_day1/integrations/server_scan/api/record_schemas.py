@@ -5,6 +5,8 @@ server-scan's own shapes (``domain/record.py``,
 ``events.py``), sent as they are, so server-scan's TypeScript
 applies (ADR-0048, decision 18 of the single-pane plan). The record adds
 whether the maintenance toggle and History work in this deployment.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

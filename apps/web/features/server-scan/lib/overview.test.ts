@@ -1,6 +1,8 @@
 /**
  * server-scan's `OverviewTab.test.tsx` and `ReservationBadge.test.tsx` cases
- * at 92146d3 (decision 18), on the rules the Overview tab renders.
+ * (decision 18), on the rules the Overview tab renders.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

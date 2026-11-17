@@ -3,9 +3,11 @@
  * §14.1): read from the URL under server-scan's parameter names, turned into
  * the list's query, and the User filter's choices.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/events/filters.ts`, the URL
  * handling of `EventsPage.tsx` and the choices of `ActorCombobox.tsx`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { EventActor, EventListParams } from "@/features/server-scan/types/server-scan-events";

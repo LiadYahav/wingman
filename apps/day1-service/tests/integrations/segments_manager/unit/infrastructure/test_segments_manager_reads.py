@@ -2,6 +2,8 @@
 
 segments-manager's answers below are its own shapes (``src/api/routes.py``,
 ``StatsService.get_stats``), served by a MockTransport: nothing calls a network.
+
+What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 """
 
 from __future__ import annotations

@@ -7,10 +7,12 @@ import { EventList } from "../events/event-list";
 
 /**
  * The History tab, as server-scan's `HistoryTab.tsx`, `EventList.tsx` and
- * `EventTimeline.tsx` (team-redbull/server-scan at 92146d3, decision 18;
+ * `EventTimeline.tsx` (team-redbull/server-scan, decision 18;
  * docs/notes/2026-11-13-server-scan-area-api.md §9.1): the server's audit
  * trail, newest first, 50 a page. Read with server-scan's auditor token;
  * without it here, one line says so and nothing is asked (§9.5).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 function Pages({ serverId }: { serverId: string }) {

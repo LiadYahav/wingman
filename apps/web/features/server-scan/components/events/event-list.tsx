@@ -12,9 +12,11 @@ import { EventTimeline } from "./event-timeline";
 /**
  * Loading, the problem, none, or one page of events with Previous, "Page X of
  * Y" and Next over server-scan's cursors, as server-scan's `EventList.tsx`
- * (team-redbull/server-scan at 92146d3, decision 18). A failed re-read keeps
+ * (team-redbull/server-scan, decision 18). A failed re-read keeps
  * the pages read with a notice. `testId` prefixes the states' test ids; the
  * words are the page's.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 export function EventList({
   query,

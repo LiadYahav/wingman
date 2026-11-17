@@ -9,10 +9,12 @@ import type { ReservationState, ServerRow } from "@/features/server-scan/types/s
 
 /**
  * The Server Scan area's badges, server-scan's words and rules in Wingman's
- * colours (team-redbull/server-scan at 92146d3: `InstallationBadge.tsx`,
+ * colours (team-redbull/server-scan: `InstallationBadge.tsx`,
  * `ReservationBadge.tsx`, `StateBadge.tsx`, `HealthBadge.tsx`, decision 18),
  * shared by the Servers table and a server's page. The explanation is each
  * badge's tooltip.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 export const pill = "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-px text-xs font-medium";

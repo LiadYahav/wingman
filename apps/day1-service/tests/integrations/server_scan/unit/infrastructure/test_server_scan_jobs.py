@@ -1,9 +1,11 @@
 """server-scan's Jobs through the adapter, the fake's, and the use case (ADR-0048, 3.32.0).
 
 The answers are in server-scan's shapes (``JobsOverview`` and ``PodLogs`` in
-``backend/app/api/v1/job_schemas.py`` at 92146d3, its ADR-0055). server-scan
+``backend/app/api/v1/job_schemas.py``, its ADR-0055). server-scan
 keeps ``/api/v1/jobs`` for its admins, reads included, so every call goes
 with the admin token, or with none to a server-scan with auth off.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

@@ -5,10 +5,12 @@
  * on each side, a classification's matched rule, the data without legacy
  * keys, each type's tint, and the pages.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/events/describeEvent.ts`,
  * `EventTimeline.tsx` (the tints) and `EventList.tsx` (the pager); the
  * details JSON from v5.4.0's `EventTimeline.tsx` (its 29682c4).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { AuditEvent, AuditEventPage } from "@/features/server-scan/types/server-scan-record";

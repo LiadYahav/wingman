@@ -13,6 +13,8 @@ Any other answer, or a malformed one, is ``SegmentsManagerUnavailableError``,
 so what segments-manager says is unknown, never "none" (ADR-0004). Nothing
 here writes to segments-manager. The answers are typed in
 ``parse``.
+
+What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 """
 
 from __future__ import annotations

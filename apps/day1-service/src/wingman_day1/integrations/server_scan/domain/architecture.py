@@ -5,6 +5,8 @@ plus the full flow: self-contained HTML pages that archify generated from
 its ADRs and provider code, served by its UI's nginx as static files
 (``frontend/public/architecture/<slug>.html``). They are not on its API and
 need no token. Wingman shows them as server-scan serves them, never a copy.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

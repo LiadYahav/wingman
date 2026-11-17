@@ -10,12 +10,14 @@ import { ServerLink } from "./server-link";
 
 /**
  * The Servers table's columns, server-scan's own in its order and words
- * (team-redbull/server-scan at 92146d3, `frontend/src/features/inventory/InventoryTable.tsx`,
+ * (team-redbull/server-scan, `frontend/src/features/inventory/InventoryTable.tsx`,
  * decision 18): Name (a link to the server's page), BMC, Installation, MCE
  * (only when a row on the page has one), Cluster, Model, State, then
  * Maintenance. Name, Installation, MCE,
  * Cluster, Model and State sort; Model also has Wingman's value filter, the
  * one column server-scan cannot filter.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const Empty = () => <span className="text-muted-foreground">—</span>;

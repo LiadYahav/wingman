@@ -9,6 +9,8 @@ ledger. Unknown keys are ignored (live records still carry legacy ones).
 
 The fake ledger reads its fixture with ``segment_record`` too, so the fixture
 has segments-manager's own shape.
+
+What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 """
 
 from __future__ import annotations
