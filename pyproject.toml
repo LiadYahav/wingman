@@ -148,6 +148,11 @@ forbidden_modules = [
 ]
 
 # ── day1 (same layers as core; only wingman_day1.main composes adapters) ─────
+# An external system's code is a package under wingman_day1.integrations with the
+# same layers inside (ADR-0001's 2026-11-17 amendment). Wingman's own domain may
+# import an integration's domain, its ports and use cases also its ports; nothing
+# outside the composition root (main, platform_adapters, compose_*, an
+# integration's compose) imports an integration's adapters, routers or compose.
 
 [[tool.importlinter.contracts]]
 name = "day1 domain is pure: no I/O libraries and no outer layers"
@@ -156,6 +161,9 @@ source_modules = ["wingman_day1.domain"]
 forbidden_modules = [
     "wingman_day1.ports", "wingman_day1.application", "wingman_day1.infrastructure",
     "wingman_day1.api", "wingman_day1.main", "wingman_day1.settings",
+    "wingman_day1.integrations.*.ports", "wingman_day1.integrations.*.application",
+    "wingman_day1.integrations.*.infrastructure", "wingman_day1.integrations.*.api",
+    "wingman_day1.integrations.*.compose",
     "wingman_core.ports", "wingman_core.application", "wingman_core.infrastructure",
     "wingman_core.observability", "wingman_core.web", "wingman_core.testing",
     "fastapi", "starlette", "httpx", "pydantic_settings", "prometheus_client",
@@ -167,7 +175,9 @@ type = "forbidden"
 source_modules = ["wingman_day1.ports"]
 forbidden_modules = [
     "wingman_day1.application", "wingman_day1.infrastructure", "wingman_day1.api",
-    "wingman_day1.main", "wingman_core.infrastructure", "wingman_core.web",
+    "wingman_day1.main", "wingman_day1.integrations.*.application",
+    "wingman_day1.integrations.*.infrastructure", "wingman_day1.integrations.*.api",
+    "wingman_day1.integrations.*.compose", "wingman_core.infrastructure", "wingman_core.web",
     "fastapi", "starlette", "httpx",
 ]
 
@@ -177,17 +187,21 @@ type = "forbidden"
 source_modules = ["wingman_day1.application"]
 forbidden_modules = [
     "wingman_day1.infrastructure", "wingman_day1.api", "wingman_day1.main",
-    "wingman_day1.settings", "wingman_core.infrastructure", "wingman_core.observability",
-    "wingman_core.web", "fastapi", "starlette", "httpx",
+    "wingman_day1.settings", "wingman_day1.integrations.*.application",
+    "wingman_day1.integrations.*.infrastructure", "wingman_day1.integrations.*.api",
+    "wingman_day1.integrations.*.compose", "wingman_core.infrastructure",
+    "wingman_core.observability", "wingman_core.web", "fastapi", "starlette", "httpx",
 ]
 
 [[tool.importlinter.contracts]]
 name = "day1 infrastructure does not depend on the application or the API"
 type = "forbidden"
 source_modules = ["wingman_day1.infrastructure"]
+# An integration's infrastructure is allowed: the fake fleet reuses server-scan's fake and parser.
 forbidden_modules = [
     "wingman_day1.application", "wingman_day1.api", "wingman_day1.main",
-    "wingman_core.web", "fastapi", "starlette",
+    "wingman_day1.integrations.*.application", "wingman_day1.integrations.*.api",
+    "wingman_day1.integrations.*.compose", "wingman_core.web", "fastapi", "starlette",
 ]
 
 [[tool.importlinter.contracts]]
@@ -195,12 +209,91 @@ name = "day1 API reaches adapters only through the composition root"
 type = "forbidden"
 source_modules = ["wingman_day1.api"]
 forbidden_modules = [
-    "wingman_day1.infrastructure", "wingman_day1.main", "wingman_core.infrastructure",
-    "httpx",
+    "wingman_day1.infrastructure", "wingman_day1.main",
+    "wingman_day1.integrations.*.infrastructure", "wingman_day1.integrations.*.compose",
+    "wingman_core.infrastructure", "httpx",
 ]
 # wingman_core.web.auth verifies tokens with core's SessionTokens; that indirect
 # import is core's business. The API itself must not name an adapter.
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "day1 integrations' domains are pure: no I/O libraries and no outer layers"
+type = "forbidden"
+source_modules = ["wingman_day1.integrations.*.domain"]
+forbidden_modules = [
+    "wingman_day1.integrations.*.ports", "wingman_day1.integrations.*.application",
+    "wingman_day1.integrations.*.infrastructure", "wingman_day1.integrations.*.api",
+    "wingman_day1.integrations.*.compose",
+    "wingman_day1.ports", "wingman_day1.application", "wingman_day1.infrastructure",
+    "wingman_day1.api", "wingman_day1.main", "wingman_day1.platform_adapters",
+    "wingman_day1.settings",
+    "wingman_core.ports", "wingman_core.application", "wingman_core.infrastructure",
+    "wingman_core.observability", "wingman_core.web", "wingman_core.testing",
+    "fastapi", "starlette", "httpx", "pydantic_settings", "prometheus_client",
+]
+
+[[tool.importlinter.contracts]]
+name = "day1 integrations' ports depend only on the domains"
+type = "forbidden"
+source_modules = ["wingman_day1.integrations.*.ports"]
+forbidden_modules = [
+    "wingman_day1.integrations.*.application", "wingman_day1.integrations.*.infrastructure",
+    "wingman_day1.integrations.*.api", "wingman_day1.integrations.*.compose",
+    "wingman_day1.application", "wingman_day1.infrastructure", "wingman_day1.api",
+    "wingman_day1.main", "wingman_day1.platform_adapters", "wingman_day1.settings",
+    "wingman_core.infrastructure", "wingman_core.web", "fastapi", "starlette", "httpx",
+]
+
+[[tool.importlinter.contracts]]
+name = "day1 integrations' use cases depend only on the domains and ports"
+type = "forbidden"
+source_modules = ["wingman_day1.integrations.*.application"]
+forbidden_modules = [
+    "wingman_day1.integrations.*.infrastructure", "wingman_day1.integrations.*.api",
+    "wingman_day1.integrations.*.compose",
+    "wingman_day1.infrastructure", "wingman_day1.api", "wingman_day1.main",
+    "wingman_day1.platform_adapters", "wingman_day1.settings",
+    "wingman_core.infrastructure", "wingman_core.observability", "wingman_core.web",
+    "fastapi", "starlette", "httpx",
+]
+
+[[tool.importlinter.contracts]]
+name = "day1 integrations' adapters do not depend on the use cases or the API"
+type = "forbidden"
+source_modules = ["wingman_day1.integrations.*.infrastructure"]
+forbidden_modules = [
+    "wingman_day1.integrations.*.application", "wingman_day1.integrations.*.api",
+    "wingman_day1.integrations.*.compose",
+    "wingman_day1.application", "wingman_day1.api", "wingman_day1.main",
+    "wingman_day1.platform_adapters", "wingman_core.web", "fastapi", "starlette",
+]
+
+[[tool.importlinter.contracts]]
+name = "day1 integrations' API reaches adapters only through the composition root"
+type = "forbidden"
+source_modules = ["wingman_day1.integrations.*.api"]
+forbidden_modules = [
+    "wingman_day1.integrations.*.infrastructure", "wingman_day1.integrations.*.compose",
+    "wingman_day1.infrastructure", "wingman_day1.main", "wingman_day1.platform_adapters",
+    "wingman_core.infrastructure", "httpx",
+]
+# As day1's API: core's auth dependency verifies tokens with an adapter.
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "day1's integrations do not import each other"
+type = "independence"
+modules = ["wingman_day1.integrations.*"]
+# Independence follows indirect chains too, and Wingman's own code uses both systems:
+# its use cases read an integration's port (placement and Inventory read server-scan,
+# a cluster's network check segments-manager), and the routes' context names every
+# area's use case. A chain through those two is Wingman's, not one integration's; any
+# other path, direct or indirect, breaks this contract.
+ignore_imports = [
+    "wingman_day1.application.* -> wingman_day1.integrations.*.ports",
+    "wingman_day1.api.deps -> wingman_day1.integrations.*.application.*",
+]
 
 [[tool.importlinter.contracts]]
 name = "wingman_day1 does not import wingman_day2"
