@@ -4,6 +4,54 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-16 — 3.38.0 to 3.43.0: Inventory Ready/Needs fix, tuning in the every-nodepool rule, Scale through update-nodepool, Server Scan at server-scan v6.1.0.**
+- **Inventory Management** (3.38.0, ADR-0057's amendment): a pool's free
+  servers split into Ready and Needs fix, a Total per pool and MCE,
+  collapsible MCEs; an admin may install a Needs-fix server by name with
+  `allow_unhealthy`, after a confirmation.
+- **Tuning in the flavor's "same on every nodepool"** (3.39.0, ADR-0061's
+  amendment): a switch beside the configs rule locks the same profiles on
+  every nodepool, on by default unless the nodepools differ.
+- **Scale through the platform's update-nodepool workflow** (3.40.0, 3.41.0;
+  ADR-0062 and its amendment), behind `day1.scaleNodepools.enabled`, off by
+  default and off on the sandbox: a − N + on each NodePool card of the Nodes
+  tab (one NodePool, exact), a hardware type's total in a small dialog (kinds
+  with 2+ NodePools), one change at a time, the run in place. While on, a
+  NodePool's replicas change only through the workflow: an edit that changes
+  them is refused, a flavor's sync or rollout leaves them out and offers
+  "Restore to N". A flavor-locked NodePool is not scaled; the lock is
+  Wingman's rule, not the platform's (a direct GitLab edit or a direct
+  workflow call can still move it, shown as drift).
+- **3.42.0**: a short confirmation before every scale, both ways, saying on a
+  scale-down which nodes leave by the NodePool's `redbull.io/scale-down-policy`
+  (read from the nodepool entry's `annotations` in the day1 file); the cluster
+  page's first render matches the server's (no hydration error). Turning Scale
+  on: `docs/upgrade/3.39-to-3.40.md`.
+- **Server Scan at parity with server-scan v6.1.0** (3.43.0, ADR-0048's
+  2026-11-16 amendment): Collection error with its cause, an event's serial
+  and BMC (details and the Server box), Healthy without servers in
+  maintenance; an older server-scan still works.
+- The workflow is on team-redbull/workflows' branch `feat/update-nodepool`
+  (not merged when this was written): Wingman follows its contract and has
+  not run against it live. The day1 CI tuning patch went to the user as a zip
+  for the air-gap; workflows PR #23 (provision-cluster sets
+  `tuningConfigmap` aside) is merged.
+
+**Next:**
+- Scale's scale-down policy per NodePool (the user): a flavor and
+  create-form choice that `cluster-template.j2` writes as the entry's
+  annotation (the specs project's template needs it too); more in
+  `CLAUDE.local.md`. Then, when the workflow is deployed: turn Scale on and
+  a first live run.
+- cluster-navigator's data on the cluster page and per MCE
+  (`docs/ideas/single-pane.md` workstream 5).
+- Flavors v2's "Left for later": missing add-ons in one MR per team, the
+  cluster-name prefix in the web, a preview of an unsaved flavor.
+- Tuning: a lock per pool.
+- Code organisation, later (the user): 28 files left in the size baseline.
+- The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
+  shared Git store.
+
 **2026-11-16 — 3.35.0 to 3.37.0: team chart groups, the Grafana dashboard, tuning profiles.**
 - **A team's charts sit in `<team>/helm-charts/<chart>`** (3.35.0,
   ADR-0060): the New add-on form suggests that address; only a suggestion.
@@ -506,3 +554,74 @@ and how Wingman fits them. The new `cluster-template.j2` renders the slim
 values file and was checked with `helm template` against both chart copies.
 Earlier the same day: the dark-first UI refresh (PR #16) and the legacy
 Playwright specs fixed.
+
+## Status as CLAUDE.md listed it until 2026-11-17
+
+CLAUDE.md's "Current status" before it was shortened; the features since are in
+README.md's feature table and the entries above.
+
+- Done: ecosystem map (`docs/ecosystem/`); the new day1 template
+  (`dev/gitlab-fixtures/wingman/cluster-specs/cluster-template.j2`, verified
+  with `helm template` against both chart copies); fixtures; the
+  `wingman-core` foundation (GitLab port, httpx adapter, in-memory fake,
+  contract suite passing 30/30 on the fake and on GitLab CE 19.5.3, RFC 9457
+  errors, metrics, settings, auth, cache, approvals); CI and
+  `scripts/gate.sh`; ADRs 0001-0011; monitoring in the chart (ServiceMonitor,
+  7 promtool-tested alerts with a runbook, a Grafana dashboard, all off by
+  default) with a test tying alerts and dashboard to the metric catalogue.
+- Done: day1 rewritten on `wingman-core` as `wingman_day1`
+  (`apps/day1-service/src/wingman_day1`, ADRs 0012-0019), checked end to end
+  against local GitLab with `scripts/dev/day1_live_e2e.py` and through both
+  chart copies. Web-visible API changes:
+  `docs/notes/2026-11-07-day1-api-changes.md`.
+- Done: day2 rewritten as `wingman_day2` (four destination kinds, fleet
+  defaults and exclusions, the platform's value stacks with provenance,
+  lints, one MR per team; ADRs 0020-0024), held to the team's
+  `render_chain.py` by an oracle test and run against GitLab CE 19.5.3.
+  Web-visible API changes: `docs/notes/2026-11-07-day2-api-changes.md`.
+- Done: CI's supply chain and releases (ADR-0030, ADR-0031, ADR-0032):
+  hash-pinned per-service exports, the web image from the root lock, build on
+  every PR, every merge to main a release versioned from its commits, a
+  blocking npm audit, a nightly live-GitLab run.
+- Done: both service images install only from the hash-pinned exports
+  (`docs/ops/images.md`); the chart sets exactly the variables the services
+  read (`tests/repo/test_chart_env_contract.py`) and probes
+  `/health/live`/`/health/ready`.
+- Done (2026-11-08): the web on both new APIs (shared dropdown, searchable
+  combobox, empty, loading and error states); the whole stack checked live
+  against the seeded local GitLab; report-only version drift (ADR-0025); the
+  legacy `wingman-shared` removed; the delete dialog ready for the
+  delete-cluster workflow (ADR-0033); OpenShift versions per MCE from the
+  day1 repo's upgrade ladder; `docs/ideas/`, `docs/upgrade/`.
+- Done (2026-11-08): the day1, specs and team repos are read once per commit
+  from GitLab's archive (ADR-0035); the catalog on a production-sized repo went
+  from 9 s and 357 GitLab calls per load to 0.03 s cached, 0.46 s after the TTL.
+- Done (2026-11-08): flavors v2 (`docs/ideas/flavors-v2.md`, ADRs 0026-0029,
+  0036, 0037): enforced locks, machine configs from `mc-files/` with nodepool
+  defaults, numeric owners, drift on locked values, importing existing
+  clusters into a flavor and syncing a cluster to it; the web pages for all of
+  it; the UI says Flavor (the API keeps `/specs`).
+- Done (2026-11-11): the cluster page's Nodes tab by NodePool from the MCE
+  (missing pieces, the node an update works on), joined to server-scan, and
+  node uninstall through the platform's workflow (ADR-0038); 3.3.1 reads
+  network templates by the CI's name.
+- Done (2026-11-12): the cluster's EPG from segments-manager, checked
+  against the file's VLAN and segment (ADR-0039).
+- Done (2026-11-12): create from a flavor with a nodepool ratio, a suggested
+  name and one-letter sequences (ADR-0040).
+- Done (2026-11-12): reads answer from cache while one fetch refreshes them;
+  a merge re-reads only the files it changed (ADR-0041, `docs/ops/performance.md`).
+- Done (2026-11-12): create can start the `provision-cluster` workflow,
+  off by default (ADR-0042).
+- Done (2026-11-14): chart hardening: nginx stays the one entry point, on
+  UBI nginx by digest (ADR-0058); every pod restricted with a read-only root;
+  `values.schema.json` and no default image tag (ADR-0059).
+- Done (2026-11-16): tuning profiles per nodepool from the day1 repo's
+  `tuning/` (ADR-0061); the Grafana dashboard's activity and external-systems
+  rows (3.36.0).
+- Done (2026-11-16): scaling NodePools through the platform's update-nodepool
+  workflow, off by default; while on, it alone changes an existing
+  NodePool's replicas (ADR-0062).
+- **Not done yet, in order:** (1) the architect's
+  answers (`docs/ideas/architecture-fit.md`); (2) flavors v2's "Left for
+  later"; (3) ecosystem features (`docs/ideas/`).
