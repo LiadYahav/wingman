@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { ServersPage } from "@/components/server-scan/servers-page";
+import { ServersPage } from "@/features/server-scan/components/servers-page";
 
 /**
  * The Server Scan area's Servers page (ADR-0048's 3.23.0 amendment,

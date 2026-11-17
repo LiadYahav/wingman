@@ -1,4 +1,4 @@
-import { ConfsPage } from "@/components/server-scan/confs-page";
+import { ConfsPage } from "@/features/server-scan/components/confs-page";
 
 /**
  * The Server Scan area's Confs page (ADR-0048's 3.29.0 amendment,

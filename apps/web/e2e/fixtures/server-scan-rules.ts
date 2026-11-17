@@ -9,10 +9,10 @@
 import type { Page, Route } from "@playwright/test";
 import { json } from "./api-handlers";
 import { setUpServerScan } from "./server-scan";
-import type { HealthSeverity } from "../../types/server-scan";
+import type { HealthSeverity } from "../../features/server-scan/types/server-scan";
 import type {
   ClassificationRuleListResponse, ClassificationRuleResponse, Condition, HealthPolicyListResponse, HealthPolicyResponse, PolicyScope,
-} from "../../types/server-scan-rules";
+} from "../../features/server-scan/types/server-scan-rules";
 
 const AT = "2026-09-01T06:00:00Z";
 

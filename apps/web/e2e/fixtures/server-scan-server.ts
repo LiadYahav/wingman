@@ -8,8 +8,8 @@
 import type { Page, Route } from "@playwright/test";
 import { fulfillProblem, json } from "./api-handlers";
 import { mockServers, setUpServers } from "./server-scan-servers";
-import type { AuditEvent, AuditEventPage, ServerRecord, VmHostAnswer } from "../../types/server-scan-record";
-import type { ServerRowsAnswer } from "../../types/server-scan-servers";
+import type { AuditEvent, AuditEventPage, ServerRecord, VmHostAnswer } from "../../features/server-scan/types/server-scan-record";
+import type { ServerRowsAnswer } from "../../features/server-scan/types/server-scan-servers";
 
 export const NODE = "ocp-dell-r660-site1-node-01";
 export const NODE_ID = `srv_${NODE}`;

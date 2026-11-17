@@ -10,7 +10,7 @@
 import type { Page, Route } from "@playwright/test";
 import { json } from "./api-handlers";
 import { setUpServerScan } from "./server-scan";
-import type { Conf, ConfList } from "../../types/server-scan-confs";
+import type { Conf, ConfList } from "../../features/server-scan/types/server-scan-confs";
 
 function conf(overrides: Partial<Conf>): Conf {
   return {

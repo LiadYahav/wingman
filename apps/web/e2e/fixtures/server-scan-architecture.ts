@@ -9,7 +9,7 @@
 import type { Page, Route } from "@playwright/test";
 import { json } from "./api-handlers";
 import { setUpServerScan } from "./server-scan";
-import type { DiagramAnswer } from "../../types/server-scan-architecture";
+import type { DiagramAnswer } from "../../features/server-scan/types/server-scan-architecture";
 
 /** A stand-in for one of server-scan's archify pages. */
 export function diagramPage(slug: string): string {

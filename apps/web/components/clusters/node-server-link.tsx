@@ -3,8 +3,8 @@
 import type { ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
 import { IntentLink } from "@/components/common/intent-link";
-import { useServerScanArea } from "@/lib/api/server-scan";
-import { nodeServerLink, type NodeServerLink } from "@/lib/server-scan/server-page";
+import { useServerScanArea } from "@/features/server-scan/api/server-scan";
+import { nodeServerLink, type NodeServerLink } from "@/features/server-scan/lib/server-page";
 import type { ServerRecord } from "@/types";
 
 /**

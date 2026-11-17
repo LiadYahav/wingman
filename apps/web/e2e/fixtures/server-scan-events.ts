@@ -11,8 +11,8 @@
 import type { Page, Route } from "@playwright/test";
 import { fulfillProblem, json } from "./api-handlers";
 import { NODE, NODE_ID, setUpServer } from "./server-scan-server";
-import type { EventActorList } from "../../types/server-scan-events";
-import type { AuditEvent, AuditEventPage } from "../../types/server-scan-record";
+import type { EventActorList } from "../../features/server-scan/types/server-scan-events";
+import type { AuditEvent, AuditEventPage } from "../../features/server-scan/types/server-scan-record";
 
 export const PRUNED_ID = "srv_00000000000000000000000000000999";
 

@@ -1,4 +1,4 @@
-import { JobsPage } from "@/components/server-scan/jobs/jobs-page";
+import { JobsPage } from "@/features/server-scan/components/jobs/jobs-page";
 
 /**
  * The Server Scan area's Jobs page (ADR-0048's 3.32.0 amendment,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Breakdown, SiteStats, SiteStatsList } from "@/types/server-scan";
+import type { Breakdown, SiteStats, SiteStatsList } from "@/features/server-scan/types/server-scan";
 import { fleetHealth } from "./fleet-health";
 
 const breakdown = (health: Breakdown["by_health"], in_maintenance = 0): Breakdown => ({

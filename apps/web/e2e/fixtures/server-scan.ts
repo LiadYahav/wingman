@@ -8,7 +8,7 @@
 
 import type { Page, Route } from "@playwright/test";
 import { fulfillProblem, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "./api-handlers";
-import type { Breakdown, FleetSummary, SiteStats, SiteStatsList } from "../../types/server-scan";
+import type { Breakdown, FleetSummary, SiteStats, SiteStatsList } from "../../features/server-scan/types/server-scan";
 
 const VENDORS = ["dell", "cisco", "hp", "standalone", "kubevirt"] as const;
 const SEVERITIES = ["UNKNOWN", "HEALTHY", "WARNING", "MAJOR", "CRITICAL"] as const;

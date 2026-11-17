@@ -6,9 +6,9 @@
  * the healthy count and the bar's parts.
  */
 
-import { cardCounts, fleetCards, siteCards, sitesSummary, withFilter, type CardCount, type SiteCard } from "@/lib/server-scan/sites";
-import { SEVERITY_GLYPH } from "@/lib/server-scan/vocabulary";
-import type { HealthSeverity, SiteStatsList } from "@/types/server-scan";
+import { cardCounts, fleetCards, siteCards, sitesSummary, withFilter, type CardCount, type SiteCard } from "@/features/server-scan/lib/sites";
+import { SEVERITY_GLYPH } from "@/features/server-scan/lib/vocabulary";
+import type { HealthSeverity, SiteStatsList } from "@/features/server-scan/types/server-scan";
 
 /** The bar's order: healthy grows from the left, the worst toward the right, unknown last. */
 const BAR_ORDER: readonly HealthSeverity[] = ["HEALTHY", "WARNING", "MAJOR", "CRITICAL", "UNKNOWN"];
