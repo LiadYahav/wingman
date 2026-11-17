@@ -13,7 +13,8 @@ import { HealthBreakdown, HostValue, LastSeen, MaintenanceValue, ModelValue, Ope
  * §9.1): two columns of fields, kept apart so a field only some vendors have
  * (the template, Collection) never moves the others into the other column.
  * Collection's cause, in words, sits under its badge (v5.3.1's 8c0771a).
- * Its one control is the maintenance toggle (§9.8).
+ * It has no control: maintenance is shown read only, with a link to the
+ * Servers list, where it is switched (server-scan's `0bb7dad`).
  */
 export function OverviewTab({ record }: { record: ServerRecord }) {
   const templateLabel = profileTemplateLabel(record.source_provider);
