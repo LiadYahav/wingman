@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Funnel, Search, X } from "lucide-react";
-import { STATUS_TABS, type StatusTab } from "@/lib/segments/view";
+import { STATUS_TABS, type StatusTab } from "@/features/segments/lib/view";
 import { cn } from "@/lib/utils";
 
 const TAB_LABELS: Record<StatusTab, string> = { all: "All", available: "Available", allocated: "Allocated" };

@@ -3,9 +3,9 @@
 import { Network } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
-import { useSegmentStats } from "@/lib/api/segments";
+import { useSegmentStats } from "@/features/segments/api/segments";
 import { segmentCapacity } from "@/lib/overview/capacity";
-import { DEFAULT_VIEW, viewHref } from "@/lib/segments/view";
+import { DEFAULT_VIEW, viewHref } from "@/features/segments/lib/view";
 import { plural } from "@/lib/utils";
 import { CapacityRow, CapacityTotal } from "./capacity-row";
 import { OverviewCard, RowsSkeleton } from "./overview-card";

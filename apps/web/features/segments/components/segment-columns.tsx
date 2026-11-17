@@ -6,9 +6,9 @@ import { CopyCell } from "@/components/data-table/copy-cell";
 import { Badge } from "@/components/ui/badge";
 import { MismatchMarker } from "./mismatch-marker";
 import { clusterHref } from "@/lib/clusters";
-import { COLUMN_LABELS, cellText, dhcpLabel, isAllocated, statusLabel, type ColumnId } from "@/lib/segments/columns";
+import { COLUMN_LABELS, cellText, dhcpLabel, isAllocated, statusLabel, type ColumnId } from "@/features/segments/lib/columns";
 import { cn } from "@/lib/utils";
-import type { Segment } from "@/types/segments";
+import type { Segment } from "@/features/segments/types/segments";
 
 const Empty = () => <span className="text-muted-foreground">—</span>;
 

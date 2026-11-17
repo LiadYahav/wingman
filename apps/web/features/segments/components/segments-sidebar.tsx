@@ -2,9 +2,9 @@
 
 import { useSearchParams } from "next/navigation";
 import { AreaNav } from "@/components/layout/area-nav";
-import { useSegmentStats } from "@/lib/api/segments";
-import { segmentsSidebar, type SitesState } from "@/lib/segments/sidebar";
-import { parseView } from "@/lib/segments/view";
+import { useSegmentStats } from "@/features/segments/api/segments";
+import { segmentsSidebar, type SitesState } from "@/features/segments/lib/sidebar";
+import { parseView } from "@/features/segments/lib/view";
 
 /**
  * The Segments area's sidebar: the page's options as links that set its URL

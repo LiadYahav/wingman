@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SEGMENTS_REFRESH_MS } from "@/lib/api/segments";
-import type { Connection } from "@/lib/segments/connection";
-import { updatedAgo } from "@/lib/segments/sites";
+import { SEGMENTS_REFRESH_MS } from "@/features/segments/api/segments";
+import type { Connection } from "@/features/segments/lib/connection";
+import { updatedAgo } from "@/features/segments/lib/sites";
 import { cn } from "@/lib/utils";
 
 /**

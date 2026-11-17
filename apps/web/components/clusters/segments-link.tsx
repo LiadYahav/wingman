@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, Copy, ExternalLink, Network } from "lucide-react";
-import { useSegmentsArea } from "@/lib/api/segments";
-import { clusterSegmentsLink } from "@/lib/segments/links";
+import { useSegmentsArea } from "@/features/segments/api/segments";
+import { clusterSegmentsLink } from "@/features/segments/lib/links";
 import { cn } from "@/lib/utils";
 import type { SegmentsManagerLinks } from "@/types";
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { clusterHref } from "@/lib/clusters";
-import type { Segment } from "@/types/segments";
+import type { Segment } from "@/features/segments/types/segments";
 
 /**
  * A row's mark where segments-manager disagrees with a cluster file (ADR-0039's

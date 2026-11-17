@@ -2,9 +2,9 @@
 
 import { Server } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { siteCard } from "@/lib/segments/sites";
+import { siteCard } from "@/features/segments/lib/sites";
 import { cn } from "@/lib/utils";
-import type { SiteSegmentStats } from "@/types/segments";
+import type { SiteSegmentStats } from "@/features/segments/types/segments";
 import { TypeLabel } from "./segment-columns";
 
 /**

@@ -4,7 +4,7 @@
  * segment as text, for the search, the sort and the CSV.
  */
 
-import type { Segment } from "@/types/segments";
+import type { Segment } from "@/features/segments/types/segments";
 
 export const COLUMN_IDS = ["type", "site", "vlan_id", "epg_name", "segment", "dhcp", "cluster", "status"] as const;
 export type ColumnId = (typeof COLUMN_IDS)[number];

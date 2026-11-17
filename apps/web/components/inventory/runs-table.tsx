@@ -9,7 +9,7 @@ import { Hint } from "@/components/common/hint";
 import { ServerLink } from "@/features/server-scan/components/server-link";
 import { useServerScanArea } from "@/features/server-scan/api/server-scan";
 import { originHint, originLabel, readablePhase, runSubject, runTone, type RunTone } from "@/lib/inventory/runs";
-import { updatedAgo } from "@/lib/segments/sites";
+import { updatedAgo } from "@/features/segments/lib/sites";
 import { cn } from "@/lib/utils";
 import type { InventoryRun } from "@/types/inventory";
 

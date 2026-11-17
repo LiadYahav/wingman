@@ -1,4 +1,4 @@
-import { useSegmentsArea } from "@/lib/api/segments";
+import { useSegmentsArea } from "@/features/segments/api/segments";
 import { useServerScanArea } from "@/features/server-scan/api/server-scan";
 import type { AreaAccess } from "@/lib/areas";
 

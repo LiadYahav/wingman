@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, type ComponentType } from "react";
-import { SegmentsSidebar } from "@/components/segments/segments-sidebar";
+import { SegmentsSidebar } from "@/features/segments/components/segments-sidebar";
 import { ServerScanSidebar } from "@/features/server-scan/components/server-scan-sidebar";
 import type { AreaId } from "@/lib/areas";
 import { SidebarNav } from "./sidebar-nav";

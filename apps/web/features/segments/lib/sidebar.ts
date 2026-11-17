@@ -6,7 +6,7 @@
  */
 
 import type { NavSection } from "@/lib/areas";
-import type { SiteSegmentStats } from "@/types/segments";
+import type { SiteSegmentStats } from "@/features/segments/types/segments";
 import { siteCard } from "./sites";
 import { viewHref, type SegmentsView, type StatusTab } from "./view";
 

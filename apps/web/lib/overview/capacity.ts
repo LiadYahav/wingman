@@ -5,9 +5,9 @@
  * sources'; this only orders them and works out the shares.
  */
 
-import { siteCard } from "@/lib/segments/sites";
+import { siteCard } from "@/features/segments/lib/sites";
 import type { MceInventory, PoolCount } from "@/types/inventory";
-import type { SiteSegmentStats } from "@/types/segments";
+import type { SiteSegmentStats } from "@/features/segments/types/segments";
 import { percent } from "./clusters";
 
 export interface PoolFree {

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { parseView, viewHref, type SegmentsView } from "@/lib/segments/view";
+import { parseView, viewHref, type SegmentsView } from "@/features/segments/lib/view";
 
 /**
  * The page's view, read from and written to the URL. A change replaces the

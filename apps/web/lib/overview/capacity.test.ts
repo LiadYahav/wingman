@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MceInventory, PoolCount } from "@/types/inventory";
-import type { SiteSegmentStats } from "@/types/segments";
+import type { SiteSegmentStats } from "@/features/segments/types/segments";
 import { segmentCapacity, serverCapacity } from "./capacity";
 
 const pool = (infra_env: string | null, available: number): PoolCount => ({

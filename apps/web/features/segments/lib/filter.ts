@@ -5,7 +5,7 @@
  */
 
 import { applyColumnFilters, type ColumnFilters } from "@/lib/table/column-filters";
-import type { Segment } from "@/types/segments";
+import type { Segment } from "@/features/segments/types/segments";
 import { cellText, isAllocated, isColumnId, type ColumnId } from "./columns";
 import type { SegmentsView, SortState, StatusTab } from "./view";
 

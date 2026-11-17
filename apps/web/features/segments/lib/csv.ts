@@ -6,7 +6,7 @@
 
 import { toCsv } from "@/lib/table/csv";
 import type { ExportTable } from "@/lib/table/export";
-import type { Segment } from "@/types/segments";
+import type { Segment } from "@/features/segments/types/segments";
 import { COLUMN_LABELS, cellText, type ColumnId } from "./columns";
 
 /** The shown segments in the shown columns: each cell's text, a VLAN ID as a number. */

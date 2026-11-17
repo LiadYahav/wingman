@@ -4,7 +4,7 @@
  * zero), and when a reading is "updated … ago".
  */
 
-import type { SiteSegmentStats } from "@/types/segments";
+import type { SiteSegmentStats } from "@/features/segments/types/segments";
 
 export interface SiteCard {
   site: string;

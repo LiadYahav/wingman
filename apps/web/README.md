@@ -155,6 +155,7 @@ components/
 └── specs/              # Spec-specific components
 
 features/               # An external system's area, all of it in one folder: api/ (day1 calls, keys, hooks), types/, lib/ (pure logic and its Vitest), components/
+├── segments/           # Segments, segments-manager's page (ADR-0047); its route stays in app/(app)/segments/
 └── server-scan/        # Server Scan (ADR-0048); its routes stay in app/(app)/server-scan/
 
 hooks/

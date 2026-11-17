@@ -9,7 +9,7 @@ import { useCallback, useState } from "react";
 import { api, isApiError } from "@/lib/api-client";
 import { useMounted } from "@/hooks/use-mounted";
 import { useIsAdmin } from "@/stores/auth-store";
-import type { SegmentList, SegmentSites, SegmentStats } from "@/types/segments";
+import type { SegmentList, SegmentSites, SegmentStats } from "@/features/segments/types/segments";
 
 /** The page re-reads every 30 seconds while it is open, as segments-manager's UI does. */
 export const SEGMENTS_REFRESH_MS = 30_000;

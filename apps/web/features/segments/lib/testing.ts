@@ -1,6 +1,6 @@
 /** Segments for the unit tests (made up), in day1's shape (docs/notes/2026-11-13-segments-area-api.md §3). */
 
-import type { Segment } from "@/types/segments";
+import type { Segment } from "@/features/segments/types/segments";
 
 /** A segment; `holders` follows `cluster_name` unless given. */
 export function segment(overrides: Partial<Segment> = {}): Segment {
