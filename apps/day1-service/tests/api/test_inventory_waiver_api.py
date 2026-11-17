@@ -22,16 +22,16 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.fake_add_server import FakeAddServerWorkflow
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
-from wingman_day1.infrastructure.fake_fleet import (
-    FakeServerInventory,
-    default_fleet_file,
-    load_fleet,
-)
+from wingman_day1.infrastructure.fake_fleet import load_fleet
 from wingman_day1.infrastructure.fake_inventory_demo import (
     default_inventory_file,
     load_inventory_demo,
 )
 from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
+from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+    FakeServerInventory,
+    default_fleet_file,
+)
 
 Auth = Callable[[User], dict[str, str]]
 SITE1_A = "ocp4-prod-mce-site1-a"

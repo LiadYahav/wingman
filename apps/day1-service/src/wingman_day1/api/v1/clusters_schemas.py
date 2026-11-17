@@ -20,7 +20,7 @@ from wingman_day1.domain.cluster_file import ClusterValues, NodePoolValues
 from wingman_day1.domain.names import ClusterNaming, HostedClusterRef, NameSuggestion
 from wingman_day1.domain.network import segment_of
 from wingman_day1.domain.placement import MAX_REASON
-from wingman_day1.domain.segments_manager import SegmentsManagerLinks
+from wingman_day1.integrations.segments_manager.domain.links import SegmentsManagerLinks
 
 
 class NamingOut(BaseModel):

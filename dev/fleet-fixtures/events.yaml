@@ -2,7 +2,7 @@
 # 3.31.0 amendment): the Events page, and a server's History.
 #
 # The fake's audit trail is every server's History (made from its row in
-# servers.yaml, by fake_server_records) plus these: what people did, what
+# servers.yaml, by server-scan's fakes/records.py) plus these: what people did, what
 # the platform did on its own, herzi's install lock, and a server since
 # pruned. Together about 100 events, so the Events page has two pages.
 #

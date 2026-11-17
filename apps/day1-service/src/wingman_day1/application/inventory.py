@@ -59,7 +59,8 @@ from wingman_day1.domain.inventory import (
     named_refusals,
 )
 from wingman_day1.domain.names import dns_label_problems
-from wingman_day1.ports import AddServerWorkflow, HubApi, ServerInventory
+from wingman_day1.integrations.server_scan.ports import ServerInventory
+from wingman_day1.ports import AddServerWorkflow, HubApi
 
 logger = logging.getLogger(__name__)
 

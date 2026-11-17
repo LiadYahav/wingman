@@ -69,13 +69,10 @@ from wingman_day1.application.sync import SyncService
 from wingman_day1.compose_inventory import add_server_workflow, inventory_service
 from wingman_day1.compose_quick_links import quick_links_service
 from wingman_day1.compose_scale import scale_service, scale_workflow
-from wingman_day1.compose_segments import segment_ledger, segments_service
-from wingman_day1.compose_server_scan import cached_inventory, server_scan_service, server_scan_ui
 from wingman_day1.domain.cluster_file import WorkflowKeys
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
-from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons, HttpDay2Installs
 from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_access
@@ -88,6 +85,10 @@ from wingman_day1.infrastructure.merge_requests import (
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
 from wingman_day1.infrastructure.repositories import CachedRepository
 from wingman_day1.infrastructure.rollout_events import MetricRolloutEvents
+from wingman_day1.integrations.segments_manager import compose as segments_manager
+from wingman_day1.integrations.segments_manager.ports import SegmentLedger
+from wingman_day1.integrations.server_scan import compose as server_scan
+from wingman_day1.integrations.server_scan.ports import ServerInventory
 from wingman_day1.platform_adapters import Close
 from wingman_day1.ports import (
     AddServerWorkflow,
@@ -98,8 +99,6 @@ from wingman_day1.ports import (
     IdentityProvider,
     ProvisionWorkflow,
     ScaleWorkflow,
-    SegmentLedger,
-    ServerInventory,
     UninstallWorkflow,
     UpgradeWorkflow,
 )
@@ -234,7 +233,7 @@ def build_adapters(
         identity=identity,
         inventory=inventory,
         uninstall=uninstall,
-        ledger=segment_ledger(settings, metrics=metrics, closers=closers),
+        ledger=segments_manager.segment_ledger(settings, metrics=metrics, closers=closers),
         provision=platform.provision_workflow(
             settings, metrics=metrics, clock=clock, closers=closers
         ),
@@ -294,7 +293,7 @@ def build_context(
     day1_writer = MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
     provisioner = GitClusterProvisioner(day1_writer)
     rollout_writer = GitRolloutMergeRequests(gitlab, day1, day1_writer)
-    inventory = cached_inventory(adapters.inventory, cache, ttl=ttl)
+    inventory = server_scan.cached_inventory(adapters.inventory, cache, ttl=ttl)
     # Placement always runs (ADR-0050). An MCE's nodes, pods and Agents are read when a
     # create asks, kept for seconds; without live reads it decides on Git and server-scan.
     placement = PlacementService(
@@ -349,7 +348,7 @@ def build_context(
             hub,
             cluster_service,
             inventory=inventory,
-            ui_url=server_scan_ui(settings),
+            ui_url=server_scan.server_scan_ui(settings),
             workflows=(
                 CachedUninstallWorkflow(adapters.uninstall, cache, ttl=runs_ttl)
                 if adapters.uninstall is not None
@@ -358,10 +357,7 @@ def build_context(
             infraenv_namespace=settings.mce_infraenv_namespace or None,
         )
     network = NetworkService(
-        cluster_service,
-        CachedSegmentLedger(adapters.ledger, cache, ttl=ttl)
-        if adapters.ledger is not None
-        else None,
+        cluster_service, segments_manager.network_ledger(adapters.ledger, cache, ttl=ttl)
     )
     sync = SyncService(
         cluster_service,
@@ -426,7 +422,9 @@ def build_context(
         segments_manager_ui_url=settings.segments_manager_ui_base or fake_ui or None,
         placement=placement,
         quick_links=quick_links,
-        segments=segments_service(adapters.ledger, cache, cluster_service, ttl=ttl),
+        segments=segments_manager.segments_service(
+            adapters.ledger, cache, cluster_service, ttl=ttl
+        ),
         upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service, cache),
         scale=scale_service(settings, adapters.scale, cluster_service, spec_catalog),
         inventory=inventory_service(
@@ -438,7 +436,7 @@ def build_context(
             workflows=adapters.add_server,
             cache=cache,
         ),
-        server_scan=server_scan_service(inventory, settings),
+        server_scan=server_scan.server_scan_service(inventory, settings),
     )
 
 

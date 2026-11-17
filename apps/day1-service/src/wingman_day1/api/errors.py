@@ -75,8 +75,8 @@ from wingman_day1.domain.errors import (
     WorkflowsNotConfiguredError,
     WorkflowsUnavailableError,
 )
-from wingman_day1.domain.server_scan_events import AUDITOR_SETTING
-from wingman_day1.domain.server_scan_servers import ADMIN_SETTING
+from wingman_day1.integrations.server_scan.domain.events import AUDITOR_SETTING
+from wingman_day1.integrations.server_scan.domain.servers import ADMIN_SETTING
 
 _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (InvalidInputError, ValidationFailed),

@@ -1,7 +1,8 @@
 # ADR-0056: Files and functions stay small
 
 Date: 2026-11-13
-Status: Accepted
+Status: Accepted; amended 2026-11-17 (an external system's area is one folder per side:
+`apps/web/features/<area>/` and `wingman_day1/integrations/<system>/`)
 
 ## Context
 
@@ -162,3 +163,28 @@ time.
   simple function fails with `RUF100`, and a probe
   `// eslint-disable-next-line complexity` above one fails with "Unused
   eslint-disable directive".
+
+## Amendment (2026-11-17): an external system's area is one folder on each side
+
+"Where code goes" described one place per layer, so an external system's
+area was spread over both lists. Since 2026-11-17 (ADR-0001's amendment of
+that date) it is one folder on each side:
+
+- **Web**: `apps/web/features/<area>/` with four folders: `api/` (its API
+  paths, query keys and hooks), `types/` (its mirrored types), `lib/` (its
+  pure logic) and `components/` (its UI, a folder per flow as rule 3 says).
+  Today `features/server-scan/` and `features/segments/`; the file names were
+  kept (`features/server-scan/api/server-scan-jobs.ts`). The page routes stay
+  in `app/`, thin as rule 1 says. For a feature folder, web rules 2, 3 and 5
+  (`lib/api/`, `components/<area>/`, `types/`) read as its own `api/`,
+  `components/` and `types/`.
+- **day1**: `apps/day1-service/src/wingman_day1/integrations/<system>/`, with
+  Python rules 1 to 3 inside it: its routers and their `*_schemas.py` in
+  `api/`, its use cases in `application/`, and `infrastructure/` holding
+  `adapter.py`, `parse.py`, `cached.py` and its fakes (`fakes/`, or one
+  `fake.py`). Its `compose.py` is part of the composition root (rule 4),
+  beside `main.py`, `platform_adapters.py` and `compose_*.py`. Its tests are
+  in `apps/day1-service/tests/integrations/<system>/`.
+
+The limits are unchanged; the moves added no baseline entry or exemption, and
+`main.py`'s ceiling went from 538 to 536.

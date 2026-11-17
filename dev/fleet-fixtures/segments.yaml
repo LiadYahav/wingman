@@ -4,8 +4,8 @@
 # `items` has the exact shape of segments-manager's answers
 # (`GET /api/segments`, and `GET /api/segments/by-segment?segment=<cidr>` for
 # one), and day1 reads it with the same parser as the real answers
-# (wingman_day1.infrastructure.segments_manager_parse.segment_record). Nothing
-# here is real: the ids, VLANs, EPG names and holders are invented.
+# (wingman_day1.integrations.segments_manager.infrastructure.parse.segment_record).
+# Nothing here is real: the ids, VLANs, EPG names and holders are invented.
 #
 # `sites` is segments-manager's `SITE_NETWORKS` keys: the fake answers
 # `GET /api/sites` with it, and `GET /api/stats` with one entry per site,

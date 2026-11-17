@@ -51,7 +51,7 @@ from wingman_day1.application.upgrades import upgrade_hints
 from wingman_day1.domain.errors import Day1Error
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.placement import Choice
-from wingman_day1.domain.segments_manager import segments_manager_links
+from wingman_day1.integrations.segments_manager.domain.links import segments_manager_links
 
 router = APIRouter(prefix="/api/day1/clusters", tags=["clusters"])
 

@@ -10,15 +10,15 @@ from wingman_day1.domain.add_server import AddServerRequest
 from wingman_day1.domain.errors import AddServerAlreadyRunningError, WorkflowsUnavailableError
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.infrastructure.fake_add_server import FakeAddServerWorkflow, HerziScript
-from wingman_day1.infrastructure.fake_fleet import (
-    FakeServerInventory,
-    default_fleet_file,
-    load_fleet,
-)
+from wingman_day1.infrastructure.fake_fleet import load_fleet
 from wingman_day1.infrastructure.fake_inventory_demo import (
     default_inventory_file,
     fake_add_server,
     load_inventory_demo,
+)
+from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+    FakeServerInventory,
+    default_fleet_file,
 )
 
 MCE = "ocp4-prod-mce-site1-a"

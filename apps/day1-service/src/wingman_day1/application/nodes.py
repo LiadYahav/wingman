@@ -49,7 +49,8 @@ from wingman_day1.domain.servers import (
     uninstall_run_ids,
 )
 from wingman_day1.domain.workflows import WorkflowRun
-from wingman_day1.ports import HubApi, ServerInventory, UninstallWorkflow
+from wingman_day1.integrations.server_scan.ports import ServerInventory
+from wingman_day1.ports import HubApi, UninstallWorkflow
 
 logger = logging.getLogger(__name__)
 

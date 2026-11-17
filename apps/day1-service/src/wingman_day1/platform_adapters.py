@@ -2,8 +2,10 @@
 
 The workflows orchestrator (provision, uninstall and upgrade, ADR-0038,
 ADR-0042, ADR-0055) and server-scan, real or none; or, with ``DAY1_FAKE_FLEET``
-(development only), their fakes from ``dev/fleet-fixtures``. segments-manager's
-is ``compose_segments``.
+(development only), their fakes from ``dev/fleet-fixtures``. server-scan's
+HTTP adapter is built by its integration's ``compose``, its fake by the
+integration's ``infrastructure/fakes/fleet.py``; segments-manager's adapter is
+its integration's ``compose`` too.
 ``main.build_adapters`` calls these; nothing else does.
 """
 
@@ -20,16 +22,11 @@ from wingman_day1.application.upgrades import UpgradeService
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_workflows import CachedUpgradeWorkflow
 from wingman_day1.infrastructure.provision_workflow import HttpProvisionWorkflow
-from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.infrastructure.upgrade_workflow import HttpUpgradeWorkflow
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
-from wingman_day1.ports import (
-    HubApi,
-    ProvisionWorkflow,
-    ServerInventory,
-    UninstallWorkflow,
-    UpgradeWorkflow,
-)
+from wingman_day1.integrations.server_scan.compose import http_inventory
+from wingman_day1.integrations.server_scan.ports import ServerInventory
+from wingman_day1.ports import HubApi, ProvisionWorkflow, UninstallWorkflow, UpgradeWorkflow
 from wingman_day1.settings import Day1Settings
 
 Close = Callable[[], Awaitable[None]]
@@ -66,72 +63,21 @@ def fleet_adapters(
     status and InfraEnvs.
     """
     if settings.day1_fake_fleet:
-        from wingman_day1.infrastructure.fake_fleet import (
-            FakeServerInventory,
-            FakeUninstallWorkflow,
-            default_fleet_file,
-            load_fleet,
-        )
+        from wingman_day1.infrastructure.fake_fleet import FakeUninstallWorkflow, load_fleet
         from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
-        from wingman_day1.infrastructure.fake_server_records import (
-            default_records_file,
-            load_records,
-        )
-        from wingman_day1.infrastructure.fake_server_scan_architecture import (
-            default_diagram_file,
-            load_diagrams,
-        )
-        from wingman_day1.infrastructure.fake_server_scan_confs import (
-            default_confs_file,
-            load_confs,
-        )
-        from wingman_day1.infrastructure.fake_server_scan_events import (
-            default_events_file,
-            load_events,
-        )
-        from wingman_day1.infrastructure.fake_server_scan_jobs import demo_jobs
-        from wingman_day1.infrastructure.fake_server_scan_rules import (
-            default_rules_file,
-            load_rules,
-        )
-        from wingman_day1.infrastructure.fake_server_scan_sites import load_site_catalog
-        from wingman_day1.infrastructure.fake_server_scan_skill import (
-            default_skill_dir,
-            load_skill,
+        from wingman_day1.integrations.server_scan.infrastructure.fakes.fleet import fleet_inventory
+        from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
+            default_fleet_file,
         )
 
         rows, runs = load_fleet(default_fleet_file())
-        fake = FakeServerInventory(
-            rows,
-            rules=load_rules(default_rules_file()),
-            sites=load_site_catalog(default_fleet_file()),
-            records=load_records(default_records_file()),
-            skill=load_skill(default_skill_dir()),
-            diagrams=load_diagrams(default_diagram_file()),
-            confs=load_confs(default_confs_file()),
-            events=load_events(default_events_file(), rows),
-            jobs=demo_jobs(clock),
-            clock=clock,
-        )
+        fake = fleet_inventory(rows, clock=clock)
         workflow = FakeUninstallWorkflow(fake, clock=clock, runs=runs)
         naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
         mce = load_fake_mce(default_mce_file(), servers=rows, naming=naming)
         workflow.after_uninstall(mce.remove_server)
         return mce, fake, workflow
-    inventory: ServerInventory | None = None
-    if settings.server_scan_url:
-        scan = HttpServerInventory(
-            base_url=settings.server_scan_url,
-            ui_url=settings.server_scan_ui_base,
-            token=settings.server_scan_token.get_secret_value(),
-            admin_token=settings.server_scan_admin_token.get_secret_value(),
-            auditor_token=settings.server_scan_auditor_token.get_secret_value(),
-            verify=settings.server_scan_tls_verify,
-            timeout_seconds=settings.server_scan_timeout_seconds,
-            metrics=metrics,
-        )
-        closers.append(scan.aclose)
-        inventory = scan
+    inventory = http_inventory(settings, metrics=metrics, closers=closers)
     uninstall: UninstallWorkflow | None = None
     if settings.workflows_api_url:
         orchestrator = HttpUninstallWorkflow(

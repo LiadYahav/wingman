@@ -3,9 +3,10 @@
 Each has an adapter in ``wingman_day1.infrastructure`` and a fake used by
 tests and by ``WINGMAN_GIT_BACKEND=fake``. GitLab itself is
 ``wingman_core.ports.gitlab.GitLabPort``; :class:`RepoReads` is the cached
-read side of one project on top of it. server-scan's port is in
-:mod:`wingman_day1.ports.server_scan` (ADR-0048) and update-nodepool's in
-:mod:`wingman_day1.ports.scale` (ADR-0062), re-exported here.
+read side of one project on top of it. update-nodepool's port is in
+:mod:`wingman_day1.ports.scale` (ADR-0062), re-exported here. server-scan's
+and segments-manager's are in their integrations' ``ports`` (ADR-0048,
+ADR-0039).
 """
 
 from __future__ import annotations
@@ -37,16 +38,13 @@ from wingman_day1.domain.machines import (
     MachineSetObservation,
 )
 from wingman_day1.domain.mce_capacity import NodeObservation
-from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.rollout import RolloutOutcome, RolloutTrigger
-from wingman_day1.domain.segments import ALL_SEGMENTS, SegmentList, SegmentQuery, SiteStats
 from wingman_day1.domain.servers import RunSummary
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 from wingman_day1.domain.upgrades import UpgradeDecision, UpgradeRequest, UpgradeRun, UpgradeTargets
 from wingman_day1.domain.workflows import ProvisionRun, WorkflowRun
 from wingman_day1.ports.scale import ScaleWorkflow as ScaleWorkflow
-from wingman_day1.ports.server_scan import ServerInventory as ServerInventory
 
 
 class RepoReads(Protocol):
@@ -453,33 +451,4 @@ class LinksFileSource(Protocol):
 
     async def read(self) -> str | None:
         """Its text; ``None`` when there is no file. Raises ``LinksFileUnreadableError``."""
-        ...
-
-
-class SegmentLedger(Protocol):
-    """segments-manager: the platform's ledger of VLAN segments (read only, ADR-0039).
-
-    Raises ``SegmentsManagerUnavailableError`` when segments-manager cannot
-    answer: the EPG is then unknown, never "none". Nothing is ever written to it.
-    """
-
-    async def segment(self, cidr: str) -> SegmentRecord | None:
-        """The segment ``cidr`` (``a.b.c.0/24``); ``None`` when segments-manager has no such one."""
-        ...
-
-    async def sites(self) -> tuple[str, ...]:
-        """Its sites (``GET /api/sites``), in its order (ADR-0047)."""
-        ...
-
-    async def stats(self) -> tuple[SiteStats, ...]:
-        """Each site's allocated and total segments, and allocated per type (``GET /api/stats``)."""
-        ...
-
-    async def segments(
-        self, query: SegmentQuery = ALL_SEGMENTS, *, fresh: bool = False
-    ) -> SegmentList:
-        """The segments ``query`` matches (``GET /api/segments``).
-
-        ``fresh`` asks segments-manager to read its database, not its 60-second cache.
-        """
         ...

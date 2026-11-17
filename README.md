@@ -70,7 +70,9 @@ wingman/
 │   │   │                          #   settings, and the segments and server-scan areas
 │   │   ├── components/            # ui, common, layout, data-table, and one folder per area:
 │   │   │                          #   overview, clusters, specs, addons, machine-configs, tuning,
-│   │   │                          #   inventory, quick-links, segments, server-scan
+│   │   │                          #   inventory, quick-links
+│   │   ├── features/              # An external system's area, one folder each: server-scan/ and
+│   │   │                          #   segments/, each with api/, types/, lib/ and components/
 │   │   ├── hooks/ lib/ stores/    # query hooks, the API client and helpers, the auth store
 │   │   ├── types/                 # day1/, day2/, one file per area, problem.ts (index.ts re-exports them)
 │   │   └── e2e/                   # Playwright: the mocked and live projects
@@ -80,13 +82,16 @@ wingman/
 │   │   │   ├── domain/            # Pure rules: names, paths, the template, cluster files
 │   │   │   ├── application/       # Use cases, over ports only
 │   │   │   ├── infrastructure/    # Adapters (the GitLab-backed repositories, day2, MCE hubs,
-│   │   │   │                      #   OpenShift OAuth, server-scan, segments-manager, the
-│   │   │   │                      #   workflows orchestrator) and their fakes
+│   │   │   │                      #   OpenShift OAuth, the workflows orchestrator) and their fakes
 │   │   │   ├── api/               # deps.py, errors.py, v1/ (the FastAPI routers)
-│   │   │   ├── ports/             # day1's own ports (server-scan's in server_scan.py)
+│   │   │   ├── ports/             # day1's own ports
+│   │   │   ├── integrations/      # One package per external system, the same layers inside:
+│   │   │   │                      #   server_scan/ and segments_manager/, each with domain/,
+│   │   │   │                      #   ports.py, application/, infrastructure/, api/, compose.py
 │   │   │   ├── settings.py        # Every variable day1 reads
-│   │   │   └── main.py            # The composition root, with platform_adapters.py and compose_*.py
-│   │   └── tests/
+│   │   │   └── main.py            # The composition root, with platform_adapters.py, compose_*.py
+│   │   │                          #   and each integration's compose.py
+│   │   └── tests/                 # unit/, api/, and integrations/<system>/
 │   │
 │   └── day2-service/              # Charts on destinations (port 8002): the same layout,
 │       └── src/wingman_day2/      #   with api/v1/dependencies.py and the render_chain oracle in tests/oracle/
@@ -701,10 +706,11 @@ A configuration a service refuses (ADR-0009) is logged at start-up, naming the v
 
 1. Backend code goes in its layer (ADR-0001): `domain/`, `application/` (use cases over the ports in
    `ports.py`, day1's `ports/`), `infrastructure/` (adapters and fakes), `api/v1/` (routers); `uv run lint-imports` holds the
-   layers. GitLab only through `GitLabPort` (ADR-0002). DEVELOPMENT.md walks through a new endpoint.
+   layers. GitLab only through `GitLabPort` (ADR-0002). An external system's code goes in day1's
+   `integrations/<system>/`, with the same layers inside. DEVELOPMENT.md walks through a new endpoint.
 2. Shared code goes in `packages/wingman-core`
-3. Frontend routes go in `app/(app)/` and stay thin; the feature they render goes in `components/<area>/`
-   (ADR-0056 says where its state and pure helpers go). Files stay within 500 lines and functions small:
+3. Frontend routes go in `app/(app)/` and stay thin; the feature they render goes in `components/<area>/`,
+   or `features/<area>/` for an external system's area (ADR-0056 says where its state and pure helpers go). Files stay within 500 lines and functions small:
    CI checks both (ADR-0056)
 4. Add API types to the section's file in `types/day1/` or `types/day2/`, or to `types/problem.ts`
    (`types/index.ts` re-exports them; import from `@/types`)

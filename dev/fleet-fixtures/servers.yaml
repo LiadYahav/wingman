@@ -2,9 +2,9 @@
 #
 # `items` has the exact shape of server-scan's `GET /api/v1/servers/rows`
 # items, and day1 reads it with the same parser as the real answer
-# (wingman_day1.infrastructure.server_scan.server_row). Nothing here is real:
-# the ids, serials and MACs are invented, and the BMC addresses are in the
-# documentation range 192.0.2.0/24.
+# (wingman_day1.integrations.server_scan.infrastructure.parse.server_row).
+# Nothing here is real: the ids, serials and MACs are invented, and the BMC
+# addresses are in the documentation range 192.0.2.0/24.
 #
 # `cluster_name` is what server-scan's nodes-status jobs write: the
 # HostedCluster (ocp4-<clusterName>, the file stem with the default

@@ -63,10 +63,14 @@ flowchart LR
 ```
 
 Only day1 talks to anything but GitLab. Each system it calls has a port, an
-adapter in `apps/day1-service/src/wingman_day1/infrastructure/` and a fake
-(ADR-0001), built in the composition root (`main.py`, `platform_adapters.py`,
-`compose_*.py`). Every platform system's switch is off by default: with all of
-them off, Wingman needs only GitLab and OpenShift OAuth.
+adapter and a fake (ADR-0001). server-scan and segments-manager, which each
+have an area of their own, are a package each under
+`apps/day1-service/src/wingman_day1/integrations/` (ADR-0001's 2026-11-17
+amendment); the other adapters are in `wingman_day1/infrastructure/`. All are
+built in the composition root (`main.py`, `platform_adapters.py`,
+`compose_*.py`, each integration's `compose.py`). Every platform system's
+switch is off by default: with all of them off, Wingman needs only GitLab and
+OpenShift OAuth.
 
 | System | Adapter | Switch | What Wingman does with it |
 |---|---|---|---|
@@ -74,8 +78,8 @@ them off, Wingman needs only GitLab and OpenShift OAuth.
 | Argo CD | none | none | Nothing: Argo CD reads the merged files and applies them. Each MCE's ApplicationSet makes one Application per cluster file in `hostedClusters/`, rendered by the hostedclusters-setup chart; day2's ApplicationSets find the team repos' folders. Quick Links only links to each Argo CD (ADR-0052). |
 | MCE hubs (Kubernetes API) | `hub_api.py` (ADR-0019), a token per hub from `MCE_TOKENS_FILE`, an address by `MCE_API_DOMAIN` or per hub (ADR-0045) | `CLUSTER_STATUS_ENABLED` | Read only: HostedClusters, NodePools and InfraEnvs (live status), each cluster's Machines and Agents (the Nodes tab, ADR-0038), the hub's nodes and pods (MCE placement, ADR-0050). |
 | OpenShift OAuth | `openshift_oauth.py` | the OpenShift OAuth settings, or dev login | Login only (below). |
-| server-scan | `server_scan*.py` (`HttpServerInventory`) | `SERVER_SCAN_URL`, with `SERVER_SCAN_TOKEN`, `SERVER_SCAN_ADMIN_TOKEN`, `SERVER_SCAN_AUDITOR_TOKEN` | Its servers on the Nodes tab (ADR-0038), placement's spare servers (ADR-0050), Inventory Management's pools (ADR-0057) and the Server Scan area for admins (ADR-0048). Two writes, from that area, with the admin token: a server's maintenance and Run job. Never `/servers/available` or a reservation: those are the workflows'. |
-| segments-manager | `segments_manager.py` | `SEGMENTS_MANAGER_URL` | Read only, its open GETs: a cluster's EPG checked against its file (ADR-0039) and the Segments area for admins (ADR-0047). |
+| server-scan | `integrations/server_scan/` (`HttpServerInventory` in `infrastructure/adapter.py`) | `SERVER_SCAN_URL`, with `SERVER_SCAN_TOKEN`, `SERVER_SCAN_ADMIN_TOKEN`, `SERVER_SCAN_AUDITOR_TOKEN` | Its servers on the Nodes tab (ADR-0038), placement's spare servers (ADR-0050), Inventory Management's pools (ADR-0057) and the Server Scan area for admins (ADR-0048). Two writes, from that area, with the admin token: a server's maintenance and Run job. Never `/servers/available` or a reservation: those are the workflows'. |
+| segments-manager | `integrations/segments_manager/` (`HttpSegmentLedger` in `infrastructure/adapter.py`) | `SEGMENTS_MANAGER_URL` | Read only, its open GETs: a cluster's EPG checked against its file (ADR-0039) and the Segments area for admins (ADR-0047). |
 | workflows orchestrator | one adapter per workflow: `workflows_api.py`, `provision_workflow.py`, `upgrade_workflow.py`, `add_server_workflow.py`, `scale_workflow.py` | `WORKFLOWS_API_URL`, plus each workflow's own switch (next table) | Starts a run and shows it in the workflow's words; never re-implements its procedure, checks or phases. The orchestrator has no auth (accepted); day1 lets only admins start a run and logs who did. |
 | cluster-navigator | none | none | Not wired. Its data on the cluster page is planned (`docs/ideas/single-pane.md`, workstream 5). |
 | herzi | none | none | No adapter: its add-server runs are in the orchestrator's run list, which Inventory Management shows (ADR-0057). |
@@ -134,12 +138,27 @@ Every package has the same layers, and each may import only the ones before it
 | infrastructure, observability | the GitLab adapter and fake, `TtlCache`, `RepoSnapshots`, session tokens; metrics, logs | `infrastructure/`: adapters, their fakes, the cached repositories | the application, the API; FastAPI |
 | web | `web/`: the app factory, auth, RFC 9457 errors (ADR-0004) | `api/`: the FastAPI routers and their dependencies | an adapter or httpx: the API gets them from the composition root |
 
-`uv run lint-imports` enforces this with the forbidden contracts in
-`pyproject.toml` (`[tool.importlinter]`), and `scripts/gate.sh python` runs it.
-Only `main.py` (and day1's `platform_adapters.py` and `compose_*.py`) builds
-adapters; day1 never imports day2. A new external system gets a port, an
-adapter and a fake; a router never calls a client. Files and functions stay
-small (ADR-0056).
+day1's external systems with an area of their own are packages under
+`wingman_day1/integrations/` (`server_scan/`, `segments_manager/`), each with
+the same layers inside: `domain/`, `ports.py`, `application/`,
+`infrastructure/` (the adapter, its parser and cache, the fakes), `api/` (the
+area's routers and schemas) and `compose.py`; their tests are in
+`tests/integrations/<system>/` (ADR-0001's 2026-11-17 amendment). Wingman's
+own features that use their data (the Nodes tab, placement, Inventory
+Management, a cluster's network check, the Overview) stay in day1's layers and
+import an integration's `domain` and `ports` only. The web's counterpart is
+`apps/web/features/<area>/` (`api/`, `types/`, `lib/`, `components/`), with
+the page routes in `app/` (ADR-0056's 2026-11-17 amendment).
+
+`uv run lint-imports` enforces this with the contracts in `pyproject.toml`
+(`[tool.importlinter]`): forbidden contracts for each layer, of day1's and of
+every integration's, and an independence contract that keeps the
+integrations from importing each other. `scripts/gate.sh python` runs it.
+Only `main.py` (and day1's `platform_adapters.py`, `compose_*.py` and each
+integration's `compose.py`) builds adapters; day1 never imports day2. A new
+external system gets `integrations/<system>/` with a port, an adapter and a
+fake; a router never calls a client. Files and functions stay small
+(ADR-0056).
 
 ## Reads
 
