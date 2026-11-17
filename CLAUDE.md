@@ -194,12 +194,20 @@ and write yours here.
   docs, `docs/architecture.md` is the overview to read first; this file was
   shortened (its CI pass is `docs/ops/ci-maintenance.md`, its status history
   is at the end of `docs/notes/session-log.md`).
-- **In progress, the owner's decision:** server-scan and segments-manager
-  each get one package in day1 (`integrations/<system>/`, ADR-0001's layers
-  inside, ADR-0001's 2026-11-17 amendment) and one folder in the web
-  (`apps/web/features/<system>/`); then a map of which upstream files each
-  Wingman file follows, a compare script for a new upstream release, and a
-  short guide per system in `docs/integrations/`.
+- **One place per mirrored system** (3.44.4 to 3.44.6, the owner's
+  decision): server-scan's and segments-manager's day1 code is in
+  `integrations/server_scan/` and `integrations/segments_manager/` (ADR-0001's
+  layers inside, enforced by import-linter; ADR-0001's 2026-11-17 amendment),
+  their web code in `apps/web/features/server-scan/` and
+  `apps/web/features/segments/` (`api`, `types`, `lib`, `components`;
+  ADR-0056's note). Checked live on the sandbox after the move.
+- **Syncing with a new upstream release:** `docs/integrations/<system>.yaml`
+  maps each Wingman file to the upstream files it follows and records the
+  version it matches (server-scan v6.1.0, segments-manager `a4edc12`);
+  `scripts/upstream_diff.py <system> [<ref>]` lists what changed upstream for
+  each; `docs/integrations/<system>.md` is the checklist. A test fails when a
+  ported file is missing from its map. Unreleased on server-scan (2026-11-17):
+  maintenance no longer counts as Available, and a server refresh write.
 
 **Next:**
 - Scale's scale-down policy per NodePool (the user): a flavor and
