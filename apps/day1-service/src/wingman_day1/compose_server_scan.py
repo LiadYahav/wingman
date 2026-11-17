@@ -1,18 +1,20 @@
 """server-scan's part of the composition root (ADR-0038, ADR-0048).
 
-``platform_adapters`` builds the adapter (real, none, or the fake fleet's);
-this puts the one cache in front of it, which the Nodes tab, placement,
-Inventory Management and the Server Scan area share, and builds the area's
-use case. Kept apart so ``main`` stays one screen of wiring per system.
+This builds the HTTP adapter (``platform_adapters`` picks it, none, or the
+fake fleet's), puts the one cache in front of it, which the Nodes tab,
+placement, Inventory Management and the Server Scan area share, and builds
+the area's use case. Kept apart so ``main`` stays one screen of wiring per system.
 ``server_scan_ui`` is where a person's browser and Claude Code find
 server-scan: the node links, and the Claude page's commands and zip.
 """
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Final
 
 from wingman_core.infrastructure.cache import TtlCache
+from wingman_core.observability.metrics import WingmanMetrics
 from wingman_day1.application.server_scan import ServerScanService
 from wingman_day1.application.server_scan_jobs import ServerScanJobs
 from wingman_day1.domain.server_scan_events import audit_detail
@@ -20,6 +22,7 @@ from wingman_day1.domain.server_scan_jobs import jobs_detail
 from wingman_day1.domain.server_scan_servers import maintenance_detail
 from wingman_day1.domain.server_scan_skill import token_line
 from wingman_day1.infrastructure.cached_server_scan import CachedServerInventory
+from wingman_day1.infrastructure.server_scan import HttpServerInventory
 from wingman_day1.ports import ServerInventory
 from wingman_day1.settings import Day1Settings
 
@@ -29,6 +32,29 @@ SKILL_TTL_SECONDS: Final = 60.0
 """The longest day1 keeps server-scan's skill: its own Claude page reads it every minute."""
 FAKE_SERVER_SCAN_UI: Final = "http://server-scan.example"
 """Where the fake fleet's server-scan is said to be when ``SERVER_SCAN_UI_URL`` is empty."""
+
+
+def http_inventory(
+    settings: Day1Settings,
+    *,
+    metrics: WingmanMetrics,
+    closers: list[Callable[[], Awaitable[None]]],
+) -> ServerInventory | None:
+    """server-scan over HTTP with its three tokens; ``None`` when ``SERVER_SCAN_URL`` is empty."""
+    if not settings.server_scan_url:
+        return None
+    scan = HttpServerInventory(
+        base_url=settings.server_scan_url,
+        ui_url=settings.server_scan_ui_base,
+        token=settings.server_scan_token.get_secret_value(),
+        admin_token=settings.server_scan_admin_token.get_secret_value(),
+        auditor_token=settings.server_scan_auditor_token.get_secret_value(),
+        verify=settings.server_scan_tls_verify,
+        timeout_seconds=settings.server_scan_timeout_seconds,
+        metrics=metrics,
+    )
+    closers.append(scan.aclose)
+    return scan
 
 
 def server_scan_ui(settings: Day1Settings) -> str:

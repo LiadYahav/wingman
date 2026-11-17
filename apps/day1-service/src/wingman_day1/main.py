@@ -69,13 +69,12 @@ from wingman_day1.application.sync import SyncService
 from wingman_day1.compose_inventory import add_server_workflow, inventory_service
 from wingman_day1.compose_quick_links import quick_links_service
 from wingman_day1.compose_scale import scale_service, scale_workflow
-from wingman_day1.compose_segments import segment_ledger, segments_service
+from wingman_day1.compose_segments import network_ledger, segment_ledger, segments_service
 from wingman_day1.compose_server_scan import cached_inventory, server_scan_service, server_scan_ui
 from wingman_day1.domain.cluster_file import WorkflowKeys
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
-from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons, HttpDay2Installs
 from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_access
@@ -357,12 +356,7 @@ def build_context(
             ),
             infraenv_namespace=settings.mce_infraenv_namespace or None,
         )
-    network = NetworkService(
-        cluster_service,
-        CachedSegmentLedger(adapters.ledger, cache, ttl=ttl)
-        if adapters.ledger is not None
-        else None,
-    )
+    network = NetworkService(cluster_service, network_ledger(adapters.ledger, cache, ttl=ttl))
     sync = SyncService(
         cluster_service,
         spec_catalog,

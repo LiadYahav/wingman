@@ -1,8 +1,9 @@
 """segments-manager's part of the composition root (ADR-0039, ADR-0047).
 
 ``main`` builds the app; this builds what segments-manager feeds: the ledger
-(real, none, or the fake fleet's) and the Segments area's use case. Kept apart
-so ``main`` stays one screen of wiring per system.
+(real, none, or the fake fleet's), its cache for a cluster's network check and
+the Segments area's use case. Kept apart so ``main`` stays one screen of
+wiring per system.
 """
 
 from __future__ import annotations
@@ -47,6 +48,15 @@ def segment_ledger(
     )
     closers.append(ledger.aclose)
     return ledger
+
+
+def network_ledger(
+    ledger: SegmentLedger | None, cache: TtlCache, *, ttl: float
+) -> SegmentLedger | None:
+    """``ledger`` behind day1's cache for a cluster's network check (ADR-0039); ``None`` without."""
+    if ledger is None:
+        return None
+    return CachedSegmentLedger(ledger, cache, ttl=ttl)
 
 
 def segments_service(
