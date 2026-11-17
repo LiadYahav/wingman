@@ -38,8 +38,28 @@ the direction (domain → ports → application → infrastructure → api):
 | `api/` | FastAPI routers (`api/v1/`), the dependencies that hand them the use cases, error mapping |
 | `settings.py` | Every environment variable the service reads (ADR-0009) |
 | `main.py` | The composition root: the only place adapters are built and wired |
+| `integrations/<system>/` (day1) | One external system: the same layers inside (`domain/`, `ports.py`, `application/`, `infrastructure/`, `api/`) and its part of the composition root, `compose.py` |
 
-A new external system gets a port, an adapter and a fake; a router never calls a client.
+A new external system gets a port, an adapter and a fake; a router never calls a client. In
+day1 it gets a package of its own, `src/wingman_day1/integrations/<system>/` (ADR-0001's
+2026-11-17 amendment), like `server_scan/` and `segments_manager/`:
+
+| In `integrations/<system>/` | What |
+|-------|------|
+| `domain/` | Its answers typed in its shapes, and its area's pure rules; names without the system's prefix (`domain/events.py`) |
+| `ports.py` | Its port: the one way day1 reads (or writes) it |
+| `application/` | Its area's use cases, if it has an area |
+| `infrastructure/` | `adapter.py` (the real one, through `infrastructure/http.py` and `observed.py`, so it is counted), `parse.py`, `cached.py`, and its fake: `fake.py`, or `fakes/` when it has several |
+| `api/` | Its area's routers and their `*_schemas.py`, listed in day1's `api/v1/routers.py` |
+| `compose.py` | Builds its adapter, its cache and its use cases (with `DAY1_FAKE_FLEET`, over its fake); `main.py` and `platform_adapters.py` call it |
+
+Its tests go in `tests/integrations/<system>/` (`api/`, `unit/<layer>/`). Wingman's own
+features that use its data stay in day1's layers and import only its `domain` and `ports`;
+`uv run lint-imports` refuses anything else, and an import between two integrations. Its
+settings go in day1's `settings.py`, its cache keys in `infrastructure/cache_keys.py`, its
+errors in `domain/errors.py` (mapped in `api/errors.py`), its use case's dependency in
+`api/deps.py`, and its fake's fixtures in `dev/fleet-fixtures/`. Its web area goes in
+`apps/web/features/<area>/` (`api/`, `types/`, `lib/`, `components/`; ADR-0056).
 
 ## Running locally
 
