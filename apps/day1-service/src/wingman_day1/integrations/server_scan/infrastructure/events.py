@@ -2,8 +2,8 @@
 
 ``GET /api/v1/events`` with the page's filters and cursor, and
 ``/api/v1/events/actors``, both with the auditor token's header, which the
-adapter passes, as a server's History (``server_scan_record``). Each answer
-is read strictly into the domain's models (``server_scan_events``): one that
+adapter passes, as a server's History (``record``). Each answer
+is read strictly into the domain's models (``domain/events.py``): one that
 does not fit is "unavailable", never a blank. A cursor server-scan refuses
 (its ``400 CURSOR_INVALID``) is the caller's mistake, not server-scan failing.
 """

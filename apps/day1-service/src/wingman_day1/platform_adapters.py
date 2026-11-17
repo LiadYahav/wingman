@@ -3,8 +3,9 @@
 The workflows orchestrator (provision, uninstall and upgrade, ADR-0038,
 ADR-0042, ADR-0055) and server-scan, real or none; or, with ``DAY1_FAKE_FLEET``
 (development only), their fakes from ``dev/fleet-fixtures``. server-scan's
-HTTP adapter is built by ``compose_server_scan``, its fake by
-``fake_server_scan_fleet``; segments-manager's is ``compose_segments``.
+HTTP adapter is built by its integration's ``compose``, its fake by the
+integration's ``infrastructure/fakes/fleet.py``; segments-manager's adapter is
+its integration's ``compose`` too.
 ``main.build_adapters`` calls these; nothing else does.
 """
 

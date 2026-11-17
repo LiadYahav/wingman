@@ -7,7 +7,7 @@ the real answer, so the fixture cannot drift from the shape. Its History is
 made up from the row (discovered, classified, installed, health, maintenance)
 plus every maintenance change made in the fake since it started, by ``dev``,
 as a server-scan with auth off records it; the fleet's audit trail joins them
-(``fake_server_scan_events``). Nothing here is real.
+(``events``). Nothing here is real.
 """
 
 from __future__ import annotations

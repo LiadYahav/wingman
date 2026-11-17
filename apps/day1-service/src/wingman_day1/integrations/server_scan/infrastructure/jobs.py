@@ -6,14 +6,14 @@ pods) and ``GET /api/v1/jobs/{cronjob}/runs/{job}/pods/{pod}/logs?tail=``
 server-scan serves its whole ``/api/v1/jobs`` router to its admin role, so
 both go with the admin token's header, which the adapter passes (none to a
 server-scan with auth off). Read strictly into the domain's models of
-server-scan's shapes (``domain/server_scan_jobs.py``): an answer that does
+server-scan's shapes (``domain/jobs.py``): an answer that does
 not fit is "unavailable", never a blank. server-scan's 404 (no such CronJob,
 Job or pod, or its feature off) is ``ServerScanJobNotFoundError``, in its
 own words.
 
 ``POST /api/v1/jobs/{cronjob}/run`` (no body) starts a real Job from the
 CronJob's template and answers it (``201``); its ``409`` (an unfinished Job)
-is ``ServerScanJobRunningError``. Sent once through ``server_scan_writes``
+is ``ServerScanJobRunningError``. Sent once through ``writes``
 (ADR-0006): unanswered, or accepted in a shape day1 cannot read, it is
 ``AmbiguousServerScanWriteError``, which says to look at the runs first.
 """

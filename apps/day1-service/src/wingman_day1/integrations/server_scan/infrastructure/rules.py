@@ -5,7 +5,7 @@
 (server-scan serves both to any authenticated caller): the enabled ones only,
 as server-scan's page asks, since a disabled rule is not something the
 deployment does. Read strictly into the domain's models of server-scan's
-shapes (``domain/server_scan_rules.py``): an answer that does not fit is
+shapes (``domain/rules.py``): an answer that does not fit is
 "unavailable", never a blank.
 """
 

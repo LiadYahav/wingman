@@ -15,7 +15,11 @@ from collections.abc import Awaitable, Callable, Mapping
 from wingman_day1.domain.errors import AmbiguousServerScanWriteError
 
 logger = logging.getLogger("wingman_day1.application.server_scan")
-"""One logger for the area's writes, whichever page sends them."""
+"""One logger for the area's writes, whichever page sends them.
+
+Named as it was before the area's code moved to ``integrations/server_scan``
+(2026-11-17), so the audit lines read the same.
+"""
 
 
 async def recorded[T](

@@ -12,7 +12,7 @@ Read only, and only GETs segments-manager serves without a token:
 Any other answer, or a malformed one, is ``SegmentsManagerUnavailableError``,
 so what segments-manager says is unknown, never "none" (ADR-0004). Nothing
 here writes to segments-manager. The answers are typed in
-``segments_manager_parse``.
+``parse``.
 """
 
 from __future__ import annotations

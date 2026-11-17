@@ -3,7 +3,7 @@
 ``GET /api/v1/confs`` with the viewer token (server-scan serves it to any
 authenticated caller): every conf, unpaged, in server-scan's natural
 ``conf_id`` order, and the ids it could not read. Read strictly into the
-domain's model of server-scan's shape (``domain/server_scan_confs.py``): an
+domain's model of server-scan's shape (``domain/confs.py``): an
 answer that does not fit is "unavailable", never a blank.
 """
 

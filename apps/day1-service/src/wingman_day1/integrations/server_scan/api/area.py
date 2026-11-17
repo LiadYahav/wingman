@@ -122,7 +122,7 @@ async def server_scan_vm_host(server_id: str, service: ServerScan, user: AdminUs
     return await service.vm_host(server_id)
 
 
-# The fields an older server-scan does not send stay out (``domain/server_scan_events.py``).
+# The fields an older server-scan does not send stay out (``domain/events.py``).
 @router.get("/servers/{server_id}/events", response_model_exclude_unset=True)
 async def server_scan_events(
     server_id: str,
@@ -135,7 +135,7 @@ async def server_scan_events(
     return await service.history(server_id, cursor=cursor, page_size=page_size)
 
 
-# The fields an older server-scan does not send stay out (``domain/server_scan_events.py``).
+# The fields an older server-scan does not send stay out (``domain/events.py``).
 @router.get("/events", response_model_exclude_unset=True)
 async def server_scan_fleet_events(
     service: ServerScan, user: AdminUser, query: Annotated[EventQuery, Depends(event_query)]

@@ -1,7 +1,7 @@
 """The Claude page's response body (docs/notes/2026-11-13-server-scan-area-api.md §12).
 
 server-scan's skill is the domain's model of its own shape
-(``domain/server_scan_skill.py``), sent as it is, so server-scan's TypeScript
+(``domain/skill.py``), sent as it is, so server-scan's TypeScript
 applies (ADR-0048, decision 18 of the single-pane plan). Two additions: where
 server-scan is for people, which its page takes from its own origin, and
 the token line Wingman's copy of the zip names.

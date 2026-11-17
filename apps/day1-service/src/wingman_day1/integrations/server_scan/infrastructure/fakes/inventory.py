@@ -2,23 +2,23 @@
 
 Tests seed it directly; ``DAY1_FAKE_FLEET=true`` (development only) seeds it
 from ``dev/fleet-fixtures/servers.yaml``, written in server-scan's own row
-shape and read by the HTTP adapter's parser (``fake_fleet.load_fleet``), and
+shape and read by the HTTP adapter's parser (day1's ``fake_fleet.load_fleet``), and
 its rules and policies (Rules & Policies) from ``rules.yaml``
-(``fake_server_scan_rules``). It raises the same domain errors as the real
+(``rules``). It raises the same domain errors as the real
 adapter. Its sites are its rows counted by server-scan's rules over a site
-catalog (``fake_server_scan_sites``, ADR-0048); its maintenance writes change
+catalog (``sites``, ADR-0048); its maintenance writes change
 the row as a server-scan with auth off does, recording ``dev`` as who. A
 server's record and History are its row and its model's hardware
-(``fake_server_records``, ADR-0048's 3.25.0 amendment); no fake server is a
+(``records``, ADR-0048's 3.25.0 amendment); no fake server is a
 VM unless the records fixture says so. Its Claude skill is a folder, read and
-zipped as server-scan does (``fake_server_scan_skill``, 3.27.0); without one
+zipped as server-scan does (``skill``, 3.27.0); without one
 it carries none. Its architecture diagrams are
-``fake_server_scan_architecture``'s (3.28.0). Its hardware catalog (the Confs
-page) is the fixture's, as loaded (``fake_server_scan_confs``, 3.29.0). Its
+``architecture``'s (3.28.0). Its hardware catalog (the Confs
+page) is the fixture's, as loaded (``confs``, 3.29.0). Its
 audit trail is every server's History and the seeded ``events``, filtered and
 paged as server-scan does, for the Events page and a server's History alike
-(``fake_server_scan_events``, 3.31.0). Its Jobs are server-scan's fake
-runner, ported (``fake_server_scan_jobs``, 3.32.0).
+(``events``, 3.31.0). Its Jobs are server-scan's fake
+runner, ported (``jobs``, 3.32.0).
 """
 
 from __future__ import annotations

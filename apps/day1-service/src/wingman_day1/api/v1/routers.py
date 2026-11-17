@@ -1,7 +1,7 @@
 """Every router of the day1 API, in the order ``main`` mounts them.
 
 A new area adds its router here, not to the composition root; the server-scan
-area and the nodepool catalogues are one entry each (``server_scan_area``,
+area and the nodepool catalogues are one entry each (``integrations/server_scan/api/routers.py``,
 ``nodepool_catalogs``).
 """
 

@@ -8,16 +8,16 @@ record, a VM's host, History with the auditor token), the Claude page
 people: ``ui_url``), the Architecture page's diagrams from server-scan's
 UI, the Confs page's hardware catalog, and the Events page's audit trail of
 the fleet (the auditor token, as History); the Jobs page is its own use
-case (``jobs``, ``server_scan_jobs``). server-scan failing is
+case (``jobs``, ``application/jobs.py``). server-scan failing is
 ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
 Its write here is a server's maintenance on and off (ADR-0048's 3.23.0
 amendment), behind the routes' admin check; the Jobs page's Run job is the
-other (``server_scan_jobs``). server-scan records the token as who did it,
+other (``application/jobs.py``). server-scan records the token as who did it,
 so each write is logged with the person's name
-(``server_scan_audit.recorded``): Wingman's record. A page that needs the
-auditor's or the admin's token is guarded by ``server_scan_guards``.
+(``audit.recorded``): Wingman's record. A page that needs the
+auditor's or the admin's token is guarded by ``guards``.
 """
 
 from __future__ import annotations
@@ -70,11 +70,11 @@ class ServerScanService:
         """Read server-scan through ``inventory``.
 
         ``maintenance_detail`` says why the maintenance writes are off here
-        (``domain.server_scan_servers.maintenance_detail``), ``history_detail``
+        (``domain.servers.maintenance_detail``), ``history_detail``
         why a server's History is and ``events_detail`` why the Events page is
-        (``domain.server_scan_events.audit_detail``); ``None``: on. ``ui_url``
+        (``domain.events.audit_detail``); ``None``: on. ``ui_url``
         is server-scan's address for people and Claude Code; ``token_line`` the
-        line its zip of the skill names (``domain.server_scan_skill.token_line``).
+        line its zip of the skill names (``domain.skill.token_line``).
         ``jobs`` is the Jobs page (none: over ``inventory``, on).
         """
         self._inventory = inventory

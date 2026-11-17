@@ -2,7 +2,7 @@
 
 ``GET /api/v1/servers/{id}`` read whole, ``/vm-host`` and ``/events``, each
 answered in server-scan's own shape and read strictly into the domain's
-models (``server_scan_record``, ``server_scan_events``): an answer that does
+models (``domain/record.py``, ``domain/events.py``): an answer that does
 not fit is "unavailable", never a blank. The record and the VM host go with
 the viewer token; History with the auditor token's header, which the
 adapter passes. ``fetch`` and ``check`` are how every server-scan read goes

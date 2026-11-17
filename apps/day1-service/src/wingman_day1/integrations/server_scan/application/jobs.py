@@ -3,13 +3,13 @@
 Read through the one ``ServerInventory``, never cached. server-scan keeps
 all of it for its admins, reads included, so it works with server-scan's
 admin token, or with no token at all (a server-scan with auth off), and is
-off with a viewer token alone (``domain.server_scan_jobs.jobs_detail``, the
+off with a viewer token alone (``domain.jobs.jobs_detail``, the
 maintenance toggle's rule): every call then raises
 ``ServerScanWritesOffError`` with the line naming the key.
 
 Run job is the area's second write. server-scan writes Wingman's token on
 the Job, never the person, so each start is logged with the person's name
-(``server_scan_audit.recorded``), as maintenance is. Never retried
+(``audit.recorded``), as maintenance is. Never retried
 (ADR-0006): server-scan has no idempotency key, and refuses a second start
 only while the first is unfinished.
 """

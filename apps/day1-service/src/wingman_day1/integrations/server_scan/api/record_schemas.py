@@ -1,8 +1,8 @@
 """A server's page's response bodies (docs/notes/2026-11-13-server-scan-area-api.md §9.4).
 
 The record, the VM host and a History page are the domain's models of
-server-scan's own shapes (``domain/server_scan_record.py``,
-``server_scan_events.py``), sent as they are, so server-scan's TypeScript
+server-scan's own shapes (``domain/record.py``,
+``events.py``), sent as they are, so server-scan's TypeScript
 applies (ADR-0048, decision 18 of the single-pane plan). The record adds
 whether the maintenance toggle and History work in this deployment.
 """

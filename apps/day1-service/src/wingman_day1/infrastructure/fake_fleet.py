@@ -1,10 +1,11 @@
 """FakeUninstallWorkflow, the orchestrator's uninstall in memory, and the fleet fixture.
 
 ``load_fleet`` reads ``dev/fleet-fixtures/servers.yaml``: the servers, in
-server-scan's row shape, that seed ``FakeServerInventory``
-(``fake_server_inventory``), and the seeded uninstall runs. Tests seed both
-fakes directly; ``DAY1_FAKE_FLEET=true`` (development only) seeds them from
-the fixture. They raise the same domain errors as the real adapters.
+server-scan's row shape, that seed ``FakeServerInventory`` (server-scan's
+integration, ``infrastructure/fakes/inventory.py``), and the seeded uninstall
+runs. Tests seed both fakes directly; ``DAY1_FAKE_FLEET=true`` (development
+only) seeds them from the fixture. They raise the same domain errors as the
+real adapters.
 
 An uninstall walks through a few sample phases on the injected clock and then
 frees the server, and its hooks remove the node from the fake MCE (which

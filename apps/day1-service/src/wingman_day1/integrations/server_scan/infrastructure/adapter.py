@@ -1,8 +1,8 @@
 """HttpServerInventory: server-scan's fleet, one server, its sites and maintenance, over httpx.
 
 Read only (ADR-0038, ADR-0048) but for a server's maintenance
-(``server_scan_writes``, ADR-0048's 3.23.0 amendment) and a Job's start
-(``server_scan_jobs``, 3.32.0), the Server Scan area's writes. Day1
+(``writes``, ADR-0048's 3.23.0 amendment) and a Job's start
+(``jobs``, 3.32.0), the Server Scan area's writes. Day1
 presents a viewer token (``Authorization: Bearer``) on every read, the
 auditor token on the audit trail only (a server's History, the Events page)
 and the admin token on the writes and the Jobs page only, or none for an
@@ -12,22 +12,22 @@ The fleet is one read, ``GET /api/v1/servers/rows`` (about 250 KB gzipped for
 unchanged fleet costs a 304 and no download. One server is
 ``GET /api/v1/servers/{id}``, read fresh for the uninstall's check. The Server
 Scan area's Sites page is ``GET /api/v1/sites``, server-scan's own counts
-(read by ``server_scan_sites``). A server's page reads the server whole,
-a VM's host and its History (``server_scan_record``, ADR-0048's 3.25.0
-amendment); the Claude page its skill and the skill's zip (``server_scan_skill``,
+(read by ``sites``). A server's page reads the server whole,
+a VM's host and its History (``record``, ADR-0048's 3.25.0
+amendment); the Claude page its skill and the skill's zip (``skill``,
 3.27.0). The Architecture page's diagrams come from server-scan's UI, not
-its API, with no token (``server_scan_architecture``, 3.28.0). The Confs page
-reads the hardware catalog (``server_scan_confs``, 3.29.0). The Jobs page
+its API, with no token (``architecture``, 3.28.0). The Confs page
+reads the hardware catalog (``confs``, 3.29.0). The Jobs page
 reads the CronJobs and a pod's log with the admin token, since server-scan
-keeps them for its admins (``server_scan_jobs``, 3.32.0).
+keeps them for its admins (``jobs``, 3.32.0).
 
 Any failure is ``ServerScanUnavailableError`` (``ServerScanDeniedError`` when
 server-scan refuses the token): nodes are then unknown, never "none"
-(ADR-0004). The answers are read by ``server_scan_parse`` (rows and one
-server) and ``server_scan_sites``. The Rules & Policies page reads the enabled
-classification rules and health policies (``server_scan_rules``, ADR-0048's
+(ADR-0004). The answers are read by ``parse`` (rows and one
+server) and ``sites``. The Rules & Policies page reads the enabled
+classification rules and health policies (``rules``, ADR-0048's
 3.30.0 amendment); the Events page the fleet's audit trail and its actors
-(``server_scan_events``, 3.31.0).
+(``events``, 3.31.0).
 """
 
 from __future__ import annotations

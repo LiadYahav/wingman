@@ -6,7 +6,7 @@ reads (team-redbull/server-scan at 92146d3), typed and in its shape, so the
 web's port of server-scan's TypeScript reads day1's answer as it is. Read
 strictly; its internals the UI never reads are left out
 (docs/notes/2026-11-13-server-scan-area-api.md §9.4). The hardware is in
-``server_scan_hardware``.
+``hardware``.
 
 Two differences from server-scan's answer: the maintenance keeps its dates
 (Wingman's dialog sets an expected end), and the reservation says whether it

@@ -7,7 +7,7 @@ own shape and server-scan's TypeScript applies as it is (decision 18 of
 ``docs/ideas/single-pane.md``). Read strictly (``SHAPE``): a value of the
 wrong type fails the read, never becomes a blank. Words server-scan picks
 (a health, a media type, a controller's kind) stay strings, so a word it adds
-later still reaches the page. ``server_scan_record`` holds the rest.
+later still reaches the page. ``record`` holds the rest.
 """
 
 from __future__ import annotations

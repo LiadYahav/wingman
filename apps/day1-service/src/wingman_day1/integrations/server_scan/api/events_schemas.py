@@ -5,7 +5,7 @@ day1 passes it on: lengths, server-scan's event-type form, a date and time
 with its zone (the browser sends UTC), the page size. A filter left out is
 not sent; an empty one is refused, so a blank box never filters on "".
 The answers are the domain's models of server-scan's shapes, sent as they
-are (``domain/server_scan_events.py``).
+are (``domain/events.py``).
 """
 
 from __future__ import annotations
