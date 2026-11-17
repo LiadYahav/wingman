@@ -1,4 +1,4 @@
-import { SitesPage } from "@/components/server-scan/sites-page";
+import { SitesPage } from "@/features/server-scan/components/sites-page";
 
 /**
  * The Server Scan area's home, server-scan's Sites page (ADR-0048,

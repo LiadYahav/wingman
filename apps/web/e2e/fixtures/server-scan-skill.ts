@@ -8,7 +8,7 @@
 import type { Page, Route } from "@playwright/test";
 import { json } from "./api-handlers";
 import { setUpServerScan } from "./server-scan";
-import type { SkillAnswer } from "../../types/server-scan-skill";
+import type { SkillAnswer } from "../../features/server-scan/types/server-scan-skill";
 
 export const SERVER_SCAN_URL = "https://server-scan.example";
 

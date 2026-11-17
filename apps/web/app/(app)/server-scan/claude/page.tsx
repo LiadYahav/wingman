@@ -1,4 +1,4 @@
-import { ClaudePage } from "@/components/server-scan/claude/claude-page";
+import { ClaudePage } from "@/features/server-scan/components/claude/claude-page";
 
 /**
  * The Server Scan area's Claude page (ADR-0048's 3.27.0 amendment,

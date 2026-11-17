@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, Copy, ExternalLink, Network } from "lucide-react";
-import { useSegmentsArea } from "@/lib/api/segments";
-import { clusterSegmentsLink } from "@/lib/segments/links";
+import { useSegmentsArea } from "@/features/segments/api/segments";
+import { clusterSegmentsLink } from "@/features/segments/lib/links";
 import { cn } from "@/lib/utils";
 import type { SegmentsManagerLinks } from "@/types";
 
@@ -80,9 +80,9 @@ function SegmentsManagerLink({ name, url, searchUrl }: { name: string; url: stri
 
 /**
  * The HostedCluster card's link to the cluster's segments, chosen by the one
- * helper (`lib/segments/links.ts`): Wingman's Segments area filtered to the
- * cluster for an admin who has it, segments-manager's UI for anyone else,
- * nothing when segments-manager is not configured.
+ * helper (`features/segments/lib/links.ts`): Wingman's Segments area
+ * filtered to the cluster for an admin who has it, segments-manager's UI for
+ * anyone else, nothing when segments-manager is not configured.
  */
 export function ClusterSegmentsLink({ name, external }: { name: string; external: SegmentsManagerLinks | null }) {
   const link = clusterSegmentsLink(name, { area: useSegmentsArea(), external });

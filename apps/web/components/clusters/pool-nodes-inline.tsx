@@ -5,9 +5,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemList } from "@/components/common/problem-list";
 import { HealthBadge, NodeStateChip } from "@/components/clusters/node-badges";
 import { NodeServerAnchor } from "@/components/clusters/node-server-link";
-import { useServerScanArea } from "@/lib/api/server-scan";
+import { useServerScanArea } from "@/features/server-scan/api/server-scan";
 import type { NodesRead } from "@/lib/nodes";
-import { nodeServerLink } from "@/lib/server-scan/server-page";
+import { nodeServerLink } from "@/features/server-scan/lib/server-page";
 import { cn } from "@/lib/utils";
 import type { NodePoolNodes, PoolNode } from "@/types";
 

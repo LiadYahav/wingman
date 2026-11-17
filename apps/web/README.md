@@ -154,6 +154,10 @@ components/
 ├── addons/             # A destination's charts (values editor, cards, bulk install), the authoring flow (sync options, dry-run plans, confirmations), and an add-on's scope panels (per-destination values, deploy on specific MCEs)
 └── specs/              # Spec-specific components
 
+features/               # An external system's area, all of it in one folder: api/ (day1 calls, keys, hooks), types/, lib/ (pure logic and its Vitest), components/
+├── segments/           # Segments, segments-manager's page (ADR-0047); its route stays in app/(app)/segments/
+└── server-scan/        # Server Scan (ADR-0048); its routes stay in app/(app)/server-scan/
+
 hooks/
 └── use-bulk-status.ts  # Live status of every listed cluster in one request
 

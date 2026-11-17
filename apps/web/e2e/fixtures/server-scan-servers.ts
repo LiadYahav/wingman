@@ -8,8 +8,8 @@
 import type { Page, Route } from "@playwright/test";
 import { json } from "./api-handlers";
 import { mockSites, setUpServerScan } from "./server-scan";
-import type { SiteStatsList } from "../../types/server-scan";
-import type { ServerRow, ServerRowsAnswer } from "../../types/server-scan-servers";
+import type { SiteStatsList } from "../../features/server-scan/types/server-scan";
+import type { ServerRow, ServerRowsAnswer } from "../../features/server-scan/types/server-scan-servers";
 
 const FREE = { held: false, holder: null, mce_cluster: null, infra_env: null, expires_at: null } as const;
 

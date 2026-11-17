@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { SegmentsPage } from "@/components/segments/segments-page";
+import { SegmentsPage } from "@/features/segments/components/segments-page";
 
 /**
  * The Segments area (ADR-0047, docs/notes/2026-11-13-segments-area-api.md):

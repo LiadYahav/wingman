@@ -9,7 +9,7 @@
 import type { Page, Route } from "@playwright/test";
 import { json } from "./api-handlers";
 import { setUpServerScan } from "./server-scan";
-import type { CronJob, JobRun, JobsOverview, PodLogs } from "../../types/server-scan-jobs";
+import type { CronJob, JobRun, JobsOverview, PodLogs } from "../../features/server-scan/types/server-scan-jobs";
 
 const HOUR = 3_600_000;
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString().replace(/\.\d+Z$/, "Z");

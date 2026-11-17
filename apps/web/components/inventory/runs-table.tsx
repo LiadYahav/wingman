@@ -6,10 +6,10 @@ import { DataTable } from "@/components/data-table/data-table";
 import { useDataTable } from "@/components/data-table/use-data-table";
 import { EmptyState } from "@/components/common/empty-state";
 import { Hint } from "@/components/common/hint";
-import { ServerLink } from "@/components/server-scan/server-link";
-import { useServerScanArea } from "@/lib/api/server-scan";
+import { ServerLink } from "@/features/server-scan/components/server-link";
+import { useServerScanArea } from "@/features/server-scan/api/server-scan";
 import { originHint, originLabel, readablePhase, runSubject, runTone, type RunTone } from "@/lib/inventory/runs";
-import { updatedAgo } from "@/lib/segments/sites";
+import { updatedAgo } from "@/features/segments/lib/sites";
 import { cn } from "@/lib/utils";
 import type { InventoryRun } from "@/types/inventory";
 

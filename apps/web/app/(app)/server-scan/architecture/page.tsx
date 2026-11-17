@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { ArchitecturePage } from "@/components/server-scan/architecture-page";
+import { ArchitecturePage } from "@/features/server-scan/components/architecture-page";
 
 /**
  * The Server Scan area's Architecture page (ADR-0048's 3.28.0 amendment,

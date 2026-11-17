@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useSegmentsArea } from "@/lib/api/segments";
-import { useServerScanArea } from "@/lib/api/server-scan";
+import { useSegmentsArea } from "@/features/segments/api/segments";
+import { useServerScanArea } from "@/features/server-scan/api/server-scan";
 import { ClustersBySiteCard } from "./clusters-by-site-card";
 import { FleetHealthCard } from "./fleet-health-card";
 import { FreeSegmentsCard } from "./free-segments-card";

@@ -4,11 +4,11 @@ import Link from "next/link";
 import { ServerCog } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
-import { useServerScanSites } from "@/lib/api/server-scan";
+import { useServerScanSites } from "@/features/server-scan/api/server-scan";
 import { fleetHealth, type HealthCount, type HealthRow } from "@/lib/overview/fleet-health";
-import { serversHref } from "@/lib/server-scan/servers-view";
+import { serversHref } from "@/features/server-scan/lib/servers-view";
 import { cn, plural } from "@/lib/utils";
-import type { HealthSeverity } from "@/types/server-scan";
+import type { HealthSeverity } from "@/features/server-scan/types/server-scan";
 import { SegmentedBar } from "./bars";
 import { OverviewCard, RowsSkeleton } from "./overview-card";
 

@@ -1,4 +1,4 @@
-import { RulesPage } from "@/components/server-scan/rules-page";
+import { RulesPage } from "@/features/server-scan/components/rules-page";
 
 /**
  * The Server Scan area's Rules & Policies page (ADR-0048's 3.30.0 amendment,

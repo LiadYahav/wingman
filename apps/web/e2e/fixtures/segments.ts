@@ -8,7 +8,7 @@
 
 import type { Page, Route } from "@playwright/test";
 import { fulfillProblem, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "./api-handlers";
-import type { Segment, SegmentList, SegmentSites, SegmentStats } from "../../types/segments";
+import type { Segment, SegmentList, SegmentSites, SegmentStats } from "../../features/segments/types/segments";
 
 export const HERZI = "ocp4-prod-herzi-site1";
 /** The fake fleet's deliberate disagreement (ADR-0039): segments-manager has VLAN 1418, the file 1410. */

@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { EventsPage } from "@/components/server-scan/events/events-page";
+import { EventsPage } from "@/features/server-scan/components/events/events-page";
 
 /**
  * The Server Scan area's Events page (ADR-0048's 3.31.0 amendment,
