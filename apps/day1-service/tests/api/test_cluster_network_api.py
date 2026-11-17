@@ -17,7 +17,7 @@ import httpx
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
-from wingman_day1.infrastructure.fake_segments import (
+from wingman_day1.integrations.segments_manager.infrastructure.fake import (
     FakeSegmentLedger,
     default_segments_file,
     load_segments,

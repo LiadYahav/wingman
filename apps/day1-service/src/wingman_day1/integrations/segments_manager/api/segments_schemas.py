@@ -11,7 +11,13 @@ from collections.abc import Sequence
 from pydantic import BaseModel
 
 from wingman_day1.domain.paths import ClusterRef
-from wingman_day1.domain.segments import Holder, Mismatch, SegmentRow, SegmentsView, SiteStats
+from wingman_day1.integrations.segments_manager.domain.segments import (
+    Holder,
+    Mismatch,
+    SegmentRow,
+    SegmentsView,
+    SiteStats,
+)
 
 
 class SitesOut(BaseModel):

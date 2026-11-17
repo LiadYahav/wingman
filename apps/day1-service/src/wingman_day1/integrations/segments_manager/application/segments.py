@@ -24,7 +24,7 @@ from typing import Final
 from wingman_core.domain.errors import GitUnavailableError, PermissionDeniedError
 from wingman_day1.application.clusters import ClusterFile, ClusterService
 from wingman_day1.domain.network import file_network
-from wingman_day1.domain.segments import (
+from wingman_day1.integrations.segments_manager.domain.segments import (
     ALL_SEGMENTS,
     SegmentQuery,
     SegmentRow,
@@ -35,7 +35,7 @@ from wingman_day1.domain.segments import (
     unlinked,
     with_mismatches,
 )
-from wingman_day1.ports import SegmentLedger
+from wingman_day1.integrations.segments_manager.ports import SegmentLedger
 
 FRESH_COOLDOWN_SECONDS: Final = 5.0
 """The shortest time between two reads of segments-manager's database, per replica."""

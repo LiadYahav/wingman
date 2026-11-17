@@ -14,9 +14,14 @@ from __future__ import annotations
 
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.domain.network import SegmentRecord
-from wingman_day1.domain.segments import ALL_SEGMENTS, SegmentList, SegmentQuery, SiteStats
 from wingman_day1.infrastructure import cache_keys as keys
-from wingman_day1.ports import SegmentLedger
+from wingman_day1.integrations.segments_manager.domain.segments import (
+    ALL_SEGMENTS,
+    SegmentList,
+    SegmentQuery,
+    SiteStats,
+)
+from wingman_day1.integrations.segments_manager.ports import SegmentLedger
 
 
 class CachedSegmentLedger:

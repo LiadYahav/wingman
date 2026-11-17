@@ -14,7 +14,7 @@ from wingman_day1.application.clusters import ClusterService
 from wingman_day1.domain.errors import SegmentsManagerUnavailableError
 from wingman_day1.domain.network import NetworkView, checked, file_network, unchecked
 from wingman_day1.domain.paths import ClusterRef
-from wingman_day1.ports import SegmentLedger
+from wingman_day1.integrations.segments_manager.ports import SegmentLedger
 
 
 class NetworkService:

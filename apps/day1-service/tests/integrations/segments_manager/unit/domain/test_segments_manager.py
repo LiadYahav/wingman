@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from wingman_day1.domain.segments_manager import SegmentsManagerLinks, segments_manager_links
+from wingman_day1.integrations.segments_manager.domain.links import (
+    SegmentsManagerLinks,
+    segments_manager_links,
+)
 
 UI = "https://segments-manager.example"
 

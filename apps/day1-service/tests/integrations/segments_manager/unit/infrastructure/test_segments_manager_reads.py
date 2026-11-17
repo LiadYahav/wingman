@@ -18,14 +18,19 @@ from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_day1.domain.errors import SegmentsManagerUnavailableError
 from wingman_day1.domain.network import SegmentRecord
-from wingman_day1.domain.segments import SEGMENT_TYPES, SegmentList, SegmentQuery, TypeCount
-from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
-from wingman_day1.infrastructure.fake_segments import (
+from wingman_day1.integrations.segments_manager.domain.segments import (
+    SEGMENT_TYPES,
+    SegmentList,
+    SegmentQuery,
+    TypeCount,
+)
+from wingman_day1.integrations.segments_manager.infrastructure.adapter import HttpSegmentLedger
+from wingman_day1.integrations.segments_manager.infrastructure.cached import CachedSegmentLedger
+from wingman_day1.integrations.segments_manager.infrastructure.fake import (
     FakeSegmentLedger,
     default_segments_file,
     load_fake_ledger,
 )
-from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 
 HC: dict[str, Any] = {
     "_id": "6720f0000000000000000999",

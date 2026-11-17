@@ -6,7 +6,7 @@ import dataclasses
 
 from wingman_day1.domain.network import FileNetwork, SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
-from wingman_day1.domain.segments import (
+from wingman_day1.integrations.segments_manager.domain.segments import (
     Holder,
     Mismatch,
     SegmentRow,

@@ -20,7 +20,7 @@ import yaml
 
 from wingman_day1.domain.errors import SegmentsManagerUnavailableError
 from wingman_day1.domain.network import ALLOCATED, SegmentRecord
-from wingman_day1.domain.segments import (
+from wingman_day1.integrations.segments_manager.domain.segments import (
     ALL_SEGMENTS,
     SEGMENT_TYPES,
     SegmentList,
@@ -28,7 +28,7 @@ from wingman_day1.domain.segments import (
     SiteStats,
     TypeCount,
 )
-from wingman_day1.infrastructure.segments_manager_parse import segment_record
+from wingman_day1.integrations.segments_manager.infrastructure.parse import segment_record
 
 SEGMENTS_FILE: Final = Path("dev/fleet-fixtures/segments.yaml")
 

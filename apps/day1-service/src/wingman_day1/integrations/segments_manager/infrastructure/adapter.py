@@ -26,10 +26,15 @@ import httpx
 from wingman_core.observability.metrics import Dependency, WingmanMetrics
 from wingman_day1.domain.errors import SegmentsManagerUnavailableError
 from wingman_day1.domain.network import SegmentRecord
-from wingman_day1.domain.segments import ALL_SEGMENTS, SegmentList, SegmentQuery, SiteStats
 from wingman_day1.infrastructure.http import JSON, json_client
 from wingman_day1.infrastructure.observed import Observer, SegmentsManagerOperation, Timer
-from wingman_day1.infrastructure.segments_manager_parse import (
+from wingman_day1.integrations.segments_manager.domain.segments import (
+    ALL_SEGMENTS,
+    SegmentList,
+    SegmentQuery,
+    SiteStats,
+)
+from wingman_day1.integrations.segments_manager.infrastructure.parse import (
     segment_list,
     segment_record,
     site_names,

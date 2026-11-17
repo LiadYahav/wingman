@@ -14,10 +14,10 @@ from typing import Final
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_day1.application.clusters import ClusterService
-from wingman_day1.application.segments import SegmentsService
-from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
-from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
-from wingman_day1.ports import SegmentLedger
+from wingman_day1.integrations.segments_manager.application.segments import SegmentsService
+from wingman_day1.integrations.segments_manager.infrastructure.adapter import HttpSegmentLedger
+from wingman_day1.integrations.segments_manager.infrastructure.cached import CachedSegmentLedger
+from wingman_day1.integrations.segments_manager.ports import SegmentLedger
 from wingman_day1.settings import Day1Settings
 
 SEGMENTS_TTL_SECONDS: Final = 10.0
@@ -32,7 +32,7 @@ def segment_ledger(
 ) -> SegmentLedger | None:
     """segments-manager, real or none; or, with the fake fleet, its fake (ADR-0039)."""
     if settings.day1_fake_fleet:
-        from wingman_day1.infrastructure.fake_segments import (
+        from wingman_day1.integrations.segments_manager.infrastructure.fake import (
             default_segments_file,
             load_fake_ledger,
         )

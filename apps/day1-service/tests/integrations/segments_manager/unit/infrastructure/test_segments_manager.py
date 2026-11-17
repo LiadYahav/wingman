@@ -15,13 +15,13 @@ from wingman_core.infrastructure.cache import TtlCache
 from wingman_core.observability.metrics import WingmanMetrics
 from wingman_day1.domain.errors import SegmentsManagerUnavailableError
 from wingman_day1.domain.network import SegmentRecord, file_network, segment_of
-from wingman_day1.infrastructure.cached_segments_manager import CachedSegmentLedger
-from wingman_day1.infrastructure.fake_segments import (
+from wingman_day1.integrations.segments_manager.infrastructure.adapter import HttpSegmentLedger
+from wingman_day1.integrations.segments_manager.infrastructure.cached import CachedSegmentLedger
+from wingman_day1.integrations.segments_manager.infrastructure.fake import (
     FakeSegmentLedger,
     default_segments_file,
     load_segments,
 )
-from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 
 SEGMENT = "10.20.90.0/24"
 # One segment exactly as segments-manager's GET /api/segments/by-segment answers it.

@@ -22,13 +22,13 @@ from wingman_day1.infrastructure.fake_add_server import FakeAddServerWorkflow
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeUninstallWorkflow
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
-from wingman_day1.infrastructure.fake_segments import FakeSegmentLedger
 from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
-from wingman_day1.infrastructure.segments_manager import HttpSegmentLedger
 from wingman_day1.infrastructure.upgrade_workflow import HttpUpgradeWorkflow
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
+from wingman_day1.integrations.segments_manager.infrastructure.adapter import HttpSegmentLedger
+from wingman_day1.integrations.segments_manager.infrastructure.fake import FakeSegmentLedger
 from wingman_day1.integrations.server_scan.infrastructure.adapter import HttpServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
 from wingman_day1.main import Adapters, build_adapters, create_app

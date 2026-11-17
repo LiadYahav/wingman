@@ -14,8 +14,12 @@ from fastapi import APIRouter, Query
 
 from wingman_core.web.auth import AdminUser
 from wingman_day1.api.deps import Segments
-from wingman_day1.api.v1.segments_schemas import SegmentsOut, SitesOut, StatsOut
-from wingman_day1.domain.segments import SegmentQuery
+from wingman_day1.integrations.segments_manager.api.segments_schemas import (
+    SegmentsOut,
+    SitesOut,
+    StatsOut,
+)
+from wingman_day1.integrations.segments_manager.domain.segments import SegmentQuery
 
 router = APIRouter(prefix="/api/day1/segments", tags=["segments"])
 

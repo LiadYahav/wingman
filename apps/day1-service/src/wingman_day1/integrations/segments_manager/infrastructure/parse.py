@@ -16,8 +16,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from wingman_day1.domain.network import SegmentRecord
-from wingman_day1.domain.segments import SegmentList, SiteStats, TypeCount
 from wingman_day1.infrastructure.http import JSON, optional_text, required_text
+from wingman_day1.integrations.segments_manager.domain.segments import (
+    SegmentList,
+    SiteStats,
+    TypeCount,
+)
 
 
 def segment_record(raw: JSON) -> SegmentRecord:

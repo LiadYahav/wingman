@@ -6,11 +6,18 @@ from types import SimpleNamespace
 from typing import Any
 
 from wingman_core.domain.errors import GitUnavailableError, PermissionDeniedError
-from wingman_day1.application.segments import FRESH_COOLDOWN_SECONDS, SegmentsService
 from wingman_day1.domain.network import SegmentRecord
 from wingman_day1.domain.paths import ClusterRef
-from wingman_day1.domain.segments import Holder, Mismatch, SegmentQuery
-from wingman_day1.infrastructure.fake_segments import FakeSegmentLedger
+from wingman_day1.integrations.segments_manager.application.segments import (
+    FRESH_COOLDOWN_SECONDS,
+    SegmentsService,
+)
+from wingman_day1.integrations.segments_manager.domain.segments import (
+    Holder,
+    Mismatch,
+    SegmentQuery,
+)
+from wingman_day1.integrations.segments_manager.infrastructure.fake import FakeSegmentLedger
 
 HERZI = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-herzi-site1")
 RECORD = SegmentRecord("10.20.44.0/24", 1418, "EPG", HERZI.name, "Allocated", "HC", "site1")
