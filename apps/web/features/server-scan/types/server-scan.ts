@@ -4,10 +4,12 @@
  * ADR-0048). Admins only; `501 FEATURE_DISABLED` when server-scan is not
  * configured.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/types/server.ts` and
  * `frontend/src/api/sites.ts`. A value server-scan adds later (a vendor, a
  * severity) still arrives: day1 keeps every key it sends.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 export type Vendor = "dell" | "cisco" | "hp" | "standalone" | "kubevirt";

@@ -1,12 +1,14 @@
 """The Claude page: server-scan's skill and its zip (ADR-0048, 3.27.0).
 
 The adapter against server-scan's answers (MockTransport), in the shape its
-``backend/app/api/v1/skill.py`` sends at 92146d3: the skill read and typed,
+``backend/app/api/v1/skill.py`` sends: the skill read and typed,
 malformed answers refused, no skill a 404 in server-scan's words, the zip
 passed on with the address asked for, the viewer token on both, the metrics.
 The cache keeps the skill for its TTL and never the zip; the fake reads and
 zips its fixture as server-scan does; the token line follows server-scan's
 rule (docs/notes/2026-11-13-server-scan-area-api.md §12).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 server-scan's ``GET /api/v1/confs`` (its ``ConfListResponse`` and ``Conf`` in
 ``backend/app/api/v1/confs_schemas.py`` and ``backend/app/domain/models/conf.py``,
-team-redbull/server-scan at 92146d3): every server configuration (spec) in
+team-redbull/server-scan): every server configuration (spec) in
 its ``confs`` collection, which another system writes, in natural
 ``conf_id`` order, unpaged, and the id of each stored document it could not
 read. The shape is that writer's, reproduced field for field by server-scan,
@@ -10,6 +10,8 @@ and here, with its defaults: the web's port of server-scan's TypeScript reads
 day1's answer as it is. Read strictly (``SHAPE``): a value of the wrong type
 fails the read, never becomes a blank. Words the writer picks (a disk type,
 ``"unknown"``) stay strings.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

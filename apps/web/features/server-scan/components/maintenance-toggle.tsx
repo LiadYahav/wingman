@@ -15,12 +15,14 @@ import type { ServerRow } from "@/features/server-scan/types/server-scan-servers
 type Switchable = Pick<ServerRow, "id" | "name" | "maintenance">;
 
 /**
- * One row's maintenance switch, as server-scan's (team-redbull/server-scan at
- * 92146d3, `frontend/src/features/inventory/MaintenanceToggle.tsx`, decision
+ * One row's maintenance switch, as server-scan's (team-redbull/server-scan,
+ * `frontend/src/features/inventory/MaintenanceToggle.tsx`, decision
  * 14): entering maintenance asks why, in its words; leaving it is one click,
  * the operators' asked-for asymmetry. Wingman adds the optional expected end
  * server-scan's API takes. Never retried: an unanswered change says so
  * (`AMBIGUOUS_WRITE`), and the row shows what server-scan has.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const EXPECTED_END_HELP =

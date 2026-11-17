@@ -1,9 +1,11 @@
 """server-scan's architecture diagrams through HttpServerInventory, the cache and the fake.
 
 server-scan's UI serves each diagram as a static page,
-``frontend/public/architecture/<slug>.html`` (archify's output, at 92146d3),
+``frontend/public/architecture/<slug>.html`` (archify's output),
 and answers any unknown path with its app's ``index.html`` and a 200 (its
 ``frontend/nginx.conf``): ADR-0048's 3.28.0 amendment.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

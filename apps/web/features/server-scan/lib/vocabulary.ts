@@ -3,11 +3,13 @@
  * the vendors and collectors, the installation types and OpenShift states,
  * the severities with their glyphs and order, the Unassigned bucket.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18):
+ * Ported from team-redbull/server-scan (decision 18):
  * `frontend/src/api/sites.ts` (vendors, collectors, Unassigned),
  * `frontend/src/components/severity.ts` (glyphs, order),
  * `frontend/src/features/inventory/InventoryPage.tsx` (the dropdowns' options)
  * and `frontend/src/components/InstallationBadge.tsx` (the state labels).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { HealthSeverity, InstallationType, OpenShiftState, Vendor } from "@/features/server-scan/types/server-scan";

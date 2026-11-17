@@ -1,6 +1,8 @@
 /**
- * server-scan's `NetworkTab.test.tsx` and `ConnectivityTab.test.tsx` cases at
- * 92146d3 (decision 18), on the pure rules the tabs render.
+ * server-scan's `NetworkTab.test.tsx` and `ConnectivityTab.test.tsx` cases
+ * (decision 18), on the pure rules the tabs render.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

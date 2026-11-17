@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
+
 import { Server } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { siteCard } from "@/features/segments/lib/sites";

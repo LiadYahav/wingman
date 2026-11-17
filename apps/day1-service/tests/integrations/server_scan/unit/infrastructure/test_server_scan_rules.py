@@ -1,9 +1,11 @@
 """server-scan's classification rules and health policies through the adapter, and the fake's.
 
 The answers are in server-scan's shapes (``ClassificationRuleListResponse``
-and ``HealthPolicyListResponse`` in ``backend/app/api/v1/`` at 92146d3;
+and ``HealthPolicyListResponse`` in ``backend/app/api/v1/``;
 ADR-0048's 3.30.0 amendment): every field on every condition node, the
 unused ones null, as server-scan dumps them.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

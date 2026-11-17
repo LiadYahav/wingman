@@ -10,13 +10,15 @@ import type { CronJob, JobRun } from "@/features/server-scan/types/server-scan-j
 
 /**
  * Run job's confirmation, as server-scan's `ConfirmRun`
- * (team-redbull/server-scan at 92146d3, `frontend/src/features/jobs/JobsPage.tsx`,
+ * (team-redbull/server-scan, `frontend/src/features/jobs/JobsPage.tsx`,
  * decision 18): its question and words, the CronJob's warning, its problem
  * in its words (409 "already has an unfinished Job", 404). It starts a real
  * collector or prune, so it is sent once per click: the submit is disabled
  * while sending, the dialog cannot be closed until the answer comes, and
  * after an unanswered start (`AMBIGUOUS_WRITE`) Run job stays off here and
  * day1's words say to look at the runs first.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 export function RunDialog({
   cronjob,

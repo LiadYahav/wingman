@@ -16,6 +16,8 @@ CronJob's template and answers it (``201``); its ``409`` (an unfinished Job)
 is ``ServerScanJobRunningError``. Sent once through ``writes``
 (ADR-0006): unanswered, or accepted in a shape day1 cannot read, it is
 ``AmbiguousServerScanWriteError``, which says to look at the runs first.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

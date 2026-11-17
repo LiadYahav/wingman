@@ -2,6 +2,8 @@
  * The Segments table's columns: segments-manager's own, with its words
  * (docs/notes/2026-11-13-segments-area-api.md §5), and how each shows a
  * segment as text, for the search, the sort and the CSV.
+ *
+ * What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
  */
 
 import type { Segment } from "@/features/segments/types/segments";

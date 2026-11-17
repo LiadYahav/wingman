@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import { useState } from "react";
 import { CopyButton } from "@/components/data-table/copy-cell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";

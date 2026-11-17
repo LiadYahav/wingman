@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import { useCallback, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { SERVERS_HREF, backHref, parseTab, type ServerTab } from "@/features/server-scan/lib/server-page";

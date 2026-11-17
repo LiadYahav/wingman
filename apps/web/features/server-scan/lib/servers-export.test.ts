@@ -1,8 +1,10 @@
 /**
  * The Servers export. The cases are server-scan's own
- * (`frontend/src/features/inventory/xlsxExport.test.ts` at 92146d3, decision
+ * (`frontend/src/features/inventory/xlsxExport.test.ts`, decision
  * 18), asked of the table both files write instead of server-scan's zip; the
  * sheet's widths and bold header are the shared export's (`lib/table/export.test.ts`).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

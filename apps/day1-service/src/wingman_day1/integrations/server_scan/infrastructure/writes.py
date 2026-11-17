@@ -11,6 +11,8 @@ way: nothing sent is "unavailable", nothing changed; sent but unanswered (a
 timeout or a connection lost after sending, a gateway's 504), or accepted in
 a shape day1 cannot read, is ``AmbiguousServerScanWriteError``, which names
 what to look at (``check_first``) before trying again.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

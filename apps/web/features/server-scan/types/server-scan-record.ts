@@ -4,13 +4,15 @@
  * server-scan's own shapes (docs/notes/2026-11-13-server-scan-area-api.md §9,
  * ADR-0048's 3.25.0 amendment). Admins only.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/types/server.ts` (`ServerDetail`,
  * `VmHostResponse`) and `frontend/src/types/events.ts`, with what v6.1.0
  * added (`collection_error`, `unreachable_detail`, an event's serial and BMC).
  * As there, `X | null` means "always sent, may be null"; `X?` is what an
  * older server-scan does not send. day1 adds the maintenance's dates,
  * `reservation.held` and whether the toggle and History work here.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { HealthSeverity, InstallationType, OpenShiftState, Vendor } from "./server-scan";

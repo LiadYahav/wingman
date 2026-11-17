@@ -6,9 +6,11 @@
  * dash, never a zero; the GPU-derived model hint for a chassis that reported
  * none; and what an unread field (`unread_fields`) shows.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/servers/HardwareTab.tsx`,
  * `drives.ts`, `frontend/src/lib/gpuModel.ts` and `frontend/src/components/Reported.tsx`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { GpuInfo, PsuInfo, StorageDrive } from "@/features/server-scan/types/server-scan-record";

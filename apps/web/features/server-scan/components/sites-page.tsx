@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import { ServerOff } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";

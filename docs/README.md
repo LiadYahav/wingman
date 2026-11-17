@@ -37,6 +37,17 @@ template for a new one.
 
 Read it before changing day1 or day2, or before calling a platform system.
 
+## integrations/: the systems Wingman mirrors
+
+| File | What it holds |
+|---|---|
+| [integrations/server-scan.md](integrations/server-scan.md) | The Server Scan area: what Wingman mirrors and never does, the server-scan version it matches, where its code lives, the checklist for a new release, known gaps |
+| [integrations/segments-manager.md](integrations/segments-manager.md) | The same for the Segments area and segments-manager |
+| `integrations/<system>.yaml` | The map: each Wingman file and the upstream files it follows, the version Wingman matches (`synced_at`), what to watch and what is not followed. `scripts/upstream_diff.py <system>` reads it to list what changed upstream since |
+
+Read it before bringing Wingman to a new release of either system, or before
+porting more of one.
+
 ## ops/: operating a deployment
 
 | File | What it holds |
@@ -83,4 +94,6 @@ read the code, the README's API Reference and the ADRs.
   DEVELOPMENT.md, the chart and web READMEs, `ops/` and `architecture.md` name
   only routes, settings, error codes and Helm keys that exist, and that the
   README lists every route and setting.
+- `tests/repo/test_integrations_map.py` checks that every file `integrations/`'s maps
+  name exists, and that a file names its map exactly when the map lists it.
 - After a change, re-read the docs it made wrong.

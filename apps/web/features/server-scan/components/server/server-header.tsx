@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { CopyButton } from "@/components/data-table/copy-cell";

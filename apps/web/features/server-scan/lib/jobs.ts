@@ -5,9 +5,11 @@
  * it has no Job, a pod's button, a manual run's words and the log's caption;
  * and why Run job is off, and its confirmation's words.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/jobs/JobsPage.tsx` (`TAIL`,
  * `LIST_POLL_MS`, `LOG_POLL_MS`, `isUnfinished` and the page's words).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { CronJob, JobPod, JobRun, JobState, JobsOverview, PodLogs } from "@/features/server-scan/types/server-scan-jobs";

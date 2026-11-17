@@ -5,9 +5,11 @@
  * amendment). server-scan keeps them for its admins, reads included, so day1
  * reads them with its admin token.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/api/jobs.ts`. `state` and `backend` keep
  * server-scan's words; a word it adds later is still a string.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 /** A Job's state, as server-scan judges it from the Job's status and conditions. */

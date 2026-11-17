@@ -6,6 +6,8 @@ that address written into ``SKILL.md``'s ``BASE_URL=`` line, passed on as it
 is once it reads as a zip. Both go with the viewer token (any caller server-scan
 resolves may read them). server-scan carrying no skill is a 404:
 ``ServerScanSkillMissingError``.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

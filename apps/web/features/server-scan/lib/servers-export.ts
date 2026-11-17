@@ -1,12 +1,14 @@
 /**
  * The Servers page's export: every row the filters keep, not only the page,
  * in the order shown, with server-scan's columns and headers
- * (team-redbull/server-scan at 92146d3, `frontend/src/features/inventory/xlsxExport.ts`,
+ * (team-redbull/server-scan, `frontend/src/features/inventory/xlsxExport.ts`,
  * decision 18). One `ExportTable` that the Excel file (Wingman's shared
  * `write-excel-file` export, in place of server-scan's own zip writer) and
  * the CSV both write, so they hold the same rows and columns. Every value
  * stays text: a serial with leading zeros or a leading `=` is never a number
  * or a formula.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { toCsv } from "@/lib/table/csv";

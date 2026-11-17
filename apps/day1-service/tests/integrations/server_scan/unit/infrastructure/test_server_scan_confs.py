@@ -1,8 +1,10 @@
 """server-scan's ``GET /api/v1/confs`` through HttpServerInventory, and the fake's catalog.
 
 The answers are in server-scan's shape (``ConfListResponse`` in
-``backend/app/api/v1/confs_schemas.py`` at 92146d3; ADR-0048's 3.29.0
+``backend/app/api/v1/confs_schemas.py``; ADR-0048's 3.29.0
 amendment); the fake's fixture is server-scan's own fake catalog.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

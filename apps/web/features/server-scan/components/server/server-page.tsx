@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ServerOff } from "lucide-react";

@@ -5,8 +5,10 @@
  * amendment). Read only: another system writes server-scan's `confs`
  * collection.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/api/confs.ts`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 // ── GET /api/day1/server-scan/confs (server-scan's GET /api/v1/confs) ─────────

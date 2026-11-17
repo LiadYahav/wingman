@@ -5,6 +5,8 @@ The rows are server-scan's ``GET /api/v1/servers/rows``, every field read
 write is a server's maintenance on and off, as server-scan's own UI does it;
 server-scan takes it only from its admin token, unless it runs with auth off
 (docs/notes/2026-11-13-server-scan-area-api.md §8).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

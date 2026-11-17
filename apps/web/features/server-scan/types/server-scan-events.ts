@@ -1,8 +1,10 @@
 /**
  * The Events page's answers and query (docs/notes/2026-11-13-server-scan-area-api.md
  * §14.4): server-scan's own shapes, as day1 sends them. A page of events is
- * History's `AuditEventPage`. Ported from team-redbull/server-scan at 92146d3,
+ * History's `AuditEventPage`. Ported from team-redbull/server-scan,
  * `frontend/src/types/events.ts` and `frontend/src/api/events.ts` (decision 18).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { Actor } from "./server-scan-record";

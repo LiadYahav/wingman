@@ -1,13 +1,15 @@
 """A server's page: its record, a VM's host and its History (ADR-0048, 3.25.0).
 
 The adapter against server-scan's answers (MockTransport), in the shape its
-``backend/app/api/v1/schemas.py`` and ``events_schemas.py`` send at 92146d3,
+``backend/app/api/v1/schemas.py`` and ``events_schemas.py`` send,
 internals included, and the collection's cause v5.3.1 added (an older answer
 without it still reads): read and typed, malformed answers refused, the viewer
 token on the record and the host, the auditor token on History only, the
 metrics. The cache reads every one through; the fake builds them from its
 fixture; the use case keeps History off without the auditor token
 (docs/notes/2026-11-13-server-scan-area-api.md §9).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

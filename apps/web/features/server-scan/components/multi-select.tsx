@@ -7,10 +7,12 @@ import { cn } from "@/lib/utils";
 
 /**
  * A filter dropdown that takes one value, several, or none (all), as
- * server-scan's (team-redbull/server-scan at 92146d3,
+ * server-scan's (team-redbull/server-scan,
  * `frontend/src/features/inventory/MultiSelect.tsx`, decision 18): a button
  * showing the choice ("All (3,104)", "Dell, HPE", "3 selected") and a
  * checklist, each option with how many servers ticking it would show.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 export interface MultiSelectOption {

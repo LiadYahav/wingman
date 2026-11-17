@@ -1,8 +1,10 @@
 /**
  * The Claude page's answer (docs/notes/2026-11-13-server-scan-area-api.md §12):
  * server-scan's `GET /api/v1/skill` in its own shape (its `frontend/src/api/skill.ts`,
- * team-redbull/server-scan at 92146d3), plus where server-scan is for people
+ * team-redbull/server-scan), plus where server-scan is for people
  * and the token line Wingman's copy of the zip names.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 /** One file of the skill: `SKILL.md`, then the references. */

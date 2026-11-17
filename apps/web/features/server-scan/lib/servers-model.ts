@@ -8,6 +8,8 @@
  * the counts are taken over too, so every number on the page says what
  * ticking it would show; its own popover lists the models of the rows every
  * other filter keeps.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { applyColumnFilters, hasColumnFilters } from "@/lib/table/column-filters";

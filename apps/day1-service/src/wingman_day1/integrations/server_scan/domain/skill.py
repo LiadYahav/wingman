@@ -1,13 +1,15 @@
 """The Claude Code skill server-scan serves, as its Claude page shows it (ADR-0048, 3.27.0).
 
 server-scan's ``GET /api/v1/skill`` (its ``SkillResponse``,
-``backend/app/api/v1/skill_schemas.py``, team-redbull/server-scan at
-92146d3), typed and in its shape, so the web's port of server-scan's page
+``backend/app/api/v1/skill_schemas.py``, team-redbull/server-scan),
+typed and in its shape, so the web's port of server-scan's page
 reads day1's answer as it is. server-scan reads the skill from its own disk
 on every call (its ADR-0052), so Wingman never keeps a copy: a copy goes
 stale the first time the skill is edited. The zip is its
 ``GET /api/v1/skill/download``, passed on as server-scan built it
 (docs/notes/2026-11-13-server-scan-area-api.md §12).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

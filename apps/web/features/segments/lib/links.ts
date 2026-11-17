@@ -3,6 +3,8 @@
  * Wingman's own page in one place (ADR-0047). Today: an admin with the
  * Segments area opens `/segments` filtered; everyone else opens
  * segments-manager's UI and its search, whose URLs day1 builds (ADR-0039).
+ *
+ * What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
  */
 
 import type { SegmentsManagerLinks } from "@/types";

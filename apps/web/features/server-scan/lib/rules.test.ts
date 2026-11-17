@@ -1,8 +1,10 @@
 /**
- * server-scan's Rules & Policies page cases at 92146d3 (`RulesPage.test.tsx`;
+ * server-scan's Rules & Policies page cases (`RulesPage.test.tsx`;
  * decision 18), on the pure functions the page renders: the rules' scope and
  * pattern words, the policies' sections and their order, and a condition as
  * one line.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

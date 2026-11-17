@@ -5,11 +5,13 @@
  * groups from general to site, the rows by severity then name; a policy's
  * condition as one line of text.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/rules/RulesPage.tsx`
  * (`scopeSummary`, `policyScopeLabel`, `policyScopeRank`, `policySections`,
  * `severityRank`, `conditionSummary`) and `MANAGER_TYPE_LABELS` of
  * `frontend/src/types/classification.ts`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { HealthSeverity } from "@/features/server-scan/types/server-scan";

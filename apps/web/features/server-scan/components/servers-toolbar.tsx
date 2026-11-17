@@ -19,9 +19,11 @@ import { MultiSelect } from "./multi-select";
 
 /**
  * The Servers page's filters, as server-scan's page has them
- * (team-redbull/server-scan at 92146d3, `InventoryPage.tsx`, decision 18):
+ * (team-redbull/server-scan, `InventoryPage.tsx`, decision 18):
  * the search, six dropdowns with their counts, five toggles, the "Filtered
  * by:" chips, and the exports. Each control changes the URL's view.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const SEARCH_HELP =

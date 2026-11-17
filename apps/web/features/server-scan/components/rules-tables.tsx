@@ -6,11 +6,13 @@ import { SeverityPill, pill } from "./server-badges";
 
 /**
  * The Rules & Policies page's tables, as server-scan's `RulesPage.tsx`
- * (team-redbull/server-scan at 92146d3, decision 18;
+ * (team-redbull/server-scan, decision 18;
  * docs/notes/2026-11-13-server-scan-area-api.md §13.1): the classification
  * rules in the order server-scan tries them, and the health policies in a
  * table per scope. Read only: no control at all. A rule's or policy's
  * description is its name's tooltip.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const RULE_COLUMNS = ["Name", "Type", "Matches", "Priority", "Scope"] as const;

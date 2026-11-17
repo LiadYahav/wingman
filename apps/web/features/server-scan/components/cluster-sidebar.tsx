@@ -7,7 +7,7 @@ import type { ClusterFacets, ClusterOption } from "@/features/server-scan/lib/ro
 
 /**
  * The MCE, hosted-cluster and UPI-cluster filter, read off the fleet itself
- * (`clusterFacets`), as server-scan's (team-redbull/server-scan at 92146d3,
+ * (`clusterFacets`), as server-scan's (team-redbull/server-scan,
  * `frontend/src/features/inventory/ClusterSidebar.tsx`, decision 18): three
  * lists of checkboxes with counts, each hidden while empty, a find box above
  * them when they hold more than 8 entries, and a way to fold it away.
@@ -15,6 +15,8 @@ import type { ClusterFacets, ClusterOption } from "@/features/server-scan/lib/ro
  * It sits inside the page, not in the area's sidebar: it is this page's
  * filter, its counts follow the page's other filters, and the area's sidebar
  * is the navigation between pages.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 type ParamKey = "mce" | "cluster";

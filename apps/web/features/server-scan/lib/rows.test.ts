@@ -1,7 +1,9 @@
 /**
  * The Servers page's pure functions. The cases are server-scan's own
- * (`frontend/src/features/inventory/rows.test.ts` at 92146d3, decision 18),
+ * (`frontend/src/features/inventory/rows.test.ts`, decision 18),
  * ported as they are: the same fleet, the same expectations.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

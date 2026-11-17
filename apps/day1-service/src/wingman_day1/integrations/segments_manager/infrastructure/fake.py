@@ -8,6 +8,8 @@ site may have no segments), else the records' sites; its statistics are
 counted from the records, every site and every type listed; its filters
 compare without case, and a type never matches an Available segment (it has
 none). It raises the same error as the real adapter.
+
+What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 """
 
 from __future__ import annotations

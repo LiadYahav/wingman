@@ -2,6 +2,8 @@
  * The exports of what the Segments table shows: its rows, in its order, its
  * visible columns with the original's headers, as one table that the CSV
  * (`lib/table/csv.ts`) and the Excel file both write.
+ *
+ * What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
  */
 
 import { toCsv } from "@/lib/table/csv";

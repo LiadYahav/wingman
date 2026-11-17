@@ -2,6 +2,8 @@
  * The Segments area: day1's typed view of segments-manager's open reads
  * (docs/notes/2026-11-13-segments-area-api.md, ADR-0047). Admins only;
  * `501 FEATURE_DISABLED` when segments-manager is not configured.
+ *
+ * What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
  */
 
 // ── GET /api/day1/segments/sites ──────────────────────────────────────────────

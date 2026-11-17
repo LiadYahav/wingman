@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Info, KeyRound } from "lucide-react";

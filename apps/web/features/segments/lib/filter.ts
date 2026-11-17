@@ -2,6 +2,8 @@
  * Which segments a view shows, and in what order. Pure: the page reads the
  * whole list once and filters here, so a tab switch is instant and the CSV
  * is exactly what is shown.
+ *
+ * What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
  */
 
 import { applyColumnFilters, type ColumnFilters } from "@/lib/table/column-filters";

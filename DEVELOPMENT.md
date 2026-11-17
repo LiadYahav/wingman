@@ -61,6 +61,15 @@ errors in `domain/errors.py` (mapped in `api/errors.py`), its use case's depende
 `api/deps.py`, and its fake's fixtures in `dev/fleet-fixtures/`. Its web area goes in
 `apps/web/features/<area>/` (`api/`, `types/`, `lib/`, `components/`; ADR-0056).
 
+A system whose code or UI Wingman ports (server-scan, segments-manager) has a guide and a map
+in `docs/integrations/`: [server-scan.md](docs/integrations/server-scan.md) and
+[segments-manager.md](docs/integrations/segments-manager.md). A file that follows an upstream
+file is an entry of `docs/integrations/<system>.yaml` and ends its header with the line that
+names it (`tests/repo/test_integrations_map.py` checks both ways); never write an upstream
+commit in a header, the map's `synced_at` is the version. `uv run python
+scripts/upstream_diff.py <system>` lists what changed upstream since, and the guide has the
+checklist that follows.
+
 ## Running locally
 
 ```bash

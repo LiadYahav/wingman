@@ -25,6 +25,8 @@
 # day1 has no file for, `dhcp: false`, Available segments that still carry the
 # `allocated_at` of their last allocation (segments-manager never clears it),
 # and one record with the legacy keys live records still have, all null.
+#
+# What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 
 sites: [site1, site2, site3]
 

@@ -8,6 +8,8 @@ cached like a record; a failure is not.
 
 A ``fresh`` read (the area's Refresh button) drops everything cached from
 segments-manager, the cluster page's segments too, and keeps what it reads.
+
+What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 """
 
 from __future__ import annotations

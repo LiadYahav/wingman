@@ -3,7 +3,7 @@
  * per site, each with its counts, as server-scan's landing page shows them.
  *
  * server-scan's own model, ported without its JSX from team-redbull/server-scan
- * at 92146d3 (decision 18): `fleetCards`, `siteCards`, the filters, the
+ * (decision 18): `fleetCards`, `siteCards`, the filters, the
  * "all healthy" rule and the vendor bars from
  * `frontend/src/features/sites/SitesOverviewPage.tsx`; the vendor labels and
  * glyphs are in `./vocabulary`.
@@ -11,6 +11,8 @@
  * Each card and count is a link to the Servers page with the filter it opens
  * in server-scan (`site_id`, `installation_type`, `openshift_state`,
  * `health_overall`, `maintenance`), in server-scan's parameter names.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { Breakdown, FleetSummary, HealthSeverity, OpenShiftState, SiteStats, SiteStatsList } from "@/features/server-scan/types/server-scan";

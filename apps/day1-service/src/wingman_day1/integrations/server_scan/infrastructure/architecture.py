@@ -7,6 +7,8 @@ reads them from server-scan's UI address (``SERVER_SCAN_UI_URL``, else
 need none, and a token is not sent where it is not needed. The page is taken
 only if it says it is a diagram (``is_diagram``): server-scan's nginx answers
 an unknown path with its app and a 200.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

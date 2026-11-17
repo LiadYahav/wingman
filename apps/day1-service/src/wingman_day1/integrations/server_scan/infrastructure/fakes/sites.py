@@ -1,7 +1,7 @@
 """The fake server-scan's sites: its rows counted by server-scan's own rules (ADR-0048).
 
 A port of ``_pivot``, ``_accumulate`` and ``_empty_*`` in
-``backend/app/api/v1/sites.py`` (team-redbull/server-scan at 92146d3), so the
+``backend/app/api/v1/sites.py`` (team-redbull/server-scan), so the
 demo's Sites cards agree with the fake fleet's servers:
 
 - every configured site, in the catalog's order, then ``unassigned``; a site
@@ -14,6 +14,8 @@ demo's Sites cards agree with the fake fleet's servers:
 
 The catalog is server-scan's ``INVENTORY_SITES`` (``code:Display Name``); the
 fake fleet's is the ``sites`` list of ``dev/fleet-fixtures/servers.yaml``.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

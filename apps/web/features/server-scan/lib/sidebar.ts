@@ -4,6 +4,8 @@
  * Servers, Confs, Events, Jobs, Rules & Policies, Claude, Architecture), and
  * only those Wingman has built, so no entry leads nowhere. A new page is one
  * entry in `PAGES`; a section shows once it has a page.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { areaById, type NavIcon, type NavSection } from "@/lib/areas";

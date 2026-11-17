@@ -2,7 +2,7 @@
 
 server-scan's ``GET /api/v1/servers/{id}`` (its ``ServerDetail``) and
 ``/vm-host``, holding the fields its UI's ``frontend/src/types/server.ts``
-reads (team-redbull/server-scan at 92146d3), typed and in its shape, so the
+reads (team-redbull/server-scan), typed and in its shape, so the
 web's port of server-scan's TypeScript reads day1's answer as it is. Read
 strictly; its internals the UI never reads are left out
 (docs/notes/2026-11-13-server-scan-area-api.md §9.4). The hardware is in
@@ -13,6 +13,8 @@ Two differences from server-scan's answer: the maintenance keeps its dates
 is ``held``, which server-scan computes for its rows only (``ReservationState``).
 A field server-scan added later (``unreachable_detail``, v5.3.1) has a
 default, so an older server-scan's record still reads.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

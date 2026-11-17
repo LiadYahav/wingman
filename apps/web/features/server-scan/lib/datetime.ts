@@ -6,8 +6,10 @@
  * (`20h`) for a chip; and a typed `DD/MM/YYYY HH:MM` read as Israel's time
  * (the Events page's custom range).
  *
- * Ported from team-redbull/server-scan at 92146d3, `frontend/src/lib/datetime.ts`
+ * Ported from team-redbull/server-scan, `frontend/src/lib/datetime.ts`
  * (decision 18 of the single-pane plan).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const DISPLAY_TIME_ZONE = "Asia/Jerusalem";

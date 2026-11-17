@@ -8,13 +8,15 @@ import { Field, Tag } from "./fields";
 import { HealthBreakdown, HostValue, LastSeen, MaintenanceValue, ModelValue, OpenShiftValue } from "./overview-values";
 
 /**
- * The Overview, as server-scan's `OverviewTab.tsx` (team-redbull/server-scan
- * at 92146d3, decision 18; docs/notes/2026-11-13-server-scan-area-api.md
+ * The Overview, as server-scan's `OverviewTab.tsx` (team-redbull/server-scan,
+ * decision 18; docs/notes/2026-11-13-server-scan-area-api.md
  * §9.1): two columns of fields, kept apart so a field only some vendors have
  * (the template, Collection) never moves the others into the other column.
  * Collection's cause, in words, sits under its badge (v5.3.1's 8c0771a).
  * It has no control: maintenance is shown read only, with a link to the
  * Servers list, where it is switched (server-scan's `0bb7dad`).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 export function OverviewTab({ record }: { record: ServerRecord }) {
   const templateLabel = profileTemplateLabel(record.source_provider);

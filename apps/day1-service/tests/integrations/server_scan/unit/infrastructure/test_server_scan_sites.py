@@ -1,8 +1,10 @@
 """server-scan's ``GET /api/v1/sites`` through HttpServerInventory, and the fake's counts.
 
-The answers are in server-scan's shape (``backend/app/api/v1/sites_schemas.py``
-at 92146d3; ADR-0048); the fake is held to server-scan's counting rules (``_pivot`` in
+The answers are in server-scan's shape (``backend/app/api/v1/sites_schemas.py``;
+ADR-0048); the fake is held to server-scan's counting rules (``_pivot`` in
 ``backend/app/api/v1/sites.py``).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

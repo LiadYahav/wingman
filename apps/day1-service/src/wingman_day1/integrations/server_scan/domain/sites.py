@@ -8,6 +8,8 @@ per OpenShift state. These mirror server-scan's models
 
 Every map keeps server-scan's keys in its order, including a vendor, severity,
 type or state it adds later: day1 never drops one.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """The fake fleet's Jobs: the Jobs page with ``DAY1_FAKE_FLEET=true`` (ADR-0048's 3.32.0 amendment).
 
-server-scan's own fake runner (team-redbull/server-scan at 92146d3,
+server-scan's own fake runner (team-redbull/server-scan,
 ``backend/app/infrastructure/jobs/fake.py``, decision 18), ported: CronJobs
 with a short history each, every run's state judged on the clock (running
 until its time is up, then succeeded or failed), and log lines that grow
@@ -9,6 +9,8 @@ as ``kubectl create job --from`` names it, and is refused (server-scan's
 409) while the CronJob has an unfinished Job. ``demo_jobs`` is the local
 demo's three CronJobs, as a deployment of server-scan's charts has them: two
 collectors (one running now) and the events prune. Nothing here is real.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

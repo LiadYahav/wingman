@@ -7,6 +7,8 @@ as server-scan's page asks, since a disabled rule is not something the
 deployment does. Read strictly into the domain's models of server-scan's
 shapes (``domain/rules.py``): an answer that does not fit is
 "unavailable", never a blank.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

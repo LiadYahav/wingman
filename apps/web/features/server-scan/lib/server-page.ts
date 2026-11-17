@@ -5,6 +5,8 @@
  * server-scan keeps the tab in component state and the Servers filters in
  * its router's state; Wingman keeps the tab in the URL and the filters in
  * the browser's session.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { areaById } from "@/lib/areas";

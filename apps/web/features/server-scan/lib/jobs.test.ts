@@ -1,7 +1,9 @@
 /**
- * server-scan's Jobs page cases at 92146d3 (`JobsPage.test.tsx`; decision
+ * server-scan's Jobs page cases (`JobsPage.test.tsx`; decision
  * 18), on the pure functions the page renders: its CronJob and Job as its
  * test makes them, and its cases where they decide a word, a poll or a log.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import { describe, expect, it } from "vitest";

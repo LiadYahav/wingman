@@ -1,13 +1,15 @@
 """The Events page: the fleet's audit trail and its actors (ADR-0048, 3.31.0).
 
 The adapter against server-scan's answers (MockTransport), in the shape its
-``backend/app/api/v1/events_schemas.py`` sends at 92146d3, and the serial and
+``backend/app/api/v1/events_schemas.py`` sends, and the serial and
 BMC v5.4.0 added (absent before, and kept absent): the filters and
 cursor sent as given, the auditor token on both reads only, a refused cursor
 or token, malformed answers, the metrics. The use case keeps Events off
 without the auditor token, as History; the fake filters and pages its trail
 (every server's History and ``events.yaml``) as server-scan does
 (docs/notes/2026-11-13-server-scan-area-api.md §14).
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

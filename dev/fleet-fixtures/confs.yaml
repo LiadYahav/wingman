@@ -5,11 +5,13 @@
 # In server-scan's own answer shape (`GET /api/v1/confs`, its
 # `ConfListResponse`), read by the same strict model as the real answer.
 # The confs are server-scan's own fake catalog, transcribed from
-# `backend/app/infrastructure/providers/fake/confs.py` (team-redbull/server-scan
-# at 92146d3, decision 18): `CONF-<n>` is a scan with no catalog entry, so
+# `backend/app/infrastructure/providers/fake/confs.py` (team-redbull/server-scan,
+# decision 18): `CONF-<n>` is a scan with no catalog entry, so
 # it has no part number (Unmapped); `CONF-34`'s memory scan failed, so its
 # RAM is all zeros. `unreadable` names one stored document server-scan
 # could not read, to show the page's notice. Nothing here is real.
+#
+# What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 items:
   - conf_id: "CONF200"
     part_number: "210-AZKL"

@@ -10,9 +10,11 @@ import type { EventActor } from "@/features/server-scan/types/server-scan-events
 
 /**
  * The Events page's four filters, in server-scan's order and words
- * (team-redbull/server-scan at 92146d3, `EventsPage.tsx` and
+ * (team-redbull/server-scan, `EventsPage.tsx` and
  * `ActorCombobox.tsx`, decision 18): Event type, Server, User, Time range,
  * and the custom range's two bounds. Each change sets one URL parameter.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 /** A dropdown's "All" / "Any time", which sets nothing. */

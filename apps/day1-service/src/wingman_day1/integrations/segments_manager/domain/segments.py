@@ -12,6 +12,8 @@ cluster, a name day1 does not have) is only a name.
 Each row also carries where segments-manager disagrees with a cluster file:
 ADR-0039's checks seen from the segment, on data day1 already holds. Git
 stays the source of truth: a mismatch is a warning, never a fix.
+
+What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
 """
 
 from __future__ import annotations

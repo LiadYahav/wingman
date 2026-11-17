@@ -4,6 +4,8 @@
  * 30-second re-read and the Refresh button are attempts, and the latest one
  * decides. A failed attempt never drops the rows: the page keeps showing the
  * last good read.
+ *
+ * What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
  */
 
 /** One refresh: when it ended, and why it failed (`null`: it succeeded). */

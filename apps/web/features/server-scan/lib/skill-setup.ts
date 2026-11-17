@@ -1,9 +1,11 @@
 /**
  * The Claude page's commands and addresses (ADR-0048's 3.27.0 amendment), in
- * server-scan's words (its `SkillPage.tsx` and `McpSection.tsx` at 92146d3).
+ * server-scan's words (its `SkillPage.tsx` and `McpSection.tsx`).
  * They name server-scan, never Wingman: Claude Code calls server-scan's API
  * itself, with the person's own token, which server-scan makes on its own
  * Claude page (`/skill`) for someone signed in to it.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 /** The placeholder the MCP command carries until the person pastes their token over it. */

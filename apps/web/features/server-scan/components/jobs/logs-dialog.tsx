@@ -9,10 +9,12 @@ const LINK = "text-sm text-muted-foreground outline-none hover:text-foreground f
 
 /**
  * A pod's log over the Jobs page, as server-scan's `LogPane`
- * (team-redbull/server-scan at 92146d3, `frontend/src/features/jobs/JobsPage.tsx`,
+ * (team-redbull/server-scan, `frontend/src/features/jobs/JobsPage.tsx`,
  * decision 18): the pod and its Job, Refresh and Close, the last 500 lines,
  * read again every 3 seconds while the Job is unfinished (`active`). Escape
  * or a click outside closes it.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 export function LogsDialog({ selected, active, onClose }: { selected: SelectedPod; active: boolean; onClose: () => void }) {
   const logs = useJobLogs(selected, active);

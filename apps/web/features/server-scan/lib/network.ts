@@ -4,9 +4,11 @@
  * in words, the BMC's address, and a Cisco server's physical fabric uplinks
  * grouped by fabric.
  *
- * Ported from team-redbull/server-scan at 92146d3 (decision 18 of the
+ * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/features/servers/NetworkTab.tsx` and
  * `ConnectivityTab.tsx`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 import type { BmcInfo, ConnectivityAttachment, NetworkInterface } from "@/features/server-scan/types/server-scan-record";

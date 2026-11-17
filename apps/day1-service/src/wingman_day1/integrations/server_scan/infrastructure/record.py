@@ -7,6 +7,8 @@ not fit is "unavailable", never a blank. The record and the VM host go with
 the viewer token; History with the auditor token's header, which the
 adapter passes. ``fetch`` and ``check`` are how every server-scan read goes
 out and is judged; ``parsed`` and ``problem_detail`` how its answer is read.
+
+What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
 
 from __future__ import annotations

@@ -9,9 +9,11 @@ import { pill, severityTone } from "../server-badges";
 
 /**
  * One audit event's parts, as server-scan's `EventTimeline.tsx`
- * (team-redbull/server-scan at 92146d3, decision 18) shows them: the type's
+ * (team-redbull/server-scan, decision 18) shows them: the type's
  * tinted pill, a status change's FROM → TO, the actor with its kind, and the
  * details a row opens. The words are `features/server-scan/lib/events.ts`.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const EVENT_TONE: Record<EventTone, string> = {

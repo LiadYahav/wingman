@@ -1,4 +1,8 @@
-/** server-scan's `frontend/src/lib/actor.test.ts` cases at 92146d3 (decision 18). */
+/**
+ * server-scan's `frontend/src/lib/actor.test.ts` cases (decision 18).
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+ */
 
 import { describe, expect, it } from "vitest";
 import { actorIdLabel, actorLabel } from "./actor";

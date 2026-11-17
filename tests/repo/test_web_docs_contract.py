@@ -21,10 +21,13 @@ These tests read the docs' source and compare what they name with the code:
 Guarded: ``README.md``, ``DEVELOPMENT.md``, ``deploy/helm/wingman/README.md``,
 ``apps/web/README.md``, ``docs/architecture.md``, ``docs/ops/*.md`` and every
 file under ``apps/web/app/(app)/docs/``. Left out on purpose: ``docs/adr/`` and
-``docs/notes/`` (history: they name what was true when they were written) and
+``docs/notes/`` (history: they name what was true when they were written),
 ``docs/upgrade/`` (a migration guide that names the removed settings on
-purpose); so are ``CLAUDE.md`` and ``docs/ecosystem/README.md``, which name the
-legacy code on purpose. Every check also asserts it found what it must find,
+purpose) and ``docs/integrations/`` (each guide names its upstream's own
+routes and settings, which Wingman does not serve; its map is held to the
+code by ``test_integrations_map.py``); so are ``CLAUDE.md`` and
+``docs/ecosystem/README.md``, which name the legacy code on purpose. Every
+check also asserts it found what it must find,
 so a parser that stops matching fails instead of passing on nothing.
 """
 

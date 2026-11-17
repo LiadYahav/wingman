@@ -2,6 +2,8 @@
  * The site cards: segments-manager's per-site counts as the original shows
  * them (allocated out of total, then the allocated count of each type above
  * zero), and when a reading is "updated … ago".
+ *
+ * What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
  */
 
 import type { SiteSegmentStats } from "@/features/segments/types/segments";

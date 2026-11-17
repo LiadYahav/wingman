@@ -1,5 +1,7 @@
 "use client";
 
+// What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+
 import { useMemo, useState } from "react";
 import { SearchX, ServerOff } from "lucide-react";
 import { toast } from "sonner";

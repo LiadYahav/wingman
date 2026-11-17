@@ -9,10 +9,12 @@ import type { Conf } from "@/features/server-scan/types/server-scan-confs";
 import { pill } from "./server-badges";
 
 /**
- * The Confs page's table, as server-scan's `ConfsPage.tsx` (team-redbull/server-scan
- * at 92146d3, decision 18; docs/notes/2026-11-13-server-scan-area-api.md
+ * The Confs page's table, as server-scan's `ConfsPage.tsx` (team-redbull/server-scan,
+ * decision 18; docs/notes/2026-11-13-server-scan-area-api.md
  * §10.1): one row per conf, its columns and words, and a row opened into the
  * full spec under it. Several rows may be open.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
 const COLUMNS = ["Conf", "Part number", "Model", "CPU", "RAM", "Storage", "GPU", "Adapters"] as const;
