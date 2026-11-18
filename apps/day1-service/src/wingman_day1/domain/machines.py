@@ -39,6 +39,29 @@ INFRA_ENV_LABEL: Final = "infraenvs.agent-install.openshift.io"
 """On an Agent: the AgentMachine that took it. A labelled Agent is not free."""
 PROVIDER_ID_PREFIX: Final = "agent://"
 
+DELETION_STEPS_V1BETA2: Final = {
+    "WaitingForPreDrainHook": "Waiting for a pre-drain hook",
+    "DrainingNode": "Draining",
+    "WaitingForVolumeDetach": "Waiting for volumes to detach",
+    "WaitingForPreTerminateHook": "Waiting for the host to return to discovery",
+    "WaitingForInfrastructureDeletion": "Waiting for its AgentMachine to be deleted",
+    "WaitingForBootstrapDeletion": "Waiting for its bootstrap data to be deleted",
+    "DeletingNode": "Deleting its Node",
+    "DeletionCompleted": "Deleted",
+}
+"""CAPI's v1beta2 ``Deleting`` reasons (4.19+ hosted clusters), in words."""
+DELETION_STEPS_V1BETA1: Final = (
+    ("PreDrainDeleteHookSucceeded", "Waiting for a pre-drain hook"),
+    ("DrainingSucceeded", "Draining"),
+    ("VolumeDetachSucceeded", "Waiting for volumes to detach"),
+    ("PreTerminateDeleteHookSucceeded", "Waiting for the host to return to discovery"),
+)
+"""CAPI's v1beta1 deletion conditions, in the order a deletion meets them.
+
+The last is the Agent provider's hook: it holds the Machine until its host
+reboots into discovery.
+"""
+
 
 def condition(conditions: tuple[Condition, ...], kind: str) -> Condition | None:
     """The condition of type ``kind``, if reported."""
