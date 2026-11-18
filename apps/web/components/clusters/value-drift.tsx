@@ -1,4 +1,6 @@
 import { Lock, RotateCw, TriangleAlert } from "lucide-react";
+import { MirrorEntryList } from "@/components/image-mirrors/mirror-entries";
+import { asMirrorEntries, mirrorEntryText } from "@/lib/image-mirrors";
 import { NETWORK_CONFIG } from "@/lib/machine-configs";
 import { TUNING_RULE } from "@/lib/tuning-profiles";
 import { cn } from "@/lib/utils";
@@ -59,6 +61,10 @@ function ConfigChips({ names, marked, mark }: { names: string[]; marked: string[
 }
 
 function Value({ value, marked, mark, tuning }: { value: unknown; marked: string[]; mark: "added" | "removed"; tuning: boolean }) {
+  // Image mirrors (ADR-0063): each entry as `source → mirrors`, not JSON
+  if (Array.isArray(value) && value.length > 0 && value.every((entry) => mirrorEntryText(entry) !== null)) {
+    return <MirrorEntryList entries={asMirrorEntries(value)} />;
+  }
   // One tuning profile is a string in the file (ADR-0061): still a list of names
   const names = configNames(tuning && typeof value === "string" ? [value] : value);
   if (names) return <ConfigChips names={names} marked={marked} mark={mark} />;

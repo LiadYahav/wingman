@@ -134,3 +134,9 @@ inputs itself, and for a template that reads them but writes them wrong.
   template's schema) and `test_locks.py` (the lockable table).
 - With a hostedclusters-setup chart, `WINGMAN_TEST_CHART_DIR` runs
   `tests/api/test_fixture_template_contract.py` through `helm template`.
+- `apps/web/lib/image-mirrors.test.ts` (the editor's copy of the rules and
+  the summaries) and `apps/web/e2e/tests/flavor-mirrors.spec.ts` (the
+  editor's group, preset and locked, the saved document, day1's problems
+  at the group; the Overview's row and note; the create form sending a
+  preset and a JSON boolean, showing a locked value read-only), with
+  drift's reading in `flavor-sync.spec.ts`.

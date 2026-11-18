@@ -44,6 +44,8 @@ import { ConfigListEditor } from "@/components/machine-configs/config-list-edito
 import { asEntries, NETWORK_CONFIG, useMachineConfigs } from "@/lib/machine-configs";
 import { isTuningPath, tuningNames } from "@/lib/tuning-profiles";
 import { TuningProfilesPicker } from "@/components/tuning/tuning-profiles-picker";
+import { mirrorCreateInput } from "@/components/image-mirrors/mirror-create-input";
+import { isMirrorInput } from "@/lib/image-mirrors";
 import {
   CONFIGS, NODEPOOLS, fieldPaths, flavorLocks, flavorProblems, formEntries, isConfigsPath, lookup, newNodepool,
   ownerProblems, OWNER_INPUTS, placeProblems, presetPaths, requestVariables, ruleLockLabels, seedCreateForm,
@@ -88,7 +90,7 @@ function isEmptyValue(value: unknown): boolean {
 /**
  * Every required input left empty, at any depth (`nodepools[1].infra_env`).
  * Not a locked value (the flavor's, which the person cannot change) nor a
- * config list's entries (the picker checks those, `flavorProblems`).
+ * config list's or the image mirrors' entries (`flavorProblems` checks those).
  */
 function missingRequired(
   schema: TemplateField[], values: Record<string, unknown>, locked: ReadonlyMap<string, unknown>, prefix = ""
@@ -97,7 +99,7 @@ function missingRequired(
   for (const field of schema) {
     const path = prefix ? `${prefix}.${field.name}` : field.name;
     const value = values[field.name];
-    if (locked.has(path) || isConfigsPath(path)) continue;
+    if (locked.has(path) || isConfigsPath(path) || isMirrorInput(path)) continue;
     if (field.type === "list" && field.fields?.length) {
       const items = Array.isArray(value) ? value : [];
       if (field.required && items.length === 0) missing.push(path);
@@ -769,6 +771,7 @@ export default function NewClusterPage() {
     if (isTuningPath(path)) {
       return <TuningProfilesPicker names={tuningNames(value)} onChange={onChange} readOnly={locks.tuning !== null || locked} label={`Nodepool ${index + 1} tuning profiles`} testId={`nodepool-${index}-tuning`} />;
     }
+    if (isMirrorInput(path)) return mirrorCreateInput({ field, path, value, onChange, locked }, formValues);
     if (!isConfigsPath(path)) return undefined;
     return (
       <ConfigListEditor

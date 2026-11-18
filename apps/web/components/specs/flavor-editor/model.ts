@@ -5,8 +5,8 @@
  * docs/notes/2026-11-08-flavors-v2-api-changes.md (§2-§6, §9); the decisions
  * are ADR-0026 (a lock is a fixed value), ADR-0027 (machine configs and the
  * nodepool defaults), ADR-0028 (owners are numbers), ADR-0029 (the configs
- * rule) and ADR-0061 (tuning profiles, `tuning-model.ts`). Day1 is the
- * authority: these checks only answer sooner.
+ * rule), ADR-0061 (tuning profiles, `tuning-model.ts`) and ADR-0063 (image
+ * mirrors, `lib/image-mirrors.ts`). Day1 is the authority: these checks only answer sooner.
  *
  * Every value lives in `spec.day1.values` (presets and locked values alike);
  * a path in `locked_paths` makes its value fixed. The draft keeps `values`
@@ -23,10 +23,11 @@ import {
   withHardware,
 } from "@/lib/machine-configs";
 import { specDocument } from "@/lib/specs";
-import { problemSubject } from "./problem-routing";
+import { MIRROR_INPUTS, isMirrorInput, mirrorLabel, mirrorValueText } from "@/lib/image-mirrors";
 import { isMapping, sameValues, type Values } from "@/lib/values";
 import { TUNING, TUNING_RULE, showTuning, tuningNames } from "@/lib/tuning-profiles";
 import type { ClusterSpec, ConfigEntry, MachineConfigs, SpecAddon, TemplateField } from "@/types";
+import { problemSubject } from "./problem-routing";
 
 // ── What can be locked (§6, §9) ─────────────────────────────────────────────
 
@@ -42,7 +43,7 @@ export const CONFIGS_RULE = "nodepools[*].configs";
 
 export type NodepoolKey = "replicas" | "configs" | "node_labels";
 const NODEPOOL_LOCKABLE: readonly NodepoolKey[] = ["replicas", "configs", "node_labels"];
-const TOP_LOCKABLE: readonly string[] = [...OWNERS.map((o) => o.path), PLATFORM];
+const TOP_LOCKABLE: readonly string[] = [...OWNERS.map((o) => o.path), PLATFORM, ...MIRROR_INPUTS];
 const POSITIONAL = /^nodepools\[(0|[1-9]\d{0,2})\]\.(replicas|configs|node_labels)$/;
 const POSITIONAL_CONFIGS = /^nodepools\[(0|[1-9]\d{0,2})\]\.configs$/;
 
@@ -579,6 +580,7 @@ export interface ValueLine {
 export function pathLabel(path: string): string {
   if (path === CONFIGS_RULE) return "Every nodepool · Machine configs";
   if (path === TUNING_RULE) return "Every nodepool · Tuning profiles";
+  if (isMirrorInput(path)) return mirrorLabel(path);
   const owner = OWNERS.find((o) => o.path === path);
   if (owner) return `Owner · ${owner.label}`;
   const pool = /^nodepools\[(\d+)\]\.(.+)$/.exec(path);
@@ -619,7 +621,7 @@ export function valueLines(draft: FlavorDraft): { locked: ValueLine[]; presets: 
   const rule = configsMode(draft) === "rule";
   for (const [key, value] of Object.entries(draft.values)) {
     if (key === "nodepools" || value === undefined) continue;
-    put(key, value);
+    put(key, isMirrorInput(key) ? mirrorValueText(key, value) : value);
   }
   if (rule) {
     locked.push({

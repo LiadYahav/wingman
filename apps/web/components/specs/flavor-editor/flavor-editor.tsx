@@ -15,6 +15,7 @@ import { configProblems } from "@/components/machine-configs/config-list-editor"
 import { asNewFile, computeLineDiff } from "@/lib/diff";
 import { defaultConfigs, useMachineConfigs } from "@/lib/machine-configs";
 import { useTuningProfiles } from "@/lib/tuning-profiles";
+import { MIRROR_INPUTS, mirrorIssues } from "@/lib/image-mirrors";
 import { toastMrOpened } from "@/lib/mr-toast";
 import { editVersionProblem, specNameProblem, specVersionProblem } from "@/lib/specs";
 import { cn } from "@/lib/utils";
@@ -51,7 +52,7 @@ import { SaveProblems } from "./save-problems";
 import { tuningFields, tuningIssues } from "./tuning-model";
 
 const SECTIONS = [
-  { id: "basics", title: "Basics", description: "What the flavor is, and the owner and platform of its clusters." },
+  { id: "basics", title: "Basics", description: "What the flavor is, and the owner, platform and image mirrors of its clusters." },
   { id: "nodepools", title: "Nodepools", description: "The nodepools a cluster starts with, their machine configs and tuning profiles." },
   { id: "addons", title: "Add-ons", description: "The day2 charts every cluster of the flavor gets, in install order." },
   { id: "review", title: "Review", description: "What every cluster gets, the flavor file, and the cluster file it gives." },
@@ -170,6 +171,7 @@ export function FlavorEditor({
         version: spec ? (v) => editVersionProblem(v, spec.metadata.version) : specVersionProblem,
       }),
       ...tuningIssues(draft, tuning),
+      ...mirrorIssues(draft.values),
     ],
     [draft, catalog, tuning, isNew, spec]
   );
@@ -196,7 +198,7 @@ export function FlavorEditor({
 
   // Day1's 422 problems, each at its field (§1: every problem starts with its path)
   const fields = useMemo(() => {
-    const list = ["metadata.version", "metadata.description", ...OWNERS.map((o) => o.path), PLATFORM, ...otherTop.map((i) => i.name)];
+    const list = ["metadata.version", "metadata.description", ...OWNERS.map((o) => o.path), PLATFORM, ...MIRROR_INPUTS, ...otherTop.map((i) => i.name)];
     if (isNew) list.push("metadata.name");
     list.push(...(configsMode(draft) === "rule" ? [CONFIGS_RULE] : []), ...tuningFields(draft));
     for (let i = 0; i < nodepoolCount(draft); i++) {
