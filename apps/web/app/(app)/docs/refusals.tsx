@@ -18,7 +18,7 @@ const REFUSALS = [
   {
     code: "422 VALIDATION_ERROR",
     see: "A red box headed “… fix the following” (or “The change was refused”) listing every problem",
-    why: "The change breaks one or more rules: the naming convention, an automation-owned key, an unconfirmed emergency pin, a lint error the change would add. All of them are listed at once.",
+    why: "The change breaks one or more rules: the naming convention, an automation-owned key, an InfraEnv change that would replace a NodePool and every node, an unconfirmed emergency pin, a lint error the change would add. All of them are listed at once.",
     fix: "Fix every listed problem, then submit again.",
   },
   {

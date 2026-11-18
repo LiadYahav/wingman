@@ -9,15 +9,19 @@ export interface PlacementCheck {
   detail: string;
 }
 
-/** What the new cluster needs of one node type (an InfraEnv): its nodepools' replicas, summed. */
+/** What the new cluster needs of one node type (an InfraEnv, or several): its nodepools' replicas, summed. */
 export interface PlacementNeed {
+  /** One InfraEnv, or several joined by " + " for nodepools that draw from them (ADR-0064). */
   infra_env: string;
+  infra_envs?: string[];
   replicas: number;
 }
 
 /** One node type's part of a candidate's `servers` check. */
 export interface PlacementNodeType {
+  /** One InfraEnv, or several joined by " + ": node types that share one are a single row, no server counted twice. */
   infra_env: string;
+  infra_envs?: string[];
   needed: number;
   /** `null` when the MCE's Agents could not be read. */
   free_agents: number | null;

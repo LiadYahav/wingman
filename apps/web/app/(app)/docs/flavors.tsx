@@ -51,7 +51,9 @@ export function FlavorsSection() {
           the generic template (<InlineCode>nm-conf-template.bu</InlineCode>, for any hardware, written as plain{" "}
           <InlineCode>nm-conf</InlineCode>). Replicas and node labels are preset or locked per nodepool.
           <strong> Tuning profiles</strong> come from <InlineCode>tuning/</InlineCode> in the day1 repo (see Tuning
-          profiles below); locking them locks the same profiles on every nodepool.
+          profiles below); locking them locks the same profiles on every nodepool. Where your operator turns it
+          on, <strong>Other inputs</strong> has <strong>Also draws from</strong>: InfraEnvs a nodepool may take
+          nodes from beside its own, as a preset each cluster may change.
         </Step>
         <Step n={3} title="Add-ons">
           Pick charts from the catalog and put them in order. The gear opens{" "}

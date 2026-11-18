@@ -588,10 +588,10 @@ export function pathLabel(path: string): string {
   return inputLabel(path);
 }
 
+const INPUT_LABELS: Record<string, string> = { configs: "Machine configs", [TUNING]: "Tuning profiles", additional_infra_envs: "Also draws from" };
 /** `node_labels` → `Node labels`. */
 export function inputLabel(name: string): string {
-  if (name === "configs") return "Machine configs";
-  if (name === TUNING) return "Tuning profiles";
+  if (name in INPUT_LABELS) return INPUT_LABELS[name];
   const words = name.replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }

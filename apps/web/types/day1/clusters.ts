@@ -54,6 +54,8 @@ export interface ClusterStatus {
 export interface NodePoolValues {
   name: string | null;
   infra_env_name: string | null;
+  /** `additionalInfraEnvNames`: the InfraEnvs it also draws from (ADR-0064); its name still comes from `infra_env_name`. */
+  additional_infra_env_names?: string[];
   replicas: number | null;
   allow_deletion: unknown;
   configs: string[];

@@ -46,6 +46,7 @@ import { isTuningPath, tuningNames } from "@/lib/tuning-profiles";
 import { TuningProfilesPicker } from "@/components/tuning/tuning-profiles-picker";
 import { mirrorCreateInput } from "@/components/image-mirrors/mirror-create-input";
 import { isMirrorInput } from "@/lib/image-mirrors";
+import { infraEnvsCreateInput } from "@/components/clusters/infra-envs-create-input";
 import {
   CONFIGS, NODEPOOLS, fieldPaths, flavorLocks, flavorProblems, formEntries, isConfigsPath, lookup, newNodepool,
   ownerProblems, OWNER_INPUTS, placeProblems, presetPaths, requestVariables, ruleLockLabels, seedCreateForm,
@@ -766,6 +767,8 @@ export default function NewClusterPage() {
       return <TuningProfilesPicker names={tuningNames(value)} onChange={onChange} readOnly={locks.tuning !== null || locked} label={`Nodepool ${index + 1} tuning profiles`} testId={`nodepool-${index}-tuning`} />;
     }
     if (isMirrorInput(path)) return mirrorCreateInput({ field, path, value, onChange, locked }, formValues);
+    const drawsFrom = infraEnvsCreateInput({ field, path, value, onChange, locked }, formValues, infraEnvs, infraEnvsLoading);
+    if (drawsFrom !== undefined) return drawsFrom;
     if (!isConfigsPath(path)) return undefined;
     return (
       <ConfigListEditor

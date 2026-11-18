@@ -27,6 +27,7 @@ import { UpgradeAction } from "@/components/clusters/upgrade/upgrade-action";
 import { UpgradePanel } from "@/components/clusters/upgrade/upgrade-panel";
 import { ClusterInfoCard, HostedClusterCard, NodePoolsCard, SpecCard } from "@/components/clusters/cluster-facts";
 import { FileProblems, NamingNotice } from "@/components/clusters/cluster-notices";
+import { ClusterFileEditor } from "@/components/clusters/cluster-file-editor";
 import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
 import { day2Api, day2Keys } from "@/lib/day2";
@@ -370,13 +371,7 @@ function ClusterDetailContent() {
                   {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}
                 </div>
               ) : isEditing ? (
-                <textarea
-                  aria-label="Cluster file"
-                  className="w-full font-mono text-xs bg-zinc-950 text-zinc-200 p-4 min-h-[500px] focus:outline-none resize-y leading-5 rounded-md"
-                  value={editYaml}
-                  onChange={(e) => setEditYaml(e.target.value)}
-                  spellCheck={false}
-                />
+                <ClusterFileEditor value={editYaml} onChange={setEditYaml} mce={mce} />
               ) : (
                 <pre className="overflow-auto p-4 text-xs font-mono bg-zinc-950 text-zinc-200 rounded-md leading-5 max-h-[600px]">
                   {cluster?.yaml}

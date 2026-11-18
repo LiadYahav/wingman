@@ -179,8 +179,19 @@ type PoolRow =
 function infraEnvOf(pool: NodePoolNodes): string | null {
   const selector = pool.agent_selector;
   if (!selector) return null;
-  const match = /infraenvs\.agent-install\.openshift\.io=([^,\s]+)/.exec(selector);
-  return match ? match[1] : null;
+  // One InfraEnv's label, or a NodePool that draws from several (ADR-0064): `... in (a, b)`
+  const match = /infraenvs\.agent-install\.openshift\.io(?:=([^,\s]+)| in \(([^)]+)\))/.exec(selector);
+  return match ? (match[1] ?? match[2]) : null;
+}
+
+/** The InfraEnvs a file's nodepool also draws from (ADR-0064); nothing when it draws from its own only. */
+function AlsoDrawsFromLine({ names, testId }: { names: string[] | undefined; testId: string }) {
+  if (!names || names.length === 0) return null;
+  return (
+    <p className="text-[11px] text-muted-foreground break-words" data-testid={testId} title="A new node takes the first free Agent of any of them">
+      also draws from <span className="font-mono">{names.join(", ")}</span>
+    </p>
+  );
 }
 
 /**
@@ -292,6 +303,7 @@ export function NodePoolsCard({ values, nodes }: { values: ClusterValues; nodes?
                                   </span>
                                 )}
                               </div>
+                              {row.kind === "file" && <AlsoDrawsFromLine names={row.np.additional_infra_env_names} testId={`${testId}-infra-envs`} />}
                               {poolName && (
                                 <p className="font-mono text-[11px] text-muted-foreground break-words xl:whitespace-nowrap" title="The NodePool's name on the MCE">
                                   {poolName}

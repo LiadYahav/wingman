@@ -157,7 +157,19 @@ What else reads a nodepool's InfraEnv:
      it could take; NodePools that share an InfraEnv may list the same free
      Agent, which either could claim. Nothing sums them.
 
-8. **Unchanged**:
+8. **The web** reads the template schema as the switch: when day1 offers
+   the input, a nodepool shows **Also draws from**. It sits under its own
+   InfraEnv, which the note says names the NodePool:
+   - On the create form the others are picked from the MCE's InfraEnvs, the
+     list the single picker offers, or typed without live status.
+   - In the flavor editor they are a typed preset.
+   - In Edit cluster, **InfraEnvs per nodepool** sits above the YAML. It edits
+     only the list, in the file's text, every other line kept, as the
+     template writes it. It never changes a nodepool's own InfraEnv, and
+     shows a Replace NodePool's InfraEnvs read only.
+   - The cluster page names the others under each nodepool.
+
+9. **Unchanged**:
    - A flavor's nodepool ratio (ADR-0040) sizes nodepools, not InfraEnvs.
    - Drift compares locked values only.
    - Scale (ADR-0062) names one NodePool, by the chart's rule (`name`, else
@@ -220,5 +232,8 @@ What else reads a nodepool's InfraEnv:
   files fallback) and `tests/unit/domain/test_cluster_text.py` (a sync keeps
   the list).
 - `tests/repo/test_chart_env_contract.py`: the chart value.
+- `apps/web/lib/infra-envs.test.ts` (the file text edit) and
+  `apps/web/e2e/tests/nodepool-infra-envs.spec.ts` (the create form, the
+  flavor editor, Edit cluster and the cluster page, on and off).
 - The chart draft's `tests/test_nodepool_infra_envs.py`, and a `helm
   template` of a two-InfraEnv nodepool.
