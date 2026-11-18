@@ -137,6 +137,14 @@ day1:
   # Off, Wingman never writes the key; a file that has it is read and kept as it is.
   multiInfraEnvNodepools:
     enabled: false
+  # Fetch now in the Server Scan area (ADR-0048's 2026-11-18 amendment): an
+  # admin reads one server from its vendor manager now, on its page and on
+  # every Servers row. Needs server-scan v6.5.0 or later (its POST
+  # /servers/{id}/refresh) and its admin token (serverScan.tokenSecret.adminKey,
+  # as maintenance), and serverScan.url. Off, no button is shown and day1's
+  # route answers 501.
+  serverScanRefresh:
+    enabled: false
 day2:
   cacheTtlSeconds: 15     # GitLab reads, per replica (ADR-0011; at most 60)
 

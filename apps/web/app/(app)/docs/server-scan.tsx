@@ -13,7 +13,7 @@ const PAGES = [
   },
   {
     title: "A server's page",
-    desc: "Opened from a name on Servers, in Inventory Management or on a cluster's Nodes tab. Tabs: Overview (health and why, the install lock, maintenance, and a collection error with its cause), Hardware, Network, Connectivity and History. A BMC button opens its console; Fetch now reads the server from its vendor manager now.",
+    desc: "Opened from a name on Servers, in Inventory Management or on a cluster's Nodes tab. Tabs: Overview (health and why, the install lock, maintenance, and a collection error with its cause), Hardware, Network, Connectivity and History. A BMC button opens its console; Fetch now, where turned on, reads the server from its vendor manager now.",
   },
   {
     title: "Confs",
@@ -59,9 +59,10 @@ export function ServerScanSection() {
           expected end (<strong>Start maintenance</strong>); turning it off is one click. A server&apos;s page shows its
           maintenance and links to the switch on Servers. <strong>Run job</strong>, on Jobs: after{" "}
           <strong>Run this job now?</strong> it starts a real Job from the CronJob&apos;s template, sent once.{" "}
-          <strong>Fetch now</strong>, on a server&apos;s page and first on every Servers row: server-scan reads that one
-          server from its vendor manager now, which can take a minute or two, sent once; a server it cannot read so (a
-          standalone Redfish BMC) says why. Everything else in the area is read only.
+          <strong>Fetch now</strong>, where your operator has turned it on (it needs server-scan v6.5.0 or later), on a
+          server&apos;s page and first on every Servers row: server-scan reads that one server from its vendor manager
+          now, which can take a minute or two, sent once; a server it cannot read so (a standalone Redfish BMC) says
+          why. Everything else in the area is read only.
         </Callout>
         <Callout type="info" title="Who sees it, and what needs a token">
           Wingman&apos;s admins, for now, once server-scan is configured (<InlineCode>SERVER_SCAN_URL</InlineCode>, the

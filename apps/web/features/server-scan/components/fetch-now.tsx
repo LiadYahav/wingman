@@ -15,7 +15,9 @@ import type { ServerRow } from "@/features/server-scan/types/server-scan-servers
  * (`RowRefreshButton.tsx`, v6.6.0), in Wingman's design. Each reads the one
  * server from its vendor manager now through day1, sent once (never
  * retried); while day1 waits, which can be minutes, the icon turns and the
- * button is busy. Greyed with day1's line when Wingman holds no admin token.
+ * button is busy. Shown only where the deployment offers it
+ * (`refresh_enabled`, off by default); greyed with day1's line when Wingman
+ * holds no admin token.
  *
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */

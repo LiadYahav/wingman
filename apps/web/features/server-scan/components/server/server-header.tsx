@@ -46,7 +46,7 @@ function BmcButton({ host, name }: { host: string | null; name: string }) {
 
 /**
  * server-scan's header: the name with its copy button, the BMC console and
- * Fetch now (v6.5.0), the model under them, and whether it is a physical server or a VM (v6.3.0's
+ * Fetch now (v6.5.0; only where the deployment offers it), the model under them, and whether it is a physical server or a VM (v6.3.0's
  * `server_type`), beside the model in one muted line.
  */
 export function ServerHeader({ record }: { record: ServerRecord }) {
@@ -61,7 +61,7 @@ export function ServerHeader({ record }: { record: ServerRecord }) {
           <CopyButton value={record.name} label="server name" />
         </div>
         <BmcButton host={record.network.bmc.host} name={record.name} />
-        <FetchNowButton record={record} />
+        {record.refresh_enabled && <FetchNowButton record={record} />}
       </div>
       <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
         <span data-testid="ss-server-model">{modelLine(record.model, record.hardware.gpus)}</span>

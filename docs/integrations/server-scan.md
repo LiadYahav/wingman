@@ -21,7 +21,8 @@ server-scan itself works is [its study](../ecosystem/notes/server-scan.md).
 - **Three writes, all from the area, with the admin token, never retried**
   (ADR-0006): a server's maintenance on and off, Run job on a CronJob, and
   Fetch now on a server (since v6.6.0: a server's page and every Servers
-  row; admins only, as server-scan keeps it).
+  row; admins only, as server-scan keeps it; off by default behind
+  `DAY1_SERVER_SCAN_REFRESH`, as it needs server-scan v6.5.0 or later).
 - **Never**: `/servers/available` and reservations (the workflows' and herzi's
   calls: add-server-to-mce takes a server, not Wingman), reclassify and
   health recalculate (no button in server-scan's own UI calls them; Fetch
@@ -132,8 +133,10 @@ v6.6.0 was also the newest tag and `main`'s head that day.
 - **Behaviour against an older server-scan**: `server_type` is derived from
   the vendor; before v6.3.0 `by_health` also counted servers in maintenance,
   so a card's bars count those servers twice and "all healthy" needs every
-  server healthy and none in maintenance; before v6.5.0 Fetch now answers
-  `502` (server-scan has no such route), and the buttons stay.
+  server healthy and none in maintenance; before v6.5.0 Fetch now would
+  answer `502` (server-scan has no such route), so it stays off
+  (`DAY1_SERVER_SCAN_REFRESH`, the default) until server-scan is v6.5.0 or
+  later.
 - **Deliberate differences**, not gaps: the writes above; Claude's "Your
   token" (a link to server-scan's own page); the Servers export written with
   Wingman's shared Excel writer instead of server-scan's zip writer (the same

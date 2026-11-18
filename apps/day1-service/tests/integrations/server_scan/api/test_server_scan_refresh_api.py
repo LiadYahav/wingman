@@ -1,6 +1,7 @@
 """Fetch now's route (docs/notes/2026-11-13-server-scan-area-api.md §9.9).
 
-``POST /api/day1/server-scan/servers/{id}/refresh``: admins only, as
+``POST /api/day1/server-scan/servers/{id}/refresh``: off by default
+(``DAY1_SERVER_SCAN_REFRESH``: 501 naming it, no button); on, admins only, as
 server-scan keeps it; the server's record as just read, with the
 deployment's switches; server-scan's refusals as ``409
 SERVER_REFRESH_REFUSED`` in its words; 404, 501 without the admin token beside
@@ -24,7 +25,7 @@ from wingman_day1.domain.errors import AmbiguousServerScanWriteError, ServerScan
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import load_fleet
 from wingman_day1.integrations.server_scan.domain.record import ServerRecord
-from wingman_day1.integrations.server_scan.domain.servers import REFRESH_OFF
+from wingman_day1.integrations.server_scan.domain.servers import REFRESH_DISABLED, REFRESH_OFF
 from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import (
     FakeServerInventory,
     default_fleet_file,
@@ -46,6 +47,8 @@ def client(
     inventory: ServerInventory | None,
     **settings: object,
 ) -> httpx.AsyncClient:
+    on = {"day1_server_scan_refresh": True, "server_scan_url": "http://server-scan.test"}
+    settings = {**on, **settings}
     app = support.build_app(
         gitlab=gitlab,
         hub=None,
@@ -83,6 +86,25 @@ class FailingFleet(FakeServerInventory):
         raise ServerScanUnavailableError(
             "server-scan could not finish reading it from its vendor manager: timeout (fake)"
         )
+
+
+async def test_off_by_default_it_is_501_naming_its_switch_and_nothing_is_sent(
+    support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
+) -> None:
+    inventory = fleet()
+    server_id = by_provider(inventory, "OPENMANAGE")
+    off = {"day1_server_scan_refresh": False}
+    async with client(support, gitlab, clock, inventory, **off) as http:
+        rows = (await http.get(SERVERS, headers=auth(support.ALICE))).json()
+        record = (await http.get(f"{SERVERS}/{server_id}", headers=auth(support.ALICE))).json()
+        write = await http.post(refresh(server_id), headers=auth(support.ALICE))
+    for answer in (rows, record):
+        assert (answer["refresh_enabled"], answer["refresh_available"]) == (False, False)
+        assert answer["refresh_detail"] == REFRESH_DISABLED
+    assert (write.status_code, write.json()["code"]) == (501, "FEATURE_DISABLED")
+    assert write.json()["detail"] == REFRESH_DISABLED
+    assert write.json()["details"]["setting"] == "DAY1_SERVER_SCAN_REFRESH"
+    assert inventory.refreshes == []
 
 
 async def test_only_admins_fetch_a_server(
@@ -183,6 +205,7 @@ async def test_fetch_now_needs_the_admin_token_unless_server_scan_runs_with_auth
         record = (await http.get(f"{SERVERS}/{server_id}", headers=auth(support.ALICE))).json()
         write = await http.post(refresh(server_id), headers=auth(support.ALICE))
     assert rows["refresh_available"] is record["refresh_available"] is available
+    assert rows["refresh_enabled"] is record["refresh_enabled"] is True
     if available:
         assert (rows["refresh_detail"], write.status_code) == (None, 200)
     else:
@@ -195,7 +218,8 @@ async def test_fetch_now_needs_the_admin_token_unless_server_scan_runs_with_auth
 async def test_without_server_scan_fetch_now_is_501(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
-    async with client(support, gitlab, clock, None) as http:
+    none = {"day1_server_scan_refresh": False, "server_scan_url": ""}
+    async with client(support, gitlab, clock, None, **none) as http:
         response = await http.post(refresh("srv_1"), headers=auth(support.ALICE))
     assert (response.status_code, response.json()["code"]) == (501, "FEATURE_DISABLED")
 

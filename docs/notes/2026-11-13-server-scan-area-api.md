@@ -381,8 +381,9 @@ shape, plus whether the maintenance toggle works here:
   "generated_at": "2026-11-11T08:00:03Z",
   "maintenance_available": true,
   "maintenance_detail": null,
-  "refresh_available": true,
-  "refresh_detail": null
+  "refresh_enabled": false,
+  "refresh_available": false,
+  "refresh_detail": "Fetch now is off in this deployment. It needs server-scan v6.5.0 or later and its admin token; turn it on with the chart's day1.serverScanRefresh.enabled (DAY1_SERVER_SCAN_REFRESH)."
 }
 ```
 
@@ -397,8 +398,9 @@ shape, plus whether the maintenance toggle works here:
   always there.
 - **`maintenance_available`** is whether the toggle works in this deployment
   (§8.4); `maintenance_detail` says why not, in one line, else `null`.
-  **`refresh_available`** and `refresh_detail` are the same for each row's
-  Fetch now (§9.9, 3.46.0), by the same rule.
+  **`refresh_enabled`** (whether the deployment offers Fetch now at all,
+  `DAY1_SERVER_SCAN_REFRESH`), **`refresh_available`** and `refresh_detail`
+  are the same for each row's Fetch now (§9.9, 3.46.0).
 - **One cache, two `304`s.** The rows come from the cache the Nodes tab,
   placement and Inventory Management share (`server-scan:rows`, for
   `DAY1_CACHE_TTL_SECONDS`, 30 s by default), which asks server-scan with
@@ -719,7 +721,7 @@ plus whether the maintenance toggle and History work here:
   "unreachable_since": null, "unreachable_reason": null, "unreachable_detail": null,
   "revision": 17, "updated_at": "2026-11-11T08:00:03Z", "created_at": "2026-09-01T06:00:00Z",
   "maintenance_available": true, "maintenance_detail": null,
-  "refresh_available": true, "refresh_detail": null,
+  "refresh_enabled": true, "refresh_available": true, "refresh_detail": null,
   "history_available": true, "history_detail": null
 }
 ```
@@ -976,10 +978,18 @@ or running the whole collector from Jobs. Wingman follows both.
   the path 130 seconds (the chart's `nginx-configmap.yaml`), as the Route
   does every path. A UCS Central server server-scan takes longer to read is
   `504 AMBIGUOUS_WRITE` in Wingman, though server-scan may finish it.
-- **The switch**: `refresh_available` and `refresh_detail` on the record
-  (§9.4) and on the rows' answer (§8.3), by the admin token's rule (§8.4):
-  with it, or with no token at all (auth off), it works; a viewer token
-  alone turns it off, and the route answers `501 FEATURE_DISABLED` with
+- **Off by default: its own switch**, `DAY1_SERVER_SCAN_REFRESH` (the chart's
+  `day1.serverScanRefresh.enabled`; it needs `serverScan.url`), since new
+  features land in the air-gap off and a server-scan before v6.5.0 has no
+  such route. Off, `refresh_enabled` is `false` on the record (§9.4) and on
+  the rows' answer (§8.3), `refresh_available` is `false`, `refresh_detail`
+  says how to turn it on, the web shows no button and no column at all, and
+  the route answers `501 FEATURE_DISABLED` with `details.setting:
+  DAY1_SERVER_SCAN_REFRESH`, sending nothing.
+- **The admin token**: on, `refresh_available` and `refresh_detail` follow
+  the admin token's rule (§8.4): with it, or with no token at all (auth off),
+  it works; a viewer token alone turns it off, the buttons are greyed with
+  the line, and the route answers `501 FEATURE_DISABLED` with
   `details.setting: SERVER_SCAN_ADMIN_TOKEN`.
 - **The record**: day1's record now keeps `revision` (§9.4 left it out
   before), so the page can tell "no changes" from "data updated".

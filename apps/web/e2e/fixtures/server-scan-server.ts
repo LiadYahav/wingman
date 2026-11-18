@@ -91,6 +91,7 @@ export function nodeRecord(overrides: Partial<ServerRecord> = {}): ServerRecord 
     created_at: "2026-09-01T06:00:00Z",
     maintenance_available: true,
     maintenance_detail: null,
+    refresh_enabled: true,
     refresh_available: true,
     refresh_detail: null,
     history_available: true,

@@ -197,8 +197,10 @@ and write yours here.
   /api/day1/server-scan/servers/{id}/refresh`, `AdminUser` as server-scan
   keeps it, the admin token, sent once, a 120-second wait under nginx's new
   130-second location, `409 SERVER_REFRESH_REFUSED` in server-scan's words;
-  on a server's page and first on every Servers row. Not yet tried against
-  the sandbox's server-scan.
+  on a server's page and first on every Servers row. Off by default
+  (`DAY1_SERVER_SCAN_REFRESH`, the chart's `day1.serverScanRefresh.enabled`;
+  needs server-scan v6.5.0 or later): no button until it is on. Not yet
+  tried against the sandbox's server-scan.
 
 **Next:**
 - When the workflows branch merges: the inventory follow-ups above.

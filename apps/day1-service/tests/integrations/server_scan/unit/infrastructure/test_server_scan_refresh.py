@@ -5,8 +5,9 @@ against its answers (MockTransport): the admin token, no body, day1's own
 longer wait; the answer read as the server page's record; every refusal in
 server-scan's words; sent exactly once whatever happens (ADR-0006). The cache
 clears the rows and sites after one; the fake reads its server back seen now
-and refuses those server-scan cannot read; the use case is off without the
-admin token and logs every Fetch now with the person.
+and refuses those server-scan cannot read; the use case is off by its own
+switch (``DAY1_SERVER_SCAN_REFRESH``, off by default) and without the admin
+token, and logs every Fetch now with the person.
 
 What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
@@ -20,6 +21,7 @@ from typing import Any
 import httpx
 import pytest
 from prometheus_client import CollectorRegistry
+from pydantic import SecretStr, ValidationError
 
 from wingman_core.domain.users import Role, User
 from wingman_core.infrastructure.cache import TtlCache
@@ -28,18 +30,25 @@ from wingman_day1.domain.errors import (
     AmbiguousServerScanWriteError,
     ServerNotFoundError,
     ServerScanDeniedError,
+    ServerScanRefreshOffError,
     ServerScanRefreshRefusedError,
     ServerScanUnavailableError,
     ServerScanWritesOffError,
 )
 from wingman_day1.integrations.server_scan.application.area import ServerScanService
-from wingman_day1.integrations.server_scan.domain.servers import REFRESH_OFF, refresh_detail
+from wingman_day1.integrations.server_scan.compose import server_scan_service
+from wingman_day1.integrations.server_scan.domain.servers import (
+    REFRESH_DISABLED,
+    REFRESH_OFF,
+    refresh_detail,
+)
 from wingman_day1.integrations.server_scan.infrastructure.adapter import HttpServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.cached import CachedServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.fakes.records import FakeRecords
 from wingman_day1.integrations.server_scan.infrastructure.parse import server_row
 from wingman_day1.integrations.server_scan.infrastructure.writes import REFRESH_TIMEOUT_SECONDS
+from wingman_day1.settings import Day1Settings
 
 VIEWER = "server-scan-viewer-token-never-shown-0002"
 ADMIN = "server-scan-admin-token-never-shown-0003"
@@ -271,16 +280,58 @@ def test_fetch_now_is_off_only_with_a_viewer_token_and_no_admin_token(
     assert refresh_detail(viewer_token=viewer, admin_token=admin) == expected
 
 
+def settings(**values: object) -> Day1Settings:
+    base: dict[str, object] = {
+        "day1_gitlab_project_id": "gitops-day1/platform-config",
+        "specs_gitlab_project_id": "wingman/cluster-specs",
+        "dev_auth_enabled": True,
+        "dev_auth_secret": SecretStr("d" * 40),
+    }
+    base.update(values)
+    return Day1Settings(**base)  # ty: ignore[invalid-argument-type]
+
+
+def test_fetch_now_is_off_by_default_and_needs_server_scan() -> None:
+    assert settings().day1_server_scan_refresh is False
+    with pytest.raises(
+        ValidationError, match="DAY1_SERVER_SCAN_REFRESH=true needs SERVER_SCAN_URL"
+    ):
+        settings(day1_server_scan_refresh=True)
+    on = settings(day1_server_scan_refresh=True, server_scan_url="http://server-scan.test")
+    assert on.day1_server_scan_refresh is True
+    assert settings(day1_server_scan_refresh=True, day1_fake_fleet=True).day1_server_scan_refresh
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_the_area_takes_the_switch_from_the_settings(enabled: bool) -> None:
+    values = {"server_scan_url": "http://server-scan.test", "day1_server_scan_refresh": enabled}
+    service = server_scan_service(FakeServerInventory(), settings(**values))
+    assert service is not None
+    assert service.refresh_enabled is enabled
+    assert service.refresh_off == (None if enabled else REFRESH_DISABLED)
+
+
+async def test_switched_off_nothing_is_sent_and_the_line_names_the_switch() -> None:
+    fake = FakeServerInventory([fleet_row()], clock=lambda: NOW)
+    service = ServerScanService(fake)
+    with pytest.raises(ServerScanRefreshOffError, match="DAY1_SERVER_SCAN_REFRESH") as raised:
+        await service.refresh(SERVER_ID, user=ALICE)
+    assert "v6.5.0" in str(raised.value)
+    assert service.refresh_off == REFRESH_DISABLED
+    assert fake.refreshes == []
+
+
 async def test_without_the_admin_token_nothing_is_sent() -> None:
     fake = FakeServerInventory([fleet_row()], clock=lambda: NOW)
-    service = ServerScanService(fake, refresh_detail=REFRESH_OFF)
+    service = ServerScanService(fake, refresh_enabled=True, refresh_detail=REFRESH_OFF)
     with pytest.raises(ServerScanWritesOffError, match="SERVER_SCAN_ADMIN_TOKEN"):
         await service.refresh(SERVER_ID, user=ALICE)
     assert fake.refreshes == []
 
 
 async def test_every_fetch_is_logged_with_the_person(caplog: pytest.LogCaptureFixture) -> None:
-    service = ServerScanService(FakeServerInventory([fleet_row()], clock=lambda: NOW))
+    fake = FakeServerInventory([fleet_row()], clock=lambda: NOW)
+    service = ServerScanService(fake, refresh_enabled=True)
     with caplog.at_level(logging.INFO, logger="wingman_day1.application.server_scan"):
         await service.refresh(SERVER_ID, user=ALICE)
     (line,) = caplog.records
@@ -293,7 +344,7 @@ async def test_an_unanswered_fetch_is_logged_unconfirmed_and_raised(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     inventory, sent = make(httpx.ReadTimeout("lost"))
-    service = ServerScanService(inventory)
+    service = ServerScanService(inventory, refresh_enabled=True)
     with (
         caplog.at_level(logging.INFO, logger="wingman_day1.application.server_scan"),
         pytest.raises(AmbiguousServerScanWriteError),

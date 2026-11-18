@@ -109,6 +109,7 @@ export function serverRecord(overrides: Partial<ServerRecord> = {}): ServerRecor
     created_at: "2026-08-13T10:00:00Z",
     maintenance_available: true,
     maintenance_detail: null,
+    refresh_enabled: true,
     refresh_available: true,
     refresh_detail: null,
     history_available: true,

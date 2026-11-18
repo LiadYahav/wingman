@@ -302,6 +302,23 @@ def test_multi_infraenv_nodepools_are_off_unless_enabled() -> None:
     assert "multiInfraEnvNodepools" in wrong.stderr
 
 
+def test_fetch_now_is_off_unless_enabled_and_needs_server_scan() -> None:
+    """ADR-0048: ``day1.serverScanRefresh.enabled`` sets DAY1_SERVER_SCAN_REFRESH, also off for
+    values kept from 3.45 that have no such key; on, it needs ``serverScan.url``; not a boolean,
+    the schema refuses it."""
+    assert render()["wingman-config"]["data"]["DAY1_SERVER_SCAN_REFRESH"] == "false"
+    kept = render("--set", "day1.serverScanRefresh=null")["wingman-config"]["data"]
+    assert kept["DAY1_SERVER_SCAN_REFRESH"] == "false"
+    on = render(*ALL_ON, "--set", "day1.serverScanRefresh.enabled=true")["wingman-config"]["data"]
+    assert on["DAY1_SERVER_SCAN_REFRESH"] == "true"
+    refused = template("--set", "day1.serverScanRefresh.enabled=true")
+    assert refused.returncode != 0
+    assert "day1.serverScanRefresh.enabled needs serverScan.url" in refused.stderr
+    wrong = template(*ALL_ON, "--set-string", "day1.serverScanRefresh.enabled=yes")
+    assert wrong.returncode != 0
+    assert "serverScanRefresh" in wrong.stderr
+
+
 TLS_VERIFY = {
     "auth.sslVerify": "OPENSHIFT_SSL_VERIFY",
     "clusterStatus.sslVerify": "MCE_SSL_VERIFY",

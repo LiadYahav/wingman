@@ -96,7 +96,8 @@ def server_scan_service(
     with server-scan's auditor token (3.25.0), and so does the Events page
     (3.31.0). The Claude page names the token line server-scan writes into
     Wingman's copy of its skill (3.27.0). The Jobs page follows the toggle's
-    rule, its reads too (3.32.0), and so does Fetch now (3.46.0).
+    rule, its reads too (3.32.0), and so does Fetch now (3.46.0), which has a
+    switch of its own besides, off by default (``DAY1_SERVER_SCAN_REFRESH``).
     """
     if inventory is None:
         return None
@@ -108,6 +109,7 @@ def server_scan_service(
         ui_url=server_scan_ui(settings),
         token_line=token_line(viewer_token=viewer),
         maintenance_detail=maintenance_detail(viewer_token=viewer, admin_token=admin),
+        refresh_enabled=settings.day1_server_scan_refresh,
         refresh_detail=refresh_detail(viewer_token=viewer, admin_token=admin),
         jobs=ServerScanJobs(inventory, detail=jobs_detail(viewer_token=viewer, admin_token=admin)),
         history_detail=audit_detail("History", viewer_token=viewer, auditor_token=auditor),

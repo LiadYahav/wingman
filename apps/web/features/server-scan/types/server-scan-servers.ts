@@ -76,7 +76,9 @@ export interface ServerRowsAnswer {
   maintenance_available: boolean;
   /** Why the toggle does not work, in one line; null when it does. */
   maintenance_detail: string | null;
-  /** Whether each row's Fetch now works (server-scan's admin token), and why not in one line. */
+  /** Whether this deployment offers Fetch now at all (`DAY1_SERVER_SCAN_REFRESH`, off by default): off, no column. */
+  refresh_enabled: boolean;
+  /** Whether each row's Fetch now works (on, and server-scan's admin token), and why not in one line. */
   refresh_available: boolean;
   refresh_detail: string | null;
 }

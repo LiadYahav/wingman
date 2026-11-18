@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Final
 
 from wingman_core.domain.users import User
+from wingman_day1.domain.errors import ServerScanRefreshOffError
 from wingman_day1.integrations.server_scan.application.audit import recorded
 from wingman_day1.integrations.server_scan.application.guards import admin_only, audited
 from wingman_day1.integrations.server_scan.application.jobs import ServerScanJobs
@@ -41,6 +42,7 @@ from wingman_day1.integrations.server_scan.domain.rules import (
     HealthPolicyList,
 )
 from wingman_day1.integrations.server_scan.domain.servers import (
+    REFRESH_DISABLED,
     FleetRows,
     MaintenanceStart,
     ServerMaintenance,
@@ -63,6 +65,7 @@ class ServerScanService:
         inventory: ServerInventory,
         *,
         maintenance_detail: str | None = None,
+        refresh_enabled: bool = False,
         refresh_detail: str | None = None,
         history_detail: str | None = None,
         events_detail: str | None = None,
@@ -73,8 +76,10 @@ class ServerScanService:
         """Read server-scan through ``inventory``.
 
         ``maintenance_detail`` says why the maintenance writes are off here
-        (``domain.servers.maintenance_detail``), ``refresh_detail`` why Fetch
-        now is (``domain.servers.refresh_detail``), ``history_detail``
+        (``domain.servers.maintenance_detail``), ``refresh_enabled`` whether
+        Fetch now is on at all (``DAY1_SERVER_SCAN_REFRESH``, off by default)
+        and ``refresh_detail`` why it cannot work without the admin token
+        (``domain.servers.refresh_detail``), ``history_detail``
         why a server's History is and ``events_detail`` why the Events page is
         (``domain.events.audit_detail``); ``None``: on. ``ui_url``
         is server-scan's address for people and Claude Code; ``token_line`` the
@@ -83,6 +88,7 @@ class ServerScanService:
         """
         self._inventory = inventory
         self.maintenance_detail = maintenance_detail
+        self.refresh_enabled = refresh_enabled
         self.refresh_detail = refresh_detail
         self.history_detail = history_detail
         self.events_detail = events_detail
@@ -90,13 +96,10 @@ class ServerScanService:
         self.token_line = token_line
         self.jobs = jobs or ServerScanJobs(inventory)
 
-    def switches(self) -> dict[str, str | None]:
-        """Why the maintenance toggle, Fetch now and History are off here (``None``: on)."""
-        return {
-            "maintenance_detail": self.maintenance_detail,
-            "refresh_detail": self.refresh_detail,
-            "history_detail": self.history_detail,
-        }
+    @property
+    def refresh_off(self) -> str | None:
+        """Why Fetch now does not work here: its switch off, or no admin token; ``None``: on."""
+        return self.refresh_detail if self.refresh_enabled else REFRESH_DISABLED
 
     async def sites(self) -> FleetSites:
         """The Sites page: every configured site and the fleet, as server-scan counts them."""
@@ -184,6 +187,8 @@ class ServerScanService:
 
     async def refresh(self, server_id: str, *, user: User) -> ServerRecord:
         """Fetch now: read one server from its vendor manager now. Never retried (ADR-0006)."""
+        if not self.refresh_enabled:
+            raise ServerScanRefreshOffError(REFRESH_DISABLED)
         admin_only(self.refresh_detail)
         event = {"user": user.username, "server_id": server_id}
         write = self._inventory.refresh(server_id)

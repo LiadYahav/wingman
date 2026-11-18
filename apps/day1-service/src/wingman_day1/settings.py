@@ -158,6 +158,14 @@ class Day1Settings(BaseSettings):
     # never writes the key and an edit leaves it as it is.
     day1_multi_infraenv_nodepools: bool = False
 
+    # ── Fetch now in the Server Scan area (ADR-0048's 2026-11-18 amendment) ──
+    # Off by default. On: an admin reads one server from its vendor manager
+    # now, on its page and on every Servers row (server-scan's
+    # POST /servers/{id}/refresh, v6.5.0 and later; its admin token, as
+    # maintenance). Off: no button, and the route answers 501. Needs
+    # SERVER_SCAN_URL (or DAY1_FAKE_FLEET in development).
+    day1_server_scan_refresh: bool = False
+
     # ── MCE placement (ADR-0050): always on; this needs the hubs ─────────────
     # The cost of one hosted control plane: with CLUSTER_STATUS_ENABLED, an MCE
     # is offered for a new cluster only with at least this many free pods
@@ -293,6 +301,16 @@ class Day1Settings(BaseSettings):
             raise ValueError(
                 "DAY1_SCALE_NODEPOOLS=true needs WORKFLOWS_API_URL: scaling starts the "
                 "update-nodepool workflow there"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _fetch_now_has_server_scan(self) -> Self:
+        """Fetch now asks server-scan to read a server; without server-scan nothing could."""
+        if self.day1_server_scan_refresh and not self.server_scan_url and not self.day1_fake_fleet:
+            raise ValueError(
+                "DAY1_SERVER_SCAN_REFRESH=true needs SERVER_SCAN_URL: Fetch now asks "
+                "server-scan to read the server"
             )
         return self
 

@@ -67,6 +67,7 @@ RECORD_FIELDS = {
     "created_at",
     "maintenance_available",
     "maintenance_detail",
+    "refresh_enabled",
     "refresh_available",
     "refresh_detail",
     "history_available",

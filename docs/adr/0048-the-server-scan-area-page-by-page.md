@@ -756,6 +756,15 @@ changed.
     greyed with one line and the route answers `501` naming
     `SERVER_SCAN_ADMIN_TOKEN`; with no token at all (auth off) it works. No
     new value, Secret, token or grant.
+  - **Off by default, a switch of its own**: `DAY1_SERVER_SCAN_REFRESH`
+    (the chart's `day1.serverScanRefresh.enabled`, which needs
+    `serverScan.url`), as new features land in the air-gap off, and a
+    server-scan before v6.5.0 has no such route (every press would be a
+    `502`). Off, the record and the rows say `refresh_enabled: false`, the
+    web shows no button and no column at all (not a greyed one), and the
+    route answers `501` naming the switch, sending nothing. On it needs
+    server-scan v6.5.0 or later and the admin token; the upgrade guide says
+    so.
   - **Never retried** (ADR-0006): one `POST`; unanswered is `504
     AMBIGUOUS_WRITE` ("reload the server and look at when it was last
     seen"), the buttons disabled while it waits. A second Fetch now is
@@ -770,7 +779,10 @@ changed.
     the call is open, up to 240 seconds for UCS Central; day1 waits up to 120
     seconds for this call alone, and nginx gives its path 130 seconds, as the
     Route gives every path (no setting: one longer than the Route would be
-    cut by it anyway).
+    cut by it anyway). A UCS Central server that server-scan takes longer
+    than 120 seconds to read is therefore `504 AMBIGUOUS_WRITE` in Wingman,
+    though server-scan finishes the read and persists it: the page says to
+    reload the server and look at when it was last seen.
   - **The answer is the record**, judged now, which the page takes at once;
     day1's record keeps `revision` now, so the toast says "no changes" or
     "data updated" as server-scan's does. The rows and sites cache is dropped

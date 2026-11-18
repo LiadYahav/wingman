@@ -304,7 +304,9 @@ export interface ServerRecord {
   /** Whether the maintenance toggle works here (§8.4), and why not in one line. */
   maintenance_available: boolean;
   maintenance_detail: string | null;
-  /** Whether Fetch now works here (§9.9: server-scan's admin token), and why not in one line. */
+  /** Whether this deployment offers Fetch now at all (`DAY1_SERVER_SCAN_REFRESH`, off by default): off, no button. */
+  refresh_enabled: boolean;
+  /** Whether Fetch now works here (§9.9: on, and server-scan's admin token), and why not in one line. */
   refresh_available: boolean;
   refresh_detail: string | null;
   /** Whether History works here (the auditor token, §9.5), and why not in one line. */

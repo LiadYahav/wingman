@@ -118,19 +118,26 @@ class ServerRowsOut(BaseModel):
     """``GET /api/day1/server-scan/servers``: server-scan's ``GET /api/v1/servers/rows``, typed.
 
     Plus whether the maintenance toggle and each row's Fetch now work in this
-    deployment, and why not.
+    deployment, and why not; ``refresh_enabled`` false: Fetch now is off, no
+    column at all.
     """
 
     items: list[ServerRowOut]
     generated_at: datetime | None
     maintenance_available: bool
     maintenance_detail: str | None
+    refresh_enabled: bool
     refresh_available: bool
     refresh_detail: str | None
 
     @classmethod
     def of(
-        cls, fleet: FleetRows, maintenance_detail: str | None, refresh_detail: str | None = None
+        cls,
+        fleet: FleetRows,
+        maintenance_detail: str | None,
+        *,
+        refresh_detail: str | None = None,
+        refresh_enabled: bool = False,
     ) -> ServerRowsOut:
         """From the domain, in server-scan's order."""
         return cls(
@@ -138,7 +145,8 @@ class ServerRowsOut(BaseModel):
             generated_at=fleet.generated_at,
             maintenance_available=maintenance_detail is None,
             maintenance_detail=maintenance_detail,
-            refresh_available=refresh_detail is None,
+            refresh_enabled=refresh_enabled,
+            refresh_available=refresh_enabled and refresh_detail is None,
             refresh_detail=refresh_detail,
         )
 

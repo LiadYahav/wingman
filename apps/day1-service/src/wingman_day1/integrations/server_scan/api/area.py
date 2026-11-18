@@ -29,6 +29,7 @@ from wingman_day1.integrations.server_scan.api.servers_schemas import (
     ServerRowsOut,
 )
 from wingman_day1.integrations.server_scan.api.sites_schemas import SitesOut
+from wingman_day1.integrations.server_scan.application.area import ServerScanService
 from wingman_day1.integrations.server_scan.domain.architecture import DIAGRAM_SLUG
 from wingman_day1.integrations.server_scan.domain.confs import ConfList
 from wingman_day1.integrations.server_scan.domain.events import (
@@ -39,7 +40,7 @@ from wingman_day1.integrations.server_scan.domain.events import (
     EventPage,
     EventQuery,
 )
-from wingman_day1.integrations.server_scan.domain.record import VmHostAnswer
+from wingman_day1.integrations.server_scan.domain.record import ServerRecord, VmHostAnswer
 from wingman_day1.integrations.server_scan.domain.rules import (
     ClassificationRuleList,
     HealthPolicyList,
@@ -80,17 +81,20 @@ class EncodedFleet:
     def __init__(self) -> None:
         """Nothing encoded yet."""
         self._fleet: FleetRows | None = None
-        self._details: tuple[str | None, str | None] = (None, None)
+        self._details: tuple[str | None, bool, str | None] | None = None
         self._body = b""
         self._etag = ""
 
-    def of(
-        self, fleet: FleetRows, maintenance_detail: str | None, refresh_detail: str | None
-    ) -> tuple[bytes, str]:
+    def of(self, fleet: FleetRows, service: ServerScanService) -> tuple[bytes, str]:
         """``fleet``'s answer and its weak ETag."""
-        details = (maintenance_detail, refresh_detail)
+        details = (service.maintenance_detail, service.refresh_enabled, service.refresh_off)
         if fleet is not self._fleet or details != self._details:
-            answer = ServerRowsOut.of(fleet, maintenance_detail, refresh_detail)
+            answer = ServerRowsOut.of(
+                fleet,
+                service.maintenance_detail,
+                refresh_detail=service.refresh_off,
+                refresh_enabled=service.refresh_enabled,
+            )
             self._body = answer.model_dump_json().encode()
             self._etag = weak_etag(self._body)
             self._fleet, self._details = fleet, details
@@ -103,9 +107,7 @@ _ENCODED = EncodedFleet()
 @router.get("/servers", response_model=ServerRowsOut)
 async def server_scan_servers(request: Request, service: ServerScan, user: AdminUser) -> Response:
     """The fleet as server-scan's rows; ``304`` when the ``If-None-Match`` is current."""
-    body, etag = _ENCODED.of(
-        await service.servers(), service.maintenance_detail, service.refresh_detail
-    )
+    body, etag = _ENCODED.of(await service.servers(), service)
     return conditional_json(request, body, etag)
 
 
@@ -114,7 +116,7 @@ async def server_scan_record(
     server_id: str, service: ServerScan, user: AdminUser
 ) -> ServerRecordOut:
     """A server's page: the server whole, in server-scan's shape, read now."""
-    return ServerRecordOut.of(await service.record(server_id), **service.switches())
+    return _record(await service.record(server_id), service)
 
 
 @router.get("/servers/{server_id}/vm-host")
@@ -181,7 +183,18 @@ async def refresh_server(server_id: str, service: ServerScan, user: AdminUser) -
 
     Admins only, as server-scan keeps it (its ``require_admin``); logged with the person.
     """
-    return ServerRecordOut.of(await service.refresh(server_id, user=user), **service.switches())
+    return _record(await service.refresh(server_id, user=user), service)
+
+
+def _record(record: ServerRecord, service: ServerScanService) -> ServerRecordOut:
+    """The record with this deployment's switches: maintenance, Fetch now, History."""
+    return ServerRecordOut.of(
+        record,
+        maintenance_detail=service.maintenance_detail,
+        history_detail=service.history_detail,
+        refresh_detail=service.refresh_off,
+        refresh_enabled=service.refresh_enabled,
+    )
 
 
 @router.get("/architecture/{slug}")

@@ -504,6 +504,17 @@ test.describe("A row's Fetch now", () => {
     expect(calls).toHaveLength(1);
   });
 
+  test("where the deployment does not offer it (DAY1_SERVER_SCAN_REFRESH) there is no column at all", async ({ page }) => {
+    const off = { refresh_enabled: false, refresh_available: false, refresh_detail: "Fetch now is off in this deployment." };
+    await setUpServers(page, { servers: mockServers(FLEET, off) });
+    await go(page, PAGE);
+    await expect(rows(page)).toHaveCount(12);
+    await expect(page.getByRole("table", { name: "Servers" }).locator("thead th")).toHaveText([
+      "Name", "BMC", "Installation", "MCE", "Cluster", "Model", "State", "Maintenance",
+    ]);
+    await expect(page.getByTestId("ss-row-fetch-now")).toHaveCount(0);
+  });
+
   test("without server-scan's admin token every row's is greyed with day1's line, and sends nothing", async ({ page }) => {
     const why = "Fetch now needs server-scan's admin token: add the key admin-token to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN).";
     await setUpServers(page, { servers: mockServers(FLEET, { refresh_available: false, refresh_detail: why }) });

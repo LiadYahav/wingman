@@ -4,7 +4,7 @@ The core handlers already cover Git errors, self-approval and unmanaged MRs;
 this maps day1's own. ``details.problems`` lists every rule a request broke,
 so the form can show them all at once; ``details.setting`` names the setting
 a ``501`` waits for when it is not ``SERVER_SCAN_URL`` (the auditor token, or
-the admin token: maintenance, Jobs and Fetch now).
+the admin token: maintenance, Jobs and Fetch now; or Fetch now's own switch).
 """
 
 from __future__ import annotations
@@ -65,6 +65,7 @@ from wingman_day1.domain.errors import (
     ServerScanJobNotFoundError,
     ServerScanJobRunningError,
     ServerScanNotConfiguredError,
+    ServerScanRefreshOffError,
     ServerScanRefreshRefusedError,
     ServerScanSkillMissingError,
     ServerScanUnavailableError,
@@ -78,7 +79,7 @@ from wingman_day1.domain.errors import (
     WorkflowsUnavailableError,
 )
 from wingman_day1.integrations.server_scan.domain.events import AUDITOR_SETTING
-from wingman_day1.integrations.server_scan.domain.servers import ADMIN_SETTING
+from wingman_day1.integrations.server_scan.domain.servers import ADMIN_SETTING, REFRESH_SETTING
 
 _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (InvalidInputError, ValidationFailed),
@@ -102,6 +103,7 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (ServerScanRefreshRefusedError, ServerRefreshRefused),
     (ServerScanNotConfiguredError, FeatureDisabled),
     (ServerScanWritesOffError, FeatureDisabled),
+    (ServerScanRefreshOffError, FeatureDisabled),
     (ServerScanAuditOffError, FeatureDisabled),
     (ServerScanUnavailableError, DependencyUnavailable),
     (AmbiguousServerScanWriteError, AmbiguousWrite),
@@ -131,6 +133,8 @@ def to_app_error(error: Day1Error) -> AppError:
         details["setting"] = AUDITOR_SETTING
     if isinstance(error, ServerScanWritesOffError):
         details["setting"] = ADMIN_SETTING
+    if isinstance(error, ServerScanRefreshOffError):
+        details["setting"] = REFRESH_SETTING
     for domain_type, app_type in _MAPPING:
         if isinstance(error, domain_type):
             return app_type(str(error), details=details)

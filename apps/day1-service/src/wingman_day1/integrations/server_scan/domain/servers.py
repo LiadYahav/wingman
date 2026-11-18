@@ -30,6 +30,12 @@ REFRESH_OFF: Final = (
     "Fetch now needs server-scan's admin token: add the key admin-token to the server-scan "
     f"Secret and restart day1 ({ADMIN_SETTING})."
 )
+REFRESH_SETTING: Final = "DAY1_SERVER_SCAN_REFRESH"
+"""Fetch now's own switch, off by default: the chart's ``day1.serverScanRefresh.enabled``."""
+REFRESH_DISABLED: Final = (
+    "Fetch now is off in this deployment. It needs server-scan v6.5.0 or later and its admin "
+    f"token; turn it on with the chart's day1.serverScanRefresh.enabled ({REFRESH_SETTING})."
+)
 REASON_MAX_LENGTH: Final = 500
 """The longest reason day1 sends; server-scan sets no limit of its own."""
 VM_VENDOR: Final = "kubevirt"

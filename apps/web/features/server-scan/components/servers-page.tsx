@@ -85,10 +85,12 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
   const search = useSearchDraft(view.search, (q) => setView(withChange(view, { search: q })), SEARCH_PAUSE_MS);
   const searchError = useMemo(() => parseSearch(search.draft).error, [search.draft]);
   const siteList = siteOptions(sites, model, view.multi.site_id);
-  const { maintenance_available: writable, maintenance_detail: why, refresh_available: fetchable, refresh_detail: fetchWhy } = data;
+  const { maintenance_available: writable, maintenance_detail: why } = data;
+  const { refresh_enabled: fetchOn, refresh_available: fetchable, refresh_detail: fetchWhy } = data;
+  // Fetch now is a column only where this deployment offers it (DAY1_SERVER_SCAN_REFRESH)
   const columns = useMemo(
-    () => [fetchNowColumn(fetchable, fetchWhy), ...serverColumns(model.withMce, [maintenanceColumn(writable, why)])],
-    [model.withMce, writable, why, fetchable, fetchWhy]
+    () => [...(fetchOn ? [fetchNowColumn(fetchable, fetchWhy)] : []), ...serverColumns(model.withMce, [maintenanceColumn(writable, why)])],
+    [model.withMce, writable, why, fetchOn, fetchable, fetchWhy]
   );
   const table = useDataTable<ServerRow>({
     data: model.page.items,

@@ -57,6 +57,12 @@ data:
   # A nodepool may draw from several InfraEnvs (ADR-0064). Off for values kept
   # from a release before it.
   DAY1_MULTI_INFRAENV_NODEPOOLS: {{ if and .Values.day1.multiInfraEnvNodepools .Values.day1.multiInfraEnvNodepools.enabled }}"true"{{ else }}"false"{{ end }}
+  # Fetch now in the Server Scan area (ADR-0048; needs serverScan.url, and
+  # server-scan v6.5.0 or later). Off for values kept from a release before it.
+  {{- if and .Values.day1.serverScanRefresh .Values.day1.serverScanRefresh.enabled (not (and .Values.serverScan .Values.serverScan.url)) }}
+  {{- fail "day1.serverScanRefresh.enabled needs serverScan.url: Fetch now asks server-scan to read the server" }}
+  {{- end }}
+  DAY1_SERVER_SCAN_REFRESH: {{ if and .Values.day1.serverScanRefresh .Values.day1.serverScanRefresh.enabled }}"true"{{ else }}"false"{{ end }}
   DAY2_SERVICE_URL: "http://wingman-day2:8002"
 
   # ── day2 ─────────────────────────────────────────────────────────────────────

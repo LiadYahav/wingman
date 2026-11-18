@@ -324,6 +324,17 @@ test.describe("Fetch now", () => {
   });
 });
 
+test.describe("Fetch now, switched off", () => {
+  test("is not on the page at all where the deployment does not offer it (DAY1_SERVER_SCAN_REFRESH)", async ({ page }) => {
+    const why = "Fetch now is off in this deployment. It needs server-scan v6.5.0 or later and its admin token; turn it on with the chart's day1.serverScanRefresh.enabled (DAY1_SERVER_SCAN_REFRESH).";
+    await setUpServer(page, { records: [nodeRecord({ refresh_enabled: false, refresh_available: false, refresh_detail: why })] });
+    await go(page, PAGE);
+    await expect(page.getByRole("heading", { level: 1, name: NODE })).toBeVisible();
+    await expect(page.getByTestId("ss-fetch-now")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Fetch/ })).toHaveCount(0);
+  });
+});
+
 test.describe("Maintenance on the record", () => {
   test("is read only, as in server-scan, with a link to switch it from Servers", async ({ page }) => {
     const calls = await setUpServer(page);

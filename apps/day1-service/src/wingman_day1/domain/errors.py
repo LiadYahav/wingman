@@ -175,6 +175,10 @@ class AmbiguousServerScanWriteError(ServerScanError):
     """
 
 
+class ServerScanRefreshOffError(ServerScanError):
+    """Fetch now is off in this deployment (``DAY1_SERVER_SCAN_REFRESH``); nothing is sent."""
+
+
 class ServerScanRefreshRefusedError(ServerScanError):
     """server-scan cannot read the server from its vendor manager now (its 409); nothing changed.
 

@@ -126,6 +126,7 @@ async def test_every_row_has_server_scans_shape_and_order(
         "generated_at",
         "maintenance_available",
         "maintenance_detail",
+        "refresh_enabled",
         "refresh_available",
         "refresh_detail",
     }
