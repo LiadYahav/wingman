@@ -185,31 +185,28 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-17 — 3.44.0 to 3.44.3: credits per area, the docs refresh, a layout for the integrations.**
-- **Credits** (3.44.0, 3.44.1): five quick clicks on an area's brand show who
-  built it, each person with their years (`lib/areas.ts`).
-- **Docs** (3.44.2, 3.44.3): the in-app Documentation page covers the
-  Overview, Cluster Workflows, Inventory Management, Quick Links, Segments and
-  Server Scan (a test opens every Contents entry); `docs/README.md` indexes the
-  docs, `docs/architecture.md` is the overview to read first; this file was
-  shortened (its CI pass is `docs/ops/ci-maintenance.md`, its status history
-  is at the end of `docs/notes/session-log.md`).
-- **One place per mirrored system** (3.44.4 to 3.44.6, the owner's
-  decision): server-scan's and segments-manager's day1 code is in
-  `integrations/server_scan/` and `integrations/segments_manager/` (ADR-0001's
-  layers inside, enforced by import-linter; ADR-0001's 2026-11-17 amendment),
-  their web code in `apps/web/features/server-scan/` and
-  `apps/web/features/segments/` (`api`, `types`, `lib`, `components`;
-  ADR-0056's note). Checked live on the sandbox after the move.
-- **Syncing with a new upstream release:** `docs/integrations/<system>.yaml`
-  maps each Wingman file to the upstream files it follows and records the
-  version it matches (server-scan v6.1.0, segments-manager `a4edc12`);
-  `scripts/upstream_diff.py <system> [<ref>]` lists what changed upstream for
-  each; `docs/integrations/<system>.md` is the checklist. A test fails when a
-  ported file is missing from its map. Unreleased on server-scan (2026-11-17):
-  maintenance no longer counts as Available, and a server refresh write.
+**2026-11-18 — Scale sets one NodePool a run (PR #101).**
+- **The workflow changed** (team-redbull/workflows `feat/update-nodepool`,
+  b1976f4 and aab8949, not merged): `update-nodepool` takes `nodepool` only,
+  `infra_env_kind` is a 422; a scale-down may name the servers that leave
+  (`server_names`); the result has `ignored`; a new failure,
+  `ScaleDownServersInvalidError`.
+- **Wingman follows** (ADR-0062's 2026-11-18 amendment): day1 sends exactly
+  `{mce_cluster, cluster, nodepool, replicas}`; the by-kind mode and the
+  hardware type total are gone (domain, schemas, fake, web, docs); day1
+  refuses `infra_env_kind` and a NodePool the file does not name (or names
+  twice) before anything is sent; a run recorded by kind still shows; the
+  run card lists `ignored` and explains `ScaleDownServersInvalidError`.
+- **The branch's other changes** (add-server-to-mce one server per run from
+  server-scan, ADR-0063 there; uninstall and remove-server-from-mce) break
+  nothing Wingman sends today. When it merges: `domain/inventory.py`'s
+  `named_for` should match `ocp-<infraEnv>-` with the dash, the
+  orchestrator OpenAPI snapshot test treats `namespace` as hidden, and the
+  inventory docs describe the allocation, maintenance on a no-Agent timeout
+  and the early lock release.
 
 **Next:**
+- When the workflows branch merges: the inventory follow-ups above.
 - Scale's scale-down policy per NodePool (the user): a flavor and
   create-form choice that `cluster-template.j2` writes as the entry's
   annotation (the specs project's template needs it too); more in
