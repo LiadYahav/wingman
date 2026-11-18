@@ -137,8 +137,27 @@ describe("a run's target and failure", () => {
   it("explains named servers a scale-down could not remove, and nothing else", () => {
     expect(failureHint("ScaleDownServersInvalidError")).toMatch(/^The servers named to leave cannot be the ones/);
     expect(failureHint("ScaleDownServersInvalidError")).toMatch(/Nothing was marked or written\.$/);
-    expect(failureHint("ArgoSyncRefusedError")).toBeNull();
+    expect(failureHint("ArgoSyncRefusedError", "no Machine of NodePool x is server y")).toBeNull();
     expect(failureHint(null)).toBeNull();
+  });
+
+  it("says which way named servers were refused, by the workflow's words", () => {
+    const why = (error: string) => failureHint("ScaleDownServersInvalidError", error);
+    expect(why("the server-lifecycle-worker on MCE m predates `server_names`: it does not say")).toMatch(/older than named servers/);
+    expect(why("NodePool p: Machine m (server unknown) is unhealthy for CAPI, which in OpenShift 4.18")).toMatch(
+      /would take an unhealthy machine you did not pick/
+    );
+    expect(why("more than one Machine of NodePool p is server s (m1, m2)")).toMatch(/Two machines of the NodePool are the same server/);
+    expect(why("no Machine of NodePool p is server ocp-x; its servers are a (m1)")).toMatch(/is not a machine of the NodePool now/);
+    expect(why("`server_names` names ocp-a more than once.")).toBe("A server was picked twice. Nothing was marked or written.");
+    expect(why("p goes from 3 to 1, so 2 server(s) leave; `server_names` names 1 (a). Name exactly the servers that leave")).toBe(
+      "The servers picked are not as many as the scale-down removes. Nothing was marked or written."
+    );
+  });
+
+  it("sends named servers only when there are some", () => {
+    expect(startBody("p", 1, ["ocp-a", "ocp-b"])).toStrictEqual({ nodepool: "p", replicas: 1, server_names: ["ocp-a", "ocp-b"] });
+    expect(startBody("p", 1, [])).toStrictEqual({ nodepool: "p", replicas: 1 });
   });
 });
 

@@ -26,12 +26,15 @@ from enum import StrEnum
 from typing import Final
 
 from wingman_day1.domain.machines import (
+    DELETION_STEPS_V1BETA1,
+    DELETION_STEPS_V1BETA2,
     AgentMachineObservation,
     AgentObservation,
     MachineObservation,
     MachineSetObservation,
     condition,
     is_true,
+    machine_server,
 )
 from wingman_day1.domain.names import HostedClusterRef
 from wingman_day1.domain.selectors import selects
@@ -51,29 +54,6 @@ PROBLEM_CONDITIONS: Final = ("Ready", "AllMachinesReady", "AllNodesHealthy")
 INSTALLED_AGENT_STATES: Final = frozenset({"installed", "added-to-existing-cluster"})
 _PROGRESS: Final = re.compile(r"Total Nodes: (\d+)\. Upgraded: (\d+)")
 _DEGRADED: Final = re.compile(r"Node (\S+) in nodepool degraded: (.*)", re.DOTALL)
-
-DELETION_STEPS_V1BETA2: Final = {
-    "WaitingForPreDrainHook": "Waiting for a pre-drain hook",
-    "DrainingNode": "Draining",
-    "WaitingForVolumeDetach": "Waiting for volumes to detach",
-    "WaitingForPreTerminateHook": "Waiting for the host to return to discovery",
-    "WaitingForInfrastructureDeletion": "Waiting for its AgentMachine to be deleted",
-    "WaitingForBootstrapDeletion": "Waiting for its bootstrap data to be deleted",
-    "DeletingNode": "Deleting its Node",
-    "DeletionCompleted": "Deleted",
-}
-"""CAPI's v1beta2 ``Deleting`` reasons (4.19+ hosted clusters), in words."""
-DELETION_STEPS_V1BETA1: Final = (
-    ("PreDrainDeleteHookSucceeded", "Waiting for a pre-drain hook"),
-    ("DrainingSucceeded", "Draining"),
-    ("VolumeDetachSucceeded", "Waiting for volumes to detach"),
-    ("PreTerminateDeleteHookSucceeded", "Waiting for the host to return to discovery"),
-)
-"""CAPI's v1beta1 deletion conditions, in the order a deletion meets them.
-
-The last is the Agent provider's hook: it holds the Machine until its host
-reboots into discovery.
-"""
 
 
 class NodeState(StrEnum):
@@ -161,6 +141,8 @@ class NodeView:
     server_name: str | None = None
     """server-scan's name when it knows the server, else the BareMetalHost's."""
     server: ServerRow | None = None
+    machine_server: str | None = None
+    """The server update-nodepool takes this Machine to be (``machines.machine_server``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,6 +315,7 @@ def _node_view(
         agent=AgentSummary(agent.name, agent.state, agent.stage) if agent else None,
         server_name=server.name if server else (agent.bmh if agent else None),
         server=server,
+        machine_server=machine_server(agent, machine.node_name),
     )
 
 

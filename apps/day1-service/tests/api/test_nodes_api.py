@@ -60,6 +60,7 @@ NODE = {
     "agent",
     "server_name",
     "server",
+    "machine_server",
     "uninstall",
 }
 SERVER = {
@@ -245,6 +246,7 @@ async def test_the_nodes_answer_has_exactly_the_contracts_shape(
         "waiting_for": None,
         "outdated": None,
         "server_name": DL0102,
+        "machine_server": DL0102.lower(),
         "uninstall": None,
     }
     assert rebooting["machine"].startswith("prod-lark-site1-dell-r660-site1-128c-1024gb-5tb-")
@@ -253,6 +255,7 @@ async def test_the_nodes_answer_has_exactly_the_contracts_shape(
     assert rebooting["server"]["last_seen_at"] == "2026-11-11T08:00:03+00:00"
     waiting = replace["nodes"][0]
     assert (waiting["state"], waiting["server"], waiting["agent"]) == ("waiting", None, None)
+    assert waiting["machine_server"] is None  # no Agent and no Node: not a server to name
     assert "(2 bound, 1 not approved)" in waiting["waiting_for"]
     (left,) = body["unassigned"]
     assert set(left) == SERVER | {"uninstall"}

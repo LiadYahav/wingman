@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave)
 
 ## Context
 
@@ -338,6 +338,7 @@ the ownership rule (5) do not change.
   and the run card adds a plain line under them.
 - Naming the servers a scale-down removes (the workflow's new
   `server_names`) is not built here; it waits for the user's decision.
+  *The user decided the same day: built, below.*
 
 Verification: `test_scale_workflow.py` (the start's exact four fields; a run
 recorded by kind still read, with its plan and chosen servers; `ignored`
@@ -349,3 +350,70 @@ and `ignored`), `apps/web/lib/scale-model.test.ts` (the start's body, a
 run's target, the failure line), `apps/web/lib/scale-confirm.test.ts`, and
 `apps/web/e2e/tests/cluster-scale.spec.ts` (no hardware type anywhere, a run
 by kind still shown, a run's `ignored`, the failure line).
+
+## Amendment (2026-11-18, later): a scale-down may name the servers that leave
+
+The user (2026-11-18) asked that a scale-down let the admin pick which
+servers leave, optionally: none picked keeps the NodePool's policy (or
+CAPI) choosing, as before. The workflow takes it as `server_names` (b1976f4):
+exactly those servers, as many as the replicas removed, each a Machine of the
+NodePool; a scale-up or no change ignores it and says so in `ignored`.
+
+- **The names are the workflow's.** It matches a named server to its
+  Machine by AgentMachine → Agent → the Agent's
+  `agent-install.openshift.io/bmh` label, else the Agent's hostname, else
+  the Machine's Node, lowercased. Day1 already follows each Machine to its
+  Agent for the Nodes tab (ADR-0038), so `GET .../nodes` gives each node a
+  `machine_server` computed by that same rule (`machines.machine_server`),
+  and that is what is sent. Not server-scan's records: server-scan places a
+  server in a cluster, not in a NodePool, and its name reaches a Machine
+  only through the BareMetalHost label the workflow reads first anyway.
+  The `server_name` the page shows is server-scan's name when it knows the
+  server, which can differ from the workflow's (a host found by MAC or
+  serial, with no label); `machine_server` cannot. A Machine with no Agent
+  and no Node has none and cannot be named.
+- **Day1 checks only what is its own** (decision 3): `server_names` is 1 to
+  20 server names, each once case-insensitively; it is sent only on a
+  scale-down of the file's replicas on `main` (a scale-up or no change with
+  names is a 422: never sent), and only exactly as many as leave (a 422 that
+  says how many). Which Machine each name is, a server named twice on the
+  MCE, an unhealthy Machine 4.18's CAPI would take instead, and an MCE
+  worker too old for the field are the workflow's: a failed run,
+  `ScaleDownServersInvalidError`, in its words.
+- **The run shows them**: a named server's `chosen` entry has `policy:
+  "named"` and its `server`.
+- Documented by the workflow for OpenShift 4.19 and later; on 4.18 it
+  refuses a pick CAPI could override.
+- **In the web, in the scale-down's confirmation** (no new page, no new
+  control on the card): the NodePool's Machines from the Nodes tab's read
+  (`GET .../nodes`), each shown by server-scan's name (else the workflow's),
+  its Node and state, with a checkbox. Optional: none ticked sends no names
+  and the NodePool's policy line stays; ticking counts "1 of 2 picked: tick
+  1 more, or none", the rest wait once as many are ticked as leave, and Yes
+  waits while some but not all are; all ticked, the line says exactly those
+  leave and the policy is not used. A Machine with no server yet, or one
+  already deleting, is listed but cannot be ticked, with why. Without live
+  status there is nothing to pick from, and it says so. Closing the
+  confirmation drops the picks; changing the replicas does too. A scale-up
+  shows none and never sends names.
+- **The run**: a named server shows by its server, "picked by name". A
+  `ScaleDownServersInvalidError` gets a line under the workflow's words that
+  says, from those words, which refusal it is (a wrong count, a server
+  picked twice, one that is no machine of the NodePool now, two machines
+  that are one server, an unhealthy machine 4.18's CAPI would take instead,
+  an MCE worker too old for names), else a general one.
+
+Verification: `tests/unit/domain/test_machine_server.py` (the rule),
+`tests/api/test_nodes_api.py` (`machine_server` in the nodes' contract),
+`test_scale_workflow.py` (the names sent, a named `chosen` read),
+`test_fake_scale.py` (exactly the named servers leave),
+`tests/api/test_scale_api.py` (names sent on a scale-down; refused on a
+scale-up, on no change, on a wrong count, twice, empty, more than 20, not a
+list; none sent); `apps/web/lib/scale-servers.test.ts` (what can be picked,
+the count's words, the line once complete), `apps/web/lib/scale-model.test.ts`
+(the body with and without names, each refusal's line), and
+`apps/web/e2e/tests/cluster-scale-servers.spec.ts` (none picked sends no
+names; Yes waits for the count, then the workflow's names are sent; the
+rest wait once all are picked; Cancel drops the picks; a scale-up offers
+none; a Machine with no server or already leaving cannot be picked; without
+the MCE's nodes it says so; the run's named server and a refusal's line).

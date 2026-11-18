@@ -66,6 +66,11 @@ export interface PoolNode {
   server_name: string | null;
   /** `null` when server-scan has no record of it, or is not configured or not answering. */
   server: ServerRecord | null;
+  /**
+   * The server update-nodepool takes this Machine to be, lowercased (its Agent's BareMetalHost, else hostname, else
+   * its Node): the name a scale-down sends to remove it. `null` when none is known (still provisioning).
+   */
+  machine_server: string | null;
   /** The server's newest uninstall run (the 202's shape), or `null`. `phase` is the workflow's own string. */
   uninstall: WorkflowRun | null;
 }

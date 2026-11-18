@@ -185,7 +185,7 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-18 — Scale sets one NodePool a run (PR #101).**
+**2026-11-18 — Scale sets one NodePool a run (PR #101), and a scale-down may pick its servers (the PR after it).**
 - **The workflow changed** (team-redbull/workflows `feat/update-nodepool`,
   b1976f4 and aab8949, not merged): `update-nodepool` takes `nodepool` only,
   `infra_env_kind` is a 422; a scale-down may name the servers that leave
@@ -197,6 +197,14 @@ and write yours here.
   refuses `infra_env_kind` and a NodePool the file does not name (or names
   twice) before anything is sent; a run recorded by kind still shows; the
   run card lists `ignored` and explains `ScaleDownServersInvalidError`.
+- **Picking the servers that leave** (the user's decision, ADR-0062's later
+  2026-11-18 amendment): optional, in the scale-down's confirmation, from
+  the Nodes tab's read of the MCE (needs live status); exactly as many as
+  leave, sent as `server_names`, each named by the workflow's own rule
+  (`machines.machine_server`, `GET .../nodes`' `machine_server`); never on a
+  scale-up. Needs the workflows release with `server_names` on the
+  orchestrator and every MCE's worker (`docs/upgrade/3.39-to-3.40.md`
+  step 3.5).
 - **The branch's other changes** (add-server-to-mce one server per run from
   server-scan, ADR-0063 there; uninstall and remove-server-from-mce) break
   nothing Wingman sends today. When it merges: `domain/inventory.py`'s

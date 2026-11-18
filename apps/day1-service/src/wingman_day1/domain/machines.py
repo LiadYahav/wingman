@@ -39,6 +39,29 @@ INFRA_ENV_LABEL: Final = "infraenvs.agent-install.openshift.io"
 """On an Agent: the AgentMachine that took it. A labelled Agent is not free."""
 PROVIDER_ID_PREFIX: Final = "agent://"
 
+DELETION_STEPS_V1BETA2: Final = {
+    "WaitingForPreDrainHook": "Waiting for a pre-drain hook",
+    "DrainingNode": "Draining",
+    "WaitingForVolumeDetach": "Waiting for volumes to detach",
+    "WaitingForPreTerminateHook": "Waiting for the host to return to discovery",
+    "WaitingForInfrastructureDeletion": "Waiting for its AgentMachine to be deleted",
+    "WaitingForBootstrapDeletion": "Waiting for its bootstrap data to be deleted",
+    "DeletingNode": "Deleting its Node",
+    "DeletionCompleted": "Deleted",
+}
+"""CAPI's v1beta2 ``Deleting`` reasons (4.19+ hosted clusters), in words."""
+DELETION_STEPS_V1BETA1: Final = (
+    ("PreDrainDeleteHookSucceeded", "Waiting for a pre-drain hook"),
+    ("DrainingSucceeded", "Draining"),
+    ("VolumeDetachSucceeded", "Waiting for volumes to detach"),
+    ("PreTerminateDeleteHookSucceeded", "Waiting for the host to return to discovery"),
+)
+"""CAPI's v1beta1 deletion conditions, in the order a deletion meets them.
+
+The last is the Agent provider's hook: it holds the Machine until its host
+reboots into discovery.
+"""
+
 
 def condition(conditions: tuple[Condition, ...], kind: str) -> Condition | None:
     """The condition of type ``kind``, if reported."""
@@ -139,3 +162,15 @@ class AgentObservation:
     def taken_by(self) -> str | None:
         """The AgentMachine that took it, from the ``agentMachineRef`` label."""
         return self.labels.get(AGENT_MACHINE_REF_LABEL) or None
+
+
+def machine_server(agent: AgentObservation | None, node_name: str | None) -> str | None:
+    """The server update-nodepool takes a Machine to be, lowercased; ``None`` when none is known.
+
+    The workflow's rule for a scale-down that names its servers (its
+    ``machine_selection.machine_server``): the Agent's BareMetalHost (the
+    ``agent-install.openshift.io/bmh`` label), else the Agent's hostname, else
+    the Machine's Node. add-server-to-mce names all three after the server.
+    """
+    found = (agent.bmh or agent.hostname if agent else None) or node_name
+    return found.lower() if found else None

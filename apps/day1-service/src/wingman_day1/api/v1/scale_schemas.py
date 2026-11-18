@@ -6,9 +6,9 @@ Responses pass the workflow's strings through, its phases included.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any, Final
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from wingman_day1.application.scale import ScaleOptions, ScaleTarget
 from wingman_day1.domain.scale import (
@@ -24,16 +24,35 @@ from wingman_day1.domain.scale import (
 
 _NAME = r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
 """A Kubernetes name, as the workflow takes a NodePool."""
+MAX_NAMED: Final = 20
+"""The most servers one update-nodepool request may name (the workflow's limit)."""
+ServerName = Annotated[
+    str, Field(min_length=1, max_length=253, pattern=r"^[A-Za-z0-9]([-A-Za-z0-9._]*[A-Za-z0-9])?$")
+]
+"""A server's name, as server-scan and the BareMetalHost give it (compared case-insensitively)."""
 
 
 class ScaleIn(BaseModel):
-    """``POST .../scale``: one NodePool of the cluster, by name, and its replicas."""
+    """``POST .../scale``: one NodePool, its replicas, on a scale-down the servers that leave."""
 
     model_config = ConfigDict(extra="forbid")
 
     replicas: StrictInt = Field(ge=0, le=10_000)
     """That NodePool's own, set exactly; the cluster's other NodePools are left as they are."""
     nodepool: str = Field(max_length=253, pattern=_NAME)
+    server_names: list[ServerName] | None = Field(default=None, min_length=1, max_length=MAX_NAMED)
+    """Scale-down only: exactly the servers that leave, as many as it removes; omit it to let the
+    NodePool's policy (or CAPI) pick."""
+
+    @field_validator("server_names")
+    @classmethod
+    def _each_once(cls, names: list[str] | None) -> list[str] | None:
+        """Each server once, case-insensitively: the workflow matches them lowercased."""
+        seen = [n.lower() for n in names or ()]
+        twice = sorted({n for n in seen if seen.count(n) > 1})
+        if twice:
+            raise ValueError(f"server_names lists {', '.join(twice)} more than once")
+        return names
 
     @model_validator(mode="before")
     @classmethod
@@ -48,7 +67,7 @@ class ScaleIn(BaseModel):
 
     def target(self) -> ScaleTarget:
         """For the use case."""
-        return ScaleTarget(self.replicas, self.nodepool)
+        return ScaleTarget(self.replicas, self.nodepool, tuple(self.server_names or ()))
 
 
 # ── What can be scaled ───────────────────────────────────────────────────────
@@ -146,13 +165,16 @@ class LiveReplicasOut(BaseModel):
 
 
 class ChosenServerOut(BaseModel):
-    """A server a scale-down chose to leave, by its NodePool's policy."""
+    """A server a scale-down chose to leave, by its NodePool's policy or by name."""
 
     nodepool: str
     machine: str
     node: str | None
     policy: str
+    """The policy's name; ``named`` for a server the request named."""
     reason: str
+    server: str | None
+    """The server, lowercased, when the request named it."""
 
 
 class ScaleResultOut(BaseModel):
@@ -267,5 +289,10 @@ def _live(n: LiveReplicas) -> LiveReplicasOut:
 
 def _chosen(c: ChosenServer) -> ChosenServerOut:
     return ChosenServerOut(
-        nodepool=c.nodepool, machine=c.machine, node=c.node, policy=c.policy, reason=c.reason
+        nodepool=c.nodepool,
+        machine=c.machine,
+        node=c.node,
+        policy=c.policy,
+        reason=c.reason,
+        server=c.server,
     )

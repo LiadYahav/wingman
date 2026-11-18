@@ -5,8 +5,9 @@ its replicas in day1 ``main``, syncs the cluster's Argo CD Application and
 checks the NodePool; day1 starts a run and reads it
 (``docs/notes/2026-11-16-scale-nodepools-api.md``):
 
-- ``POST /workflows/server-lifecycle/update-nodepool`` with exactly
-  ``{mce_cluster, cluster, nodepool, replicas}`` (the body forbids other
+- ``POST /workflows/server-lifecycle/update-nodepool`` with
+  ``{mce_cluster, cluster, nodepool, replicas}`` and, on a scale-down that
+  names the servers that leave, ``server_names`` (the body forbids other
   fields; ``infra_env_kind`` is refused since 2026-11-18) answers ``202
   {"workflow_id": "update-nodepool-<cluster>", "run_id"}``, 409 while a run
   of the cluster runs and while an upgrade-cluster run of it runs (its words
@@ -177,13 +178,16 @@ class HttpScaleWorkflow:
 
 
 def _start_body(request: ScaleRequest) -> dict[str, JSON]:
-    """The start's JSON: exactly these four fields, one NodePool, never anything else."""
-    return {
+    """The start's JSON: these four fields, one NodePool, and a scale-down's named servers."""
+    body: dict[str, JSON] = {
         "mce_cluster": request.mce_cluster,
         "cluster": request.cluster,
         "nodepool": request.nodepool,
         "replicas": request.replicas,
     }
+    if request.server_names:
+        body["server_names"] = list(request.server_names)
+    return body
 
 
 def _started(response: httpx.Response, cluster: str) -> ScaleRun:

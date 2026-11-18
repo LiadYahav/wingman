@@ -285,6 +285,11 @@ async def test_viewers_read_but_only_admins_start(
         {"replicas": "2", "nodepool": SMALL},
         {"replicas": 1, "nodepool": "Not A Name"},
         {"replicas": 1, "nodepool": SMALL, "mce_cluster": "elsewhere"},
+        {"replicas": 2, "nodepool": SMALL, "server_names": []},
+        {"replicas": 2, "nodepool": SMALL, "server_names": "ocp-a"},
+        {"replicas": 2, "nodepool": SMALL, "server_names": ["ocp-a b"]},
+        {"replicas": 1, "nodepool": SMALL, "server_names": ["ocp-A", "ocp-a"]},
+        {"replicas": 0, "nodepool": SMALL, "server_names": [f"ocp-{n}" for n in range(21)]},
     ],
 )
 async def test_a_body_the_workflow_would_refuse_is_a_422_before_anything_is_sent(
@@ -292,6 +297,70 @@ async def test_a_body_the_workflow_would_refuse_is_a_422_before_anything_is_sent
 ) -> None:
     response = await on.post(f"{BASE}/scale", json=body, headers=auth(support.ALICE))
     assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert scale.started == []
+
+
+async def test_a_scale_down_may_name_exactly_the_servers_that_leave(
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    scale: FakeScaleWorkflow,
+    run_clock: ManualClock,
+) -> None:
+    alice = auth(support.ALICE)
+    named = [
+        "ocp-dell-r660-site1-128c-1024gb-5tb-DL0001",
+        "ocp-dell-r660-site1-128c-1024gb-5tb-DL0002",
+    ]
+    started = await on.post(
+        f"{BASE}/scale",
+        json={"replicas": 1, "nodepool": SMALL, "server_names": named},
+        headers=alice,
+    )
+    assert started.status_code == 202, started.text
+    assert scale.started == [ScaleRequest(MCE, LARK, 1, nodepool=SMALL, server_names=tuple(named))]
+    run_clock.advance(seconds=120)
+    run = (await on.get(f"{BASE}/scale-run", headers=alice)).json()
+    assert [(c["server"], c["policy"]) for c in run["result"]["chosen"]] == [
+        (named[0].lower(), "named"),
+        (named[1].lower(), "named"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("replicas", "names", "problem"),
+    [
+        (
+            4,
+            ["ocp-a"],
+            f"server_names: servers are named only on a scale-down; {SMALL} goes from 3 to 4",
+        ),
+        (
+            3,
+            ["ocp-a"],
+            f"server_names: servers are named only on a scale-down; {SMALL} goes from 3 to 3",
+        ),
+        (
+            1,
+            ["ocp-a"],
+            f"server_names: {SMALL} goes from 3 to 1, so 2 server(s) leave and 1 are named; "
+            "name exactly the servers that leave, or none to let its policy pick",
+        ),
+    ],
+)
+async def test_servers_are_named_only_on_a_scale_down_and_as_many_as_leave(
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    scale: FakeScaleWorkflow,
+    replicas: int,
+    names: list[str],
+    problem: str,
+) -> None:
+    body = {"replicas": replicas, "nodepool": SMALL, "server_names": names}
+    response = await on.post(f"{BASE}/scale", json=body, headers=auth(support.ALICE))
+    assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert response.json()["details"]["problems"] == [problem]
     assert scale.started == []
 
 

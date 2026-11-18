@@ -84,6 +84,8 @@ class NodeOut(BaseModel):
     agent: AgentOut | None
     server_name: str | None
     server: ServerOut | None
+    machine_server: str | None
+    """The server update-nodepool takes this Machine to be, lowercased: what a scale-down names."""
     uninstall: WorkflowRunOut | None
     """The server's newest uninstall run; ``null`` when none, or when runs are unknown."""
 
@@ -179,6 +181,7 @@ class ClusterNodesOut(BaseModel):
                 else None,
                 server_name=node.server_name,
                 server=server_of(node.server),
+                machine_server=node.machine_server,
                 uninstall=run_of(node.server),
             )
 
