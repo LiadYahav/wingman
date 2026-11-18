@@ -383,6 +383,9 @@ class CountingInventory:
     async def end_maintenance(self, server_id: str) -> ServerMaintenance:
         raise AssertionError("not written here")
 
+    async def refresh(self, server_id: str) -> ServerRecord:
+        raise AssertionError("not written here")
+
     async def record(self, server_id: str) -> ServerRecord:
         raise AssertionError("not read here")
 

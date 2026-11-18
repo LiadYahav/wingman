@@ -12,7 +12,7 @@
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
-import type { HealthSeverity, InstallationType, OpenShiftState, Vendor } from "@/features/server-scan/types/server-scan";
+import type { HealthSeverity, InstallationType, OpenShiftState, ServerType, Vendor } from "@/features/server-scan/types/server-scan";
 
 /** server-scan's bucket for servers whose name carries no site. */
 export const UNASSIGNED_SITE_ID = "unassigned";
@@ -30,6 +30,17 @@ const VENDOR_LABELS: Record<string, string> = {
 /** A vendor server-scan names later is shown under its own name, never dropped. */
 export function vendorLabel(vendor: string): string {
   return VENDOR_LABELS[vendor] ?? vendor;
+}
+
+/** The Type dropdown's options (server-scan v6.3.0): `server_type` is derived from the vendor. */
+export const SERVER_TYPES: readonly { value: ServerType; label: string }[] = [
+  { value: "physical", label: "Physical" },
+  { value: "vm", label: "VM" },
+];
+
+/** A type's word: "Physical", "VM", or what server-scan sent. */
+export function serverTypeLabel(type: string): string {
+  return SERVER_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
 /** The collectors that exist (server-scan's `ManagerType`), with its labels. */

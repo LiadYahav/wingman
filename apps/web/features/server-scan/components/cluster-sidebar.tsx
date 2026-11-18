@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFillMain } from "./use-fill-main";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { CheckItem } from "@/components/data-table/check-item";
 import type { ClusterFacets, ClusterOption } from "@/features/server-scan/lib/rows";
@@ -14,7 +15,8 @@ import type { ClusterFacets, ClusterOption } from "@/features/server-scan/lib/ro
  *
  * It sits inside the page, not in the area's sidebar: it is this page's
  * filter, its counts follow the page's other filters, and the area's sidebar
- * is the navigation between pages.
+ * is the navigation between pages. It is never taller than the page's room
+ * (server-scan v6.4.0), so it never makes the page scroll past the table's box.
  *
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
@@ -67,6 +69,8 @@ export function ClusterSidebar({
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(true);
+  // Its own room only: the table beside it is the row's other item, not something under it.
+  const { attach: fillBox, style: fillStyle } = useFillMain<HTMLElement>(open, { column: false, min: 160 });
   const { mces, hosted, upi } = facets;
   const entries = mces.length + hosted.length + upi.length;
   if (entries === 0) return null;
@@ -91,7 +95,9 @@ export function ClusterSidebar({
   return (
     <aside
       aria-label="Cluster filters"
-      className="sticky top-4 flex max-h-[calc(100vh-6rem)] w-56 shrink-0 flex-col gap-3 self-start overflow-hidden rounded-xl border bg-card p-2.5"
+      ref={fillBox}
+      style={fillStyle}
+      className="sticky top-4 flex max-h-[var(--ss-fill,calc(100vh-6rem))] w-56 shrink-0 flex-col gap-3 self-start overflow-hidden rounded-xl border bg-card p-2.5"
     >
       <div className="shrink-0 space-y-2">
         <button

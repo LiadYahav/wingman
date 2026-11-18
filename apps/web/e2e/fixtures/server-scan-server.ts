@@ -26,6 +26,7 @@ export function nodeRecord(overrides: Partial<ServerRecord> = {}): ServerRecord 
     id: NODE_ID,
     name: NODE,
     model: "PowerEdge R660",
+    server_type: "physical",
     profile_template: { name: "R660-Standard", external_id: "tmpl-r660" },
     identity: { vendor: "dell", serial: "DL0101", system_uuid: "4c4c4544-0101", nic_macs: ["02:00:00:00:01:01", "02:00:00:00:01:02"] },
     hardware: {
@@ -85,10 +86,14 @@ export function nodeRecord(overrides: Partial<ServerRecord> = {}): ServerRecord 
     unreachable_since: null,
     unreachable_reason: null,
     unreachable_detail: null,
+    revision: 1,
     updated_at: "2026-11-13T08:00:00Z",
     created_at: "2026-09-01T06:00:00Z",
     maintenance_available: true,
     maintenance_detail: null,
+    refresh_enabled: true,
+    refresh_available: true,
+    refresh_detail: null,
     history_available: true,
     history_detail: null,
     ...overrides,
@@ -172,6 +177,7 @@ export function vmRecord(): ServerRecord {
     id: VM_ID,
     name: "vm-ocp-virt-01",
     model: null,
+    server_type: "vm",
     profile_template: { name: null, external_id: null },
     identity: { ...base.identity, vendor: "kubevirt", serial: null },
     hardware: { ...base.hardware, gpus: [] },
@@ -272,6 +278,22 @@ export async function setUpServer(
       : { enabled: false, reason: null, created_by: null, created_at: null, updated_at: null, expected_end: null };
     const { enabled, reason, created_by } = found.maintenance;
     return json(route, { id, name: found.name, maintenance: { enabled, reason, created_by } });
+  });
+  return calls;
+}
+
+/**
+ * Fetch now's route (§9.9): every POST's server id, in order; `answer` is the
+ * record read now (by its id, else 404), or a `Handler` answering instead.
+ */
+export async function mockFetchNow(page: Page, answer: ServerRecord[] | Handler): Promise<string[]> {
+  const calls: string[] = [];
+  await page.route(/\/api\/day1\/server-scan\/servers\/[^/]+\/refresh$/, (route) => {
+    const id = decodeURIComponent(new URL(route.request().url()).pathname.split("/").at(-2) ?? "");
+    calls.push(id);
+    if (typeof answer === "function") return answer(route);
+    const found = answer.find((r) => r.id === id);
+    return found ? json(route, found) : fulfillProblem(route, 404, "NOT_FOUND", `server-scan: No server with id '${id}'.`);
   });
   return calls;
 }

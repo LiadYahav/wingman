@@ -143,8 +143,9 @@ async def test_the_sites_in_server_scan_s_shape(
     assert fleet_["total"] == len(rows) == sum(s["total"] for s in items)
     for key in ("by_installation_type", "by_openshift_state"):
         assert sum(b["total"] for b in fleet_[key].values()) == fleet_["total"], key
-    assert sum(fleet_["by_health"].values()) == fleet_["total"]
-    assert fleet_["in_maintenance"] == sum(r.maintenance for r in rows)
+    # Servers in maintenance are counted there, not by health (server-scan v6.3.0).
+    assert fleet_["in_maintenance"] == sum(r.maintenance for r in rows) > 0
+    assert sum(fleet_["by_health"].values()) + fleet_["in_maintenance"] == fleet_["total"]
     assert list(fleet_["by_openshift_state"]) == [
         "AVAILABLE",
         "INSTALLED",

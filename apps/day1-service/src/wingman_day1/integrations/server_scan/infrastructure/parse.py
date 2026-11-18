@@ -2,8 +2,9 @@
 
 The shapes are server-scan's ``ServerRowsResponse`` and ``ServerDetail``
 (``backend/app/api/v1/schemas.py`` in team-redbull/server-scan).
-A row is read whole, all 22 fields the Servers page shows, searches or
-exports (docs/notes/2026-11-13-server-scan-area-api.md §8.3). Read strictly:
+A row is read whole, all 23 fields the Servers page shows, searches or
+exports (docs/notes/2026-11-13-server-scan-area-api.md §8.3); ``server_type``
+(v6.3.0) is ``None`` when an older server-scan does not send it. Read strictly:
 a missing required field or a value of the wrong type raises
 Type/Key/ValueError, which the adapter turns into "unavailable", never into a
 blank. ``server_row`` is also how the fake fleet reads its fixture, so the
@@ -49,6 +50,7 @@ def server_row(raw: JSON) -> ServerRow:
         health=required_text(raw, "health"),
         serial=optional_text(raw, "serial"),
         vendor=optional_text(raw, "vendor"),
+        server_type=optional_text(raw, "server_type"),
         model=optional_text(raw, "model"),
         site=optional_text(raw, "site_id"),
         cluster_name=optional_text(raw, "cluster_name"),

@@ -6,7 +6,9 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { CopyButton } from "@/components/data-table/copy-cell";
 import { modelLine } from "@/features/server-scan/lib/hardware";
+import { serverTypeLabel } from "@/features/server-scan/lib/vocabulary";
 import type { ServerRecord } from "@/features/server-scan/types/server-scan-record";
+import { FetchNowButton } from "../fetch-now";
 import { useServersBackHref } from "./use-server-page";
 
 /** "← Servers", back to the Servers view the page was opened from (server-scan's "← Back to inventory"). */
@@ -21,7 +23,8 @@ export function BackToServers() {
 
 /**
  * Opens the BMC's own web console in a new tab (`https://`, the one scheme
- * every vendor's BMC serves); nothing for a server whose BMC host was not read.
+ * every vendor's BMC serves), its address first on hover (server-scan
+ * v6.2.0); nothing for a server whose BMC host was not read.
  */
 function BmcButton({ host, name }: { host: string | null; name: string }) {
   if (!host) return null;
@@ -31,7 +34,7 @@ function BmcButton({ host, name }: { host: string | null; name: string }) {
       href={`https://${host}`}
       target="_blank"
       rel="noopener noreferrer"
-      title={label}
+      title={`${host} — open BMC console`}
       aria-label={label}
       className="inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium text-muted-foreground outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
     >
@@ -41,7 +44,11 @@ function BmcButton({ host, name }: { host: string | null; name: string }) {
   );
 }
 
-/** server-scan's header: the name with its copy button, the BMC console, the model under them. */
+/**
+ * server-scan's header: the name with its copy button, the BMC console and
+ * Fetch now (v6.5.0; only where the deployment offers it), the model under them, and whether it is a physical server or a VM (v6.3.0's
+ * `server_type`), beside the model in one muted line.
+ */
 export function ServerHeader({ record }: { record: ServerRecord }) {
   return (
     <header className="space-y-1">
@@ -54,9 +61,12 @@ export function ServerHeader({ record }: { record: ServerRecord }) {
           <CopyButton value={record.name} label="server name" />
         </div>
         <BmcButton host={record.network.bmc.host} name={record.name} />
+        {record.refresh_enabled && <FetchNowButton record={record} />}
       </div>
-      <p className="text-sm text-muted-foreground" data-testid="ss-server-model">
-        {modelLine(record.model, record.hardware.gpus)}
+      <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+        <span data-testid="ss-server-model">{modelLine(record.model, record.hardware.gpus)}</span>
+        <span aria-hidden>·</span>
+        <span data-testid="ss-server-type">{serverTypeLabel(record.server_type)}</span>
       </p>
     </header>
   );

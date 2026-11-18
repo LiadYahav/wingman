@@ -13,10 +13,12 @@ import {
   cardCounts,
   cardVerdict,
   fleetCards,
+  healthSegments,
+  healthSummary,
   installedAvailable,
   siteCards,
   sitesSummary,
-  vendorBars,
+  countBars,
   withFilter,
 } from "./sites";
 import { UNASSIGNED_SITE_ID, vendorLabel } from "./vocabulary";
@@ -250,36 +252,96 @@ describe("a card's counts", () => {
     expect(cardVerdict(breakdown())).toBe("empty");
   });
 
+  // server-scan v6.3.0 (its a0e29c3): `by_health` counts servers in service only.
+  it("say all healthy when every server in service is healthy, and not when every one is in maintenance", () => {
+    expect(cardVerdict(breakdown({ total: 3, in_maintenance: 1, by_health: { HEALTHY: 2 } }))).toBe("all-healthy");
+    expect(cardVerdict(breakdown({ total: 3, in_maintenance: 1, by_health: { HEALTHY: 1, CRITICAL: 1 } }))).toBeNull();
+    expect(cardVerdict(breakdown({ total: 2, in_maintenance: 2, by_health: { HEALTHY: 0 } }))).toBeNull();
+  });
+
   it("read a severity server-scan left out as zero", () => {
     expect(cardCounts(card({ total: 1, by_health: { HEALTHY: 1 } }))).toEqual([]);
   });
 });
 
-describe("the vendor bars", () => {
-  it("are each vendor's share of the card's own total, zeroes included", () => {
-    const stats = breakdown({
+describe("the Physical, VM and vendor bars", () => {
+  const cardOf = (stats: Partial<Breakdown>) => siteCards([{ ...SITE_ITEMS[0], ...breakdown(stats) }])[0];
+
+  it("are each one's share of the card's own total, zeroes included", () => {
+    const stats = {
       total: 40,
       by_vendor: [
         { vendor: "dell", count: 30 },
         { vendor: "cisco", count: 10 },
         { vendor: "hp", count: 0 },
       ],
-    });
-    expect(vendorBars(stats).map((b) => [b.label, b.count, b.percent])).toEqual([
+    };
+    expect(countBars(cardOf(stats)).map((b) => [b.label, b.count, b.percent])).toEqual([
+      ["Physical", 40, 100],
+      ["VM", 0, 0],
       ["Dell", 30, 75],
       ["Cisco", 10, 25],
       ["HPE", 0, 0],
     ]);
   });
 
+  // server-scan v6.3.0's cases (its a0e29c3), asked of the model.
+  const TLV_VENDORS = [
+    { vendor: "dell", count: 4 },
+    { vendor: "cisco", count: 2 },
+    { vendor: "hp", count: 0 },
+    { vendor: "standalone", count: 0 },
+    { vendor: "kubevirt", count: 4 },
+  ];
+
+  it("list Physical, then VM, then the physical vendors, with no KubeVirt row", () => {
+    const bars = countBars(cardOf({ total: 10, by_vendor: TLV_VENDORS }));
+    expect(bars.map((b) => b.label)).toEqual(["Physical", "VM", "Dell", "Cisco", "HPE", "Standalone"]);
+    expect(bars.map((b) => b.group)).toEqual(["type", "type", "vendor", "vendor", "vendor", "vendor"]);
+    expect(bars.slice(0, 2).map((b) => b.count)).toEqual([6, 4]);
+  });
+
+  it("turn the Physical, VM and vendor rows into links to that inventory filter, none at zero", () => {
+    const card = cardOf({ total: 10, by_vendor: TLV_VENDORS });
+    const filters = Object.fromEntries(countBars(card).map((b) => [b.label, b.filter]));
+    expect(filters).toEqual({
+      Physical: `${card.filter}&server_type=physical`,
+      VM: `${card.filter}&server_type=vm`,
+      Dell: `${card.filter}&vendor=dell`,
+      Cisco: `${card.filter}&vendor=cisco`,
+      HPE: null,
+      Standalone: null,
+    });
+  });
+
   it("are none for an empty card", () => {
-    expect(vendorBars(breakdown())).toEqual([]);
+    expect(countBars(cardOf({}))).toEqual([]);
   });
 
   it("name a vendor server-scan adds later by its own name", () => {
     expect(vendorLabel("kubevirt")).toBe("KubeVirt");
     expect(vendorLabel("standalone")).toBe("Standalone");
     expect(vendorLabel("lenovo")).toBe("lenovo");
+  });
+});
+
+// server-scan v6.2.0 (its 4d9d171): every card's stacked health bar.
+describe("the health bar", () => {
+  it("is worst first, then maintenance and healthy, only the tiers above zero, adding up to the total", () => {
+    const stats = breakdown({ total: 10, in_maintenance: 2, by_health: { HEALTHY: 5, CRITICAL: 1, UNKNOWN: 2, WARNING: 0 } });
+    const segments = healthSegments(stats);
+    expect(segments).toEqual([
+      { key: "CRITICAL", count: 1 },
+      { key: "UNKNOWN", count: 2 },
+      { key: "MAINTENANCE", count: 2 },
+      { key: "HEALTHY", count: 5 },
+    ]);
+    expect(segments.reduce((sum, s) => sum + s.count, 0)).toBe(stats.total);
+    expect(healthSummary(segments)).toBe("1 critical, 2 unknown, 2 maintenance, 5 healthy");
+  });
+
+  it("is none for an empty card", () => {
+    expect(healthSegments(breakdown())).toEqual([]);
   });
 });
 

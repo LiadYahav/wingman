@@ -21,6 +21,7 @@ from wingman_day1.integrations.server_scan.domain.servers import (
     FleetRows,
     MaintenanceStart,
     ServerMaintenance,
+    server_type_of,
 )
 
 
@@ -43,11 +44,16 @@ class ReservationFlagOut(BaseModel):
 
 
 class ServerRowOut(BaseModel):
-    """One server, every field server-scan's row has."""
+    """One server, every field server-scan's row has.
+
+    ``server_type`` is server-scan's, or its rule over the vendor when an
+    older server-scan did not send it.
+    """
 
     id: str
     name: str
     vendor: str | None
+    server_type: str
     model: str | None
     site_id: str | None
     source_provider: str | None
@@ -75,6 +81,7 @@ class ServerRowOut(BaseModel):
             id=row.id,
             name=row.name,
             vendor=row.vendor,
+            server_type=row.server_type or server_type_of(row.vendor),
             model=row.model,
             site_id=row.site,
             source_provider=row.source_provider,
@@ -110,22 +117,37 @@ class ServerRowOut(BaseModel):
 class ServerRowsOut(BaseModel):
     """``GET /api/day1/server-scan/servers``: server-scan's ``GET /api/v1/servers/rows``, typed.
 
-    Plus whether the maintenance toggle works in this deployment, and why not.
+    Plus whether the maintenance toggle and each row's Fetch now work in this
+    deployment, and why not; ``refresh_enabled`` false: Fetch now is off, no
+    column at all.
     """
 
     items: list[ServerRowOut]
     generated_at: datetime | None
     maintenance_available: bool
     maintenance_detail: str | None
+    refresh_enabled: bool
+    refresh_available: bool
+    refresh_detail: str | None
 
     @classmethod
-    def of(cls, fleet: FleetRows, maintenance_detail: str | None) -> ServerRowsOut:
+    def of(
+        cls,
+        fleet: FleetRows,
+        maintenance_detail: str | None,
+        *,
+        refresh_detail: str | None = None,
+        refresh_enabled: bool = False,
+    ) -> ServerRowsOut:
         """From the domain, in server-scan's order."""
         return cls(
             items=[ServerRowOut.of(row) for row in fleet.rows],
             generated_at=fleet.generated_at,
             maintenance_available=maintenance_detail is None,
             maintenance_detail=maintenance_detail,
+            refresh_enabled=refresh_enabled,
+            refresh_available=refresh_enabled and refresh_detail is None,
+            refresh_detail=refresh_detail,
         )
 
 

@@ -9,6 +9,7 @@
 
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, json } from "../fixtures/api-handlers";
+import { scrollState } from "../fixtures/scroll";
 import { forbidden, off } from "../fixtures/server-scan";
 import { AUDITOR_OFF, NO_EVENTS, PRUNED_ID, SNAPSHOT_PAGE, auditorOff, setUpEvents } from "../fixtures/server-scan-events";
 import { NODE, NODE_ID } from "../fixtures/server-scan-server";
@@ -116,6 +117,23 @@ test.describe("The Events page", () => {
     await pager(page).getByRole("button", { name: "Previous" }).click();
     await expect(events(page)).toHaveCount(3);
     expect(calls.lists).toEqual([{}, { cursor: "c2" }]);
+  });
+
+  test("server-scan v6.6.0: the trail scrolls inside its own box, its header pinned, and the page does not", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const [first] = SNAPSHOT_PAGE.items;
+    const items = Array.from({ length: 50 }, (_, i) => ({ ...first, id: `e${i}` }));
+    await setUpEvents(page, { events: [{ items, page: { next_cursor: null, has_more: false, page_size: 50, total: 50 } }] });
+    await go(page, PAGE);
+    await expect(events(page)).toHaveCount(50);
+    const box = '[data-testid="ss-events-box"]';
+    await expect.poll(async () => (await scrollState(page, box)).pageScrolls).toBe(false);
+    await page.locator(box).hover();
+    await page.mouse.wheel(0, 900);
+    await expect.poll(async () => (await scrollState(page, box)).boxTop).toBeGreaterThan(0);
+    const scrolled = await scrollState(page, box);
+    expect([scrolled.mainTop, scrolled.pinned]).toEqual([0, true]);
+    await expect(pager(page)).toBeInViewport();
   });
 
   test("the filters are in the URL under server-scan's names, and day1 is asked with them", async ({ page }) => {

@@ -13,9 +13,9 @@ fleet's audit trail, **Events** (§14, 3.31.0), and its CronJobs, **Jobs**
 - **server-scan's API does not change.** day1 reads server-scan with the
   viewer token it already holds (§4), a server's History and the Events page
   with its auditor token (§9.5, §14.5), and Jobs with its admin token
-  (§15.5). The writes are a server's maintenance on and off (§8.5) and
-  starting a Job (§15.6), with server-scan's admin token, behind Wingman's
-  admin check.
+  (§15.5). The writes are a server's maintenance on and off (§8.5),
+  starting a Job (§15.6) and Fetch now (§9.9, 3.48.0), with server-scan's
+  admin token, behind Wingman's admin check.
 - **The browser never calls server-scan.** It reads day1's routes below.
 - **Admins only** (decision 13 of the single-pane plan, until RBAC): every
   route takes `AdminUser`, so a viewer gets `403 FORBIDDEN` and an anonymous
@@ -57,14 +57,24 @@ its navigation.
 - **Every card**: its name and total; then only the counts above zero, each
   a glyph, the number and a word, in this order: `◆ N critical`,
   `⬟ N major`, `▲ N warning`, `⏸ N in maintenance`, `○ N unknown`. Every
-  server healthy: `● all healthy`; none at all: `empty`. A site card adds
+  server healthy: `● all healthy` (since v6.3.0 every server in service, and
+  at least one); none at all: `empty`. A site card adds
   `N installed` and `N available` (each above zero) from its own
-  `by_openshift_state`. Last, a bar per vendor (Dell, Cisco, HPE,
+  `by_openshift_state`. Since v6.2.0 (its `4d9d171`; Wingman 3.48.0) a
+  stacked **health bar**: each tier as wide as its share of the card's
+  servers, worst first (critical, major, warning, unknown, maintenance,
+  healthy), a tier above zero at least 3 pixels wide, its counts in words as
+  its tooltip. Last, a bar per vendor (Dell, Cisco, HPE,
   Standalone, KubeVirt), as wide as its share of the card's own total, with
-  its count; an empty card has none.
+  its count; an empty card has none. Since v6.3.0 (its `a0e29c3`; Wingman
+  3.48.0) **Physical** and **VM** lead them (VM is the `kubevirt` count,
+  Physical the total less it), then the physical vendors, with no KubeVirt
+  bar.
 - **Every count is a link into Servers**: the card's filter plus
   `health_overall=<SEVERITY>`, `maintenance=true` or
-  `openshift_state=<STATE>` (`/servers?site_id=tlv&health_overall=CRITICAL`).
+  `openshift_state=<STATE>` (`/servers?site_id=tlv&health_overall=CRITICAL`);
+  since v6.3.0 a bar above zero too, with `server_type=physical|vm` or
+  `vendor=<vendor>`.
 - **Refresh**: one `GET /api/v1/sites`. Not polled: TanStack Query's
   `staleTime` is 30 seconds with `refetchOnWindowFocus` off, so the page reads
   again when it is opened after 30 seconds. (Its Servers page polls every
@@ -86,6 +96,10 @@ included with `get_current_actor` only). Built by `backend/app/api/v1/sites.py`:
   site no longer configured as `unassigned`, so the slices add up to the
   total;
 - every vendor and severity present, zeroes included;
+- since v6.3.0 (its `a0e29c3`; Wingman 3.48.0) a server in maintenance is
+  counted in `in_maintenance` only, not in `by_health`, so `by_health` is
+  the servers in service and a slice's total is `by_health` summed plus
+  `in_maintenance` (before it, `by_health` counted every server);
 - cached 30 seconds in server-scan's Redis. No `ETag`.
 
 ## 3. `GET /api/day1/server-scan/sites`
@@ -231,8 +245,12 @@ rules ported, so the demo's cards agree with its servers.
   **Events** (§14.8) and 3.32.0 **Jobs** (§15.9), in that order, in an
   Activity section between Fleet and Configuration.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
-- **The Sites page**: §1's cards, counts and words in Wingman's design (its
-  colour tokens, light and dark). **The counts are not links yet**: the
+- **The Sites page**: §1's cards, counts and words, since 3.48.0 in
+  server-scan's own colours (the user's request; before it, Wingman's colour
+  tokens): its count colours (critical red, major orange, warning yellow,
+  in maintenance violet, unknown grey), its health bar's hues and its grey
+  bars, from `features/server-scan/palette.css` (its own values in dark,
+  light equivalents in light). **The counts are not links yet**: the
   Servers page they open does not exist. Each card and count carries the
   filter it will open, in server-scan's parameter names (`data-filter`), so
   the Servers PR turns them into links in one place. Since 3.23.0 they are links to the
@@ -271,19 +289,21 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   It looks at the name, model, serial, vendor, site, installation type, BMC
   host, a held reservation's MCE and the MACs (a hex-looking query also
   matches a MAC without its separators).
-- **Six dropdowns** of checkboxes, each option with how many servers ticking
+- **Seven dropdowns** of checkboxes, each option with how many servers ticking
   it would show (its count over what every *other* filter keeps): Vendor,
   Source (the collector: UCS Central, Intersight, OpenManage (Dell), OneView
-  (HPE), Standalone (Redfish), KubeVirt (VMs)), Site (server-scan's sites,
+  (HPE), Standalone (Redfish), KubeVirt (VMs)), **Type** (Physical or VM,
+  `server_type`; since v6.3.0, its `a0e29c3`), Site (server-scan's sites,
   from `/sites`), Classification (`installation_type`), Installation
   (Installed, In inventory, Available) and Health (the five severities, then
   Maintenance, which keeps only servers in maintenance). Several values of one
-  dropdown are OR, the dropdowns AND. **Healthy means healthy and in
-  service** (server-scan v6.0.0, its `2bb2fb2`; Wingman 3.43.0): a Healthy
-  server in maintenance shows only with Maintenance ticked too, while every
-  other severity keeps its servers in maintenance; Healthy's count is the
-  rows it shows, and Maintenance's still counts them, since ticking it adds
-  them.
+  dropdown are OR, the dropdowns AND. **A ticked severity means that
+  severity and in service** (server-scan v6.3.0, its `a0e29c3`; Wingman
+  3.48.0; Healthy alone since v6.0.0's `2bb2fb2`, 3.43.0): a server in
+  maintenance shows only with Maintenance ticked too, whatever other filters
+  are set; each severity's count is the rows it shows, and Maintenance's
+  still counts them, since ticking it adds them. The Sites cards count the
+  same way (§2), so a card's "5 critical" opens 5 rows.
 - **Toggles**, each with a tooltip and, while on, its count: Stale, Duplicate
   Name (the name is another server's too), Duplicate Server (claimed by two
   clusters), Name mismatch (OpenShift reports another hostname) and Donor (in
@@ -298,7 +318,9 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   they hold more than 8 entries; the sidebar folds away ("‹ Hide filters",
   "Clusters (n) ›").
 - **Table**: Name (a link to the server's page, a copy button on hover), BMC
-  (opens `https://<bmc_host>` in a new tab; nothing without one),
+  (opens `https://<bmc_host>` in a new tab; since v6.2.0, its `4d9d171`, a
+  copy button beside it copies the address, and each says the address
+  first on hover; nothing without one),
   Installation (Available, Installed or In inventory, and "→ <MCE>" under it
   while an install holds the server), MCE (only when a row on the page has
   one), Cluster (and "Contested with <cluster>"), Model, State (the severity
@@ -307,8 +329,13 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   Installation, MCE, Cluster, Model and State sort, naturally and with blanks
   last; State by severity. A left edge marks critical, major and warning rows.
 - **Paging**: 50 rows a page, Previous, "Page X of Y", Next.
+- **The table scrolls inside its own box** (since v6.4.0, its `f80ffb9`;
+  Wingman 3.48.0), never the page: the box is as tall as the window leaves
+  under its top, above the pager (at least 240 pixels, so a short window
+  scrolls a little), its header pinned inside it; the cluster sidebar is
+  never taller than the room either.
 - **Everything in the URL**, so a link or a refresh lands on the same view:
-  `search`, `vendor`, `site_id`, `source_provider`, `installation_type`,
+  `search`, `vendor`, `server_type`, `site_id`, `source_provider`, `installation_type`,
   `openshift_state`, `health_overall` (each repeated for several values),
   `maintenance` (`true`: only those; `exclude`: hide them), `stale`,
   `duplicate`, `contested`, `name_mismatch`, `donor` (`true`), `mce`,
@@ -326,7 +353,7 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
 
 | Call | Token | Answer |
 |---|---|---|
-| `GET /api/v1/servers/rows` | any (viewer) | `{items: ServerRow[], generated_at}`: every server, 22 fields each (`id`, `name`, `vendor`, `model`, `site_id`, `source_provider`, `installation_type`, `health`, `maintenance` {`enabled`, `reason`, `created_by`}, `reservation` {`held`, `holder`, `mce_cluster`, `infra_env`, `expires_at`}, `openshift_state`, `cluster_name`, `mce_name`, `openshift_reported_name`, `contested_with`, `profile_template_name`, `last_seen_at`, `stale`, `reachable`, `serial`, `bmc_host`, `macs`). A weak `ETag` over the body and `Cache-Control: no-cache`; `If-None-Match` with it is a bodiless `304`. Cached by server-scan, cleared by its writes |
+| `GET /api/v1/servers/rows` | any (viewer) | `{items: ServerRow[], generated_at}`: every server, 23 fields each (`id`, `name`, `vendor`, `server_type` (since v6.3.0: `physical`, or `vm` for a KubeVirt VM; derived from the vendor, never stored), `model`, `site_id`, `source_provider`, `installation_type`, `health`, `maintenance` {`enabled`, `reason`, `created_by`}, `reservation` {`held`, `holder`, `mce_cluster`, `infra_env`, `expires_at`}, `openshift_state`, `cluster_name`, `mce_name`, `openshift_reported_name`, `contested_with`, `profile_template_name`, `last_seen_at`, `stale`, `reachable`, `serial`, `bmc_host`, `macs`). A weak `ETag` over the body and `Cache-Control: no-cache`; `If-None-Match` with it is a bodiless `304`. Cached by server-scan, cleared by its writes |
 | `GET /api/v1/sites` | any (viewer) | The Site dropdown's options: names and order (§2) |
 | `PUT /api/v1/servers/{id}/maintenance` | admin | Body `{reason?, expected_end?}`. Puts the server into maintenance, or updates the reason of one already in it; answers the server (`ServerDetail`). Its event and `created_by` name the caller: for a static token, `api-token-admin` |
 | `DELETE /api/v1/servers/{id}/maintenance` | admin | Ends it; answers the server |
@@ -344,7 +371,7 @@ shape, plus whether the maintenance toggle works here:
   "items": [
     {
       "id": "srv_…", "name": "ocp-dell-r660-site1-…", "vendor": "dell",
-      "model": "PowerEdge R660", "site_id": "site1", "source_provider": "OPENMANAGE",
+      "server_type": "physical", "model": "PowerEdge R660", "site_id": "site1", "source_provider": "OPENMANAGE",
       "installation_type": "HOSTED_CLUSTER", "health": "HEALTHY",
       "maintenance": {"enabled": false, "reason": null, "created_by": null},
       "reservation": {"held": false, "holder": null, "mce_cluster": null, "infra_env": null, "expires_at": null},
@@ -357,7 +384,10 @@ shape, plus whether the maintenance toggle works here:
   ],
   "generated_at": "2026-11-11T08:00:03Z",
   "maintenance_available": true,
-  "maintenance_detail": null
+  "maintenance_detail": null,
+  "refresh_enabled": false,
+  "refresh_available": false,
+  "refresh_detail": "Fetch now is off in this deployment. It needs server-scan v6.5.0 or later and its admin token; turn it on with the chart's day1.serverScanRefresh.enabled (DAY1_SERVER_SCAN_REFRESH)."
 }
 ```
 
@@ -366,9 +396,15 @@ shape, plus whether the maintenance toggle works here:
   `bmc_host`, the maintenance's `reason` and `created_by`, and
   `contested_with`'s value). The rows keep server-scan's order. A
   reservation is `held` as server-scan judged it when day1 read it; one not
-  held has every other field null.
+  held has every other field null. **`server_type`** is server-scan's (v6.3.0);
+  from an older server-scan, which does not send it, day1 sends its rule
+  over the vendor (`vm` for `kubevirt`, else `physical`), so the field is
+  always there.
 - **`maintenance_available`** is whether the toggle works in this deployment
   (§8.4); `maintenance_detail` says why not, in one line, else `null`.
+  **`refresh_enabled`** (whether the deployment offers Fetch now at all,
+  `DAY1_SERVER_SCAN_REFRESH`), **`refresh_available`** and `refresh_detail`
+  are the same for each row's Fetch now (§9.9, 3.48.0).
 - **One cache, two `304`s.** The rows come from the cache the Nodes tab,
   placement and Inventory Management share (`server-scan:rows`, for
   `DAY1_CACHE_TTL_SECONDS`, 30 s by default), which asks server-scan with
@@ -464,7 +500,7 @@ maintenance:
   `disable_maintenance`, with `ok`, `denied` (the admin token refused),
   `not_found`, `rejected` (its `422`), `unavailable` and `ambiguous`.
 - **The fake** (`DAY1_FAKE_FLEET=true`): its rows are read from
-  `dev/fleet-fixtures/servers.yaml` with all 22 fields; its writes change the
+  `dev/fleet-fixtures/servers.yaml` with all 23 fields; its writes change the
   row (by `dev`, as server-scan with auth off records it), and no token is
   needed, as on the sandbox.
 
@@ -472,8 +508,16 @@ maintenance:
 
 - **`/server-scan/servers`**, "Servers" in the area's sidebar after Sites,
   as server-scan's navigation orders them.
-- **§8.1 in Wingman's design**: the shared table (`components/data-table/`),
-  Wingman's colour tokens, light and dark, the explanations in tooltips.
+- **§8.1 in server-scan's look** (since 3.48.0, the user's request; before
+  it, Wingman's colour tokens): the shared table (`components/data-table/`)
+  with server-scan's cells and headers (centred but the name, uppercase,
+  `px-2 py-2.5`), its palette (`features/server-scan/palette.css`: its own
+  values in dark, light equivalents in light) for the Installed (red),
+  Available (green) and In inventory (blue) pills, the severity, Maint
+  (violet), Donor, Stale and Name mismatch pills and a row's left edge, the
+  name in plain text, its icons for the maintenance tools and Fetch now, its
+  hairline icon buttons; the filter bar as its own (Search first, the
+  export at the toggles' end); the explanations in tooltips.
 - **Reused from server-scan** (decision 18, credited in the code): its row
   type, `rows.ts` (filter, search, sort, facets, dropdown facets, the cluster
   lists, paging), `sorting.ts`, `donor.ts`, the vendor, source and severity
@@ -486,6 +530,13 @@ maintenance:
   server-scan: it filters this page and its counts follow the page's other
   filters, while the area's sidebar is navigation between pages, shown on
   every page.
+- **The box** (§8.1, since v6.4.0): in Wingman the page scrolls inside the
+  shell's `main`, not the window, so the box's height is `main`'s less the
+  box's top, the pager and the page's bottom padding (`useFillMain`,
+  `lib/fill.ts`), measured on mount, on a resize and when the column above
+  it changes (chips wrapping), never from the scroll position; before it is
+  measured the box keeps 70% of the window, as it did. The cluster sidebar is
+  held to the same room. The Events page's table does the same (§14.8).
 - **Speed**: about 3,100 rows. The page shows them 50 at a time, as
   server-scan pages them, through the shared table, so the DOM holds 50 rows
   whatever the fleet; filtering, the facet counts and the cluster lists run
@@ -527,7 +578,9 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/server
   was opened from, else the unfiltered list), the server's name with a copy
   button, a **BMC** button opening `https://<bmc host>` in a new tab (none
   without a host), and the model under the name: the chassis model, else the
-  GPUs' short name with "(from GPU)" (`inferredGpuModel`), else "—".
+  GPUs' short name with "(from GPU)" (`inferredGpuModel`), else "—". Since
+  v6.3.0 a line under it says **Physical** or **VM** (`server_type`); Wingman
+  puts it beside the model, in the same muted line.
 - **Five tabs**: Overview, Hardware, Network, Connectivity, History. History
   is shown only to a person who may read the audit trail (an auditor or an
   admin). The tab is component state, not in the URL.
@@ -678,8 +731,9 @@ plus whether the maintenance toggle and History work here:
   "unread_fields": [], "nic_os_names": {"NIC.Integrated.1-1-1": "eno12399np0"}, "tags": [],
   "last_seen_at": "2026-11-11T08:00:03Z", "stale": false, "reachable": true,
   "unreachable_since": null, "unreachable_reason": null, "unreachable_detail": null,
-  "updated_at": "2026-11-11T08:00:03Z", "created_at": "2026-09-01T06:00:00Z",
+  "revision": 17, "updated_at": "2026-11-11T08:00:03Z", "created_at": "2026-09-01T06:00:00Z",
   "maintenance_available": true, "maintenance_detail": null,
+  "refresh_enabled": true, "refresh_available": true, "refresh_detail": null,
   "history_available": true, "history_detail": null
 }
 ```
@@ -691,13 +745,17 @@ plus whether the maintenance toggle and History work here:
   `revision`, a drive's slot, protocol and firmware, a module's type and
   serial, a controller's drive count, the BMC's `host_is_ip` and path, an
   identity's external ids, the health's `evaluated_at` and policy keys, the
-  classification's version and time, the OpenShift claim's agent history).
+  classification's version and time, the OpenShift claim's agent history;
+  since 3.48.0 `revision` is kept, for Fetch now, §9.9).
   Enumerations (`vendor`, severities, states, `installation_type`,
   `media_type`, a controller's `kind`, …) are kept as server-scan sends
   them, so a value it adds later reaches the page, which shows it as it is.
   A list or object server-scan leaves out on an older document
   (`health.reasons`, `storage.controllers`, `storage.raid`) is sent as empty
   or `null`.
+- **`server_type`** (v6.3.0, 3.48.0) is `physical` or `vm`, as the rows'
+  (§8.3): server-scan's, or day1's rule over `identity.vendor` from an
+  older server-scan.
 - **`unreachable_reason`** is server-scan's word for why the last collection
   failed (`network_unreachable`, `auth_rejected`, `tls_error`, `timeout`,
   `protocol_error`, `not_an_idrac`, and since v5.3.1 `collection_error`),
@@ -844,8 +902,10 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
   keeps Servers marked). The tab is in the URL: `?tab=hardware`, `network`,
   `connectivity` or `history`; Overview has none.
 - **§9.1 in Wingman's design**: server-scan's tabs, fields, words and
-  badges, Wingman's colour tokens (light and dark), the explanations in
-  tooltips.
+  badges, the explanations in tooltips; since 3.48.0 its badges in
+  server-scan's colours too (the Installed, Available and reservation pills,
+  its `HealthBadge` for a health: `HEALTHY`, `CRITICAL`, ...; its amber and
+  grey `Badge`).
 - **The maintenance block is read only**, as server-scan's page is (its
   `0bb7dad`): the state, the reason (since when and the expected end in its
   tooltip), and a "Switch on Servers" link that opens the Servers list at
@@ -890,6 +950,81 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
   `ConnectivityTab.tsx`, the NIC wording of `NetworkTab.tsx`, the health
   breakdown's rules, the profile-template and unreachable labels, the event
   tints, its types, and their tests' cases as Vitest cases.
+
+### 9.9 Fetch now (3.48.0)
+
+server-scan v6.5.0 (its `827cd97`, its ADR-0064) put a **Fetch now** button
+in its server page's header, and v6.6.0 (`55b6391`) one, icon only, as the
+first column of every Servers row: each reads that one server from its
+vendor manager now, instead of waiting for its collector run (every 6 hours)
+or running the whole collector from Jobs. Wingman follows both.
+
+- **server-scan's call**: `POST /api/v1/servers/{id}/refresh`, no body,
+  **admin only** (`require_admin`, as every write; it also costs a vendor
+  manager session). It reads the server from the manager that collects it
+  (the same live read its `/servers/available` recheck runs), persists it,
+  audits `SERVER_REFRESHED` (`data`: `manager_type`, `changed`) and answers
+  the server whole (`ServerDetail`), whose `revision` moves only when the
+  content changed. Calls for one server share one read. It answers `404` for
+  an unknown id; **`409 SERVER_REFRESH_UNSUPPORTED`** when the API is not
+  connected to that manager (a standalone Redfish BMC, whose credentials stay
+  with its CronJob; KubeVirt on the hub; a server no manager collected);
+  **`409 SERVER_NOT_AT_MANAGER`** when the manager no longer reports it
+  (nothing is written or deleted); **`503`** when the manager fails (timeout,
+  login, network). It waits as long as its recheck does, up to 240 seconds
+  for UCS Central.
+- **day1's route**: **`POST /api/day1/server-scan/servers/{server_id}/refresh`**,
+  no body, **`AdminUser`** (as the area, and as server-scan keeps the call),
+  sent once with server-scan's admin token (none to a server-scan with auth
+  off), through the one port (`ServerInventory.refresh`) and its adapter
+  (`infrastructure/writes.py`). It answers the record as just read, in
+  §9.4's shape with the three switches, judged now; the page takes it at
+  once. day1 drops its cached rows and sites after it, whatever the outcome.
+- **The errors**: server-scan's `409`s are **`409 SERVER_REFRESH_REFUSED`**,
+  its words as the detail (nothing changed); `404` is `404 NOT_FOUND` in its
+  words; its `503` is `502 DEPENDENCY_UNAVAILABLE` with its words (the
+  manager failed, nothing changed); a refused admin token is `502` naming
+  `SERVER_SCAN_ADMIN_TOKEN`; sent and unanswered, or a gateway's `504`, is
+  **`504 AMBIGUOUS_WRITE`**: never retried (ADR-0006), "reload the server and
+  look at when it was last seen before trying again".
+- **How long**: day1 waits up to **120 seconds** for this call alone (its
+  other server-scan calls keep `SERVER_SCAN_TIMEOUT_SECONDS`); nginx gives
+  the path 130 seconds (the chart's `nginx-configmap.yaml`), as the Route
+  does every path. A UCS Central server server-scan takes longer to read is
+  `504 AMBIGUOUS_WRITE` in Wingman, though server-scan may finish it.
+- **Off by default: its own switch**, `DAY1_SERVER_SCAN_REFRESH` (the chart's
+  `day1.serverScanRefresh.enabled`; it needs `serverScan.url`), since new
+  features land in the air-gap off and a server-scan before v6.5.0 has no
+  such route. Off, `refresh_enabled` is `false` on the record (§9.4) and on
+  the rows' answer (§8.3), `refresh_available` is `false`, `refresh_detail`
+  says how to turn it on, the web shows no button and no column at all, and
+  the route answers `501 FEATURE_DISABLED` with `details.setting:
+  DAY1_SERVER_SCAN_REFRESH`, sending nothing.
+- **The admin token**: on, `refresh_available` and `refresh_detail` follow
+  the admin token's rule (§8.4): with it, or with no token at all (auth off),
+  it works; a viewer token alone turns it off, the buttons are greyed with
+  the line, and the route answers `501 FEATURE_DISABLED` with
+  `details.setting: SERVER_SCAN_ADMIN_TOKEN`.
+- **The record**: day1's record now keeps `revision` (§9.4 left it out
+  before), so the page can tell "no changes" from "data updated".
+- **The person is recorded by Wingman**: server-scan's event names the admin
+  token; day1 logs each with the person (`server_refreshed`, with the
+  server's name and revision; `server_refresh_unconfirmed` when unanswered).
+- **Metrics**: `server_scan` `refresh_server` (docs/ops/metrics.md).
+- **The web**: the header's **Fetch now** beside BMC (its tooltip
+  server-scan's "Read this server from its vendor manager now, instead of
+  waiting for the collector", its name "Fetch this server's data now"),
+  "Fetching…" while day1 waits, its icon turning (not under reduced motion); then a toast, "Fetched <name>", "From <manager> — no changes"
+  or "— data updated" by the revision, and on a failure "Fetch failed" with
+  the reason inline too, in server-scan's words. Each Servers row's is the
+  first column, icon only, named "Fetch data of <name> now", its toast "From
+  <manager>" or "<name>: <reason>". Both are greyed with day1's line without
+  the admin token. After one, the rows, the sites and the server's History
+  are read again. History names the event "Fetched from <manager> on demand
+  (data changed | no change)", and Events lists `SERVER_REFRESHED`.
+- **The fake**: reads its server back unchanged and seen now (`changed:
+  false`, by `dev`), and refuses a server with no collector or a standalone
+  Redfish one as server-scan does (`fakes/refresh.py`).
 
 ## 10. The Confs page (3.29.0)
 
@@ -1607,6 +1742,9 @@ navigation, after Confs, at `/events`, for an auditor or an admin only.
   on this page and in History alike.
 - **Paging**: Previous, "Page X of Y" (Y from the first page's total) and
   Next, over server-scan's cursors; a change of filters starts again at page 1.
+- **The trail scrolls inside its own box** (since v6.6.0, its `55b6391`;
+  Wingman 3.48.0), never the page, as the Servers table does (§8.1), its
+  header pinned; a server's History grows its page instead.
 - **Fresh**: the events are read when the page opens and again when it is
   opened after 30 seconds (its query client's `staleTime`); the User list
   once a minute (its own `staleTime`). Not polled.

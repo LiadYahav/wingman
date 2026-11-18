@@ -10,7 +10,10 @@ demo's Sites cards agree with the fake fleet's servers:
   ``unassigned``; an unknown health as ``UNKNOWN``; an unknown or missing
   installation type as ``UNCLASSIFIED``; an unknown state as ``AVAILABLE``;
   an unknown vendor is counted in the total but in no vendor entry, so every
-  slice adds up to the fleet.
+  slice adds up to the fleet;
+- a server in maintenance counts in ``in_maintenance`` only, never in
+  ``by_health`` (server-scan v6.3.0, its a0e29c3), so a slice's total is its
+  ``by_health`` and its ``in_maintenance`` summed.
 
 The catalog is server-scan's ``INVENTORY_SITES`` (``code:Display Name``); the
 fake fleet's is the ``sites`` list of ``dev/fleet-fixtures/servers.yaml``.
@@ -59,7 +62,8 @@ class _Counts:
         self.total += 1
         if row.maintenance:
             self.in_maintenance += 1
-        self.health[row.health if row.health in self.health else "UNKNOWN"] += 1
+        else:
+            self.health[row.health if row.health in self.health else "UNKNOWN"] += 1
         if row.vendor in self.vendors:
             self.vendors[row.vendor] += 1
 

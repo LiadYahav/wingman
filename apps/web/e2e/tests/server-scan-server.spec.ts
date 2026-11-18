@@ -3,13 +3,13 @@
  * §9, ADR-0048's 3.25.0 amendment): server-scan's server page in Wingman, its
  * five tabs with the tab in the URL, its words and badges; History with and
  * without server-scan's auditor token; maintenance read only on the record;
- * the states; and the link into it from the Servers table (Inventory
- * Management's links: inventory.spec.ts).
+ * Fetch now (server-scan v6.5.0); the states; and the link into it from the
+ * Servers table (Inventory Management's links: inventory.spec.ts).
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { fulfillProblem, go, json } from "../fixtures/api-handlers";
-import { CISCO_ID, HOST_ID, NODE, NODE_ID, VM_ID, ciscoRecord, nodeRecord, setUpServer, vmRecord } from "../fixtures/server-scan-server";
+import { fulfillProblem, go, held, json } from "../fixtures/api-handlers";
+import { CISCO_ID, HOST_ID, NODE, NODE_ID, VM_ID, ciscoRecord, mockFetchNow, nodeRecord, setUpServer, vmRecord } from "../fixtures/server-scan-server";
 
 const PAGE = `/server-scan/servers/${NODE_ID}`;
 const field = (page: Page, label: string) => page.getByTestId("ss-overview").locator("div").filter({ has: page.locator(`dt:text-is("${label}")`) }).locator("dd");
@@ -33,6 +33,8 @@ test.describe("The server's page", () => {
     await setUpServer(page);
     await go(page, PAGE);
     await expect(page.getByTestId("ss-server-model")).toHaveText("PowerEdge R660");
+    // server-scan v6.3.0: physical server or VM, beside the model
+    await expect(page.getByTestId("ss-server-type")).toHaveText("Physical");
     await expect(page.getByRole("link", { name: `Open BMC console for ${NODE}` })).toHaveAttribute("href", "https://192.0.2.101");
     await expect(page.getByRole("button", { name: `Copy server name ${NODE}` })).toBeVisible();
     await expect(tab(page, "Overview")).toHaveAttribute("aria-selected", "true");
@@ -46,7 +48,7 @@ test.describe("The server's page", () => {
     // OpenManage: no Connectivity, no GPU row; RAID with who answered
     const breakdown = page.getByTestId("ss-health-breakdown");
     await expect(breakdown.locator("[data-category]")).toHaveText([
-      "Memory●Healthy", "Storage▲Warning", "RAID●HealthyiDRAC9 · redfish_storage", "Network●Healthy", "Power●Healthy", "BMC●Healthy", "Name●Healthy",
+      "MemoryHEALTHY", "StorageWARNING", "RAIDHEALTHYiDRAC9 · redfish_storage", "NetworkHEALTHY", "PowerHEALTHY", "BMCHEALTHY", "NameHEALTHY",
     ]);
     await expect(page.getByRole("list", { name: "Why this health" })).toHaveCount(0);
     await expect(field(page, "Last seen")).toHaveText("3 hours ago");
@@ -55,7 +57,8 @@ test.describe("The server's page", () => {
     await expect(field(page, "Site")).toHaveText("site1");
     await expect(field(page, "Classification")).toHaveText("HOSTED_CLUSTER");
     await expect(field(page, "Matched rule")).toHaveText("Hosted cluster nodes (name ~ ^ocp-)");
-    await expect(field(page, "Overall health")).toHaveText("●Healthy");
+    // server-scan's own HealthBadge on its server page: the severity's word, no glyph
+    await expect(field(page, "Overall health")).toHaveText("HEALTHY");
     await expect(page.getByTestId("ss-maintenance")).toContainText("Not in maintenance");
     await expect(field(page, "Last changed")).toHaveText(/^13\/11\/2026, 10:00:00/);
     await expect(page.getByTestId("ss-collection")).toHaveCount(0);
@@ -67,8 +70,8 @@ test.describe("The server's page", () => {
     await expect(page.getByTestId("ss-server-model")).toHaveText("A100 (from GPU)");
     const why = page.getByRole("list", { name: "Why this health" });
     await expect(why.getByRole("listitem")).toHaveText([
-      "◆CriticalStorage4.80 TB of storage, but the name promises 10.00 TB",
-      "⬟MajorConnectivityA fabric path is down",
+      "CRITICALStorage4.80 TB of storage, but the name promises 10.00 TB",
+      "MAJORConnectivityA fabric path is down",
     ]);
     // Cisco: Connectivity yes, BMC no
     await expect(page.locator('[data-category="connectivity"]')).toBeVisible();
@@ -108,13 +111,14 @@ test.describe("The server's page", () => {
     const host = nodeRecord({ id: HOST_ID, name: "ocp-dell-r760-site1-virt-03" });
     await setUpServer(page, { records: [vmRecord(), host] });
     await go(page, `/server-scan/servers/${VM_ID}`);
+    await expect(page.getByTestId("ss-server-type")).toHaveText("VM");
     const vmHost = page.getByTestId("ss-vm-host");
     await expect(vmHost).toContainText("worker-3 · cluster ocp4-prod-virt-site1");
     await expect(vmHost).toContainText("CPU AMD EPYC 9654");
-    await expect(vmHost).toContainText("▲Warning");
+    await expect(vmHost).toContainText("WARNING");
     await expect(vmHost).toContainText("Maintenance");
     // A VM has no BMC, power, RAID or template to judge
-    await expect(page.locator('[data-category]')).toHaveText(["Memory●Healthy", "Storage▲Warning", "Network●Healthy", "Name●Healthy"]);
+    await expect(page.locator('[data-category]')).toHaveText(["MemoryHEALTHY", "StorageWARNING", "NetworkHEALTHY", "NameHEALTHY"]);
     await expect(page.getByRole("link", { name: /Open BMC console/ })).toHaveCount(0);
     await vmHost.getByRole("link", { name: "ocp-dell-r760-site1-virt-03" }).click();
     await expect(page).toHaveURL(new RegExp(`/server-scan/servers/${HOST_ID}$`));
@@ -130,9 +134,9 @@ test.describe("The server's page", () => {
     await expect(hardware.getByRole("region", { name: "CPU" })).toContainText("Intel(R) Xeon(R) Platinum 8462Y+");
     await expect(hardware.getByRole("region", { name: "Memory" })).toContainText("1024.0 GiB total (16 modules)");
     await expect(hardware.getByRole("region", { name: "Storage" })).toContainText("4.80 TB total");
-    await expect(page.getByTestId("ss-drive")).toHaveText([/^MZ7L3960S6XX00SSD960\.0 GB▲Warning\(Predictive failure\)$/, /^MZ7L33T8S6XX01SSD3\.84 TB●Healthy\(OK\)$/]);
+    await expect(page.getByTestId("ss-drive")).toHaveText([/^MZ7L3960S6XX00SSD960\.0 GBWARNING\(Predictive failure\)$/, /^MZ7L33T8S6XX01SSD3\.84 TBHEALTHY\(OK\)$/]);
     await expect(hardware.getByRole("region", { name: "GPU" })).toContainText("No GPUs.");
-    await expect(page.getByTestId("ss-psu")).toHaveText(["PWR SPLY,1400W — 1400W rated, 312W now ●Healthy", "PSU.Slot.2 —"]);
+    await expect(page.getByTestId("ss-psu")).toHaveText(["PWR SPLY,1400W — 1400W rated, 312W now HEALTHY", "PSU.Slot.2 —"]);
     // A Cisco GPU's health is its own word; unread memory is carried forward, unread drives never read
     await go(page, `/server-scan/servers/${CISCO_ID}?tab=hardware`);
     await expect(page.getByTestId("ss-gpu")).toContainText("NVIDIA A100 80GB");
@@ -262,6 +266,73 @@ test.describe("The page's states", () => {
     await setUpServer(page, { record: (route) => fulfillProblem(route, 501, "FEATURE_DISABLED", "Server Scan is not set up in this deployment: SERVER_SCAN_URL is empty.") });
     await go(page, PAGE);
     await expect(page.getByTestId("ss-off")).toBeVisible();
+  });
+});
+
+test.describe("Fetch now", () => {
+  const button = (page: Page) => page.getByTestId("ss-fetch-now");
+
+  test("reads the server from its manager: busy while day1 waits, then says it found nothing new and shows the read", async ({ page }) => {
+    await setUpServer(page);
+    const answer = held();
+    const fresh = nodeRecord({ last_seen_at: "2026-11-18T09:00:00Z" });
+    const calls = await mockFetchNow(page, answer.answer(fresh));
+    await go(page, PAGE);
+    await expect(button(page)).toHaveAccessibleName("Fetch this server's data now");
+    await expect(button(page)).toHaveAttribute("title", "Read this server from its vendor manager now, instead of waiting for the collector");
+    await button(page).click();
+    await expect(button(page)).toHaveText("Fetching…");
+    await expect(button(page)).toHaveAttribute("aria-busy", "true");
+    await expect(button(page)).toBeDisabled();
+    answer.release();
+    await expect(page.getByText(`Fetched ${NODE}`)).toBeVisible();
+    await expect(page.getByText("From OPENMANAGE — no changes")).toBeVisible();
+    await expect(button(page)).toHaveText("Fetch now");
+    // The page takes the record as just read: its Last seen is the new one
+    await expect(field(page, "Last seen").locator("[title]").first()).toHaveAttribute("title", /^18\/11\/2026/);
+    expect(calls).toEqual([NODE_ID]);
+  });
+
+  test("says the data was updated when server-scan's revision moved", async ({ page }) => {
+    await setUpServer(page);
+    await mockFetchNow(page, [nodeRecord({ revision: 2 })]);
+    await go(page, PAGE);
+    await button(page).click();
+    await expect(page.getByText("From OPENMANAGE — data updated")).toBeVisible();
+  });
+
+  test("a refusal is shown inline in server-scan's words, and sent once", async ({ page }) => {
+    await setUpServer(page);
+    const words = "server-scan: The API is not connected to the OPENMANAGE manager that collects it; run its collector job instead.";
+    const calls = await mockFetchNow(page, (route) => fulfillProblem(route, 409, "SERVER_REFRESH_REFUSED", words));
+    await go(page, PAGE);
+    await button(page).click();
+    await expect(page.getByTestId("ss-fetch-now-error")).toHaveText(words);
+    await expect(page.getByText("Fetch failed")).toBeVisible();
+    expect(calls).toHaveLength(1);
+  });
+
+  test("without server-scan's admin token it is greyed with day1's line, and sends nothing", async ({ page }) => {
+    const why = "Fetch now needs server-scan's admin token: add the key admin-token to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN).";
+    await setUpServer(page, { records: [nodeRecord({ refresh_available: false, refresh_detail: why })] });
+    const calls = await mockFetchNow(page, [nodeRecord()]);
+    await go(page, PAGE);
+    await expect(button(page)).toHaveAttribute("aria-disabled", "true");
+    await expect(button(page)).toHaveAccessibleName(why);
+    await button(page).click({ force: true });
+    await expect(page.getByTestId("ss-fetch-now-error")).toHaveCount(0);
+    expect(calls).toEqual([]);
+  });
+});
+
+test.describe("Fetch now, switched off", () => {
+  test("is not on the page at all where the deployment does not offer it (DAY1_SERVER_SCAN_REFRESH)", async ({ page }) => {
+    const why = "Fetch now is off in this deployment. It needs server-scan v6.5.0 or later and its admin token; turn it on with the chart's day1.serverScanRefresh.enabled (DAY1_SERVER_SCAN_REFRESH).";
+    await setUpServer(page, { records: [nodeRecord({ refresh_enabled: false, refresh_available: false, refresh_detail: why })] });
+    await go(page, PAGE);
+    await expect(page.getByRole("heading", { level: 1, name: NODE })).toBeVisible();
+    await expect(page.getByTestId("ss-fetch-now")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Fetch/ })).toHaveCount(0);
   });
 });
 

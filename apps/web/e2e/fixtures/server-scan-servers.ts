@@ -19,6 +19,7 @@ function server(name: string, overrides: Partial<ServerRow> = {}): ServerRow {
     id: `srv_${name}`,
     name,
     vendor: "dell",
+    server_type: "physical",
     model: "PowerEdge R660",
     site_id: "site1",
     source_provider: "OPENMANAGE",
@@ -99,8 +100,11 @@ export const FLEET: ServerRow[] = [
   server("ocp-twin", { id: "srv_twin_b", vendor: "standalone", source_provider: "REDFISH_STANDALONE", site_id: null, installation_type: "UNCLASSIFIED", serial: "TWINB" }),
 ];
 
+/** Fetch now on and working (`DAY1_SERVER_SCAN_REFRESH`, with the admin token): the area's Fetch now specs need it. */
+const FETCH_NOW_ON = { refresh_enabled: true, refresh_available: true, refresh_detail: null } as const;
+
 export function mockServers(items: ServerRow[] = FLEET, overrides: Partial<ServerRowsAnswer> = {}): ServerRowsAnswer {
-  return { items, generated_at: "2026-11-13T08:00:00Z", maintenance_available: true, maintenance_detail: null, ...overrides };
+  return { items, generated_at: "2026-11-13T08:00:00Z", maintenance_available: true, maintenance_detail: null, ...FETCH_NOW_ON, ...overrides };
 }
 
 const MODELS = ["PowerEdge R660", "PowerEdge R760", "UCS C240", "ProLiant DL380"] as const;

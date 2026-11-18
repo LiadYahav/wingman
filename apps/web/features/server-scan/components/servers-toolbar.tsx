@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Search, X } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import type { FacetCounts } from "@/features/server-scan/lib/rows";
 import {
@@ -13,14 +13,14 @@ import {
   type FlagKey,
   type ServersView,
 } from "@/features/server-scan/lib/servers-view";
-import { HEALTH_SEVERITIES, INSTALLATION_TYPES, OPENSHIFT_STATES, SOURCE_PROVIDERS, VENDORS } from "@/features/server-scan/lib/vocabulary";
+import { HEALTH_SEVERITIES, INSTALLATION_TYPES, OPENSHIFT_STATES, SERVER_TYPES, SOURCE_PROVIDERS, VENDORS } from "@/features/server-scan/lib/vocabulary";
 import { cn } from "@/lib/utils";
 import { MultiSelect } from "./multi-select";
 
 /**
  * The Servers page's filters, as server-scan's page has them
  * (team-redbull/server-scan, `InventoryPage.tsx`, decision 18):
- * the search, six dropdowns with their counts, five toggles, the "Filtered
+ * the search, seven dropdowns with their counts (Type since v6.3.0), five toggles, the "Filtered
  * by:" chips, and the exports. Each control changes the URL's view.
  *
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
@@ -29,7 +29,7 @@ import { MultiSelect } from "./multi-select";
 const SEARCH_HELP =
   'Plain text matches anywhere. "10.0.0.1" in quotes must equal the whole value. /10\\.0\\.0\\.(1|13)$/ between slashes is a regular expression.';
 
-/** server-scan's search box: name, serial, BMC… with its three syntaxes in the tooltip, and a bad regex under it. */
+/** server-scan's search box, first in its filter bar: name, serial, BMC… with its three syntaxes in the tooltip, and a bad regex under it. */
 export function ServerSearch({
   value,
   error,
@@ -42,9 +42,9 @@ export function ServerSearch({
   onCommit: () => void;
 }) {
   return (
-    <div className="flex w-full flex-col gap-1 text-xs font-medium text-muted-foreground sm:w-80">
+    <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground">
+      <span>Search</span>
       <div className="relative">
-        <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
         <input
           type="search"
           aria-label="Search servers"
@@ -59,7 +59,7 @@ export function ServerSearch({
             if (e.key === "Enter") onCommit();
             if (e.key === "Escape" && value) onChange("");
           }}
-          className="h-8 w-full rounded-lg border bg-card pl-8 pr-2 text-sm font-normal text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 aria-invalid:border-destructive [&::-webkit-search-cancel-button]:hidden"
+          className="h-8 w-full rounded-lg border bg-card px-2.5 text-sm font-normal text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 aria-invalid:border-destructive [&::-webkit-search-cancel-button]:hidden"
         />
       </div>
       {error && (
@@ -67,14 +67,14 @@ export function ServerSearch({
           {error}
         </span>
       )}
-    </div>
+    </label>
   );
 }
 
 /** The Health dropdown's last entry: Maintenance, which keeps only servers in maintenance. */
 const MAINTENANCE_OPTION = "MAINTENANCE";
 
-/** The six dropdowns, each option counted over what every other filter keeps. */
+/** The seven dropdowns, each option counted over what every other filter keeps. */
 export function ServerDropdowns({
   view,
   setView,
@@ -89,7 +89,7 @@ export function ServerDropdowns({
 }) {
   const all = (word = "All") => `${word} (${facets.total.toLocaleString()})`;
   const count = (counts: Record<string, number>, value: string) => counts[value] ?? 0;
-  const multi = (key: "vendor" | "source_provider" | "site_id" | "installation_type" | "openshift_state") => ({
+  const multi = (key: "vendor" | "source_provider" | "server_type" | "site_id" | "installation_type" | "openshift_state") => ({
     selected: view.multi[key],
     onToggle: (value: string) => setView(toggleValue(view, key, value)),
     onClear: () => setView(setValues(view, key, [])),
@@ -108,6 +108,12 @@ export function ServerDropdowns({
         allLabel={all()}
         options={SOURCE_PROVIDERS.map((s) => ({ ...s, count: count(facets.source_provider, s.value) }))}
         {...multi("source_provider")}
+      />
+      <MultiSelect
+        label="Type"
+        allLabel={all()}
+        options={SERVER_TYPES.map((t) => ({ ...t, count: count(facets.server_type, t.value) }))}
+        {...multi("server_type")}
       />
       <MultiSelect
         label="Site"

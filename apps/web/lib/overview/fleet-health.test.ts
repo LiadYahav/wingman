@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { Breakdown, SiteStats, SiteStatsList } from "@/features/server-scan/types/server-scan";
 import { fleetHealth } from "./fleet-health";
 
+/** As server-scan v6.3.0 counts: `by_health` the servers in service, those in maintenance apart. */
 const breakdown = (health: Breakdown["by_health"], in_maintenance = 0): Breakdown => ({
-  total: Object.values(health).reduce((a, b) => a + (b ?? 0), 0), by_vendor: [], by_health: health, in_maintenance,
+  total: Object.values(health).reduce((a, b) => a + (b ?? 0), 0) + in_maintenance, by_vendor: [], by_health: health, in_maintenance,
 });
 
 const site = (site_id: string, name: string, stats: Breakdown): SiteStats => ({
@@ -30,14 +31,15 @@ describe("the fleet health", () => {
       ["maintenance", 1, "site_id=tlv&maintenance=true"],
     ]);
     expect(tlv.parts).toEqual([
-      { severity: "HEALTHY", count: 20 }, { severity: "WARNING", count: 1 }, { severity: "CRITICAL", count: 2 },
+      { severity: "HEALTHY", count: 20 }, { severity: "WARNING", count: 1 }, { severity: "CRITICAL", count: 2 }, { severity: "MAINTENANCE", count: 1 },
     ]);
+    expect(tlv.parts.reduce((sum, part) => sum + part.count, 0)).toBe(tlv.total);
     expect(tlv.filter).toBe("site_id=tlv");
   });
 
   it("keeps a configured site with no server, and Unassigned only when it holds one", () => {
     const health = fleetHealth(LIST);
-    expect(health.sites.map((s) => [s.key, s.total, s.counts.length])).toEqual([["tlv", 23, 4], ["empty", 0, 0], ["unassigned", 2, 1]]);
+    expect(health.sites.map((s) => [s.key, s.total, s.counts.length])).toEqual([["tlv", 24, 4], ["empty", 0, 0], ["unassigned", 2, 1]]);
     expect(health.siteCount).toBe(2);
     const without = fleetHealth({ ...LIST, items: LIST.items.map((s) => (s.site_id === "unassigned" ? { ...s, ...breakdown({}) } : s)) });
     expect(without.sites.map((s) => s.key)).toEqual(["tlv", "empty"]);
@@ -45,7 +47,7 @@ describe("the fleet health", () => {
 
   it("sums the fleet as server-scan does, its filters every site's", () => {
     const { fleet } = fleetHealth(LIST);
-    expect(fleet.total).toBe(25);
+    expect(fleet.total).toBe(26);
     expect(fleet.counts.map((c) => [c.kind, c.filter])).toEqual([
       ["healthy", "health_overall=HEALTHY"],
       ["critical", "health_overall=CRITICAL"],

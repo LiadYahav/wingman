@@ -29,6 +29,7 @@ DEFAULT_FIXTURE = CHART / "ci/default-values.yaml"
 OBJECTS = [
     "",
     *("image", "image.day1", "image.nginx", "gitlab", "day1", "day1.upgrades", "day1.addServers"),
+    "day1.serverScanRefresh",
     *("day2", "auth", "devAuth", "route", "openshiftRoute", "openshiftRoute.tls", "ingress", "tls"),
     *("serviceAccount", "resources", "resources.web", "resources.web.limits", "replicaCount"),
     *("clusterStatus", "serverScan", "serverScan.tokenSecret", "workflows", "segmentsManager"),

@@ -3,18 +3,23 @@
  * each severity holds and how many are in maintenance, each count with the
  * Servers page's filter for it. The numbers and the filters are the Sites
  * page's (features/server-scan/lib/sites.ts, server-scan's own model); this
- * only adds the healthy count and the bar's parts.
+ * only adds the healthy count and the bar's parts. server-scan counts a
+ * server in maintenance there and not by its health (v6.3.0), so the bar has
+ * a maintenance part and its parts add up to the site's servers.
  */
 
 import { cardCounts, fleetCards, siteCards, sitesSummary, withFilter, type CardCount, type SiteCard } from "@/features/server-scan/lib/sites";
 import { SEVERITY_GLYPH } from "@/features/server-scan/lib/vocabulary";
 import type { HealthSeverity, SiteStatsList } from "@/features/server-scan/types/server-scan";
 
-/** The bar's order: healthy grows from the left, the worst toward the right, unknown last. */
-const BAR_ORDER: readonly HealthSeverity[] = ["HEALTHY", "WARNING", "MAJOR", "CRITICAL", "UNKNOWN"];
+/** A part of the bar: a severity's servers in service, or those in maintenance. */
+export type HealthPartKind = HealthSeverity | "MAINTENANCE";
+
+/** The bar's order: healthy grows from the left, the worst toward the right, maintenance, unknown last. */
+const BAR_ORDER: readonly HealthPartKind[] = ["HEALTHY", "WARNING", "MAJOR", "CRITICAL", "MAINTENANCE", "UNKNOWN"];
 
 export interface HealthPart {
-  severity: HealthSeverity;
+  severity: HealthPartKind;
   count: number;
 }
 
@@ -35,6 +40,10 @@ export interface HealthRow {
   counts: HealthCount[];
 }
 
+function partCount(card: SiteCard, part: HealthPartKind): number {
+  return part === "MAINTENANCE" ? card.stats.in_maintenance : (card.stats.by_health[part] ?? 0);
+}
+
 function healthRow(card: SiteCard): HealthRow {
   const healthy = card.stats.by_health.HEALTHY ?? 0;
   const healthyCount: HealthCount = {
@@ -49,7 +58,7 @@ function healthRow(card: SiteCard): HealthRow {
     name: card.name,
     total: card.stats.total,
     filter: card.filter,
-    parts: BAR_ORDER.map((severity) => ({ severity, count: card.stats.by_health[severity] ?? 0 })).filter((p) => p.count > 0),
+    parts: BAR_ORDER.map((severity) => ({ severity, count: partCount(card, severity) })).filter((p) => p.count > 0),
     counts: [...(healthy > 0 ? [healthyCount] : []), ...cardCounts(card)],
   };
 }

@@ -21,14 +21,16 @@ import { SHEET_NAME, exportName, serversCsv, serversTable } from "@/features/ser
 import { serversModel, type ServersModel } from "@/features/server-scan/lib/servers-model";
 import { clearFilters, filterChips, nextSort, toggleValue, withChange, type ServersView } from "@/features/server-scan/lib/servers-view";
 import { OPENSHIFT_STATES, SOURCE_PROVIDERS } from "@/features/server-scan/lib/vocabulary";
-import { formatDateTime, plural } from "@/lib/utils";
+import { cn, formatDateTime, plural } from "@/lib/utils";
 import type { SiteStats } from "@/features/server-scan/types/server-scan";
 import type { ServerRow, ServerRowsAnswer } from "@/features/server-scan/types/server-scan-servers";
 import { Blocked, isBlocked } from "./blocked";
 import { ClusterSidebar } from "./cluster-sidebar";
+import { fetchNowColumn } from "./fetch-now";
 import { maintenanceColumn } from "./maintenance-toggle";
-import { rowAccent, serverColumns } from "./server-columns";
+import { SERVERS_TABLE, rowLook, serverColumns } from "./server-columns";
 import { ActiveFilters, ServerDropdowns, ServerExports, ServerSearch, ServerToggles } from "./servers-toolbar";
+import { useFillMain } from "./use-fill-main";
 import { useServersView } from "./use-servers-view";
 
 /** server-scan's search waits this long after the last key before it filters. */
@@ -84,7 +86,12 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
   const searchError = useMemo(() => parseSearch(search.draft).error, [search.draft]);
   const siteList = siteOptions(sites, model, view.multi.site_id);
   const { maintenance_available: writable, maintenance_detail: why } = data;
-  const columns = useMemo(() => serverColumns(model.withMce, [maintenanceColumn(writable, why)]), [model.withMce, writable, why]);
+  const { refresh_enabled: fetchOn, refresh_available: fetchable, refresh_detail: fetchWhy } = data;
+  // Fetch now is a column only where this deployment offers it (DAY1_SERVER_SCAN_REFRESH)
+  const columns = useMemo(
+    () => [...(fetchOn ? [fetchNowColumn(fetchable, fetchWhy)] : []), ...serverColumns(model.withMce, [maintenanceColumn(writable, why)])],
+    [model.withMce, writable, why, fetchOn, fetchable, fetchWhy]
+  );
   const table = useDataTable<ServerRow>({
     data: model.page.items,
     columns,
@@ -98,6 +105,8 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
     state: (value) => OPENSHIFT_STATES.find((s) => s.value === value)?.label ?? value,
   });
   const exports = useExports(model.matched);
+  // server-scan v6.4.0: the table scrolls inside its own box, which fills the page, its header pinned
+  const { attach: fillBox, style: fillStyle } = useFillMain<HTMLDivElement>(model.page.items.length);
   const clear = () => {
     search.setDraft("");
     setView(clearFilters(view));
@@ -121,10 +130,7 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
 
   return (
     <>
-      <Header data={data} shown={model.matched.length}>
-        <ServerSearch value={search.draft} error={searchError} onChange={search.setDraft} onCommit={search.flush} />
-        <ServerExports shown={model.matched.length} {...exports} />
-      </Header>
+      <Header data={data} shown={model.matched.length} />
       <div className="flex items-start gap-4">
         <ClusterSidebar
           facets={model.clusters}
@@ -134,10 +140,15 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
         />
         <section aria-label="Servers" className="min-w-0 flex-1 space-y-3">
           {error !== null && <ProblemList error={error} title="The last re-read failed; these are the servers read before it" />}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {/* As server-scan's filter bar: Search first among the dropdowns, the export at the toggles' end. */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">
+            <ServerSearch value={search.draft} error={searchError} onChange={search.setDraft} onCommit={search.flush} />
             <ServerDropdowns view={view} setView={setView} facets={model.facets} sites={siteList} />
           </div>
-          <ServerToggles view={view} setView={setView} total={model.matched.length} />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <ServerToggles view={view} setView={setView} total={model.matched.length} />
+            <ServerExports shown={model.matched.length} {...exports} />
+          </div>
           <ActiveFilters
             chips={chips}
             view={view}
@@ -147,16 +158,18 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
             }}
             onClear={clear}
           />
-          <DataTable
-            table={table}
-            label="Servers"
-            sort={{ id: view.sort, desc: view.sortDesc }}
-            onSort={(id) => isSortableField(id) && setView(nextSort(view, id))}
-            filters={{ rows: model.base, value: view.columns, onChange: (columns) => setView(withChange(view, { columns })) }}
-            rowProps={(row) => ({ "data-testid": "ss-server-row", "data-server": row.name, className: rowAccent(row) })}
-            className="max-h-[70vh]"
-            empty={empty}
-          />
+          <div ref={fillBox} style={fillStyle} data-testid="ss-servers-box">
+            <DataTable
+              table={table}
+              label="Servers"
+              sort={{ id: view.sort, desc: view.sortDesc }}
+              onSort={(id) => isSortableField(id) && setView(nextSort(view, id))}
+              filters={{ rows: model.base, value: view.columns, onChange: (columns) => setView(withChange(view, { columns })) }}
+              rowProps={(row) => ({ "data-testid": "ss-server-row", "data-server": row.name, className: rowLook(row) })}
+              className={cn(SERVERS_TABLE, "max-h-[var(--ss-fill,70vh)]")}
+              empty={empty}
+            />
+          </div>
           {model.matched.length > 0 && <Pager page={model.page.page} pageCount={model.page.pageCount} onPage={(page) => setView({ ...view, page })} />}
         </section>
       </div>
@@ -165,12 +178,12 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
 }
 
 /**
- * One row: "Servers", how many the filters keep and when server-scan's
- * inventory last changed; the search and the exports at its right, once loaded.
+ * "Servers", then how many the filters keep and when server-scan's inventory
+ * last changed; the search and the export are in the filter bar, as there.
  */
-function Header({ data, shown, children }: { data: ServerRowsAnswer | undefined; shown: number | null; children?: React.ReactNode }) {
+function Header({ data, shown }: { data: ServerRowsAnswer | undefined; shown: number | null }) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+    <header>
       <div className="flex flex-wrap items-baseline gap-x-3">
         <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
           Servers
@@ -184,7 +197,6 @@ function Header({ data, shown, children }: { data: ServerRowsAnswer | undefined;
           )}
         </p>
       </div>
-      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </header>
   );
 }
@@ -203,7 +215,7 @@ export function ServersPage() {
   const data = blocked ? undefined : servers.data;
   const model = useMemo(() => (data ? serversModel(data.items, view) : null), [data, view]);
   return (
-    <div className="space-y-4 px-6 pb-6 pt-4 lg:px-8 lg:pt-5">
+    <div className="space-y-4 px-6 pb-6 pt-4 lg:px-8 lg:pt-5" data-fill-page>
       {(!data || !model) && <Header data={data} shown={null} />}
       {blocked ? (
         <Blocked error={servers.error} />

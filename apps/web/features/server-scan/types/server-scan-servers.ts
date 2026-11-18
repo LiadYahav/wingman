@@ -11,7 +11,7 @@
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
-import type { HealthSeverity, InstallationType, OpenShiftState, Vendor } from "./server-scan";
+import type { HealthSeverity, InstallationType, OpenShiftState, ServerType, Vendor } from "./server-scan";
 
 /** A server's maintenance, as a row carries it. */
 export interface MaintenanceState {
@@ -40,6 +40,8 @@ export interface ServerRow {
   id: string;
   name: string;
   vendor: Vendor;
+  /** server-scan's since v6.3.0; day1 derives it from the vendor for an older one. */
+  server_type: ServerType;
   model: string | null;
   /** The code in the name, or null when the name carries no site (Unassigned). */
   site_id: string | null;
@@ -66,7 +68,7 @@ export interface ServerRow {
   macs: string[];
 }
 
-/** day1's answer: server-scan's rows, and whether the maintenance toggle works here (§8.4). */
+/** day1's answer: server-scan's rows, and whether the maintenance toggle and Fetch now work here (§8.4). */
 export interface ServerRowsAnswer {
   items: ServerRow[];
   /** When the inventory last changed, as server-scan says. */
@@ -74,6 +76,11 @@ export interface ServerRowsAnswer {
   maintenance_available: boolean;
   /** Why the toggle does not work, in one line; null when it does. */
   maintenance_detail: string | null;
+  /** Whether this deployment offers Fetch now at all (`DAY1_SERVER_SCAN_REFRESH`, off by default): off, no column. */
+  refresh_enabled: boolean;
+  /** Whether each row's Fetch now works (on, and server-scan's admin token), and why not in one line. */
+  refresh_available: boolean;
+  refresh_detail: string | null;
 }
 
 /** The answer to a maintenance change: the server's new maintenance (§8.3). */

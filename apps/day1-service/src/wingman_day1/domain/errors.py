@@ -144,7 +144,7 @@ class ServerScanDiagramNotFoundError(ServerScanError):
 class ServerScanWritesOffError(ServerScanError):
     """What server-scan keeps for its admins is off here: a viewer token without its admin token.
 
-    The maintenance writes, and the Jobs page, its reads too (ADR-0048, 3.32.0).
+    The maintenance writes, the Jobs page, its reads too (ADR-0048, 3.32.0), and Fetch now.
     """
 
 
@@ -169,7 +169,23 @@ class ServerScanRefusedError(InvalidInputError):
 
 
 class AmbiguousServerScanWriteError(ServerScanError):
-    """A write (maintenance, a Job's start) was sent but its outcome is unknown. Never retried."""
+    """A write (maintenance, a Job's start, Fetch now) was sent but its outcome is unknown.
+
+    Never retried.
+    """
+
+
+class ServerScanRefreshOffError(ServerScanError):
+    """Fetch now is off in this deployment (``DAY1_SERVER_SCAN_REFRESH``); nothing is sent."""
+
+
+class ServerScanRefreshRefusedError(ServerScanError):
+    """server-scan cannot read the server from its vendor manager now (its 409); nothing changed.
+
+    It is not connected to the manager that collects the server
+    (``SERVER_REFRESH_UNSUPPORTED``: a standalone Redfish server, a VM on the
+    hub), or the manager no longer reports it (``SERVER_NOT_AT_MANAGER``).
+    """
 
 
 class NodeNotInClusterError(Day1Error):

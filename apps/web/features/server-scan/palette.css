@@ -1,0 +1,114 @@
+/*
+ * server-scan's own palette, for the Server Scan area's Servers table, a
+ * server's page and the Sites cards (ADR-0048's 2026-11-18 amendment: the
+ * user asked for server-scan's colours there, not Wingman's). Used as
+ * Tailwind colours: `bg-ss-tint-critical`, `text-ss-on-critical`, ...
+ *
+ * Dark is server-scan's own, value for value (its `frontend/src/index.css`;
+ * server-scan is dark only). Light is Wingman's: each tint a pale wash of the
+ * same hue, each text the hue dark enough for AA on it, the surfaces
+ * Wingman's own light ones.
+ *
+ * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
+ */
+
+@theme inline {
+  --color-ss-tint-healthy: var(--ss-tint-healthy);
+  --color-ss-tint-info: var(--ss-tint-info);
+  --color-ss-tint-warning: var(--ss-tint-warning);
+  --color-ss-tint-major: var(--ss-tint-major);
+  --color-ss-tint-critical: var(--ss-tint-critical);
+  --color-ss-tint-maintenance: var(--ss-tint-maintenance);
+  --color-ss-tint-donor: var(--ss-tint-donor);
+  --color-ss-tint-unknown: var(--ss-tint-unknown);
+  --color-ss-on-healthy: var(--ss-on-healthy);
+  --color-ss-on-info: var(--ss-on-info);
+  --color-ss-on-warning: var(--ss-on-warning);
+  --color-ss-on-major: var(--ss-on-major);
+  --color-ss-on-critical: var(--ss-on-critical);
+  --color-ss-on-maintenance: var(--ss-on-maintenance);
+  --color-ss-on-donor: var(--ss-on-donor);
+  --color-ss-on-unknown: var(--ss-on-unknown);
+  /* The status hues as fills: bars, a row's left edge. */
+  --color-ss-healthy: var(--ss-healthy);
+  --color-ss-warning: var(--ss-warning);
+  --color-ss-critical: var(--ss-critical);
+  --color-ss-maintenance: var(--ss-maintenance);
+  --color-ss-unknown: var(--ss-unknown);
+  /* The Sites health bar's own two (its HEALTH_SEGMENTS): a deeper orange, a brighter yellow. */
+  --color-ss-bar-major: var(--ss-bar-major);
+  --color-ss-bar-warning: var(--ss-bar-warning);
+  --color-ss-surface-sunken: var(--ss-surface-sunken);
+  --color-ss-surface-hover: var(--ss-surface-hover);
+  --color-ss-border-subtle: var(--ss-border-subtle);
+  --color-ss-border-strong: var(--ss-border-strong);
+  --color-ss-text-primary: var(--ss-text-primary);
+  --color-ss-text-secondary: var(--ss-text-secondary);
+  --color-ss-text-muted: var(--ss-text-muted);
+}
+
+:root {
+  --ss-tint-healthy: oklch(0.94 0.05 152);
+  --ss-tint-info: oklch(0.94 0.035 245);
+  --ss-tint-warning: oklch(0.95 0.06 85);
+  --ss-tint-major: oklch(0.94 0.05 50);
+  --ss-tint-critical: oklch(0.94 0.04 25);
+  --ss-tint-maintenance: oklch(0.94 0.04 300);
+  --ss-tint-donor: oklch(0.94 0.04 200);
+  --ss-tint-unknown: oklch(0.94 0.005 260);
+  --ss-on-healthy: oklch(0.42 0.12 152);
+  --ss-on-info: oklch(0.45 0.15 250);
+  --ss-on-warning: oklch(0.48 0.12 70);
+  --ss-on-major: oklch(0.5 0.15 45);
+  --ss-on-critical: oklch(0.5 0.19 25);
+  --ss-on-maintenance: oklch(0.48 0.15 300);
+  --ss-on-donor: oklch(0.45 0.09 200);
+  --ss-on-unknown: oklch(0.45 0.012 260);
+  --ss-healthy: oklch(0.62 0.15 152);
+  --ss-warning: oklch(0.68 0.16 78);
+  --ss-critical: oklch(0.6 0.21 25);
+  --ss-maintenance: oklch(0.62 0.14 300);
+  --ss-unknown: oklch(0.6 0.02 260);
+  --ss-bar-major: oklch(0.64 0.19 45);
+  --ss-bar-warning: oklch(0.8 0.16 90);
+  --ss-surface-sunken: oklch(0.965 0.004 260);
+  --ss-surface-hover: oklch(0.955 0.006 260);
+  --ss-border-subtle: oklch(0.915 0.005 260);
+  --ss-border-strong: oklch(0.82 0.008 260);
+  --ss-text-primary: oklch(0.21 0.012 260);
+  --ss-text-secondary: oklch(0.42 0.012 260);
+  --ss-text-muted: oklch(0.52 0.012 260);
+}
+
+.dark {
+  --ss-tint-healthy: oklch(0.3 0.06 152);
+  --ss-tint-info: oklch(0.3 0.06 245);
+  --ss-tint-warning: oklch(0.32 0.07 78);
+  --ss-tint-major: oklch(0.32 0.08 45);
+  --ss-tint-critical: oklch(0.32 0.09 25);
+  --ss-tint-maintenance: oklch(0.3 0.06 300);
+  --ss-tint-donor: oklch(0.3 0.07 200);
+  --ss-tint-unknown: oklch(0.28 0.006 260);
+  --ss-on-healthy: oklch(0.85 0.13 152);
+  --ss-on-info: oklch(0.85 0.11 245);
+  --ss-on-warning: oklch(0.87 0.13 78);
+  --ss-on-major: oklch(0.86 0.13 45);
+  --ss-on-critical: oklch(0.84 0.13 25);
+  --ss-on-maintenance: oklch(0.85 0.11 300);
+  --ss-on-donor: oklch(0.86 0.1 200);
+  --ss-on-unknown: oklch(0.8 0.006 260);
+  --ss-healthy: oklch(0.62 0.15 152);
+  --ss-warning: oklch(0.68 0.16 78);
+  --ss-critical: oklch(0.6 0.21 25);
+  --ss-maintenance: oklch(0.62 0.14 300);
+  --ss-unknown: oklch(0.6 0.02 260);
+  --ss-bar-major: oklch(0.64 0.19 45);
+  --ss-bar-warning: oklch(0.86 0.16 95);
+  --ss-surface-sunken: oklch(0.15 0.006 260);
+  --ss-surface-hover: oklch(0.25 0.008 260);
+  --ss-border-subtle: oklch(0.28 0.008 260);
+  --ss-border-strong: oklch(0.36 0.01 260);
+  --ss-text-primary: oklch(0.95 0.003 260);
+  --ss-text-secondary: oklch(0.72 0.006 260);
+  --ss-text-muted: oklch(0.6 0.008 260);
+}

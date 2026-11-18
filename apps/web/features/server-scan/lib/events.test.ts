@@ -83,6 +83,12 @@ describe("an event in a sentence", () => {
     );
   });
 
+  // server-scan v6.5.0's case (its 827cd97): Fetch now's event.
+  it("describes a server fetched on demand", () => {
+    expect(describeEvent(ev("SERVER_REFRESHED", { manager_type: "ONEVIEW", changed: true }))).toBe("Fetched from ONEVIEW on demand (data changed)");
+    expect(describeEvent(ev("SERVER_REFRESHED", { manager_type: "ONEVIEW", changed: false }))).toBe("Fetched from ONEVIEW on demand (no change)");
+  });
+
   it("covers every written type", () => {
     for (const t of WRITTEN_EVENT_TYPES) expect(describeEvent(ev(t))).not.toBe(t);
   });

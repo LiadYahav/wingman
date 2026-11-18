@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { ServerRow } from "@/features/server-scan/types/server-scan-servers";
 import {
   dropdownFacetCounts,
+  facetCounts,
   filterRows,
   parseSearch,
   searchRows,
@@ -20,6 +21,7 @@ function row(overrides: Partial<ServerRow> = {}): ServerRow {
     id: overrides.name ?? "srv_1",
     name: "srv-1",
     vendor: "dell",
+    server_type: "physical",
     model: "R760",
     site_id: "tlv",
     source_provider: "OPENMANAGE",
@@ -66,6 +68,19 @@ const FLEET = [
 ];
 
 describe("filterRows", () => {
+  // server-scan v6.3.0's case (its a0e29c3): the Type dropdown.
+  it("filters by server type and counts each type", () => {
+    const rows = [
+      row({ name: "phys-1", vendor: "dell" }),
+      row({ name: "vm-1", vendor: "kubevirt", server_type: "vm" }),
+      row({ name: "vm-2", vendor: "kubevirt", server_type: "vm" }),
+    ];
+    expect(filterRows(rows, { server_type: ["vm"] }).map((r) => r.name)).toEqual(["vm-1", "vm-2"]);
+    expect(filterRows(rows, { server_type: [] })).toHaveLength(3);
+    expect(facetCounts(rows).server_type).toEqual({ physical: 1, vm: 2 });
+    expect(dropdownFacetCounts(rows, { server_type: ["vm"] }).server_type).toEqual({ physical: 1, vm: 2 });
+  });
+
   it("matches every set filter and treats blanks as any", () => {
     expect(filterRows(FLEET, { vendor: ["cisco"] }).map((r) => r.name)).toEqual(
       ["srv-2"],
@@ -143,22 +158,41 @@ describe("filterRows", () => {
     expect(counts.total).toBe(1);
   });
 
-  // server-scan v6.0.0's cases (its 2bb2fb2): Healthy means healthy and in service.
-  it("Healthy means healthy and in service: a Healthy server in maintenance needs Maintenance ticked too", () => {
+  // server-scan v6.3.0's cases (its a0e29c3; Healthy alone since v6.0.0's 2bb2fb2):
+  // a ticked severity means that severity and in service.
+  it("a ticked severity means that severity and in service, alone or with other filters", () => {
     const fleet = [
       row({ name: "ok", health: "HEALTHY" }),
       row({ name: "paused", health: "HEALTHY", maintenance: { enabled: true, reason: "psu" } }),
+      row({ name: "bad", health: "CRITICAL" }),
       row({ name: "bad-paused", health: "CRITICAL", maintenance: { enabled: true, reason: "disk" } }),
+      row({ name: "unk-paused-nyc", health: "UNKNOWN", site_id: "nyc", maintenance: { enabled: true, reason: "fw" } }),
+      row({ name: "unk-nyc", health: "UNKNOWN", site_id: "nyc" }),
     ];
     const names = (f: Parameters<typeof filterRows>[1]) => filterRows(fleet, f).map((r) => r.name);
     expect(names({ health: ["HEALTHY"] })).toEqual(["ok"]);
+    expect(names({ health: ["CRITICAL"] })).toEqual(["bad"]);
+    expect(names({ health: ["UNKNOWN"] })).toEqual(["unk-nyc"]);
+    // Maintenance ticked too brings them back (and still ANDs with the severity).
     expect(names({ health: ["HEALTHY"], maintenance: "only" })).toEqual(["paused"]);
-    // Other severities still include their servers in maintenance (and still AND with Maintenance).
-    expect(names({ health: ["CRITICAL"] })).toEqual(["bad-paused"]);
     expect(names({ health: ["CRITICAL"], maintenance: "only" })).toEqual(["bad-paused"]);
+    // With other filters in the mix the rule is the same.
+    expect(names({ health: ["UNKNOWN"], site_id: ["nyc"] })).toEqual(["unk-nyc"]);
+    expect(names({ health: ["UNKNOWN"], site_id: ["nyc"], maintenance: "only" })).toEqual(["unk-paused-nyc"]);
     // Without a severity nothing changes: the unfiltered list still shows every server.
-    expect(names({})).toEqual(["ok", "paused", "bad-paused"]);
-    expect(names({ health: ["HEALTHY", "CRITICAL"] })).toEqual(["ok", "bad-paused"]);
+    expect(names({})).toHaveLength(6);
+    expect(names({ health: ["HEALTHY", "CRITICAL"] })).toEqual(["ok", "bad"]);
+  });
+
+  it("counts every severity the way the list shows it (in service only)", () => {
+    const fleet = [
+      row({ name: "bad", health: "CRITICAL" }),
+      row({ name: "bad-paused", health: "CRITICAL", maintenance: { enabled: true, reason: "disk" } }),
+      row({ name: "warn-paused", health: "WARNING", maintenance: { enabled: true, reason: "fw" } }),
+    ];
+    expect(dropdownFacetCounts(fleet, {}).health).toEqual({ CRITICAL: 1 });
+    expect(dropdownFacetCounts(fleet, { health: ["CRITICAL"] }).total).toBe(filterRows(fleet, { health: ["CRITICAL"] }).length);
+    expect(dropdownFacetCounts(fleet, { maintenance: "only" }).health).toEqual({ CRITICAL: 1, WARNING: 1 });
   });
 
   it("counts Healthy the way the list shows it, so the number matches the rows", () => {

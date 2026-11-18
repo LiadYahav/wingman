@@ -11,8 +11,9 @@ strictly; its internals the UI never reads are left out
 Two differences from server-scan's answer: the maintenance keeps its dates
 (Wingman's dialog sets an expected end), and the reservation says whether it
 is ``held``, which server-scan computes for its rows only (``ReservationState``).
-A field server-scan added later (``unreachable_detail``, v5.3.1) has a
-default, so an older server-scan's record still reads.
+A field server-scan added later (``unreachable_detail``, v5.3.1;
+``server_type``, v6.3.0) has a default, so an older server-scan's record
+still reads. ``revision`` moves only when the server's content changes.
 
 What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
@@ -228,6 +229,8 @@ class ServerRecord(BaseModel):
     id: str
     name: str
     model: str | None
+    server_type: str | None = None
+    """``physical`` or ``vm`` (server-scan v6.3.0); ``None`` from an older one."""
     profile_template: ProfileTemplate
     identity: Identity
     hardware: Hardware
@@ -256,6 +259,8 @@ class ServerRecord(BaseModel):
     """Why the last collection failed (``timeout``, v5.3.1's ``collection_error``), as sent."""
     unreachable_detail: str | None = None
     """That failure's cause in words (server-scan v5.3.1, its ADR-0062); ``None`` before it."""
+    revision: int | None = None
+    """Moves only when the content changed, so a Fetch now that kept it found nothing new."""
     updated_at: datetime
     created_at: datetime
 

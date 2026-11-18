@@ -18,6 +18,6 @@ def audited(detail: str | None) -> None:
 
 
 def admin_only(detail: str | None) -> None:
-    """The admin token's guard (maintenance, Jobs): its ``detail``."""
+    """The admin token's guard (maintenance, Jobs, Fetch now): its ``detail``."""
     if detail is not None:
         raise ServerScanWritesOffError(detail)

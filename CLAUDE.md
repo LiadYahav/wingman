@@ -185,33 +185,26 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-18 — Scale sets one NodePool a run (PR #101), and a scale-down may pick its servers (the PR after it).**
-- **The workflow changed** (team-redbull/workflows `feat/update-nodepool`,
-  b1976f4 and aab8949, not merged): `update-nodepool` takes `nodepool` only,
-  `infra_env_kind` is a 422; a scale-down may name the servers that leave
-  (`server_names`); the result has `ignored`; a new failure,
-  `ScaleDownServersInvalidError`.
-- **Wingman follows** (ADR-0062's 2026-11-18 amendment): day1 sends exactly
-  `{mce_cluster, cluster, nodepool, replicas}`; the by-kind mode and the
-  hardware type total are gone (domain, schemas, fake, web, docs); day1
-  refuses `infra_env_kind` and a NodePool the file does not name (or names
-  twice) before anything is sent; a run recorded by kind still shows; the
-  run card lists `ignored` and explains `ScaleDownServersInvalidError`.
-- **Picking the servers that leave** (the user's decision, ADR-0062's later
-  2026-11-18 amendment): optional, in the scale-down's confirmation, from
-  the Nodes tab's read of the MCE (needs live status); exactly as many as
-  leave, sent as `server_names`, each named by the workflow's own rule
-  (`machines.machine_server`, `GET .../nodes`' `machine_server`); never on a
-  scale-up. Needs the workflows release with `server_names` on the
-  orchestrator and every MCE's worker (`docs/upgrade/3.39-to-3.40.md`
-  step 3.5).
-- **The branch's other changes** (add-server-to-mce one server per run from
-  server-scan, ADR-0063 there; uninstall and remove-server-from-mce) break
-  nothing Wingman sends today. When it merges: `domain/inventory.py`'s
-  `named_for` should match `ocp-<infraEnv>-` with the dash, the
-  orchestrator OpenAPI snapshot test treats `namespace` as hidden, and the
-  inventory docs describe the allocation, maintenance on a no-Agent timeout
-  and the early lock release.
+**2026-11-18 — 3.48.0: Server Scan at server-scan v6.6.0.**
+- **The sync** (ADR-0048's 2026-11-18 amendment; `scripts/upstream_diff.py
+  server-scan v6.6.0`, the map's `synced_at: v6.6.0`): a ticked severity
+  leaves out servers in maintenance and the sites count them apart (v6.3.0);
+  `server_type` and the Type filter, Physical, VM and vendor bars on the
+  Sites cards (v6.3.0); the BMC copy button and a health bar per card
+  (v6.2.0); the Servers and Events tables scroll in their own box (v6.4.0,
+  v6.6.0).
+- **Fetch now** (v6.5.0, v6.6.0), the area's third write: `POST
+  /api/day1/server-scan/servers/{id}/refresh`, `AdminUser` as server-scan
+  keeps it, the admin token, sent once, a 120-second wait under nginx's new
+  130-second location, `409 SERVER_REFRESH_REFUSED` in server-scan's words;
+  on a server's page and first on every Servers row. Off by default
+  (`DAY1_SERVER_SCAN_REFRESH`, the chart's `day1.serverScanRefresh.enabled`;
+  needs server-scan v6.5.0 or later): no button until it is on. Not yet
+  tried against the sandbox's server-scan.
+- **server-scan's own colours** (the user's request): the Servers table, a
+  server's page and the Sites cards wear its palette
+  (`features/server-scan/palette.css`, its dark values, light equivalents),
+  its cells, icons and filter bar.
 
 **Next:**
 - When the workflows branch merges: the inventory follow-ups above.

@@ -18,11 +18,15 @@ server-scan itself works is [its study](../ecosystem/notes/server-scan.md).
 - **Wingman's own features over its data**: the Nodes tab (ADR-0038), MCE
   placement's spare servers (ADR-0050) and Inventory Management's pools
   (ADR-0057). They read the same port and cache as the area.
-- **Two writes, both from the area, with the admin token, never retried**
-  (ADR-0006): a server's maintenance on and off, and Run job on a CronJob.
+- **Three writes, all from the area, with the admin token, never retried**
+  (ADR-0006): a server's maintenance on and off, Run job on a CronJob, and
+  Fetch now on a server (since v6.6.0: a server's page and every Servers
+  row; admins only, as server-scan keeps it; off by default behind
+  `DAY1_SERVER_SCAN_REFRESH`, as it needs server-scan v6.5.0 or later).
 - **Never**: `/servers/available` and reservations (the workflows' and herzi's
   calls: add-server-to-mce takes a server, not Wingman), reclassify and
-  health recalculate (no button in server-scan's own UI calls them),
+  health recalculate (no button in server-scan's own UI calls them; Fetch
+  now's refresh is one Wingman follows, since server-scan's buttons call it),
   server-scan's login and personal tokens (Wingman signs people in itself; a
   person makes their token on server-scan's own Claude page).
 - **Tokens**: the viewer token for the reads, the auditor token for History and
@@ -31,9 +35,10 @@ server-scan itself works is [its study](../ecosystem/notes/server-scan.md).
 
 ## The version Wingman matches
 
-[server-scan.yaml](server-scan.yaml) holds it: `synced_at: v6.1.0` (`876dd16`).
-The area was matched to v5.3.0 (`92146d3`) page by page and brought to v6.1.0
-in 3.43.0 (ADR-0048's 2026-11-16 amendment); the check below confirmed it.
+[server-scan.yaml](server-scan.yaml) holds it: `synced_at: v6.6.0` (`635e08a`).
+The area was matched to v5.3.0 (`92146d3`) page by page, brought to v6.1.0
+(`876dd16`) in 3.43.0 (ADR-0048's 2026-11-16 amendment) and to v6.6.0 in
+3.48.0 (its 2026-11-18 amendment); the checks below confirmed each.
 
 ## Where its code lives
 
@@ -100,9 +105,38 @@ The only unmapped change under `watch` was `HistoryPanel.test.tsx` (new
 fields in its fixture); no server-scan page renders `HistoryPanel`. v6.1.0
 was also the newest tag and `main`'s head that day: nothing released since.
 
+## The check of 2026-11-18
+
+`v6.1.0` to `v6.6.0`: 14 commits (five that change what the area shows or
+calls); 52 of the map's 126 Wingman files followed a changed file. Each change
+is in Wingman (ADR-0048's 2026-11-18 amendment):
+
+| server-scan | Wingman |
+|---|---|
+| `4d9d171` (v6.2.0): the BMC cell's copy button; a stacked health bar per Sites card | `server-columns.tsx` (and the server header's BMC tooltip); `lib/sites.ts`'s `healthSegments`, `site-card.tsx` |
+| `0c141c9` (v6.2.1): `npm audit --omit=dev` | Not followed: server-scan's own CI; Wingman's audit is its own (`docs/ops/ci-maintenance.md`) |
+| `a0e29c3` (v6.3.0): `server_type` (physical or vm), the Type filter, Physical, VM and vendor bars on the Sites cards; a ticked severity leaves out servers in maintenance, and `by_health` counts servers in service only | day1 reads `server_type` (its rule over the vendor for an older server-scan), the fake counts maintenance apart; `types/`, `lib/rows.ts`, `lib/servers-view.ts`, `servers-toolbar.tsx`, `lib/sites.ts`'s `countBars` and `cardVerdict`, the server header; the Overview's health bar gains a maintenance part |
+| `f80ffb9` (v6.4.0): the Servers table scrolls inside its own box | `lib/fill.ts`, `use-fill-main.ts` (over the shell's `main`), `servers-page.tsx`, `cluster-sidebar.tsx` |
+| `827cd97` (v6.5.0): `POST /servers/{id}/refresh`, the server page's Fetch now | the port, `writes.py`, `fakes/refresh.py`, `POST /api/day1/server-scan/servers/{id}/refresh` (`AdminUser`), `409 SERVER_REFRESH_REFUSED`, nginx's 130-second location; `fetch-now.tsx`, `lib/refresh.ts`; `SERVER_REFRESHED` in `lib/events.ts` |
+| `55b6391` (v6.6.0): Fetch now on every Servers row; Events scrolls inside its own box | `fetch-now.tsx`'s column; `event-timeline.tsx`'s `fill` |
+
+Not followed, under `watch`: `InventoryPage.test.tsx` and
+`MaintenanceToggle.test.tsx` (only their fixtures and a cell index changed;
+`not_followed` says why). Outside `watch`, not for Wingman: the footer's
+spacing (Wingman has none), `.claude/` rules, the backend's
+`available_servers.py` refactor and its dev-only `INVENTORY_FAKE_MANAGERS`.
+v6.6.0 was also the newest tag and `main`'s head that day.
+
 ## Known gaps
 
-- **None found at v6.1.0** (checked 2026-11-17).
+- **None found at v6.6.0** (checked 2026-11-18).
+- **Behaviour against an older server-scan**: `server_type` is derived from
+  the vendor; before v6.3.0 `by_health` also counted servers in maintenance,
+  so a card's bars count those servers twice and "all healthy" needs every
+  server healthy and none in maintenance; before v6.5.0 Fetch now would
+  answer `502` (server-scan has no such route), so it stays off
+  (`DAY1_SERVER_SCAN_REFRESH`, the default) until server-scan is v6.5.0 or
+  later.
 - **Deliberate differences**, not gaps: the writes above; Claude's "Your
   token" (a link to server-scan's own page); the Servers export written with
   Wingman's shared Excel writer instead of server-scan's zip writer (the same

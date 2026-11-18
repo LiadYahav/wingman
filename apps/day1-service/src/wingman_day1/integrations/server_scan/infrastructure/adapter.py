@@ -1,8 +1,9 @@
 """HttpServerInventory: server-scan's fleet, one server, its sites and maintenance, over httpx.
 
 Read only (ADR-0038, ADR-0048) but for a server's maintenance
-(``writes``, ADR-0048's 3.23.0 amendment) and a Job's start
-(``jobs``, 3.32.0), the Server Scan area's writes. Day1
+(``writes``, ADR-0048's 3.23.0 amendment), a Job's start
+(``jobs``, 3.32.0) and Fetch now (``writes``, 3.48.0), the Server Scan
+area's writes. Day1
 presents a viewer token (``Authorization: Bearer``) on every read, the
 auditor token on the audit trail only (a server's History, the Events page)
 and the admin token on the writes and the Jobs page only, or none for an
@@ -91,7 +92,11 @@ from wingman_day1.integrations.server_scan.infrastructure.record import (
 from wingman_day1.integrations.server_scan.infrastructure.rules import read_policies, read_rules
 from wingman_day1.integrations.server_scan.infrastructure.sites import fleet_sites
 from wingman_day1.integrations.server_scan.infrastructure.skill import read_skill, read_skill_zip
-from wingman_day1.integrations.server_scan.infrastructure.writes import send_maintenance, start_body
+from wingman_day1.integrations.server_scan.infrastructure.writes import (
+    send_maintenance,
+    send_refresh,
+    start_body,
+)
 
 ROWS_PATH: Final = "/api/v1/servers/rows"
 SERVER_PATH: Final = "/api/v1/servers/{id}"
@@ -259,6 +264,13 @@ class HttpServerInventory:
         """See ServerInventory.end_maintenance."""
         write = send_maintenance(self._client, "DELETE", server_id, headers=self._admin_headers)
         return await self._observer.call(ServerScanOperation.DISABLE_MAINTENANCE, write)
+
+    async def refresh(self, server_id: str) -> ServerRecord:
+        """See ServerInventory.refresh."""
+        write = send_refresh(
+            self._client, server_id, headers=self._admin_headers, now=self._clock()
+        )
+        return await self._observer.call(ServerScanOperation.REFRESH_SERVER, write)
 
     async def _read_fleet(self) -> FleetRows:
         what = "listing servers"

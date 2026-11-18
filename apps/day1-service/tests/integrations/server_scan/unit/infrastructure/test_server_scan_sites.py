@@ -288,11 +288,12 @@ def test_health_maintenance_vendor_type_and_state_are_counted_with_their_fallbac
         row("e", installation_type="MCE", state="INSTALLED_TO_INVENTORY", vendor=None),
     ]
     tlv = by_site(count_sites(rows, CATALOG))["tlv"]
-    # An unknown vendor is counted in the total, in no vendor entry
+    # An unknown vendor is counted in the total, in no vendor entry; a server in
+    # maintenance in in_maintenance, not in by_health (server-scan v6.3.0)
     assert counts(tlv) == (
         5,
         {"dell": 2, "cisco": 1},
-        {"CRITICAL": 1, "UNKNOWN": 1, "HEALTHY": 3},
+        {"UNKNOWN": 1, "HEALTHY": 3},
         1,
     )
     assert {t: b.total for t, b in tlv.by_installation_type.items()} == {
@@ -309,9 +310,23 @@ def test_health_maintenance_vendor_type_and_state_are_counted_with_their_fallbac
     assert counts(tlv.by_installation_type["HOSTED_CLUSTER"]) == (
         2,
         {"dell": 1, "cisco": 1},
-        {"CRITICAL": 1, "UNKNOWN": 1},
+        {"UNKNOWN": 1},
         1,
     )
+
+
+def test_a_server_in_maintenance_counts_there_and_not_by_its_health() -> None:
+    # server-scan's test_sites.py (v6.3.0, its a0e29c3): total = sum(by_health) + in_maintenance.
+    rows = [
+        row("a", health="CRITICAL"),
+        row("b", maintenance=True),
+        row("c", health="CRITICAL", maintenance=True, installation_type="UPI"),
+    ]
+    sites = count_sites(rows, CATALOG)
+    for summary in (sites.fleet, by_site(sites)["tlv"], sites.fleet.by_installation_type["UPI"]):
+        assert summary.total == sum(summary.by_health.values()) + summary.in_maintenance
+    assert counts(sites.fleet) == (3, {"dell": 3}, {"CRITICAL": 1}, 2)
+    assert counts(sites.fleet.by_installation_type["UPI"]) == (1, {"dell": 1}, {}, 1)
 
 
 def test_the_fleet_is_every_site_summed_and_its_slices_add_up() -> None:

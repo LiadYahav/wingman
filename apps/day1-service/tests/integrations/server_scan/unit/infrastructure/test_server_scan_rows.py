@@ -1,8 +1,8 @@
 """The Servers page's read: server-scan's rows, every field, and the conditional GET (ADR-0048).
 
-server-scan's ``GET /api/v1/servers/rows`` read whole (22 fields and
-``generated_at``), the same fleet object answered while server-scan says
-``304`` (day1 encodes it once), one cache entry for the rows and the fleet,
+server-scan's ``GET /api/v1/servers/rows`` read whole (23 fields, ``server_type``
+since v6.3.0, and ``generated_at``), the same fleet object answered while server-scan
+says ``304`` (day1 encodes it once), one cache entry for the rows and the fleet,
 the fake's ``generated_at``, and day1's own ``ETag`` rule (server-scan's).
 """
 
@@ -18,6 +18,7 @@ import pytest
 from wingman_core.infrastructure.cache import TtlCache
 from wingman_day1.api.conditional import etag_matches, weak_etag
 from wingman_day1.domain.errors import ServerScanUnavailableError
+from wingman_day1.integrations.server_scan.api.servers_schemas import ServerRowOut
 from wingman_day1.integrations.server_scan.domain.servers import FleetRows
 from wingman_day1.integrations.server_scan.infrastructure.adapter import HttpServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.cached import CachedServerInventory
@@ -29,6 +30,7 @@ ROW: dict[str, Any] = {
     "id": "srv_d226c05c968244e19f68e4aa8f16bad3",
     "name": "ocp-cisco-m6-bat-yam-128c-128gb-CIS0000630",
     "vendor": "cisco",
+    "server_type": "physical",
     "model": "UCS C220 M6",
     "site_id": "bat-yam",
     "source_provider": "INTERSIGHT",
@@ -86,6 +88,30 @@ def test_every_field_of_a_row_is_read() -> None:
         "cisco-m6-bat-yam-128c-128gb",
     )
     assert (row.stale, row.reachable, row.health, row.state) == (True, False, "MAJOR", "INSTALLED")
+
+
+@pytest.mark.parametrize(
+    ("vendor", "sent", "answered"),
+    [
+        ("kubevirt", "vm", "vm"),
+        ("dell", "physical", "physical"),
+        # An older server-scan sends none: its rule over the vendor (v6.3.0's server_type_of)
+        ("kubevirt", None, "vm"),
+        ("standalone", None, "physical"),
+        (None, None, "physical"),
+    ],
+)
+def test_a_rows_server_type_is_server_scans_or_its_rule_over_the_vendor(
+    vendor: str | None, sent: str | None, answered: str
+) -> None:
+    raw = {**ROW, "vendor": vendor}
+    if sent is None:
+        del raw["server_type"]
+    else:
+        raw["server_type"] = sent
+    row = server_row(raw)
+    assert row.server_type == sent
+    assert ServerRowOut.of(row).server_type == answered
 
 
 def test_an_uncontested_row_with_nothing_optional_reads_as_blanks() -> None:

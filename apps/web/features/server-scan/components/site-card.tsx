@@ -1,49 +1,104 @@
 // What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 
 import Link from "next/link";
+import { SegmentedBar } from "@/components/overview/bars";
 import { Skeleton } from "@/components/ui/skeleton";
 import { serversHref } from "@/features/server-scan/lib/servers-view";
 import {
   HEALTHY_GLYPH,
   cardCounts,
   cardVerdict,
+  countBars,
+  healthSegments,
+  healthSummary,
   installedAvailable,
-  vendorBars,
+  type CountBar,
+  type HealthSegment,
   type CountKind,
   type SiteCard,
-  type VendorBar,
 } from "@/features/server-scan/lib/sites";
 import { cn } from "@/lib/utils";
 
-/**
- * Wingman's colour for each count: the glyph's shape and the word tell them
- * apart first (server-scan's rule), so MAJOR shares CRITICAL's tone, as on
- * the cluster page's health badge.
- */
 /** A count's link: above the card's stretched link, underlined on hover. */
 const COUNT_LINK = "relative z-10 rounded-sm underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50";
 
+/**
+ * Each count's colour, server-scan's (its on-tint text; `../palette.css`):
+ * critical red, major orange, warning yellow, in maintenance violet, unknown
+ * grey. The glyph's shape and the word tell them apart first.
+ */
 const TONE: Record<CountKind, string> = {
-  critical: "text-status-error-fg",
-  major: "text-status-error-fg",
-  warning: "text-status-warning-fg",
-  maintenance: "text-status-provisioning-fg",
-  unknown: "text-muted-foreground",
+  critical: "text-ss-on-critical",
+  major: "text-ss-on-major",
+  warning: "text-ss-on-warning",
+  maintenance: "text-ss-on-maintenance",
+  unknown: "text-ss-on-unknown",
 };
 
-/** Bars as wide as each vendor's share of this card's total, in a neutral grey (they are not alarms). */
-function VendorBars({ bars }: { bars: VendorBar[] }) {
+/**
+ * Each health tier's fill, server-scan's (its HEALTH_SEGMENTS): its status
+ * hues, with a deeper orange for major and a brighter yellow for warning
+ * than the counts' text uses.
+ */
+const SEGMENT_FILL: Record<HealthSegment["key"], string> = {
+  CRITICAL: "bg-ss-critical",
+  MAJOR: "bg-ss-bar-major",
+  WARNING: "bg-ss-bar-warning",
+  UNKNOWN: "bg-ss-unknown",
+  MAINTENANCE: "bg-ss-maintenance",
+  HEALTHY: "bg-ss-healthy",
+};
+
+/**
+ * server-scan's stacked health bar (v6.2.0): each tier as wide as its share
+ * of the card's servers, worst at the left; a tier above zero keeps 3 pixels,
+ * so one critical server in 500 still shows. Its words are its name and tooltip.
+ */
+function HealthBar({ segments }: { segments: HealthSegment[] }) {
+  const words = healthSummary(segments);
   return (
-    <div className="mt-4 space-y-1.5" aria-label="Servers per vendor">
-      {bars.map((bar) => (
-        <div key={bar.vendor} className="flex items-center gap-2.5 text-xs" data-testid="ss-card-vendor">
-          <span className="w-16 shrink-0 text-muted-foreground">{bar.label}</span>
-          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
-            <span className="block h-full rounded-full bg-muted-foreground/45" style={{ width: `${bar.percent}%` }} />
-          </span>
-          <span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground">{bar.count}</span>
-        </div>
-      ))}
+    <div role="img" aria-label={`Health: ${words}`} title={words} data-testid="ss-card-health" className="mt-4">
+      <SegmentedBar className="bg-ss-surface-sunken" parts={segments.map((s) => ({ key: s.key, count: s.count, fill: SEGMENT_FILL[s.key] }))} />
+    </div>
+  );
+}
+
+/** A bar's row: above zero a link to its servers (above the card's stretched link), at zero plain. */
+const BAR_ROW = "flex items-center gap-2.5 text-xs";
+
+/** One bar as wide as its share of this card's total, in a neutral grey (it is not an alarm). */
+function CountBarRow({ bar }: { bar: CountBar }) {
+  const body = (
+    <>
+      <span className="w-16 shrink-0 text-ss-text-secondary group-hover/bar:underline">{bar.label}</span>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-ss-surface-sunken" aria-hidden>
+        <span className="block h-full rounded-full bg-ss-border-strong" style={{ width: `${bar.percent}%` }} />
+      </span>
+      <span className="w-9 shrink-0 text-right tabular-nums text-ss-text-secondary">{bar.count}</span>
+    </>
+  );
+  const data = { "data-testid": "ss-card-bar", "data-bar": bar.key, "data-group": bar.group };
+  if (bar.filter === null) {
+    return (
+      <div className={BAR_ROW} {...data}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <Link href={serversHref(bar.filter)} aria-label={`${bar.label}: ${bar.count}`} data-filter={bar.filter} className={cn(COUNT_LINK, "group/bar", BAR_ROW)} {...data}>
+      {body}
+    </Link>
+  );
+}
+
+/** Physical and VM, then a bar per vendor (server-scan v6.3.0), each its share of the card's total. */
+function CountBars({ bars }: { bars: CountBar[] }) {
+  const group = (name: CountBar["group"]) => bars.filter((bar) => bar.group === name).map((bar) => <CountBarRow key={bar.key} bar={bar} />);
+  return (
+    <div className="mt-4 space-y-3" aria-label="Servers by type and vendor">
+      <div className="space-y-1.5">{group("type")}</div>
+      <div className="space-y-1.5">{group("vendor")}</div>
     </div>
   );
 }
@@ -69,26 +124,27 @@ function HealthCounts({ card }: { card: SiteCard }) {
         </Link>
       ))}
       {verdict === "all-healthy" && (
-        <span className="inline-flex items-center gap-1.5 text-status-ready-fg">
+        <span className="inline-flex items-center gap-1.5 text-ss-on-healthy">
           <span aria-hidden>{HEALTHY_GLYPH}</span> all healthy
         </span>
       )}
-      {verdict === "empty" && <span className="text-muted-foreground">empty</span>}
+      {verdict === "empty" && <span className="text-ss-text-muted">empty</span>}
     </div>
   );
 }
 
 /**
  * One card, as server-scan's Sites page draws it: name and total, then the
- * counts, a site's installed and available servers, and a bar per vendor.
- * The card opens the Servers page with its filter (`data-filter`), and each
- * count with the count's own: the name is the card's link, stretched over it,
- * and the counts are links above it (anchors cannot nest). `emphasis` marks
- * the fleet-wide row.
+ * counts, a site's installed and available servers, its health bar, and the
+ * Physical, VM and vendor bars. The card opens the Servers page with its filter
+ * (`data-filter`), and each count and bar above zero with its own: the name
+ * is the card's link, stretched over it, and the counts and bars are links
+ * above it (anchors cannot nest). `emphasis` marks the fleet-wide row.
  */
 export function SiteCardView({ card, emphasis = false }: { card: SiteCard; emphasis?: boolean }) {
   const states = installedAvailable(card);
-  const bars = vendorBars(card.stats);
+  const bars = countBars(card);
+  const segments = healthSegments(card.stats);
   const titleId = `ss-card-${card.key}`;
   return (
     <article
@@ -97,49 +153,52 @@ export function SiteCardView({ card, emphasis = false }: { card: SiteCard; empha
       data-card={card.key}
       data-filter={card.filter}
       className={cn(
-        "relative rounded-xl border bg-card p-5 transition-colors hover:border-foreground/25 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring/50",
-        emphasis && "border-foreground/15 shadow-xs"
+        "relative rounded-[0.625rem] border bg-card p-5 transition-colors has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring/50",
+        emphasis ? "border-ss-border-strong hover:border-ss-text-muted" : "border-ss-border-subtle hover:border-ss-border-strong"
       )}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <h3 id={titleId} className="truncate text-sm font-semibold tracking-tight">
-          <Link href={serversHref(card.filter)} data-testid="ss-card-link" className="outline-none after:absolute after:inset-0 after:rounded-xl">
+        <h3 id={titleId} className="truncate text-sm font-semibold tracking-tight text-ss-text-primary">
+          <Link href={serversHref(card.filter)} data-testid="ss-card-link" className="outline-none after:absolute after:inset-0 after:rounded-[0.625rem]">
             {card.name}
           </Link>
         </h3>
-        <span className="text-2xl font-semibold tabular-nums" data-testid="ss-card-total">
+        <span className="text-2xl font-semibold tabular-nums text-ss-text-primary" data-testid="ss-card-total">
           {card.stats.total.toLocaleString()}
         </span>
       </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">{card.subtitle}</p>
+      <p className="mt-0.5 text-xs text-ss-text-muted">{card.subtitle}</p>
       <HealthCounts card={card} />
       {states.length > 0 && (
-        <div className="mt-3 flex items-center gap-x-3 text-xs text-muted-foreground">
+        <div className="mt-3 flex items-center gap-x-3 text-xs text-ss-text-secondary">
           {states.map((s) => (
             <Link key={s.state} href={serversHref(s.filter)} data-testid="ss-card-state" data-filter={s.filter} className={COUNT_LINK}>
-              <span className="font-medium tabular-nums text-foreground">{s.count}</span> {s.word}
+              <span className="font-medium tabular-nums">{s.count}</span> {s.word}
             </Link>
           ))}
         </div>
       )}
-      {bars.length > 0 && <VendorBars bars={bars} />}
+      {segments.length > 0 && <HealthBar segments={segments} />}
+      {bars.length > 0 && <CountBars bars={bars} />}
     </article>
   );
 }
 
-/** A card's place while the sites load, about a card's height so nothing jumps. */
+/** A card's place while the sites load, about a card's height (its health bar and six bars) so nothing jumps. */
 export function SiteCardSkeleton() {
   return (
-    <div className="h-[184px] space-y-3 rounded-xl border bg-card p-5" aria-hidden>
+    <div className="h-[296px] space-y-3 rounded-xl border bg-card p-5" aria-hidden>
       <div className="flex items-baseline justify-between">
         <Skeleton className="h-4 w-28" />
         <Skeleton className="h-7 w-12" />
       </div>
       <Skeleton className="h-3 w-24" />
       <Skeleton className="h-3 w-40" />
-      <div className="space-y-2 pt-2">
-        <Skeleton className="h-1.5 w-full" />
-        <Skeleton className="h-1.5 w-full" />
+      <Skeleton className="mt-4 h-2 w-full rounded-full" />
+      <div className="space-y-2.5 pt-2">
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-1.5 w-full" />
+        ))}
       </div>
     </div>
   );

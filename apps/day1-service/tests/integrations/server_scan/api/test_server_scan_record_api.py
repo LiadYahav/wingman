@@ -1,6 +1,6 @@
 """A server's page's routes (docs/notes/2026-11-13-server-scan-area-api.md §9).
 
-The record in server-scan's shape with the deployment's two switches, a VM's
+The record in server-scan's shape with the deployment's three switches, a VM's
 host, and History with the auditor token: admins only, 404, 501 when off or
 without the auditor token, 502 when server-scan fails or refuses, 422 for an
 out-of-range page. Built on the fake fleet and its records fixture.
@@ -38,6 +38,7 @@ RECORD_FIELDS = {
     "id",
     "name",
     "model",
+    "server_type",
     "profile_template",
     "identity",
     "hardware",
@@ -61,10 +62,14 @@ RECORD_FIELDS = {
     "unreachable_since",
     "unreachable_reason",
     "unreachable_detail",
+    "revision",
     "updated_at",
     "created_at",
     "maintenance_available",
     "maintenance_detail",
+    "refresh_enabled",
+    "refresh_available",
+    "refresh_detail",
     "history_available",
     "history_detail",
 }
@@ -142,6 +147,7 @@ async def test_the_record_is_server_scans_shape_with_the_two_switches(
     assert (body["maintenance_available"], body["history_available"]) == (True, True)
     assert (body["maintenance_detail"], body["history_detail"]) == (None, None)
     assert (body["reachable"], body["unreachable_detail"]) == (True, None)
+    assert body["server_type"] == "physical"
 
 
 async def test_a_collection_error_reaches_the_page_with_its_cause(

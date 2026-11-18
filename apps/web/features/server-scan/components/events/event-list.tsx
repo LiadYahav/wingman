@@ -25,6 +25,7 @@ export function EventList({
   problem,
   testId,
   showServer = false,
+  fill = false,
 }: {
   query: UseInfiniteQueryResult<InfiniteData<AuditEventPage, unknown>, unknown>;
   /** The table's name. */
@@ -36,6 +37,8 @@ export function EventList({
   testId: string;
   /** The Server column, for the fleet's trail. */
   showServer?: boolean;
+  /** Scroll inside a box that fills the page (the Events page; a server's History grows instead). */
+  fill?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   if (query.isPending) {
@@ -64,7 +67,7 @@ export function EventList({
   return (
     <div className="space-y-3">
       {query.isRefetchError && <ProblemList error={query.error} title="The last read failed; these are the events read before it" />}
-      <EventTimeline events={shown.items} label={label} showServer={showServer} />
+      <EventTimeline events={shown.items} label={label} showServer={showServer} fill={fill} />
       <div className="flex items-center gap-3" data-testid={`${testId}-pager`}>
         <button type="button" disabled={index <= 0} onClick={() => setIndex(index - 1)} className={buttonVariants({ variant: "outline", size: "sm" })}>
           Previous

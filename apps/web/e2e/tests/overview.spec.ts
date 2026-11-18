@@ -191,7 +191,7 @@ test.describe("Server fleet health", () => {
     await expect(sites).toHaveCount(4);
     const site1 = card.locator("[data-site=site1]");
     const counts = site1.getByTestId("overview-health-counts").getByRole("link");
-    await expect(counts).toHaveText(["●28 healthy", "◆2 critical", "⬟1 major", "▲1 warning", "⏸1 in maintenance"]);
+    await expect(counts).toHaveText(["●27 healthy", "◆2 critical", "⬟1 major", "▲1 warning", "⏸1 in maintenance"]);
     await expect(counts.nth(1)).toHaveAttribute("href", "/server-scan/servers?site_id=site1&health_overall=CRITICAL");
     await expect(counts.nth(4)).toHaveAttribute("href", "/server-scan/servers?site_id=site1&maintenance=true");
     await expect(site1.getByRole("link", { name: "Site 1" })).toHaveAttribute("href", "/server-scan/servers?site_id=site1");

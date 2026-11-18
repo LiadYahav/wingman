@@ -8,6 +8,7 @@ import { serverHref } from "@/features/server-scan/lib/server-page";
 import { cn } from "@/lib/utils";
 import type { AuditEvent } from "@/features/server-scan/types/server-scan-record";
 import { pill } from "../server-badges";
+import { useFillMain } from "../use-fill-main";
 import { ActorCell, EventDetails, Transition, eventToneClass } from "./event-details";
 
 /**
@@ -85,8 +86,23 @@ function EventRow({ event, open, onToggle, showServer }: RowProps) {
   );
 }
 
-/** The events of one page; `label` names the table (the page it is on). */
-export function EventTimeline({ events, label, showServer = false }: { events: AuditEvent[]; label: string; showServer?: boolean }) {
+/**
+ * The events of one page; `label` names the table (the page it is on). With
+ * `fill` (the Events page, server-scan v6.6.0) it scrolls inside a box that
+ * fills the page, its header pinned; a server's History grows the page.
+ */
+export function EventTimeline({
+  events,
+  label,
+  showServer = false,
+  fill = false,
+}: {
+  events: AuditEvent[];
+  label: string;
+  showServer?: boolean;
+  fill?: boolean;
+}) {
+  const { attach: fillBox, style: fillStyle } = useFillMain<HTMLDivElement>(events.length);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const toggle = (id: string) =>
     setOpen((current) => {
@@ -95,7 +111,12 @@ export function EventTimeline({ events, label, showServer = false }: { events: A
       return next;
     });
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div
+      ref={fillBox}
+      style={fill ? fillStyle : undefined}
+      data-testid={fill ? "ss-events-box" : undefined}
+      className={cn("rounded-lg border", fill ? "relative max-h-[var(--ss-fill,70vh)] overflow-auto overscroll-contain" : "overflow-x-auto")}
+    >
       <table className={cn("w-full table-fixed text-left text-sm", showServer && "min-w-[48rem]")} aria-label={label}>
         <colgroup>
           {showServer && <col className="w-64" />}
@@ -103,7 +124,7 @@ export function EventTimeline({ events, label, showServer = false }: { events: A
           <col className="w-56" />
           <col className="w-56" />
         </colgroup>
-        <thead className="bg-muted/50 text-xs text-muted-foreground">
+        <thead className={cn("bg-muted text-xs text-muted-foreground", fill && "sticky top-0 z-10")}>
           <tr>
             {showServer && <th className="px-3 py-2 font-medium">Server</th>}
             <th className="px-3 py-2 font-medium">What happened</th>

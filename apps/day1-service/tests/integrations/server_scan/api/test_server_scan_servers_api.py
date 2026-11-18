@@ -38,6 +38,7 @@ ROW_FIELDS = {
     "id",
     "name",
     "vendor",
+    "server_type",
     "model",
     "site_id",
     "source_provider",
@@ -120,11 +121,20 @@ async def test_every_row_has_server_scans_shape_and_order(
 ) -> None:
     async with client(support, gitlab, clock, fleet()) as http:
         body = (await http.get(SERVERS, headers=auth(support.ALICE))).json()
-    assert set(body) == {"items", "generated_at", "maintenance_available", "maintenance_detail"}
+    assert set(body) == {
+        "items",
+        "generated_at",
+        "maintenance_available",
+        "maintenance_detail",
+        "refresh_enabled",
+        "refresh_available",
+        "refresh_detail",
+    }
     rows, _ = load_fleet(default_fleet_file())
     assert [item["name"] for item in body["items"]] == sorted(row.name for row in rows)
     assert all(set(item) == ROW_FIELDS for item in body["items"])
     first = body["items"][0]
+    assert {item["server_type"] for item in body["items"]} == {"physical"}
     assert set(first["maintenance"]) == {"enabled", "reason", "created_by"}
     assert set(first["reservation"]) == {"held", "holder", "mce_cluster", "infra_env", "expires_at"}
     assert body["generated_at"] is not None

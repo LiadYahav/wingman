@@ -5,9 +5,11 @@ and its model's hardware from ``dev/fleet-fixtures/server-records.yaml``,
 built in server-scan's own JSON shape and read by the same strict models as
 the real answer, so the fixture cannot drift from the shape. Its History is
 made up from the row (discovered, classified, installed, health, maintenance)
-plus every maintenance change made in the fake since it started, by ``dev``,
-as a server-scan with auth off records it; the fleet's audit trail joins them
-(``events``). Nothing here is real.
+plus every maintenance change and Fetch now made in the fake since it
+started, by ``dev``, as a server-scan with auth off records it; the fleet's
+audit trail joins them (``events``). A record's ``revision`` moves with each
+maintenance change, never with a Fetch now (it finds nothing new). Nothing
+here is real.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ import yaml
 
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.integrations.server_scan.domain.record import ServerRecord
+from wingman_day1.integrations.server_scan.domain.servers import server_type_of
 
 RECORDS_FILE: Final = Path("dev/fleet-fixtures/server-records.yaml")
 CREATED_AT: Final = datetime(2026, 9, 1, 6, tzinfo=UTC)
@@ -64,6 +67,7 @@ class FakeRecords:
         self._since: dict[str, tuple[datetime, datetime | None]] = {}
         self._before: dict[str, ServerRow] = {}
         """Each written server as it was before the fake's first write: its seeded History."""
+        self._revisions: dict[str, int] = {}
 
     def record(self, row: ServerRow, now: datetime) -> ServerRecord:
         """The row's record, as server-scan would answer it, its reservation judged at ``now``."""
@@ -83,6 +87,7 @@ class FakeRecords:
             "vm_host": extra.get("vm_host"),
             "unread_fields": extra.get("unread_fields", []),
             "nic_os_names": (model.get("nics") or {}).get("os_names", {}),
+            "revision": self._revisions.get(row.id, 1),
             **_times(row, extra),
         }
         return ServerRecord.model_validate_json(json.dumps(raw, default=_iso)).judged(now)
@@ -108,6 +113,14 @@ class FakeRecords:
             started = self._since.get(row.id, (at, None))[0] if was_on else at
             self._since[row.id] = (started, expected_end)
         self._logged.setdefault(row.id, []).append(_event(row, kind, at, DEV_ACTOR, data))
+        self._revisions[row.id] = self._revisions.get(row.id, 1) + 1
+
+    def log_refresh(self, before: ServerRow, row: ServerRow, *, at: datetime) -> None:
+        """Record a Fetch now made in the fake: ``SERVER_REFRESHED``, nothing changed."""
+        self._before.setdefault(row.id, before)
+        data: JSONish = {"manager_type": row.source_provider, "changed": False}
+        event = _event(row, "SERVER_REFRESHED", at, DEV_ACTOR, data)
+        self._logged.setdefault(row.id, []).append(event)
 
     def _classification(self, row: ServerRow) -> JSONish:
         kind = row.installation_type or "UNCLASSIFIED"
@@ -189,6 +202,7 @@ def _identity(row: ServerRow, model: Mapping[str, Any]) -> JSONish:
         "id": row.id,
         "name": row.name,
         "model": row.model,
+        "server_type": row.server_type or server_type_of(row.vendor),
         "profile_template": {"name": template, "external_id": template and f"tmpl-{template}"},
         "identity": {
             "vendor": row.vendor or "standalone",

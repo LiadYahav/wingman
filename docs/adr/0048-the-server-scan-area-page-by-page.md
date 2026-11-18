@@ -695,3 +695,173 @@ server-scan sent them), `apps/web/lib/server-scan/overview.test.ts`,
 its cause; History's details), `server-scan-events.spec.ts` (the box, the
 details from v5.4.0 and from an older server-scan) and
 `server-scan-servers.spec.ts` (Healthy and its count).
+
+**2026-11-18, 3.48.0: back to parity with server-scan v6.6.0.** The area
+matched server-scan v6.1.0 (`876dd16`). Of the 14 commits up to v6.6.0
+(`635e08a`), five change what the area shows or calls; Wingman follows each,
+and still works against a server-scan without them. The contract's §1, §2,
+§8, §9 and §14 of `docs/notes/2026-11-13-server-scan-area-api.md` say what
+changed.
+
+- **`a0e29c3` (v6.3.0): a ticked severity means that severity and in
+  service.** Healthy alone did since v6.0.0; now every severity on the
+  Servers page's Health dropdown leaves out servers in maintenance unless
+  Maintenance is ticked too, whatever other filters are set, and each
+  severity's count is the rows it shows (`rows.ts`'s `matchesHealth` and
+  `dropdownFacetCounts`, server-scan's cases). server-scan's `GET
+  /api/v1/sites` counts the same way: a server in maintenance is in
+  `in_maintenance` only, not in `by_health`, so a card's "5 critical" opens
+  5 rows. day1 passes the counts through; the fake counts them so. A card
+  says "all healthy" when every server in service is healthy (and one is).
+  The Overview's fleet health bar, Wingman's own over the same counts, gains
+  a maintenance part, so its parts add up to the site's servers.
+- **`a0e29c3` (v6.3.0): `server_type`, physical or VM.** server-scan derives
+  it from the vendor (`vm` for `kubevirt`) and sends it on every row and
+  record. day1 reads it, and sends server-scan's rule over the vendor when
+  an older server-scan does not, so the web always has it. The Servers page
+  gains server-scan's **Type** dropdown between Source and Site
+  (`server_type=` in the URL, a "Type VM" chip); a server's page says
+  Physical or VM beside the model (one muted line, where server-scan puts it
+  under the model); the Sites cards' bars are **Physical**, **VM**, then
+  each physical vendor (no KubeVirt bar), and a bar above zero opens the
+  Servers page with `server_type` or `vendor` added to the card's filter.
+  The fake fleet's rows carry it; the dropdowns wrap to two rows of four
+  below 1536 pixels, where seven no longer fit beside the cluster sidebar.
+- **`4d9d171` (v6.2.0): the BMC's address to copy, and a health bar per
+  Sites card.** The Servers table's BMC cell copies the address beside the
+  console link, each with the address first on hover (the shared copy
+  button takes a tooltip of its own for it); the server page's BMC button
+  says the address first too. Every Sites card shows server-scan's stacked
+  health bar, worst first (critical, major, warning, unknown, maintenance,
+  healthy) so the red end is at the left, each tier above zero at least 3
+  pixels wide, its counts in words as its name and tooltip; drawn with the
+  Overview's segmented bar, in Wingman's status colours.
+- **`827cd97` (v6.5.0) and `55b6391` (v6.6.0): Fetch now, the area's third
+  write.** server-scan's server page and every Servers row read that one
+  server from its vendor manager now (`POST /api/v1/servers/{id}/refresh`,
+  its ADR-0064), instead of waiting for its collector. Wingman follows both
+  buttons, as the user asked ("Server Scanner have made changes lets keep
+  ours updated"): a new call from day1 to server-scan, built as the area's
+  other writes are, through the one port (`ServerInventory.refresh`), its
+  adapter (`infrastructure/writes.py`, `send_once`) and the fake
+  (`fakes/refresh.py`), behind `POST
+  /api/day1/server-scan/servers/{server_id}/refresh` (§9.9 of the contract).
+  - **Its permission: `AdminUser`, server-scan's own.** server-scan guards
+    the route with `require_admin`, as every write (a refresh persists the
+    server, audits `SERVER_REFRESHED` and costs a vendor-manager session), so
+    a viewer or an auditor of server-scan cannot press it; Wingman's route
+    takes `AdminUser`, the area's guard. day1 sends it with server-scan's
+    admin token, the maintenance toggle's, by the same rule
+    (`refresh_detail`): without it beside a viewer token the buttons are
+    greyed with one line and the route answers `501` naming
+    `SERVER_SCAN_ADMIN_TOKEN`; with no token at all (auth off) it works. No
+    new value, Secret, token or grant.
+  - **Off by default, a switch of its own**: `DAY1_SERVER_SCAN_REFRESH`
+    (the chart's `day1.serverScanRefresh.enabled`, which needs
+    `serverScan.url`), as new features land in the air-gap off, and a
+    server-scan before v6.5.0 has no such route (every press would be a
+    `502`). Off, the record and the rows say `refresh_enabled: false`, the
+    web shows no button and no column at all (not a greyed one), and the
+    route answers `501` naming the switch, sending nothing. On it needs
+    server-scan v6.5.0 or later and the admin token; the upgrade guide says
+    so.
+  - **Never retried** (ADR-0006): one `POST`; unanswered is `504
+    AMBIGUOUS_WRITE` ("reload the server and look at when it was last
+    seen"), the buttons disabled while it waits. A second Fetch now is
+    harmless to server-scan (it reads again; one server's calls share one
+    read), but the rule is the writes' rule, and the person decides.
+  - **Its errors in server-scan's words**: its `409`s (not connected to the
+    server's manager, or the manager no longer reports it; nothing changed)
+    are one new problem, **`409 SERVER_REFRESH_REFUSED`** (`wingman_core`'s
+    codes are append-only); its `503` (the manager failed) is `502` with its
+    words; `404` is `404`.
+  - **It waits longer than a read**: server-scan reads the manager while
+    the call is open, up to 240 seconds for UCS Central; day1 waits up to 120
+    seconds for this call alone, and nginx gives its path 130 seconds, as the
+    Route gives every path (no setting: one longer than the Route would be
+    cut by it anyway). A UCS Central server that server-scan takes longer
+    than 120 seconds to read is therefore `504 AMBIGUOUS_WRITE` in Wingman,
+    though server-scan finishes the read and persists it: the page says to
+    reload the server and look at when it was last seen.
+  - **The answer is the record**, judged now, which the page takes at once;
+    day1's record keeps `revision` now, so the toast says "no changes" or
+    "data updated" as server-scan's does. The rows and sites cache is dropped
+    after it, and the web reads the rows, sites and History again. day1 logs
+    each with the person (`server_refreshed`, `server_refresh_unconfirmed`);
+    the metric is `refresh_server`. History and Events describe
+    `SERVER_REFRESHED` in server-scan's words.
+  - **The row's button** is the table's first column, as server-scan's,
+    icon only; the header's sits beside BMC. Both are Wingman's buttons
+    (lucide's icon, sonner's toasts), server-scan's words.
+- **`f80ffb9` (v6.4.0) and `55b6391` (v6.6.0): the Servers and Events tables
+  scroll inside their own box.** The page never scrolls: each table's box is
+  as tall as the room under its top, above its pager (at least 240 pixels),
+  its header pinned inside; the cluster sidebar keeps to the same room.
+  Wingman's page scrolls inside the shell's `main`, not the window, so the
+  room is `main`'s (`useFillMain` over server-scan's arithmetic,
+  `lib/fill.ts`), measured from layout, never from the scroll position. The
+  Servers table already scrolled in a box of 70% of the window, which stays
+  its height until measured. A server's History grows its page, as there.
+  server-scan's tighter spacing under the table (its footer) is not
+  followed: Wingman's pages keep their own padding and have no footer.
+- **The Servers table, a server's page and the Sites cards wear
+  server-scan's own colours** (the user, 2026-11-18: "I want the Installed
+  + Available + the server names + Maintenance colors inside the servers to
+  be the same as the original server scan"). This overrides "in Wingman's
+  design" for those pages' colours and cells, not for Wingman's shell (the
+  top bar, the sidebars, the page headers, the shared table's sort marks
+  and value filter). Its palette is `features/server-scan/palette.css`:
+  server-scan's dark values as they are (it is dark only), light equivalents
+  of each hue for Wingman's light theme, as Tailwind colours (`ss-*`). From
+  its source (`InstallationBadge`, `StateBadge`, `HealthBadge`, `Badge`,
+  `InventoryTable`, `MaintenanceToggle`, `RowRefreshButton`, `BmcLink`,
+  `SitesOverviewPage`): Installed red and Available green, In inventory and
+  the reservation blue; the severity pills on their tints; Maint violet,
+  Donor cyan, Stale grey; a row's left edge red, orange or amber; the name in
+  plain text; uppercase, centred headers and taller cells; its icons for the
+  maintenance tools, the play mark and Fetch now; its hairline icon buttons;
+  on a server's page its `HealthBadge` (the severity's own word) and its
+  amber and grey badges; on the Sites cards its count colours (major
+  orange, maintenance violet) and its bar's hues. The filter bar is laid out
+  as server-scan's: Search first among the dropdowns, the export at the end
+  of the toggles' row (Wingman keeps its CSV beside Excel).
+- **Not for Wingman**: `0c141c9` (v6.2.1) is server-scan's own CI
+  (`npm audit --omit=dev`); its render tests' fixture changes are under the
+  map's `not_followed`.
+- **Against an older server-scan** the area still works: `server_type` comes
+  from day1's rule over the vendor; before v6.3.0 `by_health` also counted
+  servers in maintenance, so a card's bars count them twice and the cards say
+  "all healthy" only with none in maintenance; before v6.5.0 Fetch now is a
+  `502` (server-scan has no such route). No new value, Secret, token or grant;
+  day1's routes and the web change in one release. The map's `synced_at` is
+  `v6.6.0`.
+
+Rejected: **`CurrentUser` for Fetch now** (server-scan keeps the call for its
+admins, and the area is for Wingman's admins; a viewer pressing it would only
+get server-scan's refusal); **retrying an unanswered Fetch now** (harmless to
+server-scan, but every write here is sent once and the person decides);
+**passing server-scan's two `409` codes on as two Wingman codes** (the page
+shows server-scan's words either way, and nothing acts on which); **a
+`SERVER_SCAN_REFRESH_TIMEOUT_SECONDS` setting** (the Route's 130 seconds cut
+anything longer, so a value above 120 could never work); **waiting the 240
+seconds server-scan may take for UCS Central** (the Route cuts it; such a
+server is `504 AMBIGUOUS_WRITE` in Wingman and is read by server-scan
+anyway); **a CSS-only box for the tables** (flex alone cannot cap a box at
+the room while letting a short table keep its own height, which
+server-scan's measured `max-height` does).
+
+Verification: `apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_refresh.py`
+(sent once with the admin token and its wait, the record read, every refusal
+and failure, the metrics, the cache, the fake, the use case's switch and log),
+`apps/day1-service/tests/integrations/server_scan/api/test_server_scan_refresh_api.py`
+(admins only, 409, 404, 502, 504, 501 naming the admin token, logged),
+`test_server_scan_rows.py` and `test_server_scan_record.py` (`server_type`
+read and derived; `revision` kept), `test_server_scan_sites.py` (maintenance
+counted apart), `tests/repo/test_chart_nginx.py` (the 130-second location),
+`apps/web/features/server-scan/lib/rows.test.ts`, `sites.test.ts`,
+`servers-view.test.ts`, `refresh.test.ts`, `events.test.ts` and `fill.test.ts`
+(server-scan's cases), `apps/web/lib/overview/fleet-health.test.ts`, and the
+e2e specs `server-scan.spec.ts` (the health bar, Physical, VM and vendor bars
+and their links), `server-scan-servers.spec.ts` (Type, a ticked severity, the
+BMC copy, every row's Fetch now, the box), `server-scan-server.spec.ts` (Fetch
+now, the type line) and `server-scan-events.spec.ts` (the box).

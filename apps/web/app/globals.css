@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* server-scan's own palette, for the Server Scan area's pages that wear it (ADR-0048). */
+@import "../features/server-scan/palette.css";
 
 @custom-variant dark (&:is(.dark *));
 

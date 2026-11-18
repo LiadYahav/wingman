@@ -9,7 +9,9 @@
 import { readFile } from "node:fs/promises";
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, held } from "../fixtures/api-handlers";
+import { scrollState } from "../fixtures/scroll";
 import { failing, forbidden, off } from "../fixtures/server-scan";
+import { mockFetchNow, nodeRecord } from "../fixtures/server-scan-server";
 import { FLEET, bigFleet, mockMaintenance, mockServers, setUpServers } from "../fixtures/server-scan-servers";
 import { readXlsx } from "../fixtures/xlsx";
 
@@ -45,13 +47,21 @@ test.describe("The Servers page", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Servers" })).toBeVisible();
     await expect(summary(page)).toHaveText("12 servers");
     await expect(page.getByTestId("ss-servers-updated")).toContainText("Updated 13/11/2026");
+    // server-scan v6.6.0: the first column is each row's Fetch now, its header for screen readers
     await expect(page.getByRole("table", { name: "Servers" }).locator("thead th")).toHaveText([
-      "Name", "BMC", "Installation", "MCE", "Cluster", "Model", "State", "Maintenance",
+      "Fetch now", "Name", "BMC", "Installation", "MCE", "Cluster", "Model", "State", "Maintenance",
     ]);
     // Sorted by name, naturally
     await expect.poll(async () => (await names(page))[0]).toBe("hpe-dl380-site2-stale-10");
     const node = row(page, "ocp-dell-r660-site1-node-01");
-    await expect(node.getByRole("link", { name: "Open BMC console for ocp-dell-r660-site1-node-01" })).toHaveAttribute("href", "https://192.0.2.101");
+    const bmc = node.getByRole("link", { name: "Open BMC console for ocp-dell-r660-site1-node-01" });
+    await expect(bmc).toHaveAttribute("href", "https://192.0.2.101");
+    // server-scan v6.2.0: the address first on hover, and a copy button beside the console
+    await expect(bmc).toHaveAttribute("title", "192.0.2.101 — open BMC console");
+    const copyBmc = node.getByRole("button", { name: "Copy BMC address 192.0.2.101" });
+    await expect(copyBmc).toHaveAttribute("title", "192.0.2.101 — copy");
+    // One twin has no BMC read: neither its console nor its copy
+    await expect(row(page, "ocp-twin").getByRole("button", { name: /Copy BMC address/ })).toHaveCount(1);
     await expect(node.locator('[data-column="openshift_state"]')).toHaveText("Installed");
     await expect(node.locator('[data-column="mce_name"]')).toHaveText("ocp4-prod-mce-site1-a");
     await expect(node.locator('[data-column="health"]')).toHaveText("●Healthy");
@@ -97,7 +107,27 @@ test.describe("The Servers page", () => {
     await expect(chips(page)).toHaveText(["Maintenance only"]);
   });
 
-  test("server-scan v6.0.0: Healthy leaves out servers in maintenance unless Maintenance is ticked too, and its count follows", async ({ page }) => {
+  test("server-scan v6.3.0: the Type dropdown, between Source and Site, keeps physical servers or VMs, in the URL as server_type", async ({ page }) => {
+    const vm = { ...FLEET[0], id: "srv_vm-01", name: "vm-kubevirt-site1-01", vendor: "kubevirt", server_type: "vm", source_provider: "KUBEVIRT" } as const;
+    await setUpServers(page, { servers: mockServers([...FLEET, vm]) });
+    await go(page, PAGE);
+    await expect(page.locator('[data-testid^="ss-filter-"]')).toHaveText([
+      "All (13)", "All (13)", "All (13)", "All sites (13)", "All (13)", "All (13)", "All (13)",
+    ]);
+    await expect(page.locator('[data-testid^="ss-filter-"]').nth(2)).toHaveAttribute("data-testid", "ss-filter-type");
+    await dropdown(page, "Type").click();
+    await expect(page.getByRole("group", { name: "Type values" }).getByRole("checkbox")).toHaveText(["Physical12", "VM1"]);
+    await page.keyboard.press("Escape");
+    await tick(page, "Type", "VM");
+    await expect.poll(() => query(page)).toBe("server_type=vm");
+    await expect.poll(() => names(page)).toEqual([vm.name]);
+    await expect(chips(page)).toHaveText(["Type VM"]);
+    await chips(page).click();
+    await expect.poll(() => query(page)).toBe("");
+    await expect(rows(page)).toHaveCount(13);
+  });
+
+  test("server-scan v6.3.0: a ticked severity leaves out servers in maintenance unless Maintenance is ticked too, and its count follows", async ({ page }) => {
     const healthy = FLEET.filter((s) => s.health === "HEALTHY");
     const inService = healthy.filter((s) => !s.maintenance.enabled).map((s) => s.name);
     const DONOR = "ocp-dell-r660-site1-node-04";
@@ -121,10 +151,16 @@ test.describe("The Servers page", () => {
     await tick(page, "Health", "Maintenance");
     await expect.poll(() => query(page)).toBe("health_overall=HEALTHY&maintenance=true");
     await expect.poll(() => names(page)).toEqual([DONOR]);
-    // Every other severity keeps its servers in maintenance
+    // Every other severity too: the Warning server in maintenance needs Maintenance ticked
+    const PAUSED_WARNING = "ocp-dell-r660-site1-node-03";
     await page.getByRole("button", { name: "Clear filters" }).click();
+    await dropdown(page, "Health").click();
+    await expect(option(page, "Health", "WARNING")).toHaveText("WARNING0");
+    await page.keyboard.press("Escape");
     await tick(page, "Health", "WARNING");
-    await expect(row(page, "ocp-dell-r660-site1-node-03")).toBeVisible();
+    await expect(row(page, PAUSED_WARNING)).toHaveCount(0);
+    await tick(page, "Health", "Maintenance");
+    await expect.poll(() => names(page)).toEqual([PAUSED_WARNING]);
   });
 
   test("the toggles, with server-scan's tooltips and counts", async ({ page }) => {
@@ -208,7 +244,7 @@ test.describe("The Servers page", () => {
     await expect.poll(() => query(page)).toBe("sort=health&sort_desc=true");
     await expect(rows(page).first()).toHaveAttribute("data-server", "ocp-dell-r660-site1-node-02");
     // BMC does not sort
-    await expect(page.getByRole("table", { name: "Servers" }).getByRole("button", { name: "BMC" })).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "Servers" }).getByRole("button", { name: "BMC", exact: true })).toHaveCount(0);
   });
 
   test("the cluster sidebar: MCEs, hosted and UPI clusters with counts, kept in the URL, and folded away", async ({ page }) => {
@@ -284,6 +320,23 @@ test.describe("The Servers page", () => {
 });
 
 test.describe("The Servers page's states", () => {
+  test("server-scan v6.4.0: the table scrolls inside its own box, its header pinned, and the page does not", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setUpServers(page, { servers: mockServers(bigFleet(3100)) });
+    await go(page, PAGE);
+    await expect(rows(page)).toHaveCount(50);
+    const box = '[data-testid="ss-servers-box"] > div';
+    await expect.poll(async () => (await scrollState(page, box)).pageScrolls).toBe(false);
+    expect((await scrollState(page, box)).boxScrolls).toBe(true);
+    await page.locator(box).hover();
+    await page.mouse.wheel(0, 900);
+    await expect.poll(async () => (await scrollState(page, box)).boxTop).toBeGreaterThan(0);
+    const scrolled = await scrollState(page, box);
+    expect([scrolled.mainTop, scrolled.pinned]).toEqual([0, true]);
+    // The pager stays in view under the box
+    await expect(page.getByTestId("pager-status")).toBeInViewport();
+  });
+
   test("skeleton rows while server-scan answers, then the rows", async ({ page }) => {
     const answer = held();
     await setUpServers(page, { servers: answer.answer(mockServers()) });
@@ -420,5 +473,56 @@ test.describe("Maintenance on and off", () => {
     await toggle(page, "ocp-dell-r660-site1-node-03").click();
     await expect(page.getByText(/Maintenance on ocp-dell-r660-site1-node-03 was not ended/)).toBeVisible();
     expect(calls).toHaveLength(2);
+  });
+});
+
+test.describe("A row's Fetch now", () => {
+  const fetchNow = (page: Page, name: string) => row(page, name).getByTestId("ss-row-fetch-now");
+  const NODE = "ocp-dell-r660-site1-node-01";
+
+  test("reads that one server from its manager, says so with its name, and the rows are read again", async ({ page }) => {
+    const { reads } = await setUpServers(page);
+    const calls = await mockFetchNow(page, [nodeRecord()]);
+    await go(page, PAGE);
+    await expect(rows(page)).toHaveCount(12);
+    const before = reads();
+    await expect(fetchNow(page, NODE)).toHaveAccessibleName(`Fetch data of ${NODE} now`);
+    await fetchNow(page, NODE).click();
+    await expect(page.getByText(`Fetched ${NODE}`)).toBeVisible();
+    await expect(page.getByText("From OPENMANAGE", { exact: true })).toBeVisible();
+    await expect.poll(() => reads()).toBeGreaterThan(before);
+    expect(calls).toEqual([`srv_${NODE}`]);
+  });
+
+  test("a failure is a toast in the API's words, sent once", async ({ page }) => {
+    await setUpServers(page);
+    const words = "server-scan: The ONEVIEW manager no longer reports it; the stored data is unchanged.";
+    const calls = await mockFetchNow(page, (route) => fulfillProblem(route, 409, "SERVER_REFRESH_REFUSED", words));
+    await go(page, PAGE);
+    await fetchNow(page, "hpe-dl380-site2-stale-10").click();
+    await expect(page.getByText(`hpe-dl380-site2-stale-10: ${words}`)).toBeVisible();
+    expect(calls).toHaveLength(1);
+  });
+
+  test("where the deployment does not offer it (DAY1_SERVER_SCAN_REFRESH) there is no column at all", async ({ page }) => {
+    const off = { refresh_enabled: false, refresh_available: false, refresh_detail: "Fetch now is off in this deployment." };
+    await setUpServers(page, { servers: mockServers(FLEET, off) });
+    await go(page, PAGE);
+    await expect(rows(page)).toHaveCount(12);
+    await expect(page.getByRole("table", { name: "Servers" }).locator("thead th")).toHaveText([
+      "Name", "BMC", "Installation", "MCE", "Cluster", "Model", "State", "Maintenance",
+    ]);
+    await expect(page.getByTestId("ss-row-fetch-now")).toHaveCount(0);
+  });
+
+  test("without server-scan's admin token every row's is greyed with day1's line, and sends nothing", async ({ page }) => {
+    const why = "Fetch now needs server-scan's admin token: add the key admin-token to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN).";
+    await setUpServers(page, { servers: mockServers(FLEET, { refresh_available: false, refresh_detail: why }) });
+    const calls = await mockFetchNow(page, [nodeRecord()]);
+    await go(page, PAGE);
+    await expect(fetchNow(page, NODE)).toHaveAttribute("aria-disabled", "true");
+    await expect(fetchNow(page, NODE)).toHaveAttribute("title", why);
+    await fetchNow(page, NODE).click({ force: true });
+    expect(calls).toEqual([]);
   });
 });

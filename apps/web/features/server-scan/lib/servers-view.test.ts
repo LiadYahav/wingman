@@ -117,6 +117,18 @@ describe("the Filtered by chips", () => {
     ]);
   });
 
+  // server-scan v6.3.0 (its a0e29c3): the Type dropdown, its parameter and its chip, after Vendor.
+  it("carry the Type filter as server_type, named Physical or VM, after Vendor", () => {
+    const view = parse("server_type=vm&vendor=dell&site_id=tlv");
+    expect(view.multi.server_type).toEqual(["vm"]);
+    expect(serializeServersView(view)).toBe("vendor=dell&server_type=vm&site_id=tlv");
+    expect(rowFilters(view)).toEqual({ vendor: ["dell"], server_type: ["vm"], site_id: ["tlv"] });
+    expect(filterChips(view, words).map((c) => c.label)).toEqual(["Vendor dell", "Type VM", "Site Tel Aviv"]);
+    const physical = filterChips(parse("server_type=physical"), words);
+    expect(physical.map((c) => c.label)).toEqual(["Type Physical"]);
+    expect(serializeServersView(physical[0].remove(parse("server_type=physical")))).toBe("");
+  });
+
   it("each removes only its own filter", () => {
     const view = parse("vendor=dell&vendor=hp&maintenance=exclude&f.model=R760&donor=true");
     const chips = filterChips(view, words);

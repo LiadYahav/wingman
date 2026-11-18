@@ -5,9 +5,10 @@
 # exists, and a file is listed here exactly when it names this map.
 
 upstream: team-redbull/server-scan
-# v6.1.0 is 876dd16; Wingman was matched to v5.3.0 (92146d3) and brought to
-# v6.1.0 in 3.43.0 (ADR-0048's 2026-11-16 amendment).
-synced_at: v6.1.0
+# v6.6.0 is 635e08a; Wingman was matched to v5.3.0 (92146d3), brought to
+# v6.1.0 (876dd16) in 3.43.0 (ADR-0048's 2026-11-16 amendment) and to v6.6.0
+# in 3.48.0 (its 2026-11-18 amendment).
+synced_at: v6.6.0
 
 # What Wingman reads or ports: a change here matters even when no entry
 # below follows the file (a new route, schema, enum or page).
@@ -70,12 +71,19 @@ not_followed:
       - frontend/src/test/
       - frontend/src/main.tsx
       - frontend/src/router.tsx
-      - frontend/src/index.css
       - frontend/src/assets/
       - frontend/src/vite-env.d.ts
     why: >-
       server-scan's own shell and data layer: Wingman reads day1's routes with
       its own hooks (features/server-scan/api/), in its own layout and design
+  - upstream:
+      - frontend/src/features/inventory/InventoryPage.test.tsx
+      - frontend/src/features/inventory/MaintenanceToggle.test.tsx
+    why: >-
+      server-scan's render tests of its Servers page and its maintenance toggle,
+      through its own hooks, router and DOM; Wingman holds the page with its e2e
+      specs (apps/web/e2e/tests/server-scan-servers.spec.ts), and the pure rules
+      those tests reach with the cases of rows.test.ts, which the map follows
 
 files:
   # ── day1: server-scan's answers typed in its shapes (domain) ──────────────
@@ -84,6 +92,8 @@ files:
       - backend/app/api/v1/schemas.py
       - backend/app/api/v1/maintenance_schemas.py
       - backend/app/domain/models/maintenance.py
+      - backend/app/domain/enums/core.py
+      - backend/app/domain/enums/__init__.py
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/sites.py
     upstream: [backend/app/api/v1/sites_schemas.py]
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/record.py
@@ -151,6 +161,7 @@ files:
     upstream:
       - backend/app/api/v1/servers.py
       - backend/app/api/v1/maintenance_schemas.py
+      - backend/app/errors.py
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/architecture.py
     upstream: [frontend/public/architecture/]
   - wingman: apps/day1-service/src/wingman_day1/api/conditional.py
@@ -168,6 +179,8 @@ files:
     upstream: [backend/app/infrastructure/jobs/fake.py]
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/skill.py
     upstream: [backend/app/application/services/skill_bundle.py]
+  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/refresh.py
+    upstream: [backend/app/application/services/server_refresh.py]
 
   # ── day1: the area's routes, in server-scan's shapes and parameters ──────
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/api/servers_schemas.py
@@ -210,6 +223,11 @@ files:
     upstream: [backend/app/api/v1/skill.py]
   - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_architecture.py
     upstream: [frontend/public/architecture/]
+  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_refresh.py
+    upstream:
+      - backend/app/api/v1/servers.py
+      - backend/app/errors.py
+      - backend/app/application/services/server_refresh.py
 
   # ── dev: the fake fleet's fixtures, in server-scan's shapes ──────────────
   - wingman: dev/fleet-fixtures/confs.yaml
@@ -377,6 +395,21 @@ files:
     upstream: [frontend/src/components/AppNav.tsx]
   - wingman: apps/web/features/server-scan/lib/testing.ts
     upstream: [frontend/src/features/servers/OverviewTab.test.tsx]
+  - wingman: apps/web/features/server-scan/lib/fill.ts
+    upstream:
+      - frontend/src/lib/useFillViewport.ts
+      - frontend/src/features/inventory/ClusterSidebar.tsx
+  - wingman: apps/web/features/server-scan/lib/fill.test.ts
+    upstream: [frontend/src/lib/useFillViewport.ts]
+  - wingman: apps/web/features/server-scan/lib/refresh.ts
+    upstream:
+      - frontend/src/features/servers/RefreshButton.tsx
+      - frontend/src/features/inventory/RowRefreshButton.tsx
+      - frontend/src/features/servers/refreshError.ts
+  - wingman: apps/web/features/server-scan/lib/refresh.test.ts
+    upstream:
+      - frontend/src/features/servers/RefreshButton.test.tsx
+      - frontend/src/features/inventory/RowRefreshButton.test.tsx
 
   # ── web: the pages and their parts (components) ──────────────────────────
   - wingman: apps/web/features/server-scan/components/sites-page.tsx
@@ -386,7 +419,9 @@ files:
       - frontend/src/features/sites/SitesOverviewPage.tsx
       - frontend/src/components/severity.ts
   - wingman: apps/web/features/server-scan/components/servers-page.tsx
-    upstream: [frontend/src/features/inventory/InventoryPage.tsx]
+    upstream:
+      - frontend/src/features/inventory/InventoryPage.tsx
+      - frontend/src/features/inventory/InventoryTable.tsx
   - wingman: apps/web/features/server-scan/components/servers-toolbar.tsx
     upstream: [frontend/src/features/inventory/InventoryPage.tsx]
   - wingman: apps/web/features/server-scan/components/server-columns.tsx
@@ -397,6 +432,21 @@ files:
     upstream: [frontend/src/features/inventory/ClusterSidebar.tsx]
   - wingman: apps/web/features/server-scan/components/multi-select.tsx
     upstream: [frontend/src/features/inventory/MultiSelect.tsx]
+  - wingman: apps/web/features/server-scan/components/use-fill-main.ts
+    upstream: [frontend/src/lib/useFillViewport.ts]
+  - wingman: apps/web/features/server-scan/palette.css
+    upstream: [frontend/src/index.css]
+    note: its palette only (tints, on-tint text, status hues, surfaces); its shell's styles are Wingman's
+  - wingman: apps/web/features/server-scan/components/row-icons.tsx
+    upstream:
+      - frontend/src/assets/maintenance.svg
+      - frontend/src/features/inventory/MaintenanceToggle.tsx
+      - frontend/src/components/RefreshIcon.tsx
+  - wingman: apps/web/features/server-scan/components/fetch-now.tsx
+    upstream:
+      - frontend/src/features/servers/RefreshButton.tsx
+      - frontend/src/features/inventory/RowRefreshButton.tsx
+      - frontend/src/components/RefreshIcon.tsx
   - wingman: apps/web/features/server-scan/components/maintenance-toggle.tsx
     upstream:
       - frontend/src/features/inventory/MaintenanceToggle.tsx

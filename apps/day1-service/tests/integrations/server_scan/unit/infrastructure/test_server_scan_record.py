@@ -30,6 +30,7 @@ from wingman_day1.domain.errors import (
     ServerScanUnavailableError,
 )
 from wingman_day1.infrastructure.fake_fleet import load_fleet
+from wingman_day1.integrations.server_scan.api.record_schemas import ServerRecordOut
 from wingman_day1.integrations.server_scan.application.area import ServerScanService
 from wingman_day1.integrations.server_scan.domain.events import HISTORY_OFF, EventPage, audit_detail
 from wingman_day1.integrations.server_scan.domain.record import ServerRecord
@@ -62,6 +63,7 @@ def server_scan_detail(**changes: Any) -> dict[str, Any]:
         "name_normalized": NAME.lower(),
         "model": "PowerEdge R660",
         "model_normalized": "poweredge r660",
+        "server_type": "physical",
         "identity": {
             "vendor": "dell",
             "serial": "DLFAKE0101",
@@ -313,8 +315,10 @@ async def test_the_record_is_read_whole_with_the_viewer_token() -> None:
 async def test_the_record_drops_server_scans_internals() -> None:
     inventory, _ = make(httpx.Response(200, json=server_scan_detail()))
     sent = (await inventory.record(SERVER_ID)).model_dump(mode="json")
-    for internal in ("schema_version", "name_normalized", "search_tokens", "revision"):
+    for internal in ("schema_version", "name_normalized", "search_tokens"):
         assert internal not in sent
+    # Kept since server-scan v6.5.0's Fetch now: it says whether the content changed.
+    assert sent["revision"] == 17
     assert "external_ids" not in sent["identity"]
     assert "evaluated_at" not in sent["health"]
     assert "host_is_ip" not in sent["network"]["bmc"]
@@ -374,6 +378,20 @@ async def test_a_record_of_a_server_scan_before_the_cause_reads_without_one() ->
     inventory, _ = make(httpx.Response(200, json=raw))
     record = await inventory.record(SERVER_ID)
     assert (record.unreachable_reason, record.unreachable_detail) == ("timeout", None)
+
+
+async def test_a_records_server_type_is_read_and_an_older_records_follows_its_vendor() -> None:
+    """server-scan v6.3.0 (its a0e29c3): ``server_type``, derived from the vendor, on the record."""
+    inventory, _ = make(httpx.Response(200, json=server_scan_detail(server_type="vm")))
+    assert (await inventory.record(SERVER_ID)).server_type == "vm"
+    older = server_scan_detail()
+    del older["server_type"]
+    older["identity"] = {**older["identity"], "vendor": "kubevirt"}
+    inventory, _ = make(httpx.Response(200, json=older))
+    record = await inventory.record(SERVER_ID)
+    assert record.server_type is None
+    out = ServerRecordOut.of(record, maintenance_detail=None, history_detail=None)
+    assert out.server_type == "vm"
 
 
 def malformed() -> list[dict[str, Any]]:
