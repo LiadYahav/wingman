@@ -463,6 +463,28 @@ ownership rule (5) do not change.
 - The override needs the workflows release that has `scale_down_policy`
   (the one that has `server_names`): an older orchestrator forbids the field
   (422, nothing started).
+- **In the web, in the scale-down's confirmation** (no new control on the
+  card): one fieldset, **Which servers leave**, three radios, the chosen
+  one's detail under it. **The NodePool's own policy** names it (or "the
+  platform default: CAPI picks at random") and is the default; **Another
+  policy for this run** opens a select of the workflow's policies but the
+  NodePool's own (the first by default), with what it removes
+  (`least-utilized` says it needs the metrics API); **Pick the servers**
+  opens the picker of the amendment above, which is no longer optional once
+  chosen: Yes waits for exactly as many as leave. Without the MCE's nodes it
+  cannot be chosen, and says why. The confirmation's main line follows the
+  choice ("…(least-requested, for this run only)"), and an unknown policy of
+  the NodePool's own is still said to be refused, with another policy the
+  way out. Changing the choice drops the ticks; Cancel, Escape and a new
+  number drop the choice. A scale-up shows none and sends neither
+  (`lib/scale-leave.ts`: what is sent, when Yes waits, the line).
+- **The run says which way its servers were chosen** ("Which servers
+  left"): picked by name; by the NodePool's own policy, when the applied
+  policy is the day1 file's; by another ("not the day1 file's policy (…):
+  this run's choice, or one set on the NodePool itself", since the result
+  does not say which, and the orchestrator does not return the request); or
+  at random by CAPI. A run that did not scale down says nothing, and lists
+  what it ignored as before.
 
 ### A nodepool declares its own policy
 
@@ -517,6 +539,15 @@ one sent with a scale-up is ignored and said so), `test_scale.py` (the
 enum), `tests/api/test_scale_api.py` (a policy sent on a scale-down and
 applied; an unknown one, and one beside named servers, refused from the
 body; one on a scale-up or no change refused in words; none sent);
+`apps/web/lib/scale-leave.test.ts` (the policies offered, what is sent for
+each choice, when Yes waits, the line, the run's choice),
+`apps/web/lib/scale-model.test.ts` and `scale-confirm.test.ts` (the body,
+the line for this run), `apps/web/e2e/tests/cluster-scale-policy.spec.ts`
+(the own policy named and sent as nothing; another one offered without the
+own, said, and sent alone; the platform default; an unknown own policy and
+the way out; Cancel and a scale-up; the run's choice each way) and
+`cluster-scale-servers.spec.ts` (picking as a choice: Yes waits, another
+choice drops the ticks, no choice without the MCE's nodes);
 `tests/unit/domain/test_scale_down_policy.py` (the input, the template
 guard, the rendered check, the lock, the edit rule),
 `tests/unit/domain/test_cluster_text.py` (the annotation written as the

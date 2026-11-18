@@ -124,9 +124,13 @@ function ScaleDocs() {
         day1, no merge request. The run shows under <strong>NodePool sizes</strong> for everyone.
       </p>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        On a scale-down the confirmation lists the NodePool&apos;s servers: tick exactly as many as leave, or none and
-        the NodePool&apos;s scale-down policy picks. The list needs live status from the MCE; the run shows the servers
-        picked by name, and why the workflow refused them if it did.
+        On a scale-down the confirmation asks <strong>Which servers leave</strong>, one choice: the NodePool&apos;s own
+        policy (the default, its <InlineCode>redbull.io/scale-down-policy</InlineCode>, or CAPI at random without
+        one), another policy for this run only (<InlineCode>fewest-pods</InlineCode>,{" "}
+        <InlineCode>least-requested</InlineCode>, or <InlineCode>least-utilized</InlineCode>, which needs the hosted
+        cluster&apos;s metrics API), or the servers you tick, exactly as many as leave (the list needs live status
+        from the MCE). The run says which way its servers were chosen, shows each server it chose, and why the
+        workflow refused them if it did.
       </p>
       <Callout type="info" title="With Scale on, replicas change only through it">
         An edit that changes an existing NodePool&apos;s <InlineCode>replicas</InlineCode> is refused and points to

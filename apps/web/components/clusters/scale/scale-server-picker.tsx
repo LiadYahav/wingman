@@ -2,37 +2,32 @@
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { humanize, useClusterNodes } from "@/lib/nodes";
-import { pickedWords, serversOf } from "@/lib/scale-servers";
+import { pickedWords, serversOf, type PickableServer } from "@/lib/scale-servers";
 import { cn } from "@/lib/utils";
 import type { ScaleTabValue } from "./scale-tab";
 
-/**
- * In a scale-down's confirmation: the NodePool's servers, to tick exactly
- * the ones that leave (ADR-0062's 2026-11-18 amendment). Optional: none
- * ticked, the NodePool's scale-down policy picks, as before. The list is the
- * Nodes tab's own read of the MCE (`GET .../nodes`), so without live status
- * there is nothing to pick from, and it says so. Once as many are ticked as
- * leave, the rest wait; Yes waits until the count is none or all.
- */
-export function ServerPicker({ tab }: { tab: ScaleTabValue }) {
-  const { change, leaving, servers, toggleServer, start } = tab.state;
+/** The NodePool's servers a scale-down could pick, from the Nodes tab's own read of the MCE (`GET .../nodes`). */
+export function usePickable(tab: ScaleTabValue): PickableServer[] {
   const { data } = useClusterNodes(tab.cluster.name, tab.cluster.where);
-  if (!change || leaving <= 0) return null;
-  const pool = data && !data.off ? data.data.node_pools.find((p) => p.name === change.nodepool) : undefined;
-  const offered = serversOf(pool);
-  if (offered.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground" data-testid="scale-pick-none">
-        Picking which servers leave needs this NodePool&apos;s nodes from the MCE (live status); without them its scale-down
-        policy picks.
-      </p>
-    );
-  }
+  const nodepool = tab.state.change?.nodepool;
+  const pool = data && !data.off ? data.data.node_pools.find((p) => p.name === nodepool) : undefined;
+  return serversOf(pool);
+}
+
+/**
+ * Under "Pick the servers" in a scale-down's confirmation (ADR-0062's
+ * 2026-11-18 amendments): the NodePool's servers, to tick exactly the ones
+ * that leave. Once as many are ticked as leave, the rest wait; Yes waits
+ * until then. Without live status there is nothing to pick from: the choice
+ * says so and is not offered (`scale-leave-choice.tsx`).
+ */
+export function ServerPicker({ tab, offered }: { tab: ScaleTabValue; offered: PickableServer[] }) {
+  const { change, leaving, servers, toggleServer, start } = tab.state;
+  if (!change || leaving <= 0 || offered.length === 0) return null;
   const full = servers.length >= leaving;
   return (
-    <fieldset className="space-y-2 rounded-lg border px-3 pb-2.5 pt-1.5" data-testid="scale-pick">
-      <legend className="px-1 text-xs font-semibold">Which servers leave (optional)</legend>
-      <ul className="max-h-56 space-y-1 overflow-y-auto" aria-label={`Servers of ${change.nodepool}`}>
+    <div className="space-y-1.5" data-testid="scale-pick">
+      <ul className="max-h-48 space-y-1 overflow-y-auto" aria-label={`Servers of ${change.nodepool}`}>
         {offered.map((s) => {
           const ticked = s.name !== null && servers.includes(s.name);
           const held = s.name === null || s.why !== null || (full && !ticked);
@@ -61,6 +56,6 @@ export function ServerPicker({ tab }: { tab: ScaleTabValue }) {
       <p role="status" className="text-xs text-muted-foreground" data-testid="scale-pick-count">
         {pickedWords(servers.length, leaving)}
       </p>
-    </fieldset>
+    </div>
   );
 }

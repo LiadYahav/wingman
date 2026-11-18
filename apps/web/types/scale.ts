@@ -42,6 +42,11 @@ export interface StartScaleRequest {
   replicas: number;
   /** A scale-down only, optional: exactly the servers that leave (each node's `machine_server`), as many as it removes. */
   server_names?: string[];
+  /**
+   * A scale-down only, optional, never with `server_names`: this run's policy (`fewest-pods`, `least-requested`,
+   * `least-utilized`), ranked ahead of the NodePool's own.
+   */
+  scale_down_policy?: string;
 }
 
 /** The child that scales (`scale-up-nodepool-<cluster>` or `scale-down-nodepool-<cluster>`), read by its own id. */
@@ -58,7 +63,7 @@ export interface ScaleNodePoolChange {
   infra_env: string | null;
   before: number | null;
   after: number | null;
-  /** Its `redbull.io/scale-down-policy`; `null`: none, CAPI picks at random. */
+  /** The policy the run applied: this run's, else the NodePool's own; `null`: none (named servers, or CAPI at random). */
   scale_down_policy: string | null;
 }
 

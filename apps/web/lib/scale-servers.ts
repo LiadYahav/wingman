@@ -1,7 +1,7 @@
 /**
  * Picking the servers a scale-down removes (ADR-0062's 2026-11-18
- * amendment), as pure functions. Optional: none picked, the NodePool's
- * scale-down policy (or CAPI) picks; else exactly as many as leave. The
+ * amendment), as pure functions: one of the ways the servers that leave are
+ * chosen (`scale-leave.ts`), and then exactly as many as leave. The
  * names are each node's `machine_server`, the workflow's own rule for which
  * server a Machine is, so what is sent is what it matches. Which Machine a
  * name is, and whether CAPI would take another, stay the workflow's to judge.
@@ -35,16 +35,10 @@ export function serversOf(pool: NodePoolNodes | undefined): PickableServer[] {
     }));
 }
 
-/** Whether the picks can be sent: none (the policy picks), or exactly as many as leave. */
-export const picksReady = (picked: number, leaving: number): boolean => picked === 0 || picked === leaving;
-
-/** Under the list: how many are picked, and what that means. */
+/** Under the list: how many are picked, and what that means (exactly as many as leave are sent). */
 export function pickedWords(picked: number, leaving: number): string {
-  if (picked === 0) {
-    const which = leaving === 1 ? "the server" : `the ${leaving} servers`;
-    return `Optional: tick ${which} to remove, or none and the NodePool's scale-down policy picks.`;
-  }
-  if (picked < leaving) return `${picked} of ${leaving} picked: tick ${leaving - picked} more, or none.`;
+  if (picked === 0) return `Tick ${leaving === 1 ? "the server" : `the ${leaving} servers`} to remove.`;
+  if (picked < leaving) return `${picked} of ${leaving} picked: tick ${leaving - picked} more.`;
   return `${picked} of ${leaving} picked: exactly ${picked === 1 ? "this one leaves" : "these leave"}.`;
 }
 

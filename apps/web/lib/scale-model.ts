@@ -75,13 +75,20 @@ export function replicasOf(value: number): number | null {
 }
 
 /**
- * The start's body: one NodePool and its replicas, and the servers that leave when a scale-down names them (the
- * caller sends none on a scale-up); `null` until the number is a whole one.
+ * The start's body: one NodePool and its replicas, and on a scale-down at most one of the servers that leave or this
+ * run's policy (the caller sends neither on a scale-up, `scale-leave.ts`); `null` until the number is a whole one.
  */
-export function startBody(nodepool: string | null, replicas: number, servers: string[] = []): StartScaleRequest | null {
+export function startBody(
+  nodepool: string | null,
+  replicas: number,
+  which: Pick<StartScaleRequest, "server_names" | "scale_down_policy"> = {}
+): StartScaleRequest | null {
   const count = replicasOf(replicas);
   if (!nodepool || count === null) return null;
-  return servers.length > 0 ? { nodepool, replicas: count, server_names: servers } : { nodepool, replicas: count };
+  const body: StartScaleRequest = { nodepool, replicas: count };
+  if (which.server_names && which.server_names.length > 0) body.server_names = which.server_names;
+  else if (which.scale_down_policy) body.scale_down_policy = which.scale_down_policy;
+  return body;
 }
 
 /** The replicas a NodePool's change starts from: the day1 file's. */
