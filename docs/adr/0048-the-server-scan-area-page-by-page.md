@@ -726,3 +726,12 @@ and §9 of `docs/notes/2026-11-13-server-scan-area-api.md` say what changed.
   Servers page with `server_type` or `vendor` added to the card's filter.
   The fake fleet's rows carry it; the dropdowns wrap to two rows of four
   below 1536 pixels, where seven no longer fit beside the cluster sidebar.
+- **`4d9d171` (v6.2.0): the BMC's address to copy, and a health bar per
+  Sites card.** The Servers table's BMC cell copies the address beside the
+  console link, each with the address first on hover (the shared copy
+  button takes a tooltip of its own for it); the server page's BMC button
+  says the address first too. Every Sites card shows server-scan's stacked
+  health bar, worst first (critical, major, warning, unknown, maintenance,
+  healthy) so the red end is at the left, each tier above zero at least 3
+  pixels wide, its counts in words as its name and tooltip; drawn with the
+  Overview's segmented bar, in Wingman's status colours.

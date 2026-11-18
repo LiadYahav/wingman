@@ -43,14 +43,27 @@ export function CopyCell({ value, label, className }: { value: string | null; la
  * A copy button with only its icon, beside what it copies (a link, a title):
  * `label` names what is copied, and its name is "Copy <label> <value>", as a
  * `CopyCell`'s. `reveal` shows it only while its `group` is hovered or focused.
+ * `title` is its tooltip ("Copy <label>" without one).
  */
-export function CopyButton({ value, label, reveal = false, className }: { value: string; label: string; reveal?: boolean; className?: string }) {
+export function CopyButton({
+  value,
+  label,
+  reveal = false,
+  title,
+  className,
+}: {
+  value: string;
+  label: string;
+  reveal?: boolean;
+  title?: string;
+  className?: string;
+}) {
   return (
     <button
       type="button"
       onClick={() => void copyValue(value, label)}
       aria-label={`Copy ${label} ${value}`}
-      title={`Copy ${label}`}
+      title={title ?? `Copy ${label}`}
       className={cn(
         "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
         reveal && "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",

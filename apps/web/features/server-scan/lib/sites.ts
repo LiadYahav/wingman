@@ -197,6 +197,31 @@ export function countBars(card: SiteCard): CountBar[] {
   ];
 }
 
+/** One part of a card's health bar: a severity's servers in service, or those in maintenance. */
+export interface HealthSegment {
+  key: HealthSeverity | "MAINTENANCE";
+  count: number;
+}
+
+/**
+ * The parts of server-scan's stacked health bar (v6.2.0, its 4d9d171), worst
+ * first so the red end is at the left: critical, major, warning, unknown,
+ * maintenance, healthy; only those above zero. `by_health` counts servers in
+ * service only (v6.3.0), so they add up to the card's total.
+ */
+export function healthSegments(stats: Breakdown): HealthSegment[] {
+  if (stats.total === 0) return [];
+  const order: HealthSegment["key"][] = ["CRITICAL", "MAJOR", "WARNING", "UNKNOWN", "MAINTENANCE", "HEALTHY"];
+  return order
+    .map((key) => ({ key, count: key === "MAINTENANCE" ? stats.in_maintenance : (stats.by_health[key] ?? 0) }))
+    .filter((segment) => segment.count > 0);
+}
+
+/** The bar's words, for its tooltip and its name: "2 critical, 1 maintenance, 20 healthy". */
+export function healthSummary(segments: HealthSegment[]): string {
+  return segments.map((segment) => `${segment.count} ${segment.key.toLowerCase()}`).join(", ");
+}
+
 /** The header's "N servers across M sites": M is the configured sites, Unassigned left out. */
 export function sitesSummary(data: SiteStatsList): { servers: number; sites: number } {
   return {

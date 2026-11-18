@@ -11,7 +11,8 @@ import { ServerLink } from "./server-link";
 /**
  * The Servers table's columns, server-scan's own in its order and words
  * (team-redbull/server-scan, `frontend/src/features/inventory/InventoryTable.tsx`,
- * decision 18): Name (a link to the server's page), BMC, Installation, MCE
+ * decision 18): Name (a link to the server's page), BMC (its console and,
+ * since v6.2.0, a copy of its address), Installation, MCE
  * (only when a row on the page has one), Cluster, Model, State, then
  * Maintenance. Name, Installation, MCE,
  * Cluster, Model and State sort; Model also has Wingman's value filter, the
@@ -24,22 +25,27 @@ const Empty = () => <span className="text-muted-foreground">—</span>;
 
 /**
  * Opens the BMC's own web console in a new tab (`https://`, the one scheme
- * every vendor's BMC serves); nothing for a server whose BMC host was not read.
+ * every vendor's BMC serves), and copies its address (server-scan v6.2.0,
+ * its 4d9d171), each saying the address first on hover; nothing for a server
+ * whose BMC host was not read.
  */
-function BmcLink({ row }: { row: ServerRow }) {
+function BmcCell({ row }: { row: ServerRow }) {
   if (!row.bmc_host) return null;
   const label = `Open BMC console for ${row.name}`;
   return (
-    <a
-      href={`https://${row.bmc_host}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={label}
-      aria-label={label}
-      className="inline-flex h-6 w-6 items-center justify-center rounded-md border text-muted-foreground outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-    >
-      <ExternalLink aria-hidden className="h-3.5 w-3.5" />
-    </a>
+    <span className="inline-flex items-center gap-0.5">
+      <a
+        href={`https://${row.bmc_host}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`${row.bmc_host} — open BMC console`}
+        aria-label={label}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-md border text-muted-foreground outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <ExternalLink aria-hidden className="h-3.5 w-3.5" />
+      </a>
+      <CopyButton value={row.bmc_host} label="BMC address" title={`${row.bmc_host} — copy`} />
+    </span>
   );
 }
 
@@ -90,7 +96,7 @@ export function serverColumns(withMce: boolean, trailing: ColumnDef<ServerRow, n
       meta: { label: "Name", className: NOWRAP },
       cell: (c) => <NameCell row={c.row.original} />,
     }),
-    column.display({ id: "bmc", header: "BMC", meta: { label: "BMC", className: NOWRAP }, cell: (c) => <BmcLink row={c.row.original} /> }),
+    column.display({ id: "bmc", header: "BMC", meta: { label: "BMC", className: NOWRAP }, cell: (c) => <BmcCell row={c.row.original} /> }),
     column.accessor("openshift_state", {
       header: "Installation",
       meta: { label: "Installation", className: NOWRAP },

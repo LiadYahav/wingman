@@ -124,6 +124,9 @@ test.describe("The Sites page", () => {
     await expect(site1.getByTestId("ss-card-total")).toHaveText("32");
     await expect(counts(site1)).toHaveText(["◆2 critical", "⬟1 major", "▲1 warning", "⏸1 in maintenance"]);
     await expect(site1.getByTestId("ss-card-state")).toHaveText(["22 installed", "4 available"]);
+    // server-scan v6.2.0: a stacked health bar, worst first, adding up to the card's servers
+    await expect(site1.getByTestId("ss-card-health")).toHaveAttribute("aria-label", "Health: 2 critical, 1 major, 1 warning, 1 maintenance, 27 healthy");
+    await expect(site1.getByTestId("ss-card-health").locator("[data-part]")).toHaveCount(5);
     // server-scan v6.3.0: Physical, then VM, then the physical vendors; KubeVirt is the VM row
     await expect(site1.getByTestId("ss-card-bar")).toHaveText(["Physical32", "VM0", "Dell18", "Cisco6", "HPE8", "Standalone0"]);
     await expect(card(page, "Site 2")).toContainText("all healthy");
@@ -132,6 +135,7 @@ test.describe("The Sites page", () => {
     await expect(site3.getByTestId("ss-card-total")).toHaveText("0");
     await expect(site3).toContainText("empty");
     await expect(site3.getByTestId("ss-card-bar")).toHaveCount(0);
+    await expect(site3.getByTestId("ss-card-health")).toHaveCount(0);
     const unassigned = card(page, "Unassigned");
     await expect(unassigned).toContainText("no site in hostname");
     await expect(unassigned.getByTestId("ss-card-state")).toHaveText(["2 available"]);

@@ -5,11 +5,11 @@ import { Callout, InlineCode, SectionHeader, TermCard } from "./docs-parts";
 const PAGES = [
   {
     title: "Sites",
-    desc: "The fleet at a glance: a card for all sites, each installation type (UPI, Hosted cluster, MCE), Available and Installed, then one per site. Each counts its critical, major, warning, in-maintenance and unknown servers, or says all healthy, and its physical servers, VMs and servers per vendor; every count opens Servers filtered to it.",
+    desc: "The fleet at a glance: a card for all sites, each installation type (UPI, Hosted cluster, MCE), Available and Installed, then one per site. Each counts its critical, major, warning, in-maintenance and unknown servers, or says all healthy, a bar of its servers by health, and its physical servers, VMs and servers per vendor; every count opens Servers filtered to it.",
   },
   {
     title: "Servers",
-    desc: "The fleet's table, read again every 30 seconds: search by name, serial or BMC, filter by vendor, source, type (physical or VM), site, classification, installation and health, toggle stale, duplicate, name-mismatch and donor servers, or pick a cluster in the side panel. A ticked health leaves out servers in maintenance unless Maintenance is ticked too, as the Sites cards count them. Export as Excel or CSV.",
+    desc: "The fleet's table, read again every 30 seconds: search by name, serial or BMC, filter by vendor, source, type (physical or VM), site, classification, installation and health, toggle stale, duplicate, name-mismatch and donor servers, or pick a cluster in the side panel; a row's BMC opens its console or copies its address. A ticked health leaves out servers in maintenance unless Maintenance is ticked too, as the Sites cards count them. Export as Excel or CSV.",
   },
   {
     title: "A server's page",

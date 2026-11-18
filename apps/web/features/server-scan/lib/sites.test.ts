@@ -13,6 +13,8 @@ import {
   cardCounts,
   cardVerdict,
   fleetCards,
+  healthSegments,
+  healthSummary,
   installedAvailable,
   siteCards,
   sitesSummary,
@@ -320,6 +322,26 @@ describe("the Physical, VM and vendor bars", () => {
     expect(vendorLabel("kubevirt")).toBe("KubeVirt");
     expect(vendorLabel("standalone")).toBe("Standalone");
     expect(vendorLabel("lenovo")).toBe("lenovo");
+  });
+});
+
+// server-scan v6.2.0 (its 4d9d171): every card's stacked health bar.
+describe("the health bar", () => {
+  it("is worst first, then maintenance and healthy, only the tiers above zero, adding up to the total", () => {
+    const stats = breakdown({ total: 10, in_maintenance: 2, by_health: { HEALTHY: 5, CRITICAL: 1, UNKNOWN: 2, WARNING: 0 } });
+    const segments = healthSegments(stats);
+    expect(segments).toEqual([
+      { key: "CRITICAL", count: 1 },
+      { key: "UNKNOWN", count: 2 },
+      { key: "MAINTENANCE", count: 2 },
+      { key: "HEALTHY", count: 5 },
+    ]);
+    expect(segments.reduce((sum, s) => sum + s.count, 0)).toBe(stats.total);
+    expect(healthSummary(segments)).toBe("1 critical, 2 unknown, 2 maintenance, 5 healthy");
+  });
+
+  it("is none for an empty card", () => {
+    expect(healthSegments(breakdown())).toEqual([]);
   });
 });
 

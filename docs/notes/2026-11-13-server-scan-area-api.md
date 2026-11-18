@@ -60,7 +60,11 @@ its navigation.
   server healthy: `● all healthy` (since v6.3.0 every server in service, and
   at least one); none at all: `empty`. A site card adds
   `N installed` and `N available` (each above zero) from its own
-  `by_openshift_state`. Last, a bar per vendor (Dell, Cisco, HPE,
+  `by_openshift_state`. Since v6.2.0 (its `4d9d171`; Wingman 3.45.0) a
+  stacked **health bar**: each tier as wide as its share of the card's
+  servers, worst first (critical, major, warning, unknown, maintenance,
+  healthy), a tier above zero at least 3 pixels wide, its counts in words as
+  its tooltip. Last, a bar per vendor (Dell, Cisco, HPE,
   Standalone, KubeVirt), as wide as its share of the card's own total, with
   its count; an empty card has none. Since v6.3.0 (its `a0e29c3`; Wingman
   3.45.0) **Physical** and **VM** lead them (VM is the `kubevirt` count,
@@ -310,7 +314,9 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   they hold more than 8 entries; the sidebar folds away ("‹ Hide filters",
   "Clusters (n) ›").
 - **Table**: Name (a link to the server's page, a copy button on hover), BMC
-  (opens `https://<bmc_host>` in a new tab; nothing without one),
+  (opens `https://<bmc_host>` in a new tab; since v6.2.0, its `4d9d171`, a
+  copy button beside it copies the address, and each says the address
+  first on hover; nothing without one),
   Installation (Available, Installed or In inventory, and "→ <MCE>" under it
   while an install holds the server), MCE (only when a row on the page has
   one), Cluster (and "Contested with <cluster>"), Model, State (the severity

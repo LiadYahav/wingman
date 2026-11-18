@@ -1,6 +1,7 @@
 // What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 
 import Link from "next/link";
+import { SegmentedBar } from "@/components/overview/bars";
 import { Skeleton } from "@/components/ui/skeleton";
 import { serversHref } from "@/features/server-scan/lib/servers-view";
 import {
@@ -8,8 +9,11 @@ import {
   cardCounts,
   cardVerdict,
   countBars,
+  healthSegments,
+  healthSummary,
   installedAvailable,
   type CountBar,
+  type HealthSegment,
   type CountKind,
   type SiteCard,
 } from "@/features/server-scan/lib/sites";
@@ -30,6 +34,30 @@ const TONE: Record<CountKind, string> = {
   maintenance: "text-status-provisioning-fg",
   unknown: "text-muted-foreground",
 };
+
+/** Each health tier's fill, in Wingman's status colours (MAJOR a paler error, as on the Overview's bar). */
+const SEGMENT_FILL: Record<HealthSegment["key"], string> = {
+  CRITICAL: "bg-status-error",
+  MAJOR: "bg-status-error/60",
+  WARNING: "bg-status-warning",
+  UNKNOWN: "bg-muted-foreground/30",
+  MAINTENANCE: "bg-status-provisioning",
+  HEALTHY: "bg-status-ready",
+};
+
+/**
+ * server-scan's stacked health bar (v6.2.0): each tier as wide as its share
+ * of the card's servers, worst at the left; a tier above zero keeps 3 pixels,
+ * so one critical server in 500 still shows. Its words are its name and tooltip.
+ */
+function HealthBar({ segments }: { segments: HealthSegment[] }) {
+  const words = healthSummary(segments);
+  return (
+    <div role="img" aria-label={`Health: ${words}`} title={words} data-testid="ss-card-health" className="mt-4">
+      <SegmentedBar parts={segments.map((s) => ({ key: s.key, count: s.count, fill: SEGMENT_FILL[s.key] }))} />
+    </div>
+  );
+}
 
 /** A bar's row: above zero a link to its servers (above the card's stretched link), at zero plain. */
 const BAR_ROW = "flex items-center gap-2.5 text-xs";
@@ -103,8 +131,8 @@ function HealthCounts({ card }: { card: SiteCard }) {
 
 /**
  * One card, as server-scan's Sites page draws it: name and total, then the
- * counts, a site's installed and available servers, and the Physical, VM and
- * vendor bars. The card opens the Servers page with its filter
+ * counts, a site's installed and available servers, its health bar, and the
+ * Physical, VM and vendor bars. The card opens the Servers page with its filter
  * (`data-filter`), and each count and bar above zero with its own: the name
  * is the card's link, stretched over it, and the counts and bars are links
  * above it (anchors cannot nest). `emphasis` marks the fleet-wide row.
@@ -112,6 +140,7 @@ function HealthCounts({ card }: { card: SiteCard }) {
 export function SiteCardView({ card, emphasis = false }: { card: SiteCard; emphasis?: boolean }) {
   const states = installedAvailable(card);
   const bars = countBars(card);
+  const segments = healthSegments(card.stats);
   const titleId = `ss-card-${card.key}`;
   return (
     <article
@@ -145,6 +174,7 @@ export function SiteCardView({ card, emphasis = false }: { card: SiteCard; empha
           ))}
         </div>
       )}
+      {segments.length > 0 && <HealthBar segments={segments} />}
       {bars.length > 0 && <CountBars bars={bars} />}
     </article>
   );

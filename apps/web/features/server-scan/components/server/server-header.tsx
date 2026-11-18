@@ -22,7 +22,8 @@ export function BackToServers() {
 
 /**
  * Opens the BMC's own web console in a new tab (`https://`, the one scheme
- * every vendor's BMC serves); nothing for a server whose BMC host was not read.
+ * every vendor's BMC serves), its address first on hover (server-scan
+ * v6.2.0); nothing for a server whose BMC host was not read.
  */
 function BmcButton({ host, name }: { host: string | null; name: string }) {
   if (!host) return null;
@@ -32,7 +33,7 @@ function BmcButton({ host, name }: { host: string | null; name: string }) {
       href={`https://${host}`}
       target="_blank"
       rel="noopener noreferrer"
-      title={label}
+      title={`${host} — open BMC console`}
       aria-label={label}
       className="inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium text-muted-foreground outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
     >

@@ -51,7 +51,14 @@ test.describe("The Servers page", () => {
     // Sorted by name, naturally
     await expect.poll(async () => (await names(page))[0]).toBe("hpe-dl380-site2-stale-10");
     const node = row(page, "ocp-dell-r660-site1-node-01");
-    await expect(node.getByRole("link", { name: "Open BMC console for ocp-dell-r660-site1-node-01" })).toHaveAttribute("href", "https://192.0.2.101");
+    const bmc = node.getByRole("link", { name: "Open BMC console for ocp-dell-r660-site1-node-01" });
+    await expect(bmc).toHaveAttribute("href", "https://192.0.2.101");
+    // server-scan v6.2.0: the address first on hover, and a copy button beside the console
+    await expect(bmc).toHaveAttribute("title", "192.0.2.101 — open BMC console");
+    const copyBmc = node.getByRole("button", { name: "Copy BMC address 192.0.2.101" });
+    await expect(copyBmc).toHaveAttribute("title", "192.0.2.101 — copy");
+    // One twin has no BMC read: neither its console nor its copy
+    await expect(row(page, "ocp-twin").getByRole("button", { name: /Copy BMC address/ })).toHaveCount(1);
     await expect(node.locator('[data-column="openshift_state"]')).toHaveText("Installed");
     await expect(node.locator('[data-column="mce_name"]')).toHaveText("ocp4-prod-mce-site1-a");
     await expect(node.locator('[data-column="health"]')).toHaveText("●Healthy");
