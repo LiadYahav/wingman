@@ -6,8 +6,10 @@ import { AlertTriangle, Layers } from "lucide-react";
 import { isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import { fileNodepools, offersInfraEnvs, withInfraEnvs, type FileNodepool } from "@/lib/infra-envs";
+import { offersPolicy } from "@/lib/nodepool-policy";
 import type { TemplateField } from "@/types";
 import { AlsoDrawsFrom } from "./also-draws-from";
+import { hasPolicies, PolicyPanel } from "./policy-panel";
 
 /** The MCE's InfraEnvs, as the create form reads them; `null` when live status is off. */
 function useMceInfraEnvs(mce: string) {
@@ -98,7 +100,8 @@ function InfraEnvsPanel({ text, onChange, mce }: { text: string; onChange: (text
 /**
  * The cluster file while it is edited: its text, and with
  * `DAY1_MULTI_INFRAENV_NODEPOOLS` on (day1's template schema offers the
- * input) each nodepool's InfraEnvs above it.
+ * input) each nodepool's InfraEnvs above it; each nodepool's scale-down
+ * policy when the template writes it or the file already sets one (ADR-0062).
  */
 export function ClusterFileEditor({ value, onChange, mce }: { value: string; onChange: (text: string) => void; mce: string }) {
   const { data: schema } = useQuery<TemplateField[]>({
@@ -109,6 +112,7 @@ export function ClusterFileEditor({ value, onChange, mce }: { value: string; onC
   return (
     <div>
       {offersInfraEnvs(schema) && <InfraEnvsPanel text={value} onChange={onChange} mce={mce} />}
+      {(offersPolicy(schema) || hasPolicies(value)) && <PolicyPanel text={value} onChange={onChange} />}
       <textarea
         aria-label="Cluster file"
         className="w-full font-mono text-xs bg-zinc-950 text-zinc-200 p-4 min-h-[500px] focus:outline-none resize-y leading-5 rounded-md"

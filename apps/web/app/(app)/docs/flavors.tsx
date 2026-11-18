@@ -53,7 +53,9 @@ export function FlavorsSection() {
           <strong> Tuning profiles</strong> come from <InlineCode>tuning/</InlineCode> in the day1 repo (see Tuning
           profiles below); locking them locks the same profiles on every nodepool. Where your operator turns it
           on, <strong>Other inputs</strong> has <strong>Also draws from</strong>: InfraEnvs a nodepool may take
-          nodes from beside its own, as a preset each cluster may change.
+          nodes from beside its own, as a preset each cluster may change. Where the specs project&apos;s template
+          writes it, a nodepool&apos;s <strong>Scale-down policy</strong> (which nodes leave first when it scales
+          down) is a preset or locked; a lock fixes a policy, never the platform default.
         </Step>
         <Step n={3} title="Add-ons">
           Pick charts from the catalog and put them in order. The gear opens{" "}

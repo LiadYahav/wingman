@@ -529,6 +529,17 @@ Scale's: it works whether Scale is on or off, and needs no setting.
   unknown value the file already holds is left to the workflow. Changing
   the annotation rolls no node: HyperShift does not roll a NodePool for its
   metadata.
+- **The web** reads the template schema as the switch, as for the other
+  newer inputs. The create form has a **Scale-down policy** select per
+  nodepool: the platform default (sends nothing) or one of the three, each
+  explained in a line; a flavor's locked one is read only. The flavor
+  editor has it on each nodepool card as a preset or locked (a lock without
+  a policy says it cannot be locked). In Edit cluster, **Scale-down policy
+  per nodepool** sits above the YAML when the template writes the input or
+  a nodepool already has one: it edits only the annotation's line in the
+  file's text, as the template writes it, every other line kept, and leaves
+  a flow-style `annotations` or a quoted key to the person
+  (`lib/nodepool-policy.ts`).
 - The workflow also reads a label or an annotation set by hand on the MCE's
   NodePool (Argo CD leaves an annotation it never set alone); the file
   cannot show those.
@@ -557,7 +568,15 @@ mapping refused; every other edit keeps it), `test_locks.py` and
 `tests/api/test_scale_down_policy_api.py` (the schema, a create with and
 without, an unknown policy, a stale template refusing a create and a
 flavor, a preset, a lock to none refused, a locked policy's drift and sync,
-an edit).
+an edit); `apps/web/lib/nodepool-policy.test.ts` (the schema switch, the
+platform default left out of the request, the file's text edit: added as
+the template writes it, replaced with its comment, removed with an empty
+block, beside other annotations, a flow mapping or a quoted key left to the
+person) and `apps/web/e2e/tests/nodepool-scale-down-policy.spec.ts` (the
+create form with and without the input, the default sending nothing, a
+locked policy read only; the flavor editor's preset and lock; Edit
+cluster's policy per nodepool in the file's text, a file's own policy
+without the input, a flow mapping refused).
 
 ## Amendment (2026-11-19): a 404 to the start is an orchestrator without update-nodepool
 

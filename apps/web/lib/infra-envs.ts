@@ -62,7 +62,7 @@ export interface FileNodepool {
   replace: boolean;
 }
 
-function load(text: string): Record<string, unknown> | null {
+export function load(text: string): Record<string, unknown> | null {
   try {
     const doc = jsYaml.load(text);
     return doc && typeof doc === "object" && !Array.isArray(doc) ? (doc as Record<string, unknown>) : null;
@@ -93,10 +93,10 @@ export function fileNodepools(text: string): FileNodepool[] | null {
 }
 
 const TOP_KEY = /^[A-Za-z_][\w.-]*:(\s|$)/;
-const indentOf = (line: string) => line.length - line.trimStart().length;
+export const indentOf = (line: string) => line.length - line.trimStart().length;
 
 /** The `[start, end)` lines of `nodepool[index]`, with its keys' indentation; `null` if not found. */
-function itemRange(lines: readonly string[], index: number): { start: number; end: number; keys: number } | null {
+export function itemRange(lines: readonly string[], index: number): { start: number; end: number; keys: number } | null {
   const list = lines.findIndex((l) => /^nodepool:\s*(#.*)?$/.test(l));
   if (list < 0) return null;
   let end = lines.length;
@@ -122,7 +122,7 @@ function itemRange(lines: readonly string[], index: number): { start: number; en
 }
 
 /** The line of `key` in the item, and the lines its value takes; `null` when the item has no `key`. */
-function keyLines(lines: readonly string[], range: { start: number; end: number; keys: number }, key: string): [number, number] | null {
+export function keyLines(lines: readonly string[], range: { start: number; end: number; keys: number }, key: string): [number, number] | null {
   const at = new RegExp(`^(\\s*- )?\\s*${key}:`);
   for (let i = range.start; i < range.end; i++) {
     const own = i === range.start ? true : indentOf(lines[i]) === range.keys;
@@ -170,7 +170,7 @@ export function withInfraEnvs(text: string, index: number, names: readonly strin
 }
 
 /** A value with its mappings' keys in order, so two parses compare by content. */
-function sorted(value: unknown): unknown {
+export function sorted(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sorted);
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.keys(value).sort().map((k) => [k, sorted((value as Record<string, unknown>)[k])]));

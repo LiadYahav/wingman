@@ -22,6 +22,7 @@ import {
 } from "@/lib/machine-configs";
 import { TUNING, TUNING_RULE, isTuningPath, tuningNames, tuningPath, tuningRuleNames } from "@/lib/tuning-profiles";
 import { IMAGE_MIRRORS, asMirrorEntries, isMirrorInput, mirrorEntryProblems, noMirrorsProblem } from "@/lib/image-mirrors";
+import { withoutDefaultPolicy } from "@/lib/nodepool-policy";
 import type { ConfigEntry, MachineConfigs, SpecEntry, TemplateField } from "@/types";
 
 /** The template inputs day1's locks know by name (`wingman_day1.domain.locks.LOCKABLE`). */
@@ -97,7 +98,7 @@ const LOCKABLE = [
   /^owner_(merkaz|anaf|mador)$/,
   /^platform$/,
   /^(image_content_sources|disable_idms_merge)$/,
-  /^nodepools\[(0|[1-9][0-9]{0,2})\]\.(replicas|configs|node_labels)$/,
+  /^nodepools\[(0|[1-9][0-9]{0,2})\]\.(replicas|configs|node_labels|scale_down_policy)$/,
 ];
 
 export interface FlavorLocks {
@@ -288,15 +289,17 @@ export function presetPaths(spec: SpecEntry, schema: TemplateField[], locks: Fla
 /**
  * The template inputs to send: config entries as §3 writes them, tuning
  * profiles as a list of names (the tuning rule's under it), owners as text
- * (§4), and every locked value exactly as the flavor has it (day1 compares
- * them as JSON, so `{hardware: null}` would not be the same value).
+ * (§4), no scale-down policy for the platform default, and every locked
+ * value exactly as the flavor has it (day1 compares them as JSON, so
+ * `{hardware: null}` would not be the same value).
  */
 export function requestVariables(form: FormValues, locks: FlavorLocks): Record<string, unknown> {
   let vars: Record<string, unknown> = structuredClone(form);
   const pools = vars[NODEPOOLS];
   if (Array.isArray(pools)) {
-    vars[NODEPOOLS] = pools.map((pool) => {
-      if (!isMap(pool)) return pool;
+    vars[NODEPOOLS] = pools.map((raw) => {
+      if (!isMap(raw)) return raw;
+      const pool = withoutDefaultPolicy(raw); // the platform default is no key (ADR-0062)
       const configured = Array.isArray(pool[CONFIGS]) ? { ...pool, [CONFIGS]: asEntries(pool[CONFIGS]).map(cleanEntry) } : pool;
       if (locks.tuning) return { ...configured, [TUNING]: [...locks.tuning] };
       return TUNING in configured ? { ...configured, [TUNING]: tuningNames(configured[TUNING]) } : configured;

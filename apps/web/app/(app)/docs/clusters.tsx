@@ -67,7 +67,12 @@ export function ClustersSection() {
           kind and summary; read-only when the flavor locks them). InfraEnvs are picked from the MCE&apos;s list when this deployment reads the
           MCE. Where your operator turns it on, a nodepool may also <strong>draw from</strong> other InfraEnvs: its
           own InfraEnv still names its NodePool, and a new node takes the first free Agent of any of them; Wingman
-          counts its free servers over all of them, and never one server twice. A flavor that sizes its nodepools by a ratio (<InlineCode>1:2:1</InlineCode>) asks for one size
+          counts its free servers over all of them, and never one server twice. Where the specs project&apos;s
+          template writes it, each nodepool has a <strong>Scale-down policy</strong>: which nodes leave first when it
+          scales down (<InlineCode>fewest-pods</InlineCode>, <InlineCode>least-requested</InlineCode>,{" "}
+          <InlineCode>least-utilized</InlineCode>, which needs the hosted cluster&apos;s metrics API), written as its{" "}
+          <InlineCode>redbull.io/scale-down-policy</InlineCode> annotation; the <strong>platform default</strong> writes
+          nothing, and CAPI picks at random. A flavor that sizes its nodepools by a ratio (<InlineCode>1:2:1</InlineCode>) asks for one size
           instead, and each sized nodepool gets its part times that size. A field the flavor <strong>presets</strong> is filled in and can be changed;
           a field it <strong>locks</strong> is shown read-only with the flavor&apos;s value. Machine configs come
           from a picker of the day1 repo&apos;s <InlineCode>mc-files/</InlineCode>: a static config by name, or{" "}
@@ -181,6 +186,8 @@ function ClusterPageDocs() {
               Where nodepools may draw from several InfraEnvs, <strong>InfraEnvs per nodepool</strong> above the
               file adds and removes the others; a nodepool&apos;s own InfraEnv names its NodePool and stays, and
               a <strong>Replace</strong> NodePool&apos;s stay as they are, since a change would replace every node.
+              Where the template writes it, or a nodepool already has one, <strong>Scale-down policy per
+              nodepool</strong> sets each one&apos;s annotation in the file; it rolls no node.
             </p>
           </div>
         </div>

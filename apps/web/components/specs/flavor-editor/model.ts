@@ -41,10 +41,10 @@ export const PLATFORM = "platform";
 /** The one rule: every nodepool has exactly these configs (ADR-0029). */
 export const CONFIGS_RULE = "nodepools[*].configs";
 
-export type NodepoolKey = "replicas" | "configs" | "node_labels";
-const NODEPOOL_LOCKABLE: readonly NodepoolKey[] = ["replicas", "configs", "node_labels"];
+export type NodepoolKey = "replicas" | "configs" | "node_labels" | "scale_down_policy";
+const NODEPOOL_LOCKABLE: readonly NodepoolKey[] = ["replicas", "configs", "node_labels", "scale_down_policy"];
 const TOP_LOCKABLE: readonly string[] = [...OWNERS.map((o) => o.path), PLATFORM, ...MIRROR_INPUTS];
-const POSITIONAL = /^nodepools\[(0|[1-9]\d{0,2})\]\.(replicas|configs|node_labels)$/;
+const POSITIONAL = /^nodepools\[(0|[1-9]\d{0,2})\]\.(replicas|configs|node_labels|scale_down_policy)$/;
 const POSITIONAL_CONFIGS = /^nodepools\[(0|[1-9]\d{0,2})\]\.configs$/;
 
 /** The inputs day1 sets for each cluster at create: never preset or locked here. */
@@ -412,7 +412,7 @@ export function otherTopInputs(schema: TemplateField[], values: Values): OtherIn
   return [...fromSchema, ...release, ...extra];
 }
 
-/** A nodepool's inputs besides replicas, configs, node labels and tuning profiles. */
+/** A nodepool's inputs besides replicas, configs, node labels, its scale-down policy and tuning profiles. */
 export function otherPoolInputs(schema: TemplateField[], pool: Values): OtherInput[] {
   const fields = schema.find((f) => f.name === "nodepools")?.fields ?? [];
   const lockable = new Set<string>([...NODEPOOL_LOCKABLE, TUNING]);
@@ -588,7 +588,7 @@ export function pathLabel(path: string): string {
   return inputLabel(path);
 }
 
-const INPUT_LABELS: Record<string, string> = { configs: "Machine configs", [TUNING]: "Tuning profiles", additional_infra_envs: "Also draws from" };
+const INPUT_LABELS: Record<string, string> = { configs: "Machine configs", [TUNING]: "Tuning profiles", additional_infra_envs: "Also draws from", scale_down_policy: "Scale-down policy" };
 /** `node_labels` → `Node labels`. */
 export function inputLabel(name: string): string {
   if (name in INPUT_LABELS) return INPUT_LABELS[name];

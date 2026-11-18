@@ -113,7 +113,7 @@ export function seedFromStructure(structure: Record<string, unknown>, schema: Te
   return vals;
 }
 
-const LABELS: Record<string, string> = { tuning_config: "Tuning Profiles", image_content_sources: "Image Mirrors", disable_idms_merge: "MCE Default Mirrors", additional_infra_envs: "Also draws from" };
+const LABELS: Record<string, string> = { tuning_config: "Tuning Profiles", image_content_sources: "Image Mirrors", disable_idms_merge: "MCE Default Mirrors", additional_infra_envs: "Also draws from", scale_down_policy: "Scale-down policy" };
 const toLabel = (name: string) => LABELS[name] ?? name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
