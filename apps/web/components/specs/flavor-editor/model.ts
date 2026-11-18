@@ -1,7 +1,7 @@
 /**
  * The flavor editor's model: the draft a person edits, the document a save
- * sends, day1's checks mirrored for instant feedback, where day1's problems
- * belong, and the cluster-file preview request. The contract is
+ * sends, day1's checks mirrored for instant feedback, and the cluster-file
+ * preview request (day1's problems at their fields: `problem-routing.ts`). The contract is
  * docs/notes/2026-11-08-flavors-v2-api-changes.md (§2-§6, §9); the decisions
  * are ADR-0026 (a lock is a fixed value), ADR-0027 (machine configs and the
  * nodepool defaults), ADR-0028 (owners are numbers), ADR-0029 (the configs
@@ -23,6 +23,7 @@ import {
   withHardware,
 } from "@/lib/machine-configs";
 import { specDocument } from "@/lib/specs";
+import { problemSubject } from "./problem-routing";
 import { isMapping, sameValues, type Values } from "@/lib/values";
 import { TUNING, TUNING_RULE, showTuning, tuningNames } from "@/lib/tuning-profiles";
 import type { ClusterSpec, ConfigEntry, MachineConfigs, SpecAddon, TemplateField } from "@/types";
@@ -565,49 +566,6 @@ export function draftIssues(
 function isWholeNumber(value: unknown): boolean {
   if (typeof value === "number") return Number.isInteger(value) && value >= 0;
   return typeof value === "string" && /^\d+$/.test(value);
-}
-
-// ── Day1's problems at their fields ─────────────────────────────────────────
-
-/** A problem's subject (`owner_anaf`, `nodepools[1].configs[0]`) and the rest of it. */
-function problemSubject(problem: string): { path: string; message: string } | null {
-  const lock = /^locked_paths: '?([^\s']+)'?\s(.*)$/.exec(problem);
-  if (lock) return { path: lock[1], message: `${lock[1]} ${lock[2]}` };
-  const at = problem.indexOf(": ");
-  if (at <= 0) return null;
-  const head = problem.slice(0, at);
-  if (!/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])*$/.test(head)) return null;
-  return { path: head, message: problem.slice(at + 2) };
-}
-
-export interface RoutedProblem {
-  /** The field it is shown at. */
-  field: string;
-  /** The problem's own path: the field's, or one inside it (`nodepools[0].configs[2]`). */
-  path: string;
-  message: string;
-  /** The problem as day1 wrote it. */
-  raw: string;
-}
-
-/**
- * Attach each problem to the deepest field whose path is the problem's or
- * contains it; the rest have no field and are listed at the top.
- */
-export function routeProblems(problems: string[], fields: string[]): { routed: RoutedProblem[]; unmatched: string[] } {
-  const routed: RoutedProblem[] = [];
-  const unmatched: string[] = [];
-  for (const raw of problems) {
-    const subject = problemSubject(raw);
-    const field = subject
-      ? fields
-          .filter((f) => subject.path === f || subject.path.startsWith(`${f}.`) || subject.path.startsWith(`${f}[`))
-          .sort((a, b) => b.length - a.length)[0]
-      : undefined;
-    if (subject && field) routed.push({ field, path: subject.path, message: subject.message, raw });
-    else unmatched.push(raw);
-  }
-  return { routed, unmatched };
 }
 
 // ── What every cluster gets (the review's summary) ──────────────────────────

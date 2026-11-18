@@ -37,7 +37,6 @@ import {
   otherTopInputs,
   pathLabel,
   removeLock,
-  routeProblems,
   setLocked,
   setTopValue,
   storedForm,
@@ -46,6 +45,7 @@ import {
   type FlavorDraft,
 } from "./model";
 import { NodepoolsSection } from "./nodepools-section";
+import { routeProblems } from "./problem-routing";
 import { ReviewSection } from "./review-section";
 import { SaveProblems } from "./save-problems";
 import { tuningFields, tuningIssues } from "./tuning-model";
