@@ -10,14 +10,9 @@ from hypothesis import strategies as st
 
 from wingman_core.testing.fixtures import default_fixture_root
 from wingman_day1.domain.addons import RequestedAddon
+from wingman_day1.domain.cluster_edits import CI_MARKER, SetConfigs, SetValue
 from wingman_day1.domain.cluster_file import Provenance, load_values, read_provenance
-from wingman_day1.domain.cluster_text import (
-    CI_MARKER,
-    SetConfigs,
-    SetValue,
-    edit_values,
-    with_header,
-)
+from wingman_day1.domain.cluster_text import edit_values, with_header
 from wingman_day1.domain.errors import UneditableFileError
 from wingman_day1.domain.locks import InputPath
 

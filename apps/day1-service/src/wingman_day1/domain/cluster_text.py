@@ -23,7 +23,7 @@ on byte for byte. A file whose layout the editor cannot handle (a flow-style
 ``nodepool``, a value spread over lines) is refused with the reason, never
 written approximately: a person edits it by hand. The line-level parts (a
 key's block, a list's items, patches on the original lines) are in
-``yaml_lines``.
+``yaml_lines``; the edits and that check are in ``cluster_edits``.
 
 Nothing here touches ``vlanId``, ``dhcp_values``, ``mcFiles``,
 ``mcConfigMap`` or ``tuningConfigmap``, and nothing at or below the CI marker is ever edited.
@@ -31,12 +31,21 @@ Nothing here touches ``vlanId``, ``dhcp_values``, ``mcFiles``,
 
 from __future__ import annotations
 
-import copy
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final, cast
+from typing import cast
 
+from wingman_day1.domain.cluster_edits import (
+    Edit,
+    SetConfigs,
+    SetValue,
+    check_edited,
+    expected_values,
+    file_pool,
+    frozen_from,
+    keeps_comments,
+)
 from wingman_day1.domain.cluster_file import (
     Provenance,
     is_header_line,
@@ -46,7 +55,7 @@ from wingman_day1.domain.cluster_file import (
 )
 from wingman_day1.domain.errors import InvalidClusterFileError, UneditableFileError
 from wingman_day1.domain.image_mirrors import MIRROR_FILE_KEYS
-from wingman_day1.domain.locks import InputPath, entry_key
+from wingman_day1.domain.locks import entry_key
 from wingman_day1.domain.yaml_lines import (
     DEFAULT_STEP,
     Block,
@@ -62,15 +71,6 @@ from wingman_day1.domain.yaml_lines import (
     render_value,
     split_lines,
 )
-
-CI_MARKER: Final = "# === Added by CI ==="
-"""The line the day1 CI writes above its block; it and every line after it are never edited."""
-
-
-def _frozen_from(lines: Sequence[Line]) -> int:
-    """The index of the CI marker line, or ``len(lines)`` when the file has none."""
-    return next((i for i, line in enumerate(lines) if line.stripped == CI_MARKER), len(lines))
-
 
 # ── The header ───────────────────────────────────────────────────────────────
 
@@ -92,7 +92,7 @@ def with_header(content: str, provenance: Provenance) -> str:
         patch.delete(index, index + 1)
     patch.insert(header[0] if header else 0, provenance_lines(provenance))
     edited = patch.render()
-    problems = _check(content, edited, values_or_refuse(content))
+    problems = check_edited(content, edited, values_or_refuse(content))
     if _without_header(edited) != _without_header(content):
         problems.append("a line other than the flavor header would change")
     wanted = Provenance(provenance.spec_name, provenance.spec_version, provenance.requested_addons)
@@ -117,29 +117,6 @@ def _without_header(content: str) -> str:
 
 
 # ── Values ───────────────────────────────────────────────────────────────────
-
-
-@dataclass(frozen=True, slots=True)
-class SetValue:
-    """Set the value at a file key: ``owner.<x>``, ``platform``, ``nodepool[i].<key>``."""
-
-    key: InputPath
-    value: object
-
-
-@dataclass(frozen=True, slots=True)
-class SetConfigs:
-    """Make a nodepool's ``configs`` name exactly ``names`` (a multiset, in any order).
-
-    Entries that stay keep their lines, in the file's order; the others are
-    removed; missing names are added after the last entry, in ``names`` order.
-    """
-
-    index: int
-    names: tuple[str, ...]
-
-
-Edit = SetValue | SetConfigs
 
 
 def values_or_refuse(content: str) -> dict[str, object]:
@@ -366,95 +343,6 @@ def _mirror_lines(value: object) -> list[str]:
     return lines
 
 
-def _pool(values: dict[str, object], index: int) -> dict[str, object]:
-    pools = values.get("nodepool")
-    if not isinstance(pools, list) or index >= len(pools) or not isinstance(pools[index], dict):
-        raise UneditableFileError("the cluster file changed shape", [f"no nodepool[{index}]"])
-    return cast("dict[str, object]", pools[index])
-
-
-def _expected(values: Mapping[str, object], edits: Sequence[Edit]) -> dict[str, object]:
-    """``values`` with ``edits`` applied as data: what the edited text must parse to."""
-    result = copy.deepcopy(dict(values))
-    for edit in edits:
-        if isinstance(edit, SetConfigs):
-            pool = _pool(result, edit.index)
-            configs = pool.get("configs")
-            have = list(cast("list[object]", configs)) if isinstance(configs, list) else []
-            remaining = Counter(edit.names)
-            kept: list[object] = []
-            for raw in have:
-                if remaining[entry_key(raw)] > 0:
-                    remaining[entry_key(raw)] -= 1
-                    kept.append(raw)
-            for name in edit.names:
-                if remaining[name] > 0:
-                    kept.append({"name": name})
-                    remaining[name] -= 1
-            if kept or "configs" in pool:
-                pool["configs"] = kept
-            continue
-        segments = edit.key.segments
-        if segments[0] == "owner":
-            owner = result.get("owner")
-            if not isinstance(owner, dict):
-                owner = {}
-                result["owner"] = owner
-            cast("dict[str, object]", owner)[str(segments[1])] = edit.value
-        elif segments[0] == "nodepool":
-            _pool(result, cast("int", segments[1]))[str(segments[2])] = copy.deepcopy(edit.value)
-        else:
-            result[str(segments[0])] = edit.value
-    return result
-
-
-def _same(a: object, b: object) -> bool:
-    """Equal, with types (``"3"`` is not ``3``, ``True`` is not ``1``); mapping order is free."""
-    if type(a) is not type(b):
-        return False
-    if isinstance(a, dict):
-        left, right = cast("dict[object, object]", a), cast("dict[object, object]", b)
-        return left.keys() == right.keys() and all(_same(left[k], right[k]) for k in left)
-    if isinstance(a, list):
-        left_items, right_items = cast("list[object]", a), cast("list[object]", b)
-        return len(left_items) == len(right_items) and all(
-            _same(x, y) for x, y in zip(left_items, right_items, strict=True)
-        )
-    return a == b
-
-
-def _check(old: str, new: str, expected: Mapping[str, object]) -> list[str]:
-    """Why ``new`` may not replace ``old``: it must parse to ``expected`` and keep the CI block."""
-    problems: list[str] = []
-    old_lines = split_lines(old)
-    tail = "".join(line.body + line.ending for line in old_lines[_frozen_from(old_lines) :])
-    if not new.endswith(tail):
-        problems.append(f"the block from {CI_MARKER!r} on would change")
-    try:
-        parsed = load_values(new)
-    except InvalidClusterFileError as exc:
-        problems.append(f"the edited file would not parse: {exc}")
-    else:
-        if not _same(parsed, dict(expected)):
-            changed = sorted(
-                str(k)
-                for k in {*parsed, *expected}
-                if not _same(parsed.get(k, ...), expected.get(k, ...))
-            )
-            problems.append(f"the edited file would hold other values under {', '.join(changed)}")
-    return problems
-
-
-def _keeps_comments(lines: Sequence[Line], deleted: set[int], new: str) -> bool:
-    """Every comment line outside a removed entry is still there, in the same order."""
-    kept = iter(line.body for line in split_lines(new) if line.stripped.startswith("#"))
-    return all(
-        any(body == line.body for body in kept)
-        for index, line in enumerate(lines)
-        if index not in deleted and line.stripped.startswith("#")
-    )
-
-
 def edit_values(content: str, edits: Sequence[Edit]) -> str:
     """``content`` with ``edits`` made in its text, every other line kept byte for byte.
 
@@ -464,7 +352,7 @@ def edit_values(content: str, edits: Sequence[Edit]) -> str:
     """
     values = values_or_refuse(content)
     lines = split_lines(content)
-    editor = _Editor(lines, _frozen_from(lines), Patch(lines))
+    editor = _Editor(lines, frozen_from(lines), Patch(lines))
     owners = {
         str(e.key.segments[1]): e.value
         for e in edits
@@ -474,7 +362,7 @@ def edit_values(content: str, edits: Sequence[Edit]) -> str:
         editor.set_owners(owners)
     for edit in edits:
         if isinstance(edit, SetConfigs):
-            configs = _pool(values, edit.index).get("configs")
+            configs = file_pool(values, edit.index).get("configs")
             parsed = cast("list[object]", configs) if isinstance(configs, list) else []
             editor.set_configs(edit.index, edit.names, parsed)
             continue
@@ -492,8 +380,8 @@ def edit_values(content: str, edits: Sequence[Edit]) -> str:
                 "Wingman does not edit that key", [f"{edit.key} is not a lockable file key"]
             )
     edited = editor.patch.render()
-    problems = _check(content, edited, _expected(values, edits))
-    if not _keeps_comments(lines, editor.patch.deleted, edited):
+    problems = check_edited(content, edited, expected_values(values, edits))
+    if not keeps_comments(lines, editor.patch.deleted, edited):
         problems.append("a comment line would be lost")
     if problems:
         raise UneditableFileError("Wingman could not edit the cluster file safely", problems)
