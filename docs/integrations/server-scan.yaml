@@ -387,6 +387,12 @@ files:
     upstream: [frontend/src/components/AppNav.tsx]
   - wingman: apps/web/features/server-scan/lib/testing.ts
     upstream: [frontend/src/features/servers/OverviewTab.test.tsx]
+  - wingman: apps/web/features/server-scan/lib/fill.ts
+    upstream:
+      - frontend/src/lib/useFillViewport.ts
+      - frontend/src/features/inventory/ClusterSidebar.tsx
+  - wingman: apps/web/features/server-scan/lib/fill.test.ts
+    upstream: [frontend/src/lib/useFillViewport.ts]
   - wingman: apps/web/features/server-scan/lib/refresh.ts
     upstream:
       - frontend/src/features/servers/RefreshButton.tsx
@@ -405,7 +411,9 @@ files:
       - frontend/src/features/sites/SitesOverviewPage.tsx
       - frontend/src/components/severity.ts
   - wingman: apps/web/features/server-scan/components/servers-page.tsx
-    upstream: [frontend/src/features/inventory/InventoryPage.tsx]
+    upstream:
+      - frontend/src/features/inventory/InventoryPage.tsx
+      - frontend/src/features/inventory/InventoryTable.tsx
   - wingman: apps/web/features/server-scan/components/servers-toolbar.tsx
     upstream: [frontend/src/features/inventory/InventoryPage.tsx]
   - wingman: apps/web/features/server-scan/components/server-columns.tsx
@@ -416,6 +424,8 @@ files:
     upstream: [frontend/src/features/inventory/ClusterSidebar.tsx]
   - wingman: apps/web/features/server-scan/components/multi-select.tsx
     upstream: [frontend/src/features/inventory/MultiSelect.tsx]
+  - wingman: apps/web/features/server-scan/components/use-fill-main.ts
+    upstream: [frontend/src/lib/useFillViewport.ts]
   - wingman: apps/web/features/server-scan/components/fetch-now.tsx
     upstream:
       - frontend/src/features/servers/RefreshButton.tsx

@@ -70,7 +70,7 @@ export function EventsPage() {
   const auditorOff = errors.find(needsAuditorToken);
   const blocking = errors.find(isBlocked);
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8" data-fill-page>
       <header>
         <div className="flex items-center gap-1">
           <h1 className="text-2xl font-bold tracking-tight" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
@@ -97,6 +97,7 @@ export function EventsPage() {
             problem="The events could not be read from server-scan"
             testId="ss-events"
             showServer
+            fill
           />
         </>
       )}

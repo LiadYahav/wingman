@@ -9,7 +9,7 @@ const PAGES = [
   },
   {
     title: "Servers",
-    desc: "The fleet's table, read again every 30 seconds: search by name, serial or BMC, filter by vendor, source, type (physical or VM), site, classification, installation and health, toggle stale, duplicate, name-mismatch and donor servers, or pick a cluster in the side panel; a row's BMC opens its console or copies its address. A ticked health leaves out servers in maintenance unless Maintenance is ticked too, as the Sites cards count them. Export as Excel or CSV.",
+    desc: "The fleet's table, read again every 30 seconds: search by name, serial or BMC, filter by vendor, source, type (physical or VM), site, classification, installation and health, toggle stale, duplicate, name-mismatch and donor servers, or pick a cluster in the side panel; a row's BMC opens its console or copies its address. The table scrolls in its own box, its header pinned. A ticked health leaves out servers in maintenance unless Maintenance is ticked too, as the Sites cards count them. Export as Excel or CSV.",
   },
   {
     title: "A server's page",

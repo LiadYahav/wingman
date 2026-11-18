@@ -325,6 +325,11 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   Installation, MCE, Cluster, Model and State sort, naturally and with blanks
   last; State by severity. A left edge marks critical, major and warning rows.
 - **Paging**: 50 rows a page, Previous, "Page X of Y", Next.
+- **The table scrolls inside its own box** (since v6.4.0, its `f80ffb9`;
+  Wingman 3.45.0), never the page: the box is as tall as the window leaves
+  under its top, above the pager (at least 240 pixels, so a short window
+  scrolls a little), its header pinned inside it; the cluster sidebar is
+  never taller than the room either.
 - **Everything in the URL**, so a link or a refresh lands on the same view:
   `search`, `vendor`, `server_type`, `site_id`, `source_provider`, `installation_type`,
   `openshift_state`, `health_overall` (each repeated for several values),
@@ -509,6 +514,13 @@ maintenance:
   server-scan: it filters this page and its counts follow the page's other
   filters, while the area's sidebar is navigation between pages, shown on
   every page.
+- **The box** (§8.1, since v6.4.0): in Wingman the page scrolls inside the
+  shell's `main`, not the window, so the box's height is `main`'s less the
+  box's top, the pager and the page's bottom padding (`useFillMain`,
+  `lib/fill.ts`), measured on mount, on a resize and when the column above
+  it changes (chips wrapping), never from the scroll position; before it is
+  measured the box keeps 70% of the window, as it did. The cluster sidebar is
+  held to the same room. The Events page's table does the same (§14.8).
 - **Speed**: about 3,100 rows. The page shows them 50 at a time, as
   server-scan pages them, through the shared table, so the DOM holds 50 rows
   whatever the fleet; filtering, the facet counts and the cluster lists run
@@ -1703,6 +1715,9 @@ navigation, after Confs, at `/events`, for an auditor or an admin only.
   on this page and in History alike.
 - **Paging**: Previous, "Page X of Y" (Y from the first page's total) and
   Next, over server-scan's cursors; a change of filters starts again at page 1.
+- **The trail scrolls inside its own box** (since v6.6.0, its `55b6391`;
+  Wingman 3.45.0), never the page, as the Servers table does (§8.1), its
+  header pinned; a server's History grows its page instead.
 - **Fresh**: the events are read when the page opens and again when it is
   opened after 30 seconds (its query client's `staleTime`); the User list
   once a minute (its own `staleTime`). Not polled.

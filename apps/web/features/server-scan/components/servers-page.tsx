@@ -30,6 +30,7 @@ import { fetchNowColumn } from "./fetch-now";
 import { maintenanceColumn } from "./maintenance-toggle";
 import { rowAccent, serverColumns } from "./server-columns";
 import { ActiveFilters, ServerDropdowns, ServerExports, ServerSearch, ServerToggles } from "./servers-toolbar";
+import { useFillMain } from "./use-fill-main";
 import { useServersView } from "./use-servers-view";
 
 /** server-scan's search waits this long after the last key before it filters. */
@@ -102,6 +103,8 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
     state: (value) => OPENSHIFT_STATES.find((s) => s.value === value)?.label ?? value,
   });
   const exports = useExports(model.matched);
+  // server-scan v6.4.0: the table scrolls inside its own box, which fills the page, its header pinned
+  const { attach: fillBox, style: fillStyle } = useFillMain<HTMLDivElement>(model.page.items.length);
   const clear = () => {
     search.setDraft("");
     setView(clearFilters(view));
@@ -151,16 +154,18 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
             }}
             onClear={clear}
           />
-          <DataTable
-            table={table}
-            label="Servers"
-            sort={{ id: view.sort, desc: view.sortDesc }}
-            onSort={(id) => isSortableField(id) && setView(nextSort(view, id))}
-            filters={{ rows: model.base, value: view.columns, onChange: (columns) => setView(withChange(view, { columns })) }}
-            rowProps={(row) => ({ "data-testid": "ss-server-row", "data-server": row.name, className: rowAccent(row) })}
-            className="max-h-[70vh]"
-            empty={empty}
-          />
+          <div ref={fillBox} style={fillStyle} data-testid="ss-servers-box">
+            <DataTable
+              table={table}
+              label="Servers"
+              sort={{ id: view.sort, desc: view.sortDesc }}
+              onSort={(id) => isSortableField(id) && setView(nextSort(view, id))}
+              filters={{ rows: model.base, value: view.columns, onChange: (columns) => setView(withChange(view, { columns })) }}
+              rowProps={(row) => ({ "data-testid": "ss-server-row", "data-server": row.name, className: rowAccent(row) })}
+              className="relative max-h-[var(--ss-fill,70vh)] overscroll-contain"
+              empty={empty}
+            />
+          </div>
           {model.matched.length > 0 && <Pager page={model.page.page} pageCount={model.page.pageCount} onPage={(page) => setView({ ...view, page })} />}
         </section>
       </div>
@@ -207,7 +212,7 @@ export function ServersPage() {
   const data = blocked ? undefined : servers.data;
   const model = useMemo(() => (data ? serversModel(data.items, view) : null), [data, view]);
   return (
-    <div className="space-y-4 px-6 pb-6 pt-4 lg:px-8 lg:pt-5">
+    <div className="space-y-4 px-6 pb-6 pt-4 lg:px-8 lg:pt-5" data-fill-page>
       {(!data || !model) && <Header data={data} shown={null} />}
       {blocked ? (
         <Blocked error={servers.error} />

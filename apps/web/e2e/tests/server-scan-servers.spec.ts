@@ -9,6 +9,7 @@
 import { readFile } from "node:fs/promises";
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, held } from "../fixtures/api-handlers";
+import { scrollState } from "../fixtures/scroll";
 import { failing, forbidden, off } from "../fixtures/server-scan";
 import { mockFetchNow, nodeRecord } from "../fixtures/server-scan-server";
 import { FLEET, bigFleet, mockMaintenance, mockServers, setUpServers } from "../fixtures/server-scan-servers";
@@ -319,6 +320,23 @@ test.describe("The Servers page", () => {
 });
 
 test.describe("The Servers page's states", () => {
+  test("server-scan v6.4.0: the table scrolls inside its own box, its header pinned, and the page does not", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await setUpServers(page, { servers: mockServers(bigFleet(3100)) });
+    await go(page, PAGE);
+    await expect(rows(page)).toHaveCount(50);
+    const box = '[data-testid="ss-servers-box"] > div';
+    await expect.poll(async () => (await scrollState(page, box)).pageScrolls).toBe(false);
+    expect((await scrollState(page, box)).boxScrolls).toBe(true);
+    await page.locator(box).hover();
+    await page.mouse.wheel(0, 900);
+    await expect.poll(async () => (await scrollState(page, box)).boxTop).toBeGreaterThan(0);
+    const scrolled = await scrollState(page, box);
+    expect([scrolled.mainTop, scrolled.pinned]).toEqual([0, true]);
+    // The pager stays in view under the box
+    await expect(page.getByTestId("pager-status")).toBeInViewport();
+  });
+
   test("skeleton rows while server-scan answers, then the rows", async ({ page }) => {
     const answer = held();
     await setUpServers(page, { servers: answer.answer(mockServers()) });

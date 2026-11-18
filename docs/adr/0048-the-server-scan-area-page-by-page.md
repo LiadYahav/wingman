@@ -780,3 +780,14 @@ and §9 of `docs/notes/2026-11-13-server-scan-area-api.md` say what changed.
   - **The row's button** is the table's first column, as server-scan's,
     icon only; the header's sits beside BMC. Both are Wingman's buttons
     (lucide's icon, sonner's toasts), server-scan's words.
+- **`f80ffb9` (v6.4.0) and `55b6391` (v6.6.0): the Servers and Events tables
+  scroll inside their own box.** The page never scrolls: each table's box is
+  as tall as the room under its top, above its pager (at least 240 pixels),
+  its header pinned inside; the cluster sidebar keeps to the same room.
+  Wingman's page scrolls inside the shell's `main`, not the window, so the
+  room is `main`'s (`useFillMain` over server-scan's arithmetic,
+  `lib/fill.ts`), measured from layout, never from the scroll position. The
+  Servers table already scrolled in a box of 70% of the window, which stays
+  its height until measured. A server's History grows its page, as there.
+  server-scan's tighter spacing under the table (its footer) is not
+  followed: Wingman's pages keep their own padding and have no footer.
