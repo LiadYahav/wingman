@@ -4,6 +4,43 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-18 — 3.48.0: Server Scan at server-scan v6.6.0.**
+- **The sync** (ADR-0048's 2026-11-18 amendment; `scripts/upstream_diff.py
+  server-scan v6.6.0`, the map's `synced_at: v6.6.0`): a ticked severity
+  leaves out servers in maintenance and the sites count them apart (v6.3.0);
+  `server_type` and the Type filter, Physical, VM and vendor bars on the
+  Sites cards (v6.3.0); the BMC copy button and a health bar per card
+  (v6.2.0); the Servers and Events tables scroll in their own box (v6.4.0,
+  v6.6.0).
+- **Fetch now** (v6.5.0, v6.6.0), the area's third write: `POST
+  /api/day1/server-scan/servers/{id}/refresh`, `AdminUser` as server-scan
+  keeps it, the admin token, sent once, a 120-second wait under nginx's new
+  130-second location, `409 SERVER_REFRESH_REFUSED` in server-scan's words;
+  on a server's page and first on every Servers row. Off by default
+  (`DAY1_SERVER_SCAN_REFRESH`, the chart's `day1.serverScanRefresh.enabled`;
+  needs server-scan v6.5.0 or later): no button until it is on. Not yet
+  tried against the sandbox's server-scan.
+- **server-scan's own colours** (the user's request): the Servers table, a
+  server's page and the Sites cards wear its palette
+  (`features/server-scan/palette.css`, its dark values, light equivalents),
+  its cells, icons and filter bar.
+
+**Next:**
+- When the workflows branch merges: the inventory follow-ups above.
+- Scale's scale-down policy per NodePool (the user): a flavor and
+  create-form choice that `cluster-template.j2` writes as the entry's
+  annotation (the specs project's template needs it too); more in
+  `CLAUDE.local.md`. Then, when the workflow is deployed: turn Scale on and
+  a first live run.
+- cluster-navigator's data on the cluster page and per MCE
+  (`docs/ideas/single-pane.md` workstream 5).
+- Flavors v2's "Left for later": missing add-ons in one MR per team, the
+  cluster-name prefix in the web, a preview of an unsaved flavor.
+- Tuning: a lock per pool.
+- Code organisation, later (the user): 28 files left in the size baseline.
+- The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
+  shared Git store.
+
 **2026-11-18 — Scale sets one NodePool a run (PR #101), and a scale-down may pick its servers (the PR after it).**
 - **The workflow changed** (team-redbull/workflows `feat/update-nodepool`,
   b1976f4 and aab8949, not merged): `update-nodepool` takes `nodepool` only,
