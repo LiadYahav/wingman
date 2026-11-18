@@ -4,8 +4,8 @@ A spec that fails to parse is listed with its error rather than dropped
 (ADR-0004: a read error is never swallowed). Every change is a merge request,
 and a spec is saved only when it meets the flavor rules: safe values
 (ADR-0013), locks that fix a value (ADR-0026), machine configs that resolve
-(ADR-0027), tuning profiles from ``tuning/`` (ADR-0061) and owner numbers
-(ADR-0028).
+(ADR-0027), tuning profiles from ``tuning/`` (ADR-0061), owner numbers
+(ADR-0028) and image mirrors the shared template writes (ADR-0063).
 
 A version, once saved, never changes (ADR-0044): each cluster is measured
 against the version its header names, read from the file's history
@@ -33,6 +33,7 @@ from wingman_day1.domain.errors import (
     ResourceNotFoundError,
     StaleError,
 )
+from wingman_day1.domain.image_mirrors import given_mirror_inputs
 from wingman_day1.domain.machine_configs import flavor_config_problems
 from wingman_day1.domain.specs import (
     ClusterSpec,
@@ -248,8 +249,14 @@ class SpecCatalog:
     # ── Internals ───────────────────────────────────────────────────────────
 
     async def _require_savable(self, spec: ClusterSpec) -> None:
-        """Every flavor rule a spec must meet before it is proposed; all problems at once."""
-        problems = rule_problems(spec)
+        """Every flavor rule a spec must meet before it is proposed; all problems at once.
+
+        A flavor that gives image mirrors is checked against the shared
+        template as it is now: refused while the template does not read them
+        (ADR-0063). Any other save does not read the template.
+        """
+        mirrors = given_mirror_inputs(spec.spec.day1.values)
+        problems = rule_problems(with_template(spec, await self.template() if mirrors else ""))
         catalog = await self._machine_configs.catalog()
         problems += flavor_config_problems(spec.spec.day1.values, catalog)
         problems += tuning_problems(spec.spec.day1.values, await self._machine_configs.tuning())

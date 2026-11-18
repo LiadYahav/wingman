@@ -224,6 +224,22 @@ def test_the_fixture_template_asks_for_exactly_the_values_file_inputs() -> None:
         {"name": "owner_mador", "type": "string", "required": True, "example": "7"},
         {"name": "platform", "type": "string", "required": False, "default": ""},
         {
+            "name": "image_content_sources",
+            "type": "list",
+            "required": False,
+            "default": [],
+            "fields": [
+                {
+                    "name": "source",
+                    "type": "string",
+                    "required": True,
+                    "example": "registry.example.com/ocp4/openshift-release-dev",
+                },
+                {"name": "mirrors", "type": "string", "required": True},
+            ],
+        },
+        {"name": "disable_idms_merge", "type": "string", "required": False, "default": False},
+        {
             "name": "nodepools",
             "type": "list",
             "required": True,
@@ -262,6 +278,8 @@ def test_the_fixture_template_asks_for_exactly_the_values_file_inputs() -> None:
         "owner_mador",
         "openshift_release_version",
         "platform",
+        "image_content_sources",
+        "disable_idms_merge",
         "nodepools",
     ]
 

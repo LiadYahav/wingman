@@ -10,7 +10,8 @@ the comments and rewrite the CI's block. Wingman edits lines the same way:
 - :func:`with_header` sets Wingman's comment header (``# specName:`` ...,
   ADR-0012) in the leading comment block and changes no other line;
 - :func:`edit_values` sets the values a flavor locks: ``owner.<x>``,
-  ``platform``, a nodepool's ``replicas``, ``nodeLabels`` and ``configs``.
+  ``platform``, the image mirrors (``imageContentSources``,
+  ``disableIdmsMerge``), a nodepool's ``replicas``, ``nodeLabels`` and ``configs``.
   A replaced value keeps its line's comment; a config entry that stays keeps
   its line; a removed entry takes only its own lines; new lines copy the
   indentation the file already uses.
@@ -44,6 +45,7 @@ from wingman_day1.domain.cluster_file import (
     read_provenance,
 )
 from wingman_day1.domain.errors import InvalidClusterFileError, UneditableFileError
+from wingman_day1.domain.image_mirrors import MIRROR_FILE_KEYS
 from wingman_day1.domain.locks import InputPath, entry_key
 from wingman_day1.domain.yaml_lines import (
     DEFAULT_STEP,
@@ -228,6 +230,28 @@ class _Editor:
         where = self._attached(nodepool.index) if nodepool else self.body_start()
         self.patch.insert(where, [f"platform: {rendered}", ""])
 
+    def set_mirrors(self, name: str, value: object) -> None:
+        """``imageContentSources`` as a block list, or ``disableIdmsMerge`` (ADR-0063).
+
+        A key already there keeps its line and comment, and the comments in
+        its block; its old content lines go. A new key goes above
+        ``nodepool``, as the shared template writes it.
+        """
+        entries = _mirror_lines(value)
+        found = self.top(name)
+        if found is None:
+            nodepool = self.top("nodepool")
+            where = self._attached(nodepool.index) if nodepool else self.body_start()
+            head = f"{name}:" if entries else f"{name}: {render_value(value)}"
+            self.patch.insert(where, [head, *entries, ""])
+            return
+        for child in self.block(found).children:
+            if self.lines[child].is_content:
+                self.patch.delete(child, child + 1)
+        value_text = "" if entries else f" {render_value(value)}"
+        self.patch.replace(found.index, f"{found.lead}{found.key}:{value_text}{found.comment}")
+        self.patch.insert(found.index + 1, entries)
+
     # ── nodepools ──
 
     def item(self, index: int) -> Item:
@@ -324,6 +348,22 @@ class _Editor:
             if content:
                 return self.lines[content[0]].indent - found.column
         return DEFAULT_STEP
+
+
+def _mirror_lines(value: object) -> list[str]:
+    """A list of mirror entries as the shared template writes it; ``[]`` for any other value."""
+    if not isinstance(value, list) or not value or not all(isinstance(e, Mapping) for e in value):
+        return []
+    pad = " " * DEFAULT_STEP
+    lines: list[str] = []
+    for entry in cast("list[Mapping[str, object]]", value):
+        mirrors = entry.get("mirrors")
+        lines += [f"{pad}- source: {render_value(entry.get('source'))}", f"{pad}  mirrors:"]
+        lines += [
+            f"{pad}    - {render_value(m)}"
+            for m in (cast("list[object]", mirrors) if isinstance(mirrors, list) else [])
+        ]
+    return lines
 
 
 def _pool(values: dict[str, object], index: int) -> dict[str, object]:
@@ -443,6 +483,8 @@ def edit_values(content: str, edits: Sequence[Edit]) -> str:
             continue
         if segments == ("platform",):
             editor.set_platform(edit.value)
+        elif len(segments) == 1 and segments[0] in MIRROR_FILE_KEYS:
+            editor.set_mirrors(str(segments[0]), edit.value)
         elif segments[0] == "nodepool" and len(segments) == 3 and isinstance(segments[1], int):
             editor.set_item_value(segments[1], str(segments[2]), edit.value)
         else:

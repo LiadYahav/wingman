@@ -10,9 +10,9 @@ naming rules (ADR-0014), and its release against what the MCE can host
 (ADR-0026), its owners must be numbers (ADR-0028), its machine configs must
 resolve by the day1 CI's rule, and the cluster's network config entry is
 expanded to the name the CI reads before the template renders (ADR-0027).
-Tuning profiles must be in ``tuning/`` (ADR-0061). A
-file that cannot be parsed is shown with its
-error, never dropped from the list (ADR-0004).
+Tuning profiles must be in ``tuning/`` (ADR-0061), and image mirrors must be
+usable and rendered as given (ADR-0063). A file that cannot be parsed is
+shown with its error, never dropped from the list (ADR-0004).
 """
 
 from __future__ import annotations
@@ -65,6 +65,7 @@ from wingman_day1.domain.errors import (
     StaleError,
     WorkflowsNotConfiguredError,
 )
+from wingman_day1.domain.image_mirrors import mirror_problems, unrendered_mirrors
 from wingman_day1.domain.locks import apply_locks, lock_conflicts
 from wingman_day1.domain.machine_configs import (
     MachineConfigCatalog,
@@ -470,7 +471,7 @@ class ClusterService:
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
         cluster_name = self._naming.for_file(ref.name).cluster_name
-        problems = [*conflicts, *missing, *owner_problems(inputs)]
+        problems = [*conflicts, *missing, *owner_problems(inputs), *mirror_problems(inputs)]
         problems += sizing_problems(inputs, spec.sizing_ratio(), flavor=spec.metadata.name)
         problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
         problems += input_problems(inputs, tuning)
@@ -482,10 +483,10 @@ class ClusterService:
             raise RenderError("the specs project has no cluster-template.j2")
         rendered = render_cluster_file(template, inputs)
         problems = rendered_file_problems(rendered)
-        require_valid(
-            problems or rendered_problems(inputs, load_values(rendered)),
-            message="the rendered cluster file breaks the values-file contract",
-        )
+        if not problems:  # what the template must write as given (ADR-0061, ADR-0063)
+            written = load_values(rendered)
+            problems = [*rendered_problems(inputs, written), *unrendered_mirrors(inputs, written)]
+        require_valid(problems, message="the rendered cluster file breaks the values-file contract")
         return rendered
 
     async def _require_hostable(self, mce: str, content: str) -> None:

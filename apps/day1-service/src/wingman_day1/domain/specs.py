@@ -30,6 +30,7 @@ from pydantic import (
 
 from wingman_day1.domain.addons import AddonKey, RequestedAddon
 from wingman_day1.domain.errors import InvalidSpecError
+from wingman_day1.domain.image_mirrors import mirror_problems, mirror_template_problems
 from wingman_day1.domain.locks import Lock, enforced_locks, lock_problems
 from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.sizing import ratio_problems
@@ -252,10 +253,11 @@ def validate_spec(document: Mapping[str, object]) -> ClusterSpec:
 
 
 def rule_problems(spec: ClusterSpec) -> list[str]:
-    """The flavor rules ``spec`` breaks that need no other file.
+    """The flavor rules ``spec`` breaks that need no other file than the shared template.
 
-    Safe values (ADR-0013), owner numbers (ADR-0028), locks (ADR-0026) and
-    the nodepool ratio (ADR-0040).
+    Safe values (ADR-0013), owner numbers (ADR-0028), locks (ADR-0026), the
+    nodepool ratio (ADR-0040), and image mirrors the template in
+    ``day1.template`` writes (ADR-0063; not checked without a template).
     A save refuses them, together with configs that do not resolve
     (ADR-0027); a spec already in GitLab that breaks them still loads, and
     the API lists them as its ``warnings``.
@@ -264,6 +266,8 @@ def rule_problems(spec: ClusterSpec) -> list[str]:
     return [
         *check_inputs(values),
         *owner_problems(values),
+        *mirror_problems(values),
+        *mirror_template_problems(values, spec.spec.day1.template),
         *lock_problems(spec.spec.day1.locked_paths, values),
         *ratio_problems(
             spec.spec.day1.nodepool_ratio,

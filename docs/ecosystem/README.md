@@ -125,7 +125,7 @@ nodepool:
 **Optional per-cluster fields:**
 - `platform: kubevirt` with cores, memory, size, storageClass, vlan
 - `nodeLabels`, `tuningConfig`, `upgradeType`
-- `imageContentSources`, `workertag`, `pausedUntil`
+- `imageContentSources`, `disableIdmsMerge` (a flavor's image mirrors, ADR-0063), `workertag`, `pausedUntil`
 
 **Written only by automation. Wingman must never write these:**
 - `vlanId`, `dhcp_values` (the allocate-segment workflow)

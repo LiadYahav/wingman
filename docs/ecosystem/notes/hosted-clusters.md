@@ -115,7 +115,8 @@ chart values.yaml
 | `platform` | no | Agent; write only `kubevirt` |
 | `hostInventory` | no | `inventory`, the Agent namespace |
 | `workertag` (top-level) | no | follows `mastertag`; written only during masters-first upgrades |
-| `imageContentSources` | no | extra mirrors, merged with `defaultImageContentSources` unless `disableIdmsMerge: true` |
+| `imageContentSources` | no | extra mirrors (`[{source, mirrors}]`), merged with `defaultImageContentSources` (the entries of one source joined, sorted by source) unless `disableIdmsMerge: true`. Wingman writes it from a flavor's `image_content_sources` (ADR-0063) |
+| `disableIdmsMerge` | no | `true`: only the file's own `imageContentSources`; the MCE's defaults are dropped, so a file with none has no mirrors at all. Wingman writes it from `disable_idms_merge` and refuses it without mirrors of the cluster's own (ADR-0063) |
 | `imagePath`, `imageHc` | usually MCE-level | release mirror base; control-plane images base |
 | `allowDeletion` | no | HostedCluster label |
 | `pausedUntil` | no | `"true"` or an RFC 3339 time; written by the upgrade workflow's abort |
@@ -364,7 +365,7 @@ There is **no Day1/create-cluster workflow** in the workflows API (OpenAPI: segm
 - A **values file for the hostedclusters-setup chart**, not manifests: `sites/<site>/mces/<mce>/hostedClusters/ocp4-<clusterName>.yaml` containing only the human-owned keys from §2.2 / §2.5:
   - `owner`, `mastertag`.
   - `nodepool[]` with `infraEnvName`, `replicas`, `labels.allowDeletion: false`, `configs`, and optional `name`, `nodeLabels`, `tuningConfig`.
-  - Optional: `platform: kubevirt` plus KubeVirt fields, `imageContentSources`.
+  - Optional: `platform: kubevirt` plus KubeVirt fields, `imageContentSources` and `disableIdmsMerge` (from a flavor's image mirrors, ADR-0063).
 - Rework **specs** from "Jinja of manifests" to "a values preset / form schema". Examples: allowed `mastertag` versions (read from `upgrade/ladder.yaml` or MCE `version.yaml`), nodepool shapes (InfraEnv family plus default `configs` list per hardware), and labels. The output should be the YAML values above. Jinja can stay, rendering values instead of objects.
 - Validate before opening the MR:
   - InfraEnv exists on that MCE (live), and the herzi pool is not ignored or dry-run (metrics or annotations).
