@@ -247,6 +247,11 @@ def build_adapters(
     )
 
 
+def _cached_hub(hub: HubApi | None, cache: TtlCache, ttl: float) -> CachedHubApi | None:
+    """``hub``'s reads kept in ``cache`` for ``ttl`` seconds; ``None`` without live status."""
+    return CachedHubApi(hub, cache, ttl=ttl) if hub is not None else None
+
+
 def build_context(
     *,
     settings: Day1Settings,
@@ -299,11 +304,7 @@ def build_context(
     placement = PlacementService(
         day1,
         site_catalog,
-        (
-            CachedHubApi(adapters.hub, cache, ttl=PLACEMENT_TTL_SECONDS)
-            if adapters.hub is not None
-            else None
-        ),
+        _cached_hub(adapters.hub, cache, PLACEMENT_TTL_SECONDS),
         inventory=inventory,
         min_free_pods=settings.placement_min_free_pods,
         specs=spec_catalog,
@@ -330,17 +331,9 @@ def build_context(
     )
     repos = {RepoKey.DAY1: day1, RepoKey.SPECS: specs_repo}
     # One cache of hub reads for live status and the nodes view, shared by every user (ADR-0041)
-    hub = (
-        CachedHubApi(adapters.hub, cache, ttl=min(ttl, HUB_TTL_SECONDS))
-        if adapters.hub is not None
-        else None
-    )
+    hub = _cached_hub(adapters.hub, cache, min(ttl, HUB_TTL_SECONDS))
     # InfraEnvs rarely change: their list is kept longer than live status's reads (ADR-0040)
-    infra_env_hub = (
-        CachedHubApi(adapters.hub, cache, ttl=settings.mce_infraenv_cache_seconds)
-        if adapters.hub is not None
-        else None
-    )
+    infra_env_hub = _cached_hub(adapters.hub, cache, settings.mce_infraenv_cache_seconds)
     nodes: NodeService | None = None
     if hub is not None:
         runs_ttl = min(ttl, RUNS_TTL_SECONDS)
