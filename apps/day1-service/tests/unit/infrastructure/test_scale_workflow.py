@@ -164,6 +164,25 @@ async def test_a_scale_down_that_names_its_servers_sends_them_and_nothing_more()
     }
 
 
+async def test_a_scale_down_with_a_policy_of_its_own_sends_it_and_nothing_more() -> None:
+    workflow, requests = make(answer(202, {"workflow_id": RUN, "run_id": "r1"}))
+    own = ScaleRequest(
+        "mce-bat-yam-01",
+        CLUSTER,
+        1,
+        nodepool="prod-alpha-zone-c",
+        scale_down_policy="least-utilized",
+    )
+    await workflow.start(own)
+    assert json.loads(requests[0].content) == {
+        "mce_cluster": "mce-bat-yam-01",
+        "cluster": CLUSTER,
+        "nodepool": "prod-alpha-zone-c",
+        "replicas": 1,
+        "scale_down_policy": "least-utilized",
+    }
+
+
 async def test_a_named_server_the_run_chose_is_read_with_its_server() -> None:
     chosen = {
         "nodepool": "prod-alpha-zone-c",

@@ -87,6 +87,35 @@ async def test_a_scale_down_that_names_its_servers_removes_exactly_those(
     assert done.result.deleting == ("alpha-zone-b-m0", "alpha-zone-b-m1")
 
 
+async def test_a_scale_down_with_a_policy_of_its_own_ranks_by_it_ahead_of_the_nodepools(
+    fake: FakeScaleWorkflow, clock: Clock
+) -> None:
+    own = ScaleRequest(
+        "mce", CLUSTER, 2, nodepool="alpha-zone-b", scale_down_policy="least-utilized"
+    )
+    await fake.start(own)
+    clock.step(len(PARENT_PHASES) + len(DOWN_PHASES))
+    done = await fake.run(RUN)
+    assert done is not None and done.result is not None
+    assert [c.scale_down_policy for c in done.result.nodepools] == ["least-utilized"]
+    assert [c.policy for c in done.result.chosen] == ["least-utilized"]
+    assert done.result.ignored == ()
+
+
+async def test_a_policy_sent_with_a_scale_up_is_ignored_and_said_so(
+    fake: FakeScaleWorkflow, clock: Clock
+) -> None:
+    up = ScaleRequest(
+        "mce", CLUSTER, 4, nodepool="alpha-zone-b", scale_down_policy="least-utilized"
+    )
+    await fake.start(up)
+    clock.step(len(PARENT_PHASES) + len(UP_PHASES))
+    done = await fake.run(RUN)
+    assert done is not None and done.result is not None
+    assert [c.scale_down_policy for c in done.result.nodepools] == ["fewest-pods"]
+    assert done.result.ignored == ("scale_down_policy least-utilized: the NodePool scales up",)
+
+
 async def test_a_scale_up_by_name_sets_that_nodepool_and_the_next_run_starts_from_it(
     fake: FakeScaleWorkflow, clock: Clock
 ) -> None:

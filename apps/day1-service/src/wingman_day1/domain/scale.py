@@ -3,8 +3,9 @@
 The workflow owns the scale: it reads the cluster's NodePools in day1 and on
 the MCE (they must agree), plans the new replicas, commits them to day1
 ``main`` itself, has Argo CD apply that commit and checks that the NodePools
-show it; on a scale-down a NodePool's ``redbull.io/scale-down-policy`` picks
-the servers that leave (``docs/notes/2026-11-16-scale-nodepools-api.md``).
+show it; on a scale-down the servers named leave, else those a policy ranks
+first: the run's own, else the NodePool's (``scale_down_policy``; see
+``docs/notes/2026-11-16-scale-nodepools-api.md``).
 Wingman starts a run and shows it. Only data crosses back: these types hold
 the workflow's strings as it gives them, and there is no phase list.
 
@@ -25,14 +26,13 @@ from typing import Final, cast
 
 from wingman_day1.domain.locks import MISSING, Lock, cluster_file_key
 from wingman_day1.domain.replicas_ownership import replicas_changes
+from wingman_day1.domain.scale_down_policy import policy_of
 from wingman_day1.domain.value_drift import ValueDrift, show_value
 
 SCALE_WORKFLOW_PREFIX: Final = "update-nodepool-"
 """A cluster's run is ``update-nodepool-<file stem>``, one at a time (the orchestrator's id)."""
 DEFAULT_REPLICAS: Final = 1
 """What the chart renders for a ``nodepool[]`` entry without ``replicas``."""
-SCALE_DOWN_POLICY: Final = "redbull.io/scale-down-policy"
-"""The key update-nodepool reads off a NodePool to choose the servers a scale-down removes."""
 _ERROR_TYPE: Final = re.compile(r"\b([A-Z][A-Za-z0-9]*(?:Error|Exception)):\s")
 
 
@@ -51,8 +51,11 @@ class ScaleRequest:
     replicas: int
     nodepool: str
     server_names: tuple[str, ...] = ()
-    """A scale-down's servers that leave, exactly as many as it removes; empty: the NodePool's
-    policy (or CAPI) picks. Never on a scale-up."""
+    """A scale-down's servers that leave, exactly as many as it removes; empty: a policy (or
+    CAPI) picks. Never on a scale-up."""
+    scale_down_policy: str | None = None
+    """A scale-down's policy for this run only, ahead of the NodePool's own; never with
+    ``server_names``, never on a scale-up."""
 
 
 # ── A run, as the orchestrator reports it ────────────────────────────────────
@@ -176,7 +179,7 @@ class FileNodePool:
     locked_by: str | None = None
     """That flavor."""
     scale_down_policy: str | None = None
-    """The entry's ``annotations[SCALE_DOWN_POLICY]`` as written; ``None`` without one."""
+    """The entry's ``redbull.io/scale-down-policy`` annotation as written; ``None`` without one."""
 
     @property
     def label(self) -> str:
@@ -253,25 +256,10 @@ def file_nodepools(
                 replicas=_replicas(entry),
                 locked_replicas=lock,
                 locked_by=flavor if lock is not None else None,
-                scale_down_policy=scale_down_policy(entry),
+                scale_down_policy=policy_of(entry),
             )
         )
     return tuple(pools)
-
-
-def scale_down_policy(entry: Mapping[str, object]) -> str | None:
-    """The scale-down policy an entry's ``annotations`` name, as written; ``None`` without one.
-
-    The chart renders an entry's annotations onto its NodePool, where
-    update-nodepool reads the key (a label or an annotation set by hand on
-    the MCE is read there too; the file cannot show it). The value is not
-    checked here: the workflow refuses one it does not know.
-    """
-    annotations = entry.get("annotations")
-    if not isinstance(annotations, Mapping):
-        return None
-    value = cast("Mapping[str, object]", annotations).get(SCALE_DOWN_POLICY)
-    return None if value is None else str(value)
 
 
 def _replicas(entry: Mapping[str, object]) -> int | None:

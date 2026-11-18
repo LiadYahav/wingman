@@ -21,6 +21,7 @@ from wingman_day1.domain.scale import (
     ScaleResult,
     ScaleRun,
 )
+from wingman_day1.domain.scale_down_policy import ScaleDownPolicy
 
 _NAME = r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
 """A Kubernetes name, as the workflow takes a NodePool."""
@@ -33,7 +34,7 @@ ServerName = Annotated[
 
 
 class ScaleIn(BaseModel):
-    """``POST .../scale``: one NodePool, its replicas, on a scale-down the servers that leave."""
+    """``POST .../scale``: one NodePool, its replicas, on a scale-down which servers leave."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -41,8 +42,11 @@ class ScaleIn(BaseModel):
     """That NodePool's own, set exactly; the cluster's other NodePools are left as they are."""
     nodepool: str = Field(max_length=253, pattern=_NAME)
     server_names: list[ServerName] | None = Field(default=None, min_length=1, max_length=MAX_NAMED)
-    """Scale-down only: exactly the servers that leave, as many as it removes; omit it to let the
-    NodePool's policy (or CAPI) pick."""
+    """Scale-down only: exactly the servers that leave, as many as it removes; omit it to let a
+    policy (or CAPI) pick."""
+    scale_down_policy: ScaleDownPolicy | None = None
+    """Scale-down only: rank the NodePool's servers by this policy for this run, ahead of its own
+    ``redbull.io/scale-down-policy``; never with ``server_names``."""
 
     @field_validator("server_names")
     @classmethod
@@ -65,9 +69,20 @@ class ScaleIn(BaseModel):
             )
         return data
 
+    @model_validator(mode="after")
+    def _one_way_to_pick(self) -> ScaleIn:
+        """The servers named, or a policy: both say which servers leave (update-nodepool's 422)."""
+        if self.server_names and self.scale_down_policy is not None:
+            raise ValueError(
+                "send scale_down_policy or server_names, not both: each says which servers "
+                "leave the scale-down"
+            )
+        return self
+
     def target(self) -> ScaleTarget:
         """For the use case."""
-        return ScaleTarget(self.replicas, self.nodepool, tuple(self.server_names or ()))
+        policy = None if self.scale_down_policy is None else self.scale_down_policy.value
+        return ScaleTarget(self.replicas, self.nodepool, tuple(self.server_names or ()), policy)
 
 
 # ── What can be scaled ───────────────────────────────────────────────────────

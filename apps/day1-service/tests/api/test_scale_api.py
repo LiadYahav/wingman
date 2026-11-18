@@ -499,3 +499,77 @@ async def test_an_orchestrator_without_update_nodepool_leaves_scale_readable_and
         "Scaling works as soon as the workflow is deployed there, with no change to Wingman."
     )
     await orchestrator.aclose()
+
+
+async def test_a_scale_down_may_choose_its_own_policy_for_the_run(
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    scale: FakeScaleWorkflow,
+    run_clock: ManualClock,
+) -> None:
+    alice = auth(support.ALICE)
+    started = await on.post(
+        f"{BASE}/scale",
+        json={"replicas": 1, "nodepool": STORAGE, "scale_down_policy": "least-requested"},
+        headers=alice,
+    )
+    assert started.status_code == 202, started.text
+    assert scale.started == [
+        ScaleRequest(MCE, LARK, 1, nodepool=STORAGE, scale_down_policy="least-requested")
+    ]
+    run_clock.advance(seconds=120)
+    result = (await on.get(f"{BASE}/scale-run", headers=alice)).json()["result"]
+    assert [p["scale_down_policy"] for p in result["nodepools"]] == ["least-requested"]
+    assert {c["policy"] for c in result["chosen"]} == {"least-requested"}
+
+
+@pytest.mark.parametrize(
+    ("body", "said"),
+    [
+        (
+            {"replicas": 1, "nodepool": SMALL, "scale_down_policy": "random"},
+            "'fewest-pods', 'least-requested' or 'least-utilized'",
+        ),
+        (
+            {
+                "replicas": 2,
+                "nodepool": SMALL,
+                "scale_down_policy": "fewest-pods",
+                "server_names": ["ocp-a"],
+            },
+            "send scale_down_policy or server_names, not both",
+        ),
+    ],
+)
+async def test_an_unknown_policy_or_one_beside_named_servers_is_refused_before_anything_is_sent(
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    scale: FakeScaleWorkflow,
+    body: dict[str, Any],
+    said: str,
+) -> None:
+    response = await on.post(f"{BASE}/scale", json=body, headers=auth(support.ALICE))
+    assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+    (error,) = response.json()["details"]["errors"]
+    assert said in error["msg"]
+    assert scale.started == []
+
+
+@pytest.mark.parametrize(("replicas", "move"), [(4, "3 to 4"), (3, "3 to 3")])
+async def test_a_policy_is_chosen_only_for_a_scale_down(
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    scale: FakeScaleWorkflow,
+    replicas: int,
+    move: str,
+) -> None:
+    body = {"replicas": replicas, "nodepool": SMALL, "scale_down_policy": "fewest-pods"}
+    response = await on.post(f"{BASE}/scale", json=body, headers=auth(support.ALICE))
+    assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert response.json()["details"]["problems"] == [
+        f"scale_down_policy: a policy is chosen only for a scale-down; {SMALL} goes from {move}"
+    ]
+    assert scale.started == []

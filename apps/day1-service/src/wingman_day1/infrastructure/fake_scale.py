@@ -7,8 +7,8 @@ the cluster runs, or while its upgrade runs, is ``ScaleAlreadyRunningError``.
 
 A run walks the parent's phases and then its child's on the injected clock.
 The phases, the plan (the one NodePool set exactly) and the servers a
-scale-down picks (the named ones, else by the NodePool's policy) are a
-sample for the demo, nothing more: day1 passes the
+scale-down picks (the named ones, else by the run's policy, else by the
+NodePool's) are a sample for the demo, nothing more: day1 passes the
 real workflow's through and plans nothing itself. Nothing is written
 anywhere; the fake only remembers the replicas its runs left, for its next
 run.
@@ -68,6 +68,7 @@ class _Run:
     refusal: str | None = None
     applied: bool = False
     chosen: tuple[ChosenServer, ...] = field(default=())
+    ignored: tuple[str, ...] = ()
 
 
 class FakeScaleWorkflow:
@@ -187,25 +188,29 @@ def _plan(run: _Run, pools: Sequence[FakePool]) -> None:
             f"NodePools are {names}. Nothing was written"
         )
         return
-    after = {request.nodepool: request.replicas}
-    run.changes = tuple(
-        NodePoolChange(p.name, p.infra_env, p.replicas, after[p.name], p.scale_down_policy)
-        for p in selected
+    pool = selected[0]
+    down = request.replicas < pool.replicas
+    if down and request.server_names:
+        policy = None
+    else:
+        policy = (request.scale_down_policy if down else None) or pool.scale_down_policy
+    run.changes = (
+        NodePoolChange(pool.name, pool.infra_env, pool.replicas, request.replicas, policy),
     )
     run.chosen = tuple(
         ChosenServer(
-            p.name,
-            f"{p.name}-m{n}",
-            f"{p.name}-worker-{n}",
-            p.scale_down_policy or "",
-            "0 workload pods",
+            pool.name, f"{pool.name}-m{n}", f"{pool.name}-worker-{n}", policy, "0 workload pods"
         )
-        for p in selected
-        if p.scale_down_policy
-        for n in range(after[p.name], p.replicas)
+        for n in range(request.replicas, pool.replicas)
+        if policy
     )
-    if request.server_names and request.replicas < selected[0].replicas:
+    if down and request.server_names:
         run.chosen = tuple(_named(request.nodepool, request.server_names))
+    if not down and request.scale_down_policy is not None:
+        why = (
+            "the NodePool scales up" if request.replicas > pool.replicas else "nothing scales down"
+        )
+        run.ignored = (f"scale_down_policy {request.scale_down_policy}: {why}",)
 
 
 def _named(nodepool: str, names: Sequence[str]) -> Iterator[ChosenServer]:
@@ -231,4 +236,5 @@ def _result(run: _Run) -> ScaleResult:
         committed=direction != "none" or None,
         chosen=run.chosen,
         deleting=tuple(c.machine for c in run.chosen),
+        ignored=run.ignored,
     )

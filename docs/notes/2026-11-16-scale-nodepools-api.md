@@ -26,11 +26,18 @@ aab8949 (2026-11-18: one NodePool a run, ADR-0062's 2026-11-18 amendment).
 day1 file's name without `.yaml`, a Kubernetes name), `nodepool` (one
 NodePool of the cluster, by name, a Kubernetes name) and `replicas` (≥ 0,
 that NodePool's own, set exactly; its siblings are left as they are), and
-on a scale-down that names the servers that leave, `server_names`: one
-name or a list of up to 20, each once (case-insensitively), as many as the
-replicas removed, each a Machine of the NodePool; a scale-up or no change
-ignores it and lists it in the result's `ignored`. Day1 sends these, and
-`server_names` only on a scale-down. `infra_env_kind` (until 2026-11-18 a TOTAL over
+on a scale-down, at most one of (both are a 422):
+- `server_names`, the servers that leave: one name or a list of up to 20,
+  each once (case-insensitively), as many as the replicas removed, each a
+  Machine of the NodePool;
+- `scale_down_policy`, a policy for this run only (`fewest-pods`,
+  `least-requested` or `least-utilized`; any other is a 422), ranked ahead of
+  the NodePool's own `redbull.io/scale-down-policy`, even one of its own that
+  is no policy.
+
+A scale-up or no change ignores both and lists them in the result's
+`ignored`. Day1 sends these, and either of the last two only on a
+scale-down. `infra_env_kind` (until 2026-11-18 a TOTAL over
 the cluster's NodePools of one InfraEnv kind) is a 422 that says to name the
 NodePool; a run recorded with it before then still finishes as it began.
 Answers `202 {"workflow_id": "update-nodepool-<cluster>", "run_id"}`; 409
@@ -46,10 +53,17 @@ the MCE (they must agree, both ways), plans, and through its child
 (`scale-up-nodepool-<cluster>` or `scale-down-nodepool-<cluster>`) commits
 only that `replicas:` line to day1 `main`, syncs the cluster's Argo CD
 Application to that commit, and checks that the NodePool shows the
-replicas. On a scale-down, a NodePool labelled or annotated
-`redbull.io/scale-down-policy` (`fewest-pods`, `least-requested`,
-`least-utilized`) has its leaving servers chosen and marked first; without
-one CAPI picks at random. Freed servers stay in the MCE's inventory. Done
+replicas. On a scale-down the servers that leave are, in this order: the
+`server_names` sent; else those a policy ranks first, the request's
+`scale_down_policy`, else the NodePool's own `redbull.io/scale-down-policy`
+label or annotation (`fewest-pods` the fewest workload pods,
+`least-requested` the lowest requested CPU or memory share, `least-utilized`
+the lowest live use, from the hosted cluster's `metrics.k8s.io`: without it
+the run fails, `NodeMetricsUnavailableError`); with neither, CAPI picks at
+random. Under every policy CAPI-unhealthy Machines go first (on OpenShift
+4.18's CAPI a marked and an unhealthy Machine rank the same, so a policy
+takes the unhealthy ones first, in CAPI's order). Freed servers stay in the
+MCE's inventory. Done
 means the NodePools show the replicas, not that new nodes are Ready.
 
 **The run:** `GET /workflows/runs/{id}` (404: none) answers
@@ -119,7 +133,10 @@ works without live status.
 **`POST .../scale`** (admin), `{"nodepool": "...", "replicas": N}`, a
 Kubernetes name, `N` 0-10000, and on a scale-down, optionally,
 `"server_names": ["<server>", ...]` (1 to 20 server names, each once,
-case-insensitively): exactly the servers that leave. No other field. Day1
+case-insensitively): exactly the servers that leave, or
+`"scale_down_policy": "fewest-pods" | "least-requested" | "least-utilized"`
+(2026-11-18, later): which servers leave, for this run only, ahead of the
+NodePool's own policy. No other field. Day1
 adds `mce_cluster` (the file's MCE folder) and `cluster` (the file stem).
 `202` with the run (`status: "running"`). The names to send are the
 NodePool's nodes' `machine_server` in `GET .../nodes` (2026-11-11 note):
@@ -130,7 +147,8 @@ the workflow's own rule, so they match.
   render; a NodePool a flavor locks, to anything but its locked value;
   `server_names` on anything but a scale-down of the file's replicas on
   `main`, or not exactly as many as it removes (the problem says how many
-  leave). Nothing is sent. Which Machine each named server is stays the
+  leave); `scale_down_policy` that is not one of the three, beside
+  `server_names`, or on anything but a scale-down. Nothing is sent. Which Machine each named server is stays the
   workflow's to judge: a failed run, `ScaleDownServersInvalidError`. The orchestrator's own 422 is the same code, with its
   findings, and "nothing was started".
 - `409 SCALE_ALREADY_RUNNING`: the orchestrator's 409, its words in
@@ -163,7 +181,9 @@ total_before, total_after, nodepools: [{name, infra_env, before, after,
 scale_down_policy}], child_workflow_id, revision, committed, live: [{name,
 replicas, ready_replicas}], chosen: [{nodepool, machine, node, policy,
 reason, server}], deleting: [machine], ignored: [text]}` (`server` set on a
-named server, else `null`); `infra_env_kind` only on
+named server, else `null`; a NodePool's `scale_down_policy` is the policy the
+run applied, the request's or the NodePool's own, and `null` when it named
+its servers or had none); `infra_env_kind` only on
 a run recorded by kind before 2026-11-18, `nodepool` on every other. Failed, `error` is the workflow's words and
 `error_type` the type when they name one (`ArgoSyncRefusedError`), else
 `null`; `child` is read while the parent names it and has no result.
