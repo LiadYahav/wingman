@@ -1,0 +1,354 @@
+From 55038da45ba957832fe6565cfce692ea606ed601 Mon Sep 17 00:00:00 2001
+From: Roi Blum <roiblum05@gmail.com>
+Date: Wed, 18 Nov 2026 21:49:36 +0200
+Subject: [PATCH 3/3] feat: keep Agents carrying a label out of a NodePool
+ (excludeAgentLabels)
+
+excludeAgentLabels, a list of label keys set in any values file (the most
+specific file that sets it wins, as Helm replaces a list), and a nodepool's own
+excludeAgentLabels, added to it, each render as a
+{key: <key>, operator: DoesNotExist} requirement in the NodePool's
+agentLabelSelector: next to its matchLabels (one InfraEnv) or after the In
+requirement (several, additionalInfraEnvNames), sorted and unique. A NodePool
+then never takes an Agent that carries the label.
+
+The use is herzi's collector of used Agents: herzi labels every Agent
+installed in a cluster as used, since an uninstall or a scale-down does not
+return a used Agent to the inventory cleanly, and deletes a free Agent that
+carries the label. Every NodePool excluding it keeps a freed used Agent from
+being bound again before herzi deletes it. The label's name is herzi's to
+choose, so the value is a generic list of keys.
+
+Unset or empty, the render is byte for byte what it was: the golden tests
+pass, and a test renders every fixture with an empty list and compares the
+output. Agent platform only: a KubeVirt nodepool skips the chart-wide list,
+and its own list fails the render. The render also fails on a key that is not
+a label key and on the label the NodePool selects its InfraEnv by.
+
+The README says what a changed selector does: nothing to running nodes on an
+InPlace NodePool, every node replaced on a Replace one; and that herzi on its
+main reports a NodePool with matchExpressions beside its matchLabels as a
+problem of the InfraEnv's pool, which then orders no servers for any cluster,
+so an exclusion waits for the herzi that accepts it.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_016gPPBP4UxCerc81DKaJHKm
+---
+ README.md                                   |  30 ++++
+ templates/nodepool.yaml                     |  47 ++++++
+ tests/test_nodepool_exclude_agent_labels.py | 171 ++++++++++++++++++++
+ values.yaml                                 |   4 +
+ 4 files changed, 252 insertions(+)
+ create mode 100644 tests/test_nodepool_exclude_agent_labels.py
+
+diff --git a/README.md b/README.md
+index b0672e2..bdb8eeb 100644
+--- a/README.md
++++ b/README.md
+@@ -260,6 +260,8 @@ lists them):
+ | `nodepool[].storageClass` | unset | the KubeVirt root volume's storage class |
+ | `nodepool[].annotations` | none | passed onto the NodePool as written, values as strings, next to the chart's own sync-wave (which an entry may not set). The workflows' update-nodepool reads `redbull.io/scale-down-policy` (`fewest-pods`, `least-requested`, `least-utilized`) from it |
+ | `nodepool[].additionalInfraEnvNames` | unset | Agent platform: more InfraEnvs the NodePool may draw Agents from (below) |
++| `excludeAgentLabels` | unset | Agent platform: label keys no NodePool of the cluster takes an Agent with (below); set in any values file |
++| `nodepool[].excludeAgentLabels` | unset | more keys for that nodepool, added to `excludeAgentLabels` |
+ 
+ **A nodepool may draw from several InfraEnvs.** With `additionalInfraEnvNames`, the
+ NodePool's `agentLabelSelector` is one `matchExpressions` requirement,
+@@ -276,6 +278,34 @@ node. The render fails on KubeVirt, and with the legacy
+ demand only from a single `matchLabels`, so it skips one with this selector ("not
+ tied to an InfraEnv") and orders no servers for it.
+ 
++**Agents carrying a label can be kept out.** Each key in `excludeAgentLabels`
++(the chart-wide list) and in a nodepool's own `excludeAgentLabels` becomes a
++`{key: <key>, operator: DoesNotExist}` requirement in the NodePool's
++`agentLabelSelector`, next to its `matchLabels` (one InfraEnv) or after its `In`
++requirement (several), sorted and unique. A NodePool then never takes an Agent
++that carries the label. The use is herzi's collector of used Agents: herzi labels
++every Agent installed in a cluster as used, since an uninstall or a scale-down does
++not return a used Agent to the inventory cleanly, and deletes a free Agent that
++carries the label. Every NodePool excluding that label keeps a freed used Agent from
++being bound again before herzi deletes it. The label's name is herzi's to choose,
++so the chart takes any list of label keys. The chart-wide list can be
++set in any values file (`sites/configValues.yaml`, a site's, an MCE's or a cluster
++file); Helm replaces a list, so the most specific file that sets it wins, and a
++nodepool's own keys add to it. Unset or empty, the selector is exactly what it was.
++Agent platform only: a KubeVirt nodepool skips the chart-wide list, and its own
++list fails the render. The render also fails on a key that is not a label key and
++on the label the NodePool selects its InfraEnv by. herzi (on its main today) reports
++a NodePool whose `matchLabels` has any `matchExpressions` beside it as a problem of
++its InfraEnv's pool ("selector must be only the InfraEnv label"), and a pool with a
++problem orders no servers at all, for any cluster. So add an exclusion only once
++herzi accepts it, and on MCEs whose pools herzi does not fill until then.
++
++**Changing a NodePool's selector** (`additionalInfraEnvNames` or
++`excludeAgentLabels`, at any layer) touches no running node on an `InPlace`
++NodePool, the default: the Agent provider reads the selector only when a new Machine claims an
++Agent, so the nodes it already has stay. On a `Replace` NodePool the same change is
++a new machine template, and HyperShift replaces every node, one by one.
++
+ `releaseRepo` (and `cpoRepo`) must describe the same layout as the upgrade rules'
+ `release` block in the values repo (`upgrade/ladder.yaml`): the upgrade workflow
+ builds and pins the image references from the rules, Argo CD renders them from here.
+diff --git a/templates/nodepool.yaml b/templates/nodepool.yaml
+index 3c376fd..470aad8 100644
+--- a/templates/nodepool.yaml
++++ b/templates/nodepool.yaml
+@@ -66,6 +66,42 @@
+ {{- end }}
+ {{- end }}
+ {{- end }}
++{{- /* excludeAgentLabels: label keys an Agent must not carry for this NodePool to take
++       it, the chart-wide list (any values file; Helm replaces a list, so the most
++       specific file that sets it wins) plus the nodepool's own, sorted and unique,
++       each a DoesNotExist requirement next to the InfraEnv one. herzi's collector of
++       used Agents needs it: a freed Agent carrying its "used" label is never bound
++       again before herzi deletes it. Agent platform only:
++       a KubeVirt nodepool skips the chart-wide list and fails on its own. Unset or
++       empty: the selector is exactly what it was. */}}
++{{- $excludeAll := $.Values.excludeAgentLabels | default list }}
++{{- if not (kindIs "slice" $excludeAll) }}
++{{- fail "excludeAgentLabels must be a list of label keys." }}
++{{- end }}
++{{- $excludeOwn := .excludeAgentLabels | default list }}
++{{- if not (kindIs "slice" $excludeOwn) }}
++{{- fail (printf "nodepool %q: excludeAgentLabels must be a list of label keys." $name) }}
++{{- end }}
++{{- if and $excludeOwn (eq $platform "kubevirt") }}
++{{- fail (printf "nodepool %q: excludeAgentLabels is for the agent platform; a KubeVirt nodepool selects no Agent." $name) }}
++{{- end }}
++{{- $exclude := list }}
++{{- if ne $platform "kubevirt" }}
++{{- $exclude = concat $excludeAll $excludeOwn | uniq }}
++{{- $selectedBy := "infraenvs.agent-install.openshift.io" }}
++{{- if not $more }}
++{{- $selectedBy = $selector.nodeLabelKey | default $selectedBy }}
++{{- end }}
++{{- range $exclude }}
++{{- if not (and (kindIs "string" .) (regexMatch `^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?[A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?$` .)) }}
++{{- fail (printf "nodepool %q: every excludeAgentLabels entry must be a label key (such as example.com/used), not %v." $name .) }}
++{{- end }}
++{{- if eq . $selectedBy }}
++{{- fail (printf "nodepool %q: excludeAgentLabels may not name %s, the label the NodePool selects its InfraEnv by; it would take no Agent." $name .) }}
++{{- end }}
++{{- end }}
++{{- $exclude = sortAlpha $exclude }}
++{{- end }}
+ {{- /* hasKey rather than default throughout: an explicit 0 or false must win. */}}
+ {{- $replicas := ternary .replicas 1 (hasKey . "replicas") | int }}
+ {{- $allowDeletion := ternary $labels.allowDeletion "false" (hasKey $labels "allowDeletion") }}
+@@ -156,9 +192,20 @@ spec:
+           {{- range concat (list $infraEnv) $more | uniq | sortAlpha }}
+           - {{ . | quote }}
+           {{- end }}
++        {{- range $exclude }}
++        - key: {{ . | quote }}
++          operator: DoesNotExist
++        {{- end }}
+         {{- else }}
+         matchLabels:
+           {{ $selector.nodeLabelKey | default "infraenvs.agent-install.openshift.io" }}: {{ $infraEnv }}
++        {{- with $exclude }}
++        matchExpressions:
++        {{- range . }}
++        - key: {{ . | quote }}
++          operator: DoesNotExist
++        {{- end }}
++        {{- end }}
+         {{- end }}
+     type: Agent
+   {{- end }}
+diff --git a/tests/test_nodepool_exclude_agent_labels.py b/tests/test_nodepool_exclude_agent_labels.py
+new file mode 100644
+index 0000000..c334453
+--- /dev/null
++++ b/tests/test_nodepool_exclude_agent_labels.py
+@@ -0,0 +1,171 @@
++"""Agents carrying a label are kept out of a NodePool: excludeAgentLabels.
++
++Each key of the chart-wide excludeAgentLabels and of a nodepool's own
++excludeAgentLabels is a {key, operator: DoesNotExist} requirement in the
++NodePool's agentLabelSelector, sorted and unique, next to the InfraEnv one. The
++point: herzi labels every Agent installed in a cluster as used and deletes a free
++Agent that carries the label; a NodePool that excludes the label never binds a
++freed used Agent again before herzi deletes it. The label's name is herzi's, so
++the key here is a placeholder. Properties, each of which would fail quietly if
++broken:
++
++1. Unset or empty, the render is byte for byte what it was, so every cluster file
++   in the values repo renders as before.
++2. The chart-wide list reaches every Agent NodePool; a nodepool's own keys add to it.
++3. It sits next to matchLabels (one InfraEnv) or after the In requirement (several,
++   additionalInfraEnvNames), and the NodePool keeps its name.
++4. KubeVirt nodepools select no Agent: the chart-wide list leaves them as they are,
++   their own list fails.
++5. A key that is not a label key, or the label the InfraEnv is selected by, fails.
++
++On an InPlace NodePool (the default) a changed selector touches no running node;
++on a Replace NodePool the same change replaces every node.
++
++Requirements: helm CLI on PATH (module-level skip marker).
++"""
++import shutil
++import subprocess
++from pathlib import Path
++
++import pytest
++import yaml
++
++CHART = Path(__file__).resolve().parent.parent
++FIXTURES = CHART / "tests" / "fixtures" / "hostedcluster"
++LABEL = "infraenvs.agent-install.openshift.io"
++MARK = "example.com/used"
++
++pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm CLI not available")
++
++
++def _helm(fixture: str, *args: str) -> subprocess.CompletedProcess:
++    return subprocess.run(
++        ["helm", "template", "t", str(CHART), "--set-string", "clusterName=tenant-a",
++         "-f", str(FIXTURES / f"{fixture}.yaml"), *args],
++        capture_output=True, text=True,
++    )
++
++
++def _ok(fixture: str, *args: str) -> str:
++    r = _helm(fixture, *args)
++    assert r.returncode == 0, r.stderr
++    return r.stdout
++
++
++def _pools(*args: str, fixture: str = "production-agent") -> dict[str, dict]:
++    docs = [d for d in yaml.safe_load_all(_ok(fixture, *args)) if d]
++    return {d["metadata"]["name"]: d for d in docs if d["kind"] == "NodePool"}
++
++
++def _selector(pool: dict) -> dict:
++    return pool["spec"]["platform"]["agent"]["agentLabelSelector"]
++
++
++def _out(*keys: str) -> list[dict]:
++    return [{"key": k, "operator": "DoesNotExist"} for k in keys]
++
++
++@pytest.mark.parametrize("fixture", ["production-agent", "production-kubevirt-external", "lab-kubevirt-local"])
++@pytest.mark.parametrize("empty", ["excludeAgentLabels=[]", "excludeAgentLabels=null", "nodepool[0].excludeAgentLabels=[]"])
++def test_unset_or_empty_renders_byte_for_byte_as_before(fixture, empty):
++    assert _ok(fixture, "--set-json", empty) == _ok(fixture)
++
++
++def test_the_chart_wide_list_reaches_every_agent_nodepool_next_to_match_labels():
++    pools = _pools("--set-json", f'excludeAgentLabels=["{MARK}"]')
++    assert _selector(pools["tenant-a-zone-a"]) == {
++        "matchLabels": {LABEL: "dell-r660-128c-1024gb"}, "matchExpressions": _out(MARK),
++    }
++    assert _selector(pools["tenant-a-hp-dl380-64c-512gb"]) == {
++        "matchLabels": {LABEL: "hp-dl380-64c-512gb"}, "matchExpressions": _out(MARK),
++    }
++
++
++def test_a_nodepools_own_keys_add_to_the_chart_wide_list_sorted_and_unique():
++    pools = _pools(
++        "--set-json", f'excludeAgentLabels=["{MARK}"]',
++        "--set-json", f'nodepool[1].excludeAgentLabels=["{MARK}", "a.example.com/hold", "zz"]',
++    )
++    assert _selector(pools["tenant-a-hp-dl380-64c-512gb"])["matchExpressions"] == _out("a.example.com/hold", MARK, "zz")
++    assert _selector(pools["tenant-a-zone-a"])["matchExpressions"] == _out(MARK)
++
++
++def test_a_nodepools_own_keys_need_no_chart_wide_list():
++    pools = _pools("--set-json", f'nodepool[0].excludeAgentLabels=["{MARK}"]')
++    assert _selector(pools["tenant-a-zone-a"])["matchExpressions"] == _out(MARK)
++    assert _selector(pools["tenant-a-hp-dl380-64c-512gb"]) == {"matchLabels": {LABEL: "hp-dl380-64c-512gb"}}
++
++
++def test_with_several_infraenvs_the_exclusions_follow_the_in_requirement():
++    pools = _pools(
++        "--set-json", f'excludeAgentLabels=["{MARK}"]',
++        "--set-string", "nodepool[1].additionalInfraEnvNames={aa-infraenv}",
++    )
++    assert _selector(pools["tenant-a-hp-dl380-64c-512gb"]) == {
++        "matchExpressions": [
++            {"key": LABEL, "operator": "In", "values": ["aa-infraenv", "hp-dl380-64c-512gb"]},
++            *_out(MARK),
++        ]
++    }
++
++
++def test_the_nodepools_keep_their_names_and_all_but_the_selector():
++    before = _pools()
++    after = _pools("--set-json", f'excludeAgentLabels=["{MARK}"]')
++    assert set(after) == set(before)
++    for name, pool in after.items():
++        del pool["spec"]["platform"]["agent"], before[name]["spec"]["platform"]["agent"]
++        assert pool == before[name]
++
++
++def test_with_the_legacy_node_label_key_the_exclusions_sit_next_to_it():
++    pools = _pools(
++        "--set-json", f'excludeAgentLabels=["{MARK}"]',
++        "--set-string", "nodepool[1].agentLabelSelector.nodeLabelKey=legacy.example/pool",
++        "--set-string", "nodepool[1].agentLabelSelector.nodeLabelValue=hp-dl380-64c-512gb",
++    )
++    assert _selector(pools["tenant-a-hp-dl380-64c-512gb"]) == {
++        "matchLabels": {"legacy.example/pool": "hp-dl380-64c-512gb"}, "matchExpressions": _out(MARK),
++    }
++
++
++def test_keys_that_read_as_other_types_stay_strings():
++    pools = _pools("--set-string", "excludeAgentLabels={true,1234}")
++    assert _selector(pools["tenant-a-zone-a"])["matchExpressions"] == _out("1234", "true")
++
++
++@pytest.mark.parametrize("fixture", ["production-kubevirt-external", "lab-kubevirt-local"])
++def test_kubevirt_skips_the_chart_wide_list(fixture):
++    assert _ok(fixture, "--set-json", f'excludeAgentLabels=["{MARK}"]') == _ok(fixture)
++
++
++def test_kubevirt_fails_on_a_nodepools_own_list():
++    r = _helm("lab-kubevirt-local", "--set-json", f'nodepool[0].excludeAgentLabels=["{MARK}"]')
++    assert r.returncode != 0
++    assert "excludeAgentLabels is for the agent platform" in r.stderr
++
++
++@pytest.mark.parametrize("value, message", [
++    ("excludeAgentLabels=\"example.com/used\"", "excludeAgentLabels must be a list of label keys"),
++    ("nodepool[1].excludeAgentLabels=\"example.com/used\"", "excludeAgentLabels must be a list of label keys"),
++    ('excludeAgentLabels=["example.com/used=true"]', "every excludeAgentLabels entry must be a label key"),
++    ('excludeAgentLabels=[""]', "every excludeAgentLabels entry must be a label key"),
++    ('excludeAgentLabels=[3]', "every excludeAgentLabels entry must be a label key"),
++    ('excludeAgentLabels=["Example.COM/used"]', "every excludeAgentLabels entry must be a label key"),
++    (f'excludeAgentLabels=["{LABEL}"]', "may not name infraenvs.agent-install.openshift.io"),
++])
++def test_a_wrong_value_fails(value, message):
++    r = _helm("production-agent", "--set-json", value)
++    assert r.returncode != 0
++    assert message in r.stderr
++
++
++def test_the_legacy_selector_label_may_not_be_excluded():
++    r = _helm(
++        "production-agent",
++        "--set-string", "nodepool[1].agentLabelSelector.nodeLabelKey=legacy.example/pool",
++        "--set-string", "nodepool[1].agentLabelSelector.nodeLabelValue=hp-dl380-64c-512gb",
++        "--set-json", 'nodepool[1].excludeAgentLabels=["legacy.example/pool"]',
++    )
++    assert r.returncode != 0
++    assert "may not name legacy.example/pool" in r.stderr
+diff --git a/values.yaml b/values.yaml
+index c65c180..3d60328 100644
+--- a/values.yaml
++++ b/values.yaml
+@@ -308,6 +308,10 @@ release_segment:
+ #   nodepool[].additionalInfraEnvNames       unset = the NodePool selects infraEnvName alone;
+ #                                            a list adds InfraEnvs it may draw Agents from
+ #                                            (matchExpressions In), agent platform only
++#   excludeAgentLabels                       unset = none; label keys no NodePool takes an
++#                                            Agent with (matchExpressions DoesNotExist),
++#                                            agent platform only; any values file
++#   nodepool[].excludeAgentLabels            unset = none; more keys for that nodepool
+ #
+ # None of them is set here on purpose: an empty value is a choice ("no SSH key"),
+ # and a key set in this file could not be removed by a values file. This chart
+-- 
+2.54.0 (Apple Git-157)
+

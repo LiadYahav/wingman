@@ -1,0 +1,110 @@
+From 088048971ba4d27a95f6b106ea8086ad0fb88e7a Mon Sep 17 00:00:00 2001
+From: guydidosh <guydidosh@gmail.com>
+Date: Sun, 8 Nov 2026 16:46:26 +0200
+Subject: [PATCH 1/3] feat: a nodepool's annotations reach the NodePool
+
+An entry's `annotations:` map is now rendered onto its NodePool, values as
+strings, next to the chart's own argocd.argoproj.io/sync-wave (which an entry
+may not set: the render fails, naming it). Labels are unchanged: still only
+allowDeletion, maxReplicas and minReplicas.
+
+The workflows' update-nodepool reads redbull.io/scale-down-policy
+(fewest-pods, least-requested, least-utilized) off the NodePool to choose which
+servers leave a scale-down; this is how it is written in the values repo.
+
+With no annotations in an entry the render is unchanged: the golden parity
+tests pass, and the sandbox's ocp4-upgrade-demo renders byte for byte as before.
+---
+ README.md                   |  1 +
+ templates/nodepool.yaml     | 11 ++++++++++-
+ tests/test_hostedcluster.py | 20 ++++++++++++++++++++
+ 3 files changed, 31 insertions(+), 1 deletion(-)
+
+diff --git a/README.md b/README.md
+index 9556d79..6fcee3a 100644
+--- a/README.md
++++ b/README.md
+@@ -258,6 +258,7 @@ lists them):
+ | `services` | the GitLab branches (`serviceType`) | unset: LoadBalancer API, Routes, which is also HyperShift's KubeVirt default |
+ | `pausedUntil` | unset | the upgrade workflow's abort writes `"true"`: HostedCluster and every NodePool |
+ | `nodepool[].storageClass` | unset | the KubeVirt root volume's storage class |
++| `nodepool[].annotations` | none | passed onto the NodePool as written, values as strings, next to the chart's own sync-wave (which an entry may not set). The workflows' update-nodepool reads `redbull.io/scale-down-policy` (`fewest-pods`, `least-requested`, `least-utilized`) from it |
+ 
+ `releaseRepo` (and `cpoRepo`) must describe the same layout as the upgrade rules'
+ `release` block in the values repo (`upgrade/ladder.yaml`): the upgrade workflow
+diff --git a/templates/nodepool.yaml b/templates/nodepool.yaml
+index a3fc7df..710a2e5 100644
+--- a/templates/nodepool.yaml
++++ b/templates/nodepool.yaml
+@@ -6,7 +6,9 @@
+        volume's storageClass and kubevirtInfra: local, where the VMs sit on the
+        MCE's own pod network, so no additionalNetworks / attachDefaultNetwork
+        unless a nodepool sets them. Also fixed: a tuningConfig rendered the key
+-       twice. */}}
++       twice. And a nodepool's annotations reach the NodePool, so a NodePool
++       setting such as redbull.io/scale-down-policy is written in the values
++       repo; its labels stay the three below. */}}
+ {{- if include "hc.enabled" . }}
+ {{- $clusterName := include "hc.clusterName" . }}
+ {{- $platform := .Values.platform | default "" }}
+@@ -23,6 +25,7 @@
+ {{- $seen := dict }}
+ {{- range .Values.nodepool }}
+ {{- $labels := .labels | default dict }}
++{{- $annotations := .annotations | default dict }}
+ {{- $selector := .agentLabelSelector | default dict }}
+ {{- $infraEnv := .infraEnvName | default $selector.nodeLabelValue }}
+ {{- if and .infraEnvName $selector.nodeLabelValue (ne .infraEnvName $selector.nodeLabelValue) }}
+@@ -45,12 +48,18 @@
+ {{- $allowDeletion := ternary $labels.allowDeletion "false" (hasKey $labels "allowDeletion") }}
+ {{- $maxReplicas := ternary $labels.maxReplicas $replicas (hasKey $labels "maxReplicas") }}
+ {{- $minReplicas := ternary $labels.minReplicas (max 0 (sub $replicas 1)) (hasKey $labels "minReplicas") }}
++{{- if hasKey $annotations "argocd.argoproj.io/sync-wave" }}
++{{- fail (printf "nodepool %q: annotations may not set argocd.argoproj.io/sync-wave; the chart orders the NodePool after its HostedCluster itself." $name) }}
++{{- end }}
+ ---
+ apiVersion: hypershift.openshift.io/v1beta1
+ kind: NodePool
+ metadata:
+   annotations:
+     argocd.argoproj.io/sync-wave: "4"
++    {{- range $key, $value := $annotations }}
++    {{ $key | quote }}: {{ $value | toString | quote }}
++    {{- end }}
+   name: {{ $name }}
+   namespace: hcp-{{ $clusterName }}
+   finalizers:
+diff --git a/tests/test_hostedcluster.py b/tests/test_hostedcluster.py
+index 382b920..e1893c9 100644
+--- a/tests/test_hostedcluster.py
++++ b/tests/test_hostedcluster.py
+@@ -286,6 +286,26 @@ def test_a_local_nodepool_may_still_join_an_extra_network():
+     assert kubevirt["attachDefaultNetwork"] is True
+ 
+ 
++def test_a_nodepools_annotations_reach_the_nodepool_and_its_labels_stay_the_three():
++    # The workflows' update-nodepool reads redbull.io/scale-down-policy off the
++    # NodePool, so it has to be writable in day1: as an annotation of the entry.
++    (nodepool,) = _kind(_lab(
++        "--set-json", 'nodepool[0].annotations={"redbull.io/scale-down-policy": "fewest-pods", "redbull.io/size": 3}',
++        "--set-json", 'nodepool[0].labels={"allowDeletion": false, "team": "a"}',
++    ), "NodePool")
++    assert nodepool["metadata"]["annotations"] == {
++        "argocd.argoproj.io/sync-wave": "4", "redbull.io/scale-down-policy": "fewest-pods", "redbull.io/size": "3",
++    }
++    assert nodepool["metadata"]["labels"] == {"allowDeletion": "false", "maxReplicas": "2", "minReplicas": "1"}
++
++
++def test_a_nodepool_may_not_move_its_own_sync_wave():
++    r = _helm("--set-string", "clusterName=x", "-f", str(FIXTURES / "lab-kubevirt-local.yaml"),
++              "--set-json", 'nodepool[0].annotations={"argocd.argoproj.io/sync-wave": "1"}')
++    assert r.returncode != 0
++    assert "annotations may not set argocd.argoproj.io/sync-wave" in r.stderr
++
++
+ def test_an_unknown_kubevirt_infra_fails():
+     r = _helm("--set-string", "clusterName=x", "-f", str(FIXTURES / "lab-kubevirt-local.yaml"),
+               "--set-string", "kubevirtInfra=remote")
+-- 
+2.54.0 (Apple Git-157)
+
