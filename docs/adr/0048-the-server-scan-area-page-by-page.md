@@ -804,8 +804,8 @@ changed.
   its height until measured. A server's History grows its page, as there.
   server-scan's tighter spacing under the table (its footer) is not
   followed: Wingman's pages keep their own padding and have no footer.
-- **The Servers table and a server's page wear server-scan's own
-  colours** (the user, 2026-11-18: "I want the Installed
+- **The Servers table, a server's page and the Sites cards wear
+  server-scan's own colours** (the user, 2026-11-18: "I want the Installed
   + Available + the server names + Maintenance colors inside the servers to
   be the same as the original server scan"). This overrides "in Wingman's
   design" for those pages' colours and cells, not for Wingman's shell (the
@@ -814,14 +814,15 @@ changed.
   server-scan's dark values as they are (it is dark only), light equivalents
   of each hue for Wingman's light theme, as Tailwind colours (`ss-*`). From
   its source (`InstallationBadge`, `StateBadge`, `HealthBadge`, `Badge`,
-  `InventoryTable`, `MaintenanceToggle`, `RowRefreshButton`, `BmcLink`):
-  Installed red and Available green, In inventory and
+  `InventoryTable`, `MaintenanceToggle`, `RowRefreshButton`, `BmcLink`,
+  `SitesOverviewPage`): Installed red and Available green, In inventory and
   the reservation blue; the severity pills on their tints; Maint violet,
   Donor cyan, Stale grey; a row's left edge red, orange or amber; the name in
   plain text; uppercase, centred headers and taller cells; its icons for the
   maintenance tools, the play mark and Fetch now; its hairline icon buttons;
   on a server's page its `HealthBadge` (the severity's own word) and its
-  amber and grey badges. The filter bar is laid out
+  amber and grey badges; on the Sites cards its count colours (major
+  orange, maintenance violet) and its bar's hues. The filter bar is laid out
   as server-scan's: Search first among the dropdowns, the export at the end
   of the toggles' row (Wingman keeps its CSV beside Excel).
 - **Not for Wingman**: `0c141c9` (v6.2.1) is server-scan's own CI

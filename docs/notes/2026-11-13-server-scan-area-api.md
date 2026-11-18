@@ -245,8 +245,12 @@ rules ported, so the demo's cards agree with its servers.
   **Events** (§14.8) and 3.32.0 **Jobs** (§15.9), in that order, in an
   Activity section between Fleet and Configuration.
   `apps/web/lib/server-scan/sidebar.ts` lists them; a new page is one entry.
-- **The Sites page**: §1's cards, counts and words in Wingman's design (its
-  colour tokens, light and dark). **The counts are not links yet**: the
+- **The Sites page**: §1's cards, counts and words, since 3.46.0 in
+  server-scan's own colours (the user's request; before it, Wingman's colour
+  tokens): its count colours (critical red, major orange, warning yellow,
+  in maintenance violet, unknown grey), its health bar's hues and its grey
+  bars, from `features/server-scan/palette.css` (its own values in dark,
+  light equivalents in light). **The counts are not links yet**: the
   Servers page they open does not exist. Each card and count carries the
   filter it will open, in server-scan's parameter names (`data-filter`), so
   the Servers PR turns them into links in one place. Since 3.23.0 they are links to the
