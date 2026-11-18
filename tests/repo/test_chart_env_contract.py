@@ -304,7 +304,7 @@ def test_multi_infraenv_nodepools_are_off_unless_enabled() -> None:
 
 def test_fetch_now_is_off_unless_enabled_and_needs_server_scan() -> None:
     """ADR-0048: ``day1.serverScanRefresh.enabled`` sets DAY1_SERVER_SCAN_REFRESH, also off for
-    values kept from 3.45 that have no such key; on, it needs ``serverScan.url``; not a boolean,
+    values kept from 3.47 that have no such key; on, it needs ``serverScan.url``; not a boolean,
     the schema refuses it."""
     assert render()["wingman-config"]["data"]["DAY1_SERVER_SCAN_REFRESH"] == "false"
     kept = render("--set", "day1.serverScanRefresh=null")["wingman-config"]["data"]

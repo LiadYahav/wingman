@@ -13,7 +13,7 @@ case (``jobs``, ``application/jobs.py``). server-scan failing is
 token).
 
 Its writes here are a server's maintenance on and off (ADR-0048's 3.23.0
-amendment) and Fetch now (3.47.0), behind the routes' admin check; the Jobs
+amendment) and Fetch now (3.48.0), behind the routes' admin check; the Jobs
 page's Run job is the other (``application/jobs.py``). server-scan records the token as who did it,
 so each write is logged with the person's name
 (``audit.recorded``): Wingman's record. A page that needs the
