@@ -380,7 +380,9 @@ shape, plus whether the maintenance toggle works here:
   ],
   "generated_at": "2026-11-11T08:00:03Z",
   "maintenance_available": true,
-  "maintenance_detail": null
+  "maintenance_detail": null,
+  "refresh_available": true,
+  "refresh_detail": null
 }
 ```
 
@@ -715,8 +717,9 @@ plus whether the maintenance toggle and History work here:
   "unread_fields": [], "nic_os_names": {"NIC.Integrated.1-1-1": "eno12399np0"}, "tags": [],
   "last_seen_at": "2026-11-11T08:00:03Z", "stale": false, "reachable": true,
   "unreachable_since": null, "unreachable_reason": null, "unreachable_detail": null,
-  "updated_at": "2026-11-11T08:00:03Z", "created_at": "2026-09-01T06:00:00Z",
+  "revision": 17, "updated_at": "2026-11-11T08:00:03Z", "created_at": "2026-09-01T06:00:00Z",
   "maintenance_available": true, "maintenance_detail": null,
+  "refresh_available": true, "refresh_detail": null,
   "history_available": true, "history_detail": null
 }
 ```

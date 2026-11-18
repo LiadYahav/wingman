@@ -698,9 +698,10 @@ details from v5.4.0 and from an older server-scan) and
 
 **2026-11-18, 3.45.0: back to parity with server-scan v6.6.0.** The area
 matched server-scan v6.1.0 (`876dd16`). Of the 14 commits up to v6.6.0
-(`635e08a`), six change what the area shows or calls; Wingman follows each,
-and still works against a server-scan without them. The contract's §2, §8
-and §9 of `docs/notes/2026-11-13-server-scan-area-api.md` say what changed.
+(`635e08a`), five change what the area shows or calls; Wingman follows each,
+and still works against a server-scan without them. The contract's §1, §2,
+§8, §9 and §14 of `docs/notes/2026-11-13-server-scan-area-api.md` say what
+changed.
 
 - **`a0e29c3` (v6.3.0): a ticked severity means that severity and in
   service.** Healthy alone did since v6.0.0; now every severity on the

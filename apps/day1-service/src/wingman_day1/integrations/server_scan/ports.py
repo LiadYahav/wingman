@@ -46,7 +46,8 @@ class ServerInventory(Protocol):
     Raises ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a
     refused token) when server-scan cannot answer: servers are then unknown,
     never "none". Read only but for a server's maintenance, which the Server
-    Scan area's admins turn on and off, and a Job they start (ADR-0048).
+    Scan area's admins turn on and off, a Job they start, and a server they
+    have read from its vendor manager now, Fetch now (ADR-0048).
     """
 
     async def rows(self) -> list[ServerRow]:

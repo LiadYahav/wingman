@@ -144,7 +144,7 @@ class ServerScanDiagramNotFoundError(ServerScanError):
 class ServerScanWritesOffError(ServerScanError):
     """What server-scan keeps for its admins is off here: a viewer token without its admin token.
 
-    The maintenance writes, and the Jobs page, its reads too (ADR-0048, 3.32.0).
+    The maintenance writes, the Jobs page, its reads too (ADR-0048, 3.32.0), and Fetch now.
     """
 
 

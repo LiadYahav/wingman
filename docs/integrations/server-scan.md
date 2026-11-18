@@ -106,7 +106,7 @@ was also the newest tag and `main`'s head that day: nothing released since.
 
 ## The check of 2026-11-18
 
-`v6.1.0` to `v6.6.0`: 14 commits (six that change what the area shows or
+`v6.1.0` to `v6.6.0`: 14 commits (five that change what the area shows or
 calls); 52 of the map's 126 Wingman files followed a changed file. Each change
 is in Wingman (ADR-0048's 2026-11-18 amendment):
 
