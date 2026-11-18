@@ -10,9 +10,10 @@ naming rules (ADR-0014), and its release against what the MCE can host
 (ADR-0026), its owners must be numbers (ADR-0028), its machine configs must
 resolve by the day1 CI's rule, and the cluster's network config entry is
 expanded to the name the CI reads before the template renders (ADR-0027).
-Tuning profiles must be in ``tuning/`` (ADR-0061), and image mirrors must be
-usable and rendered as given (ADR-0063). A file that cannot be parsed is
-shown with its error, never dropped from the list (ADR-0004).
+Tuning profiles must be in ``tuning/`` (ADR-0061), image mirrors usable
+(ADR-0063), a nodepool's other InfraEnvs allowed here (ADR-0064), and each
+written as given (``rendered_file``). A file that cannot be parsed is shown
+with its error, never dropped from the list (ADR-0004).
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import read_tree
+from wingman_day1.domain import nodepool_infra_envs as infra_envs
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.changes import ClusterAction, ClusterChange, ProvisionResult
 from wingman_day1.domain.cluster_file import (
@@ -52,7 +54,6 @@ from wingman_day1.domain.cluster_file import (
     edit_problems,
     load_values,
     read_values,
-    rendered_file_problems,
     require_valid,
     with_provenance,
 )
@@ -65,7 +66,7 @@ from wingman_day1.domain.errors import (
     StaleError,
     WorkflowsNotConfiguredError,
 )
-from wingman_day1.domain.image_mirrors import mirror_problems, unrendered_mirrors
+from wingman_day1.domain.image_mirrors import mirror_problems
 from wingman_day1.domain.locks import apply_locks, lock_conflicts
 from wingman_day1.domain.machine_configs import (
     MachineConfigCatalog,
@@ -86,11 +87,12 @@ from wingman_day1.domain.openshift_versions import unhostable_problems
 from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.placement import Admission, Choice, Decision, describe_placement
+from wingman_day1.domain.rendered_file import rendered_problems
 from wingman_day1.domain.sizing import sizing_problems
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
 from wingman_day1.domain.tuning_profiles import TuningCatalog, edit_text_problems, input_problems
-from wingman_day1.domain.tuning_rule import render_inputs, rendered_problems
+from wingman_day1.domain.tuning_rule import render_inputs
 from wingman_day1.domain.workflows import ProvisionRun, provision_workflow_id
 from wingman_day1.ports import ClusterProvisioner, ProvisionWorkflow, RepoReads
 
@@ -475,6 +477,7 @@ class ClusterService:
         problems += sizing_problems(inputs, spec.sizing_ratio(), flavor=spec.metadata.name)
         problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
         problems += input_problems(inputs, tuning)
+        problems += infra_envs.input_problems(inputs, enabled=self._owned.infra_envs)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
         inputs = render_inputs(expand_network_configs(inputs, cluster_name=cluster_name))
@@ -482,10 +485,7 @@ class ClusterService:
         if not template.strip():
             raise RenderError("the specs project has no cluster-template.j2")
         rendered = render_cluster_file(template, inputs)
-        problems = rendered_file_problems(rendered)
-        if not problems:  # what the template must write as given (ADR-0061, ADR-0063)
-            written = load_values(rendered)
-            problems = [*rendered_problems(inputs, written), *unrendered_mirrors(inputs, written)]
+        problems = rendered_problems(inputs, rendered)  # and what it must write as given
         require_valid(problems, message="the rendered cluster file breaks the values-file contract")
         return rendered
 

@@ -288,6 +288,20 @@ def test_scaling_nodepools_is_off_unless_enabled_and_needs_the_orchestrator() ->
     assert "scaleNodepools" in wrong.stderr
 
 
+def test_multi_infraenv_nodepools_are_off_unless_enabled() -> None:
+    """ADR-0064: ``day1.multiInfraEnvNodepools.enabled`` sets DAY1_MULTI_INFRAENV_NODEPOOLS, also
+    off for values kept from a release before it; it needs nothing else; not a boolean, the
+    schema refuses it."""
+    assert render()["wingman-config"]["data"]["DAY1_MULTI_INFRAENV_NODEPOOLS"] == "false"
+    kept = render("--set", "day1.multiInfraEnvNodepools=null")["wingman-config"]["data"]
+    assert kept["DAY1_MULTI_INFRAENV_NODEPOOLS"] == "false"
+    on = render("--set", "day1.multiInfraEnvNodepools.enabled=true")["wingman-config"]["data"]
+    assert on["DAY1_MULTI_INFRAENV_NODEPOOLS"] == "true"
+    wrong = template("--set-string", "day1.multiInfraEnvNodepools.enabled=yes")
+    assert wrong.returncode != 0
+    assert "multiInfraEnvNodepools" in wrong.stderr
+
+
 TLS_VERIFY = {
     "auth.sslVerify": "OPENSHIFT_SSL_VERIFY",
     "clusterStatus.sslVerify": "MCE_SSL_VERIFY",

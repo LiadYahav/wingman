@@ -283,7 +283,8 @@ def build_context(
         snapshots=snapshots,
     )
     naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
-    owned = WorkflowKeys(versions=settings.day1_upgrades, replicas=settings.day1_scale_nodepools)
+    infra_envs = settings.day1_multi_infraenv_nodepools
+    owned = WorkflowKeys(settings.day1_upgrades, settings.day1_scale_nodepools, infra_envs)
     site_catalog = SiteCatalog(day1)
     machine_configs = MachineConfigService(day1, specs_repo)
     spec_catalog = SpecCatalog(
@@ -294,6 +295,7 @@ def build_context(
         ),
         machine_configs,
         specs_root=settings.specs_root_path,
+        infra_envs=infra_envs,
     )
     day1_writer = MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
     provisioner = GitClusterProvisioner(day1_writer)

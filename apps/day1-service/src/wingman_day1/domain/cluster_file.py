@@ -39,6 +39,8 @@ from yaml.resolver import BaseResolver
 
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.errors import InvalidClusterFileError
+from wingman_day1.domain.nodepool_infra_envs import additional_of, infra_envs_of
+from wingman_day1.domain.nodepool_infra_envs import edit_problems as infra_env_problems
 from wingman_day1.domain.replicas_ownership import replicas_problems
 from wingman_day1.domain.upgrades import version_problems
 
@@ -210,6 +212,13 @@ class NodePoolValues:
     configs: tuple[str, ...]
     node_labels: Mapping[str, object]
     tuning_config: object
+    additional_infra_env_names: tuple[str, ...] = ()
+    """``additionalInfraEnvNames``: the InfraEnvs it draws from beside its own (ADR-0064)."""
+
+    @property
+    def infra_envs(self) -> tuple[str, ...]:
+        """Every InfraEnv it draws from: ``infraEnvName`` first, then the others, each once."""
+        return infra_envs_of(self.infra_env_name, self.additional_infra_env_names)
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +275,7 @@ def _nodepool(raw: Mapping[str, object]) -> NodePoolValues:
         else (),
         node_labels=node_labels if isinstance(node_labels, dict) else {},
         tuning_config=raw.get("tuningConfig"),
+        additional_infra_env_names=additional_of(raw),
     )
 
 
@@ -338,16 +348,21 @@ def rendered_file_problems(content: str) -> list[str]:
 
 @dataclass(frozen=True, slots=True)
 class WorkflowKeys:
-    """The keys a platform workflow owns in this deployment: an edit may not change them."""
+    """What this deployment lets an edit change: never the keys a platform workflow owns.
+
+    And a nodepool's ``additionalInfraEnvNames`` only with ``infra_envs`` (ADR-0064).
+    """
 
     versions: bool = False
     """``DAY1_UPGRADES`` (ADR-0055): ``mastertag``, the workertags, ``pausedUntil``."""
     replicas: bool = False
     """``DAY1_SCALE_NODEPOOLS`` (ADR-0062): the replicas of each NodePool already on ``main``."""
+    infra_envs: bool = False
+    """``DAY1_MULTI_INFRAENV_NODEPOOLS`` (ADR-0064): a nodepool may draw from several InfraEnvs."""
 
 
 NO_WORKFLOW_KEYS: Final = WorkflowKeys()
-"""Both settings off: people own every key automation does not."""
+"""Every setting off: people own every key automation does not, but a nodepool's InfraEnvs."""
 
 
 def edit_problems(
@@ -358,11 +373,13 @@ def edit_problems(
     Every write of an existing cluster file is checked here: a modify, an
     edit of a pending merge request, a flavor's sync and a rollout's merge
     request. Keys owned by automation, and ``clusterName`` (which would rename
-    the cluster), must keep exactly the values they have in ``current``. With
-    ``owned.versions`` so must the version keys the upgrade workflow owns
-    (``upgrades.version_problems``), and with ``owned.replicas`` each
-    NodePool's replicas as ``main`` (the file on the default branch, when it
-    is not ``current``) has them (``replicas_ownership.replicas_problems``).
+    the cluster), must keep exactly the values they have in ``current``. No
+    NodePool is renamed by its InfraEnvs, nor a Replace one's InfraEnvs changed
+    (``nodepool_infra_envs.edit_problems``). With ``owned.versions`` so must
+    the version keys the upgrade workflow owns (``upgrades.version_problems``),
+    and with ``owned.replicas`` each NodePool's replicas as ``main`` (the file
+    on the default branch, when it is not ``current``) has them
+    (``replicas_ownership.replicas_problems``).
     """
     try:
         new = load_values(edited)
@@ -383,7 +400,7 @@ def edit_problems(
         problems += version_problems(old, new)
     if owned.replicas:
         problems += replicas_problems(old if main is None else _lenient_values(main), new)
-    return problems
+    return problems + infra_env_problems(old, new, enabled=owned.infra_envs)
 
 
 def _lenient_values(content: str) -> dict[str, object]:
@@ -407,8 +424,9 @@ def describe_for_review(values: ClusterValues) -> str:
         label = pool.name or pool.infra_env_name or "?"
         replicas = pool.replicas if pool.replicas is not None else 1
         configs = ", ".join(pool.configs) or "none"
+        also = "".join(f", also `{name}`" for name in pool.additional_infra_env_names)
         lines.append(
-            f"- nodepool `{label}`: InfraEnv `{pool.infra_env_name}`, "
+            f"- nodepool `{label}`: InfraEnv `{pool.infra_env_name}`{also}, "
             f"{replicas} replicas, configs: {configs}"
         )
     return "\n".join(lines)

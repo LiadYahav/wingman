@@ -618,12 +618,13 @@ async def test_the_needs_the_form_sends_are_checked_per_type(
         need=[f"{DELL}:1", f"{DELL}:1", f"{HP}:2"],
     )
     assert body["needs"] == [
-        {"infra_env": DELL, "replicas": 2},
-        {"infra_env": HP, "replicas": 2},
+        {"infra_env": DELL, "infra_envs": [DELL], "replicas": 2},
+        {"infra_env": HP, "infra_envs": [HP], "replicas": 2},
     ]
     found = by_mce(body)
     assert found[A]["node_types"][0] == {
         "infra_env": DELL,
+        "infra_envs": [DELL],
         "needed": 2,
         "free_agents": 4,
         "healthy": 2,

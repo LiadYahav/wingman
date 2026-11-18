@@ -54,6 +54,9 @@ data:
   {{- fail "day1.scaleNodepools.enabled needs workflows.url: scaling starts the update-nodepool workflow there" }}
   {{- end }}
   DAY1_SCALE_NODEPOOLS: {{ if and .Values.day1.scaleNodepools .Values.day1.scaleNodepools.enabled }}"true"{{ else }}"false"{{ end }}
+  # A nodepool may draw from several InfraEnvs (ADR-0064). Off for values kept
+  # from a release before it.
+  DAY1_MULTI_INFRAENV_NODEPOOLS: {{ if and .Values.day1.multiInfraEnvNodepools .Values.day1.multiInfraEnvNodepools.enabled }}"true"{{ else }}"false"{{ end }}
   DAY2_SERVICE_URL: "http://wingman-day2:8002"
 
   # ── day2 ─────────────────────────────────────────────────────────────────────

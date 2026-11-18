@@ -138,6 +138,15 @@
             }
           },
           "additionalProperties": false
+        },
+        "multiInfraEnvNodepools": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

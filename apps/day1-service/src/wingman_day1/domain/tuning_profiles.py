@@ -42,6 +42,7 @@ import yaml
 from wingman_core.domain.git import RepoPath
 from wingman_day1.domain.cluster_file import StrictLoader, load_values
 from wingman_day1.domain.errors import InvalidClusterFileError
+from wingman_day1.domain.nodepool_infra_envs import nodepool_entries
 
 TUNING_DIR: Final = RepoPath("tuning")
 TUNING_INPUT: Final = "tuning_config"
@@ -290,20 +291,6 @@ def show_names(names: Sequence[str]) -> str:
     """``names`` as a problem shows them: a JSON-like list, cut short."""
     text = "[" + ", ".join(f'"{n}"' for n in names) + "]"
     return text if len(text) <= _SHOWN else f"{text[: _SHOWN - 4]}...]"
-
-
-def nodepool_entries(
-    values: Mapping[str, object], key: str
-) -> list[tuple[int, Mapping[str, object]]]:
-    """The mappings of the list at ``key`` (``nodepools`` or ``nodepool``), with their positions."""
-    pools = values.get(key)
-    if not isinstance(pools, (list, tuple)):
-        return []
-    return [
-        (index, cast("Mapping[str, object]", pool))
-        for index, pool in enumerate(cast("Sequence[object]", pools))
-        if isinstance(pool, Mapping)
-    ]
 
 
 def input_problems(inputs: Mapping[str, object], catalog: TuningCatalog) -> list[str]:

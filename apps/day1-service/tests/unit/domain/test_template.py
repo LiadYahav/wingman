@@ -250,6 +250,13 @@ def test_the_fixture_template_asks_for_exactly_the_values_file_inputs() -> None:
                     "required": True,
                     "example": "dell-r660-site1-128c-1024gb-5tb",
                 },
+                {
+                    "name": "additional_infra_envs",
+                    "type": "list",
+                    "required": False,
+                    "default": [],
+                    "example": "dell-r760-site1-128c-1024gb-5tb",
+                },
                 {"name": "nodepool_name", "type": "string", "required": False, "default": ""},
                 {"name": "replicas", "type": "string", "required": False, "default": 2},
                 {

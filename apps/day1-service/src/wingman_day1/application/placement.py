@@ -12,8 +12,9 @@ needs:
   (a cache of seconds, shared; never the minutes another source would be);
 - each candidate's healthy free servers of every node type the new cluster
   needs: its free Agents in those InfraEnvs, joined to server-scan's servers.
-  The needs come from the form (each nodepool's InfraEnv and replicas), else
-  from the flavor's presets, and at create from the rendered file;
+  The needs come from the form (each nodepool's InfraEnvs and replicas), else
+  from the flavor's presets, and at create from the rendered file; a
+  nodepool that draws from several InfraEnvs needs ``a + b`` (ADR-0064);
 - each candidate's spare servers, from server-scan's fleet rows (cached as
   for the nodes view).
 
@@ -63,11 +64,14 @@ from wingman_day1.domain.machines import AgentObservation
 from wingman_day1.domain.mce_capacity import (
     FreePods,
     free_pods,
+    infra_envs_in,
+    node_type,
     node_type_supply,
     spare_servers,
     summed_needs,
 )
 from wingman_day1.domain.names import Env, describe_mce, dns_label_problems
+from wingman_day1.domain.nodepool_infra_envs import INPUT, names_in
 from wingman_day1.domain.openshift_versions import bare_release, is_release
 from wingman_day1.domain.owners import MAX_OWNER_DIGITS
 from wingman_day1.domain.paths import ClusterRef, parse_hosted_clusters_path
@@ -131,10 +135,11 @@ def mador_of(content: str) -> str | None:
 
 
 def need_problems(needs: Sequence[Need]) -> list[str]:
-    """Why a need is not a node type (a DNS label) with 1 to ``MAX_REPLICAS`` replicas."""
+    """Why a need is not a node type (DNS labels) with 1 to ``MAX_REPLICAS`` replicas."""
     problems: list[str] = []
     for infra_env, replicas in needs:
-        problems += [f"need: {p}" for p in dns_label_problems(infra_env, what="InfraEnv")]
+        for name in infra_envs_in(infra_env):
+            problems += [f"need: {p}" for p in dns_label_problems(name, what="InfraEnv")]
         if not 1 <= replicas <= MAX_REPLICAS:
             problems.append(
                 f"need: {infra_env} asks for {replicas} replicas; give 1 to {MAX_REPLICAS}"
@@ -143,13 +148,13 @@ def need_problems(needs: Sequence[Need]) -> list[str]:
 
 
 def file_needs(content: str) -> list[Need]:
-    """A cluster file's needs: each ``nodepool[]`` entry's ``infraEnvName`` and ``replicas``."""
+    """A cluster file's needs: each ``nodepool[]`` entry's InfraEnvs and ``replicas``."""
     try:
         pools = read_values(load_values(content)).nodepools
     except InvalidClusterFileError:
         return []
     return [
-        (pool.infra_env_name, pool.replicas)
+        (node_type(pool.infra_envs), pool.replicas)
         for pool in pools
         if pool.infra_env_name and pool.replicas is not None
     ]
@@ -171,7 +176,8 @@ def preset_needs(nodepools: object, ratio: Sequence[int]) -> list[Need]:
         replicas = pool.get("replicas")
         if isinstance(replicas, bool) or not isinstance(replicas, int) or replicas < 1:
             replicas = ratio[index] if index < len(ratio) else TEMPLATE_REPLICAS
-        needs.append((infra_env.strip(), replicas))
+        more = names_in(pool.get(INPUT)) or []
+        needs.append((node_type([infra_env.strip(), *(m.strip() for m in more)]), replicas))
     return needs
 
 
@@ -381,7 +387,7 @@ class PlacementService:
         try:
             agents = await self._hub.infra_env_agents(
                 mce,
-                infra_envs=[infra_env for infra_env, _ in needs],
+                infra_envs=sorted({name for node, _ in needs for name in infra_envs_in(node)}),
                 namespace=self._infraenv_namespace,
             )
         except HubNotConfiguredError:

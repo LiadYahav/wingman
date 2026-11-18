@@ -170,6 +170,9 @@ class NodePoolOut(BaseModel):
 
     name: str | None
     infra_env_name: str | None
+    additional_infra_env_names: list[str]
+    """``additionalInfraEnvNames``: the InfraEnvs it also draws from (ADR-0064); its name
+    still comes from ``infra_env_name``."""
     replicas: int | None
     allow_deletion: Any
     configs: list[str]
@@ -182,6 +185,7 @@ class NodePoolOut(BaseModel):
         return cls(
             name=pool.name,
             infra_env_name=pool.infra_env_name,
+            additional_infra_env_names=list(pool.additional_infra_env_names),
             replicas=pool.replicas,
             allow_deletion=pool.allow_deletion,
             configs=list(pool.configs),

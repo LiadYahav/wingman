@@ -50,6 +50,7 @@ need > 0 -> POST add-server-to-mce {infra_env, mce_cluster, namespace, count<=20
   - `replicas` must be set. Autoscaling NodePools count as a "no replicas" problem.
   - Paused or deleting NodePools are not counted as demand.
 - The chart's `nodepool.yaml` already renders exactly this shape, from `infraEnvName`.
+- A NodePool that draws from several InfraEnvs (`additionalInfraEnvNames`, ADR-0064) has an `In` expression and no label: herzi skips it ("not tied to an InfraEnv", a warning, not a pool problem) and counts none of its demand.
 
 ### 1.3 Which servers go into which InfraEnv, and from where
 - **herzi does not pick servers or BMHs.** It sends only a count per InfraEnv:
@@ -131,6 +132,7 @@ chart values.yaml
 |---|---|
 | `infraEnvName` | **required on agent**. It is the value of label `infraenvs.agent-install.openshift.io`. Legacy form: `agentLabelSelector: {nodeLabelKey, nodeLabelValue}`; a disagreement fails the render |
 | `name` | `<clusterName>-<infraEnvName>`. **Required** when two pools share an InfraEnv (zones) |
+| `additionalInfraEnvNames` | **Needs the chart change** (drafted, not merged; today's chart ignores the key and selects `infraEnvName` alone). More InfraEnvs the NodePool may draw Agents from: the selector becomes `infraenvs.agent-install.openshift.io In (infraEnvName + these)`, sorted and unique; the name still derives from `infraEnvName`. Agent only; the draft fails on KubeVirt and with the legacy `agentLabelSelector.nodeLabelKey`. Wingman writes it only with `DAY1_MULTI_INFRAENV_NODEPOOLS` (ADR-0064) |
 | `replicas` | 1 when the key is absent; an explicit `0` is honoured |
 | `labels.allowDeletion` | "false". Always write `allowDeletion: false` |
 | `labels.maxReplicas` / `minReplicas` | `replicas` / `replicas-1` |

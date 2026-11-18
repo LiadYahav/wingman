@@ -15,6 +15,13 @@ the nodes view: ``node_pools.why_not_free``), each joined to its server in
 server-scan (``node_pools.ServerFinder``) and counted when that server is
 usable. The new cluster needs at least its replicas of each type.
 
+A nodepool that draws from several InfraEnvs (ADR-0064) is one node type,
+``a + b``: a free Agent of either counts for it. Node types that share an
+InfraEnv are judged together, so no free server counts twice: their row is
+all their InfraEnvs against all their replicas, and every part of it must
+hold too (Hall's condition), so a nodepool that draws only from ``a`` is short
+when ``a`` is, however many free ``b`` has.
+
 **Spare servers** come from server-scan's fleet rows: a row in
 ``INSTALLED_TO_INVENTORY`` registered to the MCE is in no cluster, and the
 MCE keeps it to repair a cluster. A *usable* one is also out of maintenance,
@@ -25,8 +32,9 @@ contested. An MCE server-scan never names is unknown, never zero.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
+from itertools import combinations
 from typing import Final
 
 from wingman_day1.domain.machines import AgentObservation
@@ -45,6 +53,10 @@ BLOCKING_TAINTS: Final = frozenset({"NoSchedule", "NoExecute"})
 SPARE_STATE: Final = "INSTALLED_TO_INVENTORY"
 """server-scan's ``openshift_state`` of a server registered to an MCE and in no cluster."""
 UNUSABLE_HEALTH: Final = frozenset({"CRITICAL", "UNKNOWN"})
+TYPE_SEPARATOR: Final = " + "
+"""Joins the InfraEnvs of a node type that has several, sorted (ADR-0064)."""
+MAX_EXACT: Final = 10
+"""Node types judged together up to this many are checked part by part; more, each alone."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,24 +188,52 @@ class Supply(StrEnum):
     UNKNOWN = "unknown"
 
 
+_SEVERITY: Final = {Supply.SHORT: 0, Supply.UNKNOWN: 1, Supply.ENOUGH: 2}
+
+
+def node_type(infra_envs: Iterable[str]) -> str:
+    """The node type of a nodepool that draws from ``infra_envs``: ``a``, or ``a + b``, sorted."""
+    return TYPE_SEPARATOR.join(sorted(set(infra_envs)))
+
+
+def infra_envs_in(node: str) -> tuple[str, ...]:
+    """The InfraEnvs of a node type."""
+    return tuple(node.split(TYPE_SEPARATOR))
+
+
 @dataclass(frozen=True, slots=True)
 class NodeTypeSupply:
-    """One node type (InfraEnv) on one MCE: what the new cluster needs, and what is free."""
+    """One node type (InfraEnv, or several) on one MCE: what the new cluster needs, and is free."""
 
     infra_env: str
+    """The node type: one InfraEnv, or several joined by `` + `` (ADR-0064)."""
     needed: int
     free_agents: int | None
-    """Free Agents in the InfraEnv; ``None`` when the MCE's Agents could not be read."""
+    """Free Agents in its InfraEnvs; ``None`` when the MCE's Agents could not be read."""
     healthy: int | None
     """Of those, the ones whose server-scan server is usable; ``None`` without server-scan."""
     not_in_server_scan: int = 0
     """Free Agents server-scan has no server for: neither healthy nor not."""
     health_checked: bool = True
     """``False`` when this deployment has no server-scan: free Agents are counted as they are."""
+    within: NodeTypeSupply | None = None
+    """A part of it that falls shorter, for the nodepools that draw only on that part."""
+
+    @property
+    def infra_envs(self) -> tuple[str, ...]:
+        """The InfraEnvs whose free Agents it counts."""
+        return infra_envs_in(self.infra_env)
 
     @property
     def status(self) -> Supply:
-        """Enough, short, or unknown (an unknown is never picked)."""
+        """Enough, short, or unknown (never picked); a part that falls shorter decides."""
+        own = self._own_status
+        if self.within is None or _SEVERITY[own] <= _SEVERITY[self.within.status]:
+            return own
+        return self.within.status
+
+    @property
+    def _own_status(self) -> Supply:
         if self.free_agents is None:
             return Supply.UNKNOWN
         if self.free_agents < self.needed:
@@ -210,7 +250,9 @@ class NodeTypeSupply:
 
     @property
     def detail(self) -> str:
-        """``dell-r660: 2 healthy free of 6 needed``, and what is not known."""
+        """``dell-r660: 2 healthy free of 6 needed``, what is not known, and a short part."""
+        if self.within is not None:
+            return f"{replace(self, within=None).detail}; of those, {self.within.detail}"
         if self.free_agents is None:
             return f"{self.infra_env}: {self.needed} needed; the MCE's Agents could not be read"
         if not self.health_checked:
@@ -232,10 +274,22 @@ class NodeTypeSupply:
 def summed_needs(nodepools: Iterable[tuple[str, int]]) -> tuple[tuple[str, int], ...]:
     """Replicas per node type, summed over the nodepools that use it, sorted by type."""
     needs: dict[str, int] = {}
-    for infra_env, replicas in nodepools:
+    for node, replicas in nodepools:
         if replicas > 0:
-            needs[infra_env] = needs.get(infra_env, 0) + replicas
+            key = node_type(infra_envs_in(node))
+            needs[key] = needs.get(key, 0) + replicas
     return tuple(sorted(needs.items()))
+
+
+def judged_together(needs: Sequence[tuple[str, int]]) -> list[list[tuple[str, int]]]:
+    """The needs in groups whose node types share InfraEnvs, each group in the needs' order."""
+    groups: list[list[tuple[str, int]]] = []
+    for need in needs:
+        mine = set(infra_envs_in(need[0]))
+        joined = [g for g in groups if any(mine.intersection(infra_envs_in(t)) for t, _ in g)]
+        rest = [g for g in groups if all(g is not j for j in joined)]
+        groups = [*rest, [*(n for g in joined for n in g), need]]
+    return sorted(groups, key=lambda group: needs.index(group[0]))
 
 
 def node_type_supply(
@@ -250,28 +304,75 @@ def node_type_supply(
     ``agents`` is ``None`` when the MCE's Agents could not be read, ``rows``
     when server-scan could not be. ``server_scan`` is ``False`` when this
     deployment has none: the free Agents are then counted without their health.
+    Needs whose node types share an InfraEnv are one row (:func:`judged_together`).
     """
-    finder = ServerFinder(rows) if rows is not None else None
-    supply: list[NodeTypeSupply] = []
-    for infra_env, needed in needs:
-        if agents is None:
-            supply.append(NodeTypeSupply(infra_env, needed, None, None))
-            continue
-        free = [a for a in agents if a.infra_env == infra_env and why_not_free(a) is None]
-        if not server_scan:
-            supply.append(NodeTypeSupply(infra_env, needed, len(free), None, health_checked=False))
-            continue
-        if finder is None:
-            supply.append(NodeTypeSupply(infra_env, needed, len(free), None))
-            continue
-        servers = [finder.find(agent) for agent in free]
-        supply.append(
-            NodeTypeSupply(
-                infra_env,
-                needed,
-                len(free),
-                healthy=sum(1 for row in servers if row is not None and usable(row)),
-                not_in_server_scan=sum(1 for row in servers if row is None),
-            )
-        )
-    return tuple(supply)
+    count = _Count(agents, ServerFinder(rows) if rows is not None else None, server_scan)
+    return tuple(_judged(group, count) for group in judged_together(needs))
+
+
+def _judged(group: Sequence[tuple[str, int]], count: _Count) -> NodeTypeSupply:
+    """A group's row: all of it, with the part that falls shortest when that one is worse."""
+    whole = count.supply(group)
+    if len(group) == 1:
+        return whole
+    worst = min((count.supply(part) for part in _parts(group)), key=lambda s: _SEVERITY[s.status])
+    if _SEVERITY[worst.status] < _SEVERITY[whole.status]:
+        return replace(whole, within=worst)
+    return whole
+
+
+def _parts(group: Sequence[tuple[str, int]]) -> list[Sequence[tuple[str, int]]]:
+    """Every part of a group but the whole, up to :data:`MAX_EXACT` needs; else each need alone."""
+    if len(group) > MAX_EXACT:
+        return [[need] for need in group]
+    return [part for size in range(1, len(group)) for part in combinations(group, size)]
+
+
+class _Count:
+    """The MCE's free Agents per InfraEnv and their health, counted once: a node type sums its own.
+
+    Every Agent is in one InfraEnv, so a sum over a set of InfraEnvs counts
+    each free server once.
+    """
+
+    def __init__(
+        self,
+        agents: Sequence[AgentObservation] | None,
+        finder: ServerFinder | None,
+        server_scan: bool,
+    ) -> None:
+        self._known = agents is not None
+        self._checked = server_scan
+        finder = finder if server_scan else None
+        self._health_known = finder is not None
+        self._free: dict[str, int] = {}
+        self._healthy: dict[str, int] = {}
+        self._missing: dict[str, int] = {}
+        for agent in agents or ():
+            if agent.infra_env is None or why_not_free(agent) is not None:
+                continue
+            _add(self._free, agent.infra_env)
+            row = finder.find(agent) if finder is not None else None
+            if finder is not None and row is None:
+                _add(self._missing, agent.infra_env)
+            elif row is not None and usable(row):
+                _add(self._healthy, agent.infra_env)
+
+    def supply(self, needs: Sequence[tuple[str, int]]) -> NodeTypeSupply:
+        """What the needs' InfraEnvs, together, have free for all of the needs."""
+        envs = {env for node, _ in needs for env in infra_envs_in(node)}
+        label, needed = node_type(envs), sum(replicas for _, replicas in needs)
+        if not self._known:
+            return NodeTypeSupply(label, needed, None, None)
+        free = sum(self._free.get(env, 0) for env in envs)
+        if not self._checked:
+            return NodeTypeSupply(label, needed, free, None, health_checked=False)
+        if not self._health_known:
+            return NodeTypeSupply(label, needed, free, None)
+        healthy = sum(self._healthy.get(env, 0) for env in envs)
+        missing = sum(self._missing.get(env, 0) for env in envs)
+        return NodeTypeSupply(label, needed, free, healthy=healthy, not_in_server_scan=missing)
+
+
+def _add(counts: dict[str, int], key: str) -> None:
+    counts[key] = counts.get(key, 0) + 1

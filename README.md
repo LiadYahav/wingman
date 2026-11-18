@@ -226,7 +226,7 @@ Changes since the legacy services:
 | `GET` | `/api/day1/mces` | Every MCE (or one site's, `?site=`), with its default mastertag, hub version and naming |
 | `GET` | `/api/day1/mces/{mce}/openshift-versions` | The releases a new cluster on the MCE may use (`upgrade/` in the day1 repo), newest first, with `problems` when its files are missing or broken |
 | `GET` | `/api/day1/mces/{mce}/infraenvs` | InfraEnv names on the MCE hub (501 when live status is off) |
-| `GET` | `/api/day1/placement` | Where a new hosted cluster goes (`?site=&env=&version=&owner=&flavor=`, ADR-0050): every candidate MCE with its checks, clusters, this owner's clusters, spare servers and free pods, and Wingman's pick with why (with live status off, the checks that read the MCE are `not_checked`) |
+| `GET` | `/api/day1/placement` | Where a new hosted cluster goes (`?site=&env=&version=&owner=&flavor=&need=<infra_env>:<replicas>`, repeated; `need=a,b:n` for a nodepool that draws from several InfraEnvs, ADR-0050, ADR-0064): every candidate MCE with its checks, clusters, this owner's clusters, spare servers and free pods, and Wingman's pick with why (with live status off, the checks that read the MCE are `not_checked`) |
 | `GET` | `/api/day1/machine-configs` | The machine configs a nodepool can use (`mc-files/` in the day1 repo: static configs and network hardware types, `generic` first when the generic template exists) and the specs repo's nodepool defaults |
 | `GET` | `/api/day1/tuning-profiles` | The tuning profiles a nodepool can name (`tuning/` in the day1 repo: shared `Tuned` and `PerformanceProfile` files, the clusters with their own variant, the PerformanceProfile a Tuned builds on) and the files that are not offered (ADR-0061) |
 
@@ -501,6 +501,7 @@ WORKFLOWS_TARGETS_TIMEOUT_SECONDS=65      # the upgrade targets read: the orches
 PLACEMENT_MIN_FREE_PODS=70                # MCE placement (ADR-0050; checked when CLUSTER_STATUS_ENABLED): the free pods on its workers an MCE needs, the cost of one hosted control plane
 DAY1_ADD_SERVERS=false                    # Inventory Management (ADR-0057): admins install servers into an MCE's InfraEnv pool through add-server-to-mce; needs WORKFLOWS_API_URL, not live status
 DAY1_SCALE_NODEPOOLS=false                # Scale on the Nodes tab through update-nodepool (ADR-0062); needs WORKFLOWS_API_URL, not live status; on, no merge request changes an existing NodePool's replicas
+DAY1_MULTI_INFRAENV_NODEPOOLS=false       # a nodepool may draw from several InfraEnvs, nodepool[].additionalInfraEnvNames (ADR-0064); needs a chart that renders the key and a template that writes it; off, Wingman never writes it
 
 # segments-manager: the cluster's EPG, checked against the file (ADR-0039), and the Segments area (ADR-0047); off by default; read only
 SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG, no Segments area

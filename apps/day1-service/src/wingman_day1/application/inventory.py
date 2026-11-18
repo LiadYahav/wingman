@@ -302,11 +302,15 @@ class InventoryService:
             raise InvalidInputError(f"InfraEnv {infra_env!r} is not a DNS label", problems)
 
     async def _named_by_files(self) -> dict[str, list[str]]:
-        """Each MCE's InfraEnvs, as its day1 cluster files name them (``infraEnvName``)."""
+        """Each MCE's InfraEnvs, as its day1 cluster files name them.
+
+        Every InfraEnv a nodepool draws from: ``infraEnvName`` and its
+        ``additionalInfraEnvNames`` (ADR-0064).
+        """
         named: dict[str, set[str]] = {}
         for found in await self._clusters.clusters():
             pools = found.values.nodepools if found.values is not None else ()
-            names = {pool.infra_env_name for pool in pools if pool.infra_env_name}
+            names = {name for pool in pools for name in pool.infra_envs}
             named.setdefault(found.ref.mce, set()).update(names)
         return {mce: sorted(names) for mce, names in named.items()}
 

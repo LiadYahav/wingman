@@ -16,6 +16,7 @@ from wingman_core.web.auth import CurrentUser
 from wingman_day1.api.deps import Placements
 from wingman_day1.api.v1.placement_schemas import PlacementOut
 from wingman_day1.domain.errors import InvalidInputError
+from wingman_day1.domain.mce_capacity import node_type
 from wingman_day1.domain.names import Env
 
 MAX_NEEDS = 64
@@ -41,7 +42,10 @@ async def placement(
         list[str] | None,
         Query(
             max_length=MAX_NEEDS,
-            description="A nodepool's node type and replicas, <infra_env>:<replicas>; repeated",
+            description=(
+                "A nodepool's node type and replicas, <infra_env>:<replicas>, or "
+                "<infra_env>,<infra_env>:<replicas> for one that draws from several; repeated"
+            ),
         ),
     ] = None,
 ) -> PlacementOut:
@@ -50,7 +54,7 @@ async def placement(
     Without ``version`` every version check is unknown and there is no pick;
     ``versions`` says what the candidates host. Without ``owner`` the first
     ranking step (fewest clusters of this owner) is skipped. ``need`` is each
-    nodepool's InfraEnv and replicas (an empty ``need=``: none); without any
+    nodepool's InfraEnvs and replicas (an empty ``need=``: none); without any
     ``need``, the flavor's presets.
     """
     return PlacementOut.of(
@@ -66,10 +70,12 @@ async def placement(
 
 
 def parse_needs(raw: list[str]) -> list[tuple[str, int]]:
-    """``<infra_env>:<replicas>`` each; anything else is a 422 naming it.
+    """``<infra_env>[,<infra_env>...]:<replicas>`` each; anything else is a 422 naming it.
 
-    An empty ``need=`` says "no needs": the form names no node type yet, so
-    the flavor's presets are not used either.
+    A nodepool that draws from several InfraEnvs names them all, comma
+    separated: one node type, ``a + b`` (ADR-0064). An empty ``need=`` says
+    "no needs": the form names no node type yet, so the flavor's presets are
+    not used either.
     """
     needs: list[tuple[str, int]] = []
     problems: list[str] = []
@@ -80,7 +86,7 @@ def parse_needs(raw: list[str]) -> list[tuple[str, int]]:
         if not colon or not infra_env or not count.isascii() or not count.isdigit():
             problems.append(f"need: {item!r} is not <infra_env>:<replicas>")
             continue
-        needs.append((infra_env, int(count)))
+        needs.append((node_type(name.strip() for name in infra_env.split(",")), int(count)))
     if problems:
         raise InvalidInputError("the placement's inputs are not acceptable", problems)
     return needs
