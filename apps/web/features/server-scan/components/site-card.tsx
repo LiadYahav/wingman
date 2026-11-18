@@ -7,11 +7,11 @@ import {
   HEALTHY_GLYPH,
   cardCounts,
   cardVerdict,
+  countBars,
   installedAvailable,
-  vendorBars,
+  type CountBar,
   type CountKind,
   type SiteCard,
-  type VendorBar,
 } from "@/features/server-scan/lib/sites";
 import { cn } from "@/lib/utils";
 
@@ -31,19 +31,42 @@ const TONE: Record<CountKind, string> = {
   unknown: "text-muted-foreground",
 };
 
-/** Bars as wide as each vendor's share of this card's total, in a neutral grey (they are not alarms). */
-function VendorBars({ bars }: { bars: VendorBar[] }) {
+/** A bar's row: above zero a link to its servers (above the card's stretched link), at zero plain. */
+const BAR_ROW = "flex items-center gap-2.5 text-xs";
+
+/** One bar as wide as its share of this card's total, in a neutral grey (it is not an alarm). */
+function CountBarRow({ bar }: { bar: CountBar }) {
+  const body = (
+    <>
+      <span className="w-16 shrink-0 text-muted-foreground group-hover/bar:text-foreground group-hover/bar:underline">{bar.label}</span>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+        <span className="block h-full rounded-full bg-muted-foreground/45" style={{ width: `${bar.percent}%` }} />
+      </span>
+      <span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground">{bar.count}</span>
+    </>
+  );
+  const data = { "data-testid": "ss-card-bar", "data-bar": bar.key, "data-group": bar.group };
+  if (bar.filter === null) {
+    return (
+      <div className={BAR_ROW} {...data}>
+        {body}
+      </div>
+    );
+  }
   return (
-    <div className="mt-4 space-y-1.5" aria-label="Servers per vendor">
-      {bars.map((bar) => (
-        <div key={bar.vendor} className="flex items-center gap-2.5 text-xs" data-testid="ss-card-vendor">
-          <span className="w-16 shrink-0 text-muted-foreground">{bar.label}</span>
-          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
-            <span className="block h-full rounded-full bg-muted-foreground/45" style={{ width: `${bar.percent}%` }} />
-          </span>
-          <span className="w-9 shrink-0 text-right tabular-nums text-muted-foreground">{bar.count}</span>
-        </div>
-      ))}
+    <Link href={serversHref(bar.filter)} aria-label={`${bar.label}: ${bar.count}`} data-filter={bar.filter} className={cn(COUNT_LINK, "group/bar", BAR_ROW)} {...data}>
+      {body}
+    </Link>
+  );
+}
+
+/** Physical and VM, then a bar per vendor (server-scan v6.3.0), each its share of the card's total. */
+function CountBars({ bars }: { bars: CountBar[] }) {
+  const group = (name: CountBar["group"]) => bars.filter((bar) => bar.group === name).map((bar) => <CountBarRow key={bar.key} bar={bar} />);
+  return (
+    <div className="mt-4 space-y-3" aria-label="Servers by type and vendor">
+      <div className="space-y-1.5">{group("type")}</div>
+      <div className="space-y-1.5">{group("vendor")}</div>
     </div>
   );
 }
@@ -80,15 +103,15 @@ function HealthCounts({ card }: { card: SiteCard }) {
 
 /**
  * One card, as server-scan's Sites page draws it: name and total, then the
- * counts, a site's installed and available servers, and a bar per vendor.
- * The card opens the Servers page with its filter (`data-filter`), and each
- * count with the count's own: the name is the card's link, stretched over it,
- * and the counts are links above it (anchors cannot nest). `emphasis` marks
- * the fleet-wide row.
+ * counts, a site's installed and available servers, and the Physical, VM and
+ * vendor bars. The card opens the Servers page with its filter
+ * (`data-filter`), and each count and bar above zero with its own: the name
+ * is the card's link, stretched over it, and the counts and bars are links
+ * above it (anchors cannot nest). `emphasis` marks the fleet-wide row.
  */
 export function SiteCardView({ card, emphasis = false }: { card: SiteCard; emphasis?: boolean }) {
   const states = installedAvailable(card);
-  const bars = vendorBars(card.stats);
+  const bars = countBars(card);
   const titleId = `ss-card-${card.key}`;
   return (
     <article
@@ -122,7 +145,7 @@ export function SiteCardView({ card, emphasis = false }: { card: SiteCard; empha
           ))}
         </div>
       )}
-      {bars.length > 0 && <VendorBars bars={bars} />}
+      {bars.length > 0 && <CountBars bars={bars} />}
     </article>
   );
 }

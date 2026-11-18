@@ -16,12 +16,14 @@
 
 import { describeFilter, hasColumnFilters, readColumnFilters, writeColumnFilters, type ColumnFilters } from "@/lib/table/column-filters";
 import { isSortableField, type RowFilters, type SortableField } from "./rows";
+import { serverTypeLabel } from "./vocabulary";
 
 const SERVERS_PATH = "/server-scan/servers";
 
 /** The repeated parameters, each a dropdown's or the cluster sidebar's values. */
 export const MULTI_KEYS = [
   "vendor",
+  "server_type",
   "site_id",
   "source_provider",
   "installation_type",
@@ -32,8 +34,8 @@ export const MULTI_KEYS = [
 ] as const;
 export type MultiKey = (typeof MULTI_KEYS)[number];
 
-/** The six dropdowns' parameters, in server-scan's order; the cluster sidebar's are `mce` and `cluster`. */
-const DROPDOWN_KEYS = MULTI_KEYS.slice(0, 6);
+/** The seven dropdowns' parameters, in server-scan's order; the cluster sidebar's are `mce` and `cluster`. */
+const DROPDOWN_KEYS = MULTI_KEYS.slice(0, 7);
 
 /** The toggles, each `true` when on. */
 export const FLAG_KEYS = ["stale", "duplicate", "contested", "name_mismatch", "donor"] as const;
@@ -124,6 +126,7 @@ export function rowFilters(view: ServersView, search: string = view.search): Row
   const { multi, flags } = view;
   if (search) next.search = search;
   if (multi.vendor.length) next.vendor = multi.vendor;
+  if (multi.server_type.length) next.server_type = multi.server_type;
   if (multi.site_id.length) next.site_id = multi.site_id;
   if (multi.source_provider.length) next.source_provider = multi.source_provider;
   if (multi.installation_type.length) next.installation_type = multi.installation_type;
@@ -196,6 +199,7 @@ export interface ChipWords {
 
 const MULTI_LABEL: Record<MultiKey, string> = {
   vendor: "Vendor",
+  server_type: "Type",
   site_id: "Site",
   source_provider: "Source",
   installation_type: "Classification",
@@ -214,8 +218,13 @@ const FLAG_LABEL: Record<FlagKey, string> = {
 };
 
 function multiChips(view: ServersView, words: ChipWords): FilterChip[] {
-  const word = (key: MultiKey, value: string) =>
-    key === "site_id" ? words.site(value) : key === "source_provider" ? words.source(value) : key === "openshift_state" ? words.state(value) : value;
+  const lookups: Partial<Record<MultiKey, (value: string) => string>> = {
+    site_id: words.site,
+    source_provider: words.source,
+    server_type: serverTypeLabel,
+    openshift_state: words.state,
+  };
+  const word = (key: MultiKey, value: string) => lookups[key]?.(value) ?? value;
   const chip = (key: MultiKey, value: string): FilterChip => ({
     key: `${key}:${value}`,
     label: `${MULTI_LABEL[key]} ${word(key, value)}`,

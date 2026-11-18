@@ -19,6 +19,7 @@ function server(name: string, overrides: Partial<ServerRow> = {}): ServerRow {
     id: `srv_${name}`,
     name,
     vendor: "dell",
+    server_type: "physical",
     model: "PowerEdge R660",
     site_id: "site1",
     source_provider: "OPENMANAGE",

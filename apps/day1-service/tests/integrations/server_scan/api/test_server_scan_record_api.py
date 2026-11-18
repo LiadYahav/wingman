@@ -38,6 +38,7 @@ RECORD_FIELDS = {
     "id",
     "name",
     "model",
+    "server_type",
     "profile_template",
     "identity",
     "hardware",
@@ -142,6 +143,7 @@ async def test_the_record_is_server_scans_shape_with_the_two_switches(
     assert (body["maintenance_available"], body["history_available"]) == (True, True)
     assert (body["maintenance_detail"], body["history_detail"]) == (None, None)
     assert (body["reachable"], body["unreachable_detail"]) == (True, None)
+    assert body["server_type"] == "physical"
 
 
 async def test_a_collection_error_reaches_the_page_with_its_cause(

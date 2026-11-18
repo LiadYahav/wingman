@@ -14,6 +14,9 @@
 
 export type Vendor = "dell" | "cisco" | "hp" | "standalone" | "kubevirt";
 
+/** A real machine or a virtual one, derived by server-scan from the vendor (`kubevirt` is `vm`; v6.3.0). */
+export type ServerType = "physical" | "vm";
+
 /** A server's overall health; `UNKNOWN` is "no policy has said anything yet", not a verdict. */
 export type HealthSeverity = "UNKNOWN" | "HEALTHY" | "WARNING" | "MAJOR" | "CRITICAL";
 

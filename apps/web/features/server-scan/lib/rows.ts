@@ -25,8 +25,9 @@ export const isSortableField = (value: string): value is SortableField => (SORTA
 
 export interface RowFilters {
   search?: string;
-  /** Each of these six takes several values (OR within, AND across); empty or unset is "any". */
+  /** Each of these seven takes several values (OR within, AND across); empty or unset is "any". */
   vendor?: string[];
+  server_type?: string[];
   site_id?: string[];
   source_provider?: string[];
   installation_type?: string[];
@@ -70,6 +71,7 @@ export interface ClusterFacets {
 export interface FacetCounts {
   total: number;
   vendor: Record<string, number>;
+  server_type: Record<string, number>;
   source_provider: Record<string, number>;
   installation_type: Record<string, number>;
   site_id: Record<string, number>;
@@ -114,10 +116,11 @@ function matchesHealth(row: ServerRow, filters: RowFilters): boolean {
   return !filters.health?.length || inService(row) || filters.maintenance === "only";
 }
 
-/** Whether a row passes the six dropdowns. */
+/** Whether a row passes the seven dropdowns. */
 function passesDropdowns(row: ServerRow, filters: RowFilters): boolean {
   return (
     anyOf(filters.vendor, row.vendor) &&
+    anyOf(filters.server_type, row.server_type) &&
     anyOf(filters.site_id, row.site_id ?? UNASSIGNED_SITE_ID) &&
     anyOf(filters.source_provider, row.source_provider) &&
     anyOf(filters.installation_type, row.installation_type) &&
@@ -250,6 +253,7 @@ export function facetCounts(rows: readonly ServerRow[]): FacetCounts {
   const facets: FacetCounts = {
     total: rows.length,
     vendor: {},
+    server_type: {},
     source_provider: {},
     installation_type: {},
     site_id: {},
@@ -260,6 +264,7 @@ export function facetCounts(rows: readonly ServerRow[]): FacetCounts {
   };
   for (const row of rows) {
     count(facets.vendor, row.vendor);
+    count(facets.server_type, row.server_type);
     if (row.source_provider) count(facets.source_provider, row.source_provider);
     count(facets.installation_type, row.installation_type);
     count(facets.site_id, row.site_id ?? UNASSIGNED_SITE_ID);
@@ -271,9 +276,10 @@ export function facetCounts(rows: readonly ServerRow[]): FacetCounts {
   return facets;
 }
 
-/** The filter keys the six dropdowns own, with the facet each one counts. */
+/** The filter keys the seven dropdowns own, with the facet each one counts. */
 const DIMENSIONS = [
   ["vendor", "vendor"],
+  ["server_type", "server_type"],
   ["source_provider", "source_provider"],
   ["site_id", "site_id"],
   ["installation_type", "installation_type"],

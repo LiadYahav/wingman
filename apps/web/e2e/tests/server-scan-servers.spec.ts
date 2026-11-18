@@ -97,6 +97,26 @@ test.describe("The Servers page", () => {
     await expect(chips(page)).toHaveText(["Maintenance only"]);
   });
 
+  test("server-scan v6.3.0: the Type dropdown, between Source and Site, keeps physical servers or VMs, in the URL as server_type", async ({ page }) => {
+    const vm = { ...FLEET[0], id: "srv_vm-01", name: "vm-kubevirt-site1-01", vendor: "kubevirt", server_type: "vm", source_provider: "KUBEVIRT" } as const;
+    await setUpServers(page, { servers: mockServers([...FLEET, vm]) });
+    await go(page, PAGE);
+    await expect(page.locator('[data-testid^="ss-filter-"]')).toHaveText([
+      "All (13)", "All (13)", "All (13)", "All sites (13)", "All (13)", "All (13)", "All (13)",
+    ]);
+    await expect(page.locator('[data-testid^="ss-filter-"]').nth(2)).toHaveAttribute("data-testid", "ss-filter-type");
+    await dropdown(page, "Type").click();
+    await expect(page.getByRole("group", { name: "Type values" }).getByRole("checkbox")).toHaveText(["Physical12", "VM1"]);
+    await page.keyboard.press("Escape");
+    await tick(page, "Type", "VM");
+    await expect.poll(() => query(page)).toBe("server_type=vm");
+    await expect.poll(() => names(page)).toEqual([vm.name]);
+    await expect(chips(page)).toHaveText(["Type VM"]);
+    await chips(page).click();
+    await expect.poll(() => query(page)).toBe("");
+    await expect(rows(page)).toHaveCount(13);
+  });
+
   test("server-scan v6.3.0: a ticked severity leaves out servers in maintenance unless Maintenance is ticked too, and its count follows", async ({ page }) => {
     const healthy = FLEET.filter((s) => s.health === "HEALTHY");
     const inService = healthy.filter((s) => !s.maintenance.enabled).map((s) => s.name);

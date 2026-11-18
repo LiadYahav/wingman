@@ -714,3 +714,15 @@ and §9 of `docs/notes/2026-11-13-server-scan-area-api.md` say what changed.
   says "all healthy" when every server in service is healthy (and one is).
   The Overview's fleet health bar, Wingman's own over the same counts, gains
   a maintenance part, so its parts add up to the site's servers.
+- **`a0e29c3` (v6.3.0): `server_type`, physical or VM.** server-scan derives
+  it from the vendor (`vm` for `kubevirt`) and sends it on every row and
+  record. day1 reads it, and sends server-scan's rule over the vendor when
+  an older server-scan does not, so the web always has it. The Servers page
+  gains server-scan's **Type** dropdown between Source and Site
+  (`server_type=` in the URL, a "Type VM" chip); a server's page says
+  Physical or VM beside the model (one muted line, where server-scan puts it
+  under the model); the Sites cards' bars are **Physical**, **VM**, then
+  each physical vendor (no KubeVirt bar), and a bar above zero opens the
+  Servers page with `server_type` or `vendor` added to the card's filter.
+  The fake fleet's rows carry it; the dropdowns wrap to two rows of four
+  below 1536 pixels, where seven no longer fit beside the cluster sidebar.

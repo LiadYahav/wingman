@@ -84,6 +84,8 @@ files:
       - backend/app/api/v1/schemas.py
       - backend/app/api/v1/maintenance_schemas.py
       - backend/app/domain/models/maintenance.py
+      - backend/app/domain/enums/core.py
+      - backend/app/domain/enums/__init__.py
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/sites.py
     upstream: [backend/app/api/v1/sites_schemas.py]
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/record.py

@@ -33,6 +33,8 @@ test.describe("The server's page", () => {
     await setUpServer(page);
     await go(page, PAGE);
     await expect(page.getByTestId("ss-server-model")).toHaveText("PowerEdge R660");
+    // server-scan v6.3.0: physical server or VM, beside the model
+    await expect(page.getByTestId("ss-server-type")).toHaveText("Physical");
     await expect(page.getByRole("link", { name: `Open BMC console for ${NODE}` })).toHaveAttribute("href", "https://192.0.2.101");
     await expect(page.getByRole("button", { name: `Copy server name ${NODE}` })).toBeVisible();
     await expect(tab(page, "Overview")).toHaveAttribute("aria-selected", "true");
@@ -108,6 +110,7 @@ test.describe("The server's page", () => {
     const host = nodeRecord({ id: HOST_ID, name: "ocp-dell-r760-site1-virt-03" });
     await setUpServer(page, { records: [vmRecord(), host] });
     await go(page, `/server-scan/servers/${VM_ID}`);
+    await expect(page.getByTestId("ss-server-type")).toHaveText("VM");
     const vmHost = page.getByTestId("ss-vm-host");
     await expect(vmHost).toContainText("worker-3 · cluster ocp4-prod-virt-site1");
     await expect(vmHost).toContainText("CPU AMD EPYC 9654");

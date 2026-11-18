@@ -21,6 +21,7 @@ from wingman_day1.integrations.server_scan.domain.servers import (
     FleetRows,
     MaintenanceStart,
     ServerMaintenance,
+    server_type_of,
 )
 
 
@@ -43,11 +44,16 @@ class ReservationFlagOut(BaseModel):
 
 
 class ServerRowOut(BaseModel):
-    """One server, every field server-scan's row has."""
+    """One server, every field server-scan's row has.
+
+    ``server_type`` is server-scan's, or its rule over the vendor when an
+    older server-scan did not send it.
+    """
 
     id: str
     name: str
     vendor: str | None
+    server_type: str
     model: str | None
     site_id: str | None
     source_provider: str | None
@@ -75,6 +81,7 @@ class ServerRowOut(BaseModel):
             id=row.id,
             name=row.name,
             vendor=row.vendor,
+            server_type=row.server_type or server_type_of(row.vendor),
             model=row.model,
             site_id=row.site,
             source_provider=row.source_provider,

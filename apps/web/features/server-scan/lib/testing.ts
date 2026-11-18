@@ -15,6 +15,7 @@ export function serverRow(overrides: Partial<ServerRow> = {}): ServerRow {
     id: "srv_1",
     name: "srv-1",
     vendor: "dell",
+    server_type: "physical",
     model: "R760",
     site_id: "tlv",
     source_provider: "OPENMANAGE",
@@ -65,6 +66,7 @@ export function serverRecord(overrides: Partial<ServerRecord> = {}): ServerRecor
     id: "srv_1",
     name: "ocp-dell-worker-000",
     model: "PowerEdge R6515",
+    server_type: "physical",
     profile_template: { name: null, external_id: null },
     identity: { vendor: "dell", serial: "SN123", system_uuid: null, nic_macs: [] },
     hardware: {

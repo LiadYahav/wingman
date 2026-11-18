@@ -13,14 +13,14 @@ import {
   type FlagKey,
   type ServersView,
 } from "@/features/server-scan/lib/servers-view";
-import { HEALTH_SEVERITIES, INSTALLATION_TYPES, OPENSHIFT_STATES, SOURCE_PROVIDERS, VENDORS } from "@/features/server-scan/lib/vocabulary";
+import { HEALTH_SEVERITIES, INSTALLATION_TYPES, OPENSHIFT_STATES, SERVER_TYPES, SOURCE_PROVIDERS, VENDORS } from "@/features/server-scan/lib/vocabulary";
 import { cn } from "@/lib/utils";
 import { MultiSelect } from "./multi-select";
 
 /**
  * The Servers page's filters, as server-scan's page has them
  * (team-redbull/server-scan, `InventoryPage.tsx`, decision 18):
- * the search, six dropdowns with their counts, five toggles, the "Filtered
+ * the search, seven dropdowns with their counts (Type since v6.3.0), five toggles, the "Filtered
  * by:" chips, and the exports. Each control changes the URL's view.
  *
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
@@ -74,7 +74,7 @@ export function ServerSearch({
 /** The Health dropdown's last entry: Maintenance, which keeps only servers in maintenance. */
 const MAINTENANCE_OPTION = "MAINTENANCE";
 
-/** The six dropdowns, each option counted over what every other filter keeps. */
+/** The seven dropdowns, each option counted over what every other filter keeps. */
 export function ServerDropdowns({
   view,
   setView,
@@ -89,7 +89,7 @@ export function ServerDropdowns({
 }) {
   const all = (word = "All") => `${word} (${facets.total.toLocaleString()})`;
   const count = (counts: Record<string, number>, value: string) => counts[value] ?? 0;
-  const multi = (key: "vendor" | "source_provider" | "site_id" | "installation_type" | "openshift_state") => ({
+  const multi = (key: "vendor" | "source_provider" | "server_type" | "site_id" | "installation_type" | "openshift_state") => ({
     selected: view.multi[key],
     onToggle: (value: string) => setView(toggleValue(view, key, value)),
     onClear: () => setView(setValues(view, key, [])),
@@ -108,6 +108,12 @@ export function ServerDropdowns({
         allLabel={all()}
         options={SOURCE_PROVIDERS.map((s) => ({ ...s, count: count(facets.source_provider, s.value) }))}
         {...multi("source_provider")}
+      />
+      <MultiSelect
+        label="Type"
+        allLabel={all()}
+        options={SERVER_TYPES.map((t) => ({ ...t, count: count(facets.server_type, t.value) }))}
+        {...multi("server_type")}
       />
       <MultiSelect
         label="Site"

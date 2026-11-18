@@ -134,7 +134,7 @@ function Fleet({ data, model, error, view, setView, sites }: FleetProps) {
         />
         <section aria-label="Servers" className="min-w-0 flex-1 space-y-3">
           {error !== null && <ProblemList error={error} title="The last re-read failed; these are the servers read before it" />}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-7">
             <ServerDropdowns view={view} setView={setView} facets={model.facets} sites={siteList} />
           </div>
           <ServerToggles view={view} setView={setView} total={model.matched.length} />

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { ServerRow } from "@/features/server-scan/types/server-scan-servers";
 import {
   dropdownFacetCounts,
+  facetCounts,
   filterRows,
   parseSearch,
   searchRows,
@@ -20,6 +21,7 @@ function row(overrides: Partial<ServerRow> = {}): ServerRow {
     id: overrides.name ?? "srv_1",
     name: "srv-1",
     vendor: "dell",
+    server_type: "physical",
     model: "R760",
     site_id: "tlv",
     source_provider: "OPENMANAGE",
@@ -66,6 +68,19 @@ const FLEET = [
 ];
 
 describe("filterRows", () => {
+  // server-scan v6.3.0's case (its a0e29c3): the Type dropdown.
+  it("filters by server type and counts each type", () => {
+    const rows = [
+      row({ name: "phys-1", vendor: "dell" }),
+      row({ name: "vm-1", vendor: "kubevirt", server_type: "vm" }),
+      row({ name: "vm-2", vendor: "kubevirt", server_type: "vm" }),
+    ];
+    expect(filterRows(rows, { server_type: ["vm"] }).map((r) => r.name)).toEqual(["vm-1", "vm-2"]);
+    expect(filterRows(rows, { server_type: [] })).toHaveLength(3);
+    expect(facetCounts(rows).server_type).toEqual({ physical: 1, vm: 2 });
+    expect(dropdownFacetCounts(rows, { server_type: ["vm"] }).server_type).toEqual({ physical: 1, vm: 2 });
+  });
+
   it("matches every set filter and treats blanks as any", () => {
     expect(filterRows(FLEET, { vendor: ["cisco"] }).map((r) => r.name)).toEqual(
       ["srv-2"],

@@ -15,7 +15,7 @@
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
-import type { HealthSeverity, InstallationType, OpenShiftState, Vendor } from "./server-scan";
+import type { HealthSeverity, InstallationType, OpenShiftState, ServerType, Vendor } from "./server-scan";
 import type { MaintenanceState, ReservationState } from "./server-scan-servers";
 
 export type LinkState = "UP" | "DOWN" | "UNKNOWN" | "DISABLED";
@@ -268,6 +268,8 @@ export interface ServerRecord {
   id: string;
   name: string;
   model: string | null;
+  /** server-scan's since v6.3.0; day1 derives it from the vendor for an older one. */
+  server_type: ServerType;
   profile_template: ProfileTemplate;
   identity: ServerIdentity;
   hardware: HardwareInfo;

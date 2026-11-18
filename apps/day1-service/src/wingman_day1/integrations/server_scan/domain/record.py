@@ -11,8 +11,9 @@ strictly; its internals the UI never reads are left out
 Two differences from server-scan's answer: the maintenance keeps its dates
 (Wingman's dialog sets an expected end), and the reservation says whether it
 is ``held``, which server-scan computes for its rows only (``ReservationState``).
-A field server-scan added later (``unreachable_detail``, v5.3.1) has a
-default, so an older server-scan's record still reads.
+A field server-scan added later (``unreachable_detail``, v5.3.1;
+``server_type``, v6.3.0) has a default, so an older server-scan's record
+still reads. ``revision`` moves only when the server's content changes.
 
 What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
 """
@@ -228,6 +229,8 @@ class ServerRecord(BaseModel):
     id: str
     name: str
     model: str | None
+    server_type: str | None = None
+    """``physical`` or ``vm`` (server-scan v6.3.0); ``None`` from an older one."""
     profile_template: ProfileTemplate
     identity: Identity
     hardware: Hardware

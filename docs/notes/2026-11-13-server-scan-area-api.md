@@ -62,10 +62,15 @@ its navigation.
   `N installed` and `N available` (each above zero) from its own
   `by_openshift_state`. Last, a bar per vendor (Dell, Cisco, HPE,
   Standalone, KubeVirt), as wide as its share of the card's own total, with
-  its count; an empty card has none.
+  its count; an empty card has none. Since v6.3.0 (its `a0e29c3`; Wingman
+  3.45.0) **Physical** and **VM** lead them (VM is the `kubevirt` count,
+  Physical the total less it), then the physical vendors, with no KubeVirt
+  bar.
 - **Every count is a link into Servers**: the card's filter plus
   `health_overall=<SEVERITY>`, `maintenance=true` or
-  `openshift_state=<STATE>` (`/servers?site_id=tlv&health_overall=CRITICAL`).
+  `openshift_state=<STATE>` (`/servers?site_id=tlv&health_overall=CRITICAL`);
+  since v6.3.0 a bar above zero too, with `server_type=physical|vm` or
+  `vendor=<vendor>`.
 - **Refresh**: one `GET /api/v1/sites`. Not polled: TanStack Query's
   `staleTime` is 30 seconds with `refetchOnWindowFocus` off, so the page reads
   again when it is opened after 30 seconds. (Its Servers page polls every
@@ -276,10 +281,11 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   It looks at the name, model, serial, vendor, site, installation type, BMC
   host, a held reservation's MCE and the MACs (a hex-looking query also
   matches a MAC without its separators).
-- **Six dropdowns** of checkboxes, each option with how many servers ticking
+- **Seven dropdowns** of checkboxes, each option with how many servers ticking
   it would show (its count over what every *other* filter keeps): Vendor,
   Source (the collector: UCS Central, Intersight, OpenManage (Dell), OneView
-  (HPE), Standalone (Redfish), KubeVirt (VMs)), Site (server-scan's sites,
+  (HPE), Standalone (Redfish), KubeVirt (VMs)), **Type** (Physical or VM,
+  `server_type`; since v6.3.0, its `a0e29c3`), Site (server-scan's sites,
   from `/sites`), Classification (`installation_type`), Installation
   (Installed, In inventory, Available) and Health (the five severities, then
   Maintenance, which keeps only servers in maintenance). Several values of one
@@ -314,7 +320,7 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   last; State by severity. A left edge marks critical, major and warning rows.
 - **Paging**: 50 rows a page, Previous, "Page X of Y", Next.
 - **Everything in the URL**, so a link or a refresh lands on the same view:
-  `search`, `vendor`, `site_id`, `source_provider`, `installation_type`,
+  `search`, `vendor`, `server_type`, `site_id`, `source_provider`, `installation_type`,
   `openshift_state`, `health_overall` (each repeated for several values),
   `maintenance` (`true`: only those; `exclude`: hide them), `stale`,
   `duplicate`, `contested`, `name_mismatch`, `donor` (`true`), `mce`,
@@ -332,7 +338,7 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
 
 | Call | Token | Answer |
 |---|---|---|
-| `GET /api/v1/servers/rows` | any (viewer) | `{items: ServerRow[], generated_at}`: every server, 22 fields each (`id`, `name`, `vendor`, `model`, `site_id`, `source_provider`, `installation_type`, `health`, `maintenance` {`enabled`, `reason`, `created_by`}, `reservation` {`held`, `holder`, `mce_cluster`, `infra_env`, `expires_at`}, `openshift_state`, `cluster_name`, `mce_name`, `openshift_reported_name`, `contested_with`, `profile_template_name`, `last_seen_at`, `stale`, `reachable`, `serial`, `bmc_host`, `macs`). A weak `ETag` over the body and `Cache-Control: no-cache`; `If-None-Match` with it is a bodiless `304`. Cached by server-scan, cleared by its writes |
+| `GET /api/v1/servers/rows` | any (viewer) | `{items: ServerRow[], generated_at}`: every server, 23 fields each (`id`, `name`, `vendor`, `server_type` (since v6.3.0: `physical`, or `vm` for a KubeVirt VM; derived from the vendor, never stored), `model`, `site_id`, `source_provider`, `installation_type`, `health`, `maintenance` {`enabled`, `reason`, `created_by`}, `reservation` {`held`, `holder`, `mce_cluster`, `infra_env`, `expires_at`}, `openshift_state`, `cluster_name`, `mce_name`, `openshift_reported_name`, `contested_with`, `profile_template_name`, `last_seen_at`, `stale`, `reachable`, `serial`, `bmc_host`, `macs`). A weak `ETag` over the body and `Cache-Control: no-cache`; `If-None-Match` with it is a bodiless `304`. Cached by server-scan, cleared by its writes |
 | `GET /api/v1/sites` | any (viewer) | The Site dropdown's options: names and order (§2) |
 | `PUT /api/v1/servers/{id}/maintenance` | admin | Body `{reason?, expected_end?}`. Puts the server into maintenance, or updates the reason of one already in it; answers the server (`ServerDetail`). Its event and `created_by` name the caller: for a static token, `api-token-admin` |
 | `DELETE /api/v1/servers/{id}/maintenance` | admin | Ends it; answers the server |
@@ -350,7 +356,7 @@ shape, plus whether the maintenance toggle works here:
   "items": [
     {
       "id": "srv_…", "name": "ocp-dell-r660-site1-…", "vendor": "dell",
-      "model": "PowerEdge R660", "site_id": "site1", "source_provider": "OPENMANAGE",
+      "server_type": "physical", "model": "PowerEdge R660", "site_id": "site1", "source_provider": "OPENMANAGE",
       "installation_type": "HOSTED_CLUSTER", "health": "HEALTHY",
       "maintenance": {"enabled": false, "reason": null, "created_by": null},
       "reservation": {"held": false, "holder": null, "mce_cluster": null, "infra_env": null, "expires_at": null},
@@ -372,7 +378,10 @@ shape, plus whether the maintenance toggle works here:
   `bmc_host`, the maintenance's `reason` and `created_by`, and
   `contested_with`'s value). The rows keep server-scan's order. A
   reservation is `held` as server-scan judged it when day1 read it; one not
-  held has every other field null.
+  held has every other field null. **`server_type`** is server-scan's (v6.3.0);
+  from an older server-scan, which does not send it, day1 sends its rule
+  over the vendor (`vm` for `kubevirt`, else `physical`), so the field is
+  always there.
 - **`maintenance_available`** is whether the toggle works in this deployment
   (§8.4); `maintenance_detail` says why not, in one line, else `null`.
 - **One cache, two `304`s.** The rows come from the cache the Nodes tab,
@@ -470,7 +479,7 @@ maintenance:
   `disable_maintenance`, with `ok`, `denied` (the admin token refused),
   `not_found`, `rejected` (its `422`), `unavailable` and `ambiguous`.
 - **The fake** (`DAY1_FAKE_FLEET=true`): its rows are read from
-  `dev/fleet-fixtures/servers.yaml` with all 22 fields; its writes change the
+  `dev/fleet-fixtures/servers.yaml` with all 23 fields; its writes change the
   row (by `dev`, as server-scan with auth off records it), and no token is
   needed, as on the sandbox.
 
@@ -533,7 +542,9 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/server
   was opened from, else the unfiltered list), the server's name with a copy
   button, a **BMC** button opening `https://<bmc host>` in a new tab (none
   without a host), and the model under the name: the chassis model, else the
-  GPUs' short name with "(from GPU)" (`inferredGpuModel`), else "—".
+  GPUs' short name with "(from GPU)" (`inferredGpuModel`), else "—". Since
+  v6.3.0 a line under it says **Physical** or **VM** (`server_type`); Wingman
+  puts it beside the model, in the same muted line.
 - **Five tabs**: Overview, Hardware, Network, Connectivity, History. History
   is shown only to a person who may read the audit trail (an auditor or an
   admin). The tab is component state, not in the URL.
@@ -704,6 +715,9 @@ plus whether the maintenance toggle and History work here:
   A list or object server-scan leaves out on an older document
   (`health.reasons`, `storage.controllers`, `storage.raid`) is sent as empty
   or `null`.
+- **`server_type`** (v6.3.0, 3.45.0) is `physical` or `vm`, as the rows'
+  (§8.3): server-scan's, or day1's rule over `identity.vendor` from an
+  older server-scan.
 - **`unreachable_reason`** is server-scan's word for why the last collection
   failed (`network_unreachable`, `auth_rejected`, `tls_error`, `timeout`,
   `protocol_error`, `not_an_idrac`, and since v5.3.1 `collection_error`),

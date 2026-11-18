@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { CopyButton } from "@/components/data-table/copy-cell";
 import { modelLine } from "@/features/server-scan/lib/hardware";
+import { serverTypeLabel } from "@/features/server-scan/lib/vocabulary";
 import type { ServerRecord } from "@/features/server-scan/types/server-scan-record";
 import { useServersBackHref } from "./use-server-page";
 
@@ -41,7 +42,11 @@ function BmcButton({ host, name }: { host: string | null; name: string }) {
   );
 }
 
-/** server-scan's header: the name with its copy button, the BMC console, the model under them. */
+/**
+ * server-scan's header: the name with its copy button, the BMC console, the
+ * model under them, and whether it is a physical server or a VM (v6.3.0's
+ * `server_type`), beside the model in one muted line.
+ */
 export function ServerHeader({ record }: { record: ServerRecord }) {
   return (
     <header className="space-y-1">
@@ -55,8 +60,10 @@ export function ServerHeader({ record }: { record: ServerRecord }) {
         </div>
         <BmcButton host={record.network.bmc.host} name={record.name} />
       </div>
-      <p className="text-sm text-muted-foreground" data-testid="ss-server-model">
-        {modelLine(record.model, record.hardware.gpus)}
+      <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+        <span data-testid="ss-server-model">{modelLine(record.model, record.hardware.gpus)}</span>
+        <span aria-hidden>·</span>
+        <span data-testid="ss-server-type">{serverTypeLabel(record.server_type)}</span>
       </p>
     </header>
   );

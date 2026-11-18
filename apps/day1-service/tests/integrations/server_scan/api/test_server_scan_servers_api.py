@@ -38,6 +38,7 @@ ROW_FIELDS = {
     "id",
     "name",
     "vendor",
+    "server_type",
     "model",
     "site_id",
     "source_provider",
@@ -125,6 +126,7 @@ async def test_every_row_has_server_scans_shape_and_order(
     assert [item["name"] for item in body["items"]] == sorted(row.name for row in rows)
     assert all(set(item) == ROW_FIELDS for item in body["items"])
     first = body["items"][0]
+    assert {item["server_type"] for item in body["items"]} == {"physical"}
     assert set(first["maintenance"]) == {"enabled", "reason", "created_by"}
     assert set(first["reservation"]) == {"held", "holder", "mce_cluster", "infra_env", "expires_at"}
     assert body["generated_at"] is not None

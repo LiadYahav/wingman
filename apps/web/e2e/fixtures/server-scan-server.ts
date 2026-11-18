@@ -26,6 +26,7 @@ export function nodeRecord(overrides: Partial<ServerRecord> = {}): ServerRecord 
     id: NODE_ID,
     name: NODE,
     model: "PowerEdge R660",
+    server_type: "physical",
     profile_template: { name: "R660-Standard", external_id: "tmpl-r660" },
     identity: { vendor: "dell", serial: "DL0101", system_uuid: "4c4c4544-0101", nic_macs: ["02:00:00:00:01:01", "02:00:00:00:01:02"] },
     hardware: {
@@ -172,6 +173,7 @@ export function vmRecord(): ServerRecord {
     id: VM_ID,
     name: "vm-ocp-virt-01",
     model: null,
+    server_type: "vm",
     profile_template: { name: null, external_id: null },
     identity: { ...base.identity, vendor: "kubevirt", serial: null },
     hardware: { ...base.hardware, gpus: [] },

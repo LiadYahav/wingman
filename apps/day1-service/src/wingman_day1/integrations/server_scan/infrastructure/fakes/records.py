@@ -25,6 +25,7 @@ import yaml
 
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.integrations.server_scan.domain.record import ServerRecord
+from wingman_day1.integrations.server_scan.domain.servers import server_type_of
 
 RECORDS_FILE: Final = Path("dev/fleet-fixtures/server-records.yaml")
 CREATED_AT: Final = datetime(2026, 9, 1, 6, tzinfo=UTC)
@@ -189,6 +190,7 @@ def _identity(row: ServerRow, model: Mapping[str, Any]) -> JSONish:
         "id": row.id,
         "name": row.name,
         "model": row.model,
+        "server_type": row.server_type or server_type_of(row.vendor),
         "profile_template": {"name": template, "external_id": template and f"tmpl-{template}"},
         "identity": {
             "vendor": row.vendor or "standalone",

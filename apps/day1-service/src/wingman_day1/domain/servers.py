@@ -39,6 +39,8 @@ class ServerRow:
     """The overall verdict; ``UNKNOWN`` is not a verdict."""
     serial: str | None = None
     vendor: str | None = None
+    server_type: str | None = None
+    """``physical`` or ``vm``, as server-scan v6.3.0 sends it; ``None`` from an older one."""
     model: str | None = None
     site: str | None = None
     cluster_name: str | None = None

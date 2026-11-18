@@ -115,7 +115,7 @@ test.describe("The Sites page", () => {
     await expect(all.getByTestId("ss-card-state")).toHaveCount(0);
   });
 
-  test("a card per site: its counts, installed and available, a bar per vendor; Unassigned only with servers", async ({ page }) => {
+  test("a card per site: its counts, installed and available, Physical, VM and a bar per vendor; Unassigned only with servers", async ({ page }) => {
     await setUpServerScan(page);
     await go(page, "/server-scan");
     const sites = section(page, "Sites");
@@ -124,13 +124,14 @@ test.describe("The Sites page", () => {
     await expect(site1.getByTestId("ss-card-total")).toHaveText("32");
     await expect(counts(site1)).toHaveText(["◆2 critical", "⬟1 major", "▲1 warning", "⏸1 in maintenance"]);
     await expect(site1.getByTestId("ss-card-state")).toHaveText(["22 installed", "4 available"]);
-    await expect(site1.getByTestId("ss-card-vendor")).toHaveText(["Dell18", "Cisco6", "HPE8", "Standalone0", "KubeVirt0"]);
+    // server-scan v6.3.0: Physical, then VM, then the physical vendors; KubeVirt is the VM row
+    await expect(site1.getByTestId("ss-card-bar")).toHaveText(["Physical32", "VM0", "Dell18", "Cisco6", "HPE8", "Standalone0"]);
     await expect(card(page, "Site 2")).toContainText("all healthy");
     // A configured site with no server is shown at 0, not left out
     const site3 = card(page, "Site 3");
     await expect(site3.getByTestId("ss-card-total")).toHaveText("0");
     await expect(site3).toContainText("empty");
-    await expect(site3.getByTestId("ss-card-vendor")).toHaveCount(0);
+    await expect(site3.getByTestId("ss-card-bar")).toHaveCount(0);
     const unassigned = card(page, "Unassigned");
     await expect(unassigned).toContainText("no site in hostname");
     await expect(unassigned.getByTestId("ss-card-state")).toHaveText(["2 available"]);
@@ -152,6 +153,12 @@ test.describe("The Sites page", () => {
       "site_id=site1&maintenance=true"
     );
     await expect(site1.getByTestId("ss-card-state").first()).toHaveAttribute("data-filter", "site_id=site1&openshift_state=INSTALLED");
+    // The Physical, VM and vendor bars above zero open their servers; one at zero is no link
+    const bar = (key: string) => site1.locator(`[data-testid="ss-card-bar"][data-bar="${key}"]`);
+    await expect(bar("physical")).toHaveAttribute("href", "/server-scan/servers?site_id=site1&server_type=physical");
+    await expect(bar("dell")).toHaveAttribute("href", "/server-scan/servers?site_id=site1&vendor=dell");
+    await expect(bar("vm")).not.toHaveAttribute("href", /.*/);
+    await expect(bar("cisco")).toHaveAttribute("data-filter", "site_id=site1&vendor=cisco");
   });
 
   test("skeleton cards while server-scan answers, then the cards", async ({ page }) => {

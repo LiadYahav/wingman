@@ -11,7 +11,7 @@
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
-import type { HealthSeverity, InstallationType, OpenShiftState, Vendor } from "./server-scan";
+import type { HealthSeverity, InstallationType, OpenShiftState, ServerType, Vendor } from "./server-scan";
 
 /** A server's maintenance, as a row carries it. */
 export interface MaintenanceState {
@@ -40,6 +40,8 @@ export interface ServerRow {
   id: string;
   name: string;
   vendor: Vendor;
+  /** server-scan's since v6.3.0; day1 derives it from the vendor for an older one. */
+  server_type: ServerType;
   model: string | null;
   /** The code in the name, or null when the name carries no site (Unassigned). */
   site_id: string | null;
