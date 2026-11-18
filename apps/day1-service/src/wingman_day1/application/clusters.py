@@ -96,6 +96,8 @@ from wingman_day1.ports import ClusterProvisioner, ProvisionWorkflow, RepoReads
 logger = logging.getLogger(__name__)
 
 MAX_LIST_CONCURRENCY = 16
+_CREATE_CLUSTER = (Repo.DAY1, Verb.CREATE, ResourceType.CLUSTER)
+"""What an MR title that creates a cluster says (ADR-0007)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -517,15 +519,12 @@ class ClusterService:
             self._day1.merge_requests(state=MRState.OPENED, labels=(WINGMAN_LABEL,)),
             provision_merge_requests(self._day1),
         )
-        creates: list[tuple[str, str]] = []
-        for merge_request in labelled:
-            title = parse_mr_title(merge_request.title)
-            if title is not None and (title.repo, title.verb, title.resource_type) == (
-                Repo.DAY1,
-                Verb.CREATE,
-                ResourceType.CLUSTER,
-            ):
-                creates.append((title.resource_name, merge_request.web_url))
+        creates = [
+            (title.resource_name, merge_request.web_url)
+            for merge_request in labelled
+            if (title := parse_mr_title(merge_request.title)) is not None
+            and (title.repo, title.verb, title.resource_type) == _CREATE_CLUSTER
+        ]
         creates += [(p.stem, p.merge_request.web_url) for p in provisions]
         return creates
 
