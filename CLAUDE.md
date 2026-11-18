@@ -185,29 +185,36 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-18 — 3.48.0: Server Scan at server-scan v6.6.0.**
-- **The sync** (ADR-0048's 2026-11-18 amendment; `scripts/upstream_diff.py
-  server-scan v6.6.0`, the map's `synced_at: v6.6.0`): a ticked severity
-  leaves out servers in maintenance and the sites count them apart (v6.3.0);
-  `server_type` and the Type filter, Physical, VM and vendor bars on the
-  Sites cards (v6.3.0); the BMC copy button and a health bar per card
-  (v6.2.0); the Servers and Events tables scroll in their own box (v6.4.0,
-  v6.6.0).
-- **Fetch now** (v6.5.0, v6.6.0), the area's third write: `POST
-  /api/day1/server-scan/servers/{id}/refresh`, `AdminUser` as server-scan
-  keeps it, the admin token, sent once, a 120-second wait under nginx's new
-  130-second location, `409 SERVER_REFRESH_REFUSED` in server-scan's words;
-  on a server's page and first on every Servers row. Off by default
-  (`DAY1_SERVER_SCAN_REFRESH`, the chart's `day1.serverScanRefresh.enabled`;
-  needs server-scan v6.5.0 or later): no button until it is on. Not yet
-  tried against the sandbox's server-scan.
-- **server-scan's own colours** (the user's request): the Servers table, a
-  server's page and the Sites cards wear its palette
-  (`features/server-scan/palette.css`, its dark values, light equivalents),
-  its cells, icons and filter bar.
+**2026-11-18 — 3.44.8 to 3.48.0: flavors, Scale, nodepools from several InfraEnvs, Server Scan at v6.6.0.**
+- **Flavors** (3.44.8, 3.45.0): a flavor's Overview stacks Metadata over
+  Cluster inputs, each the page's width; a flavor may carry the cluster's
+  image mirrors, optional (`image_content_sources`, `disable_idms_merge` →
+  `imageContentSources`, `disableIdmsMerge`; ADR-0063). The specs project's
+  `cluster-template.j2` needs the lines in `docs/upgrade/3.44-to-3.45.md`
+  before a flavor may set them.
+- **Scale follows update-nodepool** (3.45.1, 3.46.0; ADR-0062's two
+  2026-11-18 amendments): one NodePool a run, the by-kind mode is gone; a
+  scale-down may pick the servers that leave (`server_names`). The
+  workflows branch is not merged; its inventory follow-ups are in the
+  session log's Scale entry.
+- **A nodepool may draw from several InfraEnvs** (3.47.0, ADR-0064, off:
+  `DAY1_MULTI_INFRAENV_NODEPOOLS`): `infraEnvName` stays first and names
+  the NodePool, the others in `additionalInfraEnvNames`; the chart renders
+  `matchExpressions: In`. Needs the hostedclusters-setup chart change (a
+  patch is drafted, not proposed yet) and the template lines in
+  `docs/upgrade/3.46-to-3.47.md`. herzi skips such a NodePool's demand.
+- **Server Scan at server-scan v6.6.0** (3.48.0, ADR-0048's 2026-11-18
+  amendment, map `synced_at: v6.6.0`): server types, maintenance apart from
+  health, server-scan's own colours on the Servers table, a server's page
+  and the Sites cards; Fetch now behind `DAY1_SERVER_SCAN_REFRESH` (off).
+  Tried once on the sandbox: Wingman's call reached server-scan, which
+  refused it (409) because no vendor manager is connected there.
 
 **Next:**
-- When the workflows branch merges: the inventory follow-ups above.
+- The hostedclusters-setup chart change for `additionalInfraEnvNames`, and
+  a herzi rule for such NodePools; then turn the setting on.
+- When the workflows branch merges: the inventory follow-ups in the session
+  log's Scale entry.
 - Scale's scale-down policy per NodePool (the user): a flavor and
   create-form choice that `cluster-template.j2` writes as the entry's
   annotation (the specs project's template needs it too); more in
