@@ -1,16 +1,16 @@
 /**
  * Scaling a cluster's NodePools through the platform's update-nodepool
- * workflow (ADR-0062 and its 2026-11-16 amendment), on the cluster page's
- * Nodes tab: a stepper on each NodePool's card from the MCE (its exact
- * replicas, matched by name), or on its NodePool sizes row when there are no
- * cards (live status off); a hardware type's total in a small dialog; one
- * change at a time; Scale up and Scale down each confirmed first, a
+ * workflow (ADR-0062 and its amendments), on the cluster page's Nodes tab: a
+ * stepper on each NodePool's card from the MCE (its exact replicas, matched
+ * by name), or on its NodePool sizes row when there are no cards (live
+ * status off); one NodePool a run, so no hardware type total (2026-11-18);
+ * one change at a time; Scale up and Scale down each confirmed first, a
  * scale-down with the nodes its NodePool's scale-down policy removes; the
- * run in place (the workflow's phases, its child's, the plan and
- * the servers a scale-down chose), refusals and failures in words, a
- * NodePool whose replicas a flavor locks, and a flavor sync's replicas
- * restored by their own run. Scaling off, or a viewer: no steppers. Every
- * API is mocked.
+ * run in place (the workflow's phases, its child's, the plan, the servers a
+ * scale-down chose, what a run ignored, and a run recorded by kind before
+ * then), refusals and failures in words, a NodePool whose replicas a flavor
+ * locks, and a flavor sync's replicas restored by their own run. Scaling
+ * off, or a viewer: no steppers. Every API is mocked.
  */
 import { test, expect, type Page, type Route } from "@playwright/test";
 import {
@@ -49,8 +49,8 @@ const DETAIL: ClusterDetail = {
 };
 
 /**
- * Two zones of one kind (zone-b removes its nodes by fewest-pods, zone-a has no policy), a locked NodePool whose
- * file holds 3 (the flavor locks 2), and one that cannot be named.
+ * Two zones (zone-b removes its nodes by fewest-pods, zone-a has no policy), a locked NodePool whose file holds 3
+ * (the flavor locks 2), and one that cannot be named.
  */
 const OPTIONS: ScaleOptions = {
   cluster: LARK, mce: MCE, flavor: FLAVOR,
@@ -72,12 +72,6 @@ const OPTIONS: ScaleOptions = {
       unnamed: "nodepool[3] has neither name nor infraEnvName: its NodePool cannot be named", scale_down_policy: null,
     },
   ],
-  kinds: [
-    { kind: "dell-r660-site1-zone", nodepools: [ZONE_A, ZONE_B], total: 6, locked: [] },
-    { kind: "dell-r660-site1-zone-a", nodepools: [ZONE_A], total: 3, locked: [] },
-    { kind: "dell-r660-site1-zone-b", nodepools: [ZONE_B], total: 3, locked: [] },
-    { kind: "dell-r760-site1", nodepools: [R760], total: 3, locked: [R760] },
-  ],
 };
 
 const run = (overrides: Partial<ScaleRun> = {}): ScaleRun => ({
@@ -85,7 +79,10 @@ const run = (overrides: Partial<ScaleRun> = {}): ScaleRun => ({
   ...overrides,
 });
 
-/** A scale-down of zone-b by fewest-pods, done: the plan, the server chosen and the commit. */
+/**
+ * A run recorded by InfraEnv kind before 2026-11-18 (a total over the zones), done: zone-b lost a node by
+ * fewest-pods. The plan, the server chosen and the commit still show.
+ */
 const DONE: ScaleRun = run({
   status: "completed", phase: "completed", direction: "down",
   result: {
@@ -98,6 +95,19 @@ const DONE: ScaleRun = run({
     live: [{ name: ZONE_B, replicas: 2, ready_replicas: 3 }],
     chosen: [{ nodepool: ZONE_B, machine: `${ZONE_B}-7xk2p`, node: "worker-7", policy: "fewest-pods", reason: "1 workload pods" }],
     deleting: [`${ZONE_B}-7xk2p`],
+    ignored: [],
+  },
+});
+
+/** A scale-up of zone-a by name, done, whose request also named a server to remove: unused, and said so. */
+const UP_IGNORING: ScaleRun = run({
+  status: "completed", phase: "completed", direction: "up",
+  result: {
+    ...(DONE.result as NonNullable<ScaleRun["result"]>),
+    infra_env_kind: null, nodepool: ZONE_A, direction: "up", total_before: 3, total_after: 4,
+    nodepools: [{ name: ZONE_A, infra_env: "dell-r660-site1-zone-a", before: 3, after: 4, scale_down_policy: null }],
+    child_workflow_id: `scale-up-nodepool-${LARK}`, live: [{ name: ZONE_A, replicas: 4, ready_replicas: 3 }], chosen: [], deleting: [],
+    ignored: ["server_names ocp-r660-site1-hp0001592: the NodePool scales up"],
   },
 });
 
@@ -162,12 +172,11 @@ async function openNodes(
   await go(page, `/clusters/${LARK}?site=${SITE}&mce=${MCE}&tab=${tab}`);
 }
 
-/** A NodePool's or a hardware type's stepper, by the name its group says. */
+/** A NodePool's stepper, by the name its group says. */
 const stepper = (page: Page, name: string) => page.getByRole("group", { name: `${name} replicas`, exact: true });
 const field = (page: Page, name: string) => stepper(page, name).getByRole("spinbutton");
 const more = (page: Page, name: string) => page.getByRole("button", { name: `One replica more for ${name}`, exact: true });
 const fewer = (page: Page, name: string) => page.getByRole("button", { name: `One replica fewer for ${name}`, exact: true });
-const ZONES = "dell-r660-site1-zone";
 const card = (page: Page, name: string) => page.getByTestId(`node-pool-${name}`);
 /** The confirmation every scale opens, and its Yes. */
 const confirmation = (page: Page) => page.getByTestId("scale-confirm");
@@ -188,14 +197,13 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
   });
 
-  test("a viewer sees the sizes and the run, with no steppers, no Restore and no hardware type", async ({ page }) => {
+  test("a viewer sees the sizes and the run, with no steppers and no Restore", async ({ page }) => {
     await openNodes(page, scaleOf({ run: DONE }), { viewer: true });
     await expect(page.getByTestId("scale-pool-0")).toContainText("3 replicas");
     await expect(page.getByTestId("scale-pool-2")).toContainText(`Locked by flavor ${FLAVOR} at 2`);
     await expect(page.getByTestId("scale-pool-3")).toContainText(/1 replica(?!s)/);
     await expect(page.getByTestId("scale-run")).toBeVisible();
     await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
-    await expect(page.getByTestId("scale-kind-action")).toHaveCount(0);
     await expect(page.getByTestId("restore-replicas")).toHaveCount(0);
   });
 
@@ -243,7 +251,6 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
     await expect(page.getByTestId("scale-pool-0")).toContainText("3 replicas");
     await expect(page.getByTestId("scale-pending")).toHaveCount(0);
-    await expect(page.getByTestId("scale-kind-action")).toBeDisabled();
   });
 
   test("a number can be typed, and the arrow keys step it by one", async ({ page }) => {
@@ -267,7 +274,7 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(page.getByTestId("scale-pending")).toHaveCount(0);
   });
 
-  test("one change at a time: changing a stepper, or a hardware type's total, puts every other back", async ({ page }) => {
+  test("one change at a time: changing a stepper puts every other back; there is no hardware type total", async ({ page }) => {
     await openNodes(page, scaleOf());
     await more(page, ZONE_A).click();
     await fewer(page, ZONE_B).click();
@@ -275,21 +282,9 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(field(page, ZONE_B)).toHaveValue("2");
     await expect(page.getByTestId("scale-pending")).toHaveCount(1);
     await expect(page.getByTestId("scale-pool-1").getByTestId("scale-change")).toHaveText("Replicas 3 → 2 (−1)");
-
-    // The hardware type's total is the change now
-    await page.getByTestId("scale-kind-action").click();
-    const dialog = page.getByTestId("scale-kind-dialog");
-    await more(page, ZONES).click();
-    await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 7 (+1)");
-    await expect(page.getByTestId("scale-announce")).toHaveText(`${ZONES} total: 6 → 7 (+1)`);
     await expect(page.locator('[data-testid="scale-stepper"][data-changed="true"]')).toHaveCount(1);
-    await expect(page.getByTestId("scale-pending")).toHaveCount(0);
-    // Cancel drops it, and returns to the button that opened it
-    await dialog.getByTestId("scale-kind-cancel").click();
-    await expect(dialog).toHaveCount(0);
-    await expect(page.getByTestId("scale-kind-action")).toBeFocused();
-    await expect(field(page, ZONE_B)).toHaveValue("3");
-    await expect(page.locator('[data-testid="scale-stepper"][data-changed="true"]')).toHaveCount(0);
+    // update-nodepool sets one NodePool a run: nothing offers a total over a hardware type
+    await expect(page.getByRole("button", { name: /hardware type/i })).toHaveCount(0);
 
     // A NodePool's Cancel returns to its field
     await more(page, ZONE_A).click();
@@ -360,7 +355,7 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
       ["newest-first", "Would remove 2 nodes by the scale-down policy “newest-first”, which the workflow does not know: the workflow will refuse it."],
     ];
     const nodepools = policies.map(([policy], index) => ({ ...OPTIONS.nodepools[0], index, name: `${ZONE_A}-${index}`, scale_down_policy: policy }));
-    const scale = scaleOf({ options: { ...OPTIONS, nodepools, kinds: [] } });
+    const scale = scaleOf({ options: { ...OPTIONS, nodepools } });
     await openNodes(page, scale);
     for (const [index, [, words]] of policies.entries()) {
       await field(page, `${ZONE_A}-${index}`).fill("1");
@@ -382,98 +377,6 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     const unnamed = page.getByTestId("scale-pool-3");
     await expect(unnamed.getByTestId("scale-stepper")).toHaveCount(0);
     await expect(unnamed).toContainText("its NodePool cannot be named");
-  });
-
-  test("a hardware type's total, in its dialog: spread by the workflow, sent as the kind's", async ({ page }) => {
-    const scale = scaleOf();
-    await openNodes(page, scale);
-    await page.getByTestId("scale-kind-action").click();
-    const dialog = page.getByTestId("scale-kind-dialog");
-    await expect(dialog.getByRole("heading", { name: "Scale a hardware type" })).toBeVisible();
-    // Only the types over two or more NodePools: the r760's has one
-    await expect(dialog.getByTestId("scale-kind")).toHaveCount(1);
-    await expect(dialog.getByRole("radio", { name: new RegExp(`^${ZONES}`) })).toBeChecked();
-    await expect(dialog.getByTestId("scale-kind")).toContainText("2 NodePools · 6 replicas");
-    await expect(field(page, ZONES)).toHaveValue("6");
-    await more(page, ZONES).click();
-    await more(page, ZONES).click();
-    await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 8 (+2)");
-    await dialog.getByTestId("scale-start").click();
-    // Confirmed over the dialog: the total, and that the workflow spreads it
-    const confirm = confirmation(page);
-    await expect(confirm.getByRole("heading", { name: `Scale up ${ZONES}?` })).toBeVisible();
-    await expect(confirm.getByTestId("scale-confirm-change")).toHaveText("6 → 8 in total over 2 NodePools; the workflow spreads it");
-    const points = confirm.getByTestId("scale-confirm-points");
-    await expect(points).toContainText("Adds 2 nodes: each takes a free server of this hardware type; with none free, it waits until one is added.");
-    await expect(points).toContainText("Done when the NodePools show the new sizes; new nodes join after they install.");
-    expect(scale.starts).toEqual([]);
-    await yes(page).click();
-    await expect(confirm).toHaveCount(0);
-    await expect(dialog).toHaveCount(0);
-    await expect(page.getByTestId("scale-run-phase")).toHaveText("Pending");
-    expect(scale.starts).toEqual([{ infra_env_kind: ZONES, replicas: 8 }]);
-    await expect(page.getByTestId("scale-run")).toBeFocused();
-  });
-
-  test("a hardware type's scale-down is confirmed over its dialog, with each NodePool's policy; Escape closes only the confirmation", async ({ page }) => {
-    const scale = scaleOf();
-    await openNodes(page, scale);
-    await page.getByTestId("scale-kind-action").click();
-    const dialog = page.getByTestId("scale-kind-dialog");
-    await field(page, ZONES).fill("5");
-    await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 5 (\u22121)");
-    await dialog.getByTestId("scale-start").click();
-    const confirm = confirmation(page);
-    await expect(confirm.getByRole("heading", { name: `Scale down ${ZONES}?` })).toBeVisible();
-    await expect(confirm.getByTestId("scale-confirm-change")).toHaveText("6 → 5 in total over 2 NodePools; the workflow spreads it");
-    // The zones' policies differ: each one's, under the line
-    await expect(confirm.getByTestId("scale-confirm-leaving")).toContainText(
-      `Removes 1 node; in each NodePool that loses one, its own scale-down policy picks which. ${UNHEALTHY}`
-    );
-    await expect(confirm.getByTestId("scale-confirm-pool")).toHaveText([
-      `${ZONE_A}: picked at random by CAPI (the day1 file sets no policy)`,
-      `${ZONE_B}: the nodes running the fewest pods (fewest-pods)`,
-    ]);
-    expect(scale.starts).toEqual([]);
-
-    // Escape closes the confirmation only: the dialog keeps its total
-    await page.keyboard.press("Escape");
-    await expect(confirm).toHaveCount(0);
-    await expect(dialog).toBeVisible();
-    await expect(field(page, ZONES)).toHaveValue("5");
-    await expect(dialog.getByTestId("scale-start")).toBeFocused();
-    expect(scale.starts).toEqual([]);
-
-    await dialog.getByTestId("scale-start").click();
-    await yes(page).click();
-    await expect(dialog).toHaveCount(0);
-    expect(scale.starts).toEqual([{ infra_env_kind: ZONES, replicas: 5 }]);
-  });
-
-  test("a hardware type that selects a locked NodePool cannot be scaled; with none over two NodePools, no button", async ({ page }) => {
-    const lockedB: ScaleOptions = {
-      ...OPTIONS,
-      nodepools: OPTIONS.nodepools.map((p) => (p.name === ZONE_B ? { ...p, locked_by: FLAVOR, locked_replicas: 3 } : p)),
-      kinds: OPTIONS.kinds.map((k) => (k.kind === ZONES ? { ...k, locked: [ZONE_B] } : k)),
-    };
-    const scale = scaleOf({ options: lockedB });
-    await openNodes(page, scale);
-    await page.getByTestId("scale-kind-action").click();
-    const dialog = page.getByTestId("scale-kind-dialog");
-    const radio = dialog.getByRole("radio", { name: new RegExp(`^${ZONES}`) });
-    await expect(radio).toBeDisabled();
-    await expect(radio).toHaveAccessibleDescription(`Locked by flavor ${FLAVOR}: it selects ${ZONE_B}, whose replicas the flavor fixes.`);
-    // Listed, not offered: its total as text, no stepper
-    await expect(dialog.getByTestId("scale-stepper")).toHaveCount(0);
-    await expect(dialog.getByTestId("scale-kind-total")).toHaveText("Total 6 replicas");
-    await page.keyboard.press("Escape");
-    await expect(dialog).toHaveCount(0);
-
-    scale.options = { ...OPTIONS, kinds: OPTIONS.kinds.filter((k) => k.nodepools.length < 2) };
-    await page.reload();
-    await page.waitForLoadState("domcontentloaded");
-    await expect(stepper(page, ZONE_A)).toBeVisible();
-    await expect(page.getByTestId("scale-kind-action")).toHaveCount(0);
   });
 
   test("live status on: each NodePool scales on its card, and the sizes fold to a line", async ({ page }) => {
@@ -526,7 +429,7 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(page.getByTestId("restore-replicas")).toHaveCount(0);
   });
 
-  test("the run in place: the workflow's phase and its child's, then the plan and the servers chosen", async ({ page }) => {
+  test("the run in place: the workflow's phase and its child's, then the plan and the servers chosen, a run by kind too", async ({ page }) => {
     const scale = scaleOf({
       run: run({
         phase: "scaling-down", direction: "down",
@@ -550,6 +453,18 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(page.getByTestId("scale-run-total")).toContainText("6 → 5");
     await expect(page.getByTestId("scale-run-chosen")).toContainText(`worker-7 (${ZONE_B}-7xk2p) · ${ZONE_B} · fewest-pods: 1 workload pods`);
     await expect(page.getByTestId("scale-run-commit")).toContainText("Committed 9f2c1ab77d to day1 main");
+    await expect(page.getByTestId("scale-run-ignored")).toHaveCount(0);
+  });
+
+  test("a run that did not scale down lists, in the workflow's words, what it did not use", async ({ page }) => {
+    await openNodes(page, scaleOf({ run: UP_IGNORING }));
+    const runCard = page.getByTestId("scale-run");
+    await expect(runCard.getByRole("heading", { level: 3, name: `Scale NodePool ${ZONE_A}` })).toBeVisible();
+    await expect(page.getByTestId(`scale-run-pool-${ZONE_A}`)).toContainText("3 → 4");
+    const ignored = page.getByTestId("scale-run-ignored");
+    await expect(ignored).toContainText("Not used: the run did not scale down");
+    await expect(ignored.getByRole("listitem")).toHaveText(["server_names ocp-r660-site1-hp0001592: the NodePool scales up"]);
+    await expect(page.getByTestId("scale-run-chosen")).toHaveCount(0);
   });
 
   test("a 409 is shown in the orchestrator's words, nothing is sent again, and the run is read again", async ({ page }) => {
@@ -581,12 +496,24 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     const error = page.getByTestId("scale-run-error");
     await expect(error).toContainText("ArgoSyncRefusedError");
     await expect(error).toContainText(words);
+    await expect(page.getByTestId("scale-run-error-hint")).toHaveCount(0);
     // A closed run does not hold the steppers back
     await expect(field(page, ZONE_A)).toBeEnabled();
     await expect(page.getByTestId("scale-busy-reason")).toHaveCount(0);
   });
 
-  test("an open upgrade of the cluster leaves no stepper, holds the hardware type, and says why once", async ({ page }) => {
+  test("named servers a scale-down could not remove fail the run with a plain line under the workflow's words", async ({ page }) => {
+    const words = `scale-down-nodepool-${LARK} failed — ScaleDownServersInvalidError: no Machine of NodePool ${ZONE_B} is server ocp-x; its servers are worker-7 (${ZONE_B}-7xk2p). Nothing was marked or written`;
+    const failed = run({ status: "failed", phase: "scaling-down", direction: "down", error: words, error_type: "ScaleDownServersInvalidError" });
+    await openNodes(page, scaleOf({ run: failed }));
+    const error = page.getByTestId("scale-run-error");
+    await expect(error).toContainText("ScaleDownServersInvalidError");
+    await expect(error).toContainText(words);
+    await expect(page.getByTestId("scale-run-error-hint")).toContainText("The servers named to leave cannot be the ones this scale-down removes");
+    await expect(page.getByTestId("scale-run-error-hint")).toContainText("Nothing was marked or written.");
+  });
+
+  test("an open upgrade of the cluster leaves no stepper, and says why once", async ({ page }) => {
     const upgrade = { workflow_id: `upgrade-cluster-${LARK}`, status: "running", phase: "awaiting-approval" } as UpgradeRun;
     await openNodes(page, scaleOf(), { upgrade, nodes: CARDS });
     const why = "An upgrade-cluster run of this cluster is open";
@@ -595,7 +522,6 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     // Nothing looks editable: every size is text
     await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
     await expect(card(page, ZONE_A).getByTestId("scale-card-control")).toHaveText("3 replicas");
-    await expect(page.getByTestId("scale-kind-action")).toBeDisabled();
   });
 
   test("a locked NodePool that drifted is restored to its flavor's value by its own run", async ({ page }) => {
@@ -645,8 +571,8 @@ test.describe("A flavor sync leaves locked replicas to update-nodepool", () => {
   });
 });
 
-// Screenshots for the review (SCALE_SCREENSHOTS=<dir>): a card's change, the hardware type dialog and its
-// scale-down's confirmation, a row's scale-up and scale-down confirmations and a done run, light and dark.
+// Screenshots for the review (SCALE_SCREENSHOTS=<dir>): a card's change, a row's scale-up and scale-down
+// confirmations and a done run, light and dark.
 const SHOTS = process.env.SCALE_SCREENSHOTS;
 
 /** Once the confirmation has armed and every finite animation (the dialog's, its backdrop's) has finished. */
@@ -661,7 +587,7 @@ async function settledConfirmation(page: Page) {
 test.describe("Scale screenshots", () => {
   test.skip(!SHOTS, "only with SCALE_SCREENSHOTS");
   for (const scheme of ["light", "dark"] as const) {
-    test(`a card's change, the hardware type dialog and its scale-down's confirmation, ${scheme}`, async ({ page }) => {
+    test(`a card's change, ${scheme}`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 1000 });
       // The app starts dark (next-themes' defaultTheme); the person's choice is kept under `theme`
       await page.addInitScript((theme) => localStorage.setItem("theme", theme), scheme);
@@ -673,17 +599,6 @@ test.describe("Scale screenshots", () => {
       await page.getByTestId("scale-panel").scrollIntoViewIfNeeded();
       await page.screenshot({ path: `${SHOTS}/scale-card-change-${scheme}.png` });
       await a.screenshot({ path: `${SHOTS}/scale-card-${scheme}.png` });
-      await page.getByTestId("scale-kind-action").click();
-      const dialog = page.getByTestId("scale-kind-dialog");
-      await dialog.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((x) => x.finished)));
-      await more(page, ZONES).click();
-      await more(page, ZONES).click();
-      await expect(dialog.getByTestId("scale-change")).toHaveText("6 → 8 (+2)");
-      await page.screenshot({ path: `${SHOTS}/scale-dialog-${scheme}.png` });
-      await field(page, ZONES).fill("5");
-      await dialog.getByTestId("scale-start").click();
-      await settledConfirmation(page);
-      await page.screenshot({ path: `${SHOTS}/scale-confirm-kind-down-${scheme}.png` });
     });
 
     test(`a row's scale-up and scale-down confirmations and a done run, ${scheme}`, async ({ page }) => {

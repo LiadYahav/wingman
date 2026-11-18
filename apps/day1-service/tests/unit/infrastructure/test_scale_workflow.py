@@ -42,7 +42,6 @@ CLUSTER = "ocp4-prod-alpha"
 RUN = scale_workflow_id(CLUSTER)
 CHILD = f"scale-down-nodepool-{CLUSTER}"
 START = "/workflows/server-lifecycle/update-nodepool"
-BY_KIND = ScaleRequest("mce-bat-yam-01", CLUSTER, 10, infra_env_kind="cisco-m6-bat-yam-64c-512gb")
 BY_NAME = ScaleRequest("mce-bat-yam-01", CLUSTER, 5, nodepool="prod-alpha-zone-c")
 BUSY = (
     "upgrade-cluster-ocp4-prod-alpha is running: a replicas commit now would change the file "
@@ -136,35 +135,24 @@ def failing(error: type[httpx.TransportError]) -> Handler:
 # ── The start ────────────────────────────────────────────────────────────────
 
 
-async def test_a_start_by_kind_sends_exactly_the_workflows_fields() -> None:
+async def test_a_start_sends_exactly_the_four_fields_of_one_nodepool() -> None:
     workflow, requests = make(answer(202, {"workflow_id": RUN, "run_id": "r1"}))
-    run = await workflow.start(BY_KIND)
+    run = await workflow.start(BY_NAME)
     assert (run.workflow_id, run.status) == (RUN, "running")
     (sent,) = requests
     assert (sent.method, sent.url.path) == ("POST", START)
     assert json.loads(sent.content) == {
         "mce_cluster": "mce-bat-yam-01",
         "cluster": CLUSTER,
-        "replicas": 10,
-        "infra_env_kind": "cisco-m6-bat-yam-64c-512gb",
-    }
-
-
-async def test_a_start_by_nodepool_sends_the_nodepool_and_no_kind() -> None:
-    workflow, requests = make(answer(202, {"workflow_id": RUN, "run_id": "r1"}))
-    await workflow.start(BY_NAME)
-    assert json.loads(requests[0].content) == {
-        "mce_cluster": "mce-bat-yam-01",
-        "cluster": CLUSTER,
-        "replicas": 5,
         "nodepool": "prod-alpha-zone-c",
+        "replicas": 5,
     }
 
 
 async def test_a_409_keeps_the_orchestrators_words() -> None:
     workflow, _ = make(answer(409, {"detail": BUSY}))
     with pytest.raises(ScaleAlreadyRunningError) as raised:
-        await workflow.start(BY_KIND)
+        await workflow.start(BY_NAME)
     assert str(raised.value) == BUSY
 
 
@@ -193,7 +181,7 @@ async def test_a_start_is_never_retried_and_says_whether_it_may_have_happened(
 ) -> None:
     workflow, requests = make(handler)
     with pytest.raises(error):
-        await workflow.start(BY_KIND)
+        await workflow.start(BY_NAME)
     assert len(requests) == 1
 
 
@@ -259,12 +247,17 @@ async def test_a_child_that_cannot_be_read_leaves_the_parent_shown() -> None:
     assert run is not None and run.child == ScaleChild(CHILD)
 
 
-async def test_a_completed_run_carries_the_plan_the_servers_chosen_and_the_commit() -> None:
+async def test_a_run_recorded_by_kind_still_reads_with_its_plan_servers_and_commit() -> None:
     workflow, requests = make(answer(200, COMPLETED))
     run = await workflow.run(RUN)
     assert run is not None and run.result is not None
     assert len(requests) == 1  # its child's result is in its own
     result = run.result
+    assert (result.infra_env_kind, result.nodepool, result.ignored) == (
+        "cisco-m6-bat-yam-64c-512gb",
+        None,
+        (),
+    )
     assert (run.status, run.direction, run.child) == ("completed", "down", None)
     assert (result.direction, result.total_before, result.total_after) == ("down", 9, 8)
     assert result.nodepools == (
@@ -285,6 +278,28 @@ async def test_a_completed_run_carries_the_plan_the_servers_chosen_and_the_commi
         ),
     )
     assert result.deleting == ("prod-alpha-zone-c-7xk2p",)
+
+
+async def test_a_scale_up_lists_what_it_ignored_and_names_its_nodepool() -> None:
+    ignored = "server_names ocp-r660-bat-yam-HP0001592: the NodePool scales up"
+    up: dict[str, Any] = {
+        "workflow_id": RUN,
+        "status": "COMPLETED",
+        "result": {
+            "infra_env_kind": None,
+            "nodepool": "prod-alpha-zone-c",
+            "direction": "up",
+            "total_before": 2,
+            "total_after": 3,
+            "nodepools": [{"name": "prod-alpha-zone-c", "before": 2, "after": 3}],
+            "ignored": [ignored, 7, ""],
+        },
+    }
+    workflow, _ = make(answer(200, up))
+    run = await workflow.run(RUN)
+    assert run is not None and run.result is not None
+    assert (run.result.infra_env_kind, run.result.nodepool) == (None, "prod-alpha-zone-c")
+    assert run.result.ignored == (ignored,)
 
 
 async def test_a_failed_run_keeps_its_words_its_phase_and_the_childs_failure() -> None:
@@ -349,7 +364,7 @@ async def test_an_unreadable_run_is_the_orchestrator_unavailable(handler: Handle
 async def test_starts_and_reads_are_counted_with_bounded_labels() -> None:
     metrics = WingmanMetrics(CollectorRegistry(), component="day1", version="t", commit="t")
     calls: list[tuple[Handler, Callable[[HttpScaleWorkflow], Any]]] = [
-        (answer(202, {"workflow_id": RUN}), lambda w: w.start(BY_KIND)),
+        (answer(202, {"workflow_id": RUN}), lambda w: w.start(BY_NAME)),
         (answer(409, {"detail": BUSY}), lambda w: w.start(BY_NAME)),
         (answer(422, {"detail": "no"}), lambda w: w.start(BY_NAME)),
         (answer(504, {}), lambda w: w.start(BY_NAME)),

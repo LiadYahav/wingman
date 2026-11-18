@@ -10,7 +10,7 @@ import { focusSoon, sendable, StartError } from "./scale-start";
 import type { ScaleTabValue } from "./scale-tab";
 
 /** Scale up or Scale down: the change's own button. Either asks first, in the confirmation. */
-export function ScaleButton({ tab, id, size = "sm" }: { tab: ScaleTabValue; id?: string; size?: "sm" | "default" }) {
+function ScaleButton({ tab, id, size = "sm" }: { tab: ScaleTabValue; id?: string; size?: "sm" | "default" }) {
   const { direction, start } = tab.state;
   const down = direction === "down";
   return (
@@ -39,11 +39,11 @@ export function ScaleButton({ tab, id, size = "sm" }: { tab: ScaleTabValue; id?:
  */
 export function PendingChange({ tab, nodepool, className }: { tab: ScaleTabValue; nodepool: string; className?: string }) {
   const { change, current, asked, confirming, start } = tab.state;
-  if (!change || change.mode !== "nodepool" || change.target !== nodepool) return null;
+  if (!change || change.nodepool !== nodepool) return null;
   const primaryId = `scale-primary-${nodepool}`;
   const cancel = () => {
     tab.state.cancel();
-    focusSoon(stepperInputId(change));
+    focusSoon(stepperInputId(nodepool));
   };
   return (
     <div data-testid="scale-pending" data-nodepool={nodepool} className={cn("space-y-2.5 rounded-lg border border-primary/25 bg-primary/[0.04] px-3 py-2.5", className)}>

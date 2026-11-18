@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { addsLine, changeLine, doneLine, leaving, poolsOf } from "./scale-confirm";
-import type { ScaleNodePool, ScaleOptions } from "@/types";
+import { addsLine, changeLine, DONE_LINE, leaving, policyOf } from "./scale-confirm";
+import type { ScaleNodePool } from "@/types";
 
 const A = "prod-lark-site1-dell-r660-zone-a";
 const B = "prod-lark-site1-dell-r660-zone-b";
@@ -10,38 +10,31 @@ const pool = (name: string, scale_down_policy: string | null): ScaleNodePool => 
   unnamed: null, scale_down_policy,
 });
 
-const options = (a: string | null, b: string | null): Pick<ScaleOptions, "nodepools" | "kinds"> => ({
-  nodepools: [pool(A, a), pool(B, b)],
-  kinds: [{ kind: "dell-r660-zone", nodepools: [A, B], total: 6, locked: [] }],
-});
-
 describe("the change, under the title", () => {
-  it("is a NodePool's replicas with the difference, or a hardware type's total over its NodePools", () => {
-    expect(changeLine("nodepool", 3, 4, 1)).toBe("3 → 4 replicas (+1)");
-    expect(changeLine("nodepool", 4, 1, 1)).toBe("4 → 1 replicas (−3)");
-    expect(changeLine("kind", 5, 7, 2)).toBe("5 → 7 in total over 2 NodePools; the workflow spreads it");
+  it("is the NodePool's replicas with the difference", () => {
+    expect(changeLine(3, 4)).toBe("3 → 4 replicas (+1)");
+    expect(changeLine(4, 1)).toBe("4 → 1 replicas (−3)");
   });
 });
 
 describe("a scale-up", () => {
-  it("adds nodes that each take a free server of the hardware, or wait for one", () => {
-    expect(addsLine(1, "nodepool")).toBe(
+  it("adds nodes that each take a free server of the NodePool's hardware, or wait for one", () => {
+    expect(addsLine(1)).toBe(
       "Adds 1 node: it takes a free server of the NodePool's hardware; with none free, it waits until one is added."
     );
-    expect(addsLine(3, "kind")).toBe(
-      "Adds 3 nodes: each takes a free server of this hardware type; with none free, it waits until one is added."
+    expect(addsLine(3)).toBe(
+      "Adds 3 nodes: each takes a free server of the NodePool's hardware; with none free, it waits until one is added."
     );
   });
 
-  it("is done when the NodePools show the new size", () => {
-    expect(doneLine("nodepool")).toBe("Done when the NodePool shows the new size; new nodes join after they install.");
-    expect(doneLine("kind")).toBe("Done when the NodePools show the new sizes; new nodes join after they install.");
+  it("is done when the NodePool shows the new size", () => {
+    expect(DONE_LINE).toBe("Done when the NodePool shows the new size; new nodes join after they install.");
   });
 });
 
 describe("which nodes a scale-down removes", () => {
   it("names what each policy the workflow knows picks, unhealthy machines first", () => {
-    const one = (policy: string | null, count = 1) => leaving(count, [{ nodepool: A, policy }]).text;
+    const one = (policy: string | null, count = 1) => leaving(count, policy).text;
     expect(one("fewest-pods")).toBe("Removes the node running the fewest pods (fewest-pods). Unhealthy machines always go first.");
     expect(one("fewest-pods", 2)).toBe("Removes the 2 nodes running the fewest pods (fewest-pods). Unhealthy machines always go first.");
     expect(one("least-requested")).toBe(
@@ -53,51 +46,25 @@ describe("which nodes a scale-down removes", () => {
   });
 
   it("says CAPI picks at random when the day1 file sets no policy", () => {
-    expect(leaving(2, [{ nodepool: A, policy: null }])).toEqual({
+    expect(leaving(2, null)).toEqual({
       text: "Removes 2 nodes, picked at random by CAPI: the day1 file sets no scale-down policy. Unhealthy machines always go first.",
-      pools: [],
       refused: false,
     });
   });
 
   it("shows an unknown policy as is, and that the workflow will refuse it", () => {
-    expect(leaving(1, [{ nodepool: A, policy: "newest-first" }])).toEqual({
+    expect(leaving(1, "newest-first")).toEqual({
       text: "Would remove 1 node by the scale-down policy “newest-first”, which the workflow does not know: the workflow will refuse it.",
-      pools: [],
       refused: true,
-    });
-  });
-
-  it("for a hardware type, says one policy once, and each NodePool's when they differ", () => {
-    expect(leaving(2, poolsOf({ mode: "kind", target: "dell-r660-zone" }, options("fewest-pods", "fewest-pods"))).text).toBe(
-      "Removes 2 nodes; in each NodePool, the nodes running the fewest pods (fewest-pods). Unhealthy machines always go first."
-    );
-    expect(leaving(1, poolsOf({ mode: "kind", target: "dell-r660-zone" }, options(null, null))).text).toBe(
-      "Removes 1 node, picked at random by CAPI: the day1 file sets no scale-down policy for these NodePools. Unhealthy machines always go first."
-    );
-    const differ = leaving(1, poolsOf({ mode: "kind", target: "dell-r660-zone" }, options("least-utilized", "odd")));
-    expect(differ.text).toBe(
-      "Removes 1 node; in each NodePool that loses one, its own scale-down policy picks which. Unhealthy machines always go first."
-    );
-    expect(differ.refused).toBe(false);
-    expect(differ.pools).toEqual([
-      { nodepool: A, words: "the nodes with the lowest live CPU or memory use (least-utilized)", refused: false },
-      { nodepool: B, words: "“odd”, a policy the workflow does not know: it will refuse the run if this NodePool loses a node", refused: true },
-    ]);
-    expect(leaving(1, poolsOf({ mode: "kind", target: "dell-r660-zone" }, options("fewest-pods", null))).pools[1]).toEqual({
-      nodepool: B, words: "picked at random by CAPI (the day1 file sets no policy)", refused: false,
     });
   });
 });
 
-describe("the NodePools a change may move", () => {
-  it("are the one by name, or those the hardware type selects, with their policies", () => {
-    const read = options("fewest-pods", null);
-    expect(poolsOf({ mode: "nodepool", target: B }, read)).toEqual([{ nodepool: B, policy: null }]);
-    expect(poolsOf({ mode: "kind", target: "dell-r660-zone" }, read)).toEqual([
-      { nodepool: A, policy: "fewest-pods" },
-      { nodepool: B, policy: null },
-    ]);
-    expect(poolsOf({ mode: "kind", target: "unknown" }, read)).toEqual([]);
+describe("the NodePool's policy", () => {
+  it("is the day1 file's for that NodePool, else none", () => {
+    const nodepools = [pool(A, "fewest-pods"), pool(B, null)];
+    expect(policyOf(A, nodepools)).toBe("fewest-pods");
+    expect(policyOf(B, nodepools)).toBeNull();
+    expect(policyOf("unknown", nodepools)).toBeNull();
   });
 });

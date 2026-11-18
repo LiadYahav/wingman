@@ -51,10 +51,10 @@ def fake(clock: Clock) -> FakeScaleWorkflow:
     return FakeScaleWorkflow(clock=clock, pools=source)
 
 
-async def test_a_scale_down_by_kind_walks_the_parent_then_its_child(
+async def test_a_scale_down_walks_the_parent_then_its_child(
     fake: FakeScaleWorkflow, clock: Clock
 ) -> None:
-    started = await fake.start(ScaleRequest("mce", CLUSTER, 5, infra_env_kind="cisco-64c"))
+    started = await fake.start(ScaleRequest("mce", CLUSTER, 2, nodepool="alpha-zone-b"))
     assert (started.workflow_id, started.status) == (RUN, "running")
     seen = []
     for _ in range(len(PARENT_PHASES) + len(DOWN_PHASES)):
@@ -66,10 +66,8 @@ async def test_a_scale_down_by_kind_walks_the_parent_then_its_child(
     done = await fake.run(RUN)
     assert done is not None and done.result is not None
     assert (done.status, done.direction) == ("completed", "down")
-    assert [(c.name, c.before, c.after) for c in done.result.nodepools] == [
-        ("alpha-zone-a", 3, 3),
-        ("alpha-zone-b", 3, 2),
-    ]
+    assert [(c.name, c.before, c.after) for c in done.result.nodepools] == [("alpha-zone-b", 3, 2)]
+    assert (done.result.nodepool, done.result.infra_env_kind) == ("alpha-zone-b", None)
     assert [(c.nodepool, c.policy) for c in done.result.chosen] == [("alpha-zone-b", "fewest-pods")]
     assert done.result.deleting == ("alpha-zone-b-m2",)
 
@@ -104,15 +102,15 @@ async def test_one_run_per_cluster_and_none_while_it_upgrades(clock: Clock) -> N
     assert len(fake.started) == 1
 
 
-async def test_a_name_or_kind_the_cluster_lacks_fails_the_run_in_words(
+async def test_a_nodepool_the_cluster_lacks_fails_the_run_in_words(
     fake: FakeScaleWorkflow, clock: Clock
 ) -> None:
-    await fake.start(ScaleRequest("mce", CLUSTER, 2, infra_env_kind="dell"))
+    await fake.start(ScaleRequest("mce", CLUSTER, 2, nodepool="alpha-dell"))
     clock.step(len(PARENT_PHASES))
     run = await fake.run(RUN)
     assert run is not None
     assert (run.status, run.phase) == ("failed", "reading-nodepools")
-    assert run.error is not None and "InfraEnv dell or dell-*" in run.error
+    assert run.error is not None and "no NodePool alpha-dell" in run.error
 
 
 async def test_no_run_is_none_and_a_down_orchestrator_is_unavailable(clock: Clock) -> None:

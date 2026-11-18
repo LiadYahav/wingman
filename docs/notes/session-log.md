@@ -4,6 +4,45 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-17 — 3.44.0 to 3.44.3: credits per area, the docs refresh, a layout for the integrations.**
+- **Credits** (3.44.0, 3.44.1): five quick clicks on an area's brand show who
+  built it, each person with their years (`lib/areas.ts`).
+- **Docs** (3.44.2, 3.44.3): the in-app Documentation page covers the
+  Overview, Cluster Workflows, Inventory Management, Quick Links, Segments and
+  Server Scan (a test opens every Contents entry); `docs/README.md` indexes the
+  docs, `docs/architecture.md` is the overview to read first; this file was
+  shortened (its CI pass is `docs/ops/ci-maintenance.md`, its status history
+  is at the end of `docs/notes/session-log.md`).
+- **One place per mirrored system** (3.44.4 to 3.44.6, the owner's
+  decision): server-scan's and segments-manager's day1 code is in
+  `integrations/server_scan/` and `integrations/segments_manager/` (ADR-0001's
+  layers inside, enforced by import-linter; ADR-0001's 2026-11-17 amendment),
+  their web code in `apps/web/features/server-scan/` and
+  `apps/web/features/segments/` (`api`, `types`, `lib`, `components`;
+  ADR-0056's note). Checked live on the sandbox after the move.
+- **Syncing with a new upstream release:** `docs/integrations/<system>.yaml`
+  maps each Wingman file to the upstream files it follows and records the
+  version it matches (server-scan v6.1.0, segments-manager `a4edc12`);
+  `scripts/upstream_diff.py <system> [<ref>]` lists what changed upstream for
+  each; `docs/integrations/<system>.md` is the checklist. A test fails when a
+  ported file is missing from its map. Unreleased on server-scan (2026-11-17):
+  maintenance no longer counts as Available, and a server refresh write.
+
+**Next:**
+- Scale's scale-down policy per NodePool (the user): a flavor and
+  create-form choice that `cluster-template.j2` writes as the entry's
+  annotation (the specs project's template needs it too); more in
+  `CLAUDE.local.md`. Then, when the workflow is deployed: turn Scale on and
+  a first live run.
+- cluster-navigator's data on the cluster page and per MCE
+  (`docs/ideas/single-pane.md` workstream 5).
+- Flavors v2's "Left for later": missing add-ons in one MR per team, the
+  cluster-name prefix in the web, a preview of an unsaved flavor.
+- Tuning: a lock per pool.
+- Code organisation, later (the user): 28 files left in the size baseline.
+- The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
+  shared Git store.
+
 **2026-11-16 — 3.38.0 to 3.43.0: Inventory Ready/Needs fix, tuning in the every-nodepool rule, Scale through update-nodepool, Server Scan at server-scan v6.1.0.**
 - **Inventory Management** (3.38.0, ADR-0057's amendment): a pool's free
   servers split into Ready and Needs fix, a Total per pool and MCE,

@@ -7,10 +7,7 @@
 
 import { isApiError } from "@/lib/api-client";
 import { humanize } from "@/lib/nodes";
-import type { ErrorCode, ScaleKind, ScaleNodePool, ScaleRun, StartScaleRequest } from "@/types";
-
-/** Scale by a hardware kind (a total over its NodePools) or one NodePool (its own replicas). */
-export type ScaleMode = "kind" | "nodepool";
+import type { ErrorCode, ScaleNodePool, ScaleRun, StartScaleRequest } from "@/types";
 
 /** The most replicas the form takes: a guard against a typo, not the workflow's rule. */
 export const MAX_REPLICAS = 500;
@@ -41,16 +38,6 @@ export function busyReason(scaleRunning: boolean, upgradeOpen: boolean): string 
   return null;
 }
 
-/** Why a kind cannot be scaled; `null` when it can. */
-export function kindBlock(kind: ScaleKind, flavor: string | null): string | null {
-  if (kind.locked.length > 0) {
-    const pools = kind.locked.join(", ");
-    return `Locked by flavor ${flavor ?? "its flavor"}: it selects ${pools}, whose replicas the flavor fixes.`;
-  }
-  if (kind.total === null) return "A NodePool of this kind has replicas that are not a number in the day1 file.";
-  return null;
-}
-
 /** Why a NodePool cannot be scaled by name; `null` when it can. */
 export function nodepoolBlock(pool: ScaleNodePool): string | null {
   if (pool.name === null) return pool.unnamed ?? "Its NodePool cannot be named from the day1 file.";
@@ -59,13 +46,9 @@ export function nodepoolBlock(pool: ScaleNodePool): string | null {
   return null;
 }
 
-/** The hardware types whose total can be scaled: over two or more NodePools (with one, the NodePool's own does the same). */
-export const totalKinds = (kinds: ScaleKind[]): ScaleKind[] => kinds.filter((k) => k.nodepools.length >= 2);
-
-/** The one change waiting to be sent: a kind's new total, or one NodePool's new replicas. */
+/** The one change waiting to be sent: one NodePool's new replicas (update-nodepool sets one NodePool a run). */
 export interface ScaleChange {
-  mode: ScaleMode;
-  target: string;
+  nodepool: string;
   /** As typed: `NaN` while the field is empty. */
   replicas: number;
 }
@@ -91,30 +74,21 @@ export function replicasOf(value: number): number | null {
   return Number.isInteger(value) && value >= 0 && value <= MAX_REPLICAS ? value : null;
 }
 
-/** The start's body: exactly one target, as the API takes it; `null` until the choice is complete. */
-export function startBody(mode: ScaleMode, target: string | null, replicas: number): StartScaleRequest | null {
+/** The start's body: one NodePool and its replicas, nothing else; `null` until the number is a whole one. */
+export function startBody(nodepool: string | null, replicas: number): StartScaleRequest | null {
   const count = replicasOf(replicas);
-  if (!target || count === null) return null;
-  return mode === "kind" ? { infra_env_kind: target, replicas: count } : { nodepool: target, replicas: count };
+  if (!nodepool || count === null) return null;
+  return { nodepool, replicas: count };
 }
 
-/** What the choice is now: the replicas it starts from (a kind's total, a NodePool's own). */
-export function currentOf(
-  mode: ScaleMode,
-  target: string | null,
-  kinds: ScaleKind[],
-  nodepools: ScaleNodePool[]
-): number | null {
-  if (!target) return null;
-  if (mode === "kind") return kinds.find((k) => k.kind === target)?.total ?? null;
-  return nodepools.find((p) => p.name === target)?.replicas ?? null;
+/** The replicas a NodePool's change starts from: the day1 file's. */
+export function currentOf(nodepool: string | null, nodepools: ScaleNodePool[]): number | null {
+  if (!nodepool) return null;
+  return nodepools.find((p) => p.name === nodepool)?.replicas ?? null;
 }
 
 /** `3 → 5`, with an unknown side as a dash. */
 export const fromTo = (before: number | null, after: number | null) => `${before ?? "—"} → ${after ?? "—"}`;
-
-/** What a change is of, in words: a NodePool, or `<kind> total`. */
-export const changeLabel = ({ mode, target }: Pick<ScaleChange, "mode" | "target">) => (mode === "kind" ? `${target} total` : target);
 
 /** `2 → 3 (+1)`, `4 → 1 (−3)`: a change and its difference. */
 export function changeWords(current: number | null, asked: number | null): string {
@@ -127,6 +101,23 @@ export function changeWords(current: number | null, asked: number | null): strin
 export function directionOf(current: number | null, asked: number | null): "up" | "down" | "none" | null {
   if (current === null || asked === null) return null;
   return asked > current ? "up" : asked < current ? "down" : "none";
+}
+
+/** What a run scaled, from its result: its NodePool, or the InfraEnv kind of a run recorded so before 2026-11-18. */
+export function runTarget(result: { infra_env_kind: string | null; nodepool: string | null } | null): string | null {
+  if (!result) return null;
+  if (result.nodepool) return `NodePool ${result.nodepool}`;
+  return result.infra_env_kind ? `kind ${result.infra_env_kind}` : null;
+}
+
+/** A plain line under a failed run's own words, for a failure that needs one; `null` for the rest. */
+export function failureHint(errorType: string | null): string | null {
+  if (errorType !== "ScaleDownServersInvalidError") return null;
+  return (
+    "The servers named to leave cannot be the ones this scale-down removes: a wrong count, a server that is no machine " +
+    "of the NodePool (or is two), an unhealthy machine CAPI would take instead, or an MCE worker too old to tell. " +
+    "Nothing was marked or written."
+  );
 }
 
 /** The heading of a refused start, by its `code`; the problem's own words are listed under it. */

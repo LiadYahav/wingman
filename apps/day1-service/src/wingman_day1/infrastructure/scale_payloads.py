@@ -4,7 +4,8 @@
 progress?, result?, error?}``: ``progress`` is the run's ``progress`` query
 (``phase``, ``direction``, ``child_workflow_id``) while it runs and after a
 failure, ``result`` the ``UpdateNodePoolResult`` once completed, with its
-child's ``NodePoolScaleResult`` in ``scale``. The id and status must be
+child's ``NodePoolScaleResult`` in ``scale`` (``infra_env_kind`` only on a
+run recorded by kind before 2026-11-18). The id and status must be
 there; everything else is read leniently, since the workflow's branch can
 still change: an unknown field is ignored, a field of the wrong type is left
 out, and strings are kept as the workflow wrote them. Malformed required
@@ -124,4 +125,5 @@ def scale_result(raw: Mapping[str, JSON]) -> ScaleResult:
             if _text(item, "nodepool") and _text(item, "machine")
         ),
         deleting=_texts(scale.get("deleting")),
+        ignored=_texts(raw.get("ignored")),
     )

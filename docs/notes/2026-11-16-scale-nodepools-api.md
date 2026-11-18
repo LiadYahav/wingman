@@ -16,25 +16,28 @@ no PR yet): `workflow_domains/server_lifecycle/router.py`
 `ScaleDownChoice`), `shared/exceptions.py`, `shared/workflow_ids.py`,
 `workflow_domains/routers/runs.py` and the design page
 `docs/site/server-lifecycle/update-nodepool.html`. The branch can still
-change: day1 reads its answers leniently.
+change: day1 reads its answers leniently. Last matched: b1976f4 and
+aab8949 (2026-11-18: one NodePool a run, ADR-0062's 2026-11-18 amendment).
 
 ## 1. What the workflow takes and does
 
 **Start:** `POST /workflows/server-lifecycle/update-nodepool`, JSON
 (`extra="forbid"`): `mce_cluster` (with or without `ocp4-`), `cluster` (the
-day1 file's name without `.yaml`), `replicas` (≥ 0) and exactly one of
-`infra_env_kind` (`replicas` is the TOTAL over the cluster's NodePools whose
-InfraEnv is the kind or `<kind>-…`, spread within one replica) and
-`nodepool` (that NodePool's replicas, set exactly). Both or neither: 422.
+day1 file's name without `.yaml`, a Kubernetes name), `nodepool` (one
+NodePool of the cluster, by name, a Kubernetes name) and `replicas` (≥ 0,
+that NodePool's own, set exactly; its siblings are left as they are). Day1
+sends exactly these four. `infra_env_kind` (until 2026-11-18 a TOTAL over
+the cluster's NodePools of one InfraEnv kind) is a 422 that says to name the
+NodePool; a run recorded with it before then still finishes as it began.
 Answers `202 {"workflow_id": "update-nodepool-<cluster>", "run_id"}`; 409
 while a run of the cluster runs, and while `upgrade-cluster-<cluster>` runs
-(its `detail` says which).
+(its `detail` says which); 422 for a body it refuses.
 
-**What it does:** reads the cluster file in day1 `main` and its NodePools on
+**What it does:** reads the cluster file in day1 `main` and the NodePool on
 the MCE (they must agree, both ways), plans, and through its child
 (`scale-up-nodepool-<cluster>` or `scale-down-nodepool-<cluster>`) commits
-only the `replicas:` lines to day1 `main`, syncs the cluster's Argo CD
-Application to that commit, and checks that the NodePools show the
+only that `replicas:` line to day1 `main`, syncs the cluster's Argo CD
+Application to that commit, and checks that the NodePool shows the
 replicas. On a scale-down, a NodePool labelled or annotated
 `redbull.io/scale-down-policy` (`fewest-pods`, `least-requested`,
 `least-utilized`) has its leaving servers chosen and marked first; without
@@ -51,9 +54,15 @@ scale-up `pending → committing-day1 → syncing-argo → verifying-nodepools �
 completed`; scale-down `pending → [selecting-servers → marking-machines] →
 committing-day1 [→ unmarking-machines] → syncing-argo → verifying-nodepools
 [→ verifying-machines] → completed`. Wingman keeps no list of them.
-`result` (`UpdateNodePoolResult`) has the NodePools before and after and,
-in `scale`, the child's commit, the NodePools read back, the servers chosen
-and those seen deleting. `error` is the root failure's message only: a
+`result` (`UpdateNodePoolResult`) has the NodePool before and after (a run
+recorded by kind: the kind's NodePools, and `infra_env_kind` set instead of
+`nodepool`), `ignored` (since 2026-11-18: what the request said about a
+scale-down that a run scaling up, or not at all, had no use for, each with why,
+in the workflow's words; never a failure) and, in `scale`, the child's
+commit, the NodePools read back, the servers chosen and those seen
+deleting. A new failure type, `ScaleDownServersInvalidError`: the servers a
+scale-down request named cannot be the ones that leave, nothing marked or
+written. `error` is the root failure's message only: a
 child's failure reads `<child id> failed — <Type>: <message>`; the parent's
 own refusals name no type.
 
@@ -63,18 +72,15 @@ All under `/api/day1/clusters/{name}`, with the page's `?site=&mce=`. `501
 FEATURE_DISABLED` on all three while `DAY1_SCALE_NODEPOOLS` is off.
 
 **`GET .../scale`** (any signed-in user): what Scale offers (the Nodes tab's
-steppers and its hardware type dialog, ADR-0062's 2026-11-16 amendment), from
-the cluster file on `main`, so it works without live status.
+steppers, ADR-0062's amendments), from the cluster file on `main`, so it
+works without live status.
 
 ```json
 { "cluster": "ocp4-prod-lark-site1", "mce": "ocp4-prod-mce-site1-a", "flavor": "agent-sized",
   "nodepools": [ { "index": 0, "name": "prod-lark-site1-dell-r660-site1-128c-1024gb-5tb",
                    "infra_env": "dell-r660-site1-128c-1024gb-5tb", "replicas": 3,
                    "locked_by": "agent-sized", "locked_replicas": 3, "unnamed": null,
-                   "scale_down_policy": "fewest-pods" } ],
-  "kinds": [ { "kind": "dell-r660-site1-128c-1024gb-5tb",
-               "nodepools": ["prod-lark-site1-dell-r660-site1-128c-1024gb-5tb"],
-               "total": 3, "locked": ["prod-lark-site1-dell-r660-site1-128c-1024gb-5tb"] } ] }
+                   "scale_down_policy": "fewest-pods" } ] }
 ```
 
 - `name` is the chart's (`name`, else `<clusterName>-<infraEnvName>`, else
@@ -92,17 +98,18 @@ the cluster file on `main`, so it works without live status.
   air-gapped chart copy renders no entry annotations yet) is not in the file:
   the run reads it, and its result's `scale_down_policy` shows what it used.
   The scale confirmation says which nodes leave from it.
-- `kinds`: this cluster's InfraEnvs, and the common start of sibling
-  InfraEnvs (those differing only in their last dash segment); `nodepools`
-  are those of this file the kind selects, `locked` those a flavor locks (the
-  kind cannot be scaled).
+- No `kinds` since 2026-11-18: a run sets one NodePool.
 
-**`POST .../scale`** (admin), `{"replicas": N, "infra_env_kind": "..."}` or
-`{"replicas": N, "nodepool": "..."}`, exactly one, Kubernetes names, `N`
-0-10000, no other field. Day1 adds `mce_cluster` (the file's MCE folder) and
-`cluster` (the file stem). `202` with the run (`status: "running"`).
-- `422 VALIDATION_ERROR`: the body; a NodePool a flavor locks, to anything
-  but its locked value; a kind that selects one. Nothing is sent.
+**`POST .../scale`** (admin), `{"nodepool": "...", "replicas": N}`, a
+Kubernetes name, `N` 0-10000, no other field. Day1 adds `mce_cluster` (the
+file's MCE folder) and `cluster` (the file stem). `202` with the run
+(`status: "running"`).
+- `422 VALIDATION_ERROR`: the body (`infra_env_kind` in words: send the
+  NodePool's name as `nodepool`); a `nodepool` no entry of the file on
+  `main` renders (the problem lists the file's NodePools) or two entries
+  render; a NodePool a flavor locks, to anything but its locked value.
+  Nothing is sent. The orchestrator's own 422 is the same code, with its
+  findings, and "nothing was started".
 - `409 SCALE_ALREADY_RUNNING`: the orchestrator's 409, its words in
   `detail`.
 - `504 AMBIGUOUS_WRITE`: sent, no answer; it may have started. Read the run
@@ -125,7 +132,8 @@ Completed, `result` is `{infra_env_kind, nodepool, day1_path, direction,
 total_before, total_after, nodepools: [{name, infra_env, before, after,
 scale_down_policy}], child_workflow_id, revision, committed, live: [{name,
 replicas, ready_replicas}], chosen: [{nodepool, machine, node, policy,
-reason}], deleting: [machine]}`. Failed, `error` is the workflow's words and
+reason}], deleting: [machine], ignored: [text]}`; `infra_env_kind` only on
+a run recorded by kind before 2026-11-18, `nodepool` on every other. Failed, `error` is the workflow's words and
 `error_type` the type when they name one (`ArgoSyncRefusedError`), else
 `null`; `child` is read while the parent names it and has no result.
 

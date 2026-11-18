@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did)
 
 ## Context
 
@@ -42,7 +42,8 @@ change only through update-nodepool.**
    NodePools on `main` (not the MCE's, so it works with live status off),
    an admin's **Scale** opens a dialog with the API's two ways, and the run
    shows in place for anyone signed in:
-   - **By hardware kind**: a new total for the NodePools of one InfraEnv
+   - **By hardware kind** (*removed 2026-11-18, below: the workflow takes
+     one NodePool only*): a new total for the NodePools of one InfraEnv
      kind; the dialog shows which of this cluster's NodePools the kind
      selects and their total now. The kinds offered are this cluster's own
      InfraEnvs and the common start of sibling InfraEnvs (two or more that
@@ -79,7 +80,7 @@ change only through update-nodepool.**
 4. **A flavor's locked replicas are the flavor's** (the user, 2026-11-16).
    With scaling on, a NodePool whose replicas the cluster's flavor locks
    cannot be scaled ("locked by flavor X"), and a kind that selects one
-   cannot either; day1 refuses both with a 422. The one move allowed is
+   cannot either (*no kind since 2026-11-18*); day1 refuses both with a 422. The one move allowed is
    back to the locked value: a **Restore with update-nodepool**, a by-name
    run to it.
 5. **While scaling is on, an existing NodePool's replicas change only
@@ -223,7 +224,7 @@ rule (5) and the run in place do not change; only the web's controls do.
   NodePools and replicas the file sets) and keeps a row only for an entry no
   card shows, such as one the file cannot name, so no NodePool is editable
   twice.
-- **A hardware type in a dialog.** "Scale hardware type", beside the
+- **A hardware type in a dialog** (*removed 2026-11-18, below*). "Scale hardware type", beside the
   NodePool sizes heading, opens a small dialog: the hardware types (the
   kinds the API offers) over two or more NodePools, one chosen, a locked one
   listed but not offered, with why and its total as text; a − N + total
@@ -293,3 +294,58 @@ Escape closing only it; a refusal in the confirmation; a locked NodePool on a ro
 restore; a card the file does not name; the dialog's total and its
 scale-down; a locked type as text, and no button without one; while busy no
 stepper and one reason; a viewer sees no stepper).
+
+## Amendment (2026-11-18): one NodePool a run
+
+The workflow changed on its branch (team-redbull/workflows
+`feat/update-nodepool`, b1976f4; the operator, 2026-11-18: "no need
+infraenv kind"): a start always names `nodepool`, and `infra_env_kind` is a
+422 that says to name the NodePool; a run recorded with a kind before then
+still finishes as it began. Wingman follows it; the run, the locks (4) and
+the ownership rule (5) do not change.
+
+- **Wingman sends exactly `{mce_cluster, cluster, nodepool, replicas}`**
+  (`scale_workflow._start_body`); `ScaleRequest`, `ScaleTarget` and
+  `ScaleIn` have no other field, so nothing else can be sent. The by-kind
+  mode is gone everywhere: `domain.scale.KindChoice`, `kind_choices` and
+  `belongs_to_kind`; `GET .../scale`'s `kinds`; `POST .../scale`'s
+  `infra_env_kind`; the fake's spread; the web's hardware type dialog, its
+  total and the confirmation's lines for it. Decision 2's "By hardware
+  kind", decision 4's kind that selects a locked NodePool and the first
+  amendment's "A hardware type in a dialog" are superseded.
+- **Day1 refuses a start it cannot map to one NodePool, before anything is
+  sent** (amends decision 3, which left an unknown name to the workflow).
+  A body with `infra_env_kind` is `422 VALIDATION_ERROR` in words ("send
+  the NodePool's name as nodepool"), not an unknown-field error. A
+  `nodepool` that no entry of the cluster file on `main` renders is a 422
+  listing the file's NodePools: the workflow needs the NodePool in day1
+  under that name, so its run could only fail. A name two entries render is
+  a 422 too: the chart refuses that file. The workflow's own 422 stays
+  `422 VALIDATION_ERROR` with its findings and "nothing was started".
+- **A run recorded by kind is still read and shown**: its result keeps
+  `infra_env_kind` (and `nodepool: null`), and the run card shows "Scale
+  kind <kind>", its NodePools and the total, as before.
+- **The result's `ignored`** (new in the workflow): what the request said
+  about a scale-down that a run scaling up, or not at all, had no use for,
+  in the workflow's words; never a failure. Day1 reads it
+  (`ScaleResult.ignored`, `GET .../scale-run`'s `result.ignored`) and the
+  run card lists it under "Not used: the run did not scale down". Wingman's
+  own starts send nothing a run can ignore; a run of the cluster started
+  elsewhere may.
+- **`ScaleDownServersInvalidError`** (new in the workflow): the servers a
+  scale-down request named cannot be the ones that leave; nothing is marked
+  or written. It is a failed run like the others: its type and words show,
+  and the run card adds a plain line under them.
+- Naming the servers a scale-down removes (the workflow's new
+  `server_names`) is not built here; it waits for the user's decision.
+
+Verification: `test_scale_workflow.py` (the start's exact four fields; a run
+recorded by kind still read, with its plan and chosen servers; `ignored`
+read leniently), `test_fake_scale.py` (a scale-down and an unknown NodePool
+by name), `tests/api/test_scale_api.py` (`infra_env_kind` refused in words,
+a NodePool the file does not name and one two entries render refused, none
+sent; the options have no `kinds`; the run's `nodepool`, `infra_env_kind`
+and `ignored`), `apps/web/lib/scale-model.test.ts` (the start's body, a
+run's target, the failure line), `apps/web/lib/scale-confirm.test.ts`, and
+`apps/web/e2e/tests/cluster-scale.spec.ts` (no hardware type anywhere, a run
+by kind still shown, a run's `ignored`, the failure line).

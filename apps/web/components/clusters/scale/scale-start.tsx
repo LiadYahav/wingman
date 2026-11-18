@@ -3,7 +3,7 @@
 import { toast } from "sonner";
 import { ProblemList } from "@/components/common/problem-list";
 import { isApiError } from "@/lib/api-client";
-import { changeLabel, changeWords, refusalTitle, STALE_RUN_CODES } from "@/lib/scale-model";
+import { changeWords, refusalTitle, STALE_RUN_CODES } from "@/lib/scale-model";
 import type { ScaleTabValue } from "./scale-tab";
 
 /** Focus an element once React has drawn it (or the one it replaced). */
@@ -23,13 +23,11 @@ export function sendable(tab: ScaleTabValue): boolean {
 }
 
 /** Sends the change once; on its start, a toast, and focus on the run where it shows. */
-export function sendChange(tab: ScaleTabValue, then?: () => void) {
+export function sendChange(tab: ScaleTabValue) {
   const { change, current, asked } = tab.state;
   if (!change) return;
-  const label = changeLabel(change);
   tab.state.send(() => {
-    toast.success("update-nodepool started", { description: `${label}: ${changeWords(current, asked)} replicas` });
-    then?.();
+    toast.success("update-nodepool started", { description: `${change.nodepool}: ${changeWords(current, asked)} replicas` });
     focusSoon("scale-run");
   });
 }

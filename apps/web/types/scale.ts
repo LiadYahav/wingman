@@ -28,28 +28,19 @@ export interface ScaleNodePool {
   scale_down_policy: string | null;
 }
 
-/** A hardware kind: the NodePools of this cluster whose InfraEnv is it or starts with it and a dash. */
-export interface ScaleKind {
-  kind: string;
-  /** The NodePools it selects, by name. */
-  nodepools: string[];
-  /** Their replicas now, added up; `null` when one is not a number. */
-  total: number | null;
-  /** The locked NodePools it selects: non-empty, it cannot be scaled. */
-  locked: string[];
-}
-
 /** `GET /clusters/{name}/scale`: what Scale can change on this cluster, from its day1 file and flavor. */
 export interface ScaleOptions {
   cluster: string;
   mce: string;
   flavor: string | null;
   nodepools: ScaleNodePool[];
-  kinds: ScaleKind[];
 }
 
-/** `POST /clusters/{name}/scale` body: a total over a kind's NodePools, or one NodePool's own replicas. */
-export type StartScaleRequest = { infra_env_kind: string; replicas: number } | { nodepool: string; replicas: number };
+/** `POST /clusters/{name}/scale` body: one NodePool of the day1 file, by name, and its own replicas, set exactly. */
+export interface StartScaleRequest {
+  nodepool: string;
+  replicas: number;
+}
 
 /** The child that scales (`scale-up-nodepool-<cluster>` or `scale-down-nodepool-<cluster>`), read by its own id. */
 export interface ScaleChildRun {
@@ -88,6 +79,7 @@ export interface ScaleChosenServer {
 
 /** What a completed run did. */
 export interface ScaleResult {
+  /** Only on a run recorded by InfraEnv kind before 2026-11-18 (a total over the kind's NodePools); else `nodepool`. */
   infra_env_kind: string | null;
   nodepool: string | null;
   day1_path: string | null;
@@ -104,6 +96,8 @@ export interface ScaleResult {
   chosen: ScaleChosenServer[];
   /** The marked Machines it saw deleting. */
   deleting: string[];
+  /** What the request said about a scale-down that this run (up, or no change) had no use for: never a failure. */
+  ignored: string[];
 }
 
 /** `GET /clusters/{name}/scale-run` (404: none yet), and the 202 of a start. */

@@ -215,7 +215,7 @@ start. Time-series legends list only the series with something to show.
   422). Inventory's run list is `list_runs` and `get_run` (the 20 newest
   runs, each kept 10 seconds).
 - `workflows` `start_update_nodepool` is an admin scaling a cluster's
-  NodePools from its Nodes tab, by InfraEnv kind or one NodePool, through
+  NodePools from its Nodes tab, one NodePool a run, through
   the update-nodepool workflow (`DAY1_SCALE_NODEPOOLS`, ADR-0062); a
   restore of a flavor's locked replicas after a sync is one too. `conflict`:
   a run of that cluster is going, or an upgrade-cluster run of it (the
