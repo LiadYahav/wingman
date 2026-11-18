@@ -52,6 +52,7 @@ import {
   sizedIndex, sizingRatio, startingSize, withSize, type PlacedProblems,
 } from "./flavor-form";
 import { envFromName, nameProblems, siteFromName } from "./naming";
+import { SizedReplicas } from "./sized-replicas";
 
 const inputCls =
   "w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow";
@@ -756,14 +757,7 @@ export default function NewClusterPage() {
 
   const renderInput = ({ field, path, value, onChange, locked }: FieldInputContext) => {
     const sized = sizedIndex(path, ratio);
-    if (sized !== null) {
-      return (
-        <p data-testid={`nodepool-${sized}-replicas-sized`} className="text-sm">
-          <span className="font-mono font-medium">{size !== null ? String(value) : "—"}</span>
-          <span className="ml-2 text-xs text-muted-foreground">ratio {ratio[sized]} × size {size ?? "?"}</span>
-        </p>
-      );
-    }
+    if (sized !== null) return <SizedReplicas index={sized} value={value} part={ratio[sized]} size={size} />;
     if (OWNER_INPUTS.includes(path) && !locked) {
       return <OwnerInput field={field} value={value} onChange={onChange} invalid={path in liveOwners} />;
     }
