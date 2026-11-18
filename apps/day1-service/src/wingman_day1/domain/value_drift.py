@@ -16,7 +16,10 @@ own form:
   (the configs rule, or a lock with no hardware), it is read from the one
   network config the nodepool lists; none or several needs a person;
 - tuning profiles (the tuning rule, ADR-0061) compare as a set of names; a
-  file's ``tuningConfig`` is a string for one name or a list.
+  file's ``tuningConfig`` is a string for one name or a list;
+- image mirrors (ADR-0063) compare as the chart uses them: the
+  ``imageContentSources`` entries merged by source and sorted (no key is no
+  entries), and ``disableIdmsMerge`` by Go's truth (no key keeps the MCE's).
 
 Presets are never compared: overriding them is allowed. Each difference is
 a :class:`ValueDrift` with the flavor's value and the file's, and for
@@ -30,6 +33,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, cast
 
+from wingman_day1.domain.image_mirrors import MIRROR_FILE_KEYS, mirrors_held, show_mirrors
 from wingman_day1.domain.locks import (
     MISSING,
     NETWORK_ENTRY,
@@ -122,9 +126,18 @@ def config_names(configs: object) -> list[str]:
 
 
 def show_value(value: object) -> str:
-    """A drifted value as an MR description shows it: configs by name, cut at 80 characters."""
+    """A drifted value as an MR description shows it: configs by name, cut at 80 characters.
+
+    Image mirrors read ``source → mirror, ...`` (ADR-0063).
+    """
     if value is MISSING:
         return "(absent)"
+    if (
+        isinstance(value, list)
+        and value
+        and all(isinstance(e, Mapping) and "source" in e for e in cast("Sequence[object]", value))
+    ):
+        return show_mirrors(value)
     if isinstance(value, list):
         names = [
             str(cast("Mapping[str, object]", e).get("name")) if isinstance(e, Mapping) else str(e)
@@ -283,6 +296,9 @@ def _nodepool_drift(lock: Lock, file_key: InputPath, context: _Context) -> Value
 
 def _top_level_drift(lock: Lock, file_key: InputPath, context: _Context) -> ValueDrift | None:
     have = lookup(context.values, file_key)
+    if str(file_key) in MIRROR_FILE_KEYS:
+        held = mirrors_held(str(file_key), lock.value, have)
+        return None if held else ValueDrift(lock.path, file_key, lock.value, have)
     if file_key.segments == ("platform",):
         want = _KUBEVIRT if lock.value == _KUBEVIRT else _AGENT
         effective = _KUBEVIRT if have == _KUBEVIRT else _AGENT

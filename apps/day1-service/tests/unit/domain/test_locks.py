@@ -182,6 +182,8 @@ def test_the_lockable_table_reads_as_the_docs_write_it() -> None:
         "owner_anaf",
         "owner_mador",
         "platform",
+        "image_content_sources",
+        "disable_idms_merge",
         "nodepools[<i>].replicas",
         "nodepools[<i>].configs",
         "nodepools[<i>].node_labels",
@@ -200,10 +202,14 @@ def test_every_lockable_input_is_one_the_fixture_template_writes_to_its_file_key
         "replicas:",
         "configs:",
         "nodeLabels:",
+        "imageContentSources:",
+        "disableIdmsMerge:",
     ):
         assert written in template
     for read in ("owner_merkaz", "owner_anaf", "owner_mador", "platform", "np.replicas"):
         assert read in template
+    assert "image_content_sources" in template
+    assert "disable_idms_merge" in template
     assert "np.configs" in template
     assert "np.node_labels" in template
 

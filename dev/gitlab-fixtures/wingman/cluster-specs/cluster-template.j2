@@ -26,6 +26,15 @@
     baseDomain, DNS, secrets, registries
                                MCE, site or global values layers
 
+  Optional inputs a flavor may give (ADR-0063), each written only when given:
+    image_content_sources      [{source, mirrors: [..]}]: the cluster's own
+                               image mirrors (imageContentSources)
+    disable_idms_merge         true: only those mirrors; the MCE's
+                               defaultImageContentSources are dropped
+                               (disableIdmsMerge)
+  Day1 refuses a flavor that gives them while this template does not read
+  them, and a create whose file does not hold them as given.
+
   Every field below is read by the chart (templates/nodepool.yaml, hc.yaml).
   Names are the chart's own, so `helm template` with this output plus the
   value layers above is the check that a rendered file is valid.
@@ -43,6 +52,25 @@ mastertag: {{ openshift_release_version }}
 
 # KubeVirt workers (VMs). Without this key the chart uses the Agent platform.
 platform: kubevirt
+{% endif %}
+{% if image_content_sources | default([]) %}
+
+# The cluster's own image mirrors; the chart merges them with the MCE's
+# defaultImageContentSources unless disableIdmsMerge is true.
+imageContentSources:
+{% for entry in image_content_sources %}
+  {# Example: registry.example.com/ocp4/openshift-release-dev #}
+  - source: {{ entry.source | tojson }}
+    mirrors:
+{% for mirror in entry.mirrors %}
+      - {{ mirror | tojson }}
+{% endfor %}
+{% endfor %}
+{% endif %}
+{% if disable_idms_merge | default(false) %}
+
+# Only the mirrors above: the MCE's default mirrors are dropped.
+disableIdmsMerge: true
 {% endif %}
 
 nodepool:

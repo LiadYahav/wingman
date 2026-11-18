@@ -228,6 +228,25 @@ test.describe("Cluster drift on locked values", () => {
     await expect(page.getByRole("button", { name: "Sync to flavor" })).toBeVisible();
   });
 
+  test("locked image mirrors read as source → mirrors, and the MCE switch as its value (ADR-0063)", async ({ page }) => {
+    const source = "registry.example.com/team/operators";
+    const mirrors: ValueDrift = {
+      ...OWNER_DRIFT, path: "image_content_sources", file_key: "imageContentSources", in_file: true,
+      flavor_value: [{ source, mirrors: ["mirror.example.com/team/operators"] }],
+      cluster_value: [{ source, mirrors: ["old-mirror.example.com/team/operators"] }],
+    };
+    const drop: ValueDrift = { ...OWNER_DRIFT, path: "disable_idms_merge", file_key: "disableIdmsMerge", flavor_value: true };
+    await openDetail(page, drift({ value_drift: [mirrors, drop] }));
+
+    const row = page.getByTestId("value-drift-imageContentSources");
+    await expect(row.getByRole("definition").first()).toContainText(`${source}mirror.example.com/team/operators`);
+    await expect(row.getByRole("definition").last()).toContainText("old-mirror.example.com/team/operators");
+    await expect(row).not.toContainText("{");
+    const dropRow = page.getByTestId("value-drift-disableIdmsMerge");
+    await expect(dropRow.getByRole("definition").first()).toHaveText("true");
+    await expect(dropRow).toContainText("absent from the file");
+  });
+
   test("a viewer sees the drift but no sync", async ({ page }) => {
     await openDetail(page, drift(), [preview()], { viewer: true });
 

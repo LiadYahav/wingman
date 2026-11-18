@@ -1,8 +1,12 @@
 import { AlertTriangle, CheckCircle2, CircleHelp, Minus, Package, Plus, RefreshCcw } from "lucide-react";
+import { mirrorListText } from "@/lib/image-mirrors";
 import { formatPreset } from "@/lib/specs";
 import type { ClusterDrift, ValueDrift } from "@/types";
 
 const isConfigs = (item: ValueDrift) => item.file_key.endsWith(".configs");
+
+/** A locked value in one line; image mirrors as `source → mirrors` (ADR-0063). */
+const shown = (value: unknown) => mirrorListText(value) ?? formatPreset(value);
 
 /** `3 locked values differ · 1 add-on missing`: one line for a candidate's drift. */
 export function driftSummary(drift: ClusterDrift): string {
@@ -47,10 +51,10 @@ function ValueDriftItem({ item }: { item: ValueDrift }) {
         )
       ) : (
         <p className="text-xs text-muted-foreground break-all">
-          flavor <span className="font-mono text-foreground">{formatPreset(item.flavor_value)}</span>
+          flavor <span className="font-mono text-foreground">{shown(item.flavor_value)}</span>
           {" · "}file{" "}
           {item.in_file ? (
-            <span className="font-mono text-foreground">{formatPreset(item.cluster_value)}</span>
+            <span className="font-mono text-foreground">{shown(item.cluster_value)}</span>
           ) : (
             <span className="italic">not set</span>
           )}

@@ -1,7 +1,8 @@
 /**
  * What a flavor (a cluster spec) sets on the create form in flavors v2:
- * locked values, presets, the configs rule, the tuning rule and the nodepool
- * defaults (docs/notes/2026-11-08-flavors-v2-api-changes.md §1-§6 and §9;
+ * locked values, presets, the configs rule, the tuning rule, the nodepool
+ * defaults and the image mirrors, each preset or locked as a whole (ADR-0063)
+ * (docs/notes/2026-11-08-flavors-v2-api-changes.md §1-§6 and §9;
  * ADR-0026 to ADR-0029; docs/notes/2026-11-15-tuning-profiles-api.md, ADR-0061). Day1 is the authority and checks all of it again: this mirrors
  * its rules so the form shows what day1 will accept, and every problem day1
  * returns is still shown, at its field when the form has that field.
@@ -20,6 +21,7 @@ import {
   withHardware,
 } from "@/lib/machine-configs";
 import { TUNING, TUNING_RULE, isTuningPath, tuningNames, tuningPath, tuningRuleNames } from "@/lib/tuning-profiles";
+import { IMAGE_MIRRORS, asMirrorEntries, isMirrorInput, mirrorEntryProblems, noMirrorsProblem } from "@/lib/image-mirrors";
 import type { ConfigEntry, MachineConfigs, SpecEntry, TemplateField } from "@/types";
 
 /** The template inputs day1's locks know by name (`wingman_day1.domain.locks.LOCKABLE`). */
@@ -94,6 +96,7 @@ export function isConfigsPath(path: string): boolean {
 const LOCKABLE = [
   /^owner_(merkaz|anaf|mador)$/,
   /^platform$/,
+  /^(image_content_sources|disable_idms_merge)$/,
   /^nodepools\[(0|[1-9][0-9]{0,2})\]\.(replicas|configs|node_labels)$/,
 ];
 
@@ -267,7 +270,8 @@ export function presetPaths(spec: SpecEntry, schema: TemplateField[], locks: Fla
   for (const field of schema) {
     const value = presets[field.name];
     if (value === undefined) continue;
-    if (field.type === "list" && field.fields?.length && Array.isArray(value)) {
+    // The image mirrors are one preset, as a whole (ADR-0063)
+    if (field.type === "list" && field.fields?.length && Array.isArray(value) && !isMirrorInput(field.name)) {
       value.forEach((item, i) => {
         if (!isMap(item)) return;
         for (const sub of field.fields!) if (item[sub.name] !== undefined) add(`${field.name}[${i}].${sub.name}`);
@@ -343,6 +347,12 @@ export function flavorProblems(
   label: (path: string) => string
 ): string[] {
   const lines = Object.entries(ownerProblems(form, schema, locks)).map(([path, p]) => `${label(path)}: ${p}`);
+  // The image mirrors (ADR-0063): a preset's entries as typed, and never dropping the MCE's for none
+  if (!locks.values.has(IMAGE_MIRRORS)) {
+    for (const p of mirrorEntryProblems(asMirrorEntries(form[IMAGE_MIRRORS]))) lines.push(`Image mirrors › Entry ${(p.entry ?? 0) + 1}: ${p.message}`);
+  }
+  const none = noMirrorsProblem(form);
+  if (none) lines.push(`Image mirrors: ${none}`);
   const pools = form[NODEPOOLS];
   if (!Array.isArray(pools)) return lines;
   pools.forEach((pool, i) => {
@@ -359,14 +369,17 @@ export function flavorProblems(
 
 // ── Day1's problems, placed at their fields ───────────────────────────────────
 
-/** Every field the form draws, by template-input path; config lists are one field (their entries are the picker's). */
+/**
+ * Every field the form draws, by template-input path; config lists and the
+ * image mirrors are one field each (their entries are their editor's).
+ */
 export function fieldPaths(schema: TemplateField[], values: Record<string, unknown>, prefix = ""): Set<string> {
   const paths = new Set<string>();
   for (const field of schema) {
     const path = prefix ? `${prefix}.${field.name}` : field.name;
     paths.add(path);
     const value = values[field.name];
-    if (field.type === "list" && field.fields?.length && Array.isArray(value) && !isConfigsPath(path)) {
+    if (field.type === "list" && field.fields?.length && Array.isArray(value) && !isConfigsPath(path) && !isMirrorInput(path)) {
       value.forEach((item, i) => {
         if (isMap(item)) for (const sub of fieldPaths(field.fields!, item, `${path}[${i}]`)) paths.add(sub);
       });
@@ -403,7 +416,8 @@ export function placeProblems(lines: string[], fields: ReadonlySet<string>): Pla
     const cuts = [token.length, ...[...token.matchAll(/[.[]/g)].map((m) => m.index).reverse()];
     const field = match ? cuts.map((cut) => token.slice(0, cut)).find((prefix) => fields.has(prefix)) : undefined;
     // An item of a list the form does not draw (`nodepools[2]` of two) is not about the list's field
-    const item = field !== undefined && !isConfigsPath(field) && !isTuningPath(field) && /^\[(\d+|\*)\]/.test(token.slice(field.length));
+    const item =
+      field !== undefined && !isConfigsPath(field) && !isTuningPath(field) && !isMirrorInput(field) && /^\[(\d+|\*)\]/.test(token.slice(field.length));
     if (!match || !field || item) {
       placed.rest.push(line);
       continue;

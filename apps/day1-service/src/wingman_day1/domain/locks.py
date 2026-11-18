@@ -27,6 +27,8 @@ template input                  cluster-file key
 ``owner_anaf``                  ``owner.anaf``
 ``owner_mador``                 ``owner.mador``
 ``platform``                    ``platform``
+``image_content_sources``       ``imageContentSources``
+``disable_idms_merge``          ``disableIdmsMerge``
 ``nodepools[<i>].replicas``     ``nodepool[<i>].replicas``
 ``nodepools[<i>].configs``      ``nodepool[<i>].configs``
 ``nodepools[<i>].node_labels``  ``nodepool[<i>].nodeLabels``
@@ -37,8 +39,9 @@ template input                  cluster-file key
 A value can differ in form between the two sides: a ``{name: nm-conf,
 hardware: <hw>}`` entry is ``{name: nm-conf-<clusterName>-<hw>}`` in the
 file (``machine_configs.expand_network_configs``), and ``platform`` is
-written only as ``platform: kubevirt``. The inputs Wingman sets for each
-cluster (name, site, MCE, OpenShift version) are never lockable.
+written only as ``platform: kubevirt``; the image mirrors compare as the
+chart reads them (``image_mirrors``, ADR-0063). The inputs Wingman sets for
+each cluster (name, site, MCE, OpenShift version) are never lockable.
 
 The configs rule
 ================
@@ -66,6 +69,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, cast
 
+from wingman_day1.domain.image_mirrors import (
+    DROP_FILE_KEY,
+    DROP_MCE_MIRRORS,
+    IMAGE_MIRRORS,
+    MIRRORS_FILE_KEY,
+    mirror_lock_problem,
+)
 from wingman_day1.domain.input_paths import (
     EVERY,
     MISSING,
@@ -146,6 +156,8 @@ LOCKABLE: Final = (
     Lockable(("owner_anaf",), ("owner", "anaf")),
     Lockable(("owner_mador",), ("owner", "mador")),
     Lockable(("platform",), ("platform",)),
+    Lockable((IMAGE_MIRRORS,), (MIRRORS_FILE_KEY,)),
+    Lockable((DROP_MCE_MIRRORS,), (DROP_FILE_KEY,)),
     Lockable(("nodepools", _ANY_INDEX, "replicas"), ("nodepool", _ANY_INDEX, "replicas")),
     Lockable(("nodepools", _ANY_INDEX, "configs"), ("nodepool", _ANY_INDEX, "configs")),
     Lockable(("nodepools", _ANY_INDEX, "node_labels"), ("nodepool", _ANY_INDEX, "nodeLabels")),
@@ -302,7 +314,8 @@ def lock_problems(locked_paths: Sequence[str], values: Mapping[str, object]) -> 
     Each path must parse, be lockable, appear once, and have a value in
     ``values`` (a lock is a value the flavor fixes, so a lock without one
     fixes nothing). The configs rule needs agreeing nodepools that list
-    ``nm-conf``, and no position may lock configs beside it.
+    ``nm-conf``, and no position may lock configs beside it. A locked image
+    mirror input needs a value the mirror rules accept (ADR-0063).
     """
     problems: list[str] = []
     if len(locked_paths) > MAX_LOCKS:
@@ -329,6 +342,8 @@ def lock_problems(locked_paths: Sequence[str], values: Mapping[str, object]) -> 
             problems.append(
                 f"locked_paths: {path} is locked but spec.day1.values sets no value for it"
             )
+        elif (broken := mirror_lock_problem(str(path), values)) is not None:
+            problems.append(broken)
     if CONFIGS_RULE in seen:
         problems += [
             f"locked_paths: {path} is covered by {CONFIGS_RULE}, which locks every nodepool's "
@@ -358,7 +373,7 @@ def enforced_locks(locked_paths: Sequence[str], values: Mapping[str, object]) ->
                 locks[path] = Lock(path, rule)
             continue
         value = lookup(values, path)
-        if value is not MISSING:
+        if value is not MISSING and mirror_lock_problem(str(path), values) is None:
             locks[path] = Lock(path, value)
     if CONFIGS_RULE in locks:
         locks = {p: lock for p, lock in locks.items() if p.is_rule or not is_configs_lock(p)}

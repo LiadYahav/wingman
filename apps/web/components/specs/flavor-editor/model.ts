@@ -1,12 +1,12 @@
 /**
  * The flavor editor's model: the draft a person edits, the document a save
- * sends, day1's checks mirrored for instant feedback, where day1's problems
- * belong, and the cluster-file preview request. The contract is
+ * sends, day1's checks mirrored for instant feedback, and the cluster-file
+ * preview request (day1's problems at their fields: `problem-routing.ts`). The contract is
  * docs/notes/2026-11-08-flavors-v2-api-changes.md (§2-§6, §9); the decisions
  * are ADR-0026 (a lock is a fixed value), ADR-0027 (machine configs and the
  * nodepool defaults), ADR-0028 (owners are numbers), ADR-0029 (the configs
- * rule) and ADR-0061 (tuning profiles, `tuning-model.ts`). Day1 is the
- * authority: these checks only answer sooner.
+ * rule), ADR-0061 (tuning profiles, `tuning-model.ts`) and ADR-0063 (image
+ * mirrors, `lib/image-mirrors.ts`). Day1 is the authority: these checks only answer sooner.
  *
  * Every value lives in `spec.day1.values` (presets and locked values alike);
  * a path in `locked_paths` makes its value fixed. The draft keeps `values`
@@ -23,9 +23,11 @@ import {
   withHardware,
 } from "@/lib/machine-configs";
 import { specDocument } from "@/lib/specs";
+import { MIRROR_INPUTS, isMirrorInput, mirrorLabel, mirrorValueText } from "@/lib/image-mirrors";
 import { isMapping, sameValues, type Values } from "@/lib/values";
 import { TUNING, TUNING_RULE, showTuning, tuningNames } from "@/lib/tuning-profiles";
 import type { ClusterSpec, ConfigEntry, MachineConfigs, SpecAddon, TemplateField } from "@/types";
+import { problemSubject } from "./problem-routing";
 
 // ── What can be locked (§6, §9) ─────────────────────────────────────────────
 
@@ -41,7 +43,7 @@ export const CONFIGS_RULE = "nodepools[*].configs";
 
 export type NodepoolKey = "replicas" | "configs" | "node_labels";
 const NODEPOOL_LOCKABLE: readonly NodepoolKey[] = ["replicas", "configs", "node_labels"];
-const TOP_LOCKABLE: readonly string[] = [...OWNERS.map((o) => o.path), PLATFORM];
+const TOP_LOCKABLE: readonly string[] = [...OWNERS.map((o) => o.path), PLATFORM, ...MIRROR_INPUTS];
 const POSITIONAL = /^nodepools\[(0|[1-9]\d{0,2})\]\.(replicas|configs|node_labels)$/;
 const POSITIONAL_CONFIGS = /^nodepools\[(0|[1-9]\d{0,2})\]\.configs$/;
 
@@ -567,49 +569,6 @@ function isWholeNumber(value: unknown): boolean {
   return typeof value === "string" && /^\d+$/.test(value);
 }
 
-// ── Day1's problems at their fields ─────────────────────────────────────────
-
-/** A problem's subject (`owner_anaf`, `nodepools[1].configs[0]`) and the rest of it. */
-function problemSubject(problem: string): { path: string; message: string } | null {
-  const lock = /^locked_paths: '?([^\s']+)'?\s(.*)$/.exec(problem);
-  if (lock) return { path: lock[1], message: `${lock[1]} ${lock[2]}` };
-  const at = problem.indexOf(": ");
-  if (at <= 0) return null;
-  const head = problem.slice(0, at);
-  if (!/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])*$/.test(head)) return null;
-  return { path: head, message: problem.slice(at + 2) };
-}
-
-export interface RoutedProblem {
-  /** The field it is shown at. */
-  field: string;
-  /** The problem's own path: the field's, or one inside it (`nodepools[0].configs[2]`). */
-  path: string;
-  message: string;
-  /** The problem as day1 wrote it. */
-  raw: string;
-}
-
-/**
- * Attach each problem to the deepest field whose path is the problem's or
- * contains it; the rest have no field and are listed at the top.
- */
-export function routeProblems(problems: string[], fields: string[]): { routed: RoutedProblem[]; unmatched: string[] } {
-  const routed: RoutedProblem[] = [];
-  const unmatched: string[] = [];
-  for (const raw of problems) {
-    const subject = problemSubject(raw);
-    const field = subject
-      ? fields
-          .filter((f) => subject.path === f || subject.path.startsWith(`${f}.`) || subject.path.startsWith(`${f}[`))
-          .sort((a, b) => b.length - a.length)[0]
-      : undefined;
-    if (subject && field) routed.push({ field, path: subject.path, message: subject.message, raw });
-    else unmatched.push(raw);
-  }
-  return { routed, unmatched };
-}
-
 // ── What every cluster gets (the review's summary) ──────────────────────────
 
 export interface ValueLine {
@@ -621,6 +580,7 @@ export interface ValueLine {
 export function pathLabel(path: string): string {
   if (path === CONFIGS_RULE) return "Every nodepool · Machine configs";
   if (path === TUNING_RULE) return "Every nodepool · Tuning profiles";
+  if (isMirrorInput(path)) return mirrorLabel(path);
   const owner = OWNERS.find((o) => o.path === path);
   if (owner) return `Owner · ${owner.label}`;
   const pool = /^nodepools\[(\d+)\]\.(.+)$/.exec(path);
@@ -661,7 +621,7 @@ export function valueLines(draft: FlavorDraft): { locked: ValueLine[]; presets: 
   const rule = configsMode(draft) === "rule";
   for (const [key, value] of Object.entries(draft.values)) {
     if (key === "nodepools" || value === undefined) continue;
-    put(key, value);
+    put(key, isMirrorInput(key) ? mirrorValueText(key, value) : value);
   }
   if (rule) {
     locked.push({

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FieldGroup, inputCls, Segmented, ValueField } from "./controls";
+import { ImageMirrorsGroup } from "./image-mirrors-group";
 import { PresetInput } from "./inputs";
 import { isLocked, OWNERS, PLATFORM, type FlavorDraft, type OtherInput } from "./model";
 
@@ -15,8 +16,8 @@ const PLATFORMS = [
 
 /**
  * Part 1: what the flavor is (name, version, description) and the values it
- * sets for the whole cluster: the owner numbers and the platform, each a
- * preset or locked, and any other template input as a preset.
+ * sets for the whole cluster: the owner numbers, the platform and the image
+ * mirrors, each a preset or locked, and any other template input as a preset.
  */
 export function BasicsSection({
   draft,
@@ -33,8 +34,8 @@ export function BasicsSection({
 }: {
   draft: FlavorDraft;
   isNew: boolean;
-  /** Problems by field path (the editor's own and day1's). */
-  problems: (path: string) => string[];
+  /** Problems by field path (the editor's own and day1's); `deeper` adds those about a part of it. */
+  problems: (path: string, options?: { deeper?: boolean }) => string[];
   /** Show the name and version rules only once something was typed or a save was tried. */
   showNameProblems: boolean;
   otherInputs: OtherInput[];
@@ -184,6 +185,8 @@ export function BasicsSection({
         </ValueField>
         </div>
       </FieldGroup>
+
+      <ImageMirrorsGroup draft={draft} problems={problems} notEnforced={notEnforced} onValue={onValue} onLocked={onLocked} />
 
       {otherInputs.length > 0 && (
         <div className="space-y-3">

@@ -1,7 +1,7 @@
 # ADR-0026: A flavor lock is a fixed value the flavor enforces
 
 Date: 2026-11-08
-Status: Accepted; superseded in part by ADR-0029 (a configs rule for every nodepool, beside the positional locks)
+Status: Accepted; superseded in part by ADR-0029 (a configs rule for every nodepool, beside the positional locks); amended by ADR-0063 (the image mirrors are lockable)
 
 ## Context
 
@@ -46,6 +46,10 @@ cluster-file key the shared template writes it to, is one row of
 | `nodepools[<i>].replicas` | `nodepool[<i>].replicas` |
 | `nodepools[<i>].configs` | `nodepool[<i>].configs` (network entries expanded, ADR-0027) |
 | `nodepools[<i>].node_labels` | `nodepool[<i>].nodeLabels` |
+
+Amended by ADR-0063 (2026-11-18): `image_content_sources` →
+`imageContentSources` and `disable_idms_merge` → `disableIdmsMerge` are
+lockable too, each as a whole value, compared as the chart merges them.
 
 The inputs Wingman sets per cluster (`cluster_name`, `site`, `mce`,
 `openshift_release_version` and the aliases `site_name`, `mce_name`) are

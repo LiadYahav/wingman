@@ -16,7 +16,7 @@ export function FlavorsSection() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
         {[
           { title: "Preset", desc: "Prefilled in the create form; a cluster may change it. A preset never drifts." },
-          { title: "Locked", desc: "Fixed: every cluster gets exactly this value, the create form shows it read-only and day1 refuses another, and a later edit of the file shows as drift. Lockable: the owner numbers, the platform, per nodepool its replicas, machine configs and node labels, and the tuning profiles of every nodepool." },
+          { title: "Locked", desc: "Fixed: every cluster gets exactly this value, the create form shows it read-only and day1 refuses another, and a later edit of the file shows as drift. Lockable: the owner numbers, the platform, the image mirrors and whether the MCE's default mirrors are kept, per nodepool its replicas, machine configs and node labels, and the tuning profiles of every nodepool." },
         ].map(({ title, desc }) => (
           <TermCard key={title} title={title} desc={desc} />
         ))}
@@ -34,7 +34,8 @@ export function FlavorsSection() {
           The name <InlineCode>agent-baseline</InlineCode> (a lowercase DNS label; a flavor keeps its name), a
           version and a description. Under <strong>Owner and platform</strong>, the owner numbers (digits only)
           and the platform. Each has a <strong>Preset | Locked</strong> switch: leave a preset empty and each
-          cluster fills it in. Other template inputs can be preset too, in the collapsed group below.
+          cluster fills it in. <strong>Image mirrors</strong>, optional, are the cluster&apos;s own registry mirrors
+          (see Image mirrors below). Other template inputs can be preset too, in the collapsed group below.
         </Step>
         <Step n={2} title="Nodepools">
           Add nodepools: each starts with the team&apos;s defaults (<InlineCode>nodepool-defaults.yaml</InlineCode>{" "}
@@ -123,6 +124,36 @@ spec:
         back to <strong>Each nodepool its own</strong> drops both rules: every nodepool keeps its configs and its
         profiles as presets.
       </p>
+
+      <h3 className="text-base font-semibold mt-6 mb-3" id="image-mirrors">Image mirrors</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+        Some teams deploy operators of their own and pull them from their own registry. A flavor may give its
+        clusters their own image mirrors, under <strong>Image mirrors</strong> in Basics: each entry is a{" "}
+        <strong>source</strong> (a registry or repository, like <InlineCode>registry.example.com/team/operators</InlineCode>)
+        and one or more <strong>mirrors</strong> it is pulled from. They are written to the cluster file&apos;s{" "}
+        <InlineCode>imageContentSources</InlineCode> (the template input <InlineCode>image_content_sources</InlineCode>),
+        and the hostedclusters-setup chart merges them with the MCE&apos;s default mirrors
+        (<InlineCode>defaultImageContentSources</InlineCode>): one source&apos;s mirrors are joined. The switch{" "}
+        <strong>Keep the MCE&apos;s default mirrors</strong>, on by default, can be turned off: the file then gets{" "}
+        <InlineCode>disableIdmsMerge: true</InlineCode> (the input <InlineCode>disable_idms_merge</InlineCode>) and
+        the cluster uses only its own mirrors. Turning it off with no mirrors of the cluster&apos;s own is refused: the
+        cluster would have none.
+      </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+        Both are optional. Unset, nothing is written and every cluster gets the MCE&apos;s default mirrors, as
+        before; existing flavors and clusters do not change. Each is a preset (the create form starts from it and a
+        cluster may change it) or locked as a whole: the create form shows it read-only, a file that holds other
+        mirrors, or another switch, shows as drift, and a sync or the per-cluster MR of a new version writes{" "}
+        <InlineCode>imageContentSources</InlineCode> and <InlineCode>disableIdmsMerge</InlineCode>. The flavor&apos;s
+        Overview lists them under Cluster inputs.
+      </p>
+      <Callout type="warning" title="The specs repo's template must render them">
+        The shared <InlineCode>cluster-template.j2</InlineCode> writes the cluster file, so it must read{" "}
+        <InlineCode>image_content_sources</InlineCode> and <InlineCode>disable_idms_merge</InlineCode>. Until it does,
+        a flavor that sets them is refused at save and listed with a warning, and a create from it is refused, rather
+        than writing a cluster without its mirrors. The upgrade guide <InlineCode>docs/upgrade/3.44-to-3.45.md</InlineCode>{" "}
+        gives the lines to add.
+      </Callout>
 
       <h3 className="text-base font-semibold mt-6 mb-3">Adding existing clusters to a flavor</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">

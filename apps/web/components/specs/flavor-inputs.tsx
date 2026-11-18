@@ -1,5 +1,7 @@
 import { AlertTriangle, Lock, SlidersHorizontal } from "lucide-react";
 import { ConfigEntryList } from "@/components/specs/config-entries";
+import { MirrorEntryList } from "@/components/image-mirrors/mirror-entries";
+import { DROP_MCE_MIRRORS, IMAGE_MIRRORS, asMirrorEntries, dropsMceMirrors, mirrorValueText } from "@/lib/image-mirrors";
 import { formatPreset, structureSummary } from "@/lib/specs";
 import { TUNING, TUNING_RULE, showTuning, tuningNames } from "@/lib/tuning-profiles";
 import { isMapping } from "@/lib/values";
@@ -67,7 +69,8 @@ function inputGroups(values: Record<string, unknown>): InputGroup[] {
   const top: InputRow[] = [];
   const items: InputGroup[] = [];
   for (const [key, value] of Object.entries(values)) {
-    if (Array.isArray(value) && value.length > 0 && value.every(isMapping)) {
+    // The image mirrors are one value (locked or preset as a whole), shown in one row
+    if (Array.isArray(value) && value.length > 0 && value.every(isMapping) && key !== IMAGE_MIRRORS) {
       value.forEach((item, i) => {
         items.push({
           key: `${key}[${i}]`,
@@ -99,6 +102,10 @@ function lockOf(path: string, locks: readonly string[]): string | null {
 function InputValue({ field, value }: { field: string; value: unknown }) {
   if (field === "configs" && Array.isArray(value)) return <ConfigEntryList value={value} />;
   if (field === TUNING) return <span className="text-xs font-mono text-foreground/80 break-all">{showTuning(tuningNames(value))}</span>;
+  if (field === IMAGE_MIRRORS) return <MirrorEntryList entries={asMirrorEntries(value)} testId="flavor-mirror-list" />;
+  if (field === DROP_MCE_MIRRORS) {
+    return <span className="text-xs text-foreground/80">{mirrorValueText(DROP_MCE_MIRRORS, value)}</span>;
+  }
   if (isMapping(value)) {
     const pairs = Object.entries(value);
     if (pairs.length === 0) return <span className="text-xs text-muted-foreground">None</span>;
@@ -277,6 +284,22 @@ export function FlavorInputsCard({ spec }: { spec: SpecEntry }) {
         <p className="max-w-2xl text-xs text-muted-foreground" data-testid="flavor-tuning-rule">
           <span className="font-mono">{TUNING_RULE}</span> is a rule: every nodepool of a cluster has exactly these tuning
           profiles, in any order. Changing them can reboot a nodepool&apos;s nodes.
+        </p>
+      )}
+      {(IMAGE_MIRRORS in values || DROP_MCE_MIRRORS in values) && (
+        <p className="max-w-2xl text-xs text-muted-foreground" data-testid="flavor-mirrors-note">
+          <span className="font-mono">{IMAGE_MIRRORS}</span> are the cluster&apos;s own image mirrors, written to its
+          file&apos;s <span className="font-mono">imageContentSources</span>. The chart merges them with the MCE&apos;s
+          default mirrors
+          {dropsMceMirrors(values[DROP_MCE_MIRRORS]) ? (
+            <>
+              , but <span className="font-mono">{DROP_MCE_MIRRORS}</span> drops those: the cluster uses only its own.
+            </>
+          ) : (
+            <>
+              {" "}unless <span className="font-mono">{DROP_MCE_MIRRORS}</span> drops them.
+            </>
+          )}
         </p>
       )}
 
