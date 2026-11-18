@@ -250,6 +250,13 @@ describe("a card's counts", () => {
     expect(cardVerdict(breakdown())).toBe("empty");
   });
 
+  // server-scan v6.3.0 (its a0e29c3): `by_health` counts servers in service only.
+  it("say all healthy when every server in service is healthy, and not when every one is in maintenance", () => {
+    expect(cardVerdict(breakdown({ total: 3, in_maintenance: 1, by_health: { HEALTHY: 2 } }))).toBe("all-healthy");
+    expect(cardVerdict(breakdown({ total: 3, in_maintenance: 1, by_health: { HEALTHY: 1, CRITICAL: 1 } }))).toBeNull();
+    expect(cardVerdict(breakdown({ total: 2, in_maintenance: 2, by_health: { HEALTHY: 0 } }))).toBeNull();
+  });
+
   it("read a severity server-scan left out as zero", () => {
     expect(cardCounts(card({ total: 1, by_health: { HEALTHY: 1 } }))).toEqual([]);
   });

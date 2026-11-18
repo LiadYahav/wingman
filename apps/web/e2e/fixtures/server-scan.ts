@@ -17,11 +17,15 @@ type Counts = { vendors?: Partial<Record<(typeof VENDORS)[number], number>> } & 
   maintenance?: number;
 };
 
-/** A breakdown from its counts: the total is the sum of the severities. */
+/**
+ * A breakdown from its counts, as server-scan v6.3.0 counts: the severities
+ * are the servers in service, those in maintenance apart, and the total is
+ * both summed.
+ */
 function breakdown({ vendors = {}, maintenance = 0, ...health }: Counts = {}): Breakdown {
   const by_health = Object.fromEntries(SEVERITIES.map((s) => [s, health[s] ?? 0]));
   return {
-    total: Object.values(by_health).reduce((a, b) => a + b, 0),
+    total: Object.values(by_health).reduce((a, b) => a + b, maintenance),
     by_vendor: VENDORS.map((vendor) => ({ vendor, count: vendors[vendor] ?? 0 })),
     by_health,
     in_maintenance: maintenance,
@@ -67,7 +71,7 @@ const site = (site_id: string, name: string, slices: Slices): SiteStats => ({ si
 
 const SITES: SiteStats[] = [
   site("site1", "Site 1", {
-    hosted: { HEALTHY: 20, WARNING: 1, CRITICAL: 2, vendors: { dell: 15, hp: 8 }, maintenance: 1 },
+    hosted: { HEALTHY: 19, WARNING: 1, CRITICAL: 2, vendors: { dell: 15, hp: 8 }, maintenance: 1 },
     mce: { HEALTHY: 3, vendors: { dell: 3 } },
     upi: { HEALTHY: 5, MAJOR: 1, vendors: { cisco: 6 } },
     available: { HEALTHY: 4 },

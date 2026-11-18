@@ -7,8 +7,9 @@
  * single-pane plan): `frontend/src/features/inventory/rows.ts`,
  * `frontend/src/features/inventory/sorting.ts` and `frontend/src/lib/donor.ts`,
  * with their behaviour unchanged; `rows.test.ts` holds server-scan's cases.
- * Healthy without servers in maintenance (`matchesHealth`, its counts) is
- * v6.0.0's (its 2bb2fb2).
+ * A ticked severity without servers in maintenance (`matchesHealth`, its
+ * counts) is v6.0.0's for Healthy (its 2bb2fb2) and v6.3.0's for every
+ * severity (its a0e29c3).
  *
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
@@ -33,7 +34,7 @@ export interface RowFilters {
   health?: string[];
   /**
    * Unset shows servers in maintenance with the rest; "only" keeps just them, "exclude" hides them.
-   * Healthy servers in maintenance are the exception: `health` HEALTHY shows them only with "only".
+   * With a severity ticked (`health`), servers in maintenance show only with "only".
    */
   maintenance?: "only" | "exclude";
   /** Only servers an install currently holds a lock on. */
@@ -99,18 +100,18 @@ function nameCounts(rows: readonly ServerRow[]): Map<string, number> {
 
 const anyOf = (wanted: string[] | undefined, value: string | null) => !wanted?.length || (value !== null && wanted.includes(value));
 
-/** A Healthy server in maintenance: healthy, but not in service. */
-const pausedHealthy = (row: ServerRow) => row.health === "HEALTHY" && row.maintenance.enabled;
+/** A server in service: not in maintenance. */
+const inService = (row: ServerRow) => !row.maintenance.enabled;
 
 /**
- * Whether a row passes the Health dropdown. Healthy means healthy and in
- * service: a Healthy server in maintenance shows only with Maintenance ticked
- * too (`maintenance: "only"`), so it never hides among the healthy rows on a
- * later page. Every other severity still includes its servers in maintenance.
+ * Whether a row passes the Health dropdown. Any ticked severity means that
+ * severity and in service: a server in maintenance shows only with
+ * Maintenance ticked too (`maintenance: "only"`), whatever other filters
+ * (site, installation, ...) are set, as the Sites cards count it.
  */
 function matchesHealth(row: ServerRow, filters: RowFilters): boolean {
   if (!anyOf(filters.health, row.health)) return false;
-  return !filters.health?.length || !pausedHealthy(row) || filters.maintenance === "only";
+  return !filters.health?.length || inService(row) || filters.maintenance === "only";
 }
 
 /** Whether a row passes the six dropdowns. */
@@ -290,10 +291,10 @@ function without(filters: RowFilters, key: keyof RowFilters): RowFilters {
  * The dropdowns' counts: each dimension over the rows every *other* filter
  * leaves, so an option's number is what ticking it would show. `total` and
  * the toggles' counts are over the fully filtered rows; `maintenance` is
- * counted without the maintenance filter. Healthy follows `matchesHealth`:
- * it leaves out Healthy servers in maintenance unless Maintenance is ticked,
- * so its number is the rows it shows; Maintenance still counts them, since
- * ticking it adds them.
+ * counted without the maintenance filter. Every severity follows
+ * `matchesHealth`: it leaves out servers in maintenance unless Maintenance is
+ * ticked, so its number is the rows it shows; Maintenance still counts them,
+ * since ticking it adds them.
  */
 export function dropdownFacetCounts(rows: readonly ServerRow[], filters: RowFilters): FacetCounts {
   const facets = facetCounts(filterRows(rows, filters));
@@ -304,7 +305,7 @@ export function dropdownFacetCounts(rows: readonly ServerRow[], filters: RowFilt
   const ignoringBoth = filterRows(rows, without(without(filters, "maintenance"), "health"));
   facets.maintenance = facetCounts(ignoringBoth.filter((row) => anyOf(severities, row.health))).maintenance;
   const healthBase = filterRows(rows, without(filters, "health"));
-  facets.health = facetCounts(filters.maintenance === "only" ? healthBase : healthBase.filter((row) => !pausedHealthy(row))).health;
+  facets.health = facetCounts(filters.maintenance === "only" ? healthBase : healthBase.filter(inService)).health;
   return facets;
 }
 

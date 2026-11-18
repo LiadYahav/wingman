@@ -97,7 +97,7 @@ test.describe("The Servers page", () => {
     await expect(chips(page)).toHaveText(["Maintenance only"]);
   });
 
-  test("server-scan v6.0.0: Healthy leaves out servers in maintenance unless Maintenance is ticked too, and its count follows", async ({ page }) => {
+  test("server-scan v6.3.0: a ticked severity leaves out servers in maintenance unless Maintenance is ticked too, and its count follows", async ({ page }) => {
     const healthy = FLEET.filter((s) => s.health === "HEALTHY");
     const inService = healthy.filter((s) => !s.maintenance.enabled).map((s) => s.name);
     const DONOR = "ocp-dell-r660-site1-node-04";
@@ -121,10 +121,16 @@ test.describe("The Servers page", () => {
     await tick(page, "Health", "Maintenance");
     await expect.poll(() => query(page)).toBe("health_overall=HEALTHY&maintenance=true");
     await expect.poll(() => names(page)).toEqual([DONOR]);
-    // Every other severity keeps its servers in maintenance
+    // Every other severity too: the Warning server in maintenance needs Maintenance ticked
+    const PAUSED_WARNING = "ocp-dell-r660-site1-node-03";
     await page.getByRole("button", { name: "Clear filters" }).click();
+    await dropdown(page, "Health").click();
+    await expect(option(page, "Health", "WARNING")).toHaveText("WARNING0");
+    await page.keyboard.press("Escape");
     await tick(page, "Health", "WARNING");
-    await expect(row(page, "ocp-dell-r660-site1-node-03")).toBeVisible();
+    await expect(row(page, PAUSED_WARNING)).toHaveCount(0);
+    await tick(page, "Health", "Maintenance");
+    await expect.poll(() => names(page)).toEqual([PAUSED_WARNING]);
   });
 
   test("the toggles, with server-scan's tooltips and counts", async ({ page }) => {

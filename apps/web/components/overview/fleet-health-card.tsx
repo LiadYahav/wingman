@@ -5,10 +5,9 @@ import { ServerCog } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { useServerScanSites } from "@/features/server-scan/api/server-scan";
-import { fleetHealth, type HealthCount, type HealthRow } from "@/lib/overview/fleet-health";
+import { fleetHealth, type HealthCount, type HealthPartKind, type HealthRow } from "@/lib/overview/fleet-health";
 import { serversHref } from "@/features/server-scan/lib/servers-view";
 import { cn, plural } from "@/lib/utils";
-import type { HealthSeverity } from "@/features/server-scan/types/server-scan";
 import { SegmentedBar } from "./bars";
 import { OverviewCard, RowsSkeleton } from "./overview-card";
 
@@ -25,11 +24,12 @@ const TONE: Record<HealthCount["kind"], string> = {
   unknown: "text-muted-foreground",
 };
 
-const FILL: Record<HealthSeverity, string> = {
+const FILL: Record<HealthPartKind, string> = {
   HEALTHY: "bg-status-ready",
   WARNING: "bg-status-warning",
   MAJOR: "bg-status-error/60",
   CRITICAL: "bg-status-error",
+  MAINTENANCE: "bg-status-provisioning",
   UNKNOWN: "bg-muted-foreground/30",
 };
 
@@ -102,7 +102,7 @@ export function FleetHealthCard() {
   return (
     <OverviewCard
       title="Server Fleet Health"
-      hint="server-scan's servers per site by their overall health (its health policies' verdict), and those in maintenance. The bar splits the site's servers by health; each count opens the Servers page filtered to it."
+      hint="server-scan's servers per site by their overall health (its health policies' verdict), and those in maintenance. The bar splits the site's servers by health, those in maintenance apart; each count opens the Servers page filtered to it."
       href="/server-scan"
       linkLabel="Sites"
       data-testid="overview-health"

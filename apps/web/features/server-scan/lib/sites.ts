@@ -117,13 +117,17 @@ export function cardCounts(card: SiteCard): CardCount[] {
 }
 
 /**
- * `all-healthy` when every server was evaluated HEALTHY: not merely none
- * critical or warning, which is also true of a site nothing has evaluated
- * yet. `empty` with no server at all.
+ * `all-healthy` when every server in service was evaluated HEALTHY: not
+ * merely none critical or warning, which is also true of a site nothing has
+ * evaluated yet. `by_health` counts servers in service only, those in
+ * maintenance being `in_maintenance` (server-scan v6.3.0, its a0e29c3), so a
+ * card whose every server is in maintenance is neither. `empty` with no
+ * server at all.
  */
 export function cardVerdict(stats: Breakdown): "all-healthy" | "empty" | null {
   if (stats.total === 0) return "empty";
-  return (stats.by_health.HEALTHY ?? 0) === stats.total ? "all-healthy" : null;
+  const inService = stats.total - stats.in_maintenance;
+  return inService > 0 && (stats.by_health.HEALTHY ?? 0) === inService ? "all-healthy" : null;
 }
 
 export const HEALTHY_GLYPH = GLYPH.HEALTHY;

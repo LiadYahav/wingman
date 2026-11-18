@@ -57,7 +57,8 @@ its navigation.
 - **Every card**: its name and total; then only the counts above zero, each
   a glyph, the number and a word, in this order: `◆ N critical`,
   `⬟ N major`, `▲ N warning`, `⏸ N in maintenance`, `○ N unknown`. Every
-  server healthy: `● all healthy`; none at all: `empty`. A site card adds
+  server healthy: `● all healthy` (since v6.3.0 every server in service, and
+  at least one); none at all: `empty`. A site card adds
   `N installed` and `N available` (each above zero) from its own
   `by_openshift_state`. Last, a bar per vendor (Dell, Cisco, HPE,
   Standalone, KubeVirt), as wide as its share of the card's own total, with
@@ -86,6 +87,10 @@ included with `get_current_actor` only). Built by `backend/app/api/v1/sites.py`:
   site no longer configured as `unassigned`, so the slices add up to the
   total;
 - every vendor and severity present, zeroes included;
+- since v6.3.0 (its `a0e29c3`; Wingman 3.45.0) a server in maintenance is
+  counted in `in_maintenance` only, not in `by_health`, so `by_health` is
+  the servers in service and a slice's total is `by_health` summed plus
+  `in_maintenance` (before it, `by_health` counted every server);
 - cached 30 seconds in server-scan's Redis. No `ETag`.
 
 ## 3. `GET /api/day1/server-scan/sites`
@@ -278,12 +283,13 @@ Read from `team-redbull/server-scan` at `92146d3`: `frontend/src/features/invent
   from `/sites`), Classification (`installation_type`), Installation
   (Installed, In inventory, Available) and Health (the five severities, then
   Maintenance, which keeps only servers in maintenance). Several values of one
-  dropdown are OR, the dropdowns AND. **Healthy means healthy and in
-  service** (server-scan v6.0.0, its `2bb2fb2`; Wingman 3.43.0): a Healthy
-  server in maintenance shows only with Maintenance ticked too, while every
-  other severity keeps its servers in maintenance; Healthy's count is the
-  rows it shows, and Maintenance's still counts them, since ticking it adds
-  them.
+  dropdown are OR, the dropdowns AND. **A ticked severity means that
+  severity and in service** (server-scan v6.3.0, its `a0e29c3`; Wingman
+  3.45.0; Healthy alone since v6.0.0's `2bb2fb2`, 3.43.0): a server in
+  maintenance shows only with Maintenance ticked too, whatever other filters
+  are set; each severity's count is the rows it shows, and Maintenance's
+  still counts them, since ticking it adds them. The Sites cards count the
+  same way (§2), so a card's "5 critical" opens 5 rows.
 - **Toggles**, each with a tooltip and, while on, its count: Stale, Duplicate
   Name (the name is another server's too), Duplicate Server (claimed by two
   clusters), Name mismatch (OpenShift reports another hostname) and Donor (in

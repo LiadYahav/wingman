@@ -695,3 +695,22 @@ server-scan sent them), `apps/web/lib/server-scan/overview.test.ts`,
 its cause; History's details), `server-scan-events.spec.ts` (the box, the
 details from v5.4.0 and from an older server-scan) and
 `server-scan-servers.spec.ts` (Healthy and its count).
+
+**2026-11-18, 3.45.0: back to parity with server-scan v6.6.0.** The area
+matched server-scan v6.1.0 (`876dd16`). Of the 14 commits up to v6.6.0
+(`635e08a`), six change what the area shows or calls; Wingman follows each,
+and still works against a server-scan without them. The contract's §2, §8
+and §9 of `docs/notes/2026-11-13-server-scan-area-api.md` say what changed.
+
+- **`a0e29c3` (v6.3.0): a ticked severity means that severity and in
+  service.** Healthy alone did since v6.0.0; now every severity on the
+  Servers page's Health dropdown leaves out servers in maintenance unless
+  Maintenance is ticked too, whatever other filters are set, and each
+  severity's count is the rows it shows (`rows.ts`'s `matchesHealth` and
+  `dropdownFacetCounts`, server-scan's cases). server-scan's `GET
+  /api/v1/sites` counts the same way: a server in maintenance is in
+  `in_maintenance` only, not in `by_health`, so a card's "5 critical" opens
+  5 rows. day1 passes the counts through; the fake counts them so. A card
+  says "all healthy" when every server in service is healthy (and one is).
+  The Overview's fleet health bar, Wingman's own over the same counts, gains
+  a maintenance part, so its parts add up to the site's servers.
