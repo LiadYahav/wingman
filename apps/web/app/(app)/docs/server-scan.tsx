@@ -37,7 +37,7 @@ const PAGES = [
   },
 ] as const;
 
-/** The docs page's "Server Scan" section, `#server-scan` (ADR-0048 and its amendments, up to 2026-11-16). */
+/** The docs page's "Server Scan" section, `#server-scan` (ADR-0048 and its amendments, up to 2026-11-18). */
 export function ServerScanSection() {
   return (
     <section>

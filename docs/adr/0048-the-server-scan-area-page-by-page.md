@@ -791,3 +791,43 @@ and §9 of `docs/notes/2026-11-13-server-scan-area-api.md` say what changed.
   its height until measured. A server's History grows its page, as there.
   server-scan's tighter spacing under the table (its footer) is not
   followed: Wingman's pages keep their own padding and have no footer.
+- **Not for Wingman**: `0c141c9` (v6.2.1) is server-scan's own CI
+  (`npm audit --omit=dev`); its render tests' fixture changes are under the
+  map's `not_followed`.
+- **Against an older server-scan** the area still works: `server_type` comes
+  from day1's rule over the vendor; before v6.3.0 `by_health` also counted
+  servers in maintenance, so a card's bars count them twice and the cards say
+  "all healthy" only with none in maintenance; before v6.5.0 Fetch now is a
+  `502` (server-scan has no such route). No new value, Secret, token or grant;
+  day1's routes and the web change in one release. The map's `synced_at` is
+  `v6.6.0`.
+
+Rejected: **`CurrentUser` for Fetch now** (server-scan keeps the call for its
+admins, and the area is for Wingman's admins; a viewer pressing it would only
+get server-scan's refusal); **retrying an unanswered Fetch now** (harmless to
+server-scan, but every write here is sent once and the person decides);
+**passing server-scan's two `409` codes on as two Wingman codes** (the page
+shows server-scan's words either way, and nothing acts on which); **a
+`SERVER_SCAN_REFRESH_TIMEOUT_SECONDS` setting** (the Route's 130 seconds cut
+anything longer, so a value above 120 could never work); **waiting the 240
+seconds server-scan may take for UCS Central** (the Route cuts it; such a
+server is `504 AMBIGUOUS_WRITE` in Wingman and is read by server-scan
+anyway); **a CSS-only box for the tables** (flex alone cannot cap a box at
+the room while letting a short table keep its own height, which
+server-scan's measured `max-height` does).
+
+Verification: `apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_refresh.py`
+(sent once with the admin token and its wait, the record read, every refusal
+and failure, the metrics, the cache, the fake, the use case's switch and log),
+`apps/day1-service/tests/integrations/server_scan/api/test_server_scan_refresh_api.py`
+(admins only, 409, 404, 502, 504, 501 naming the admin token, logged),
+`test_server_scan_rows.py` and `test_server_scan_record.py` (`server_type`
+read and derived; `revision` kept), `test_server_scan_sites.py` (maintenance
+counted apart), `tests/repo/test_chart_nginx.py` (the 130-second location),
+`apps/web/features/server-scan/lib/rows.test.ts`, `sites.test.ts`,
+`servers-view.test.ts`, `refresh.test.ts`, `events.test.ts` and `fill.test.ts`
+(server-scan's cases), `apps/web/lib/overview/fleet-health.test.ts`, and the
+e2e specs `server-scan.spec.ts` (the health bar, Physical, VM and vendor bars
+and their links), `server-scan-servers.spec.ts` (Type, a ticked severity, the
+BMC copy, every row's Fetch now, the box), `server-scan-server.spec.ts` (Fetch
+now, the type line) and `server-scan-events.spec.ts` (the box).

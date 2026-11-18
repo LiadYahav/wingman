@@ -5,9 +5,10 @@
 # exists, and a file is listed here exactly when it names this map.
 
 upstream: team-redbull/server-scan
-# v6.1.0 is 876dd16; Wingman was matched to v5.3.0 (92146d3) and brought to
-# v6.1.0 in 3.43.0 (ADR-0048's 2026-11-16 amendment).
-synced_at: v6.1.0
+# v6.6.0 is 635e08a; Wingman was matched to v5.3.0 (92146d3), brought to
+# v6.1.0 (876dd16) in 3.43.0 (ADR-0048's 2026-11-16 amendment) and to v6.6.0
+# in 3.45.0 (its 2026-11-18 amendment).
+synced_at: v6.6.0
 
 # What Wingman reads or ports: a change here matters even when no entry
 # below follows the file (a new route, schema, enum or page).
@@ -76,6 +77,14 @@ not_followed:
     why: >-
       server-scan's own shell and data layer: Wingman reads day1's routes with
       its own hooks (features/server-scan/api/), in its own layout and design
+  - upstream:
+      - frontend/src/features/inventory/InventoryPage.test.tsx
+      - frontend/src/features/inventory/MaintenanceToggle.test.tsx
+    why: >-
+      server-scan's render tests of its Servers page and its maintenance toggle,
+      through its own hooks, router and DOM; Wingman holds the page with its e2e
+      specs (apps/web/e2e/tests/server-scan-servers.spec.ts), and the pure rules
+      those tests reach with the cases of rows.test.ts, which the map follows
 
 files:
   # ── day1: server-scan's answers typed in its shapes (domain) ──────────────
