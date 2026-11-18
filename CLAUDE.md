@@ -185,7 +185,7 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-18 — 3.45.0: Server Scan at server-scan v6.6.0.**
+**2026-11-18 — 3.46.0: Server Scan at server-scan v6.6.0.**
 - **The sync** (ADR-0048's 2026-11-18 amendment; `scripts/upstream_diff.py
   server-scan v6.6.0`, the map's `synced_at: v6.6.0`): a ticked severity
   leaves out servers in maintenance and the sites count them apart (v6.3.0);

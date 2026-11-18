@@ -37,7 +37,7 @@ server-scan itself works is [its study](../ecosystem/notes/server-scan.md).
 [server-scan.yaml](server-scan.yaml) holds it: `synced_at: v6.6.0` (`635e08a`).
 The area was matched to v5.3.0 (`92146d3`) page by page, brought to v6.1.0
 (`876dd16`) in 3.43.0 (ADR-0048's 2026-11-16 amendment) and to v6.6.0 in
-3.45.0 (its 2026-11-18 amendment); the checks below confirmed each.
+3.46.0 (its 2026-11-18 amendment); the checks below confirmed each.
 
 ## Where its code lives
 

@@ -696,7 +696,7 @@ its cause; History's details), `server-scan-events.spec.ts` (the box, the
 details from v5.4.0 and from an older server-scan) and
 `server-scan-servers.spec.ts` (Healthy and its count).
 
-**2026-11-18, 3.45.0: back to parity with server-scan v6.6.0.** The area
+**2026-11-18, 3.46.0: back to parity with server-scan v6.6.0.** The area
 matched server-scan v6.1.0 (`876dd16`). Of the 14 commits up to v6.6.0
 (`635e08a`), five change what the area shows or calls; Wingman follows each,
 and still works against a server-scan without them. The contract's §1, §2,
