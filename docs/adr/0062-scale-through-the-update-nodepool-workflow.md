@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave; then it may choose its own policy instead); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave; then it may choose its own policy instead, and a nodepool declares its own at create); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed)
 
 ## Context
 
@@ -418,11 +418,13 @@ rest wait once all are picked; Cancel drops the picks; a scale-up offers
 none; a Machine with no server or already leaving cannot be picked; without
 the MCE's nodes it says so; the run's named server and a refusal's line).
 
-## Amendment (2026-11-18, later still): a scale-down may choose a policy of its own
+## Amendment (2026-11-18, later still): a scale-down may choose a policy of its own, and a nodepool declares its own
 
 The user (2026-11-18): "Let's perform the scale-down policy integration: it
 can select the servers to be removed when scaling down, or override the
-current scale-down policy declared inside the nodepool." The workflow takes
+current scale-down policy declared inside the nodepool. Plus we need to make
+it possible to declare it inside the nodepool, with the annotation, in
+Wingman's create cluster and in hostedclusters-setup." The workflow takes
 the override as `scale_down_policy` (b1976f4, aab8949): on a scale-down it
 ranks the NodePool's Machines by that policy, ahead of the NodePool's own
 `redbull.io/scale-down-policy` (even one of its own that is no policy), for
@@ -462,12 +464,69 @@ ownership rule (5) do not change.
   (the one that has `server_names`): an older orchestrator forbids the field
   (422, nothing started).
 
+### A nodepool declares its own policy
+
+The NodePool's own policy is its `redbull.io/scale-down-policy` annotation,
+which the hostedclusters-setup chart renders from the `nodepool[]` entry's
+`annotations` map (team-redbull/helm-charts-hostedclusters-setup PR #4,
+`feat/nodepool-annotations`, open: values as strings, beside the chart's own
+`argocd.argoproj.io/sync-wave`, which an entry may not set). Wingman reads it
+there since 3.42.0; now it writes it too. It is day1's create path, not
+Scale's: it works whether Scale is on or off, and needs no setting.
+
+- **The template input is `nodepools[].scale_down_policy`**, one of the
+  workflow's three or none. The shared template writes it only when given:
+
+  ```jinja
+  {% if np.scale_down_policy | default("") %}
+      annotations:
+        redbull.io/scale-down-policy: {{ np.scale_down_policy }}
+  {% endif %}
+  ```
+
+  None writes nothing: the platform default, CAPI at random. Any other
+  value is refused at a create and at a flavor's save
+  (`scale_down_policy.input_problems`).
+- **A flavor presets or locks it** (ADR-0026's amendment):
+  `nodepools[<i>].scale_down_policy` → `nodepool[<i>].annotations
+  ["redbull.io/scale-down-policy"]`, compared as text; a lock fixes a
+  policy, never none (a lock to none would have a sync delete keys). Drift
+  lists it under that file key, and a sync or a rollout's MR writes it in
+  the file's text as the template does (`cluster_text.set_annotation`:
+  added at the entry's end, or its line replaced; the entry's other
+  annotations and comments stay).
+- **The stale-template guard** (ADR-0063, ADR-0064): a flavor that gives the
+  input is refused while the specs project's template does not read it,
+  and a create whose rendered file does not hold the annotation as given,
+  or holds one unasked, is refused (`rendered_file`). The form schema offers
+  the input only when the template reads it.
+- **Edits keep it.** Every edit, sync and rollout keeps an entry's
+  `annotations` byte for byte, and an edit (the YAML editor, a review edit)
+  may set the policy only to one the workflow knows
+  (`scale_down_policy.edit_problems`, in `cluster_file.edit_problems`): an
+  unknown value the file already holds is left to the workflow. Changing
+  the annotation rolls no node: HyperShift does not roll a NodePool for its
+  metadata.
+- The workflow also reads a label or an annotation set by hand on the MCE's
+  NodePool (Argo CD leaves an annotation it never set alone); the file
+  cannot show those.
+
 Verification: `test_scale_workflow.py` (the body with a policy and nothing
 more), `test_fake_scale.py` (a run's policy ranks ahead of the NodePool's;
 one sent with a scale-up is ignored and said so), `test_scale.py` (the
 enum), `tests/api/test_scale_api.py` (a policy sent on a scale-down and
 applied; an unknown one, and one beside named servers, refused from the
-body; one on a scale-up or no change refused in words; none sent).
+body; one on a scale-up or no change refused in words; none sent);
+`tests/unit/domain/test_scale_down_policy.py` (the input, the template
+guard, the rendered check, the lock, the edit rule),
+`tests/unit/domain/test_cluster_text.py` (the annotation written as the
+template does, in place, beside other annotations, from `{}`; a flow
+mapping refused; every other edit keeps it), `test_locks.py` and
+`test_template.py` (the lockable table, the fixture's schema),
+`tests/api/test_scale_down_policy_api.py` (the schema, a create with and
+without, an unknown policy, a stale template refusing a create and a
+flavor, a preset, a lock to none refused, a locked policy's drift and sync,
+an edit).
 
 ## Amendment (2026-11-19): a 404 to the start is an orchestrator without update-nodepool
 

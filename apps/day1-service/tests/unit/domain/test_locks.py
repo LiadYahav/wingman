@@ -187,6 +187,7 @@ def test_the_lockable_table_reads_as_the_docs_write_it() -> None:
         "nodepools[<i>].replicas",
         "nodepools[<i>].configs",
         "nodepools[<i>].node_labels",
+        "nodepools[<i>].scale_down_policy",
         "nodepools[*].configs",
         "nodepools[*].tuning_config",
     ]
@@ -204,6 +205,7 @@ def test_every_lockable_input_is_one_the_fixture_template_writes_to_its_file_key
         "nodeLabels:",
         "imageContentSources:",
         "disableIdmsMerge:",
+        "redbull.io/scale-down-policy:",
     ):
         assert written in template
     for read in ("owner_merkaz", "owner_anaf", "owner_mador", "platform", "np.replicas"):
@@ -212,6 +214,7 @@ def test_every_lockable_input_is_one_the_fixture_template_writes_to_its_file_key
     assert "disable_idms_merge" in template
     assert "np.configs" in template
     assert "np.node_labels" in template
+    assert "np.scale_down_policy" in template
 
 
 # ── At flavor save ──────────────────────────────────────────────────────────

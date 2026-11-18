@@ -42,6 +42,7 @@ from wingman_day1.domain.errors import InvalidClusterFileError
 from wingman_day1.domain.nodepool_infra_envs import additional_of, infra_envs_of
 from wingman_day1.domain.nodepool_infra_envs import edit_problems as infra_env_problems
 from wingman_day1.domain.replicas_ownership import replicas_problems
+from wingman_day1.domain.scale_down_policy import edit_problems as policy_problems
 from wingman_day1.domain.upgrades import version_problems
 
 AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap", "tuningConfigmap")
@@ -375,7 +376,9 @@ def edit_problems(
     request. Keys owned by automation, and ``clusterName`` (which would rename
     the cluster), must keep exactly the values they have in ``current``. No
     NodePool is renamed by its InfraEnvs, nor a Replace one's InfraEnvs changed
-    (``nodepool_infra_envs.edit_problems``). With ``owned.versions`` so must
+    (``nodepool_infra_envs.edit_problems``), and a scale-down policy the edit
+    sets is one update-nodepool knows (``scale_down_policy.edit_problems``).
+    With ``owned.versions`` so must
     the version keys the upgrade workflow owns (``upgrades.version_problems``),
     and with ``owned.replicas`` each NodePool's replicas as ``main`` (the file
     on the default branch, when it is not ``current``) has them
@@ -400,6 +403,7 @@ def edit_problems(
         problems += version_problems(old, new)
     if owned.replicas:
         problems += replicas_problems(old if main is None else _lenient_values(main), new)
+    problems += policy_problems(old, new)
     return problems + infra_env_problems(old, new, enabled=owned.infra_envs)
 
 

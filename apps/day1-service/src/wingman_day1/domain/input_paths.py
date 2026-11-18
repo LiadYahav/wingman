@@ -10,7 +10,9 @@ A path names one template input the way the create form addresses it::
 at most 253 characters, with no spaces: ``owner_merkaz``,
 ``nodepools[0].configs``, ``nodepools[*].configs``. :class:`InputPath`
 parses and prints it; cluster file keys (``nodepool[0].nodeLabels``) are
-written the same way. :func:`lookup` and :func:`assigned` read and set the
+written the same way, and a key that is no name in quotes
+(``nodepool[0].annotations["redbull.io/scale-down-policy"]``, printed only).
+:func:`lookup` and :func:`assigned` read and set the
 value a path names in a mapping of inputs.
 """
 
@@ -86,6 +88,8 @@ class InputPath:
                 out += "[*]"
             elif isinstance(segment, int):
                 out += f"[{segment}]"
+            elif not _HEAD.fullmatch(str(segment)):
+                out += f'["{segment}"]'  # a file key such as an annotation's
             else:
                 out += f".{segment}" if out else str(segment)
         return out

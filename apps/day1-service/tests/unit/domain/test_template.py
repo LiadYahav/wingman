@@ -259,6 +259,7 @@ def test_the_fixture_template_asks_for_exactly_the_values_file_inputs() -> None:
                 },
                 {"name": "nodepool_name", "type": "string", "required": False, "default": ""},
                 {"name": "replicas", "type": "string", "required": False, "default": 2},
+                {"name": "scale_down_policy", "type": "string", "required": False, "default": ""},
                 {
                     "name": "configs",
                     "type": "list",

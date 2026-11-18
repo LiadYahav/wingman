@@ -65,21 +65,7 @@ def expected_values(values: Mapping[str, object], edits: Sequence[Edit]) -> dict
     result = copy.deepcopy(dict(values))
     for edit in edits:
         if isinstance(edit, SetConfigs):
-            pool = file_pool(result, edit.index)
-            configs = pool.get("configs")
-            have = list(cast("list[object]", configs)) if isinstance(configs, list) else []
-            remaining = Counter(edit.names)
-            kept: list[object] = []
-            for raw in have:
-                if remaining[entry_key(raw)] > 0:
-                    remaining[entry_key(raw)] -= 1
-                    kept.append(raw)
-            for name in edit.names:
-                if remaining[name] > 0:
-                    kept.append({"name": name})
-                    remaining[name] -= 1
-            if kept or "configs" in pool:
-                pool["configs"] = kept
+            _set_configs(file_pool(result, edit.index), edit.names)
             continue
         segments = edit.key.segments
         if segments[0] == "owner":
@@ -89,12 +75,40 @@ def expected_values(values: Mapping[str, object], edits: Sequence[Edit]) -> dict
                 result["owner"] = owner
             cast("dict[str, object]", owner)[str(segments[1])] = edit.value
         elif segments[0] == "nodepool":
-            file_pool(result, cast("int", segments[1]))[str(segments[2])] = copy.deepcopy(
-                edit.value
-            )
+            _set_in_pool(file_pool(result, cast("int", segments[1])), edit.key, edit.value)
         else:
             result[str(segments[0])] = edit.value
     return result
+
+
+def _set_configs(pool: dict[str, object], names: Sequence[str]) -> None:
+    """The entries that stay keep their place; missing names are added, in order."""
+    configs = pool.get("configs")
+    have = list(cast("list[object]", configs)) if isinstance(configs, list) else []
+    remaining = Counter(names)
+    kept: list[object] = []
+    for raw in have:
+        if remaining[entry_key(raw)] > 0:
+            remaining[entry_key(raw)] -= 1
+            kept.append(raw)
+    for name in names:
+        if remaining[name] > 0:
+            kept.append({"name": name})
+            remaining[name] -= 1
+    if kept or "configs" in pool:
+        pool["configs"] = kept
+
+
+def _set_in_pool(pool: dict[str, object], key: InputPath, value: object) -> None:
+    """``nodepool[i].<name>``, or one key of a mapping in it (``annotations``)."""
+    segments = key.segments
+    if len(segments) == 3:
+        pool[str(segments[2])] = copy.deepcopy(value)
+        return
+    inner = pool.get(str(segments[2])) or {}
+    if not isinstance(inner, dict):
+        raise UneditableFileError("the cluster file changed shape", [f"{key.parent} is no mapping"])
+    pool[str(segments[2])] = {**cast("dict[str, object]", inner), str(segments[3]): value}
 
 
 def _same(a: object, b: object) -> bool:

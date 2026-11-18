@@ -11,7 +11,8 @@ the comments and rewrite the CI's block. Wingman edits lines the same way:
   ADR-0012) in the leading comment block and changes no other line;
 - :func:`edit_values` sets the values a flavor locks: ``owner.<x>``,
   ``platform``, the image mirrors (``imageContentSources``,
-  ``disableIdmsMerge``), a nodepool's ``replicas``, ``nodeLabels`` and ``configs``.
+  ``disableIdmsMerge``), a nodepool's ``replicas``, ``nodeLabels``, ``configs``
+  and the scale-down policy in its ``annotations`` (ADR-0062).
   A replaced value keeps its line's comment; a config entry that stays keeps
   its line; a removed entry takes only its own lines; new lines copy the
   indentation the file already uses.
@@ -56,6 +57,7 @@ from wingman_day1.domain.cluster_file import (
 from wingman_day1.domain.errors import InvalidClusterFileError, UneditableFileError
 from wingman_day1.domain.image_mirrors import MIRROR_FILE_KEYS
 from wingman_day1.domain.locks import entry_key
+from wingman_day1.domain.scale_down_policy import ANNOTATIONS
 from wingman_day1.domain.yaml_lines import (
     DEFAULT_STEP,
     Block,
@@ -264,6 +266,37 @@ class _Editor:
                 self.patch.delete(child, child + 1)
         self.patch.replace(found.index, f"{found.lead}{found.key}: {rendered}{found.comment}")
 
+    def set_annotation(self, index: int, name: str, value: object) -> None:
+        """One key of a nodepool's ``annotations``; its other keys and comments stay.
+
+        Without ``annotations`` the block is added at the entry's end, as the
+        shared template writes it; ``annotations: {}`` becomes that block.
+        """
+        item = self.item(index)
+        rendered = plain(str(value))  # as the template writes the policy
+        found = find_key(self.lines, self.item_keys(item), ANNOTATIONS)
+        if found is None:
+            pad = " " * item.column
+            lines = [f"{pad}{ANNOTATIONS}:", f"{pad}{' ' * DEFAULT_STEP}{name}: {rendered}"]
+            self.patch.insert(item.end, lines)
+            return
+        where = f"nodepool[{index}].{ANNOTATIONS}"
+        if found.value and found.value != "{}":
+            raise UneditableFileError(
+                f"{where} is not a block mapping Wingman can edit",
+                [f"line {found.index + 1}: {self.lines[found.index].stripped}"],
+            )
+        block = self.block(found)
+        content = [i for i in block.children if self.lines[i].is_content]
+        column = self.lines[content[0]].indent if content else found.column + DEFAULT_STEP
+        key = find_key(self.lines, keys_at(self.lines, found.index + 1, block.end, column), name)
+        if found.value:
+            self.patch.replace(found.index, f"{found.lead}{found.key}:{found.comment}")
+        if key is None:
+            self.patch.insert(block.end, [f"{' ' * column}{name}: {rendered}"])
+        else:
+            self.scalar(key, rendered, f"{where}.{name}")
+
     def set_configs(self, index: int, names: Sequence[str], parsed: Sequence[object]) -> None:
         item = self.item(index)
         keys = self.item_keys(item)
@@ -375,6 +408,8 @@ def edit_values(content: str, edits: Sequence[Edit]) -> str:
             editor.set_mirrors(str(segments[0]), edit.value)
         elif segments[0] == "nodepool" and len(segments) == 3 and isinstance(segments[1], int):
             editor.set_item_value(segments[1], str(segments[2]), edit.value)
+        elif segments[0] == "nodepool" and segments[2:3] == (ANNOTATIONS,) and len(segments) == 4:
+            editor.set_annotation(cast("int", segments[1]), str(segments[3]), edit.value)
         else:
             raise UneditableFileError(
                 "Wingman does not edit that key", [f"{edit.key} is not a lockable file key"]
