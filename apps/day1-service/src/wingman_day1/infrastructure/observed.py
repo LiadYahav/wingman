@@ -154,7 +154,7 @@ class WorkflowsOperation(StrEnum):
     START_ADD_SERVER = "start_add_server"
     """Adding servers to an MCE's InfraEnv pool (ADR-0057), by count or by name."""
     START_UPDATE_NODEPOOL = "start_update_nodepool"
-    """Scaling a cluster's NodePools (ADR-0062), by InfraEnv kind or one NodePool."""
+    """Scaling a cluster's NodePools (ADR-0062), one NodePool a run."""
 
 
 _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (

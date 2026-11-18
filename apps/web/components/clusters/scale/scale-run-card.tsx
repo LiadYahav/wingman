@@ -2,16 +2,27 @@
 
 import { CircleCheck, CircleX, Loader2 } from "lucide-react";
 import { humanize } from "@/lib/nodes";
-import { fromTo, isRunning, stateWord } from "@/lib/scale-model";
+import { failureHint, fromTo, isRunning, runTarget, stateWord } from "@/lib/scale-model";
 import { cn } from "@/lib/utils";
 import type { ScaleResult, ScaleRun } from "@/types";
 
 const DIRECTION: Record<string, string> = { up: "Scaling up", down: "Scaling down", none: "Nothing to change" };
 
-/** What the run was asked, as its result says it: a kind's total, or one NodePool. */
-function targetOf(result: ScaleResult | null): string | null {
-  if (!result) return null;
-  return result.infra_env_kind ? `kind ${result.infra_env_kind}` : result.nodepool ? `NodePool ${result.nodepool}` : null;
+/** What the request said about a scale-down that this run (up, or no change) had no use for, in the workflow's words. */
+function Ignored({ result }: { result: ScaleResult }) {
+  if (result.ignored.length === 0) return null;
+  return (
+    <section aria-label="Not used by this run" className="space-y-1" data-testid="scale-run-ignored">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Not used: the run did not scale down</h3>
+      <ul className="space-y-0.5 text-xs text-muted-foreground">
+        {result.ignored.map((line) => (
+          <li key={line} className="break-words">
+            {line}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 /** Each NodePool the run planned, before → after, with the policy a scale-down picks its servers by. */
@@ -105,7 +116,8 @@ export function ScaleRunCard({ run }: { run: ScaleRun }) {
   const running = isRunning(run);
   const done = run.status === "completed";
   const result = run.result;
-  const target = targetOf(result);
+  const target = runTarget(result);
+  const hint = failureHint(run.error_type);
   const direction = result?.direction ?? run.direction;
   return (
     <section
@@ -148,10 +160,16 @@ export function ScaleRunCard({ run }: { run: ScaleRun }) {
         <div data-testid="scale-run-error" className="rounded-md bg-status-error/10 px-3 py-2 text-sm text-status-error-fg space-y-0.5">
           {run.error_type && <p className="font-mono text-xs font-medium">{run.error_type}</p>}
           <p className="break-words">{run.error}</p>
+          {hint && (
+            <p className="text-xs text-foreground" data-testid="scale-run-error-hint">
+              {hint}
+            </p>
+          )}
         </div>
       )}
       {result && <Plan result={result} />}
       {result && <Chosen result={result} />}
+      {result && <Ignored result={result} />}
       {result && <Commit result={result} />}
       <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-[7rem_1fr]">
         <dt className="text-muted-foreground">Run</dt>

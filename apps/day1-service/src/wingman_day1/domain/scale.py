@@ -8,18 +8,17 @@ the servers that leave (``docs/notes/2026-11-16-scale-nodepools-api.md``).
 Wingman starts a run and shows it. Only data crosses back: these types hold
 the workflow's strings as it gives them, and there is no phase list.
 
-Two things are Wingman's own, for the page and its guards, never sent as a
-plan: which NodePools of the cluster file an InfraEnv kind selects (the
-workflow's rule, so the dialog can show them and refuse a kind that selects a
-NodePool a flavor locks), and the name of each NodePool, which the file gives
-by the chart's rule (``name``, else ``<clusterName>-<InfraEnv>``), the rule the
-workflow matches day1 with the MCE by.
+A run sets one NodePool, named (the workflow refuses anything else since
+2026-11-18). The one thing Wingman works out itself is that name, which the
+cluster file gives by the chart's rule (``name``, else
+``<clusterName>-<InfraEnv>``), the rule the workflow matches day1 with the MCE
+by: day1 refuses a start it cannot map to one NodePool of the file. A run
+recorded by InfraEnv kind before then is still read and shown as it is.
 """
 
 from __future__ import annotations
 
 import re
-from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, cast
@@ -44,14 +43,13 @@ def scale_workflow_id(stem: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class ScaleRequest:
-    """One start: the replicas, and exactly one of an InfraEnv kind (a total) or a NodePool."""
+    """One start: one NodePool of the cluster, by name, and its replicas, set exactly."""
 
     mce_cluster: str
     cluster: str
     """The cluster file's stem: the workflow's ``cluster``."""
     replicas: int
-    infra_env_kind: str | None = None
-    nodepool: str | None = None
+    nodepool: str
 
 
 # ── A run, as the orchestrator reports it ────────────────────────────────────
@@ -106,6 +104,7 @@ class ScaleResult:
     direction: str
     """``up``, ``down`` or ``none`` (the replicas were already the request: nothing written)."""
     infra_env_kind: str | None = None
+    """Set only on a run recorded by kind before 2026-11-18; ``nodepool`` on every other."""
     nodepool: str | None = None
     day1_path: str | None = None
     total_before: int | None = None
@@ -118,6 +117,8 @@ class ScaleResult:
     live: tuple[LiveReplicas, ...] = ()
     chosen: tuple[ChosenServer, ...] = ()
     deleting: tuple[str, ...] = ()
+    ignored: tuple[str, ...] = ()
+    """What the request said about a scale-down that a run not scaling down had no use for."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,25 +186,6 @@ class FileNodePool:
             f"{self.label} has neither name nor infraEnvName, so its NodePool cannot be named "
             "from the file"
         )
-
-
-@dataclass(frozen=True, slots=True)
-class KindChoice:
-    """An InfraEnv kind the dialog offers, and the NodePools of this file it selects."""
-
-    kind: str
-    nodepools: tuple[FileNodePool, ...]
-
-    @property
-    def total(self) -> int | None:
-        """Their replicas now; ``None`` when one is not a whole number."""
-        counts = [p.replicas for p in self.nodepools]
-        return None if any(c is None for c in counts) else sum(c or 0 for c in counts)
-
-    @property
-    def locked(self) -> tuple[FileNodePool, ...]:
-        """The selected NodePools whose replicas a flavor locks: the kind cannot be scaled."""
-        return tuple(p for p in self.nodepools if p.locked_replicas is not None)
 
 
 def infra_env_of(entry: Mapping[str, object]) -> str | None:
@@ -284,33 +266,6 @@ def scale_down_policy(entry: Mapping[str, object]) -> str | None:
         return None
     value = cast("Mapping[str, object]", annotations).get(SCALE_DOWN_POLICY)
     return None if value is None else str(value)
-
-
-def belongs_to_kind(infra_env: str | None, kind: str) -> bool:
-    """The workflow's rule: a NodePool is of kind K when its InfraEnv is K or starts with ``K-``."""
-    return infra_env is not None and (infra_env == kind or infra_env.startswith(f"{kind}-"))
-
-
-def kind_choices(pools: Sequence[FileNodePool]) -> tuple[KindChoice, ...]:
-    """The kinds offered for this file, narrowest first: never wider than its own NodePools need.
-
-    Each InfraEnv of its NodePools, and the common start of sibling InfraEnvs
-    (two or more that differ only in their last dash segment, such as
-    ``<k>-zone-a`` and ``<k>-zone-b``: ``<k>-zone``), so a total can be spread
-    over a cluster's zones. Shorter kinds would also select other hardware.
-    """
-    envs = sorted({p.infra_env for p in pools if p.infra_env})
-    parents = Counter(env.rsplit("-", 1)[0] for env in envs if "-" in env)
-    kinds = set(envs) | {parent for parent, count in parents.items() if count >= 2}
-    choices: list[KindChoice] = []
-    seen: set[tuple[int, ...]] = set()
-    for kind in sorted(kinds, key=lambda k: (-len(k), k)):
-        selected = tuple(p for p in pools if belongs_to_kind(p.infra_env, kind))
-        positions = tuple(p.index for p in selected)
-        if selected and (kind in envs or positions not in seen):
-            seen.add(positions)
-            choices.append(KindChoice(kind, selected))
-    return tuple(sorted(choices, key=lambda c: c.kind))
 
 
 def _replicas(entry: Mapping[str, object]) -> int | None:

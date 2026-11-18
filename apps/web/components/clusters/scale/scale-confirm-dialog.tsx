@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CircleCheck, CirclePlus, GitCommitHorizontal, Loader2, ServerOff, TriangleAlert, Warehouse, type LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { addsLine, changeLine, doneLine, leaving, poolsOf, type Leaving } from "@/lib/scale-confirm";
+import { addsLine, changeLine, DONE_LINE, leaving, policyOf, type Leaving } from "@/lib/scale-confirm";
 import { cn } from "@/lib/utils";
 import { sendable, sendChange, settled, StartError } from "./scale-start";
 import type { ScaleTabValue } from "./scale-tab";
@@ -27,18 +27,16 @@ interface Point {
   text: React.ReactNode;
   /** Said louder: which nodes a scale-down removes. */
   emphasis?: "notice" | "refused";
-  /** Each NodePool's own policy, under the line. */
-  pools?: Leaving["pools"];
   testId?: string;
 }
 
 const MAIN = <span className="font-mono">main</span>;
 
-function upPoints(count: number, mode: "kind" | "nodepool"): Point[] {
+function upPoints(count: number): Point[] {
   return [
-    { icon: CirclePlus, text: addsLine(count, mode) },
+    { icon: CirclePlus, text: addsLine(count) },
     { icon: GitCommitHorizontal, text: <>One commit to day1 {MAIN}, no merge request; the workflow has Argo CD apply it.</> },
-    { icon: CircleCheck, text: doneLine(mode) },
+    { icon: CircleCheck, text: DONE_LINE },
   ];
 }
 
@@ -48,7 +46,6 @@ function downPoints(leave: Leaving): Point[] {
       icon: leave.refused ? TriangleAlert : ServerOff,
       text: leave.text,
       emphasis: leave.refused ? "refused" : "notice",
-      pools: leave.pools,
       testId: "scale-confirm-leaving",
     },
     { icon: Warehouse, text: "Their pods move to the remaining nodes; the servers stay in the MCE's inventory, free." },
@@ -59,7 +56,7 @@ function downPoints(leave: Leaving): Point[] {
 function Points({ points }: { points: Point[] }) {
   return (
     <ul className="space-y-2" aria-label="What update-nodepool does" data-testid="scale-confirm-points">
-      {points.map(({ icon: Icon, text, emphasis, pools, testId }, i) => (
+      {points.map(({ icon: Icon, text, emphasis, testId }, i) => (
         <li key={i} className="flex items-start gap-2.5 text-sm" data-testid={testId}>
           <Icon
             className={cn(
@@ -68,18 +65,7 @@ function Points({ points }: { points: Point[] }) {
             )}
             aria-hidden
           />
-          <div className="min-w-0 space-y-1">
-            <p className={emphasis ? "font-medium text-foreground" : "text-muted-foreground"}>{text}</p>
-            {pools && pools.length > 0 && (
-              <ul className="space-y-0.5 text-xs text-muted-foreground" aria-label="Each NodePool's scale-down policy">
-                {pools.map((p) => (
-                  <li key={p.nodepool} className={cn("break-words", p.refused && "text-status-error-fg")} data-testid="scale-confirm-pool">
-                    <span className="font-mono break-all text-foreground">{p.nodepool}</span>: {p.words}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <p className={cn("min-w-0", emphasis ? "font-medium text-foreground" : "text-muted-foreground")}>{text}</p>
         </li>
       ))}
     </ul>
@@ -89,24 +75,21 @@ function Points({ points }: { points: Point[] }) {
 /**
  * The confirmation before every scale (ADR-0062's amendments): what
  * update-nodepool is about to do, in a few plain lines, then Cancel or Yes.
- * A scale-down says which nodes leave, by each NodePool's scale-down policy
+ * A scale-down says which nodes leave, by the NodePool's scale-down policy
  * as the day1 file sets it. Yes arms after half a second; Cancel and Escape
- * change nothing, and the change stays where it was. Mount it while open; in
- * the hardware type dialog it is that dialog's child, so Escape closes only it.
+ * change nothing, and the change stays where it was. Mount it while open.
  */
-export function ScaleConfirmDialog({ tab, onCancel, onStarted }: {
+export function ScaleConfirmDialog({ tab, onCancel }: {
   tab: ScaleTabValue;
   /** Closed with nothing sent. */
   onCancel: () => void;
-  /** The run started (it shows under NodePool sizes, focused). */
-  onStarted?: () => void;
 }) {
   const armed = useArmed(ARM_MS);
   const { change, current, asked, direction, start } = tab.state;
   if (!change || current === null || asked === null || (direction !== "up" && direction !== "down")) return null;
   const up = direction === "up";
-  const pools = poolsOf(change, tab.options);
-  const points = up ? upPoints(asked - current, change.mode) : downPoints(leaving(current - asked, pools));
+  const policy = policyOf(change.nodepool, tab.options.nodepools);
+  const points = up ? upPoints(asked - current) : downPoints(leaving(current - asked, policy));
   const close = () => {
     if (!start.isPending) onCancel();
   };
@@ -116,10 +99,10 @@ export function ScaleConfirmDialog({ tab, onCancel, onStarted }: {
       <DialogContent className="sm:max-w-lg" showCloseButton={false} data-testid="scale-confirm" data-direction={direction}>
         <DialogHeader>
           <DialogTitle className="leading-snug">
-            Scale {up ? "up" : "down"} <span className="font-mono break-words">{change.target}</span>?
+            Scale {up ? "up" : "down"} <span className="font-mono break-words">{change.nodepool}</span>?
           </DialogTitle>
           <DialogDescription className="tabular-nums text-foreground" data-testid="scale-confirm-change">
-            {changeLine(change.mode, current, asked, pools.length)}
+            {changeLine(current, asked)}
           </DialogDescription>
         </DialogHeader>
 
@@ -140,7 +123,7 @@ export function ScaleConfirmDialog({ tab, onCancel, onStarted }: {
           </button>
           <button
             type="button"
-            onClick={() => sendChange(tab, onStarted)}
+            onClick={() => sendChange(tab)}
             disabled={!armed || !sendable(tab)}
             className={buttonVariants({ variant: up ? "default" : "destructive" })}
             data-testid="scale-confirm-yes"

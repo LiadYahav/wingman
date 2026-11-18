@@ -1,22 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   busyReason,
-  changeLabel,
   changeWords,
   currentOf,
   directionOf,
-  kindBlock,
+  failureHint,
   needsRestore,
   nodepoolBlock,
   phaseWords,
   replicasOf,
+  runTarget,
   startBody,
   stateWord,
   stepped,
-  totalKinds,
   typedReplicas,
 } from "./scale-model";
-import type { ScaleKind, ScaleNodePool, ScaleRun } from "@/types";
+import type { ScaleNodePool, ScaleRun } from "@/types";
 
 const run = (overrides: Partial<ScaleRun> = {}): ScaleRun => ({
   workflow_id: "update-nodepool-ocp4-prod-lark-site1",
@@ -39,14 +38,6 @@ const pool = (overrides: Partial<ScaleNodePool> = {}): ScaleNodePool => ({
   locked_replicas: null,
   unnamed: null,
   scale_down_policy: null,
-  ...overrides,
-});
-
-const kind = (overrides: Partial<ScaleKind> = {}): ScaleKind => ({
-  kind: "dell-r660",
-  nodepools: ["prod-lark-site1-dell-r660"],
-  total: 3,
-  locked: [],
   ...overrides,
 });
 
@@ -92,14 +83,6 @@ describe("busyReason", () => {
 });
 
 describe("what can be scaled", () => {
-  it("refuses a kind that selects a locked NodePool, naming the flavor and the pools", () => {
-    expect(kindBlock(kind(), "agent-standard")).toBeNull();
-    expect(kindBlock(kind({ locked: ["a", "b"] }), "agent-standard")).toBe(
-      "Locked by flavor agent-standard: it selects a, b, whose replicas the flavor fixes."
-    );
-    expect(kindBlock(kind({ total: null }), null)).toMatch(/not a number/);
-  });
-
   it("refuses an unnamed or a locked NodePool by name", () => {
     expect(nodepoolBlock(pool())).toBeNull();
     expect(nodepoolBlock(pool({ name: null, unnamed: "nodepool[2] has neither name nor infraEnvName" }))).toBe(
@@ -118,25 +101,24 @@ describe("what can be scaled", () => {
 });
 
 describe("the start", () => {
-  it("sends exactly one target", () => {
-    expect(startBody("kind", "dell-r660", 12)).toEqual({ infra_env_kind: "dell-r660", replicas: 12 });
-    expect(startBody("nodepool", "prod-lark-site1-dell-r660", 0)).toEqual({ nodepool: "prod-lark-site1-dell-r660", replicas: 0 });
+  it("sends one NodePool and its replicas, nothing else", () => {
+    expect(startBody("prod-lark-site1-dell-r660", 0)).toStrictEqual({ nodepool: "prod-lark-site1-dell-r660", replicas: 0 });
+    expect(startBody("prod-lark-site1-dell-r660", 12)).toStrictEqual({ nodepool: "prod-lark-site1-dell-r660", replicas: 12 });
   });
 
-  it("waits for a target and a whole number from 0", () => {
-    expect(startBody("kind", null, 3)).toBeNull();
-    expect(startBody("kind", "k", NaN)).toBeNull();
-    expect(startBody("kind", "k", -1)).toBeNull();
-    expect(startBody("kind", "k", 2.5)).toBeNull();
+  it("waits for a NodePool and a whole number from 0", () => {
+    expect(startBody(null, 3)).toBeNull();
+    expect(startBody("p", NaN)).toBeNull();
+    expect(startBody("p", -1)).toBeNull();
+    expect(startBody("p", 2.5)).toBeNull();
     expect(replicasOf(501)).toBeNull();
   });
 
-  it("knows where the choice is now and which way it goes, never the plan", () => {
-    const kinds = [kind({ total: 9 })];
+  it("knows where the NodePool is now and which way it goes, never the plan", () => {
     const pools = [pool({ replicas: 3 })];
-    expect(currentOf("kind", "dell-r660", kinds, pools)).toBe(9);
-    expect(currentOf("nodepool", "prod-lark-site1-dell-r660", kinds, pools)).toBe(3);
-    expect(currentOf("kind", null, kinds, pools)).toBeNull();
+    expect(currentOf("prod-lark-site1-dell-r660", pools)).toBe(3);
+    expect(currentOf("prod-lark-site1-other", pools)).toBeNull();
+    expect(currentOf(null, pools)).toBeNull();
     expect(directionOf(9, 12)).toBe("up");
     expect(directionOf(9, 8)).toBe("down");
     expect(directionOf(9, 9)).toBe("none");
@@ -144,16 +126,19 @@ describe("the start", () => {
   });
 });
 
-describe("hardware types with a total", () => {
-  it("are those over two or more NodePools", () => {
-    const zones = kind({ kind: "dell-r660-zone", nodepools: ["lark-zone-a", "lark-zone-b"], total: 6 });
-    expect(totalKinds([kind(), zones, kind({ kind: "dell-r760" })])).toEqual([zones]);
-    expect(totalKinds([kind()])).toEqual([]);
+describe("a run's target and failure", () => {
+  it("is its NodePool, or the kind of a run recorded by kind before 2026-11-18", () => {
+    expect(runTarget({ infra_env_kind: null, nodepool: "lark-zone-a" })).toBe("NodePool lark-zone-a");
+    expect(runTarget({ infra_env_kind: "dell-r660-zone", nodepool: null })).toBe("kind dell-r660-zone");
+    expect(runTarget({ infra_env_kind: null, nodepool: null })).toBeNull();
+    expect(runTarget(null)).toBeNull();
   });
 
-  it("name a change: a NodePool, or a kind's total", () => {
-    expect(changeLabel({ mode: "nodepool", target: "lark-zone-a" })).toBe("lark-zone-a");
-    expect(changeLabel({ mode: "kind", target: "dell-r660-zone" })).toBe("dell-r660-zone total");
+  it("explains named servers a scale-down could not remove, and nothing else", () => {
+    expect(failureHint("ScaleDownServersInvalidError")).toMatch(/^The servers named to leave cannot be the ones/);
+    expect(failureHint("ScaleDownServersInvalidError")).toMatch(/Nothing was marked or written\.$/);
+    expect(failureHint("ArgoSyncRefusedError")).toBeNull();
+    expect(failureHint(null)).toBeNull();
   });
 });
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 import yaml
 
 from wingman_day1.domain.input_paths import InputPath
@@ -11,11 +10,9 @@ from wingman_day1.domain.scale import (
     FileNodePool,
     HeldReplicas,
     ScaleRun,
-    belongs_to_kind,
     error_type,
     file_nodepools,
     held_back,
-    kind_choices,
     replicas_locks,
     restore_lines,
     scale_down_policy,
@@ -99,53 +96,6 @@ nodepool:
     assert [p.scale_down_policy for p in pools()] == [None] * 5
 
 
-@pytest.mark.parametrize(
-    ("infra_env", "selected"),
-    [
-        ("cisco-m6-bat-yam-64c-512gb", True),
-        ("cisco-m6-bat-yam-64c-512gb-zone-a", True),
-        ("cisco-m6-bat-yam-64c-512gb-b2", True),
-        ("cisco-m6-bat-yam-64c-512gbx", False),
-        (None, False),
-    ],
-)
-def test_a_kind_selects_its_infraenv_and_what_follows_a_dash(
-    infra_env: str | None, selected: bool
-) -> None:
-    assert belongs_to_kind(infra_env, "cisco-m6-bat-yam-64c-512gb") is selected
-
-
-def test_the_kinds_are_the_infraenvs_and_the_common_start_of_siblings() -> None:
-    choices = {c.kind: c for c in kind_choices(pools(locked={1: 2}, flavor="f"))}
-    assert sorted(choices) == [
-        "cisco-m6-bat-yam-64c-512gb-zone",
-        "cisco-m6-bat-yam-64c-512gb-zone-a",
-        "cisco-m6-bat-yam-64c-512gb-zone-b",
-        "dell-r760-128c",
-        "hp-gen11",
-    ]
-    zones = choices["cisco-m6-bat-yam-64c-512gb-zone"]
-    assert [p.index for p in zones.nodepools] == [0, 1]
-    assert zones.total == 5
-    assert [p.index for p in zones.locked] == [1]
-    assert choices["hp-gen11"].total is None
-    assert choices["dell-r760-128c"].locked == ()
-
-
-def test_different_hardware_is_never_one_kind() -> None:
-    text = "nodepool:\n- infraEnvName: dell-r660-site1-128c\n- infraEnvName: dell-r760-site1-64c\n"
-    assert [c.kind for c in kind_choices(pools(text))] == [
-        "dell-r660-site1-128c",
-        "dell-r760-site1-64c",
-    ]
-
-
-def test_a_shorter_infraenv_is_a_kind_that_selects_the_longer_one() -> None:
-    text = "nodepool:\n- infraEnvName: hp-64c\n- infraEnvName: hp-64c-b2\n"
-    choices = {c.kind: [p.index for p in c.nodepools] for c in kind_choices(pools(text))}
-    assert choices == {"hp-64c": [0, 1], "hp-64c-b2": [1]}
-
-
 def test_the_flavors_locked_replicas_by_position() -> None:
     locks = [
         Lock(InputPath.parse("nodepools[0].replicas"), 5),
@@ -162,7 +112,7 @@ def test_the_error_type_is_read_from_the_words_when_they_name_one() -> None:
         "out of sync. Its history has the detail"
     )
     assert error_type(child) == "ArgoSyncRefusedError"
-    assert error_type("the NodePools of kind x are more than one replica apart") is None
+    assert error_type("the cluster has no NodePool x, on the MCE or in day1") is None
     assert error_type(None) is None
 
 

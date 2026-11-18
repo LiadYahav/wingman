@@ -3,7 +3,7 @@
 import { createContext, useContext } from "react";
 import { useScaleBusy, useScaleOptions } from "@/lib/scale";
 import { useScaleChange, type ScaleChangeState } from "@/lib/scale-change";
-import { changeLabel, changeWords, MAX_REPLICAS } from "@/lib/scale-model";
+import { changeWords, MAX_REPLICAS } from "@/lib/scale-model";
 import type { ScaleOptions } from "@/types";
 
 /** Where the Nodes tab says, once, why nothing can be scaled now; every stepper points there. */
@@ -30,15 +30,15 @@ export function useScaleTab(): ScaleTabValue | null {
 function announcement({ state }: ScaleTabValue): string {
   const { change, current, asked } = state;
   if (!change) return "";
-  if (asked === null) return `${changeLabel(change)}: replicas are a whole number from 0 to ${MAX_REPLICAS}.`;
-  return `${changeLabel(change)}: ${changeWords(current, asked)}`;
+  if (asked === null) return `${change.nodepool}: replicas are a whole number from 0 to ${MAX_REPLICAS}.`;
+  return `${change.nodepool}: ${changeWords(current, asked)}`;
 }
 
 /**
- * Scale's state for the whole Nodes tab (ADR-0062, its 2026-11-16
- * amendment): the NodePool cards, the NodePool sizes and the hardware type
- * dialog share one change, so changing any stepper puts every other back.
- * The change is announced from one place. Nothing while scaling is off.
+ * Scale's state for the whole Nodes tab (ADR-0062, its amendments): the
+ * NodePool cards and the NodePool sizes share one change, so changing any
+ * stepper puts every other back. The change is announced from one place.
+ * Nothing while scaling is off.
  */
 export function ScaleTab({
   name,

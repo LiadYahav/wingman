@@ -1,11 +1,11 @@
 "use client";
 
 import { Minus, Plus } from "lucide-react";
-import { MAX_REPLICAS, stepped, typedReplicas, type ScaleMode } from "@/lib/scale-model";
+import { MAX_REPLICAS, stepped, typedReplicas } from "@/lib/scale-model";
 import { cn } from "@/lib/utils";
 
-/** The id of a stepper's field, for focus to go back to once its change is cancelled. */
-export const stepperInputId = ({ mode, target }: { mode: ScaleMode; target: string }) => `scale-input-${mode}-${target}`;
+/** The id of a NodePool stepper's field, for focus to go back to once its change is cancelled. */
+export const stepperInputId = (nodepool: string) => `scale-input-nodepool-${nodepool}`;
 
 /**
  * Quiet until wanted: in a card or a row (`group/pool`) the frame and the
@@ -32,7 +32,7 @@ const iconClass =
   "size-4 transition-[transform,opacity] duration-100 ease-out group-active/step:scale-[0.82] motion-reduce:transition-none motion-reduce:group-active/step:scale-100";
 
 /**
- * − [n] +: one NodePool's replicas or a hardware type's total. Each button
+ * − [n] +: one NodePool's replicas. Each button
  * moves it by one, the arrow keys too, and it can be typed. `changed` marks
  * the one stepper whose number differs from now.
  */
@@ -46,7 +46,7 @@ export function ReplicasStepper({
   inputId,
   quiet = false,
 }: {
-  /** The NodePool or the hardware type: it names the group and its buttons. */
+  /** The NodePool: it names the group and its buttons. */
   name: string;
   /** `NaN` while the field is empty. */
   value: number;

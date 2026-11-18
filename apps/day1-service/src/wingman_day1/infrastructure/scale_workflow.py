@@ -1,13 +1,13 @@
 """HttpScaleWorkflow: the orchestrator's update-nodepool workflow, over httpx (ADR-0062).
 
-The workflow reads the cluster's NodePools in day1 and on the MCE, plans the
-replicas, commits them to day1 ``main``, syncs the cluster's Argo CD
-Application and checks the NodePools; day1 starts a run and reads it
+The workflow reads one NodePool of the cluster in day1 and on the MCE, sets
+its replicas in day1 ``main``, syncs the cluster's Argo CD Application and
+checks the NodePool; day1 starts a run and reads it
 (``docs/notes/2026-11-16-scale-nodepools-api.md``):
 
-- ``POST /workflows/server-lifecycle/update-nodepool`` with
-  ``{mce_cluster, cluster, replicas, infra_env_kind | nodepool}`` (exactly
-  one of the last two; the body forbids other fields) answers ``202
+- ``POST /workflows/server-lifecycle/update-nodepool`` with exactly
+  ``{mce_cluster, cluster, nodepool, replicas}`` (the body forbids other
+  fields; ``infra_env_kind`` is refused since 2026-11-18) answers ``202
   {"workflow_id": "update-nodepool-<cluster>", "run_id"}``, 409 while a run
   of the cluster runs and while an upgrade-cluster run of it runs (its words
   say which), 422 for a body it refuses. Everything it judges later is a
@@ -123,7 +123,8 @@ class HttpScaleWorkflow:
             )
         if status == 422:
             raise ScaleRefusedError(
-                f"the orchestrator refused the scale of {cluster}", orchestrator_problems(response)
+                f"the orchestrator refused the scale of {cluster}; nothing was started",
+                orchestrator_problems(response),
             )
         if status == 504:
             raise AmbiguousStartError(
@@ -176,17 +177,13 @@ class HttpScaleWorkflow:
 
 
 def _start_body(request: ScaleRequest) -> dict[str, JSON]:
-    """The start's JSON: exactly the workflow's fields, and only the one target."""
-    body: dict[str, JSON] = {
+    """The start's JSON: exactly these four fields, one NodePool, never anything else."""
+    return {
         "mce_cluster": request.mce_cluster,
         "cluster": request.cluster,
+        "nodepool": request.nodepool,
         "replicas": request.replicas,
     }
-    if request.nodepool is not None:
-        body["nodepool"] = request.nodepool
-    else:
-        body["infra_env_kind"] = request.infra_env_kind
-    return body
 
 
 def _started(response: httpx.Response, cluster: str) -> ScaleRun:

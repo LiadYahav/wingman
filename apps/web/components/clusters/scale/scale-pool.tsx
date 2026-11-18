@@ -65,11 +65,11 @@ function PoolSize({ tab, pool }: { tab: ScaleTabValue; pool: ScaleNodePool }) {
     <div className="ml-auto">
       <ReplicasStepper
         name={pool.name}
-        value={tab.state.valueOf("nodepool", pool.name)}
-        onValue={(n) => tab.state.edit("nodepool", pool.name, n)}
+        value={tab.state.valueOf(pool.name)}
+        onValue={(n) => tab.state.edit(pool.name, n)}
         disabled={false}
-        changed={change?.mode === "nodepool" && change.target === pool.name}
-        inputId={stepperInputId({ mode: "nodepool", target: pool.name })}
+        changed={change?.nodepool === pool.name}
+        inputId={stepperInputId(pool.name)}
         quiet
       />
     </div>
@@ -122,7 +122,7 @@ export function CardScaleBelow({ nodepool }: { nodepool: string }) {
   const pool = tab ? day1Of(tab, nodepool) : null;
   if (!tab || !pool) return null;
   const { change } = tab.state;
-  const mine = tab.isAdmin && change?.mode === "nodepool" && change.target === nodepool;
+  const mine = tab.isAdmin && change?.nodepool === nodepool;
   if (!nodepoolBlock(pool) && !mine) return null;
   return (
     <div className="mx-4 mb-3 space-y-2" data-testid="scale-card-below">

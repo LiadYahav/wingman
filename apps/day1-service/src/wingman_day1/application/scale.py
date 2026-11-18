@@ -1,17 +1,17 @@
 """Scaling a hosted cluster's NodePools through the platform's update-nodepool workflow (ADR-0062).
 
-The workflow plans the replicas, commits them to day1 ``main``, syncs the
-cluster's Argo CD Application and checks the NodePools; a scale-down's
-leaving servers are its NodePools' policy's. Wingman shows what can be
-scaled (the cluster file's NodePools on ``main``, their InfraEnv kinds and
-the flavor's locks), starts a run and shows it. Day1 checks only what is its
-own: the cluster is in the day1 repo, and a NodePool whose replicas the
-cluster's flavor locks is not scaled, by name or by a kind that selects it,
+The workflow sets one NodePool's replicas, commits them to day1 ``main``,
+syncs the cluster's Argo CD Application and checks the NodePool; a
+scale-down's leaving servers are its NodePool's policy's. Wingman shows what
+can be scaled (the cluster file's NodePools on ``main`` and the flavor's
+locks), starts a run and shows it. Day1 checks only what is its own: the
+cluster is in the day1 repo, the NodePool is one entry of its file on
+``main`` (a start Wingman cannot map to one is refused here, never sent),
+and a NodePool whose replicas the cluster's flavor locks is not scaled
 except to its locked value (the restore after a sync, ADR-0062). Everything
-else (an unknown kind or name, NodePools out of balance, drift between day1
-and the MCE, a run or an upgrade already going) is the workflow's to judge,
-and its refusal is shown in its words. Who asked is logged; the orchestrator
-records nobody. Nothing is retried (ADR-0006).
+else (drift between day1 and the MCE, a run or an upgrade already going) is
+the workflow's to judge, and its refusal is shown in its words. Who asked is
+logged; the orchestrator records nobody. Nothing is retried (ADR-0006).
 """
 
 from __future__ import annotations
@@ -33,12 +33,9 @@ from wingman_day1.domain.errors import (
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.scale import (
     FileNodePool,
-    KindChoice,
     ScaleRequest,
     ScaleRun,
-    belongs_to_kind,
     file_nodepools,
-    kind_choices,
     replicas_locks,
     scale_workflow_id,
 )
@@ -49,21 +46,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class ScaleOptions:
-    """What the Scale dialog offers for one cluster, from its file on ``main``."""
+    """What Scale offers for one cluster, from its file on ``main``."""
 
     ref: ClusterRef
     flavor: str | None
     nodepools: tuple[FileNodePool, ...]
-    kinds: tuple[KindChoice, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ScaleTarget:
-    """What the person asked: the replicas, and exactly one of a kind (a total) or a NodePool."""
+    """What the person asked: one NodePool, by name, and its replicas."""
 
     replicas: int
-    infra_env_kind: str | None = None
-    nodepool: str | None = None
+    nodepool: str
 
 
 class ScaleService:
@@ -78,7 +73,7 @@ class ScaleService:
         self._specs = specs
 
     async def options(self, ref: ClusterRef) -> ScaleOptions:
-        """The file's NodePools with the flavor's locks, and the kinds a total may be spread on."""
+        """The file's NodePools, named by the chart's rule, with the flavor's locks."""
         cluster = await self._clusters.get(ref)
         try:
             values = load_values(cluster.content)
@@ -94,23 +89,18 @@ class ScaleService:
             locked=locked,
             flavor=flavor,
         )
-        return ScaleOptions(ref, flavor, pools, kind_choices(pools))
+        return ScaleOptions(ref, flavor, pools)
 
     async def start(self, ref: ClusterRef, target: ScaleTarget, *, user: User) -> ScaleRun:
-        """Start one run: the workflow plans and commits. Never retried."""
-        if (target.infra_env_kind is None) == (target.nodepool is None):
-            raise InvalidInputError(
-                "choose one target", ["send exactly one of infra_env_kind and nodepool"]
-            )
+        """Start one run for one NodePool of the file: the workflow commits. Never retried."""
         if target.replicas < 0:
             raise InvalidInputError("replicas cannot be negative", ["replicas must be 0 or more"])
         options = await self.options(ref)
-        _refuse_locked(options, target)
+        _refuse_locked(_one_nodepool(options, target.nodepool), target)
         request = ScaleRequest(
             mce_cluster=ref.mce,
             cluster=ref.name,
             replicas=target.replicas,
-            infra_env_kind=target.infra_env_kind,
             nodepool=target.nodepool,
         )
         event = {
@@ -119,7 +109,7 @@ class ScaleService:
             "site": ref.site,
             "mce": ref.mce,
             "replicas": str(target.replicas),
-            "target": target.nodepool or f"kind {target.infra_env_kind}",
+            "target": target.nodepool,
         }
         try:
             run = await self._workflow.start(request)
@@ -148,31 +138,43 @@ class ScaleService:
         return replicas_locks(spec.locks())
 
 
-def _refuse_locked(options: ScaleOptions, target: ScaleTarget) -> None:
+def _one_nodepool(options: ScaleOptions, nodepool: str) -> FileNodePool:
+    """The one ``nodepool[]`` entry of the file on ``main`` that renders ``nodepool``.
+
+    update-nodepool sets one NodePool, which must be in day1 under that name;
+    a name no entry renders, or two do, is refused here and never sent.
+    """
+    found = [p for p in options.nodepools if p.name == nodepool]
+    if len(found) == 1:
+        return found[0]
+    if found:
+        entries = " and ".join(f"nodepool[{p.index}]" for p in found)
+        raise InvalidInputError(
+            f"NodePool {nodepool} cannot be scaled",
+            [f"{entries} both render NodePool {nodepool}: give each its own name in the day1 file"],
+        )
+    names = ", ".join(p.name for p in options.nodepools if p.name) or "none"
+    raise InvalidInputError(
+        f"cluster {options.ref.name!r} has no NodePool {nodepool}",
+        [
+            f"nodepool: no entry of the day1 file on main renders NodePool {nodepool}; "
+            f"its NodePools are {names}"
+        ],
+    )
+
+
+def _refuse_locked(pool: FileNodePool, target: ScaleTarget) -> None:
     """A flavor's locked replicas move only back to their locked value (the user, 2026-11-16)."""
-    if target.nodepool is not None:
-        pool = next((p for p in options.nodepools if p.name == target.nodepool), None)
-        if pool is None or pool.locked_replicas in (None, target.replicas):
-            return  # a name the file lacks is the workflow's to refuse, in its words
-        raise InvalidInputError(
-            f"NodePool {pool.label} cannot be scaled",
-            [
-                f"{pool.label}: its replicas are locked by flavor {pool.locked_by} at "
-                f"{pool.locked_replicas}; change the flavor, or restore it to "
-                f"{pool.locked_replicas}"
-            ],
-        )
-    kind = target.infra_env_kind or ""
-    locked = [p for p in options.nodepools if belongs_to_kind(p.infra_env, kind) and p.locked_by]
-    if locked:
-        raise InvalidInputError(
-            f"kind {kind} cannot be scaled",
-            [
-                f"{p.label}: kind {kind} selects it, and its replicas are locked by flavor "
-                f"{p.locked_by} at {p.locked_replicas}; scale the other NodePools by name"
-                for p in locked
-            ],
-        )
+    if pool.locked_replicas in (None, target.replicas):
+        return
+    raise InvalidInputError(
+        f"NodePool {pool.label} cannot be scaled",
+        [
+            f"{pool.label}: its replicas are locked by flavor {pool.locked_by} at "
+            f"{pool.locked_replicas}; change the flavor, or restore it to "
+            f"{pool.locked_replicas}"
+        ],
+    )
 
 
 def _log(level: int, message: str, name: str, event: Mapping[str, str]) -> None:

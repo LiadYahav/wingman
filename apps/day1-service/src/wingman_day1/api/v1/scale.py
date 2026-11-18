@@ -31,7 +31,7 @@ async def _ref(context: Context, name: str, site: str | None, mce: str | None) -
 async def scale_options(
     name: str, context: Context, scale: Scale, user: CurrentUser, site: Site = None, mce: Mce = None
 ) -> ScaleOptionsOut:
-    """The cluster file's NodePools, the flavor's locks, and the kinds a total may be spread on."""
+    """The cluster file's NodePools, each named by the chart's rule, and the flavor's locks."""
     return ScaleOptionsOut.of(await scale.options(await _ref(context, name, site, mce)))
 
 

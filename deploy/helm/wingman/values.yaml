@@ -121,8 +121,8 @@ day1:
   addServers:
     enabled: false
   # Scaling NodePools through the platform's update-nodepool workflow (ADR-0062):
-  # an admin's Scale on the cluster page's Nodes tab starts it, by InfraEnv kind
-  # (a total) or for one NodePool; it commits the replicas to day1 main and syncs
+  # an admin's Scale on the cluster page's Nodes tab starts it for one NodePool
+  # at a time; it commits the replicas to day1 main and syncs
   # the cluster's Argo CD Application itself. While on, no Wingman merge request
   # changes an existing NodePool's replicas: an edit that does is refused, a
   # flavor's sync leaves them out. Needs workflows.url, and the workflow must

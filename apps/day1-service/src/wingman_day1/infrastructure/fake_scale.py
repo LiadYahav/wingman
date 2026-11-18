@@ -6,11 +6,11 @@ the same domain errors as the real adapter: a second start while a run of
 the cluster runs, or while its upgrade runs, is ``ScaleAlreadyRunningError``.
 
 A run walks the parent's phases and then its child's on the injected clock.
-The phases, the plan and the servers a scale-down picks are a sample for the
-demo, nothing more (by NodePool: that one set exactly; by kind: one replica
-at a time to the fewest, or from the most): day1 passes the real workflow's
-through and plans nothing itself. Nothing is written anywhere; the fake only
-remembers the replicas its runs left, for its next run.
+The phases, the plan (the one NodePool set exactly) and the servers a
+scale-down picks are a sample for the demo, nothing more: day1 passes the
+real workflow's through and plans nothing itself. Nothing is written
+anywhere; the fake only remembers the replicas its runs left, for its next
+run.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ from wingman_day1.domain.scale import (
     ScaleRequest,
     ScaleResult,
     ScaleRun,
-    belongs_to_kind,
     scale_workflow_id,
 )
 
@@ -179,27 +178,15 @@ def _direction(changes: Sequence[NodePoolChange]) -> str:
 def _plan(run: _Run, pools: Sequence[FakePool]) -> None:
     """The sample plan, or the refusal the run will fail with."""
     request = run.request
-    if request.nodepool is not None:
-        selected = [p for p in pools if p.name == request.nodepool]
-        if not selected:
-            names = ", ".join(sorted(p.name for p in pools)) or "none"
-            run.refusal = (
-                f"the cluster has no NodePool {request.nodepool}, on the MCE or in day1; its "
-                f"NodePools are {names}. Nothing was written"
-            )
-            return
-        after = {selected[0].name: request.replicas}
-    else:
-        kind = request.infra_env_kind or ""
-        selected = [p for p in pools if belongs_to_kind(p.infra_env, kind)]
-        if not selected:
-            seen = ", ".join(sorted({p.infra_env or "none" for p in pools})) or "none"
-            run.refusal = (
-                f"no NodePool of the cluster takes Agents from InfraEnv {kind} or {kind}-*: its "
-                f"NodePools' InfraEnvs are {seen}. Nothing was written"
-            )
-            return
-        after = _spread(selected, request.replicas)
+    selected = [p for p in pools if p.name == request.nodepool]
+    if not selected:
+        names = ", ".join(sorted(p.name for p in pools)) or "none"
+        run.refusal = (
+            f"the cluster has no NodePool {request.nodepool}, on the MCE or in day1; its "
+            f"NodePools are {names}. Nothing was written"
+        )
+        return
+    after = {request.nodepool: request.replicas}
     run.changes = tuple(
         NodePoolChange(p.name, p.infra_env, p.replicas, after[p.name], p.scale_down_policy)
         for p in selected
@@ -218,21 +205,11 @@ def _plan(run: _Run, pools: Sequence[FakePool]) -> None:
     )
 
 
-def _spread(pools: Sequence[FakePool], total: int) -> dict[str, int]:
-    counts = {p.name: p.replicas for p in pools}
-    while sum(counts.values()) < total:
-        counts[min(sorted(counts), key=lambda name: counts[name])] += 1
-    while sum(counts.values()) > total:
-        counts[max(sorted(counts, reverse=True), key=lambda name: counts[name])] -= 1
-    return counts
-
-
 def _result(run: _Run) -> ScaleResult:
     request, changes = run.request, run.changes
     direction = _direction(changes)
     return ScaleResult(
         direction=direction,
-        infra_env_kind=request.infra_env_kind,
         nodepool=request.nodepool,
         total_before=sum(c.before or 0 for c in changes),
         total_after=sum(c.after or 0 for c in changes),

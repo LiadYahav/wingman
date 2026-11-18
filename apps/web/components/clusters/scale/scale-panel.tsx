@@ -5,7 +5,6 @@ import { ProblemList } from "@/components/common/problem-list";
 import { useScaleOptions, useScaleRun } from "@/lib/scale";
 import { plural } from "@/lib/utils";
 import type { ScaleNodePool, ScaleOptions } from "@/types";
-import { ScaleKindButton } from "./scale-kind-dialog";
 import { SizeRow } from "./scale-pool";
 import { ScaleRunCard } from "./scale-run-card";
 import { BUSY_ID, useScaleTab } from "./scale-tab";
@@ -41,9 +40,9 @@ function rowsOf(nodepools: ScaleNodePool[], live: LiveCards): ScaleNodePool[] {
 
 /**
  * The Nodes tab's NodePool sizes, from the cluster's day1 file (ADR-0062,
- * its 2026-11-16 amendment): with the MCE's cards shown, a line, since each
- * card scales its own NodePool; without them, a row per NodePool, an
- * admin's a stepper. "Scale hardware type" opens a hardware type's total.
+ * its amendments): with the MCE's cards shown, a line, since each card
+ * scales its own NodePool; without them, a row per NodePool, an admin's a
+ * stepper. update-nodepool sets one NodePool a run, so there is no total.
  * Why nothing can change now is said here, once. The cluster's run shows
  * below it for everyone. Nothing at all while scaling is off.
  */
@@ -79,7 +78,6 @@ export function ScalePanel({ name, where, enabled = true, live }: { name: string
               <Subtitle options={read} cards={cards} />
             </p>
           </div>
-          <ScaleKindButton />
         </header>
         {tab.isAdmin && tab.busy && !empty && (
           <p id={BUSY_ID} data-testid="scale-busy-reason" className="border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">

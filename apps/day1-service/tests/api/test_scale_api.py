@@ -1,10 +1,12 @@
 """A cluster's NodePools scaled through the update-nodepool workflow, over HTTP (ADR-0062).
 
 Off by default: every route answers 501. With ``DAY1_SCALE_NODEPOOLS`` on,
-anyone signed in reads what can be scaled and the run; admins start one, by
-kind or by NodePool; day1 fills the MCE and the cluster; a NodePool whose
-replicas a flavor locks moves only back to its locked value; everything
-else is the workflow's to judge, in its words.
+anyone signed in reads what can be scaled and the run; admins start one for
+one NodePool of the cluster file; day1 fills the MCE and the cluster,
+refuses a NodePool it cannot map to one entry of the file (and the retired
+InfraEnv kind) before anything is sent; a NodePool whose replicas a flavor
+locks moves only back to its locked value; everything else is the
+workflow's to judge, in its words.
 """
 
 from __future__ import annotations
@@ -137,7 +139,7 @@ async def test_off_every_scale_route_is_501(
         assert "DAY1_SCALE_NODEPOOLS" in response.json()["detail"]
 
 
-async def test_the_options_are_the_files_nodepools_and_their_kinds(
+async def test_the_options_are_the_files_nodepools(
     on: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     response = await on.get(f"{BASE}/scale", headers=auth(support.VIEWER))
@@ -166,15 +168,7 @@ async def test_the_options_are_the_files_nodepools_and_their_kinds(
             "scale_down_policy": None,
         },
     ]
-    assert body["kinds"] == [
-        {"kind": "dell-r660-site1-128c-1024gb-5tb", "nodepools": [SMALL], "total": 3, "locked": []},
-        {
-            "kind": "dell-r760-site1-64c-512gb-20tb",
-            "nodepools": [STORAGE],
-            "total": 2,
-            "locked": [],
-        },
-    ]
+    assert "kinds" not in body
 
 
 async def test_each_nodepools_scale_down_policy_is_read_from_its_annotations(
@@ -198,7 +192,7 @@ async def test_each_nodepools_scale_down_policy_is_read_from_its_annotations(
     ]
 
 
-async def test_an_admin_starts_by_kind_or_by_nodepool_and_day1_names_the_mce_and_cluster(
+async def test_an_admin_starts_one_nodepool_and_day1_names_the_mce_and_cluster(
     on: httpx.AsyncClient,
     auth: Auth,
     support: Any,
@@ -206,16 +200,15 @@ async def test_an_admin_starts_by_kind_or_by_nodepool_and_day1_names_the_mce_and
     run_clock: ManualClock,
 ) -> None:
     alice = auth(support.ALICE)
-    kind = "dell-r760-site1-64c-512gb-20tb"
     started = await on.post(
-        f"{BASE}/scale", json={"replicas": 4, "infra_env_kind": kind}, headers=alice
+        f"{BASE}/scale", json={"replicas": 4, "nodepool": STORAGE}, headers=alice
     )
     assert started.status_code == 202, started.text
     assert {k: started.json()[k] for k in ("workflow_id", "status")} == {
         "workflow_id": f"update-nodepool-{LARK}",
         "status": "running",
     }
-    assert scale.started == [ScaleRequest(MCE, LARK, 4, infra_env_kind=kind)]
+    assert scale.started == [ScaleRequest(MCE, LARK, 4, nodepool=STORAGE)]
     busy = await on.post(f"{BASE}/scale", json={"replicas": 1, "nodepool": SMALL}, headers=alice)
     assert (busy.status_code, busy.json()["code"]) == (409, "SCALE_ALREADY_RUNNING")
     assert (
@@ -224,10 +217,12 @@ async def test_an_admin_starts_by_kind_or_by_nodepool_and_day1_names_the_mce_and
     run_clock.advance(seconds=120)
     run = (await on.get(f"{BASE}/scale-run", headers=auth(support.VIEWER))).json()
     assert (run["status"], run["direction"], run["error"]) == ("completed", "up", None)
-    assert run["result"]["nodepools"] == [
+    result = run["result"]
+    assert (result["nodepool"], result["infra_env_kind"], result["ignored"]) == (STORAGE, None, [])
+    assert result["nodepools"] == [
         {
             "name": STORAGE,
-            "infra_env": kind,
+            "infra_env": "dell-r760-site1-64c-512gb-20tb",
             "before": 2,
             "after": 4,
             "scale_down_policy": "fewest-pods",
@@ -252,14 +247,22 @@ async def test_a_running_scale_down_shows_its_childs_phase(
 
 
 async def test_a_failed_run_is_shown_in_the_workflows_words(
-    on: httpx.AsyncClient, auth: Auth, support: Any, run_clock: ManualClock
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    scale: FakeScaleWorkflow,
+    run_clock: ManualClock,
 ) -> None:
+    async def mce_lacks_storage(_cluster: str) -> Sequence[FakePool]:
+        return [p for p in await pools(_cluster) if p.name != STORAGE]
+
+    scale.read_pools_with(mce_lacks_storage)
     alice = auth(support.ALICE)
-    await on.post(f"{BASE}/scale", json={"replicas": 1, "infra_env_kind": "hp"}, headers=alice)
+    await on.post(f"{BASE}/scale", json={"replicas": 1, "nodepool": STORAGE}, headers=alice)
     run_clock.advance(seconds=60)
     run = (await on.get(f"{BASE}/scale-run", headers=alice)).json()
     assert (run["status"], run["phase"], run["error_type"]) == ("failed", "reading-nodepools", None)
-    assert "InfraEnv hp or hp-*" in run["error"]
+    assert f"no NodePool {STORAGE}" in run["error"]
 
 
 async def test_viewers_read_but_only_admins_start(
@@ -292,6 +295,63 @@ async def test_a_body_the_workflow_would_refuse_is_a_422_before_anything_is_sent
     assert scale.started == []
 
 
+async def test_a_total_over_an_infraenv_kind_is_refused_in_words_and_never_sent(
+    on: httpx.AsyncClient, auth: Auth, support: Any, scale: FakeScaleWorkflow
+) -> None:
+    response = await on.post(
+        f"{BASE}/scale",
+        json={"replicas": 4, "infra_env_kind": "dell-r660-site1-128c-1024gb-5tb"},
+        headers=auth(support.ALICE),
+    )
+    assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+    (error,) = response.json()["details"]["errors"]
+    assert "infra_env_kind is no longer taken: send the NodePool's name as nodepool" in error["msg"]
+    assert scale.started == []
+
+
+async def test_a_nodepool_the_day1_file_does_not_name_is_refused_before_anything_is_sent(
+    on: httpx.AsyncClient, auth: Auth, support: Any, scale: FakeScaleWorkflow
+) -> None:
+    response = await on.post(
+        f"{BASE}/scale",
+        json={"replicas": 2, "nodepool": "prod-lark-site1-hp-gen11"},
+        headers=auth(support.ALICE),
+    )
+    assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert response.json()["details"]["problems"] == [
+        "nodepool: no entry of the day1 file on main renders NodePool prod-lark-site1-hp-gen11; "
+        f"its NodePools are {SMALL}, {STORAGE}"
+    ]
+    assert scale.started == []
+
+
+async def test_a_name_two_entries_render_is_refused_before_anything_is_sent(
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    gitlab: InMemoryGitLab,
+    scale: FakeScaleWorkflow,
+) -> None:
+    day1 = await support.project_id(gitlab, support.DAY1)
+    path = f"{HOSTED}/{LARK}.yaml"
+    current = (await gitlab.read_file(day1, RepoPath(path), "main")).content
+    storage = "- infraEnvName: dell-r760-site1-64c-512gb-20tb\n"
+    twice = current.replace(
+        storage, f"- name: {SMALL}\n  infraEnvName: dell-r760-site1-64c-512gb-20tb\n"
+    )
+    await support.push(gitlab, support.DAY1, branch="main", file=path, content=twice)
+    await on.post("/api/webhooks/gitlab", json={"project": {"id": day1}}, headers=WEBHOOK)
+    response = await on.post(
+        f"{BASE}/scale", json={"replicas": 2, "nodepool": SMALL}, headers=auth(support.ALICE)
+    )
+    assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+    assert response.json()["details"]["problems"] == [
+        f"nodepool[0] and nodepool[1] both render NodePool {SMALL}: give each its own name in "
+        "the day1 file"
+    ]
+    assert scale.started == []
+
+
 async def test_a_locked_nodepool_moves_only_to_its_locked_value(
     on: httpx.AsyncClient,
     auth: Auth,
@@ -307,23 +367,12 @@ async def test_a_locked_nodepool_moves_only_to_its_locked_value(
         ("agent-sized", 3),
         (None, None),
     ]
-    assert [k["locked"] for k in options["kinds"]] == [[SMALL], []]
     moved = await on.post(f"{BASE}/scale", json={"replicas": 4, "nodepool": SMALL}, headers=alice)
     assert (moved.status_code, moved.json()["code"]) == (422, "VALIDATION_ERROR")
     assert moved.json()["details"]["problems"] == [
         f"{SMALL}: its replicas are locked by flavor agent-sized at 3; change the flavor, or "
         "restore it to 3"
     ]
-    by_kind = await on.post(
-        f"{BASE}/scale",
-        json={"replicas": 4, "infra_env_kind": "dell-r660-site1-128c-1024gb-5tb"},
-        headers=alice,
-    )
-    assert by_kind.status_code == 422
-    assert (
-        "kind dell-r660-site1-128c-1024gb-5tb selects it"
-        in by_kind.json()["details"]["problems"][0]
-    )
     assert scale.started == []
     restore = await on.post(f"{BASE}/scale", json={"replicas": 3, "nodepool": SMALL}, headers=alice)
     assert restore.status_code == 202, restore.text

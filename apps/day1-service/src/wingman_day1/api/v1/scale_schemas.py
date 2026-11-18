@@ -6,6 +6,8 @@ Responses pass the workflow's strings through, its phases included.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from wingman_day1.application.scale import ScaleOptions, ScaleTarget
@@ -13,7 +15,6 @@ from wingman_day1.domain.scale import (
     ChosenServer,
     FileNodePool,
     HeldReplicas,
-    KindChoice,
     LiveReplicas,
     NodePoolChange,
     ScaleChild,
@@ -22,28 +23,32 @@ from wingman_day1.domain.scale import (
 )
 
 _NAME = r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
-"""A Kubernetes name, as the workflow takes a NodePool or an InfraEnv kind."""
+"""A Kubernetes name, as the workflow takes a NodePool."""
 
 
 class ScaleIn(BaseModel):
-    """``POST .../scale``: the replicas, and exactly one of a kind (a total) or a NodePool."""
+    """``POST .../scale``: one NodePool of the cluster, by name, and its replicas."""
 
     model_config = ConfigDict(extra="forbid")
 
     replicas: StrictInt = Field(ge=0, le=10_000)
-    """With ``infra_env_kind``, the TOTAL over the kind's NodePools; with ``nodepool``, its own."""
-    infra_env_kind: str | None = Field(default=None, max_length=253, pattern=_NAME)
-    nodepool: str | None = Field(default=None, max_length=253, pattern=_NAME)
+    """That NodePool's own, set exactly; the cluster's other NodePools are left as they are."""
+    nodepool: str = Field(max_length=253, pattern=_NAME)
 
-    @model_validator(mode="after")
-    def _one_target(self) -> ScaleIn:
-        if (self.infra_env_kind is None) == (self.nodepool is None):
-            raise ValueError("send exactly one of infra_env_kind and nodepool")
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def _no_kind(cls, data: Any) -> Any:
+        """A total over an InfraEnv kind is gone (2026-11-18): refused in words, not as extra."""
+        if isinstance(data, dict) and "infra_env_kind" in data:
+            raise ValueError(
+                "infra_env_kind is no longer taken: send the NodePool's name as nodepool, "
+                "with that NodePool's own replicas"
+            )
+        return data
 
     def target(self) -> ScaleTarget:
         """For the use case."""
-        return ScaleTarget(self.replicas, self.infra_env_kind, self.nodepool)
+        return ScaleTarget(self.replicas, self.nodepool)
 
 
 # ── What can be scaled ───────────────────────────────────────────────────────
@@ -81,34 +86,13 @@ class ScaleNodePoolOut(BaseModel):
         )
 
 
-class ScaleKindOut(BaseModel):
-    """An InfraEnv kind a total may be spread on, and this cluster's NodePools it selects."""
-
-    kind: str
-    nodepools: list[str]
-    total: int | None
-    locked: list[str]
-    """Selected NodePools a flavor locks: the kind cannot be scaled."""
-
-    @classmethod
-    def of(cls, choice: KindChoice) -> ScaleKindOut:
-        """From a kind choice."""
-        return cls(
-            kind=choice.kind,
-            nodepools=[p.label for p in choice.nodepools],
-            total=choice.total,
-            locked=[p.label for p in choice.locked],
-        )
-
-
 class ScaleOptionsOut(BaseModel):
-    """``GET .../scale``: what the Scale dialog offers for the cluster."""
+    """``GET .../scale``: what Scale offers for the cluster, one NodePool at a time."""
 
     cluster: str
     mce: str
     flavor: str | None
     nodepools: list[ScaleNodePoolOut]
-    kinds: list[ScaleKindOut]
 
     @classmethod
     def of(cls, options: ScaleOptions) -> ScaleOptionsOut:
@@ -118,7 +102,6 @@ class ScaleOptionsOut(BaseModel):
             mce=options.ref.mce,
             flavor=options.flavor,
             nodepools=[ScaleNodePoolOut.of(p) for p in options.nodepools],
-            kinds=[ScaleKindOut.of(k) for k in options.kinds],
         )
 
 
@@ -176,6 +159,7 @@ class ScaleResultOut(BaseModel):
     """What a completed run did."""
 
     infra_env_kind: str | None
+    """Only on a run recorded by kind before 2026-11-18; every other names its ``nodepool``."""
     nodepool: str | None
     day1_path: str | None
     direction: str
@@ -188,6 +172,8 @@ class ScaleResultOut(BaseModel):
     live: list[LiveReplicasOut]
     chosen: list[ChosenServerOut]
     deleting: list[str]
+    ignored: list[str]
+    """What the request said about a scale-down that this run had no use for; never a failure."""
 
     @classmethod
     def of(cls, result: ScaleResult) -> ScaleResultOut:
@@ -206,6 +192,7 @@ class ScaleResultOut(BaseModel):
             live=[_live(n) for n in result.live],
             chosen=[_chosen(c) for c in result.chosen],
             deleting=list(result.deleting),
+            ignored=list(result.ignored),
         )
 
 
