@@ -159,22 +159,30 @@ function ValueKindBadge({ value }: { value: ValueKind }) {
   );
 }
 
-/** Lists and maps go under their name, scalars beside it. */
+/** In a narrow card, lists and maps go under their name and scalars beside it, at the right. */
 const isWide = (value: unknown) => Array.isArray(value) || (isMapping(value) && Object.keys(value).length > 0);
 
+/**
+ * In a wide card (the overview gives it the page's width) every value starts
+ * in one column beside its name, so a long flavor reads down two columns
+ * instead of across the page.
+ */
 function InputRowView({ row, kind }: { row: InputRow; kind: ValueKind }) {
   const wide = isWide(row.value);
   return (
     <div
       data-testid={`flavor-input-${row.path}`}
       data-kind={kind.kind}
-      className={cn("px-3 py-2", wide ? "space-y-1.5" : "flex items-center justify-between gap-3")}
+      className={cn(
+        "px-3 py-2 @xl:grid @xl:grid-cols-[18rem_minmax(0,1fr)] @xl:items-baseline @xl:gap-x-4",
+        wide ? "space-y-1.5 @xl:space-y-0" : "flex items-center justify-between gap-3"
+      )}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-sm font-mono break-all">{row.field}</span>
         <ValueKindBadge value={kind} />
       </div>
-      <div className={cn("min-w-0", wide ? "[&>span]:justify-start" : "text-right")}>
+      <div className={cn("min-w-0 @xl:text-left @xl:[&>span]:justify-start", wide ? "[&>span]:justify-start" : "text-right")}>
         <InputValue field={row.field} value={row.value} />
       </div>
     </div>
@@ -205,7 +213,7 @@ export function FlavorInputsCard({ spec }: { spec: SpecEntry }) {
   const shape = structureSummary(structure);
 
   return (
-    <div className="bg-card rounded-xl border shadow-sm p-5 space-y-4" data-testid="flavor-inputs">
+    <div className="@container bg-card rounded-xl border shadow-sm p-5 space-y-4" data-testid="flavor-inputs">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <h2 className="text-sm font-semibold">Cluster inputs</h2>
         <p className="text-xs text-muted-foreground" data-testid="flavor-input-counts">
@@ -214,7 +222,7 @@ export function FlavorInputsCard({ spec }: { spec: SpecEntry }) {
         </p>
       </div>
 
-      <dl className="grid gap-1.5 text-xs text-muted-foreground">
+      <dl className="grid max-w-2xl gap-1.5 text-xs text-muted-foreground">
         <div className="flex gap-2">
           <dt className="w-20 shrink-0 font-medium text-foreground">Preset</dt>
           <dd>Prefilled when a cluster is created; the person creating it can change it.</dd>
@@ -259,14 +267,14 @@ export function FlavorInputsCard({ spec }: { spec: SpecEntry }) {
       )}
 
       {enforced.some((lock) => isRule(lock) && lock !== TUNING_RULE) && (
-        <p className="text-xs text-muted-foreground" data-testid="flavor-configs-rule">
+        <p className="max-w-2xl text-xs text-muted-foreground" data-testid="flavor-configs-rule">
           <span className="font-mono">nodepools[*].configs</span> is a rule: every nodepool of a cluster has exactly
           these configs, in any order, and <span className="font-mono">nm-conf</span> is each nodepool&apos;s own network
           config for its own hardware. The hardware shown is only the create form&apos;s preset.
         </p>
       )}
       {enforced.includes(TUNING_RULE) && (
-        <p className="text-xs text-muted-foreground" data-testid="flavor-tuning-rule">
+        <p className="max-w-2xl text-xs text-muted-foreground" data-testid="flavor-tuning-rule">
           <span className="font-mono">{TUNING_RULE}</span> is a rule: every nodepool of a cluster has exactly these tuning
           profiles, in any order. Changing them can reboot a nodepool&apos;s nodes.
         </p>
@@ -296,7 +304,7 @@ export function FlavorInputsCard({ spec }: { spec: SpecEntry }) {
       {variables.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Declared variables (legacy)</p>
-          <div className="space-y-1">
+          <div className="max-w-2xl space-y-1">
             {variables.map((v) => (
               <div key={v.name} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
                 <div>

@@ -285,6 +285,27 @@ test.describe("Flavor overview", () => {
     await expect(page.getByText(/locked after create/i)).toHaveCount(0);
   });
 
+  test("Metadata, then Cluster inputs, then Addons, each the page's width; a value sits beside its name", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page);
+
+    const metadata = await page.getByTestId("flavor-metadata").boundingBox();
+    const inputs = await page.getByTestId("flavor-inputs").boundingBox();
+    const addons = await page.getByRole("heading", { name: "Addons (1)" }).boundingBox();
+    expect(metadata && inputs && addons).toBeTruthy();
+    // Stacked, in that order, one column: the same left edge and the same width
+    expect(inputs!.y).toBeGreaterThanOrEqual(metadata!.y + metadata!.height);
+    expect(addons!.y).toBeGreaterThan(inputs!.y + inputs!.height);
+    expect(inputs!.x).toBeCloseTo(metadata!.x, 0);
+    expect(inputs!.width).toBeCloseTo(metadata!.width, 0);
+
+    // A scalar starts in the value column beside its name, not at the far right of the page
+    const row = page.getByTestId("flavor-input-owner_merkaz");
+    const rowBox = (await row.boundingBox())!;
+    const valueBox = (await row.getByText("1234", { exact: true }).boundingBox())!;
+    expect(valueBox.x + valueBox.width).toBeLessThan(rowBox.x + rowBox.width / 2);
+  });
+
   test("an older day1 without enforced_locks: every lock in the file is enforced", async ({ page }) => {
     const older: SpecDetail = { ...SPEC, enforced_locks: undefined }; // left out of the JSON
     await open(page, {

@@ -30,9 +30,9 @@ import type { SpecCluster, SpecCommit, SpecDetail, SpecDrift } from "@/types";
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5 border-b border-border/50 last:border-0">
-      <span className="text-sm text-muted-foreground shrink-0 w-32">{label}</span>
-      <span className="text-sm font-medium text-right min-w-0 break-words">{value}</span>
+    <div className="flex items-start gap-4 py-2.5 border-b border-border/50 last:border-0">
+      <span className="text-sm text-muted-foreground shrink-0 w-32 break-words">{label}</span>
+      <span className="text-sm font-medium min-w-0 break-words">{value}</span>
     </div>
   );
 }
@@ -271,8 +271,8 @@ export default function SpecDetailPage() {
 
       {/* Overview tab */}
       {activeTab === "overview" && (isLoading || spec) && (
-        <div className="grid gap-4 lg:grid-cols-2 items-start">
-          <div className="bg-card rounded-xl border shadow-sm p-5">
+        <div className="grid gap-4">
+          <div className="bg-card rounded-xl border shadow-sm p-5" data-testid="flavor-metadata">
             <h2 className="text-sm font-semibold mb-3">Metadata</h2>
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full mb-2" />)
@@ -313,7 +313,7 @@ export default function SpecDetailPage() {
                       <button
                         type="button"
                         onClick={() => setActiveTab("clusters")}
-                        className="hover:text-primary transition-colors text-right"
+                        className="hover:text-primary transition-colors text-left"
                         data-testid="flavor-rollout-summary"
                       >
                         v{rollout!.version}: {rolloutLine}
@@ -331,7 +331,7 @@ export default function SpecDetailPage() {
           ) : spec && <FlavorInputsCard spec={spec} />}
 
           {spec && spec.spec.day2.addons.length > 0 && (
-            <div className="bg-card rounded-xl border shadow-sm p-5 lg:col-span-2">
+            <div className="bg-card rounded-xl border shadow-sm p-5">
               <h2 className="text-sm font-semibold mb-3">Addons ({spec.spec.day2.addons.length})</h2>
               <div className="flex flex-wrap gap-2">
                 {spec.spec.day2.addons.map((addon) => (
