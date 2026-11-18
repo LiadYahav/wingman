@@ -310,6 +310,7 @@ export function mockPoolNode(machine: string, overrides: Partial<PoolNode> = {})
     agent: { name: `agent-${machine.slice(-5)}`, state: "added-to-existing-cluster", stage: "Done" },
     server_name: server?.name ?? null,
     server,
+    machine_server: server?.name.toLowerCase() ?? null,
     uninstall: null,
     ...overrides,
   };

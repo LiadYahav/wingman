@@ -40,6 +40,8 @@ export interface ScaleOptions {
 export interface StartScaleRequest {
   nodepool: string;
   replicas: number;
+  /** A scale-down only, optional: exactly the servers that leave (each node's `machine_server`), as many as it removes. */
+  server_names?: string[];
 }
 
 /** The child that scales (`scale-up-nodepool-<cluster>` or `scale-down-nodepool-<cluster>`), read by its own id. */
@@ -72,9 +74,12 @@ export interface ScaleChosenServer {
   nodepool: string;
   machine: string;
   node: string | null;
+  /** The policy's name; `named` for a server the request named. */
   policy: string;
-  /** The policy's reading: `1 workload pods`, `requested 41%`, `no Node`, `NotReady`. */
+  /** The policy's reading: `1 workload pods`, `requested 41%`, `no Node`, `NotReady`; `named: <name>`. */
   reason: string;
+  /** The server, lowercased, when the request named it; else `null`. */
+  server: string | null;
 }
 
 /** What a completed run did. */

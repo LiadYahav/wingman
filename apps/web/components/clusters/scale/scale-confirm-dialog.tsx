@@ -5,7 +5,9 @@ import { CircleCheck, CirclePlus, GitCommitHorizontal, Loader2, ServerOff, Trian
 import { buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { addsLine, changeLine, DONE_LINE, leaving, policyOf, type Leaving } from "@/lib/scale-confirm";
+import { pickedLeaving } from "@/lib/scale-servers";
 import { cn } from "@/lib/utils";
+import { ServerPicker } from "./scale-server-picker";
 import { sendable, sendChange, settled, StartError } from "./scale-start";
 import type { ScaleTabValue } from "./scale-tab";
 
@@ -76,8 +78,10 @@ function Points({ points }: { points: Point[] }) {
  * The confirmation before every scale (ADR-0062's amendments): what
  * update-nodepool is about to do, in a few plain lines, then Cancel or Yes.
  * A scale-down says which nodes leave, by the NodePool's scale-down policy
- * as the day1 file sets it. Yes arms after half a second; Cancel and Escape
- * change nothing, and the change stays where it was. Mount it while open.
+ * as the day1 file sets it, and lets the admin pick exactly the servers
+ * that leave instead (optional). Yes arms after half a second, and waits
+ * while some but not all are picked; Cancel and Escape change nothing, and
+ * the change stays where it was (the picks are dropped). Mount it while open.
  */
 export function ScaleConfirmDialog({ tab, onCancel }: {
   tab: ScaleTabValue;
@@ -85,11 +89,13 @@ export function ScaleConfirmDialog({ tab, onCancel }: {
   onCancel: () => void;
 }) {
   const armed = useArmed(ARM_MS);
-  const { change, current, asked, direction, start } = tab.state;
+  const { change, current, asked, direction, start, servers, leaving: count } = tab.state;
   if (!change || current === null || asked === null || (direction !== "up" && direction !== "down")) return null;
   const up = direction === "up";
   const policy = policyOf(change.nodepool, tab.options.nodepools);
-  const points = up ? upPoints(asked - current) : downPoints(leaving(current - asked, policy));
+  // Every server that leaves picked: exactly those, and the NodePool's policy is not read
+  const leave = count > 0 && servers.length === count ? { text: pickedLeaving(servers), refused: false } : leaving(current - asked, policy);
+  const points = up ? upPoints(asked - current) : downPoints(leave);
   const close = () => {
     if (!start.isPending) onCancel();
   };
@@ -107,6 +113,7 @@ export function ScaleConfirmDialog({ tab, onCancel }: {
         </DialogHeader>
 
         <Points points={points} />
+        {!up && <ServerPicker tab={tab} />}
 
         {tab.busy && <p className="text-xs text-status-warning-fg">{tab.busy}</p>}
         <StartError tab={tab} />

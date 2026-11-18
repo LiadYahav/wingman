@@ -123,6 +123,11 @@ function ScaleDocs() {
         confirmation, and the platform&apos;s <InlineCode>update-nodepool</InlineCode> workflow does it: one commit to
         day1, no merge request. The run shows under <strong>NodePool sizes</strong> for everyone.
       </p>
+      <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+        On a scale-down the confirmation lists the NodePool&apos;s servers: tick exactly as many as leave, or none and
+        the NodePool&apos;s scale-down policy picks. The list needs live status from the MCE; the run shows the servers
+        picked by name, and why the workflow refused them if it did.
+      </p>
       <Callout type="info" title="With Scale on, replicas change only through it">
         An edit that changes an existing NodePool&apos;s <InlineCode>replicas</InlineCode> is refused and points to
         Scale; a new cluster and a new NodePool still set their first replicas. A NodePool whose replicas its flavor

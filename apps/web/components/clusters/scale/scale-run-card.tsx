@@ -63,7 +63,7 @@ function Plan({ result }: { result: ScaleResult }) {
   );
 }
 
-/** The servers a scale-down chose to leave, and what put each first. */
+/** The servers a scale-down chose to leave, and what put each first (or that they were picked by name). */
 function Chosen({ result }: { result: ScaleResult }) {
   if (result.chosen.length === 0) return null;
   return (
@@ -72,9 +72,9 @@ function Chosen({ result }: { result: ScaleResult }) {
       <ul className="space-y-0.5 text-xs">
         {result.chosen.map((c) => (
           <li key={c.machine} className="break-words">
-            <span className="font-mono font-medium">{c.node ?? c.machine}</span>
-            {c.node && <span className="font-mono text-muted-foreground"> ({c.machine})</span>}
-            <span className="text-muted-foreground"> · {c.nodepool} · {c.policy}: {c.reason}</span>
+            <span className="font-mono font-medium">{c.server ?? c.node ?? c.machine}</span>
+            {(c.server ?? c.node) && <span className="font-mono text-muted-foreground"> ({c.machine})</span>}
+            <span className="text-muted-foreground"> · {c.nodepool} · {c.policy === "named" ? "picked by name" : `${c.policy}: ${c.reason}`}</span>
           </li>
         ))}
       </ul>
@@ -117,7 +117,7 @@ export function ScaleRunCard({ run }: { run: ScaleRun }) {
   const done = run.status === "completed";
   const result = run.result;
   const target = runTarget(result);
-  const hint = failureHint(run.error_type);
+  const hint = failureHint(run.error_type, run.error);
   const direction = result?.direction ?? run.direction;
   return (
     <section

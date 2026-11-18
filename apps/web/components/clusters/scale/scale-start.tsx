@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ProblemList } from "@/components/common/problem-list";
 import { isApiError } from "@/lib/api-client";
 import { changeWords, refusalTitle, STALE_RUN_CODES } from "@/lib/scale-model";
+import { picksReady } from "@/lib/scale-servers";
 import type { ScaleTabValue } from "./scale-tab";
 
 /** Focus an element once React has drawn it (or the one it replaced). */
@@ -16,10 +17,13 @@ export function settled(tab: ScaleTabValue): boolean {
   return STALE_RUN_CODES.some((code) => isApiError(tab.state.start.error, code));
 }
 
-/** Whether the change can be sent now, and why not: a run is going, the refusal said the page was out of date, or no number. */
+/**
+ * Whether the change can be sent now, and why not: a run is going, the refusal said the page was out of date, no
+ * number, or a scale-down's picks are neither none nor as many as leave.
+ */
 export function sendable(tab: ScaleTabValue): boolean {
-  const { start, asked } = tab.state;
-  return tab.busy === null && !settled(tab) && asked !== null && !start.isPending;
+  const { start, asked, servers, leaving } = tab.state;
+  return tab.busy === null && !settled(tab) && asked !== null && !start.isPending && picksReady(servers.length, leaving);
 }
 
 /** Sends the change once; on its start, a toast, and focus on the run where it shows. */

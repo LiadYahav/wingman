@@ -74,11 +74,14 @@ export function replicasOf(value: number): number | null {
   return Number.isInteger(value) && value >= 0 && value <= MAX_REPLICAS ? value : null;
 }
 
-/** The start's body: one NodePool and its replicas, nothing else; `null` until the number is a whole one. */
-export function startBody(nodepool: string | null, replicas: number): StartScaleRequest | null {
+/**
+ * The start's body: one NodePool and its replicas, and the servers that leave when a scale-down names them (the
+ * caller sends none on a scale-up); `null` until the number is a whole one.
+ */
+export function startBody(nodepool: string | null, replicas: number, servers: string[] = []): StartScaleRequest | null {
   const count = replicasOf(replicas);
   if (!nodepool || count === null) return null;
-  return { nodepool, replicas: count };
+  return servers.length > 0 ? { nodepool, replicas: count, server_names: servers } : { nodepool, replicas: count };
 }
 
 /** The replicas a NodePool's change starts from: the day1 file's. */
@@ -110,13 +113,26 @@ export function runTarget(result: { infra_env_kind: string | null; nodepool: str
   return result.infra_env_kind ? `kind ${result.infra_env_kind}` : null;
 }
 
+const NOTHING_DONE = "Nothing was marked or written.";
+
+/** Why named servers were refused, by the workflow's words (its own stay shown above); the first that matches. */
+const NAMED_REFUSALS: [RegExp, string][] = [
+  [/predates/i, "The MCE's server-lifecycle worker is older than named servers and cannot tell which server a machine is: upgrade it, then run again."],
+  [/unhealthy for CAPI/i, "This OpenShift's CAPI would take an unhealthy machine you did not pick in place of one you did: pick its server instead, or bring it back to health first."],
+  [/more than one Machine/i, "Two machines of the NodePool are the same server, so which one leaves cannot be told."],
+  [/no Machine of NodePool/i, "A picked server is not a machine of the NodePool now (the workflow lists its servers): read the nodes again and pick again."],
+  [/more than once/i, "A server was picked twice."],
+  [/Name exactly the servers that leave/i, "The servers picked are not as many as the scale-down removes."],
+];
+
 /** A plain line under a failed run's own words, for a failure that needs one; `null` for the rest. */
-export function failureHint(errorType: string | null): string | null {
+export function failureHint(errorType: string | null, error: string | null = null): string | null {
   if (errorType !== "ScaleDownServersInvalidError") return null;
+  const known = NAMED_REFUSALS.find(([words]) => words.test(error ?? ""));
+  if (known) return `${known[1]} ${NOTHING_DONE}`;
   return (
     "The servers named to leave cannot be the ones this scale-down removes: a wrong count, a server that is no machine " +
-    "of the NodePool (or is two), an unhealthy machine CAPI would take instead, or an MCE worker too old to tell. " +
-    "Nothing was marked or written."
+    `of the NodePool (or is two), an unhealthy machine CAPI would take instead, or an MCE worker too old to tell. ${NOTHING_DONE}`
   );
 }
 

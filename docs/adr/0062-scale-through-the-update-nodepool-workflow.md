@@ -384,6 +384,24 @@ NodePool; a scale-up or no change ignores it and says so in `ignored`.
   "named"` and its `server`.
 - Documented by the workflow for OpenShift 4.19 and later; on 4.18 it
   refuses a pick CAPI could override.
+- **In the web, in the scale-down's confirmation** (no new page, no new
+  control on the card): the NodePool's Machines from the Nodes tab's read
+  (`GET .../nodes`), each shown by server-scan's name (else the workflow's),
+  its Node and state, with a checkbox. Optional: none ticked sends no names
+  and the NodePool's policy line stays; ticking counts "1 of 2 picked: tick
+  1 more, or none", the rest wait once as many are ticked as leave, and Yes
+  waits while some but not all are; all ticked, the line says exactly those
+  leave and the policy is not used. A Machine with no server yet, or one
+  already deleting, is listed but cannot be ticked, with why. Without live
+  status there is nothing to pick from, and it says so. Closing the
+  confirmation drops the picks; changing the replicas does too. A scale-up
+  shows none and never sends names.
+- **The run**: a named server shows by its server, "picked by name". A
+  `ScaleDownServersInvalidError` gets a line under the workflow's words that
+  says, from those words, which refusal it is (a wrong count, a server
+  picked twice, one that is no machine of the NodePool now, two machines
+  that are one server, an unhealthy machine 4.18's CAPI would take instead,
+  an MCE worker too old for names), else a general one.
 
 Verification: `tests/unit/domain/test_machine_server.py` (the rule),
 `tests/api/test_nodes_api.py` (`machine_server` in the nodes' contract),
@@ -391,4 +409,11 @@ Verification: `tests/unit/domain/test_machine_server.py` (the rule),
 `test_fake_scale.py` (exactly the named servers leave),
 `tests/api/test_scale_api.py` (names sent on a scale-down; refused on a
 scale-up, on no change, on a wrong count, twice, empty, more than 20, not a
-list; none sent).
+list; none sent); `apps/web/lib/scale-servers.test.ts` (what can be picked,
+the count's words, the line once complete), `apps/web/lib/scale-model.test.ts`
+(the body with and without names, each refusal's line), and
+`apps/web/e2e/tests/cluster-scale-servers.spec.ts` (none picked sends no
+names; Yes waits for the count, then the workflow's names are sent; the
+rest wait once all are picked; Cancel drops the picks; a scale-up offers
+none; a Machine with no server or already leaving cannot be picked; without
+the MCE's nodes it says so; the run's named server and a refusal's line).

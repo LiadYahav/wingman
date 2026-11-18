@@ -34,7 +34,7 @@ const DONE: ScaleRun = run({
     ],
     child_workflow_id: `scale-down-nodepool-${LARK}`, revision: "9f2c1ab77d0e5c3f", committed: true,
     live: [{ name: ZONE_B, replicas: 2, ready_replicas: 3 }],
-    chosen: [{ nodepool: ZONE_B, machine: `${ZONE_B}-7xk2p`, node: "worker-7", policy: "fewest-pods", reason: "1 workload pods" }],
+    chosen: [{ nodepool: ZONE_B, machine: `${ZONE_B}-7xk2p`, node: "worker-7", policy: "fewest-pods", reason: "1 workload pods", server: null }],
     deleting: [`${ZONE_B}-7xk2p`],
     ignored: [],
   },
@@ -366,7 +366,7 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
   });
 
   test("named servers a scale-down could not remove fail the run with a plain line under the workflow's words", async ({ page }) => {
-    const words = `scale-down-nodepool-${LARK} failed — ScaleDownServersInvalidError: no Machine of NodePool ${ZONE_B} is server ocp-x; its servers are worker-7 (${ZONE_B}-7xk2p). Nothing was marked or written`;
+    const words = `scale-down-nodepool-${LARK} failed — ScaleDownServersInvalidError: NodePool ${ZONE_B}: the servers named cannot be the ones that leave. Nothing was marked or written`;
     const failed = run({ status: "failed", phase: "scaling-down", direction: "down", error: words, error_type: "ScaleDownServersInvalidError" });
     await openNodes(page, scaleOf({ run: failed }));
     const error = page.getByTestId("scale-run-error");
