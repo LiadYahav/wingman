@@ -35,6 +35,9 @@ from wingman_day1.domain.errors import (
 )
 from wingman_day1.domain.image_mirrors import given_mirror_inputs
 from wingman_day1.domain.machine_configs import flavor_config_problems
+from wingman_day1.domain.nodepool_infra_envs import given as infra_envs_given
+from wingman_day1.domain.nodepool_infra_envs import input_problems as infra_env_problems
+from wingman_day1.domain.nodepool_infra_envs import without_input
 from wingman_day1.domain.specs import (
     ClusterSpec,
     dump_spec,
@@ -71,12 +74,19 @@ class SpecCatalog:
         machine_configs: MachineConfigService,
         *,
         specs_root: str,
+        infra_envs: bool = False,
     ) -> None:
-        """Read through ``specs`` (cached), write through ``changes``, resolve configs."""
+        """Read through ``specs`` (cached), write through ``changes``, resolve configs.
+
+        ``infra_envs`` is ``DAY1_MULTI_INFRAENV_NODEPOOLS`` (ADR-0064): off, the
+        form schema leaves a nodepool's ``additional_infra_envs`` out and a
+        flavor may not preset it.
+        """
         self._specs = specs
         self._changes = changes
         self._machine_configs = machine_configs
         self._root = specs_root
+        self._infra_envs = infra_envs
         self._versions: dict[tuple[str, str], ClusterSpec] = {}
         """Older versions found in history: a saved version never changes, so kept for good."""
         self._missing: dict[tuple[str, str], str] = {}
@@ -93,9 +103,10 @@ class SpecCatalog:
             return ""
 
     async def schema(self, *, include_reserved: bool = False) -> list[TemplateField]:
-        """The template's inputs, for the create form."""
+        """The template's inputs, for the create form and the flavor editor."""
         template = await self.template()
-        return analyze_template(template, include_reserved=include_reserved) if template else []
+        found = analyze_template(template, include_reserved=include_reserved) if template else []
+        return found if self._infra_envs else without_input(found)
 
     async def entries(self) -> list[SpecEntry]:
         """Every ``<name>.yaml`` under the specs folder, with the template filled in."""
@@ -251,15 +262,18 @@ class SpecCatalog:
     async def _require_savable(self, spec: ClusterSpec) -> None:
         """Every flavor rule a spec must meet before it is proposed; all problems at once.
 
-        A flavor that gives image mirrors is checked against the shared
-        template as it is now: refused while the template does not read them
-        (ADR-0063). Any other save does not read the template.
+        A flavor that gives image mirrors (ADR-0063) or a nodepool's other
+        InfraEnvs (ADR-0064) is checked against the shared template as it is
+        now: refused while the template does not read them. Any other save
+        does not read the template.
         """
-        mirrors = given_mirror_inputs(spec.spec.day1.values)
-        problems = rule_problems(with_template(spec, await self.template() if mirrors else ""))
+        values = spec.spec.day1.values
+        reads = given_mirror_inputs(values) or infra_envs_given(values)  # the template's inputs
+        problems = rule_problems(with_template(spec, await self.template() if reads else ""))
         catalog = await self._machine_configs.catalog()
         problems += flavor_config_problems(spec.spec.day1.values, catalog)
         problems += tuning_problems(spec.spec.day1.values, await self._machine_configs.tuning())
+        problems += infra_env_problems(spec.spec.day1.values, enabled=self._infra_envs)
         if problems:
             raise InvalidSpecError(f"spec {spec.metadata.name!r} cannot be saved", problems)
 

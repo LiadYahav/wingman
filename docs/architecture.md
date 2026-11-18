@@ -212,7 +212,10 @@ fake; a router never calls a client. Files and functions stay small
   `mcConfigMap` and `tuningConfigmap` the day1 CI's. With `DAY1_UPGRADES` the
   versions are upgrade-cluster's, and with `DAY1_SCALE_NODEPOOLS` an existing
   NodePool's replicas are update-nodepool's. Wingman never writes them, and
-  expects their commits on its MR branches.
+  expects their commits on its MR branches. Without
+  `DAY1_MULTI_INFRAENV_NODEPOOLS` an edit leaves a nodepool's
+  `additionalInfraEnvNames` as it is, and no edit renames a NodePool by its
+  InfraEnvs (ADR-0064).
 - **Not every change is Wingman's MR.** Some workflows commit to day1
   themselves (upgrade-cluster and update-nodepool to `main`, allocate-segment
   to an MR's branch); server-scan's maintenance and Run job are server-scan's

@@ -15,6 +15,8 @@ import { fieldId, inputCls, ValueField } from "./controls";
 import { ConfigsModeChoice } from "./configs-mode-choice";
 import { EveryNodepoolPanel } from "./every-nodepool-panel";
 import { NodeLabelsEditor, PresetInput } from "./inputs";
+import { InfraEnvsPreset } from "./infra-envs-preset";
+import { INFRA_ENVS_INPUT } from "@/lib/infra-envs";
 import { TuningField } from "./tuning-field";
 import { chooseConfigsMode, isTuningRule, keepTuningRule } from "./tuning-model";
 import {
@@ -449,16 +451,27 @@ function NodepoolCard({
             </button>
             {moreOpen && (
               <div className="grid gap-x-5 gap-y-4 pl-6 sm:grid-cols-2">
-                {others.map((input) => (
-                  <PresetInput
-                    key={input.name}
-                    input={input}
-                    path={nodepoolPath(index, input.name)}
-                    value={pool[input.name]}
-                    onChange={(v) => setValue(input.name, v)}
-                    problems={problems(nodepoolPath(index, input.name), { deeper: true })}
-                  />
-                ))}
+                {others.map((input) =>
+                  input.name === INFRA_ENVS_INPUT ? (
+                    <InfraEnvsPreset
+                      key={input.name}
+                      index={index}
+                      own={pool.infra_env}
+                      value={pool[input.name]}
+                      onChange={(v) => setValue(input.name, v)}
+                      problems={problems(nodepoolPath(index, input.name), { deeper: true })}
+                    />
+                  ) : (
+                    <PresetInput
+                      key={input.name}
+                      input={input}
+                      path={nodepoolPath(index, input.name)}
+                      value={pool[input.name]}
+                      onChange={(v) => setValue(input.name, v)}
+                      problems={problems(nodepoolPath(index, input.name), { deeper: true })}
+                    />
+                  )
+                )}
               </div>
             )}
           </div>

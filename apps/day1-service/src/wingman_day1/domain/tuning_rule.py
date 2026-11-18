@@ -13,11 +13,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import cast
 
+from wingman_day1.domain.nodepool_infra_envs import nodepool_entries
 from wingman_day1.domain.tuning_profiles import (
     TUNING_FILE_KEY,
     TUNING_INPUT,
     file_value,
-    nodepool_entries,
     show_names,
     tuning_names,
 )

@@ -13,6 +13,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
+import { infraEnvNames } from "@/lib/infra-envs";
 import type { Placement, PlacementCandidate, PlacementCheck } from "@/types";
 
 /** The environments a new cluster can be created in. */
@@ -51,18 +52,21 @@ export function placementOwner(value: unknown): string | undefined {
 /**
  * The servers the new cluster needs, as `need` values: one per nodepool that
  * names an InfraEnv (a DNS label) with 1 to 1000 replicas, in the form's order.
- * A nodepool still being filled in is left out until it is both.
+ * A nodepool still being filled in is left out until it is both. One that
+ * draws from other InfraEnvs too names them all, `a,b:3`: one node type to
+ * day1, which counts no free server twice (ADR-0064).
  */
 export function placementNeeds(nodepools: unknown): string[] {
   if (!Array.isArray(nodepools)) return [];
   const needs: string[] = [];
   for (const pool of nodepools) {
     if (!pool || typeof pool !== "object" || Array.isArray(pool)) continue;
-    const { infra_env: infraEnv, replicas } = pool as Record<string, unknown>;
+    const { infra_env: infraEnv, replicas, additional_infra_envs: more } = pool as Record<string, unknown>;
     const name = typeof infraEnv === "string" ? infraEnv.trim() : "";
+    const others = infraEnvNames(more).filter((other) => INFRA_ENV.test(other) && other !== name);
     const count = typeof replicas === "number" ? replicas : /^\d+$/.test(String(replicas ?? "").trim()) ? Number(replicas) : NaN;
     if (INFRA_ENV.test(name) && Number.isInteger(count) && count >= 1 && count <= MAX_NEED_REPLICAS) {
-      needs.push(`${name}:${count}`);
+      needs.push(`${[name, ...others].join(",")}:${count}`);
     }
   }
   return needs;

@@ -77,6 +77,12 @@ nodepool:
 {% for np in nodepools %}
   {# Example: dell-r660-site1-128c-1024gb-5tb #}
   - infraEnvName: {{ np.infra_env }}
+{% if np.additional_infra_envs | default([]) %}
+    {#- More InfraEnvs the NodePool may draw Agents from; it is still named
+        after infraEnvName (ADR-0064). Only with DAY1_MULTI_INFRAENV_NODEPOOLS. #}
+    {# Example: dell-r760-site1-128c-1024gb-5tb #}
+    additionalInfraEnvNames: {{ np.additional_infra_envs | tojson }}
+{% endif %}
 {% if np.nodepool_name | default("") %}
     # Needed only when two nodepools share an InfraEnv; otherwise the chart
     # derives <clusterName>-<infraEnvName>.

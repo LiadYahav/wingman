@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from wingman_day1.domain.mce_capacity import infra_envs_in
 from wingman_day1.domain.placement import Candidate, Placement
 
 
@@ -40,9 +41,12 @@ class NodeTypeOut(BaseModel):
     """One node type the new cluster needs, on one candidate MCE."""
 
     infra_env: str
+    """The node type: an InfraEnv, or several joined by `` + `` (ADR-0064)."""
+    infra_envs: list[str]
+    """Its InfraEnvs; node types that share one are a single row, so no server counts twice."""
     needed: int
     free_agents: int | None
-    """Free Agents in the InfraEnv; ``None`` when the MCE's Agents could not be read."""
+    """Free Agents in its InfraEnvs; ``None`` when the MCE's Agents could not be read."""
     healthy: int | None
     """Of those, the ones whose server-scan server is usable; ``None`` without server-scan."""
     not_in_server_scan: int
@@ -56,6 +60,8 @@ class NeedOut(BaseModel):
     """Replicas the new cluster needs of one node type, summed over its nodepools."""
 
     infra_env: str
+    """An InfraEnv, or several joined by `` + `` for nodepools that draw from them (ADR-0064)."""
+    infra_envs: list[str]
     replicas: int
 
 
@@ -105,6 +111,7 @@ class PlacementCandidateOut(BaseModel):
             node_types=[
                 NodeTypeOut(
                     infra_env=t.infra_env,
+                    infra_envs=list(t.infra_envs),
                     needed=t.needed,
                     free_agents=t.free_agents,
                     healthy=t.healthy,
@@ -178,7 +185,10 @@ class PlacementOut(BaseModel):
             flavor=inputs.flavor,
             min_free_pods=inputs.min_free_pods,
             live_reads=placement.live_reads,
-            needs=[NeedOut(infra_env=t, replicas=n) for t, n in inputs.needs],
+            needs=[
+                NeedOut(infra_env=t, infra_envs=list(infra_envs_in(t)), replicas=n)
+                for t, n in inputs.needs
+            ],
             versions=list(placement.versions),
             pick=placement.pick,
             why=placement.why,

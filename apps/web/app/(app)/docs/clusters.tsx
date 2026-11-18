@@ -65,7 +65,9 @@ export function ClustersSection() {
           (merkaz, anaf, mador: digits only) and, per nodepool, its InfraEnv, replicas, machine configs, node
           labels and tuning profiles (picked from <InlineCode>tuning/</InlineCode> in the day1 repo, each with its
           kind and summary; read-only when the flavor locks them). InfraEnvs are picked from the MCE&apos;s list when this deployment reads the
-          MCE. A flavor that sizes its nodepools by a ratio (<InlineCode>1:2:1</InlineCode>) asks for one size
+          MCE. Where your operator turns it on, a nodepool may also <strong>draw from</strong> other InfraEnvs: its
+          own InfraEnv still names its NodePool, and a new node takes the first free Agent of any of them; Wingman
+          counts its free servers over all of them, and never one server twice. A flavor that sizes its nodepools by a ratio (<InlineCode>1:2:1</InlineCode>) asks for one size
           instead, and each sized nodepool gets its part times that size. A field the flavor <strong>presets</strong> is filled in and can be changed;
           a field it <strong>locks</strong> is shown read-only with the flavor&apos;s value. Machine configs come
           from a picker of the day1 repo&apos;s <InlineCode>mc-files/</InlineCode>: a static config by name, or{" "}
@@ -176,6 +178,9 @@ function ClusterPageDocs() {
               Edit the file as YAML, then <strong>Review &amp; Submit</strong> shows the diff and opens a modify MR.
               Keep the automation keys as they are. If the file changed since you opened it (CI or the workflow
               committed), the MR is refused and nothing is overwritten: <strong>Reload</strong> and edit again.
+              Where nodepools may draw from several InfraEnvs, <strong>InfraEnvs per nodepool</strong> above the
+              file adds and removes the others; a nodepool&apos;s own InfraEnv names its NodePool and stays, and
+              a <strong>Replace</strong> NodePool&apos;s stay as they are, since a change would replace every node.
             </p>
           </div>
         </div>

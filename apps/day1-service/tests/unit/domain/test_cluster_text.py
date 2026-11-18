@@ -376,3 +376,15 @@ def test_any_configs_edit_changes_only_the_configs_and_keeps_the_ci_block(
     assert [
         line for line in edited.splitlines() if "name:" not in line and "configs" not in line
     ] == unchanged
+
+
+def test_an_edit_leaves_a_nodepools_other_infraenvs_byte_for_byte() -> None:
+    """ADR-0064: a flavor's sync never touches ``additionalInfraEnvNames``."""
+    content = (
+        'owner: {merkaz: "1", anaf: "2", mador: "3"}\nmastertag: 4.18.22\nnodepool:\n'
+        "- infraEnvName: dell-r660\n"
+        "  additionalInfraEnvNames: [hp-gen11, dell-r760]  # any free one\n"
+        "  replicas: 2\n"
+    )
+    edited = edit_values(content, [value("nodepool[0].replicas", 4)])
+    assert edited == content.replace("replicas: 2", "replicas: 4")

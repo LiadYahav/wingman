@@ -628,6 +628,8 @@ export async function mockDashboardApis(page: Page) {
     fulfillProblem(route, 501, "FEATURE_DISABLED", "Server Scan is not set up in this deployment: SERVER_SCAN_URL is empty.")
   );
   await page.route("**/api/day1/specs", (route: Route) => json(route, []));
+  // No template input to offer unless a test sets its schema: Edit cluster is the file alone (ADR-0064)
+  await page.route("**/api/day1/specs/template/schema**", (route: Route) => json(route, []));
   await page.route("**/api/day1/machine-configs", (route: Route) => json(route, mockMachineConfigs));
   await page.route("**/api/day1/tuning-profiles", (route: Route) => json(route, mockTuningProfiles));
   await page.route("**/api/day1/approvals", (route: Route) => json(route, []));

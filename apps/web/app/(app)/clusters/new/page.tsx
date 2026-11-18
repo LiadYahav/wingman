@@ -46,12 +46,14 @@ import { isTuningPath, tuningNames } from "@/lib/tuning-profiles";
 import { TuningProfilesPicker } from "@/components/tuning/tuning-profiles-picker";
 import { mirrorCreateInput } from "@/components/image-mirrors/mirror-create-input";
 import { isMirrorInput } from "@/lib/image-mirrors";
+import { infraEnvsCreateInput } from "@/components/clusters/infra-envs-create-input";
 import {
   CONFIGS, NODEPOOLS, fieldPaths, flavorLocks, flavorProblems, formEntries, isConfigsPath, lookup, newNodepool,
   ownerProblems, OWNER_INPUTS, placeProblems, presetPaths, requestVariables, ruleLockLabels, seedCreateForm,
   sizedIndex, sizingRatio, startingSize, withSize, type PlacedProblems,
 } from "./flavor-form";
 import { envFromName, nameProblems, siteFromName } from "./naming";
+import { SizedReplicas } from "./sized-replicas";
 
 const inputCls =
   "w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-shadow";
@@ -756,14 +758,7 @@ export default function NewClusterPage() {
 
   const renderInput = ({ field, path, value, onChange, locked }: FieldInputContext) => {
     const sized = sizedIndex(path, ratio);
-    if (sized !== null) {
-      return (
-        <p data-testid={`nodepool-${sized}-replicas-sized`} className="text-sm">
-          <span className="font-mono font-medium">{size !== null ? String(value) : "—"}</span>
-          <span className="ml-2 text-xs text-muted-foreground">ratio {ratio[sized]} × size {size ?? "?"}</span>
-        </p>
-      );
-    }
+    if (sized !== null) return <SizedReplicas index={sized} value={value} part={ratio[sized]} size={size} />;
     if (OWNER_INPUTS.includes(path) && !locked) {
       return <OwnerInput field={field} value={value} onChange={onChange} invalid={path in liveOwners} />;
     }
@@ -772,6 +767,8 @@ export default function NewClusterPage() {
       return <TuningProfilesPicker names={tuningNames(value)} onChange={onChange} readOnly={locks.tuning !== null || locked} label={`Nodepool ${index + 1} tuning profiles`} testId={`nodepool-${index}-tuning`} />;
     }
     if (isMirrorInput(path)) return mirrorCreateInput({ field, path, value, onChange, locked }, formValues);
+    const drawsFrom = infraEnvsCreateInput({ field, path, value, onChange, locked }, formValues, infraEnvs, infraEnvsLoading);
+    if (drawsFrom !== undefined) return drawsFrom;
     if (!isConfigsPath(path)) return undefined;
     return (
       <ConfigListEditor

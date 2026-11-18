@@ -150,6 +150,14 @@ class Day1Settings(BaseSettings):
     # WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development).
     day1_scale_nodepools: bool = False
 
+    # ── A nodepool that draws from several InfraEnvs (ADR-0064) ──────────────
+    # Off by default. On: the create form and the flavor editor let a nodepool
+    # draw Agents from more InfraEnvs than its own (additionalInfraEnvNames),
+    # and an edit may change that list. Needs a hostedclusters-setup chart that
+    # renders the key and a specs-project template that writes it; off, Wingman
+    # never writes the key and an edit leaves it as it is.
+    day1_multi_infraenv_nodepools: bool = False
+
     # ── MCE placement (ADR-0050): always on; this needs the hubs ─────────────
     # The cost of one hosted control plane: with CLUSTER_STATUS_ENABLED, an MCE
     # is offered for a new cluster only with at least this many free pods

@@ -18,6 +18,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from wingman_core.domain.git import RepoPath
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.infrastructure.fake_add_server import FakeAddServerWorkflow
@@ -235,3 +236,26 @@ async def test_a_viewer_still_cannot_install(
     )
     assert (response.status_code, response.json()["code"]) == (403, "FORBIDDEN")
     assert workflow.starts == []
+
+
+async def test_the_day1_files_fallback_names_every_infraenv_a_nodepool_draws_from(
+    support: Any,
+    gitlab: InMemoryGitLab,
+    clock: Any,
+    inventory: FakeServerInventory,
+    workflow: FakeAddServerWorkflow,
+    auth: Auth,
+) -> None:
+    """ADR-0064: a nodepool's ``additionalInfraEnvNames`` are pools of its MCE too."""
+    path = "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/ocp4-prod-lark-site1.yaml"
+    pid = await support.project_id(gitlab, support.DAY1)
+    lark = (await gitlab.read_file(pid, RepoPath(path), "main")).content
+    first = "- infraEnvName: dell-r660-site1-128c-1024gb-5tb\n"
+    wide = lark.replace(first, f"{first}  additionalInfraEnvNames: [{R650}]\n", 1)
+    await support.push(gitlab, support.DAY1, branch="main", file=path, content=wide)
+    hub = FakeHubApi(unavailable=[SITE1_A])
+    app = app_of(support, gitlab, clock, hub=hub, inventory=inventory, workflow=workflow)
+    async for client in serve(app):
+        body = (await client.get("/api/day1/inventory", headers=auth(support.ALICE))).json()
+    site1_a = next(m for m in body["mces"] if m["mce"] == SITE1_A)
+    assert site1_a["infra_envs"] == sorted([*DAY1_POOLS, R650])
