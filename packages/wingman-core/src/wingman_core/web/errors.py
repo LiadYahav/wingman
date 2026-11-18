@@ -67,6 +67,7 @@ class ErrorCode(StrEnum):
     ADD_SERVER_ALREADY_RUNNING = "ADD_SERVER_ALREADY_RUNNING"
     JOB_ALREADY_RUNNING = "JOB_ALREADY_RUNNING"
     SCALE_ALREADY_RUNNING = "SCALE_ALREADY_RUNNING"
+    SERVER_REFRESH_REFUSED = "SERVER_REFRESH_REFUSED"
 
     @property
     def slug(self) -> str:
@@ -251,6 +252,13 @@ class ScaleAlreadyRunning(AppError):
 
     status = 409
     code = ErrorCode.SCALE_ALREADY_RUNNING
+
+
+class ServerRefreshRefused(AppError):
+    """server-scan cannot read a server from its vendor manager now; nothing changed."""
+
+    status = 409
+    code = ErrorCode.SERVER_REFRESH_REFUSED
 
 
 _GIT_ERRORS: tuple[tuple[type[GitError], type[AppError]], ...] = (

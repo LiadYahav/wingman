@@ -259,6 +259,8 @@ class ServerRecord(BaseModel):
     """Why the last collection failed (``timeout``, v5.3.1's ``collection_error``), as sent."""
     unreachable_detail: str | None = None
     """That failure's cause in words (server-scan v5.3.1, its ADR-0062); ``None`` before it."""
+    revision: int | None = None
+    """Moves only when the content changed, so a Fetch now that kept it found nothing new."""
     updated_at: datetime
     created_at: datetime
 

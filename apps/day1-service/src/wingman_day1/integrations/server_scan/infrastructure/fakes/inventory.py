@@ -18,7 +18,9 @@ page) is the fixture's, as loaded (``confs``, 3.29.0). Its
 audit trail is every server's History and the seeded ``events``, filtered and
 paged as server-scan does, for the Events page and a server's History alike
 (``events``, 3.31.0). Its Jobs are server-scan's fake
-runner, ported (``jobs``, 3.32.0).
+runner, ported (``jobs``, 3.32.0). Its Fetch now reads a server back
+unchanged, seen now, and refuses those server-scan cannot read
+(``refresh``, 3.45.0).
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from typing import Final
 from wingman_core.ports.clock import Clock, system_clock
 from wingman_day1.domain.errors import (
     ServerNotFoundError,
+    ServerScanRefreshRefusedError,
     ServerScanSkillMissingError,
     ServerScanUnavailableError,
 )
@@ -67,6 +70,7 @@ from wingman_day1.integrations.server_scan.infrastructure.fakes.events import (
 )
 from wingman_day1.integrations.server_scan.infrastructure.fakes.jobs import FakeJobs
 from wingman_day1.integrations.server_scan.infrastructure.fakes.records import FakeRecords
+from wingman_day1.integrations.server_scan.infrastructure.fakes.refresh import refusal
 from wingman_day1.integrations.server_scan.infrastructure.fakes.rules import FakeRules
 from wingman_day1.integrations.server_scan.infrastructure.fakes.sites import (
     SiteName,
@@ -125,6 +129,8 @@ class FakeServerInventory:
         """Every ``start_maintenance`` that reached a server, in order."""
         self.job_starts: list[str] = []
         """Every ``run_job`` that reached the fake server-scan, in order."""
+        self.refreshes: list[str] = []
+        """Every ``refresh`` that reached a server, in order."""
         self._before_read: list[Callable[[], None]] = []
 
     def before_read(self, hook: Callable[[], None]) -> None:
@@ -272,6 +278,18 @@ class FakeServerInventory:
         )
         self._records.log_maintenance(row, changed, at=self._clock())
         return self._change(changed)
+
+    async def refresh(self, server_id: str) -> ServerRecord:
+        """See ServerInventory.refresh: read back unchanged and seen now, by ``dev``, as there."""
+        row = self._writable(server_id)
+        self.refreshes.append(server_id)
+        why = refusal(row)
+        if why is not None:
+            raise ServerScanRefreshRefusedError(why)
+        seen = dataclasses.replace(row, last_seen_at=self._clock(), stale=False)
+        self._records.log_refresh(row, seen, at=self._clock())
+        self._rows[row.id] = seen
+        return self._records.record(seen, self._clock())
 
     def _trail(self) -> list[JSONish]:
         """Every event now: each server's History and the seeded ones."""

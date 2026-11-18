@@ -26,6 +26,10 @@ MAINTENANCE_OFF: Final = (
     "Maintenance needs server-scan's admin token: add the key admin-token to the server-scan "
     f"Secret and restart day1 ({ADMIN_SETTING})."
 )
+REFRESH_OFF: Final = (
+    "Fetch now needs server-scan's admin token: add the key admin-token to the server-scan "
+    f"Secret and restart day1 ({ADMIN_SETTING})."
+)
 REASON_MAX_LENGTH: Final = 500
 """The longest reason day1 sends; server-scan sets no limit of its own."""
 VM_VENDOR: Final = "kubevirt"
@@ -65,6 +69,15 @@ class ServerMaintenance:
 def maintenance_detail(*, viewer_token: bool, admin_token: bool) -> str | None:
     """Why the maintenance toggle does not work in this deployment; ``None`` when it does."""
     return token_detail(MAINTENANCE_OFF, viewer_token=viewer_token, token=admin_token)
+
+
+def refresh_detail(*, viewer_token: bool, admin_token: bool) -> str | None:
+    """Why Fetch now does not work in this deployment; ``None`` when it does.
+
+    server-scan keeps ``POST /servers/{id}/refresh`` for its admins
+    (``require_admin``, its ADR-0064), as it does maintenance: the same rule.
+    """
+    return token_detail(REFRESH_OFF, viewer_token=viewer_token, token=admin_token)
 
 
 def server_type_of(vendor: str | None) -> str:

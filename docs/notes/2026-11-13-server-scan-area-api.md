@@ -13,9 +13,9 @@ fleet's audit trail, **Events** (§14, 3.31.0), and its CronJobs, **Jobs**
 - **server-scan's API does not change.** day1 reads server-scan with the
   viewer token it already holds (§4), a server's History and the Events page
   with its auditor token (§9.5, §14.5), and Jobs with its admin token
-  (§15.5). The writes are a server's maintenance on and off (§8.5) and
-  starting a Job (§15.6), with server-scan's admin token, behind Wingman's
-  admin check.
+  (§15.5). The writes are a server's maintenance on and off (§8.5),
+  starting a Job (§15.6) and Fetch now (§9.9, 3.45.0), with server-scan's
+  admin token, behind Wingman's admin check.
 - **The browser never calls server-scan.** It reads day1's routes below.
 - **Admins only** (decision 13 of the single-pane plan, until RBAC): every
   route takes `AdminUser`, so a viewer gets `403 FORBIDDEN` and an anonymous
@@ -390,6 +390,8 @@ shape, plus whether the maintenance toggle works here:
   always there.
 - **`maintenance_available`** is whether the toggle works in this deployment
   (§8.4); `maintenance_detail` says why not, in one line, else `null`.
+  **`refresh_available`** and `refresh_detail` are the same for each row's
+  Fetch now (§9.9, 3.45.0), by the same rule.
 - **One cache, two `304`s.** The rows come from the cache the Nodes tab,
   placement and Inventory Management share (`server-scan:rows`, for
   `DAY1_CACHE_TTL_SECONDS`, 30 s by default), which asks server-scan with
@@ -714,7 +716,8 @@ plus whether the maintenance toggle and History work here:
   `revision`, a drive's slot, protocol and firmware, a module's type and
   serial, a controller's drive count, the BMC's `host_is_ip` and path, an
   identity's external ids, the health's `evaluated_at` and policy keys, the
-  classification's version and time, the OpenShift claim's agent history).
+  classification's version and time, the OpenShift claim's agent history;
+  since 3.45.0 `revision` is kept, for Fetch now, §9.9).
   Enumerations (`vendor`, severities, states, `installation_type`,
   `media_type`, a controller's `kind`, …) are kept as server-scan sends
   them, so a value it adds later reaches the page, which shows it as it is.
@@ -916,6 +919,73 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
   `ConnectivityTab.tsx`, the NIC wording of `NetworkTab.tsx`, the health
   breakdown's rules, the profile-template and unreachable labels, the event
   tints, its types, and their tests' cases as Vitest cases.
+
+### 9.9 Fetch now (3.45.0)
+
+server-scan v6.5.0 (its `827cd97`, its ADR-0064) put a **Fetch now** button
+in its server page's header, and v6.6.0 (`55b6391`) one, icon only, as the
+first column of every Servers row: each reads that one server from its
+vendor manager now, instead of waiting for its collector run (every 6 hours)
+or running the whole collector from Jobs. Wingman follows both.
+
+- **server-scan's call**: `POST /api/v1/servers/{id}/refresh`, no body,
+  **admin only** (`require_admin`, as every write; it also costs a vendor
+  manager session). It reads the server from the manager that collects it
+  (the same live read its `/servers/available` recheck runs), persists it,
+  audits `SERVER_REFRESHED` (`data`: `manager_type`, `changed`) and answers
+  the server whole (`ServerDetail`), whose `revision` moves only when the
+  content changed. Calls for one server share one read. It answers `404` for
+  an unknown id; **`409 SERVER_REFRESH_UNSUPPORTED`** when the API is not
+  connected to that manager (a standalone Redfish BMC, whose credentials stay
+  with its CronJob; KubeVirt on the hub; a server no manager collected);
+  **`409 SERVER_NOT_AT_MANAGER`** when the manager no longer reports it
+  (nothing is written or deleted); **`503`** when the manager fails (timeout,
+  login, network). It waits as long as its recheck does, up to 240 seconds
+  for UCS Central.
+- **day1's route**: **`POST /api/day1/server-scan/servers/{server_id}/refresh`**,
+  no body, **`AdminUser`** (as the area, and as server-scan keeps the call),
+  sent once with server-scan's admin token (none to a server-scan with auth
+  off), through the one port (`ServerInventory.refresh`) and its adapter
+  (`infrastructure/writes.py`). It answers the record as just read, in
+  §9.4's shape with the three switches, judged now; the page takes it at
+  once. day1 drops its cached rows and sites after it, whatever the outcome.
+- **The errors**: server-scan's `409`s are **`409 SERVER_REFRESH_REFUSED`**,
+  its words as the detail (nothing changed); `404` is `404 NOT_FOUND` in its
+  words; its `503` is `502 DEPENDENCY_UNAVAILABLE` with its words (the
+  manager failed, nothing changed); a refused admin token is `502` naming
+  `SERVER_SCAN_ADMIN_TOKEN`; sent and unanswered, or a gateway's `504`, is
+  **`504 AMBIGUOUS_WRITE`**: never retried (ADR-0006), "reload the server and
+  look at when it was last seen before trying again".
+- **How long**: day1 waits up to **120 seconds** for this call alone (its
+  other server-scan calls keep `SERVER_SCAN_TIMEOUT_SECONDS`); nginx gives
+  the path 130 seconds (the chart's `nginx-configmap.yaml`), as the Route
+  does every path. A UCS Central server server-scan takes longer to read is
+  `504 AMBIGUOUS_WRITE` in Wingman, though server-scan may finish it.
+- **The switch**: `refresh_available` and `refresh_detail` on the record
+  (§9.4) and on the rows' answer (§8.3), by the admin token's rule (§8.4):
+  with it, or with no token at all (auth off), it works; a viewer token
+  alone turns it off, and the route answers `501 FEATURE_DISABLED` with
+  `details.setting: SERVER_SCAN_ADMIN_TOKEN`.
+- **The record**: day1's record now keeps `revision` (§9.4 left it out
+  before), so the page can tell "no changes" from "data updated".
+- **The person is recorded by Wingman**: server-scan's event names the admin
+  token; day1 logs each with the person (`server_refreshed`, with the
+  server's name and revision; `server_refresh_unconfirmed` when unanswered).
+- **Metrics**: `server_scan` `refresh_server` (docs/ops/metrics.md).
+- **The web**: the header's **Fetch now** beside BMC (its tooltip
+  server-scan's "Read this server from its vendor manager now, instead of
+  waiting for the collector", its name "Fetch this server's data now"),
+  "Fetching…" while day1 waits, its icon turning (not under reduced motion); then a toast, "Fetched <name>", "From <manager> — no changes"
+  or "— data updated" by the revision, and on a failure "Fetch failed" with
+  the reason inline too, in server-scan's words. Each Servers row's is the
+  first column, icon only, named "Fetch data of <name> now", its toast "From
+  <manager>" or "<name>: <reason>". Both are greyed with day1's line without
+  the admin token. After one, the rows, the sites and the server's History
+  are read again. History names the event "Fetched from <manager> on demand
+  (data changed | no change)", and Events lists `SERVER_REFRESHED`.
+- **The fake**: reads its server back unchanged and seen now (`changed:
+  false`, by `dev`), and refuses a server with no collector or a standalone
+  Redfish one as server-scan does (`fakes/refresh.py`).
 
 ## 10. The Confs page (3.29.0)
 

@@ -315,8 +315,10 @@ async def test_the_record_is_read_whole_with_the_viewer_token() -> None:
 async def test_the_record_drops_server_scans_internals() -> None:
     inventory, _ = make(httpx.Response(200, json=server_scan_detail()))
     sent = (await inventory.record(SERVER_ID)).model_dump(mode="json")
-    for internal in ("schema_version", "name_normalized", "search_tokens", "revision"):
+    for internal in ("schema_version", "name_normalized", "search_tokens"):
         assert internal not in sent
+    # Kept since server-scan v6.5.0's Fetch now: it says whether the content changed.
+    assert sent["revision"] == 17
     assert "external_ids" not in sent["identity"]
     assert "evaluated_at" not in sent["health"]
     assert "host_is_ip" not in sent["network"]["bmc"]

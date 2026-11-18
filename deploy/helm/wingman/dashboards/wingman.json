@@ -640,7 +640,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "round(sum(increase(wingman_dependency_requests_total{job=~\"$job\",dependency=\"server_scan\",operation=~\"enable_maintenance|disable_maintenance|run_job\",outcome=\"ok\"}[$__range]))) or vector(0)",
+          "expr": "round(sum(increase(wingman_dependency_requests_total{job=~\"$job\",dependency=\"server_scan\",operation=~\"enable_maintenance|disable_maintenance|run_job|refresh_server\",outcome=\"ok\"}[$__range]))) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",

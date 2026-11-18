@@ -1,8 +1,8 @@
 """The Servers page's read: server-scan's rows, every field, and the conditional GET (ADR-0048).
 
-server-scan's ``GET /api/v1/servers/rows`` read whole (23 fields and
-``generated_at``; ``server_type`` since v6.3.0), the same fleet object answered while server-scan says
-``304`` (day1 encodes it once), one cache entry for the rows and the fleet,
+server-scan's ``GET /api/v1/servers/rows`` read whole (23 fields, ``server_type``
+since v6.3.0, and ``generated_at``), the same fleet object answered while server-scan
+says ``304`` (day1 encodes it once), one cache entry for the rows and the fleet,
 the fake's ``generated_at``, and day1's own ``ETag`` rule (server-scan's).
 """
 

@@ -101,7 +101,7 @@ export const FLEET: ServerRow[] = [
 ];
 
 export function mockServers(items: ServerRow[] = FLEET, overrides: Partial<ServerRowsAnswer> = {}): ServerRowsAnswer {
-  return { items, generated_at: "2026-11-13T08:00:00Z", maintenance_available: true, maintenance_detail: null, ...overrides };
+  return { items, generated_at: "2026-11-13T08:00:00Z", maintenance_available: true, maintenance_detail: null, refresh_available: true, refresh_detail: null, ...overrides };
 }
 
 const MODELS = ["PowerEdge R660", "PowerEdge R760", "UCS C240", "ProLiant DL380"] as const;

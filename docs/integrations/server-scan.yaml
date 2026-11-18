@@ -153,6 +153,7 @@ files:
     upstream:
       - backend/app/api/v1/servers.py
       - backend/app/api/v1/maintenance_schemas.py
+      - backend/app/errors.py
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/architecture.py
     upstream: [frontend/public/architecture/]
   - wingman: apps/day1-service/src/wingman_day1/api/conditional.py
@@ -170,6 +171,8 @@ files:
     upstream: [backend/app/infrastructure/jobs/fake.py]
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/skill.py
     upstream: [backend/app/application/services/skill_bundle.py]
+  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/refresh.py
+    upstream: [backend/app/application/services/server_refresh.py]
 
   # ── day1: the area's routes, in server-scan's shapes and parameters ──────
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/api/servers_schemas.py
@@ -212,6 +215,11 @@ files:
     upstream: [backend/app/api/v1/skill.py]
   - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_architecture.py
     upstream: [frontend/public/architecture/]
+  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_refresh.py
+    upstream:
+      - backend/app/api/v1/servers.py
+      - backend/app/errors.py
+      - backend/app/application/services/server_refresh.py
 
   # ── dev: the fake fleet's fixtures, in server-scan's shapes ──────────────
   - wingman: dev/fleet-fixtures/confs.yaml
@@ -379,6 +387,15 @@ files:
     upstream: [frontend/src/components/AppNav.tsx]
   - wingman: apps/web/features/server-scan/lib/testing.ts
     upstream: [frontend/src/features/servers/OverviewTab.test.tsx]
+  - wingman: apps/web/features/server-scan/lib/refresh.ts
+    upstream:
+      - frontend/src/features/servers/RefreshButton.tsx
+      - frontend/src/features/inventory/RowRefreshButton.tsx
+      - frontend/src/features/servers/refreshError.ts
+  - wingman: apps/web/features/server-scan/lib/refresh.test.ts
+    upstream:
+      - frontend/src/features/servers/RefreshButton.test.tsx
+      - frontend/src/features/inventory/RowRefreshButton.test.tsx
 
   # ── web: the pages and their parts (components) ──────────────────────────
   - wingman: apps/web/features/server-scan/components/sites-page.tsx
@@ -399,6 +416,11 @@ files:
     upstream: [frontend/src/features/inventory/ClusterSidebar.tsx]
   - wingman: apps/web/features/server-scan/components/multi-select.tsx
     upstream: [frontend/src/features/inventory/MultiSelect.tsx]
+  - wingman: apps/web/features/server-scan/components/fetch-now.tsx
+    upstream:
+      - frontend/src/features/servers/RefreshButton.tsx
+      - frontend/src/features/inventory/RowRefreshButton.tsx
+      - frontend/src/components/RefreshIcon.tsx
   - wingman: apps/web/features/server-scan/components/maintenance-toggle.tsx
     upstream:
       - frontend/src/features/inventory/MaintenanceToggle.tsx

@@ -12,9 +12,9 @@ case (``jobs``, ``application/jobs.py``). server-scan failing is
 ``ServerScanUnavailableError`` (``ServerScanDeniedError`` for a refused
 token).
 
-Its write here is a server's maintenance on and off (ADR-0048's 3.23.0
-amendment), behind the routes' admin check; the Jobs page's Run job is the
-other (``application/jobs.py``). server-scan records the token as who did it,
+Its writes here are a server's maintenance on and off (ADR-0048's 3.23.0
+amendment) and Fetch now (3.45.0), behind the routes' admin check; the Jobs
+page's Run job is the other (``application/jobs.py``). server-scan records the token as who did it,
 so each write is logged with the person's name
 (``audit.recorded``): Wingman's record. A page that needs the
 auditor's or the admin's token is guarded by ``guards``.
@@ -51,6 +51,8 @@ from wingman_day1.integrations.server_scan.ports import ServerInventory
 
 UNCONFIRMED: Final = "server_maintenance_unconfirmed"
 """The log event of a maintenance write sent and not answered."""
+REFRESH_UNCONFIRMED: Final = "server_refresh_unconfirmed"
+"""The log event of a Fetch now sent and not answered."""
 
 
 class ServerScanService:
@@ -61,6 +63,7 @@ class ServerScanService:
         inventory: ServerInventory,
         *,
         maintenance_detail: str | None = None,
+        refresh_detail: str | None = None,
         history_detail: str | None = None,
         events_detail: str | None = None,
         ui_url: str = "",
@@ -70,7 +73,8 @@ class ServerScanService:
         """Read server-scan through ``inventory``.
 
         ``maintenance_detail`` says why the maintenance writes are off here
-        (``domain.servers.maintenance_detail``), ``history_detail``
+        (``domain.servers.maintenance_detail``), ``refresh_detail`` why Fetch
+        now is (``domain.servers.refresh_detail``), ``history_detail``
         why a server's History is and ``events_detail`` why the Events page is
         (``domain.events.audit_detail``); ``None``: on. ``ui_url``
         is server-scan's address for people and Claude Code; ``token_line`` the
@@ -79,11 +83,20 @@ class ServerScanService:
         """
         self._inventory = inventory
         self.maintenance_detail = maintenance_detail
+        self.refresh_detail = refresh_detail
         self.history_detail = history_detail
         self.events_detail = events_detail
         self.ui_url = ui_url.rstrip("/")
         self.token_line = token_line
         self.jobs = jobs or ServerScanJobs(inventory)
+
+    def switches(self) -> dict[str, str | None]:
+        """Why the maintenance toggle, Fetch now and History are off here (``None``: on)."""
+        return {
+            "maintenance_detail": self.maintenance_detail,
+            "refresh_detail": self.refresh_detail,
+            "history_detail": self.history_detail,
+        }
 
     async def sites(self) -> FleetSites:
         """The Sites page: every configured site and the fleet, as server-scan counts them."""
@@ -168,6 +181,24 @@ class ServerScanService:
         return await recorded(
             write, event, done="server_maintenance_ended", unconfirmed=UNCONFIRMED, answered=_named
         )
+
+    async def refresh(self, server_id: str, *, user: User) -> ServerRecord:
+        """Fetch now: read one server from its vendor manager now. Never retried (ADR-0006)."""
+        admin_only(self.refresh_detail)
+        event = {"user": user.username, "server_id": server_id}
+        write = self._inventory.refresh(server_id)
+        return await recorded(
+            write,
+            event,
+            done="server_refreshed",
+            unconfirmed=REFRESH_UNCONFIRMED,
+            answered=_fetched,
+        )
+
+
+def _fetched(record: ServerRecord) -> dict[str, str]:
+    """What a Fetch now's answer adds to its log line: the server's name and revision."""
+    return {"server_name": record.name, "revision": str(record.revision)}
 
 
 def _named(change: ServerMaintenance) -> dict[str, str]:

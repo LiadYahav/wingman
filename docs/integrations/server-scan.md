@@ -18,11 +18,14 @@ server-scan itself works is [its study](../ecosystem/notes/server-scan.md).
 - **Wingman's own features over its data**: the Nodes tab (ADR-0038), MCE
   placement's spare servers (ADR-0050) and Inventory Management's pools
   (ADR-0057). They read the same port and cache as the area.
-- **Two writes, both from the area, with the admin token, never retried**
-  (ADR-0006): a server's maintenance on and off, and Run job on a CronJob.
+- **Three writes, all from the area, with the admin token, never retried**
+  (ADR-0006): a server's maintenance on and off, Run job on a CronJob, and
+  Fetch now on a server (since v6.6.0: a server's page and every Servers
+  row; admins only, as server-scan keeps it).
 - **Never**: `/servers/available` and reservations (the workflows' and herzi's
   calls: add-server-to-mce takes a server, not Wingman), reclassify and
-  health recalculate (no button in server-scan's own UI calls them),
+  health recalculate (no button in server-scan's own UI calls them; Fetch
+  now's refresh is one Wingman follows, since server-scan's buttons call it),
   server-scan's login and personal tokens (Wingman signs people in itself; a
   person makes their token on server-scan's own Claude page).
 - **Tokens**: the viewer token for the reads, the auditor token for History and

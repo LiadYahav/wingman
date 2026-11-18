@@ -7,7 +7,8 @@
  * Ported from team-redbull/server-scan (decision 18 of the
  * single-pane plan): `frontend/src/types/server.ts` (`ServerDetail`,
  * `VmHostResponse`) and `frontend/src/types/events.ts`, with what v6.1.0
- * added (`collection_error`, `unreachable_detail`, an event's serial and BMC).
+ * added (`collection_error`, `unreachable_detail`, an event's serial and BMC)
+ * and v6.6.0 (`server_type`, `revision`, Fetch now's answer: the record).
  * As there, `X | null` means "always sent, may be null"; `X?` is what an
  * older server-scan does not send. day1 adds the maintenance's dates,
  * `reservation.held` and whether the toggle and History work here.
@@ -296,11 +297,16 @@ export interface ServerRecord {
   unreachable_reason: UnreachableReason | null;
   /** The last failed collection's cause, in words; null when none was recorded (or before server-scan v5.3.1). */
   unreachable_detail: string | null;
+  /** Moves only when the content changed, so a Fetch now that kept it found nothing new (server-scan v6.5.0). */
+  revision: number | null;
   updated_at: string;
   created_at: string;
   /** Whether the maintenance toggle works here (§8.4), and why not in one line. */
   maintenance_available: boolean;
   maintenance_detail: string | null;
+  /** Whether Fetch now works here (§9.9: server-scan's admin token), and why not in one line. */
+  refresh_available: boolean;
+  refresh_detail: string | null;
   /** Whether History works here (the auditor token, §9.5), and why not in one line. */
   history_available: boolean;
   history_detail: string | null;

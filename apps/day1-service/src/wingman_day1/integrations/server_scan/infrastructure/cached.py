@@ -14,9 +14,9 @@ History (server-scan caches the record per revision itself, the host's
 health changes without the VM changing, History comes in cursors), nor the
 Confs page's catalog (a small collection server-scan reads per call, asked
 for by that page only, so a cache would only delay a change). A
-failure is not cached. A maintenance write clears the rows and the sites, so
-the next read shows it (whatever its outcome: an ambiguous one may have
-landed). The Rules & Policies page's rules and policies are read through too:
+failure is not cached. A maintenance write or a Fetch now clears the rows
+and the sites, so the next read shows it (whatever its outcome: an
+ambiguous one may have landed). The Rules & Policies page's rules and policies are read through too:
 two small reads server-scan answers from its database, asked for by that page
 only; and so is the Events page's audit trail (cursors and filters over a
 trail that grows) and its actors (at most once a minute per open page). So
@@ -171,6 +171,13 @@ class CachedServerInventory:
         """See ServerInventory.end_maintenance; clears the rows and sites."""
         try:
             return await self._inner.end_maintenance(server_id)
+        finally:
+            self._forget_fleet()
+
+    async def refresh(self, server_id: str) -> ServerRecord:
+        """See ServerInventory.refresh; clears the rows and sites."""
+        try:
+            return await self._inner.refresh(server_id)
         finally:
             self._forget_fleet()
 

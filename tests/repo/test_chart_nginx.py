@@ -30,10 +30,12 @@ API = {
     "/api/auth/": "day1",
     "/api/day1/": "day1",
     "~ ^/api/day1/clusters/[^/]+/upgrade-targets$": "day1",
+    "~ ^/api/day1/server-scan/servers/[^/]+/refresh$": "day1",
     "/api/webhooks/": "day1",
     "/api/day2/": "day2",
 }
 UPGRADE_TARGETS = "~ ^/api/day1/clusters/[^/]+/upgrade-targets$"
+FETCH_NOW = "~ ^/api/day1/server-scan/servers/[^/]+/refresh$"
 DEFAULTS = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
 PINNED = DEFAULTS["image"]["nginx"]
 
@@ -96,8 +98,10 @@ def test_metrics_is_never_routed() -> None:
 def test_the_timeouts_body_size_gzip_and_stream_are_kept() -> None:
     conf, _ = nginx()
     locations = blocks(conf, "location")
-    assert directive(conf, "proxy_read_timeout") == ["60s", "130s"]
+    assert directive(conf, "proxy_read_timeout") == ["60s", "130s", "130s"]
     assert directive(locations[UPGRADE_TARGETS], "proxy_read_timeout") == ["130s"]
+    # day1 waits up to 120 s for server-scan's Fetch now; nginx and the Route give it 130 s
+    assert directive(locations[FETCH_NOW], "proxy_read_timeout") == ["130s"]
     assert directive(conf, "proxy_connect_timeout") == ["10s"]
     assert directive(conf, "client_max_body_size") == ["10m"]
     assert directive(conf, "gzip") == ["on"]

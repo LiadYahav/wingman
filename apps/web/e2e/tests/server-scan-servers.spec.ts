@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, held } from "../fixtures/api-handlers";
 import { failing, forbidden, off } from "../fixtures/server-scan";
+import { mockFetchNow, nodeRecord } from "../fixtures/server-scan-server";
 import { FLEET, bigFleet, mockMaintenance, mockServers, setUpServers } from "../fixtures/server-scan-servers";
 import { readXlsx } from "../fixtures/xlsx";
 
@@ -45,8 +46,9 @@ test.describe("The Servers page", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Servers" })).toBeVisible();
     await expect(summary(page)).toHaveText("12 servers");
     await expect(page.getByTestId("ss-servers-updated")).toContainText("Updated 13/11/2026");
+    // server-scan v6.6.0: the first column is each row's Fetch now, its header for screen readers
     await expect(page.getByRole("table", { name: "Servers" }).locator("thead th")).toHaveText([
-      "Name", "BMC", "Installation", "MCE", "Cluster", "Model", "State", "Maintenance",
+      "Fetch now", "Name", "BMC", "Installation", "MCE", "Cluster", "Model", "State", "Maintenance",
     ]);
     // Sorted by name, naturally
     await expect.poll(async () => (await names(page))[0]).toBe("hpe-dl380-site2-stale-10");
@@ -241,7 +243,7 @@ test.describe("The Servers page", () => {
     await expect.poll(() => query(page)).toBe("sort=health&sort_desc=true");
     await expect(rows(page).first()).toHaveAttribute("data-server", "ocp-dell-r660-site1-node-02");
     // BMC does not sort
-    await expect(page.getByRole("table", { name: "Servers" }).getByRole("button", { name: "BMC" })).toHaveCount(0);
+    await expect(page.getByRole("table", { name: "Servers" }).getByRole("button", { name: "BMC", exact: true })).toHaveCount(0);
   });
 
   test("the cluster sidebar: MCEs, hosted and UPI clusters with counts, kept in the URL, and folded away", async ({ page }) => {
@@ -453,5 +455,45 @@ test.describe("Maintenance on and off", () => {
     await toggle(page, "ocp-dell-r660-site1-node-03").click();
     await expect(page.getByText(/Maintenance on ocp-dell-r660-site1-node-03 was not ended/)).toBeVisible();
     expect(calls).toHaveLength(2);
+  });
+});
+
+test.describe("A row's Fetch now", () => {
+  const fetchNow = (page: Page, name: string) => row(page, name).getByTestId("ss-row-fetch-now");
+  const NODE = "ocp-dell-r660-site1-node-01";
+
+  test("reads that one server from its manager, says so with its name, and the rows are read again", async ({ page }) => {
+    const { reads } = await setUpServers(page);
+    const calls = await mockFetchNow(page, [nodeRecord()]);
+    await go(page, PAGE);
+    await expect(rows(page)).toHaveCount(12);
+    const before = reads();
+    await expect(fetchNow(page, NODE)).toHaveAccessibleName(`Fetch data of ${NODE} now`);
+    await fetchNow(page, NODE).click();
+    await expect(page.getByText(`Fetched ${NODE}`)).toBeVisible();
+    await expect(page.getByText("From OPENMANAGE", { exact: true })).toBeVisible();
+    await expect.poll(() => reads()).toBeGreaterThan(before);
+    expect(calls).toEqual([`srv_${NODE}`]);
+  });
+
+  test("a failure is a toast in the API's words, sent once", async ({ page }) => {
+    await setUpServers(page);
+    const words = "server-scan: The ONEVIEW manager no longer reports it; the stored data is unchanged.";
+    const calls = await mockFetchNow(page, (route) => fulfillProblem(route, 409, "SERVER_REFRESH_REFUSED", words));
+    await go(page, PAGE);
+    await fetchNow(page, "hpe-dl380-site2-stale-10").click();
+    await expect(page.getByText(`hpe-dl380-site2-stale-10: ${words}`)).toBeVisible();
+    expect(calls).toHaveLength(1);
+  });
+
+  test("without server-scan's admin token every row's is greyed with day1's line, and sends nothing", async ({ page }) => {
+    const why = "Fetch now needs server-scan's admin token: add the key admin-token to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN).";
+    await setUpServers(page, { servers: mockServers(FLEET, { refresh_available: false, refresh_detail: why }) });
+    const calls = await mockFetchNow(page, [nodeRecord()]);
+    await go(page, PAGE);
+    await expect(fetchNow(page, NODE)).toHaveAttribute("aria-disabled", "true");
+    await expect(fetchNow(page, NODE)).toHaveAttribute("title", why);
+    await fetchNow(page, NODE).click({ force: true });
+    expect(calls).toEqual([]);
   });
 });

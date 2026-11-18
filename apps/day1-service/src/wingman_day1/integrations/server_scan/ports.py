@@ -9,7 +9,8 @@ reads server-scan's skill and the skill's zip (3.27.0); its Architecture
 page reads the diagrams server-scan's UI serves (3.28.0); its Confs page the
 hardware catalog (3.29.0); its Events page the fleet's audit trail and who
 wrote it (3.31.0); its Jobs page the CronJobs server-scan may start and a
-pod's log (3.32.0).
+pod's log (3.32.0); a server's page and the Servers rows read one server
+from its vendor manager now, Fetch now (3.45.0).
 """
 
 from __future__ import annotations
@@ -152,4 +153,16 @@ class ServerInventory(Protocol):
 
     async def end_maintenance(self, server_id: str) -> ServerMaintenance:
         """End a server's maintenance; the errors are ``start_maintenance``'s."""
+        ...
+
+    async def refresh(self, server_id: str) -> ServerRecord:
+        """Read one server from its vendor manager now, and the record it then holds.
+
+        server-scan's Fetch now (v6.5.0). Never retried (ADR-0006).
+        ``ServerNotFoundError`` for an unknown id;
+        ``ServerScanRefreshRefusedError`` when server-scan cannot read it from
+        its manager (nothing changed); ``ServerScanUnavailableError`` when the
+        manager failed; ``AmbiguousServerScanWriteError`` when it was sent and
+        no answer came back.
+        """
         ...

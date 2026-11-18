@@ -3,13 +3,13 @@
  * §9, ADR-0048's 3.25.0 amendment): server-scan's server page in Wingman, its
  * five tabs with the tab in the URL, its words and badges; History with and
  * without server-scan's auditor token; maintenance read only on the record;
- * the states; and the link into it from the Servers table (Inventory
- * Management's links: inventory.spec.ts).
+ * Fetch now (server-scan v6.5.0); the states; and the link into it from the
+ * Servers table (Inventory Management's links: inventory.spec.ts).
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { fulfillProblem, go, json } from "../fixtures/api-handlers";
-import { CISCO_ID, HOST_ID, NODE, NODE_ID, VM_ID, ciscoRecord, nodeRecord, setUpServer, vmRecord } from "../fixtures/server-scan-server";
+import { fulfillProblem, go, held, json } from "../fixtures/api-handlers";
+import { CISCO_ID, HOST_ID, NODE, NODE_ID, VM_ID, ciscoRecord, mockFetchNow, nodeRecord, setUpServer, vmRecord } from "../fixtures/server-scan-server";
 
 const PAGE = `/server-scan/servers/${NODE_ID}`;
 const field = (page: Page, label: string) => page.getByTestId("ss-overview").locator("div").filter({ has: page.locator(`dt:text-is("${label}")`) }).locator("dd");
@@ -265,6 +265,62 @@ test.describe("The page's states", () => {
     await setUpServer(page, { record: (route) => fulfillProblem(route, 501, "FEATURE_DISABLED", "Server Scan is not set up in this deployment: SERVER_SCAN_URL is empty.") });
     await go(page, PAGE);
     await expect(page.getByTestId("ss-off")).toBeVisible();
+  });
+});
+
+test.describe("Fetch now", () => {
+  const button = (page: Page) => page.getByTestId("ss-fetch-now");
+
+  test("reads the server from its manager: busy while day1 waits, then says it found nothing new and shows the read", async ({ page }) => {
+    await setUpServer(page);
+    const answer = held();
+    const fresh = nodeRecord({ last_seen_at: "2026-11-18T09:00:00Z" });
+    const calls = await mockFetchNow(page, answer.answer(fresh));
+    await go(page, PAGE);
+    await expect(button(page)).toHaveAccessibleName("Fetch this server's data now");
+    await expect(button(page)).toHaveAttribute("title", "Read this server from its vendor manager now, instead of waiting for the collector");
+    await button(page).click();
+    await expect(button(page)).toHaveText("Fetching…");
+    await expect(button(page)).toHaveAttribute("aria-busy", "true");
+    await expect(button(page)).toBeDisabled();
+    answer.release();
+    await expect(page.getByText(`Fetched ${NODE}`)).toBeVisible();
+    await expect(page.getByText("From OPENMANAGE — no changes")).toBeVisible();
+    await expect(button(page)).toHaveText("Fetch now");
+    // The page takes the record as just read: its Last seen is the new one
+    await expect(field(page, "Last seen").locator("[title]").first()).toHaveAttribute("title", /^18\/11\/2026/);
+    expect(calls).toEqual([NODE_ID]);
+  });
+
+  test("says the data was updated when server-scan's revision moved", async ({ page }) => {
+    await setUpServer(page);
+    await mockFetchNow(page, [nodeRecord({ revision: 2 })]);
+    await go(page, PAGE);
+    await button(page).click();
+    await expect(page.getByText("From OPENMANAGE — data updated")).toBeVisible();
+  });
+
+  test("a refusal is shown inline in server-scan's words, and sent once", async ({ page }) => {
+    await setUpServer(page);
+    const words = "server-scan: The API is not connected to the OPENMANAGE manager that collects it; run its collector job instead.";
+    const calls = await mockFetchNow(page, (route) => fulfillProblem(route, 409, "SERVER_REFRESH_REFUSED", words));
+    await go(page, PAGE);
+    await button(page).click();
+    await expect(page.getByTestId("ss-fetch-now-error")).toHaveText(words);
+    await expect(page.getByText("Fetch failed")).toBeVisible();
+    expect(calls).toHaveLength(1);
+  });
+
+  test("without server-scan's admin token it is greyed with day1's line, and sends nothing", async ({ page }) => {
+    const why = "Fetch now needs server-scan's admin token: add the key admin-token to the server-scan Secret and restart day1 (SERVER_SCAN_ADMIN_TOKEN).";
+    await setUpServer(page, { records: [nodeRecord({ refresh_available: false, refresh_detail: why })] });
+    const calls = await mockFetchNow(page, [nodeRecord()]);
+    await go(page, PAGE);
+    await expect(button(page)).toHaveAttribute("aria-disabled", "true");
+    await expect(button(page)).toHaveAccessibleName(why);
+    await button(page).click({ force: true });
+    await expect(page.getByTestId("ss-fetch-now-error")).toHaveCount(0);
+    expect(calls).toEqual([]);
   });
 });
 

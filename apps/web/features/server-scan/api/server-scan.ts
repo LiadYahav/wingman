@@ -71,6 +71,7 @@ const serverScanApi = {
     const path = `${serverPath(id)}/maintenance`;
     return start ? api.put<MaintenanceAnswer>(path, start) : api.del<MaintenanceAnswer>(path);
   },
+  refresh: (id: string) => api.post<ServerRecord>(`${serverPath(id)}/refresh`),
   classificationRules: () => api.get<ClassificationRuleListResponse>("/api/day1/server-scan/classification-rules"),
   healthPolicies: () => api.get<HealthPolicyListResponse>("/api/day1/server-scan/health-policies"),
 };
@@ -157,6 +158,27 @@ export function useMaintenanceChange() {
       void client.invalidateQueries({ queryKey: serverScanKeys.servers });
       void client.invalidateQueries({ queryKey: serverScanKeys.sites });
       void client.invalidateQueries({ queryKey: serverScanKeys.server(id) });
+    },
+  });
+}
+
+/**
+ * Fetch now (§9.9, server-scan v6.5.0): the server read from its vendor
+ * manager now, by the server page's button or a Servers row's. Never retried
+ * (ADR-0006): an unanswered one is `AMBIGUOUS_WRITE`. The answer is the
+ * server's record, which the page takes at once; the rows, the sites and
+ * the server's History are read again, after a failure too.
+ */
+export function useServerRefresh() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => serverScanApi.refresh(id),
+    retry: false,
+    onSuccess: (record) => client.setQueryData(serverScanKeys.server(record.id), record),
+    onSettled: (_record, _error, id) => {
+      void client.invalidateQueries({ queryKey: serverScanKeys.servers });
+      void client.invalidateQueries({ queryKey: serverScanKeys.sites });
+      void client.invalidateQueries({ queryKey: serverScanKeys.history(id) });
     },
   });
 }

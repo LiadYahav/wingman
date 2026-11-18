@@ -23,7 +23,7 @@ export const WRITTEN_EVENT_TYPES = [
   "SERVER_CREATED", "SERVER_RENAMED", "SERVER_PRUNED", "HEALTH_CHANGED", "CLASSIFICATION_CHANGED", "OPENSHIFT_STATE_CHANGED",
   "MAINTENANCE_ENABLED", "MAINTENANCE_UPDATED", "MAINTENANCE_DISABLED", "SERVER_RESERVED", "SERVER_RESERVATION_REFUSED",
   "SERVER_RELEASED", "IDRAC_RESET", "AUDIT_PURGED", "LOGIN_SUCCEEDED", "LOGIN_DENIED", "TOKEN_CREATED", "TOKEN_REVOKED",
-  "JOB_TRIGGERED",
+  "JOB_TRIGGERED", "SERVER_REFRESHED",
 ] as const;
 
 function str(value: unknown): string | null {
@@ -146,6 +146,7 @@ const SENTENCES: Record<string, Sentence> = {
   TOKEN_REVOKED: (_, d) =>
     d.by_admin === true ? `Personal API token of ${str(d.user) ?? "?"} revoked by an admin` : "Revoked their personal API token",
   JOB_TRIGGERED: (_, d) => `Ran CronJob ${str(d.cronjob) ?? "?"} by hand as Job ${str(d.job) ?? "?"}`,
+  SERVER_REFRESHED: (_, d) => `Fetched from ${str(d.manager_type) ?? "its manager"} on demand (${d.changed === true ? "data changed" : "no change"})`,
   AUDIT_PURGED: (_, d) => `Purged ${count(d.deleted)} audit events older than ${count(d.retention_days)} days`,
   HEALTH_CHANGED: (_, d) => transition(d),
   CLASSIFICATION_CHANGED: (_, d) => classificationChanged(d),

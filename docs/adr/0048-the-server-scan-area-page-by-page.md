@@ -735,3 +735,48 @@ and §9 of `docs/notes/2026-11-13-server-scan-area-api.md` say what changed.
   healthy) so the red end is at the left, each tier above zero at least 3
   pixels wide, its counts in words as its name and tooltip; drawn with the
   Overview's segmented bar, in Wingman's status colours.
+- **`827cd97` (v6.5.0) and `55b6391` (v6.6.0): Fetch now, the area's third
+  write.** server-scan's server page and every Servers row read that one
+  server from its vendor manager now (`POST /api/v1/servers/{id}/refresh`,
+  its ADR-0064), instead of waiting for its collector. Wingman follows both
+  buttons, as the user asked ("Server Scanner have made changes lets keep
+  ours updated"): a new call from day1 to server-scan, built as the area's
+  other writes are, through the one port (`ServerInventory.refresh`), its
+  adapter (`infrastructure/writes.py`, `send_once`) and the fake
+  (`fakes/refresh.py`), behind `POST
+  /api/day1/server-scan/servers/{server_id}/refresh` (§9.9 of the contract).
+  - **Its permission: `AdminUser`, server-scan's own.** server-scan guards
+    the route with `require_admin`, as every write (a refresh persists the
+    server, audits `SERVER_REFRESHED` and costs a vendor-manager session), so
+    a viewer or an auditor of server-scan cannot press it; Wingman's route
+    takes `AdminUser`, the area's guard. day1 sends it with server-scan's
+    admin token, the maintenance toggle's, by the same rule
+    (`refresh_detail`): without it beside a viewer token the buttons are
+    greyed with one line and the route answers `501` naming
+    `SERVER_SCAN_ADMIN_TOKEN`; with no token at all (auth off) it works. No
+    new value, Secret, token or grant.
+  - **Never retried** (ADR-0006): one `POST`; unanswered is `504
+    AMBIGUOUS_WRITE` ("reload the server and look at when it was last
+    seen"), the buttons disabled while it waits. A second Fetch now is
+    harmless to server-scan (it reads again; one server's calls share one
+    read), but the rule is the writes' rule, and the person decides.
+  - **Its errors in server-scan's words**: its `409`s (not connected to the
+    server's manager, or the manager no longer reports it; nothing changed)
+    are one new problem, **`409 SERVER_REFRESH_REFUSED`** (`wingman_core`'s
+    codes are append-only); its `503` (the manager failed) is `502` with its
+    words; `404` is `404`.
+  - **It waits longer than a read**: server-scan reads the manager while
+    the call is open, up to 240 seconds for UCS Central; day1 waits up to 120
+    seconds for this call alone, and nginx gives its path 130 seconds, as the
+    Route gives every path (no setting: one longer than the Route would be
+    cut by it anyway).
+  - **The answer is the record**, judged now, which the page takes at once;
+    day1's record keeps `revision` now, so the toast says "no changes" or
+    "data updated" as server-scan's does. The rows and sites cache is dropped
+    after it, and the web reads the rows, sites and History again. day1 logs
+    each with the person (`server_refreshed`, `server_refresh_unconfirmed`);
+    the metric is `refresh_server`. History and Events describe
+    `SERVER_REFRESHED` in server-scan's words.
+  - **The row's button** is the table's first column, as server-scan's,
+    icon only; the header's sits beside BMC. Both are Wingman's buttons
+    (lucide's icon, sonner's toasts), server-scan's words.

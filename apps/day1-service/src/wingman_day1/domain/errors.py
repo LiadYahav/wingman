@@ -169,7 +169,19 @@ class ServerScanRefusedError(InvalidInputError):
 
 
 class AmbiguousServerScanWriteError(ServerScanError):
-    """A write (maintenance, a Job's start) was sent but its outcome is unknown. Never retried."""
+    """A write (maintenance, a Job's start, Fetch now) was sent but its outcome is unknown.
+
+    Never retried.
+    """
+
+
+class ServerScanRefreshRefusedError(ServerScanError):
+    """server-scan cannot read the server from its vendor manager now (its 409); nothing changed.
+
+    It is not connected to the manager that collects the server
+    (``SERVER_REFRESH_UNSUPPORTED``: a standalone Redfish server, a VM on the
+    hub), or the manager no longer reports it (``SERVER_NOT_AT_MANAGER``).
+    """
 
 
 class NodeNotInClusterError(Day1Error):

@@ -1,9 +1,14 @@
-"""server-scan's writes: a server's maintenance on and off (ADR-0048's 3.23.0 amendment).
+"""server-scan's writes: a server's maintenance on and off, and Fetch now (ADR-0048).
 
 ``PUT /api/v1/servers/{id}/maintenance`` (``{reason?, expected_end?}``) and
 ``DELETE`` on the same path, each answering the server (``ServerDetail``),
-whose ``maintenance`` is read. Sent with server-scan's admin token, or with
-none to a server-scan that runs with auth off.
+whose ``maintenance`` is read (3.23.0 amendment). ``POST
+/api/v1/servers/{id}/refresh`` (server-scan v6.5.0, no body) reads the
+server from its vendor manager now and answers it whole, read as the server
+page's record; server-scan waits up to its recheck timeout (four minutes for
+UCS Central), so day1 waits ``REFRESH_TIMEOUT_SECONDS``, under nginx's and
+the Route's 130 seconds for that path. Sent with server-scan's admin token,
+or with none to a server-scan that runs with auth off.
 
 Every write to server-scan goes out through ``send_once`` and is judged by
 ``accepted`` and ``refused``, so each is never retried (ADR-0006) in the same
@@ -18,6 +23,7 @@ What it follows upstream, and at which version: docs/integrations/server-scan.ya
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from datetime import datetime
 from typing import Final, Literal
 from urllib.parse import quote
 
@@ -28,15 +34,23 @@ from wingman_day1.domain.errors import (
     ServerNotFoundError,
     ServerScanDeniedError,
     ServerScanError,
+    ServerScanRefreshRefusedError,
     ServerScanRefusedError,
     ServerScanUnavailableError,
 )
 from wingman_day1.infrastructure.http import JSON, NOT_SENT, optional_text, required_text
+from wingman_day1.integrations.server_scan.domain.record import ServerRecord
 from wingman_day1.integrations.server_scan.domain.servers import MaintenanceStart, ServerMaintenance
 from wingman_day1.integrations.server_scan.infrastructure.parse import json_object
 
 MAINTENANCE_PATH: Final = "/api/v1/servers/{id}/maintenance"
+REFRESH_PATH: Final = "/api/v1/servers/{id}/refresh"
 CHECK_FIRST: Final = "Reload the servers and look at its row before trying again."
+REFRESH_CHECK_FIRST: Final = (
+    "Reload the server and look at when it was last seen before trying again."
+)
+REFRESH_TIMEOUT_SECONDS: Final = 120.0
+"""How long day1 waits for a Fetch now: under the 130 seconds nginx and the Route give the path."""
 
 Method = Literal["PUT", "POST", "DELETE"]
 
@@ -60,10 +74,15 @@ async def send_once(
     check_first: str,
     headers: Mapping[str, str],
     body: Mapping[str, str] | None = None,
+    wait_seconds: float | None = None,
 ) -> httpx.Response:
-    """Send one write and return server-scan's answer; once, whatever happens."""
+    """Send one write and return server-scan's answer; once, whatever happens.
+
+    ``wait_seconds`` replaces the client's timeout for this write (none: the client's).
+    """
+    wait = httpx.USE_CLIENT_DEFAULT if wait_seconds is None else httpx.Timeout(wait_seconds)
     try:
-        return await client.request(method, path, json=body, headers=headers)
+        return await client.request(method, path, json=body, headers=headers, timeout=wait)
     except NOT_SENT as exc:
         raise ServerScanUnavailableError(
             f"server-scan could not be reached {what} ({type(exc).__name__}); nothing changed"
@@ -128,6 +147,43 @@ async def send_maintenance(
     raise refused(response, what=what, check_first=CHECK_FIRST)
 
 
+async def send_refresh(
+    client: httpx.AsyncClient, server_id: str, *, headers: Mapping[str, str], now: datetime
+) -> ServerRecord:
+    """Fetch now: one ``POST``, never retried; the answer read as the record, judged at ``now``."""
+    what = f"reading {server_id} from its vendor manager"
+    path = REFRESH_PATH.format(id=quote(server_id, safe=""))
+    response = await send_once(
+        client,
+        "POST",
+        path,
+        what=what,
+        check_first=REFRESH_CHECK_FIRST,
+        headers=headers,
+        wait_seconds=REFRESH_TIMEOUT_SECONDS,
+    )
+    status = response.status_code
+    if status == 200:
+        return accepted(
+            response, lambda r: _record_of(r, now), what=what, check_first=REFRESH_CHECK_FIRST
+        )
+    words = _problem(response)
+    if status == 404:
+        raise ServerNotFoundError(
+            f"server-scan: {words[0]}" if words else f"no server {server_id!r}"
+        )
+    if status == 409:
+        raise ServerScanRefreshRefusedError(
+            f"server-scan: {words[0]}" if words else f"server-scan refused {what} (409)"
+        )
+    if status == 503:
+        cause = f": {words[0]}" if words else ""
+        raise ServerScanUnavailableError(
+            f"server-scan could not finish {what}{cause}; nothing changed"
+        )
+    raise refused(response, what=what, check_first=REFRESH_CHECK_FIRST)
+
+
 def server_maintenance(raw: JSON) -> ServerMaintenance:
     """The server a maintenance write answers: who it is, and its maintenance now."""
     if not isinstance(raw, dict):
@@ -147,6 +203,11 @@ def server_maintenance(raw: JSON) -> ServerMaintenance:
 
 def _maintenance_of(response: httpx.Response) -> ServerMaintenance:
     return server_maintenance(response.json())
+
+
+def _record_of(response: httpx.Response, now: datetime) -> ServerRecord:
+    """The server Fetch now answers, read strictly; one that does not fit raises ValueError."""
+    return ServerRecord.model_validate_json(response.content).judged(now)
 
 
 def _problem(response: httpx.Response) -> list[str]:

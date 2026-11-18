@@ -68,7 +68,7 @@ export interface ServerRow {
   macs: string[];
 }
 
-/** day1's answer: server-scan's rows, and whether the maintenance toggle works here (§8.4). */
+/** day1's answer: server-scan's rows, and whether the maintenance toggle and Fetch now work here (§8.4). */
 export interface ServerRowsAnswer {
   items: ServerRow[];
   /** When the inventory last changed, as server-scan says. */
@@ -76,6 +76,9 @@ export interface ServerRowsAnswer {
   maintenance_available: boolean;
   /** Why the toggle does not work, in one line; null when it does. */
   maintenance_detail: string | null;
+  /** Whether each row's Fetch now works (server-scan's admin token), and why not in one line. */
+  refresh_available: boolean;
+  refresh_detail: string | null;
 }
 
 /** The answer to a maintenance change: the server's new maintenance (§8.3). */

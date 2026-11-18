@@ -41,7 +41,7 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
-| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `list_events`, `list_event_actors`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs`, `list_classification_rules`, `list_health_policies`, `list_jobs`, `get_job_logs`, `run_job` |
+| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `list_events`, `list_event_actors`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs`, `list_classification_rules`, `list_health_policies`, `list_jobs`, `get_job_logs`, `run_job`, `refresh_server` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server`, `start_update_nodepool` |
 | `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
 
@@ -60,7 +60,7 @@ checks every name, label and label value it reads against the code.
 
 | Row | What it shows |
 |---|---|
-| Overview | Targets up; the running builds (component, version, short commit); GitLab token rejected (10m) and ambiguous writes (30m), the alerts' counts. Over the dashboard's range: MRs opened, MRs merged, approvals (GitLab `ok` calls of `create_merge_request`, `merge_merge_request`, `approve_merge_request`), workflow runs started (`workflows` `start_*`), server-scan writes (`enable_maintenance`, `disable_maintenance`, `run_job`); systems failing (each `dependency` with `unavailable` or `error` calls in the last 10m, or None) |
+| Overview | Targets up; the running builds (component, version, short commit); GitLab token rejected (10m) and ambiguous writes (30m), the alerts' counts. Over the dashboard's range: MRs opened, MRs merged, approvals (GitLab `ok` calls of `create_merge_request`, `merge_merge_request`, `approve_merge_request`), workflow runs started (`workflows` `start_*`), server-scan writes (`enable_maintenance`, `disable_maintenance`, `run_job`, `refresh_server`); systems failing (each `dependency` with `unavailable` or `error` calls in the last 10m, or None) |
 | Activity | Per hour: MRs opened, approved, merged and closed; workflow starts by operation; flavor rollout runs by `trigger`; rollout MRs by `outcome`; MCE placement decisions by `decision` |
 | API | Requests per second and p95 by route, the 5xx ratio (over 10m, as `WingmanHighServerErrorRate`), responses by status class; tables of the 10 slowest routes by p95 over the range (status streams left out) and of the routes that answered 5xx, with their share |
 | External systems | Calls per second, outcomes, p95 and the unavailable + error ratio by `dependency`; a table of each system's calls, ok share, failure share and p95 over the last 15m |
@@ -185,6 +185,16 @@ start. Time-series legends list only the series with something to show.
   refused; `ambiguous` a start sent whose answer was lost (logged as
   `server_scan_job_unconfirmed`): never retried, look at the CronJob's runs
   before starting it again.
+- `server_scan` `refresh_server` is Fetch now, on a server's page and every
+  Servers row (ADR-0048's v6.6.0 amendment): one server read from its vendor
+  manager now by an admin, logged with the person (`server_refreshed`), with
+  **the admin token**, waiting up to 120 seconds (the manager's own read).
+  `rejected` is server-scan's `409` (not connected to that manager, or the
+  manager no longer reports the server; nothing changed); `not_found` a
+  server it does not have; `unavailable` the manager failing (its `503`);
+  `denied` the admin token refused; `ambiguous` a Fetch now sent whose answer
+  was lost (logged as `server_refresh_unconfirmed`): never retried, reload
+  the server and look at when it was last seen.
 - `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the

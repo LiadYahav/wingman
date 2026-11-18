@@ -1,6 +1,6 @@
 """A server's page's routes (docs/notes/2026-11-13-server-scan-area-api.md §9).
 
-The record in server-scan's shape with the deployment's two switches, a VM's
+The record in server-scan's shape with the deployment's three switches, a VM's
 host, and History with the auditor token: admins only, 404, 501 when off or
 without the auditor token, 502 when server-scan fails or refuses, 422 for an
 out-of-range page. Built on the fake fleet and its records fixture.
@@ -62,10 +62,13 @@ RECORD_FIELDS = {
     "unreachable_since",
     "unreachable_reason",
     "unreachable_detail",
+    "revision",
     "updated_at",
     "created_at",
     "maintenance_available",
     "maintenance_detail",
+    "refresh_available",
+    "refresh_detail",
     "history_available",
     "history_detail",
 }

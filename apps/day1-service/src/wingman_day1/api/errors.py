@@ -4,7 +4,7 @@ The core handlers already cover Git errors, self-approval and unmanaged MRs;
 this maps day1's own. ``details.problems`` lists every rule a request broke,
 so the form can show them all at once; ``details.setting`` names the setting
 a ``501`` waits for when it is not ``SERVER_SCAN_URL`` (the auditor token, or
-the admin token: maintenance and Jobs).
+the admin token: maintenance, Jobs and Fetch now).
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from wingman_core.web.errors import (
     NotFound,
     RevisionConflict,
     ScaleAlreadyRunning,
+    ServerRefreshRefused,
     Unauthorized,
     UninstallAlreadyRunning,
     UpgradeAlreadyRunning,
@@ -64,6 +65,7 @@ from wingman_day1.domain.errors import (
     ServerScanJobNotFoundError,
     ServerScanJobRunningError,
     ServerScanNotConfiguredError,
+    ServerScanRefreshRefusedError,
     ServerScanSkillMissingError,
     ServerScanUnavailableError,
     ServerScanWritesOffError,
@@ -97,6 +99,7 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (ServerScanDiagramNotFoundError, NotFound),
     (ServerScanJobNotFoundError, NotFound),
     (ServerScanJobRunningError, JobAlreadyRunning),
+    (ServerScanRefreshRefusedError, ServerRefreshRefused),
     (ServerScanNotConfiguredError, FeatureDisabled),
     (ServerScanWritesOffError, FeatureDisabled),
     (ServerScanAuditOffError, FeatureDisabled),

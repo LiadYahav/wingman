@@ -37,7 +37,9 @@ export type ErrorCode =
   /** 409: server-scan refuses to start a CronJob that has an unfinished Job (ADR-0048, 3.32.0). */
   | "JOB_ALREADY_RUNNING"
   /** 409: an update-nodepool run, or an upgrade-cluster run, of the cluster is running (ADR-0062). */
-  | "SCALE_ALREADY_RUNNING";
+  | "SCALE_ALREADY_RUNNING"
+  /** 409: server-scan cannot read the server from its vendor manager now, in its words; nothing changed (ADR-0048). */
+  | "SERVER_REFRESH_REFUSED";
 
 /** One entry of FastAPI's own request validation (`details.errors`). */
 export interface RequestFieldError {
