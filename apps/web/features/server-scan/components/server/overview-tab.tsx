@@ -3,7 +3,7 @@
 import { formatTimestamp } from "@/features/server-scan/lib/datetime";
 import { collectionText, matchedRuleText, profileTemplateLabel } from "@/features/server-scan/lib/overview";
 import type { ServerRecord } from "@/features/server-scan/types/server-scan-record";
-import { SeverityPill } from "../server-badges";
+import { HealthBadge } from "../server-badges";
 import { Field, Tag } from "./fields";
 import { HealthBreakdown, HostValue, LastSeen, MaintenanceValue, ModelValue, OpenShiftValue } from "./overview-values";
 
@@ -54,7 +54,7 @@ export function OverviewTab({ record }: { record: ServerRecord }) {
         </Field>
         {rule && <Field label="Matched rule">{rule}</Field>}
         <Field label="Overall health">
-          <SeverityPill severity={record.health.overall} />
+          <HealthBadge severity={record.health.overall} />
         </Field>
         <Field label="Maintenance">
           <MaintenanceValue record={record} />

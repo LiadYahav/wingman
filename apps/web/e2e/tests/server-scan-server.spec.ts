@@ -48,7 +48,7 @@ test.describe("The server's page", () => {
     // OpenManage: no Connectivity, no GPU row; RAID with who answered
     const breakdown = page.getByTestId("ss-health-breakdown");
     await expect(breakdown.locator("[data-category]")).toHaveText([
-      "Memory●Healthy", "Storage▲Warning", "RAID●HealthyiDRAC9 · redfish_storage", "Network●Healthy", "Power●Healthy", "BMC●Healthy", "Name●Healthy",
+      "MemoryHEALTHY", "StorageWARNING", "RAIDHEALTHYiDRAC9 · redfish_storage", "NetworkHEALTHY", "PowerHEALTHY", "BMCHEALTHY", "NameHEALTHY",
     ]);
     await expect(page.getByRole("list", { name: "Why this health" })).toHaveCount(0);
     await expect(field(page, "Last seen")).toHaveText("3 hours ago");
@@ -57,7 +57,8 @@ test.describe("The server's page", () => {
     await expect(field(page, "Site")).toHaveText("site1");
     await expect(field(page, "Classification")).toHaveText("HOSTED_CLUSTER");
     await expect(field(page, "Matched rule")).toHaveText("Hosted cluster nodes (name ~ ^ocp-)");
-    await expect(field(page, "Overall health")).toHaveText("●Healthy");
+    // server-scan's own HealthBadge on its server page: the severity's word, no glyph
+    await expect(field(page, "Overall health")).toHaveText("HEALTHY");
     await expect(page.getByTestId("ss-maintenance")).toContainText("Not in maintenance");
     await expect(field(page, "Last changed")).toHaveText(/^13\/11\/2026, 10:00:00/);
     await expect(page.getByTestId("ss-collection")).toHaveCount(0);
@@ -69,8 +70,8 @@ test.describe("The server's page", () => {
     await expect(page.getByTestId("ss-server-model")).toHaveText("A100 (from GPU)");
     const why = page.getByRole("list", { name: "Why this health" });
     await expect(why.getByRole("listitem")).toHaveText([
-      "◆CriticalStorage4.80 TB of storage, but the name promises 10.00 TB",
-      "⬟MajorConnectivityA fabric path is down",
+      "CRITICALStorage4.80 TB of storage, but the name promises 10.00 TB",
+      "MAJORConnectivityA fabric path is down",
     ]);
     // Cisco: Connectivity yes, BMC no
     await expect(page.locator('[data-category="connectivity"]')).toBeVisible();
@@ -114,10 +115,10 @@ test.describe("The server's page", () => {
     const vmHost = page.getByTestId("ss-vm-host");
     await expect(vmHost).toContainText("worker-3 · cluster ocp4-prod-virt-site1");
     await expect(vmHost).toContainText("CPU AMD EPYC 9654");
-    await expect(vmHost).toContainText("▲Warning");
+    await expect(vmHost).toContainText("WARNING");
     await expect(vmHost).toContainText("Maintenance");
     // A VM has no BMC, power, RAID or template to judge
-    await expect(page.locator('[data-category]')).toHaveText(["Memory●Healthy", "Storage▲Warning", "Network●Healthy", "Name●Healthy"]);
+    await expect(page.locator('[data-category]')).toHaveText(["MemoryHEALTHY", "StorageWARNING", "NetworkHEALTHY", "NameHEALTHY"]);
     await expect(page.getByRole("link", { name: /Open BMC console/ })).toHaveCount(0);
     await vmHost.getByRole("link", { name: "ocp-dell-r760-site1-virt-03" }).click();
     await expect(page).toHaveURL(new RegExp(`/server-scan/servers/${HOST_ID}$`));
@@ -133,9 +134,9 @@ test.describe("The server's page", () => {
     await expect(hardware.getByRole("region", { name: "CPU" })).toContainText("Intel(R) Xeon(R) Platinum 8462Y+");
     await expect(hardware.getByRole("region", { name: "Memory" })).toContainText("1024.0 GiB total (16 modules)");
     await expect(hardware.getByRole("region", { name: "Storage" })).toContainText("4.80 TB total");
-    await expect(page.getByTestId("ss-drive")).toHaveText([/^MZ7L3960S6XX00SSD960\.0 GB▲Warning\(Predictive failure\)$/, /^MZ7L33T8S6XX01SSD3\.84 TB●Healthy\(OK\)$/]);
+    await expect(page.getByTestId("ss-drive")).toHaveText([/^MZ7L3960S6XX00SSD960\.0 GBWARNING\(Predictive failure\)$/, /^MZ7L33T8S6XX01SSD3\.84 TBHEALTHY\(OK\)$/]);
     await expect(hardware.getByRole("region", { name: "GPU" })).toContainText("No GPUs.");
-    await expect(page.getByTestId("ss-psu")).toHaveText(["PWR SPLY,1400W — 1400W rated, 312W now ●Healthy", "PSU.Slot.2 —"]);
+    await expect(page.getByTestId("ss-psu")).toHaveText(["PWR SPLY,1400W — 1400W rated, 312W now HEALTHY", "PSU.Slot.2 —"]);
     // A Cisco GPU's health is its own word; unread memory is carried forward, unread drives never read
     await go(page, `/server-scan/servers/${CISCO_ID}?tab=hardware`);
     await expect(page.getByTestId("ss-gpu")).toContainText("NVIDIA A100 80GB");

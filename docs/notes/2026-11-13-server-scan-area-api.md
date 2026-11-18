@@ -504,8 +504,16 @@ maintenance:
 
 - **`/server-scan/servers`**, "Servers" in the area's sidebar after Sites,
   as server-scan's navigation orders them.
-- **§8.1 in Wingman's design**: the shared table (`components/data-table/`),
-  Wingman's colour tokens, light and dark, the explanations in tooltips.
+- **§8.1 in server-scan's look** (since 3.46.0, the user's request; before
+  it, Wingman's colour tokens): the shared table (`components/data-table/`)
+  with server-scan's cells and headers (centred but the name, uppercase,
+  `px-2 py-2.5`), its palette (`features/server-scan/palette.css`: its own
+  values in dark, light equivalents in light) for the Installed (red),
+  Available (green) and In inventory (blue) pills, the severity, Maint
+  (violet), Donor, Stale and Name mismatch pills and a row's left edge, the
+  name in plain text, its icons for the maintenance tools and Fetch now, its
+  hairline icon buttons; the filter bar as its own (Search first, the
+  export at the toggles' end); the explanations in tooltips.
 - **Reused from server-scan** (decision 18, credited in the code): its row
   type, `rows.ts` (filter, search, sort, facets, dropdown facets, the cluster
   lists, paging), `sorting.ts`, `donor.ts`, the vendor, source and severity
@@ -890,8 +898,10 @@ The maintenance toggle on this page calls §8.3's `PUT`/`DELETE` routes, with
   keeps Servers marked). The tab is in the URL: `?tab=hardware`, `network`,
   `connectivity` or `history`; Overview has none.
 - **§9.1 in Wingman's design**: server-scan's tabs, fields, words and
-  badges, Wingman's colour tokens (light and dark), the explanations in
-  tooltips.
+  badges, the explanations in tooltips; since 3.46.0 its badges in
+  server-scan's colours too (the Installed, Available and reservation pills,
+  its `HealthBadge` for a health: `HEALTHY`, `CRITICAL`, ...; its amber and
+  grey `Badge`).
 - **The maintenance block is read only**, as server-scan's page is (its
   `0bb7dad`): the state, the reason (since when and the expected end in its
   tooltip), and a "Switch on Servers" link that opens the Servers list at

@@ -8,31 +8,34 @@ import type { HealthSeverity, OpenShiftState } from "@/features/server-scan/type
 import type { ReservationState, ServerRow } from "@/features/server-scan/types/server-scan-servers";
 
 /**
- * The Server Scan area's badges, server-scan's words and rules in Wingman's
- * colours (team-redbull/server-scan: `InstallationBadge.tsx`,
- * `ReservationBadge.tsx`, `StateBadge.tsx`, `HealthBadge.tsx`, decision 18),
- * shared by the Servers table and a server's page. The explanation is each
+ * The Server Scan area's badges, server-scan's words, rules and colours
+ * (team-redbull/server-scan: `InstallationBadge.tsx`, `ReservationBadge.tsx`,
+ * `StateBadge.tsx`, `HealthBadge.tsx`, decision 18), shared by the Servers
+ * table and a server's page. The colours are server-scan's own palette
+ * (`../palette.css`: its tint and on-tint pairs; Installed red, Available
+ * green, as its palette inverts for "in use" and "free"), at the user's
+ * request (ADR-0048's 2026-11-18 amendment). The explanation is each
  * badge's tooltip.
  *
  * What it follows upstream, and at which version: docs/integrations/server-scan.yaml.
  */
 
-export const pill = "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-px text-xs font-medium";
+export const pill = "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium";
 
 const INSTALLATION: Record<OpenShiftState, { label: string; full: string; tone: string; title: string }> = {
-  AVAILABLE: { label: "Available", full: "Available", tone: "bg-status-ready/15 text-status-ready-fg", title: "No cluster holds it" },
-  INSTALLED: { label: "Installed", full: "Installed", tone: "bg-primary/12 text-primary", title: "A cluster's node" },
+  AVAILABLE: { label: "Available", full: "Available", tone: "bg-ss-tint-healthy text-ss-on-healthy", title: "No cluster holds it" },
+  INSTALLED: { label: "Installed", full: "Installed", tone: "bg-ss-tint-critical text-ss-on-critical", title: "A cluster's node" },
   INSTALLED_TO_INVENTORY: {
     label: "In inventory",
     full: "Installed to inventory",
-    tone: "bg-status-provisioning/15 text-status-provisioning-fg",
+    tone: "bg-ss-tint-info text-ss-on-info",
     title: "An MCE's Agent, in no cluster yet",
   },
 };
 
 /** Whether a cluster uses the server: the table's short word, or the page's `full` one. */
 export function InstallationBadge({ state, full = false }: { state: OpenShiftState; full?: boolean }) {
-  const known = INSTALLATION[state] ?? { label: state, full: state, tone: "bg-muted text-muted-foreground", title: "" };
+  const known = INSTALLATION[state] ?? { label: state, full: state, tone: "bg-ss-tint-unknown text-ss-on-unknown", title: "" };
   return (
     <span className={cn(pill, known.tone)} title={known.title} data-testid="ss-installation">
       {full ? known.full : known.label}
@@ -40,10 +43,10 @@ export function InstallationBadge({ state, full = false }: { state: OpenShiftSta
   );
 }
 
-/** Whether a cluster uses the server, and under it which MCE an install is taking it to. */
+/** Whether a cluster uses the server, and under it which MCE an install is taking it to, centred as there. */
 export function InstallationCell({ row }: { row: ServerRow }) {
   return (
-    <span className="inline-flex flex-col items-start gap-1">
+    <span className="inline-flex flex-col items-center gap-1">
       <InstallationBadge state={row.openshift_state} />
       <ReservationBadge reservation={row.reservation} />
     </span>
@@ -61,7 +64,7 @@ export function ReservationBadge({ reservation, full = false }: { reservation: R
   const target = reservation.mce_cluster ?? "an unnamed MCE";
   const detail = reservationDetail(reservation);
   return (
-    <span title={detail} aria-label={detail} data-testid="ss-reservation" className={cn(pill, "bg-status-provisioning/15 text-status-provisioning-fg")}>
+    <span title={detail} aria-label={detail} data-testid="ss-reservation" className={cn(pill, "bg-ss-tint-info text-ss-on-info")}>
       <span aria-hidden>→</span>
       {full ? `Installing to ${target}` : target}
     </span>
@@ -69,12 +72,34 @@ export function ReservationBadge({ reservation, full = false }: { reservation: R
 }
 
 const SEVERITY: Record<HealthSeverity, { label: string; tone: string }> = {
-  CRITICAL: { label: "Critical", tone: "bg-status-error/15 text-status-error-fg" },
-  MAJOR: { label: "Major", tone: "bg-status-error/10 text-status-error-fg" },
-  WARNING: { label: "Warning", tone: "bg-status-warning/15 text-status-warning-fg" },
-  HEALTHY: { label: "Healthy", tone: "bg-status-ready/15 text-status-ready-fg" },
-  UNKNOWN: { label: "Unknown", tone: "bg-muted text-muted-foreground" },
+  CRITICAL: { label: "Critical", tone: "bg-ss-tint-critical text-ss-on-critical" },
+  MAJOR: { label: "Major", tone: "bg-ss-tint-major text-ss-on-major" },
+  WARNING: { label: "Warning", tone: "bg-ss-tint-warning text-ss-on-warning" },
+  HEALTHY: { label: "Healthy", tone: "bg-ss-tint-healthy text-ss-on-healthy" },
+  UNKNOWN: { label: "Unknown", tone: "bg-ss-tint-unknown text-ss-on-unknown" },
 };
+
+/**
+ * server-scan's `HealthBadge` (its server page's health): the severity's own
+ * word as server-scan sends it, in that badge's palette (Tailwind's green,
+ * amber, orange, red and grey; its light and its dark), no glyph.
+ */
+const HEALTH_BADGE: Record<HealthSeverity, string> = {
+  HEALTHY: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+  WARNING: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  MAJOR: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
+  CRITICAL: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+  UNKNOWN: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+};
+
+/** A severity on a server's page, as server-scan's page shows it: `HEALTHY`, `CRITICAL`, ... */
+export function HealthBadge({ severity }: { severity: HealthSeverity }) {
+  return (
+    <span className={cn(pill, HEALTH_BADGE[severity] ?? HEALTH_BADGE.UNKNOWN)} data-health={severity}>
+      {severity}
+    </span>
+  );
+}
 
 /** A severity's tone, for a chip that shows server-scan's own word (History's FROM → TO). */
 export function severityTone(severity: string): string {
@@ -103,13 +128,13 @@ export function StateCell({ row }: { row: ServerRow }) {
   const donor = isDonor(maintenance);
   const why = [maintenance.reason, maintenance.created_by ? `by ${actorIdLabel(maintenance.created_by)}` : null].filter(Boolean).join(" - ");
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5" data-testid="ss-state">
+    <span className="inline-flex flex-wrap items-center justify-center gap-1.5" data-testid="ss-state">
       <SeverityPill severity={row.health} />
       {maintenance.enabled && (
         <span
           title={why || undefined}
           data-testid="ss-maint-chip"
-          className={cn(pill, donor ? "bg-muted text-foreground/80" : "bg-status-provisioning/15 text-status-provisioning-fg")}
+          className={cn(pill, donor ? "bg-ss-tint-donor text-ss-on-donor" : "bg-ss-tint-maintenance text-ss-on-maintenance")}
         >
           <span aria-hidden className="text-[0.7em] leading-none">
             {donor ? "◇" : "⏸"}
@@ -118,12 +143,12 @@ export function StateCell({ row }: { row: ServerRow }) {
         </span>
       )}
       {row.stale && (
-        <span title={row.last_seen_at ? `Last seen ${formatDateTime(row.last_seen_at)}` : "Never successfully collected"} className={cn(pill, "bg-muted text-muted-foreground")}>
+        <span title={row.last_seen_at ? `Last seen ${formatDateTime(row.last_seen_at)}` : "Never successfully collected"} className={cn(pill, "bg-ss-tint-unknown text-ss-on-unknown")}>
           Stale{row.last_seen_at ? ` ${formatAge(row.last_seen_at)}` : ""}
         </span>
       )}
       {row.openshift_reported_name && (
-        <span title={`OpenShift reports this node as "${row.openshift_reported_name}"`} className={cn(pill, "bg-status-warning/15 text-status-warning-fg")}>
+        <span title={`OpenShift reports this node as "${row.openshift_reported_name}"`} className={cn(pill, "bg-ss-tint-warning text-ss-on-warning")}>
           Name mismatch
         </span>
       )}

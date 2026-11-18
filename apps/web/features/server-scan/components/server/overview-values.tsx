@@ -8,7 +8,7 @@ import { categoryLabel, healthCategories, maintenanceText, maintenanceWhen, raid
 import { serverHref } from "@/features/server-scan/lib/server-page";
 import { serversHref } from "@/features/server-scan/lib/servers-view";
 import type { ServerRecord, VmHost } from "@/features/server-scan/types/server-scan-record";
-import { InstallationBadge, ReservationBadge, SeverityPill } from "../server-badges";
+import { HealthBadge, InstallationBadge, ReservationBadge } from "../server-badges";
 import { Tag } from "./fields";
 
 /**
@@ -89,7 +89,7 @@ export function HostValue({ serverId, vmHost }: { serverId: string; vmHost: VmHo
           <Link href={serverHref(host.id)} className="text-primary hover:underline">
             {host.name}
           </Link>
-          <SeverityPill severity={host.health} />
+          <HealthBadge severity={host.health} />
           {host.maintenance && <Tag tone="warning">Maintenance</Tag>}
         </div>
       )}
@@ -116,7 +116,7 @@ export function HealthBreakdown({ record }: { record: ServerRecord }) {
         {healthCategories(record).map(({ key, label, severity }) => (
           <span key={key} className="inline-flex items-center gap-1.5 text-xs" data-category={key}>
             <span className="text-muted-foreground">{label}</span>
-            <SeverityPill severity={severity} />
+            <HealthBadge severity={severity} />
             {key === "raid" && raid && (
               <span className="text-muted-foreground" title={record.hardware.storage.raid?.reason ?? undefined}>
                 {raid}
@@ -129,7 +129,7 @@ export function HealthBreakdown({ record }: { record: ServerRecord }) {
         <ul aria-label="Why this health" className="mt-2 space-y-1">
           {reasons.map((reason) => (
             <li key={reason.policy_key} className="flex flex-wrap items-center gap-1.5 text-xs" title={reason.policy_name}>
-              <SeverityPill severity={reason.severity} />
+              <HealthBadge severity={reason.severity} />
               <span className="text-muted-foreground">{categoryLabel(reason.category)}</span>
               <span>{reason.message ?? reason.policy_name}</span>
             </li>

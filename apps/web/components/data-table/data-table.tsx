@@ -13,6 +13,8 @@ declare module "@tanstack/react-table" {
     label: string;
     /** Classes for the column's header and cells (width, alignment). */
     className?: string;
+    /** Classes for the header alone, after `className` (a table with headers of its own look). */
+    headerClassName?: string;
     /**
      * Opts the column in to the header's value filter (with the table's
      * `filters`): the row's cell as text, as the caller's filtering reads it.
@@ -148,7 +150,7 @@ function HeaderCell<T>({
       scope="col"
       aria-sort={sorted}
       data-column={header.column.id}
-      className={cn("whitespace-nowrap px-3 py-2 text-left text-xs font-semibold tracking-[0.01em] text-foreground/75", meta?.className)}
+      className={cn("whitespace-nowrap px-3 py-2 text-left text-xs font-semibold tracking-[0.01em] text-foreground/75", meta?.className, meta?.headerClassName)}
     >
       <span className="inline-flex items-center gap-1">
         {onSort && header.column.getCanSort() ? (

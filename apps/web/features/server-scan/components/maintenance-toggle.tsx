@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from "react";
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
-import { Play, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +9,8 @@ import { errorMessages } from "@/lib/api-client";
 import { useMaintenanceChange } from "@/features/server-scan/api/server-scan";
 import { cn } from "@/lib/utils";
 import type { ServerRow } from "@/features/server-scan/types/server-scan-servers";
+import { PlayIcon, ToolsIcon } from "./row-icons";
+import { look } from "./server-columns";
 
 /** What the toggle needs of a server: a row of the Servers page, or a server's page's record. */
 type Switchable = Pick<ServerRow, "id" | "name" | "maintenance">;
@@ -142,14 +143,14 @@ function MaintenanceToggle({ server, available, detail }: { server: Switchable; 
         data-state={enabled ? "on" : "off"}
         onClick={onClick}
         className={cn(
-          "inline-flex h-7 w-7 items-center justify-center rounded-md border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-40",
+          "inline-flex size-7 items-center justify-center rounded-md border text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-40",
           !available && "cursor-not-allowed opacity-40",
           enabled
-            ? "border-status-provisioning/40 bg-status-provisioning/15 text-status-provisioning-fg"
-            : "text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+            ? "border-ss-border-strong bg-ss-tint-maintenance text-ss-on-maintenance"
+            : "border-ss-border-subtle text-ss-text-muted hover:border-ss-border-strong hover:text-ss-text-primary"
         )}
       >
-        {enabled ? <Play aria-hidden className="h-3.5 w-3.5" /> : <Wrench aria-hidden className="h-3.5 w-3.5" />}
+        {enabled ? <PlayIcon /> : <ToolsIcon />}
       </button>
       {!enabled && <StartDialog server={server} open={asking} onOpenChange={setAsking} />}
     </>
@@ -164,7 +165,7 @@ export function maintenanceColumn(available: boolean, detail: string | null): Co
   return createColumnHelper<ServerRow>().display({
     id: "maintenance",
     header: "Maintenance",
-    meta: { label: "Maintenance", className: "whitespace-nowrap px-2 text-center" },
+    meta: look("Maintenance"),
     cell: (c) => <MaintenanceToggle server={c.row.original} available={available} detail={detail} />,
   }) as ColumnDef<ServerRow, never>;
 }

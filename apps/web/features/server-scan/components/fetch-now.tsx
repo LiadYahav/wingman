@@ -1,18 +1,20 @@
 "use client";
 
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
-import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useServerRefresh } from "@/features/server-scan/api/server-scan";
 import { FETCHING, FETCH_LABEL, FETCH_TITLE, fetchControl, fetchFailure, fetchedToast, rowFetchLabel } from "@/features/server-scan/lib/refresh";
 import { cn } from "@/lib/utils";
 import type { ServerRecord } from "@/features/server-scan/types/server-scan-record";
 import type { ServerRow } from "@/features/server-scan/types/server-scan-servers";
+import { RefreshIcon } from "./row-icons";
+import { look } from "./server-columns";
 
 /**
  * Fetch now (ADR-0048's v6.6.0 amendment): server-scan's button on a
  * server's page (`RefreshButton.tsx`, v6.5.0) and on every Servers row
- * (`RowRefreshButton.tsx`, v6.6.0), in Wingman's design. Each reads the one
+ * (`RowRefreshButton.tsx`, v6.6.0), in its look (its icon and hairline
+ * boxes, `../palette.css`). Each reads the one
  * server from its vendor manager now through day1, sent once (never
  * retried); while day1 waits, which can be minutes, the icon turns and the
  * button is busy. Shown only where the deployment offers it
@@ -23,11 +25,11 @@ import type { ServerRow } from "@/features/server-scan/types/server-scan-servers
  */
 
 const BUTTON =
-  "inline-flex items-center justify-center rounded-md border text-muted-foreground outline-none transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-wait disabled:opacity-60";
-const OFF = "cursor-not-allowed opacity-40 hover:border-border hover:text-muted-foreground";
+  "inline-flex items-center justify-center rounded-md border border-ss-border-subtle text-ss-text-muted outline-none transition-colors hover:border-ss-border-strong hover:text-ss-text-primary focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-wait disabled:opacity-60";
+const OFF = "cursor-not-allowed opacity-40 hover:border-ss-border-subtle hover:text-ss-text-muted";
 
 function Spinner({ busy }: { busy: boolean }) {
-  return <RefreshCw aria-hidden className={cn("h-3.5 w-3.5", busy && "motion-safe:animate-spin")} />;
+  return <RefreshIcon spinning={busy} />;
 }
 
 /** The server page's button, beside the BMC's: it says what it found, and why it failed inline too. */
@@ -111,7 +113,7 @@ export function fetchNowColumn(available: boolean, detail: string | null): Colum
   return createColumnHelper<ServerRow>().display({
     id: "refresh",
     header: () => <span className="sr-only">Fetch now</span>,
-    meta: { label: "Fetch now", className: "w-px whitespace-nowrap px-2" },
+    meta: look("Fetch now", { className: "w-px whitespace-nowrap px-2 py-2.5 text-center" }),
     cell: (c) => <RowFetchNow row={c.row.original} available={available} detail={detail} />,
   }) as ColumnDef<ServerRow, never>;
 }

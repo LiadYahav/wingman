@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Search, X } from "lucide-react";
+import { Download, X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import type { FacetCounts } from "@/features/server-scan/lib/rows";
 import {
@@ -29,7 +29,7 @@ import { MultiSelect } from "./multi-select";
 const SEARCH_HELP =
   'Plain text matches anywhere. "10.0.0.1" in quotes must equal the whole value. /10\\.0\\.0\\.(1|13)$/ between slashes is a regular expression.';
 
-/** server-scan's search box: name, serial, BMC… with its three syntaxes in the tooltip, and a bad regex under it. */
+/** server-scan's search box, first in its filter bar: name, serial, BMC… with its three syntaxes in the tooltip, and a bad regex under it. */
 export function ServerSearch({
   value,
   error,
@@ -42,9 +42,9 @@ export function ServerSearch({
   onCommit: () => void;
 }) {
   return (
-    <div className="flex w-full flex-col gap-1 text-xs font-medium text-muted-foreground sm:w-80">
+    <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground">
+      <span>Search</span>
       <div className="relative">
-        <Search aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
         <input
           type="search"
           aria-label="Search servers"
@@ -59,7 +59,7 @@ export function ServerSearch({
             if (e.key === "Enter") onCommit();
             if (e.key === "Escape" && value) onChange("");
           }}
-          className="h-8 w-full rounded-lg border bg-card pl-8 pr-2 text-sm font-normal text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 aria-invalid:border-destructive [&::-webkit-search-cancel-button]:hidden"
+          className="h-8 w-full rounded-lg border bg-card px-2.5 text-sm font-normal text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 aria-invalid:border-destructive [&::-webkit-search-cancel-button]:hidden"
         />
       </div>
       {error && (
@@ -67,7 +67,7 @@ export function ServerSearch({
           {error}
         </span>
       )}
-    </div>
+    </label>
   );
 }
 

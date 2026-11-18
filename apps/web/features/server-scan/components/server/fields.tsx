@@ -3,7 +3,7 @@ import { NOT_READ_TITLE, STALE_TITLE, reported } from "@/features/server-scan/li
 import { isHealthSeverity } from "@/features/server-scan/lib/vocabulary";
 import { cn } from "@/lib/utils";
 import type { ComponentHealth } from "@/features/server-scan/types/server-scan-record";
-import { SeverityPill, pill } from "../server-badges";
+import { HealthBadge, pill } from "../server-badges";
 
 /**
  * The server page's small parts, server-scan's (team-redbull/server-scan:
@@ -28,10 +28,18 @@ export function Field({ label, children, testId }: { label: string; children: Re
   );
 }
 
-/** A pill with no severity: neutral, or amber for what needs a look (Stale, Name mismatch, maintenance). */
+/**
+ * A pill with no severity: neutral, or amber for what needs a look (Stale,
+ * Name mismatch, maintenance), in server-scan's `Badge` palette (Tailwind's
+ * grey and amber, light and dark).
+ */
 export function Tag({ children, tone = "neutral", title }: { children: ReactNode; tone?: "neutral" | "warning"; title?: string }) {
+  const tint =
+    tone === "warning"
+      ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+      : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
   return (
-    <span title={title} className={cn(pill, tone === "warning" ? "bg-status-warning/15 text-status-warning-fg" : "bg-muted text-foreground/80")}>
+    <span title={title} className={cn(pill, tint)}>
       {children}
     </span>
   );
@@ -58,7 +66,7 @@ export function ComponentHealthValue({ value, detail }: { value: ComponentHealth
   if (value == null) return <>—</>;
   return (
     <span className="inline-flex items-center gap-1.5">
-      {isHealthSeverity(value) ? <SeverityPill severity={value} /> : <span>{value}</span>}
+      {isHealthSeverity(value) ? <HealthBadge severity={value} /> : <span>{value}</span>}
       {detail && <span className="text-xs text-muted-foreground">({detail})</span>}
     </span>
   );

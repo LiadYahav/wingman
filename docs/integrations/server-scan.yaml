@@ -71,7 +71,6 @@ not_followed:
       - frontend/src/test/
       - frontend/src/main.tsx
       - frontend/src/router.tsx
-      - frontend/src/index.css
       - frontend/src/assets/
       - frontend/src/vite-env.d.ts
     why: >-
@@ -435,6 +434,14 @@ files:
     upstream: [frontend/src/features/inventory/MultiSelect.tsx]
   - wingman: apps/web/features/server-scan/components/use-fill-main.ts
     upstream: [frontend/src/lib/useFillViewport.ts]
+  - wingman: apps/web/features/server-scan/palette.css
+    upstream: [frontend/src/index.css]
+    note: its palette only (tints, on-tint text, status hues, surfaces); its shell's styles are Wingman's
+  - wingman: apps/web/features/server-scan/components/row-icons.tsx
+    upstream:
+      - frontend/src/assets/maintenance.svg
+      - frontend/src/features/inventory/MaintenanceToggle.tsx
+      - frontend/src/components/RefreshIcon.tsx
   - wingman: apps/web/features/server-scan/components/fetch-now.tsx
     upstream:
       - frontend/src/features/servers/RefreshButton.tsx
