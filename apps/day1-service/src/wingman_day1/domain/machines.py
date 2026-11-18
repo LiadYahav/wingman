@@ -162,3 +162,15 @@ class AgentObservation:
     def taken_by(self) -> str | None:
         """The AgentMachine that took it, from the ``agentMachineRef`` label."""
         return self.labels.get(AGENT_MACHINE_REF_LABEL) or None
+
+
+def machine_server(agent: AgentObservation | None, node_name: str | None) -> str | None:
+    """The server update-nodepool takes a Machine to be, lowercased; ``None`` when none is known.
+
+    The workflow's rule for a scale-down that names its servers (its
+    ``machine_selection.machine_server``): the Agent's BareMetalHost (the
+    ``agent-install.openshift.io/bmh`` label), else the Agent's hostname, else
+    the Machine's Node. add-server-to-mce names all three after the server.
+    """
+    found = (agent.bmh or agent.hostname if agent else None) or node_name
+    return found.lower() if found else None

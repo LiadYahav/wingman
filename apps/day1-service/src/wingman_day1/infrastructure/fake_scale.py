@@ -7,7 +7,8 @@ the cluster runs, or while its upgrade runs, is ``ScaleAlreadyRunningError``.
 
 A run walks the parent's phases and then its child's on the injected clock.
 The phases, the plan (the one NodePool set exactly) and the servers a
-scale-down picks are a sample for the demo, nothing more: day1 passes the
+scale-down picks (the named ones, else by the NodePool's policy) are a
+sample for the demo, nothing more: day1 passes the
 real workflow's through and plans nothing itself. Nothing is written
 anywhere; the fake only remembers the replicas its runs left, for its next
 run.
@@ -15,7 +16,7 @@ run.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Final
@@ -203,6 +204,15 @@ def _plan(run: _Run, pools: Sequence[FakePool]) -> None:
         if p.scale_down_policy
         for n in range(after[p.name], p.replicas)
     )
+    if request.server_names and request.replicas < selected[0].replicas:
+        run.chosen = tuple(_named(request.nodepool, request.server_names))
+
+
+def _named(nodepool: str, names: Sequence[str]) -> Iterator[ChosenServer]:
+    """A scale-down that names its servers: exactly those leave, each its own Machine."""
+    for n, name in enumerate(names):
+        server = name.lower()
+        yield ChosenServer(nodepool, f"{nodepool}-m{n}", server, "named", f"named: {name}", server)
 
 
 def _result(run: _Run) -> ScaleResult:

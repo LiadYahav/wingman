@@ -72,6 +72,21 @@ async def test_a_scale_down_walks_the_parent_then_its_child(
     assert done.result.deleting == ("alpha-zone-b-m2",)
 
 
+async def test_a_scale_down_that_names_its_servers_removes_exactly_those(
+    fake: FakeScaleWorkflow, clock: Clock
+) -> None:
+    named = ("ocp-cisco-64c-ZB0001", "ocp-cisco-64c-zb0002")
+    await fake.start(ScaleRequest("mce", CLUSTER, 1, nodepool="alpha-zone-b", server_names=named))
+    clock.step(len(PARENT_PHASES) + len(DOWN_PHASES))
+    done = await fake.run(RUN)
+    assert done is not None and done.result is not None
+    assert [(c.server, c.policy, c.reason) for c in done.result.chosen] == [
+        ("ocp-cisco-64c-zb0001", "named", "named: ocp-cisco-64c-ZB0001"),
+        ("ocp-cisco-64c-zb0002", "named", "named: ocp-cisco-64c-zb0002"),
+    ]
+    assert done.result.deleting == ("alpha-zone-b-m0", "alpha-zone-b-m1")
+
+
 async def test_a_scale_up_by_name_sets_that_nodepool_and_the_next_run_starts_from_it(
     fake: FakeScaleWorkflow, clock: Clock
 ) -> None:

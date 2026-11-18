@@ -13,7 +13,7 @@
   568  apps/day1-service/src/wingman_day1/application/clusters.py
   720  apps/day1-service/src/wingman_day1/application/rollouts.py
   540  apps/day1-service/src/wingman_day1/domain/machine_configs.py
-  668  apps/day1-service/src/wingman_day1/domain/node_pools.py
+  651  apps/day1-service/src/wingman_day1/domain/node_pools.py
   590  apps/day1-service/src/wingman_day1/domain/placement.py
   525  apps/day1-service/src/wingman_day1/domain/quick_links.py
   551  apps/day1-service/src/wingman_day1/domain/template.py

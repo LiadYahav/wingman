@@ -7,10 +7,12 @@ can be scaled (the cluster file's NodePools on ``main`` and the flavor's
 locks), starts a run and shows it. Day1 checks only what is its own: the
 cluster is in the day1 repo, the NodePool is one entry of its file on
 ``main`` (a start Wingman cannot map to one is refused here, never sent),
-and a NodePool whose replicas the cluster's flavor locks is not scaled
-except to its locked value (the restore after a sync, ADR-0062). Everything
-else (drift between day1 and the MCE, a run or an upgrade already going) is
-the workflow's to judge, and its refusal is shown in its words. Who asked is
+a NodePool whose replicas the cluster's flavor locks is not scaled except
+to its locked value (the restore after a sync, ADR-0062), and servers are
+named only on a scale-down, as many as leave. Everything else (drift
+between day1 and the MCE, which Machine a named server is, a run or an
+upgrade already going) is the workflow's to judge, and its refusal is shown
+in its words. Who asked is
 logged; the orchestrator records nobody. Nothing is retried (ADR-0006).
 """
 
@@ -55,10 +57,12 @@ class ScaleOptions:
 
 @dataclass(frozen=True, slots=True)
 class ScaleTarget:
-    """What the person asked: one NodePool, by name, and its replicas."""
+    """What the person asked: one NodePool, by name, its replicas, and the servers that leave."""
 
     replicas: int
     nodepool: str
+    server_names: tuple[str, ...] = ()
+    """On a scale-down only, exactly as many as it removes; empty: the NodePool's policy picks."""
 
 
 class ScaleService:
@@ -96,12 +100,15 @@ class ScaleService:
         if target.replicas < 0:
             raise InvalidInputError("replicas cannot be negative", ["replicas must be 0 or more"])
         options = await self.options(ref)
-        _refuse_locked(_one_nodepool(options, target.nodepool), target)
+        pool = _one_nodepool(options, target.nodepool)
+        _refuse_locked(pool, target)
+        _refuse_named(pool, target)
         request = ScaleRequest(
             mce_cluster=ref.mce,
             cluster=ref.name,
             replicas=target.replicas,
             nodepool=target.nodepool,
+            server_names=target.server_names,
         )
         event = {
             "user": user.username,
@@ -110,6 +117,7 @@ class ScaleService:
             "mce": ref.mce,
             "replicas": str(target.replicas),
             "target": target.nodepool,
+            "servers": ",".join(target.server_names) or "-",
         }
         try:
             run = await self._workflow.start(request)
@@ -175,6 +183,36 @@ def _refuse_locked(pool: FileNodePool, target: ScaleTarget) -> None:
             f"{pool.locked_replicas}"
         ],
     )
+
+
+def _refuse_named(pool: FileNodePool, target: ScaleTarget) -> None:
+    """Servers are named on a scale-down only, exactly as many as leave (update-nodepool's rule).
+
+    Checked against the file's replicas on ``main``, which the workflow needs
+    the MCE to agree with; which Machine each server is stays the workflow's.
+    """
+    named = len(target.server_names)
+    if not named:
+        return
+    move = f"{pool.label} goes from {_shown(pool.replicas)} to {target.replicas}"
+    if pool.replicas is None or target.replicas >= pool.replicas:
+        raise InvalidInputError(
+            f"NodePool {pool.label} is not scaled down",
+            [f"server_names: servers are named only on a scale-down; {move}"],
+        )
+    leaving = pool.replicas - target.replicas
+    if named != leaving:
+        raise InvalidInputError(
+            f"name {leaving} server(s), or none",
+            [
+                f"server_names: {move}, so {leaving} server(s) leave and {named} are named; "
+                "name exactly the servers that leave, or none to let its policy pick"
+            ],
+        )
+
+
+def _shown(replicas: int | None) -> str:
+    return "replicas that are not a number" if replicas is None else str(replicas)
 
 
 def _log(level: int, message: str, name: str, event: Mapping[str, str]) -> None:

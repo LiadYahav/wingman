@@ -55,6 +55,7 @@ hub does and does not say, with sources:
           "outdated": null,
           "agent": {"name": "5f0c…", "state": "added-to-existing-cluster", "stage": "Done"},
           "server_name": "ocp-dell-r660-site1-64c-512gb-DL0000123",
+          "machine_server": "ocp-dell-r660-site1-64c-512gb-dl0000123",
           "server": {
             "id": "srv_0d48131a4fcc4b4c9cc8eec6ef72c421",
             "name": "ocp-dell-r660-site1-64c-512gb-DL0000123",
@@ -76,6 +77,7 @@ hub does and does not say, with sources:
           "outdated": null,
           "agent": null,
           "server_name": null,
+          "machine_server": null,
           "server": null,
           "uninstall": null
         }
@@ -148,6 +150,12 @@ hub does and does not say, with sources:
 - `server_name` is the BareMetalHost name (`null` with no Agent). `server` is
   server-scan's record of it (as in the example), or `null` when server-scan
   has none or is not configured.
+- `machine_server` (2026-11-18) is the server update-nodepool takes the
+  Machine to be, lowercased, by the workflow's rule: the Agent's
+  `agent-install.openshift.io/bmh` label, else the Agent's hostname, else
+  the Machine's Node; `null` when none is known (a Machine still
+  provisioning). It is what a scale-down's `server_names` sends
+  (`docs/notes/2026-11-16-scale-nodepools-api.md`).
 - `uninstall` is the server's newest uninstall run, or `null`:
   `{"workflow_id", "status", "phase", "error"}`.
   - `status` is the orchestrator's, lowercase (`running`, `completed`,

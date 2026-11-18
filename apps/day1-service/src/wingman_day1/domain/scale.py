@@ -50,6 +50,9 @@ class ScaleRequest:
     """The cluster file's stem: the workflow's ``cluster``."""
     replicas: int
     nodepool: str
+    server_names: tuple[str, ...] = ()
+    """A scale-down's servers that leave, exactly as many as it removes; empty: the NodePool's
+    policy (or CAPI) picks. Never on a scale-up."""
 
 
 # ── A run, as the orchestrator reports it ────────────────────────────────────
@@ -88,13 +91,16 @@ class LiveReplicas:
 
 @dataclass(frozen=True, slots=True)
 class ChosenServer:
-    """A server a scale-down chose to leave, by its NodePool's policy, and why."""
+    """A server a scale-down chose to leave, by its NodePool's policy or by name, and why."""
 
     nodepool: str
     machine: str
     node: str | None
     policy: str
+    """The policy's name; ``named`` for a server the request named."""
     reason: str
+    server: str | None = None
+    """The server, lowercased, when the request named it."""
 
 
 @dataclass(frozen=True, slots=True)

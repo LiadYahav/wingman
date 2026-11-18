@@ -120,6 +120,7 @@ def scale_result(raw: Mapping[str, JSON]) -> ScaleResult:
                 node=_text(item, "node"),
                 policy=_text(item, "policy") or "",
                 reason=_text(item, "reason") or "",
+                server=_text(item, "server"),
             )
             for item in _objects(scale.get("chosen"))
             if _text(item, "nodepool") and _text(item, "machine")

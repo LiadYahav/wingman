@@ -25,8 +25,12 @@ aab8949 (2026-11-18: one NodePool a run, ADR-0062's 2026-11-18 amendment).
 (`extra="forbid"`): `mce_cluster` (with or without `ocp4-`), `cluster` (the
 day1 file's name without `.yaml`, a Kubernetes name), `nodepool` (one
 NodePool of the cluster, by name, a Kubernetes name) and `replicas` (≥ 0,
-that NodePool's own, set exactly; its siblings are left as they are). Day1
-sends exactly these four. `infra_env_kind` (until 2026-11-18 a TOTAL over
+that NodePool's own, set exactly; its siblings are left as they are), and
+on a scale-down that names the servers that leave, `server_names`: one
+name or a list of up to 20, each once (case-insensitively), as many as the
+replicas removed, each a Machine of the NodePool; a scale-up or no change
+ignores it and lists it in the result's `ignored`. Day1 sends these, and
+`server_names` only on a scale-down. `infra_env_kind` (until 2026-11-18 a TOTAL over
 the cluster's NodePools of one InfraEnv kind) is a 422 that says to name the
 NodePool; a run recorded with it before then still finishes as it began.
 Answers `202 {"workflow_id": "update-nodepool-<cluster>", "run_id"}`; 409
@@ -60,9 +64,17 @@ recorded by kind: the kind's NodePools, and `infra_env_kind` set instead of
 scale-down that a run scaling up, or not at all, had no use for, each with why,
 in the workflow's words; never a failure) and, in `scale`, the child's
 commit, the NodePools read back, the servers chosen and those seen
-deleting. A new failure type, `ScaleDownServersInvalidError`: the servers a
-scale-down request named cannot be the ones that leave, nothing marked or
-written. `error` is the root failure's message only: a
+deleting (a named server's `chosen` entry has `policy: "named"`, `reason:
+"named: <name>"` and `server`, lowercased). A new failure type,
+`ScaleDownServersInvalidError`: the servers a scale-down request named cannot
+be the ones that leave, nothing marked or written. The workflow matches a
+named server to its Machine by AgentMachine → Agent → the Agent's
+`agent-install.openshift.io/bmh` label, else its hostname, else the
+Machine's Node (lowercased), and refuses a wrong count, a server no Machine
+of the NodePool is (or two are), an unnamed CAPI-unhealthy Machine that
+OpenShift 4.18's CAPI would take instead, and an MCE worker too old to say
+which server a Machine is. Named servers are documented for OpenShift 4.19
+and later. `error` is the root failure's message only: a
 child's failure reads `<child id> failed — <Type>: <message>`; the parent's
 own refusals name no type.
 
@@ -101,14 +113,21 @@ works without live status.
 - No `kinds` since 2026-11-18: a run sets one NodePool.
 
 **`POST .../scale`** (admin), `{"nodepool": "...", "replicas": N}`, a
-Kubernetes name, `N` 0-10000, no other field. Day1 adds `mce_cluster` (the
-file's MCE folder) and `cluster` (the file stem). `202` with the run
-(`status: "running"`).
+Kubernetes name, `N` 0-10000, and on a scale-down, optionally,
+`"server_names": ["<server>", ...]` (1 to 20 server names, each once,
+case-insensitively): exactly the servers that leave. No other field. Day1
+adds `mce_cluster` (the file's MCE folder) and `cluster` (the file stem).
+`202` with the run (`status: "running"`). The names to send are the
+NodePool's nodes' `machine_server` in `GET .../nodes` (2026-11-11 note):
+the workflow's own rule, so they match.
 - `422 VALIDATION_ERROR`: the body (`infra_env_kind` in words: send the
   NodePool's name as `nodepool`); a `nodepool` no entry of the file on
   `main` renders (the problem lists the file's NodePools) or two entries
-  render; a NodePool a flavor locks, to anything but its locked value.
-  Nothing is sent. The orchestrator's own 422 is the same code, with its
+  render; a NodePool a flavor locks, to anything but its locked value;
+  `server_names` on anything but a scale-down of the file's replicas on
+  `main`, or not exactly as many as it removes (the problem says how many
+  leave). Nothing is sent. Which Machine each named server is stays the
+  workflow's to judge: a failed run, `ScaleDownServersInvalidError`. The orchestrator's own 422 is the same code, with its
   findings, and "nothing was started".
 - `409 SCALE_ALREADY_RUNNING`: the orchestrator's 409, its words in
   `detail`.
@@ -132,7 +151,8 @@ Completed, `result` is `{infra_env_kind, nodepool, day1_path, direction,
 total_before, total_after, nodepools: [{name, infra_env, before, after,
 scale_down_policy}], child_workflow_id, revision, committed, live: [{name,
 replicas, ready_replicas}], chosen: [{nodepool, machine, node, policy,
-reason}], deleting: [machine], ignored: [text]}`; `infra_env_kind` only on
+reason, server}], deleting: [machine], ignored: [text]}` (`server` set on a
+named server, else `null`); `infra_env_kind` only on
 a run recorded by kind before 2026-11-18, `nodepool` on every other. Failed, `error` is the workflow's words and
 `error_type` the type when they name one (`ArgoSyncRefusedError`), else
 `null`; `child` is read while the parent names it and has no result.

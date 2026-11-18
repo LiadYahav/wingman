@@ -34,6 +34,7 @@ from wingman_day1.domain.machines import (
     MachineSetObservation,
     condition,
     is_true,
+    machine_server,
 )
 from wingman_day1.domain.names import HostedClusterRef
 from wingman_day1.domain.selectors import selects
@@ -140,6 +141,8 @@ class NodeView:
     server_name: str | None = None
     """server-scan's name when it knows the server, else the BareMetalHost's."""
     server: ServerRow | None = None
+    machine_server: str | None = None
+    """The server update-nodepool takes this Machine to be (``machines.machine_server``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,6 +315,7 @@ def _node_view(
         agent=AgentSummary(agent.name, agent.state, agent.stage) if agent else None,
         server_name=server.name if server else (agent.bmh if agent else None),
         server=server,
+        machine_server=machine_server(agent, machine.node_name),
     )
 
 

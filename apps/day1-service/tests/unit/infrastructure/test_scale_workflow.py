@@ -149,6 +149,46 @@ async def test_a_start_sends_exactly_the_four_fields_of_one_nodepool() -> None:
     }
 
 
+async def test_a_scale_down_that_names_its_servers_sends_them_and_nothing_more() -> None:
+    workflow, requests = make(answer(202, {"workflow_id": RUN, "run_id": "r1"}))
+    named = ScaleRequest(
+        "mce-bat-yam-01", CLUSTER, 1, nodepool="prod-alpha-zone-c", server_names=("ocp-a", "ocp-B")
+    )
+    await workflow.start(named)
+    assert json.loads(requests[0].content) == {
+        "mce_cluster": "mce-bat-yam-01",
+        "cluster": CLUSTER,
+        "nodepool": "prod-alpha-zone-c",
+        "replicas": 1,
+        "server_names": ["ocp-a", "ocp-B"],
+    }
+
+
+async def test_a_named_server_the_run_chose_is_read_with_its_server() -> None:
+    chosen = {
+        "nodepool": "prod-alpha-zone-c",
+        "machine": "prod-alpha-zone-c-7xk2p",
+        "node": "ocp-r660-bat-yam-hp0001592",
+        "policy": "named",
+        "reason": "named: ocp-r660-bat-yam-HP0001592",
+        "server": "ocp-r660-bat-yam-hp0001592",
+    }
+    done = {**COMPLETED, "result": {**COMPLETED["result"], "scale": {"chosen": [chosen]}}}
+    workflow, _ = make(answer(200, done))
+    run = await workflow.run(RUN)
+    assert run is not None and run.result is not None
+    assert run.result.chosen == (
+        ChosenServer(
+            "prod-alpha-zone-c",
+            "prod-alpha-zone-c-7xk2p",
+            "ocp-r660-bat-yam-hp0001592",
+            "named",
+            "named: ocp-r660-bat-yam-HP0001592",
+            "ocp-r660-bat-yam-hp0001592",
+        ),
+    )
+
+
 async def test_a_409_keeps_the_orchestrators_words() -> None:
     workflow, _ = make(answer(409, {"detail": BUSY}))
     with pytest.raises(ScaleAlreadyRunningError) as raised:
