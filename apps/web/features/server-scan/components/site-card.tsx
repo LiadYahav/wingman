@@ -180,19 +180,21 @@ export function SiteCardView({ card, emphasis = false }: { card: SiteCard; empha
   );
 }
 
-/** A card's place while the sites load, about a card's height so nothing jumps. */
+/** A card's place while the sites load, about a card's height (its health bar and six bars) so nothing jumps. */
 export function SiteCardSkeleton() {
   return (
-    <div className="h-[184px] space-y-3 rounded-xl border bg-card p-5" aria-hidden>
+    <div className="h-[296px] space-y-3 rounded-xl border bg-card p-5" aria-hidden>
       <div className="flex items-baseline justify-between">
         <Skeleton className="h-4 w-28" />
         <Skeleton className="h-7 w-12" />
       </div>
       <Skeleton className="h-3 w-24" />
       <Skeleton className="h-3 w-40" />
-      <div className="space-y-2 pt-2">
-        <Skeleton className="h-1.5 w-full" />
-        <Skeleton className="h-1.5 w-full" />
+      <Skeleton className="mt-4 h-2 w-full rounded-full" />
+      <div className="space-y-2.5 pt-2">
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-1.5 w-full" />
+        ))}
       </div>
     </div>
   );
