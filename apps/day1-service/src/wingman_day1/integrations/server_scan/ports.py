@@ -10,7 +10,7 @@ page reads the diagrams server-scan's UI serves (3.28.0); its Confs page the
 hardware catalog (3.29.0); its Events page the fleet's audit trail and who
 wrote it (3.31.0); its Jobs page the CronJobs server-scan may start and a
 pod's log (3.32.0); a server's page and the Servers rows read one server
-from its vendor manager now, Fetch now (3.46.0).
+from its vendor manager now, Fetch now (3.47.0).
 """
 
 from __future__ import annotations

@@ -20,7 +20,7 @@ paged as server-scan does, for the Events page and a server's History alike
 (``events``, 3.31.0). Its Jobs are server-scan's fake
 runner, ported (``jobs``, 3.32.0). Its Fetch now reads a server back
 unchanged, seen now, and refuses those server-scan cannot read
-(``refresh``, 3.46.0).
+(``refresh``, 3.47.0).
 """
 
 from __future__ import annotations

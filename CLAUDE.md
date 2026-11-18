@@ -185,7 +185,7 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-18 — 3.46.0: Server Scan at server-scan v6.6.0.**
+**2026-11-18 — 3.47.0: Server Scan at server-scan v6.6.0.**
 - **The sync** (ADR-0048's 2026-11-18 amendment; `scripts/upstream_diff.py
   server-scan v6.6.0`, the map's `synced_at: v6.6.0`): a ticked severity
   leaves out servers in maintenance and the sites count them apart (v6.3.0);
@@ -201,6 +201,10 @@ and write yours here.
   (`DAY1_SERVER_SCAN_REFRESH`, the chart's `day1.serverScanRefresh.enabled`;
   needs server-scan v6.5.0 or later): no button until it is on. Not yet
   tried against the sandbox's server-scan.
+- **server-scan's own colours** (the user's request): the Servers table, a
+  server's page and the Sites cards wear its palette
+  (`features/server-scan/palette.css`, its dark values, light equivalents),
+  its cells, icons and filter bar.
 
 **Next:**
 - When the workflows branch merges: the inventory follow-ups above.

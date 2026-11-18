@@ -7,7 +7,7 @@
 upstream: team-redbull/server-scan
 # v6.6.0 is 635e08a; Wingman was matched to v5.3.0 (92146d3), brought to
 # v6.1.0 (876dd16) in 3.43.0 (ADR-0048's 2026-11-16 amendment) and to v6.6.0
-# in 3.46.0 (its 2026-11-18 amendment).
+# in 3.47.0 (its 2026-11-18 amendment).
 synced_at: v6.6.0
 
 # What Wingman reads or ports: a change here matters even when no entry

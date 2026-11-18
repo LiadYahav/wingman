@@ -2,7 +2,7 @@
 
 Read only (ADR-0038, ADR-0048) but for a server's maintenance
 (``writes``, ADR-0048's 3.23.0 amendment), a Job's start
-(``jobs``, 3.32.0) and Fetch now (``writes``, 3.46.0), the Server Scan
+(``jobs``, 3.32.0) and Fetch now (``writes``, 3.47.0), the Server Scan
 area's writes. Day1
 presents a viewer token (``Authorization: Bearer``) on every read, the
 auditor token on the audit trail only (a server's History, the Events page)

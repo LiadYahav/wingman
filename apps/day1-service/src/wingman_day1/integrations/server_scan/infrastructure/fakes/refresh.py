@@ -1,4 +1,4 @@
-"""The fake server-scan's Fetch now: which servers it cannot read now (ADR-0048, 3.46.0).
+"""The fake server-scan's Fetch now: which servers it cannot read now (ADR-0048, 3.47.0).
 
 A port of the refusals in ``ServerRefreshService`` (team-redbull/server-scan's
 ``backend/app/application/services/server_refresh.py``, v6.5.0, its
