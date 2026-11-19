@@ -8,8 +8,9 @@ locks), starts a run and shows it. Day1 checks only what is its own: the
 cluster is in the day1 repo, the NodePool is one entry of its file on
 ``main`` (a start Wingman cannot map to one is refused here, never sent),
 a NodePool whose replicas the cluster's flavor locks is not scaled except
-to its locked value (the restore after a sync, ADR-0062), and servers are
-named only on a scale-down, as many as leave. Everything else (drift
+to its locked value (the restore after a sync, ADR-0062), and which servers
+leave is said only on a scale-down: as many servers named as leave, or a
+policy for the run, never both. Everything else (drift
 between day1 and the MCE, which Machine a named server is, a run or an
 upgrade already going) is the workflow's to judge, and its refusal is shown
 in its words. Who asked is
@@ -57,12 +58,14 @@ class ScaleOptions:
 
 @dataclass(frozen=True, slots=True)
 class ScaleTarget:
-    """What the person asked: one NodePool, by name, its replicas, and the servers that leave."""
+    """What the person asked: one NodePool, by name, its replicas, and which servers leave."""
 
     replicas: int
     nodepool: str
     server_names: tuple[str, ...] = ()
-    """On a scale-down only, exactly as many as it removes; empty: the NodePool's policy picks."""
+    """On a scale-down only, exactly as many as it removes; empty: a policy picks."""
+    scale_down_policy: str | None = None
+    """On a scale-down only, this run's policy ahead of the NodePool's own; never with names."""
 
 
 class ScaleService:
@@ -103,12 +106,14 @@ class ScaleService:
         pool = _one_nodepool(options, target.nodepool)
         _refuse_locked(pool, target)
         _refuse_named(pool, target)
+        _refuse_policy(pool, target)
         request = ScaleRequest(
             mce_cluster=ref.mce,
             cluster=ref.name,
             replicas=target.replicas,
             nodepool=target.nodepool,
             server_names=target.server_names,
+            scale_down_policy=target.scale_down_policy,
         )
         event = {
             "user": user.username,
@@ -118,6 +123,7 @@ class ScaleService:
             "replicas": str(target.replicas),
             "target": target.nodepool,
             "servers": ",".join(target.server_names) or "-",
+            "policy": target.scale_down_policy or "-",
         }
         try:
             run = await self._workflow.start(request)
@@ -208,6 +214,22 @@ def _refuse_named(pool: FileNodePool, target: ScaleTarget) -> None:
                 f"server_names: {move}, so {leaving} server(s) leave and {named} are named; "
                 "name exactly the servers that leave, or none to let its policy pick"
             ],
+        )
+
+
+def _refuse_policy(pool: FileNodePool, target: ScaleTarget) -> None:
+    """A run's own policy is sent on a scale-down only (``ScaleIn`` refuses it beside names).
+
+    The workflow would ignore it on a scale-up or no change; Wingman's starts
+    send nothing a run ignores.
+    """
+    if target.scale_down_policy is None:
+        return
+    if pool.replicas is None or target.replicas >= pool.replicas:
+        move = f"{pool.label} goes from {_shown(pool.replicas)} to {target.replicas}"
+        raise InvalidInputError(
+            f"NodePool {pool.label} is not scaled down",
+            [f"scale_down_policy: a policy is chosen only for a scale-down; {move}"],
         )
 
 

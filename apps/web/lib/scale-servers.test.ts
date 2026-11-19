@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickedLeaving, pickedWords, picksReady, serversOf } from "./scale-servers";
+import { pickedLeaving, pickedWords, serversOf } from "./scale-servers";
 import type { NodePoolNodes, PoolNode } from "@/types";
 
 const node = (overrides: Partial<PoolNode>): PoolNode => ({
@@ -34,16 +34,10 @@ describe("the servers a scale-down can pick", () => {
 });
 
 describe("the picks", () => {
-  it("are sent when none, or exactly as many as leave", () => {
-    expect(picksReady(0, 2)).toBe(true);
-    expect(picksReady(1, 2)).toBe(false);
-    expect(picksReady(2, 2)).toBe(true);
-  });
-
   it("say how many are picked and what that does", () => {
-    expect(pickedWords(0, 1)).toBe("Optional: tick the server to remove, or none and the NodePool's scale-down policy picks.");
-    expect(pickedWords(0, 2)).toBe("Optional: tick the 2 servers to remove, or none and the NodePool's scale-down policy picks.");
-    expect(pickedWords(1, 3)).toBe("1 of 3 picked: tick 2 more, or none.");
+    expect(pickedWords(0, 1)).toBe("Tick the server to remove.");
+    expect(pickedWords(0, 2)).toBe("Tick the 2 servers to remove.");
+    expect(pickedWords(1, 3)).toBe("1 of 3 picked: tick 2 more.");
     expect(pickedWords(1, 1)).toBe("1 of 1 picked: exactly this one leaves.");
     expect(pickedWords(2, 2)).toBe("2 of 2 picked: exactly these leave.");
   });

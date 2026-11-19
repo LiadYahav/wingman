@@ -48,6 +48,7 @@ from wingman_day1.application.open_syncs import open_syncs, supersede
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.domain.addons import AddonDrift, VersionDifference
 from wingman_day1.domain.changes import ClusterAction, ClusterChange, ProvisionResult
+from wingman_day1.domain.cluster_edits import Edit, SetConfigs, SetValue
 from wingman_day1.domain.cluster_file import (
     AUTOMATION_KEYS,
     NO_WORKFLOW_KEYS,
@@ -55,14 +56,7 @@ from wingman_day1.domain.cluster_file import (
     WorkflowKeys,
     edit_problems,
 )
-from wingman_day1.domain.cluster_text import (
-    Edit,
-    SetConfigs,
-    SetValue,
-    edit_values,
-    values_or_refuse,
-    with_header,
-)
+from wingman_day1.domain.cluster_text import edit_values, values_or_refuse, with_header
 from wingman_day1.domain.errors import (
     AlreadyInUseError,
     InvalidInputError,

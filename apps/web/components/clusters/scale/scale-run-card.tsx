@@ -2,9 +2,11 @@
 
 import { CircleCheck, CircleX, Loader2 } from "lucide-react";
 import { humanize } from "@/lib/nodes";
+import { ownPolicy, runChoice } from "@/lib/scale-leave";
 import { failureHint, fromTo, isRunning, runTarget, stateWord } from "@/lib/scale-model";
 import { cn } from "@/lib/utils";
 import type { ScaleResult, ScaleRun } from "@/types";
+import { useScaleTab } from "./scale-tab";
 
 const DIRECTION: Record<string, string> = { up: "Scaling up", down: "Scaling down", none: "Nothing to change" };
 
@@ -63,6 +65,19 @@ function Plan({ result }: { result: ScaleResult }) {
   );
 }
 
+/** Which way a scale-down's servers were chosen: by name, by a policy (whose), or at random. */
+function RunChoice({ result }: { result: ScaleResult }) {
+  const tab = useScaleTab();
+  const own = tab && result.nodepool ? ownPolicy(result.nodepool, tab.options.nodepools) : undefined;
+  const words = runChoice(result, own);
+  if (!words) return null;
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="scale-run-choice">
+      <span className="font-medium text-foreground">Which servers left:</span> {words}
+    </p>
+  );
+}
+
 /** The servers a scale-down chose to leave, and what put each first (or that they were picked by name). */
 function Chosen({ result }: { result: ScaleResult }) {
   if (result.chosen.length === 0) return null;
@@ -108,8 +123,9 @@ function Commit({ result }: { result: ScaleResult }) {
 /**
  * The cluster's newest update-nodepool run (ADR-0062), in place on the Nodes
  * tab: what it is doing in the workflow's own words (its child's step too),
- * then, once done, each NodePool before → after, the servers a scale-down
- * chose and the commit; a failure in the workflow's words. While it runs the
+ * then, once done, each NodePool before → after, which way a scale-down
+ * chose its servers and which it chose, and the commit; a failure in the
+ * workflow's words. While it runs the
  * plan is not known yet: the workflow reports it when it completes.
  */
 export function ScaleRunCard({ run }: { run: ScaleRun }) {
@@ -168,6 +184,7 @@ export function ScaleRunCard({ run }: { run: ScaleRun }) {
         </div>
       )}
       {result && <Plan result={result} />}
+      {result && <RunChoice result={result} />}
       {result && <Chosen result={result} />}
       {result && <Ignored result={result} />}
       {result && <Commit result={result} />}

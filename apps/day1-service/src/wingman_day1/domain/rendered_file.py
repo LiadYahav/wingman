@@ -7,17 +7,20 @@ silently, a create checks the rendered file: the values-file contract
 
 - each nodepool's ``tuning_config`` as ``tuningConfig`` (ADR-0061);
 - the image mirrors as ``imageContentSources`` and ``disableIdmsMerge`` (ADR-0063);
-- each nodepool's ``additional_infra_envs`` as ``additionalInfraEnvNames`` (ADR-0064).
+- each nodepool's ``additional_infra_envs`` as ``additionalInfraEnvNames`` (ADR-0064);
+- each nodepool's ``scale_down_policy`` as its ``redbull.io/scale-down-policy``
+  annotation (ADR-0062).
 
 A flavor that gives one of the newer inputs is also refused at its save
-while the template does not read it (``specs.rule_problems``).
+while the template does not read it (``specs.rule_problems``). The newer
+nodepool inputs' own rules, which need no catalog, are :func:`input_problems`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 
-from wingman_day1.domain import nodepool_infra_envs
+from wingman_day1.domain import nodepool_infra_envs, scale_down_policy
 from wingman_day1.domain.cluster_file import load_values, rendered_file_problems
 from wingman_day1.domain.image_mirrors import unrendered_mirrors
 from wingman_day1.domain.tuning_rule import rendered_problems as unrendered_tuning
@@ -33,4 +36,17 @@ def rendered_problems(inputs: Mapping[str, object], rendered: str) -> list[str]:
         *unrendered_tuning(inputs, written),
         *unrendered_mirrors(inputs, written),
         *nodepool_infra_envs.rendered_problems(inputs, written),
+        *scale_down_policy.rendered_problems(inputs, written),
+    ]
+
+
+def input_problems(inputs: Mapping[str, object], *, infra_envs: bool) -> list[str]:
+    """Why a create's nodepools' other InfraEnvs or scale-down policies cannot be used.
+
+    ``infra_envs`` is ``DAY1_MULTI_INFRAENV_NODEPOOLS`` (ADR-0064); a policy
+    needs no setting (ADR-0062).
+    """
+    return [
+        *nodepool_infra_envs.input_problems(inputs, enabled=infra_envs),
+        *scale_down_policy.input_problems(inputs),
     ]

@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave; then it may choose its own policy instead, and a nodepool declares its own at create); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed)
 
 ## Context
 
@@ -417,6 +417,170 @@ names; Yes waits for the count, then the workflow's names are sent; the
 rest wait once all are picked; Cancel drops the picks; a scale-up offers
 none; a Machine with no server or already leaving cannot be picked; without
 the MCE's nodes it says so; the run's named server and a refusal's line).
+
+## Amendment (2026-11-18, later still): a scale-down may choose a policy of its own, and a nodepool declares its own
+
+The user (2026-11-18): "Let's perform the scale-down policy integration: it
+can select the servers to be removed when scaling down, or override the
+current scale-down policy declared inside the nodepool. Plus we need to make
+it possible to declare it inside the nodepool, with the annotation, in
+Wingman's create cluster and in hostedclusters-setup." The workflow takes
+the override as `scale_down_policy` (b1976f4, aab8949): on a scale-down it
+ranks the NodePool's Machines by that policy, ahead of the NodePool's own
+`redbull.io/scale-down-policy` (even one of its own that is no policy), for
+that run only; with `server_names` too it is a 422, and a scale-up or no
+change ignores it and says so in `ignored`. The run, the locks (4) and the
+ownership rule (5) do not change.
+
+- **Which servers leave is one choice a scale-down makes**, and at most one
+  answer is sent: the NodePool's own policy (sends nothing: the default, and
+  without one CAPI picks at random), a policy for this run
+  (`scale_down_policy`), or the servers picked (`server_names`, the
+  amendment above).
+- **Day1 checks what the workflow would refuse, before anything is sent**:
+  `scale_down_policy` is one of the workflow's enum
+  (`domain.scale_down_policy.ScaleDownPolicy`: `fewest-pods`,
+  `least-requested`, `least-utilized`), and not beside `server_names`; both
+  are `422 VALIDATION_ERROR` from the body. As for names, it is sent only on
+  a scale-down of the file's replicas on `main`: on a scale-up or no change
+  it is a 422 that says so, never sent, so Wingman's starts still send
+  nothing a run ignores. `ScaleRequest`, `ScaleTarget` and `ScaleIn` gain
+  the field; the start's body adds it only when set.
+- **What the workflow says of each policy** (its design page): unhealthy
+  Machines always go first, then Nodes missing, NotReady or cordoned;
+  `fewest-pods` the fewest workload pods, `least-requested` the lowest share
+  of CPU or memory its pods request, `least-utilized` the lowest live use,
+  from the hosted cluster's `metrics.k8s.io`: without the metrics API the
+  run fails, `NodeMetricsUnavailableError`, nothing marked or written. On
+  OpenShift 4.18's CAPI a marked and an unhealthy Machine rank the same,
+  which is why a policy takes the unhealthy ones first, in CAPI's order.
+- **The run's result** already carries what was used: the NodePool's
+  `scale_down_policy` is the policy applied (the request's, else its own;
+  `null` when it named its servers or had none), each `chosen[].policy` the
+  policy or `named`, and `ignored` what a run that did not scale down left
+  unused. The fake ranks by the run's policy too, and lists one sent with a
+  scale-up in `ignored`.
+- The override needs the workflows release that has `scale_down_policy`
+  (the one that has `server_names`): an older orchestrator forbids the field
+  (422, nothing started).
+- **In the web, in the scale-down's confirmation** (no new control on the
+  card): one fieldset, **Which servers leave**, three radios, the chosen
+  one's detail under it. **The NodePool's own policy** names it (or "the
+  platform default: CAPI picks at random") and is the default; **Another
+  policy for this run** opens a select of the workflow's policies but the
+  NodePool's own (the first by default), with what it removes
+  (`least-utilized` says it needs the metrics API); **Pick the servers**
+  opens the picker of the amendment above, which is no longer optional once
+  chosen: Yes waits for exactly as many as leave. Without the MCE's nodes it
+  cannot be chosen, and says why. The confirmation's main line follows the
+  choice ("…(least-requested, for this run only)"), and an unknown policy of
+  the NodePool's own is still said to be refused, with another policy the
+  way out. Changing the choice drops the ticks; Cancel, Escape and a new
+  number drop the choice. A scale-up shows none and sends neither
+  (`lib/scale-leave.ts`: what is sent, when Yes waits, the line).
+- **The run says which way its servers were chosen** ("Which servers
+  left"): picked by name; by the NodePool's own policy, when the applied
+  policy is the day1 file's; by another ("not the day1 file's policy (…):
+  this run's choice, or one set on the NodePool itself", since the result
+  does not say which, and the orchestrator does not return the request); or
+  at random by CAPI. A run that did not scale down says nothing, and lists
+  what it ignored as before.
+
+### A nodepool declares its own policy
+
+The NodePool's own policy is its `redbull.io/scale-down-policy` annotation,
+which the hostedclusters-setup chart renders from the `nodepool[]` entry's
+`annotations` map, as written (`toYaml`), after the chart's own
+`argocd.argoproj.io/sync-wave` (a change to `templates/nodepool.yaml`,
+approved by the chart's owner, not merged upstream yet; the air-gapped chart
+gets it from a separate package). Wingman reads it
+there since 3.42.0; now it writes it too. It is day1's create path, not
+Scale's: it works whether Scale is on or off, and needs no setting.
+
+- **The template input is `nodepools[].scale_down_policy`**, one of the
+  workflow's three or none. The shared template writes it only when given:
+
+  ```jinja
+  {% if np.scale_down_policy | default("") %}
+      annotations:
+        redbull.io/scale-down-policy: {{ np.scale_down_policy }}
+  {% endif %}
+  ```
+
+  None writes nothing: the platform default, CAPI at random. Any other
+  value is refused at a create and at a flavor's save
+  (`scale_down_policy.input_problems`).
+- **A flavor presets or locks it** (ADR-0026's amendment):
+  `nodepools[<i>].scale_down_policy` → `nodepool[<i>].annotations
+  ["redbull.io/scale-down-policy"]`, compared as text; a lock fixes a
+  policy, never none (a lock to none would have a sync delete keys). Drift
+  lists it under that file key, and a sync or a rollout's MR writes it in
+  the file's text as the template does (`cluster_text.set_annotation`:
+  added at the entry's end, or its line replaced; the entry's other
+  annotations and comments stay).
+- **The stale-template guard** (ADR-0063, ADR-0064): a flavor that gives the
+  input is refused while the specs project's template does not read it,
+  and a create whose rendered file does not hold the annotation as given,
+  or holds one unasked, is refused (`rendered_file`). The form schema offers
+  the input only when the template reads it.
+- **Edits keep it.** Every edit, sync and rollout keeps an entry's
+  `annotations` byte for byte, and an edit (the YAML editor, a review edit)
+  may set the policy only to one the workflow knows
+  (`scale_down_policy.edit_problems`, in `cluster_file.edit_problems`): an
+  unknown value the file already holds is left to the workflow. The chart
+  does not refuse an entry's own `argocd.argoproj.io/sync-wave`, which would
+  reach the NodePool twice; Wingman never writes it, and refuses an edit
+  that adds it to an entry's `annotations`. Changing
+  the annotation rolls no node: HyperShift does not roll a NodePool for its
+  metadata.
+- **The web** reads the template schema as the switch, as for the other
+  newer inputs. The create form has a **Scale-down policy** select per
+  nodepool: the platform default (sends nothing) or one of the three, each
+  explained in a line; a flavor's locked one is read only. The flavor
+  editor has it on each nodepool card as a preset or locked (a lock without
+  a policy says it cannot be locked). In Edit cluster, **Scale-down policy
+  per nodepool** sits above the YAML when the template writes the input or
+  a nodepool already has one: it edits only the annotation's line in the
+  file's text, as the template writes it, every other line kept, and leaves
+  a flow-style `annotations` or a quoted key to the person
+  (`lib/nodepool-policy.ts`).
+- The workflow also reads a label or an annotation set by hand on the MCE's
+  NodePool (Argo CD leaves an annotation it never set alone); the file
+  cannot show those.
+
+Verification: `test_scale_workflow.py` (the body with a policy and nothing
+more), `test_fake_scale.py` (a run's policy ranks ahead of the NodePool's;
+one sent with a scale-up is ignored and said so), `test_scale.py` (the
+enum), `tests/api/test_scale_api.py` (a policy sent on a scale-down and
+applied; an unknown one, and one beside named servers, refused from the
+body; one on a scale-up or no change refused in words; none sent);
+`apps/web/lib/scale-leave.test.ts` (the policies offered, what is sent for
+each choice, when Yes waits, the line, the run's choice),
+`apps/web/lib/scale-model.test.ts` and `scale-confirm.test.ts` (the body,
+the line for this run), `apps/web/e2e/tests/cluster-scale-policy.spec.ts`
+(the own policy named and sent as nothing; another one offered without the
+own, said, and sent alone; the platform default; an unknown own policy and
+the way out; Cancel and a scale-up; the run's choice each way) and
+`cluster-scale-servers.spec.ts` (picking as a choice: Yes waits, another
+choice drops the ticks, no choice without the MCE's nodes);
+`tests/unit/domain/test_scale_down_policy.py` (the input, the template
+guard, the rendered check, the lock, the edit rule),
+`tests/unit/domain/test_cluster_text.py` (the annotation written as the
+template does, in place, beside other annotations, from `{}`; a flow
+mapping refused; every other edit keeps it), `test_locks.py` and
+`test_template.py` (the lockable table, the fixture's schema),
+`tests/api/test_scale_down_policy_api.py` (the schema, a create with and
+without, an unknown policy, a stale template refusing a create and a
+flavor, a preset, a lock to none refused, a locked policy's drift and sync,
+an edit); `apps/web/lib/nodepool-policy.test.ts` (the schema switch, the
+platform default left out of the request, the file's text edit: added as
+the template writes it, replaced with its comment, removed with an empty
+block, beside other annotations, a flow mapping or a quoted key left to the
+person) and `apps/web/e2e/tests/nodepool-scale-down-policy.spec.ts` (the
+create form with and without the input, the default sending nothing, a
+locked policy read only; the flavor editor's preset and lock; Edit
+cluster's policy per nodepool in the file's text, a file's own policy
+without the input, a flow mapping refused).
 
 ## Amendment (2026-11-19): a 404 to the start is an orchestrator without update-nodepool
 

@@ -17,6 +17,7 @@ import { EveryNodepoolPanel } from "./every-nodepool-panel";
 import { NodeLabelsEditor, PresetInput } from "./inputs";
 import { InfraEnvsPreset } from "./infra-envs-preset";
 import { INFRA_ENVS_INPUT } from "@/lib/infra-envs";
+import { PolicyField } from "./policy-field";
 import { TuningField } from "./tuning-field";
 import { chooseConfigsMode, isTuningRule, keepTuningRule } from "./tuning-model";
 import {
@@ -433,6 +434,7 @@ function NodepoolCard({
         </ValueField>
 
         <TuningField index={index} draft={draft} update={update} problems={problems} notEnforced={notEnforced} />
+        <PolicyField index={index} draft={draft} update={update} schema={schema} problems={problems} notEnforced={notEnforced} />
 
         {others.length > 0 && (
           <div className="space-y-3">

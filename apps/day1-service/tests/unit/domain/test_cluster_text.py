@@ -10,14 +10,9 @@ from hypothesis import strategies as st
 
 from wingman_core.testing.fixtures import default_fixture_root
 from wingman_day1.domain.addons import RequestedAddon
+from wingman_day1.domain.cluster_edits import CI_MARKER, SetConfigs, SetValue
 from wingman_day1.domain.cluster_file import Provenance, load_values, read_provenance
-from wingman_day1.domain.cluster_text import (
-    CI_MARKER,
-    SetConfigs,
-    SetValue,
-    edit_values,
-    with_header,
-)
+from wingman_day1.domain.cluster_text import edit_values, with_header
 from wingman_day1.domain.errors import UneditableFileError
 from wingman_day1.domain.locks import InputPath
 
@@ -388,3 +383,70 @@ def test_an_edit_leaves_a_nodepools_other_infraenvs_byte_for_byte() -> None:
     )
     edited = edit_values(content, [value("nodepool[0].replicas", 4)])
     assert edited == content.replace("replicas: 2", "replicas: 4")
+
+
+POLICY = InputPath(("nodepool", 0, "annotations", "redbull.io/scale-down-policy"))
+POOL = 'owner: {merkaz: "1", anaf: "2", mador: "3"}\nmastertag: 4.18.22\nnodepool:\n'
+
+
+def policy(content: str, to: str, index: int = 0) -> str:
+    key = InputPath(("nodepool", index, "annotations", "redbull.io/scale-down-policy"))
+    return edit_values(content, [SetValue(key, to)])
+
+
+def test_a_policy_is_written_as_the_template_writes_it_at_the_entrys_end() -> None:
+    """ADR-0062: a flavor's locked scale-down policy, by a sync or a rollout's MR."""
+    edited = policy(LARK, "fewest-pods")
+    first = "  tuningConfig: tuned-network-latency\n"
+    assert edited == LARK.replace(
+        first, first + "  annotations:\n    redbull.io/scale-down-policy: fewest-pods\n", 1
+    )
+    after, before = load_values(edited)["nodepool"], load_values(LARK)["nodepool"]
+    assert isinstance(after, list) and isinstance(before, list)
+    assert after[1] == before[1]
+
+
+def test_a_policy_replaces_its_line_and_keeps_the_other_annotations_and_comments() -> None:
+    content = POOL + (
+        "- infraEnvName: dell-r660\n"
+        "  annotations:\n"
+        "    # set by the platform team\n"
+        "    team.io/owner: storage\n"
+        "    redbull.io/scale-down-policy: least-requested  # quiet nodes first\n"
+        "  replicas: 2\n"
+    )
+    assert policy(content, "fewest-pods") == content.replace(
+        "policy: least-requested  #", "policy: fewest-pods  #"
+    )
+    without = content.replace(
+        "    redbull.io/scale-down-policy: least-requested  # quiet nodes first\n", ""
+    )
+    assert policy(without, "fewest-pods") == without.replace(
+        "    team.io/owner: storage\n",
+        "    team.io/owner: storage\n    redbull.io/scale-down-policy: fewest-pods\n",
+    )
+
+
+def test_an_empty_annotations_mapping_becomes_the_block_and_a_flow_one_is_refused() -> None:
+    empty = POOL + "- infraEnvName: dell-r660\n  annotations: {}  # none yet\n  replicas: 2\n"
+    assert policy(empty, "least-utilized") == empty.replace(
+        "  annotations: {}  # none yet\n",
+        "  annotations:  # none yet\n    redbull.io/scale-down-policy: least-utilized\n",
+    )
+    flow = POOL + "- infraEnvName: dell-r660\n  annotations: {team.io/owner: x}\n  replicas: 2\n"
+    with pytest.raises(UneditableFileError) as refused:
+        policy(flow, "fewest-pods")
+    assert str(refused.value) == "nodepool[0].annotations is not a block mapping Wingman can edit"
+
+
+def test_an_edit_leaves_a_nodepools_annotations_byte_for_byte() -> None:
+    """ADR-0062: Scale reads the annotation, so every other edit keeps it as it is."""
+    content = POOL + (
+        "- infraEnvName: dell-r660\n"
+        "  annotations:\n"
+        '    "redbull.io/scale-down-policy": "fewest-pods"  # quoted by hand\n'
+        "  replicas: 2\n"
+    )
+    edited = edit_values(content, [value("nodepool[0].replicas", 4)])
+    assert edited == content.replace("replicas: 2", "replicas: 4")
+    assert str(POLICY) == 'nodepool[0].annotations["redbull.io/scale-down-policy"]'

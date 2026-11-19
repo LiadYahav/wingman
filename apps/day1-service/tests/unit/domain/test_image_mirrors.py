@@ -10,8 +10,9 @@ import yaml
 
 from wingman_core.domain.git import RepoPath
 from wingman_core.testing.fixtures import default_fixture_root
+from wingman_day1.domain.cluster_edits import SetValue
 from wingman_day1.domain.cluster_file import load_values
-from wingman_day1.domain.cluster_text import SetValue, edit_values
+from wingman_day1.domain.cluster_text import edit_values
 from wingman_day1.domain.image_mirrors import (
     DROP_MCE_MIRRORS,
     IMAGE_MIRRORS,

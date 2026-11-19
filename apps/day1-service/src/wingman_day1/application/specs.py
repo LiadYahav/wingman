@@ -38,6 +38,7 @@ from wingman_day1.domain.machine_configs import flavor_config_problems
 from wingman_day1.domain.nodepool_infra_envs import given as infra_envs_given
 from wingman_day1.domain.nodepool_infra_envs import input_problems as infra_env_problems
 from wingman_day1.domain.nodepool_infra_envs import without_input
+from wingman_day1.domain.scale_down_policy import given as policies_given
 from wingman_day1.domain.specs import (
     ClusterSpec,
     dump_spec,
@@ -262,13 +263,13 @@ class SpecCatalog:
     async def _require_savable(self, spec: ClusterSpec) -> None:
         """Every flavor rule a spec must meet before it is proposed; all problems at once.
 
-        A flavor that gives image mirrors (ADR-0063) or a nodepool's other
-        InfraEnvs (ADR-0064) is checked against the shared template as it is
-        now: refused while the template does not read them. Any other save
-        does not read the template.
+        A flavor that gives image mirrors (ADR-0063), a nodepool's other
+        InfraEnvs (ADR-0064) or its scale-down policy (ADR-0062) is checked
+        against the shared template as it is now: refused while the template
+        does not read them. Any other save does not read the template.
         """
         values = spec.spec.day1.values
-        reads = given_mirror_inputs(values) or infra_envs_given(values)  # the template's inputs
+        reads = given_mirror_inputs(values) or infra_envs_given(values) or policies_given(values)
         problems = rule_problems(with_template(spec, await self.template() if reads else ""))
         catalog = await self._machine_configs.catalog()
         problems += flavor_config_problems(spec.spec.day1.values, catalog)

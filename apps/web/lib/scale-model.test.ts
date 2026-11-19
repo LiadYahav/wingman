@@ -155,9 +155,14 @@ describe("a run's target and failure", () => {
     );
   });
 
-  it("sends named servers only when there are some", () => {
-    expect(startBody("p", 1, ["ocp-a", "ocp-b"])).toStrictEqual({ nodepool: "p", replicas: 1, server_names: ["ocp-a", "ocp-b"] });
-    expect(startBody("p", 1, [])).toStrictEqual({ nodepool: "p", replicas: 1 });
+  it("sends named servers only when there are some, else a run's policy, never both", () => {
+    const named = { nodepool: "p", replicas: 1, server_names: ["ocp-a", "ocp-b"] };
+    expect(startBody("p", 1, { server_names: ["ocp-a", "ocp-b"] })).toStrictEqual(named);
+    expect(startBody("p", 1, { server_names: [] })).toStrictEqual({ nodepool: "p", replicas: 1 });
+    expect(startBody("p", 1, { scale_down_policy: "least-utilized" })).toStrictEqual({
+      nodepool: "p", replicas: 1, scale_down_policy: "least-utilized",
+    });
+    expect(startBody("p", 1, { server_names: ["ocp-a", "ocp-b"], scale_down_policy: "fewest-pods" })).toStrictEqual(named);
   });
 });
 

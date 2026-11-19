@@ -9,7 +9,8 @@ own form:
   the same as its digits;
 - ``platform`` is ``kubevirt`` or the Agent default; a file without the key
   is on the Agent platform, as the template writes it;
-- replicas compare as numbers, node labels as a mapping (no key is ``{}``);
+- replicas compare as numbers, node labels as a mapping (no key is ``{}``),
+  a scale-down policy as the entry's annotation's text (ADR-0062);
 - configs compare by name, each as often, in any order (ADR-0029); a lock's
   ``{name: nm-conf, hardware: <hw>}`` is the file's
   ``nm-conf-<clusterName>-<hw>``. Where the hardware is the nodepool's own
@@ -282,7 +283,7 @@ def _nodepool_drift(lock: Lock, file_key: InputPath, context: _Context) -> Value
     if is_configs_lock(lock.path):
         return _configs_drift(lock, index, found, context)
     key = str(file_key.segments[-1])
-    have = found.get(key, MISSING)
+    have = lookup(found, InputPath(file_key.segments[2:]))  # a key, or an annotation's
     ref = NodepoolRef(index, nodepool_name(found, index, cluster_name=context.cluster_name))
     want = lock.value
     if key == "replicas" and isinstance(want, str) and want.isdigit():

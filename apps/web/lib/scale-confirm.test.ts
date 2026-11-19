@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addsLine, changeLine, DONE_LINE, leaving, policyOf } from "./scale-confirm";
-import type { ScaleNodePool } from "@/types";
-
-const A = "prod-lark-site1-dell-r660-zone-a";
-const B = "prod-lark-site1-dell-r660-zone-b";
-
-const pool = (name: string, scale_down_policy: string | null): ScaleNodePool => ({
-  index: 0, name, infra_env: name.replace("prod-lark-site1-", ""), replicas: 3, locked_by: null, locked_replicas: null,
-  unnamed: null, scale_down_policy,
-});
+import { addsLine, changeLine, DONE_LINE, leaving, POLICIES } from "./scale-confirm";
 
 describe("the change, under the title", () => {
   it("is the NodePool's replicas with the difference", () => {
@@ -60,11 +51,14 @@ describe("which nodes a scale-down removes", () => {
   });
 });
 
-describe("the NodePool's policy", () => {
-  it("is the day1 file's for that NodePool, else none", () => {
-    const nodepools = [pool(A, "fewest-pods"), pool(B, null)];
-    expect(policyOf(A, nodepools)).toBe("fewest-pods");
-    expect(policyOf(B, nodepools)).toBeNull();
-    expect(policyOf("unknown", nodepools)).toBeNull();
+describe("the policies", () => {
+  it("are the workflow's three, in its order", () => {
+    expect(POLICIES).toEqual(["fewest-pods", "least-requested", "least-utilized"]);
+  });
+
+  it("say when one is this run's own", () => {
+    expect(leaving(1, "least-utilized", true).text).toBe(
+      "Removes the node with the lowest live CPU or memory use (least-utilized, for this run only). Unhealthy machines always go first."
+    );
   });
 });

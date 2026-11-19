@@ -20,27 +20,29 @@ What can be locked
 Only what day1 drift can compare with the cluster file. Each lockable input
 and the file key the shared template writes it to:
 
-==============================  ============================
-template input                  cluster-file key
-==============================  ============================
-``owner_merkaz``                ``owner.merkaz``
-``owner_anaf``                  ``owner.anaf``
-``owner_mador``                 ``owner.mador``
-``platform``                    ``platform``
-``image_content_sources``       ``imageContentSources``
-``disable_idms_merge``          ``disableIdmsMerge``
-``nodepools[<i>].replicas``     ``nodepool[<i>].replicas``
-``nodepools[<i>].configs``      ``nodepool[<i>].configs``
-``nodepools[<i>].node_labels``  ``nodepool[<i>].nodeLabels``
-``nodepools[*].configs``        ``nodepool[*].configs``
-``nodepools[*].tuning_config``  ``nodepool[*].tuningConfig``
-==============================  ============================
+====================================  =============================================================
+template input                        cluster-file key
+====================================  =============================================================
+``owner_merkaz``                      ``owner.merkaz``
+``owner_anaf``                        ``owner.anaf``
+``owner_mador``                       ``owner.mador``
+``platform``                          ``platform``
+``image_content_sources``             ``imageContentSources``
+``disable_idms_merge``                ``disableIdmsMerge``
+``nodepools[<i>].replicas``           ``nodepool[<i>].replicas``
+``nodepools[<i>].configs``            ``nodepool[<i>].configs``
+``nodepools[<i>].node_labels``        ``nodepool[<i>].nodeLabels``
+``nodepools[<i>].scale_down_policy``  ``nodepool[<i>].annotations["redbull.io/scale-down-policy"]``
+``nodepools[*].configs``              ``nodepool[*].configs``
+``nodepools[*].tuning_config``        ``nodepool[*].tuningConfig``
+====================================  =============================================================
 
 A value can differ in form between the two sides: a ``{name: nm-conf,
 hardware: <hw>}`` entry is ``{name: nm-conf-<clusterName>-<hw>}`` in the
 file (``machine_configs.expand_network_configs``), and ``platform`` is
 written only as ``platform: kubevirt``; the image mirrors compare as the
-chart reads them (``image_mirrors``, ADR-0063). The inputs Wingman sets for
+chart reads them (``image_mirrors``, ADR-0063); a locked scale-down policy is
+a policy, never none (``scale_down_policy``, ADR-0062). The inputs Wingman sets for
 each cluster (name, site, MCE, OpenShift version) are never lockable.
 
 The configs rule
@@ -69,6 +71,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, cast
 
+from wingman_day1.domain import scale_down_policy as policy
 from wingman_day1.domain.image_mirrors import (
     DROP_FILE_KEY,
     DROP_MCE_MIRRORS,
@@ -161,6 +164,7 @@ LOCKABLE: Final = (
     Lockable(("nodepools", _ANY_INDEX, "replicas"), ("nodepool", _ANY_INDEX, "replicas")),
     Lockable(("nodepools", _ANY_INDEX, "configs"), ("nodepool", _ANY_INDEX, "configs")),
     Lockable(("nodepools", _ANY_INDEX, "node_labels"), ("nodepool", _ANY_INDEX, "nodeLabels")),
+    Lockable(("nodepools", _ANY_INDEX, policy.INPUT), ("nodepool", _ANY_INDEX, *policy.FILE_KEY)),
     Lockable(("nodepools", EVERY, "configs"), ("nodepool", EVERY, "configs")),
     Lockable(("nodepools", EVERY, TUNING_INPUT), ("nodepool", EVERY, "tuningConfig")),
 )
@@ -308,6 +312,11 @@ def _configs_rule_value(values: Mapping[str, object]) -> list[dict[str, str]] | 
     return entries
 
 
+def _value_problem(path: str, values: Mapping[str, object]) -> str | None:
+    """Why a locked value fixes nothing usable: a broken image mirror input, or no policy."""
+    return mirror_lock_problem(path, values) or policy.lock_problem(path, values)
+
+
 def lock_problems(locked_paths: Sequence[str], values: Mapping[str, object]) -> list[str]:
     """Why ``locked_paths`` cannot be saved with ``values``; empty when they can.
 
@@ -315,7 +324,8 @@ def lock_problems(locked_paths: Sequence[str], values: Mapping[str, object]) -> 
     ``values`` (a lock is a value the flavor fixes, so a lock without one
     fixes nothing). The configs rule needs agreeing nodepools that list
     ``nm-conf``, and no position may lock configs beside it. A locked image
-    mirror input needs a value the mirror rules accept (ADR-0063).
+    mirror input needs a value the mirror rules accept (ADR-0063), a locked
+    scale-down policy a policy (ADR-0062).
     """
     problems: list[str] = []
     if len(locked_paths) > MAX_LOCKS:
@@ -342,7 +352,7 @@ def lock_problems(locked_paths: Sequence[str], values: Mapping[str, object]) -> 
             problems.append(
                 f"locked_paths: {path} is locked but spec.day1.values sets no value for it"
             )
-        elif (broken := mirror_lock_problem(str(path), values)) is not None:
+        elif (broken := _value_problem(str(path), values)) is not None:
             problems.append(broken)
     if CONFIGS_RULE in seen:
         problems += [
@@ -373,7 +383,7 @@ def enforced_locks(locked_paths: Sequence[str], values: Mapping[str, object]) ->
                 locks[path] = Lock(path, rule)
             continue
         value = lookup(values, path)
-        if value is not MISSING and mirror_lock_problem(str(path), values) is None:
+        if value is not MISSING and _value_problem(str(path), values) is None:
             locks[path] = Lock(path, value)
     if CONFIGS_RULE in locks:
         locks = {p: lock for p, lock in locks.items() if p.is_rule or not is_configs_lock(p)}

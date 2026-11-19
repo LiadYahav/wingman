@@ -202,7 +202,7 @@ export function FlavorEditor({
     if (isNew) list.push("metadata.name");
     list.push(...(configsMode(draft) === "rule" ? [CONFIGS_RULE] : []), ...tuningFields(draft));
     for (let i = 0; i < nodepoolCount(draft); i++) {
-      list.push(nodepoolPath(i, "replicas"), nodepoolPath(i, "configs"), nodepoolPath(i, "node_labels"));
+      list.push(nodepoolPath(i, "replicas"), nodepoolPath(i, "configs"), nodepoolPath(i, "node_labels"), nodepoolPath(i, "scale_down_policy"));
       for (const input of otherPoolInputs(schema ?? [], nodepoolValues(draft, i))) list.push(nodepoolPath(i, input.name));
     }
     return list;

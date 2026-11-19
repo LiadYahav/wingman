@@ -15,10 +15,10 @@ from wingman_day1.domain.scale import (
     held_back,
     replicas_locks,
     restore_lines,
-    scale_down_policy,
     scale_name,
     scale_workflow_id,
 )
+from wingman_day1.domain.scale_down_policy import POLICIES, policy_of
 from wingman_day1.domain.value_drift import NodepoolRef, ValueDrift
 
 FILE = """\
@@ -88,12 +88,16 @@ nodepool:
 """
     assert [p.scale_down_policy for p in pools(text)] == ["fewest-pods", "newest-first", None]
     requested = {"annotations": {"redbull.io/scale-down-policy": "least-requested"}}
-    assert scale_down_policy(requested) == "least-requested"
-    assert scale_down_policy({"annotations": None}) is None
-    assert scale_down_policy({"annotations": ["redbull.io/scale-down-policy"]}) is None
-    assert scale_down_policy({"annotations": {"redbull.io/scale-down-policy": None}}) is None
-    assert scale_down_policy({}) is None
+    assert policy_of(requested) == "least-requested"
+    assert policy_of({"annotations": None}) is None
+    assert policy_of({"annotations": ["redbull.io/scale-down-policy"]}) is None
+    assert policy_of({"annotations": {"redbull.io/scale-down-policy": None}}) is None
+    assert policy_of({}) is None
     assert [p.scale_down_policy for p in pools()] == [None] * 5
+
+
+def test_the_policies_are_the_workflows_enum() -> None:
+    assert POLICIES == ("fewest-pods", "least-requested", "least-utilized")
 
 
 def test_the_flavors_locked_replicas_by_position() -> None:

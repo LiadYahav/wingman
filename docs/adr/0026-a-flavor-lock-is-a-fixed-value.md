@@ -1,7 +1,7 @@
 # ADR-0026: A flavor lock is a fixed value the flavor enforces
 
 Date: 2026-11-08
-Status: Accepted; superseded in part by ADR-0029 (a configs rule for every nodepool, beside the positional locks); amended by ADR-0063 (the image mirrors are lockable)
+Status: Accepted; superseded in part by ADR-0029 (a configs rule for every nodepool, beside the positional locks); amended by ADR-0063 (the image mirrors are lockable) and ADR-0062 (a nodepool's scale-down policy is lockable)
 
 ## Context
 
@@ -50,6 +50,10 @@ cluster-file key the shared template writes it to, is one row of
 Amended by ADR-0063 (2026-11-18): `image_content_sources` →
 `imageContentSources` and `disable_idms_merge` → `disableIdmsMerge` are
 lockable too, each as a whole value, compared as the chart merges them.
+
+Amended by ADR-0062 (2026-11-18): `nodepools[<i>].scale_down_policy` →
+`nodepool[<i>].annotations["redbull.io/scale-down-policy"]` is lockable, to a
+policy (never to none), compared as text.
 
 The inputs Wingman sets per cluster (`cluster_name`, `site`, `mce`,
 `openshift_release_version` and the aliases `site_name`, `mce_name`) are

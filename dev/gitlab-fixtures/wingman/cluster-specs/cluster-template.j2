@@ -35,6 +35,12 @@
   Day1 refuses a flavor that gives them while this template does not read
   them, and a create whose file does not hold them as given.
 
+  A nodepool may give its scale-down policy (ADR-0062), written only when
+  given, as its annotation:
+    nodepools[].scale_down_policy   fewest-pods, least-requested or
+                               least-utilized; none for the platform default
+                               (CAPI picks at random). Same guards.
+
   Every field below is read by the chart (templates/nodepool.yaml, hc.yaml).
   Names are the chart's own, so `helm template` with this output plus the
   value layers above is the check that a rendered file is valid.
@@ -91,6 +97,13 @@ nodepool:
     replicas: {{ np.replicas | default(2) }}
     labels:
       allowDeletion: false
+{% if np.scale_down_policy | default("") %}
+    {#- Which servers a scale-down removes first; update-nodepool reads it off
+        the NodePool, which the hostedclusters-setup chart renders it onto
+        (ADR-0062). None: CAPI picks at random. #}
+    annotations:
+      redbull.io/scale-down-policy: {{ np.scale_down_policy }}
+{% endif %}
 {% if np.configs | default([]) %}
     configs:
 {% for config in np.configs | default([]) %}
