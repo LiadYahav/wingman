@@ -319,6 +319,23 @@ def test_fetch_now_is_off_unless_enabled_and_needs_server_scan() -> None:
     assert "serverScanRefresh" in wrong.stderr
 
 
+def test_excluded_agent_labels_are_label_keys_joined_with_commas() -> None:
+    """ADR-0065: ``day1.excludedAgentLabels`` sets DAY1_EXCLUDED_AGENT_LABELS, empty by default
+    and for values kept from a release before it; each must be a label key, at most 16."""
+    assert render()["wingman-config"]["data"]["DAY1_EXCLUDED_AGENT_LABELS"] == ""
+    kept = render("--set", "day1.excludedAgentLabels=null")["wingman-config"]["data"]
+    assert kept["DAY1_EXCLUDED_AGENT_LABELS"] == ""
+    on = render("--set-json", 'day1.excludedAgentLabels=["redbull.io/used","used-by-herzi"]')
+    assert (
+        on["wingman-config"]["data"]["DAY1_EXCLUDED_AGENT_LABELS"]
+        == "redbull.io/used,used-by-herzi"
+    )
+    for wrong in ('["not a key"]', '["Redbull.IO/used"]', '"redbull.io/used"', '["a","a"]'):
+        refused = template("--set-json", f"day1.excludedAgentLabels={wrong}")
+        assert refused.returncode != 0, wrong
+        assert "excludedAgentLabels" in refused.stderr, wrong
+
+
 TLS_VERIFY = {
     "auth.sslVerify": "OPENSHIFT_SSL_VERIFY",
     "clusterStatus.sslVerify": "MCE_SSL_VERIFY",

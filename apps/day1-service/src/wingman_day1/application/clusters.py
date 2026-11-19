@@ -12,8 +12,8 @@ resolve by the day1 CI's rule, and the cluster's network config entry is
 expanded to the name the CI reads before the template renders (ADR-0027).
 Tuning profiles must be in ``tuning/`` (ADR-0061), image mirrors usable
 (ADR-0063), other InfraEnvs allowed (ADR-0064), scale-down policies known
-(ADR-0062), each written as given (``rendered_file``). A file that cannot be
-parsed is shown with its error, never dropped from the list (ADR-0004).
+(ADR-0062), excluded Agent labels the deployment's (ADR-0065), each written as
+given (``rendered_file``). A file that does not parse is shown with its error.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ from wingman_day1.application.provision_mrs import provision_merge_requests
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import read_tree
+from wingman_day1.domain import rendered_file
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.changes import ClusterAction, ClusterChange, ProvisionResult
 from wingman_day1.domain.cluster_file import (
@@ -86,8 +87,6 @@ from wingman_day1.domain.openshift_versions import unhostable_problems
 from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.placement import Admission, Choice, Decision, describe_placement
-from wingman_day1.domain.rendered_file import input_problems as nodepool_problems
-from wingman_day1.domain.rendered_file import rendered_problems
 from wingman_day1.domain.sizing import sizing_problems
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
@@ -477,15 +476,16 @@ class ClusterService:
         problems += sizing_problems(inputs, spec.sizing_ratio(), flavor=spec.metadata.name)
         problems += cluster_config_problems(inputs, catalog, cluster_name=cluster_name)
         problems += input_problems(inputs, tuning)
-        problems += nodepool_problems(inputs, infra_envs=self._owned.infra_envs)
+        problems += rendered_file.input_problems(inputs, self._owned)
         if problems:
             raise InvalidInputError("the cluster's inputs are not acceptable", problems)
         inputs = render_inputs(expand_network_configs(inputs, cluster_name=cluster_name))
+        inputs = rendered_file.with_agent_labels(inputs, self._owned)  # the deployment's (ADR-0065)
         template = spec.spec.day1.template
         if not template.strip():
             raise RenderError("the specs project has no cluster-template.j2")
         rendered = render_cluster_file(template, inputs)
-        problems = rendered_problems(inputs, rendered)  # and what it must write as given
+        problems = rendered_file.rendered_problems(inputs, rendered)  # and what it must hold
         require_valid(problems, message="the rendered cluster file breaks the values-file contract")
         return rendered
 

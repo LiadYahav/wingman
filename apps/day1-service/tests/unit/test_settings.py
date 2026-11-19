@@ -388,3 +388,18 @@ def test_adding_servers_is_off_by_default_and_needs_an_orchestrator() -> None:
     on = dev(day1_add_servers=True, workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN)
     assert on.day1_add_servers is True
     assert dev(day1_add_servers=True, day1_fake_fleet=True).day1_add_servers is True
+
+
+def test_excluded_agent_labels_are_none_by_default_and_travel_with_the_workflow_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-0065: empty, nothing changes; set, every new agent nodepool excludes the keys."""
+    assert dev().workflow_keys().excluded_agent_labels == ()
+    monkeypatch.setenv("DAY1_EXCLUDED_AGENT_LABELS", "redbull.io/used, used-by-herzi")
+    assert dev().workflow_keys().excluded_agent_labels == ("redbull.io/used", "used-by-herzi")
+
+
+@pytest.mark.parametrize("keys", ["not a key", "Redbull.IO/used", "a/b/c"])
+def test_an_excluded_agent_label_that_is_not_a_label_key_is_refused(keys: str) -> None:
+    with pytest.raises(ValidationError, match="DAY1_EXCLUDED_AGENT_LABELS"):
+        dev(day1_excluded_agent_labels=keys)

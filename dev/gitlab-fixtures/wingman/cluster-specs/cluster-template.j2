@@ -14,6 +14,9 @@
     cluster_name               the file stem, e.g. ocp4-prod-herzi-site1
     site, mce                  the folder the file is written to
     openshift_release_version  e.g. 4.16.27-x86_64 (a bare 4.16.27 also works)
+    excluded_agent_labels      the deployment's DAY1_EXCLUDED_AGENT_LABELS, the
+                               same for every agent cluster; [] on KubeVirt
+                               and when unset (no form widget, ADR-0065)
 
   Never render these keys. Other owners write them:
     clusterName, site, mce     ArgoCD passes them from the file path
@@ -103,6 +106,11 @@ nodepool:
         (ADR-0062). None: CAPI picks at random. #}
     annotations:
       redbull.io/scale-down-policy: {{ np.scale_down_policy }}
+{% endif %}
+{% if excluded_agent_labels | default([]) %}
+    {#- Agents carrying one of these labels are never taken: herzi marks used
+        Agents so, and deletes them once free (ADR-0065). #}
+    excludeAgentLabels: {{ excluded_agent_labels | tojson }}
 {% endif %}
 {% if np.configs | default([]) %}
     configs:

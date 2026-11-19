@@ -19,6 +19,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from wingman_core.domain.git import RepoPath
 from wingman_core.settings import Environment, RuntimeSettings
+from wingman_day1.domain.cluster_file import WorkflowKeys
+from wingman_day1.domain.excluded_agent_labels import parse as parse_agent_labels
+from wingman_day1.domain.excluded_agent_labels import setting_problems as agent_label_problems
 from wingman_day1.domain.quick_links import (
     DEFAULT_ARGOCD_TEMPLATE,
     DEFAULT_CONSOLE_TEMPLATE,
@@ -158,6 +161,15 @@ class Day1Settings(BaseSettings):
     # never writes the key and an edit leaves it as it is.
     day1_multi_infraenv_nodepools: bool = False
 
+    # ── Agent labels every NodePool excludes (ADR-0065) ──────────────────────
+    # Comma-separated Agent label keys, empty by default: herzi's label for
+    # used Agents, once named. Every agent nodepool Wingman creates excludes
+    # Agents that carry one (excludeAgentLabels, a DoesNotExist each); an
+    # existing cluster takes them through its own merge request. Needs a
+    # hostedclusters-setup chart that renders the key (chart patch 0003), a
+    # specs-project template that writes it, and a herzi that accepts it.
+    day1_excluded_agent_labels: str = ""
+
     # ── Fetch now in the Server Scan area (ADR-0048's 2026-11-18 amendment) ──
     # Off by default. On: an admin reads one server from its vendor manager
     # now, on its page and on every Servers row (server-scan's
@@ -225,6 +237,22 @@ class Day1Settings(BaseSettings):
         if value and (parts.scheme not in ("http", "https") or not parts.netloc):
             raise ValueError(f"{value!r} must be empty or an http(s):// URL")
         return value
+
+    @field_validator("day1_excluded_agent_labels")
+    @classmethod
+    def _agent_label_keys(cls, value: str) -> str:
+        if problems := agent_label_problems(parse_agent_labels(value)):
+            raise ValueError(f"DAY1_EXCLUDED_AGENT_LABELS: {'; '.join(problems)}")
+        return value
+
+    def workflow_keys(self) -> WorkflowKeys:
+        """What this deployment lets an edit change, and the Agent labels its NodePools exclude."""
+        return WorkflowKeys(
+            self.day1_upgrades,
+            self.day1_scale_nodepools,
+            self.day1_multi_infraenv_nodepools,
+            parse_agent_labels(self.day1_excluded_agent_labels),
+        )
 
     @field_validator("quick_links_hub_name")
     @classmethod
