@@ -22,8 +22,9 @@ class ScaleWorkflow(Protocol):
         Raises ``ScaleAlreadyRunningError`` for the orchestrator's 409 (a run
         of the cluster, or an upgrade-cluster run of it, is running),
         ``ScaleRefusedError`` for its 422, ``WorkflowsUnavailableError`` when
-        nothing was started, and ``AmbiguousStartError`` when it was sent but
-        the answer was lost.
+        nothing was started (among them an orchestrator that has no
+        update-nodepool deployed yet), and ``AmbiguousStartError`` when it was
+        sent but the answer was lost.
         """
         ...
 

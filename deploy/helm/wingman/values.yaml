@@ -126,7 +126,9 @@ day1:
   # the cluster's Argo CD Application itself. While on, no Wingman merge request
   # changes an existing NodePool's replicas: an edit that does is refused, a
   # flavor's sync leaves them out. Needs workflows.url, and the workflow must
-  # read the same day1 repo as Wingman. Live status is not needed.
+  # read the same day1 repo as Wingman. Live status is not needed. It may be on
+  # before the orchestrator has update-nodepool: a start then says it is not
+  # deployed, and no existing NodePool's replicas change from Wingman until it is.
   scaleNodepools:
     enabled: false
   # A nodepool may draw Agents from several InfraEnvs (ADR-0064): the create form
