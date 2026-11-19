@@ -166,7 +166,7 @@ class Day1Settings(BaseSettings):
     # used Agents, once named. Every agent nodepool Wingman creates excludes
     # Agents that carry one (excludeAgentLabels, a DoesNotExist each); an
     # existing cluster takes them through its own merge request. Needs a
-    # hostedclusters-setup chart that renders the key (chart patch 0003), a
+    # hostedclusters-setup chart that renders the key (its approved change), a
     # specs-project template that writes it, and a herzi that accepts it.
     day1_excluded_agent_labels: str = ""
 

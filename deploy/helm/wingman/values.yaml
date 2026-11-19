@@ -151,8 +151,9 @@ day1:
   # used Agents, once herzi names it. Each new cluster's nodepools get
   # excludeAgentLabels (a DoesNotExist each); an existing cluster takes them
   # through its own merge request. Before setting it: the hostedclusters-setup
-  # chart patch 0003, the specs-project template lines and a herzi release that
-  # accepts the exclusion (docs/upgrade/3.48-to-3.49.md). Empty: nothing changes.
+  # chart change (patch 0003), the specs-project template lines and a herzi
+  # release that accepts the exclusion (docs/upgrade/3.48-to-3.49.md). Empty:
+  # nothing changes; shipped empty.
   excludedAgentLabels: []
 day2:
   cacheTtlSeconds: 15     # GitLab reads, per replica (ADR-0011; at most 60)

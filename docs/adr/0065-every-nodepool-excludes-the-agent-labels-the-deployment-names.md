@@ -19,13 +19,15 @@ all of the nodepools, but selected by an environment variable of Wingman /
 inside the j2 / maybe inside hostedclusters-setup."
 
 What the NodePool needs is `{key: <label>, operator: DoesNotExist}` in its
-`agentLabelSelector.matchExpressions`, beside `matchLabels` or the
-InfraEnvs' `In` expression (ADR-0064). The hostedclusters-setup chart renders
-it with chart patch 0003 (`docs/upgrade/patches/hostedclusters-setup/`, since
-3.48.2): from a nodepool entry's `excludeAgentLabels` and from a chart-wide
-`excludeAgentLabels` value, sorted and unique. KubeVirt NodePools skip the
-chart-wide list, and a KubeVirt nodepool's own list fails the render. The
-label's name is not final: herzi's design names it.
+`agentLabelSelector.matchExpressions`. The hostedclusters-setup change the
+chart's owner approved (patch 0003 in `docs/upgrade/patches/hostedclusters-setup/`,
+on the public port; the air-gapped chart gets the same change from a
+separate package) renders it from a nodepool entry's `excludeAgentLabels`:
+the selector keeps `matchLabels` when the nodepool draws from one InfraEnv
+and gains `matchExpressions`, the InfraEnvs' `In` requirement
+(`[infraEnvName, ...additionalInfraEnvNames]`, ADR-0064) then one
+`DoesNotExist` per key. It has no chart-wide list. The label's name is not
+final: herzi's design names it (`redbull.io/claimed` is proposed).
 
 What Kubernetes does with it: on an `InPlace` NodePool, the chart's default,
 a changed selector touches no running node; it is read only when a new
@@ -35,15 +37,16 @@ every node (as in ADR-0064).
 ## Decision
 
 1. **`DAY1_EXCLUDED_AGENT_LABELS`**: comma-separated Agent label keys, empty
-   by default (the chart's `day1.excludedAgentLabels: []`, in
-   `values.schema.json`). Each is a Kubernetes label key (`[prefix/]name`),
+   by default and shipped empty, the air-gap included (the chart's
+   `day1.excludedAgentLabels: []`, in `values.schema.json`). Each is a Kubernetes label key (`[prefix/]name`),
    at most 16; day1 refuses to start otherwise (ADR-0009). Empty, nothing
    changes anywhere. A generic list, not one name: herzi names the label.
 2. **It is the deployment's default, not a per-cluster choice.** Day1 sets
    the template input `excluded_agent_labels` itself on every create, after
    the request and the flavor (`rendered_file.with_agent_labels`): the form
    schema leaves it out, it is not lockable, and a request or a flavor that
-   gives it is refused. A KubeVirt cluster takes no Agents and gets `[]`. The
+   gives it is refused. A KubeVirt cluster takes no Agents and gets `[]`
+   (Wingman's rule; the chart does not check). The
    create preview shows the rendered file, the key included.
 3. **The shared template writes it on every nodepool entry**, only when the
    list is not empty:
@@ -74,18 +77,21 @@ every node (as in ADR-0064).
 6. **A Replace NodePool keeps its list.** An edit that changes the list of a
    NodePool that already exists and is `upgradeType: Replace` (before or
    after) is refused: every node would be replaced. The per-cluster merge
-   request leaves such a NodePool out and says why. A new NodePool may be
-   Replace with the list: nothing runs yet. Whatever the setting.
+   request leaves such a NodePool out (skips it) and says why. A new NodePool
+   may be Replace with the list: nothing runs yet. Whatever the setting. So
+   Wingman never adds `excludeAgentLabels` to a running Replace NodePool, and,
+   by ADR-0064's rule 6, never changes its `additionalInfraEnvNames` either:
+   nothing in Wingman adds them by itself.
 7. **Where the list lives, and why there.** Wingman's setting → the template
    input → each cluster file's nodepools → the chart. Written into each file,
    a change reaches a cluster only through that cluster's own merge request,
    reviewed and merged on its own: a small blast radius (one MR per cluster),
-   and each NodePool's selector is what its file says. The alternative is the
-   chart's global value (`excludeAgentLabels` in `sites/configValues.yaml`, a
-   site's or an MCE's `values.yaml`): one commit changes the selector of every
-   Agent NodePool below that layer at its next sync, Replace NodePools
-   included, with no per-cluster review
-   (`docs/upgrade/3.46-to-3.47.md` step 9).
+   and each NodePool's selector is what its file says. The alternative, a
+   chart-wide list in the values layers (`sites/configValues.yaml`, a site's
+   or an MCE's `values.yaml`), would change the selector of every Agent
+   NodePool below that layer at its next sync, Replace NodePools included,
+   with no per-cluster review; the approved chart change reads the key per
+   nodepool only.
 8. **herzi must accept it first.** herzi's current `main` treats a NodePool
    with `matchLabels` plus any `matchExpressions` as a problem of its
    InfraEnv's pool, and orders no servers for that InfraEnv for any cluster.
@@ -94,9 +100,8 @@ every node (as in ADR-0064).
 
 ## Alternatives rejected
 
-- **The chart's global value only**: every cluster at once, Replace
-  NodePools included, with no per-cluster review. It stays available to an
-  operator who wants exactly that, outside Wingman.
+- **A chart-wide list**: every cluster at once, Replace NodePools included,
+  with no per-cluster review. The approved chart change has none.
 - **A flavor input**: the exclusion is the platform's rule for herzi's
   collector, not a flavor's choice; a flavor that left it out would create
   clusters that bind used Agents.

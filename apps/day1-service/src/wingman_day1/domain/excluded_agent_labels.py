@@ -12,12 +12,14 @@ Where the list lives: ``DAY1_EXCLUDED_AGENT_LABELS`` (comma-separated Agent
 label keys, empty by default) → the template input ``excluded_agent_labels``,
 which Wingman sets itself (nobody picks it on the create form) → each agent
 nodepool entry's ``excludeAgentLabels: [..]`` in the cluster file → the
-hostedclusters-setup chart, which renders each key as a ``DoesNotExist``
-expression beside ``matchLabels`` or the ``In`` expression. Written into each
-cluster file rather than set as the chart's global value, a change reaches a
+hostedclusters-setup chart, whose NodePool selector then gains
+``matchExpressions``: the InfraEnvs' ``In`` requirement, then a
+``DoesNotExist`` per key (beside ``matchLabels`` for one InfraEnv). Written
+into each cluster file rather than as a chart-wide list, a change reaches a
 cluster only through that cluster's own merge request: a small blast radius,
 and every NodePool's selector is in Git where its cluster is. A KubeVirt
-NodePool takes no Agents and gets none.
+NodePool takes no Agents and gets none (Wingman's rule; the chart does not
+check).
 
 Existing clusters get it only through their own merge requests: an edit, or
 the explicit per-cluster one (:func:`plan`). Never all at once. On an

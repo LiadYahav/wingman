@@ -1,7 +1,7 @@
 # ADR-0064: A nodepool may draw from several InfraEnvs: `infraEnvName` stays and names it, the others are `additionalInfraEnvNames`, behind a setting
 
 Date: 2026-11-18
-Status: Accepted
+Status: Accepted; amended 2026-11-19 (the chart change the owner approved: `In [infraEnvName, ...others]`, unsorted, and no checks in the chart)
 
 ## Context
 
@@ -54,10 +54,11 @@ What else reads a nodepool's InfraEnv:
    - The others go in a new list, `additionalInfraEnvNames: [b, c]`.
    - With no others the file is exactly as today. With others, the chart
      renders the `In` selector over `infraEnvName` and the list, sorted and
-     unique.
+     unique (*amended 2026-11-19, below: in the given order*).
    - The chart change is drafted for team-redbull/helm-charts-hostedclusters-setup
      and not merged. It fails the render on KubeVirt and with the legacy
-     `agentLabelSelector.nodeLabelKey`.
+     `agentLabelSelector.nodeLabelKey` (*amended 2026-11-19: the approved
+     change does not; Wingman's rules still refuse both*).
    - No server classes: the person picks the InfraEnvs. How a nodepool's
      network hardware (`nm-conf`) is chosen does not change.
 
@@ -237,3 +238,26 @@ What else reads a nodepool's InfraEnv:
   flavor editor, Edit cluster and the cluster page, on and off).
 - The chart draft's `tests/test_nodepool_infra_envs.py`, and a `helm
   template` of a two-InfraEnv nodepool.
+
+## Amendment (2026-11-19): the chart change the owner approved
+
+The hostedclusters-setup change the chart's owner approved is simpler than
+the draft decision 1 describes. It is in this repository as patch 0002 in
+`docs/upgrade/patches/hostedclusters-setup/`, on the public port of the
+chart; the air-gapped chart gets the same change from a separate package.
+
+- With `additionalInfraEnvNames`, the NodePool's `agentLabelSelector` has no
+  `matchLabels`, and one `matchExpressions` requirement:
+  `{key: infraenvs.agent-install.openshift.io, operator: In, values:
+  [infraEnvName, ...additionalInfraEnvNames]}`, in that order, not sorted.
+  Without the key, `matchLabels` as before.
+- The chart checks nothing about the key: not KubeVirt, not the legacy
+  `agentLabelSelector.nodeLabelKey`, not duplicates. Wingman's own rules
+  (decision 3, `nodepool_infra_envs.input_problems` and `file_problems`)
+  still refuse each of them in what it writes.
+- With `excludeAgentLabels` (ADR-0065) too, the same requirement is followed
+  by one `DoesNotExist` per key.
+
+Nothing in Wingman changes: it reads the live NodePool's selector with
+Kubernetes' rules (ADR-0038), and compares InfraEnvs as sets.
+
