@@ -136,14 +136,17 @@ export function failureHint(errorType: string | null, error: string | null = nul
   );
 }
 
-/** The heading of a refused start, by its `code`; the problem's own words are listed under it. */
+/**
+ * The heading of a refused start, by its `code`; the problem's own words are listed under it. A 502 is neutral: its
+ * words say whether the orchestrator could not be reached, failed, or has no update-nodepool deployed yet.
+ */
 export function refusalTitle(error: unknown): string {
   if (isApiError(error, "SCALE_ALREADY_RUNNING")) return "update-nodepool refused to start: a run of this cluster is going.";
   if (isApiError(error, "AMBIGUOUS_WRITE")) {
     return "The start was sent but not confirmed, so it may have started: the run is read again. Look at it before trying again.";
   }
   if (isApiError(error, "VALIDATION_ERROR")) return "Wingman refused the request.";
-  if (isApiError(error, "DEPENDENCY_UNAVAILABLE")) return "Nothing started: the workflows orchestrator did not answer.";
+  if (isApiError(error, "DEPENDENCY_UNAVAILABLE")) return "Nothing started: the workflows orchestrator could not start update-nodepool.";
   if (isApiError(error, "FEATURE_DISABLED")) return "Scaling is not turned on in this deployment.";
   if (isApiError(error, "FORBIDDEN")) return "Only an admin can scale a cluster.";
   return "The scale did not start.";

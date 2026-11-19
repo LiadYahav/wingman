@@ -352,6 +352,23 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     expect(scale.starts).toHaveLength(1);
   });
 
+  test("an orchestrator without update-nodepool: the tab loads, and only Scale says it is not deployed yet", async ({ page }) => {
+    const words =
+      `update-nodepool is not deployed on this orchestrator yet (it has no POST /workflows/server-lifecycle/update-nodepool): ` +
+      `nothing was started for ${LARK}. Scaling works as soon as the workflow is deployed there, with no change to Wingman.`;
+    const scale = scaleOf({ start: (route) => fulfillProblem(route, 502, "DEPENDENCY_UNAVAILABLE", words) });
+    await openNodes(page, scale);
+    await expect(page.getByTestId("scale-run")).toHaveCount(0);
+    await expect(page.getByTestId("scale-error")).toHaveCount(0);
+    await more(page, ZONE_A).click();
+    await page.getByTestId("scale-start").click();
+    await yes(page).click();
+    const refused = confirmation(page).getByTestId("scale-error");
+    await expect(refused).toContainText("Nothing started: the workflows orchestrator could not start update-nodepool.");
+    await expect(refused).toContainText(words);
+    expect(scale.starts).toHaveLength(1);
+  });
+
   test("a failed run says why in the workflow's words, with its type", async ({ page }) => {
     const words = `scale-down-nodepool-${LARK} failed — ArgoSyncRefusedError: the Application ${LARK} has other changes pending. Its history has the detail`;
     await openNodes(page, scaleOf({ run: run({ status: "failed", phase: "scaling-down", direction: "down", error: words, error_type: "ArgoSyncRefusedError" }) }));

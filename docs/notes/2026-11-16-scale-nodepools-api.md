@@ -35,7 +35,11 @@ the cluster's NodePools of one InfraEnv kind) is a 422 that says to name the
 NodePool; a run recorded with it before then still finishes as it began.
 Answers `202 {"workflow_id": "update-nodepool-<cluster>", "run_id"}`; 409
 while a run of the cluster runs, and while `upgrade-cluster-<cluster>` runs
-(its `detail` says which); 422 for a body it refuses.
+(its `detail` says which); 422 for a body it refuses. Never a 404: an
+unknown cluster or NodePool is a FAILED run. An orchestrator without the
+workflow (not deployed yet) answers FastAPI's 404 for a path it has no route
+for, whose whole body is `{"detail": "Not Found"}` (ADR-0062's 2026-11-19
+amendment).
 
 **What it does:** reads the cluster file in day1 `main` and the NodePool on
 the MCE (they must agree, both ways), plans, and through its child
@@ -134,7 +138,14 @@ the workflow's own rule, so they match.
 - `504 AMBIGUOUS_WRITE`: sent, no answer; it may have started. Read the run
   first; never retried.
 - `502 DEPENDENCY_UNAVAILABLE`: the orchestrator could not be reached or
-  refused otherwise; nothing started.
+  refused otherwise; nothing started. An orchestrator without
+  update-nodepool (FastAPI's 404 above) is this too, in these words:
+  "update-nodepool is not deployed on this orchestrator yet (it has no POST
+  /workflows/server-lifecycle/update-nodepool): nothing was started for
+  <cluster>. Scaling works as soon as the workflow is deployed there, with
+  no change to Wingman." Any other 404 is a refusal in the orchestrator's
+  words. Meanwhile `GET .../scale` works and `GET .../scale-run` is `404
+  NOT_FOUND` (no run).
 
 **`GET .../scale-run`** (any signed-in user): the cluster's newest run, `404
 NOT_FOUND` when it never had one.

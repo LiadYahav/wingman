@@ -21,6 +21,14 @@ checks the NodePool; day1 starts a run and reads it
 Writes are never retried (ADR-0006). Refused before it was sent, a start is
 ``WorkflowsUnavailableError``; sent and unanswered, it may have happened:
 ``AmbiguousStartError``.
+
+The start route never answers 404 itself (an unknown cluster, NodePool or
+MCE is a FAILED run). A 404 whose body is FastAPI's own for a path it has no
+route for (``NO_ROUTE``) is an orchestrator that has no update-nodepool yet:
+``WorkflowsUnavailableError`` saying it is not deployed there, nothing
+started. Once it is deployed the same request answers 202. Any other 404 is
+a refusal in the orchestrator's words. Reading a run needs only the runs
+route, so a cluster's Scale reads "no run" until then.
 """
 
 from __future__ import annotations
@@ -52,6 +60,8 @@ SCALE_PATH: Final = "/workflows/server-lifecycle/update-nodepool"
 LOOK_FIRST: Final = "Look at the cluster's scale run before trying again."
 MAX_WORDS: Final = 2000
 """A 409 is shown in the orchestrator's own words: kept whole, up to this."""
+NO_ROUTE: Final = {"detail": "Not Found"}
+"""FastAPI's whole 404 body for a path it has no route for, unlike any answer of a route."""
 _CLOSED_WITH_RESULT: Final = "completed"
 
 
@@ -118,6 +128,12 @@ class HttpScaleWorkflow:
         status, detail = response.status_code, orchestrator_detail(response)
         if status == 202:
             return _started(response, cluster)
+        if status == 404 and _no_route(response):
+            raise WorkflowsUnavailableError(
+                f"update-nodepool is not deployed on this orchestrator yet (it has no POST "
+                f"{SCALE_PATH}): nothing was started for {cluster}. Scaling works as soon as "
+                "the workflow is deployed there, with no change to Wingman."
+            )
         if status == 409:
             raise ScaleAlreadyRunningError(
                 _words(response) or f"{cluster} already has a scale or an upgrade running"
@@ -199,6 +215,14 @@ def _started(response: httpx.Response, cluster: str) -> ScaleRun:
             f"be read. {LOOK_FIRST}"
         ) from exc
     return ScaleRun(workflow_id=workflow_id, status="running")
+
+
+def _no_route(response: httpx.Response) -> bool:
+    """Whether a 404 is FastAPI's for a path it has no route for: the workflow is not there."""
+    try:
+        return response.json() == NO_ROUTE
+    except ValueError:
+        return False
 
 
 def _words(response: httpx.Response) -> str:

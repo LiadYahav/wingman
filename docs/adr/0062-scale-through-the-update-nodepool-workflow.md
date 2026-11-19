@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed)
 
 ## Context
 
@@ -417,3 +417,61 @@ names; Yes waits for the count, then the workflow's names are sent; the
 rest wait once all are picked; Cancel drops the picks; a scale-up offers
 none; a Machine with no server or already leaving cannot be picked; without
 the MCE's nodes it says so; the run's named server and a refusal's line).
+
+## Amendment (2026-11-19): a 404 to the start is an orchestrator without update-nodepool
+
+The workflow is not merged or deployed yet. The user (2026-11-19): send
+the start to its path now; it answers 404 today, and once the workflow is
+deployed the same request answers 202, with no change in Wingman. Scale
+sends the same start to every orchestrator. Only how a 404 reads changes.
+
+- **The start route never answers 404 itself.** On `feat/update-nodepool`
+  (aab8949) it answers 202, 409 (a run of the cluster, or an upgrade of it,
+  is running), 422 (the body) and 500 for a Temporal error it does not
+  expect. An unknown cluster or NodePool is a FAILED run
+  (`ClusterNotOnMceError`, `NodePoolNotFoundError`, …), and an MCE with no
+  worker gives a run that waits. Neither is a 4xx. So a 404 is FastAPI's
+  own answer for a path it has no route for, whose whole body is
+  `{"detail": "Not Found"}`: an orchestrator with no update-nodepool yet.
+- **That 404 is `502 DEPENDENCY_UNAVAILABLE`.** It raises
+  `WorkflowsUnavailableError`, the existing "nothing was started" error
+  (metrics outcome `unavailable`), in these words: "update-nodepool is not
+  deployed on this orchestrator yet (it has no POST
+  /workflows/server-lifecycle/update-nodepool): nothing was started for
+  <cluster>. Scaling works as soon as the workflow is deployed there, with
+  no change to Wingman." Before, it read "the orchestrator refused the
+  scale of <cluster> (404): Not Found", as if the orchestrator had judged
+  the request. Any other 404 is still a refusal in the orchestrator's own
+  words: a body with other words or other fields, or a page from a router
+  in front. So a real refusal is never reported as "not deployed". There
+  is no new problem code. The web's heading for a 502 start is now neutral
+  ("Nothing started: the workflows orchestrator could not start
+  update-nodepool."), and the words under it say which case it is. It is
+  not `501 FEATURE_DISABLED`, which means a Wingman setting is off and is
+  read that way by the web.
+- **Scale loads meanwhile.** Its options come from the day1 file. Its run
+  is `GET /workflows/runs/update-nodepool-<cluster>`, a route every
+  orchestrator has, which answers 404 for a run that never existed, so the
+  page shows "no run". Only pressing Scale (or a Restore) shows the words.
+- **Scale may be turned on before the workflow is deployed**
+  (`day1.scaleNodepools.enabled`). Decision 5 then applies at once:
+  - an edit that changes an existing NodePool's replicas is refused, and
+    points to Scale;
+  - a flavor's sync or rollout leaves drifted locked replicas out of its MR
+    and offers a Restore, which starts update-nodepool too.
+
+  So until the workflow is deployed, nobody can change an existing
+  NodePool's replicas from Wingman. Three things still work: a new
+  cluster's and a new `nodepool[]` entry's first replicas, removing an
+  entry, and merging an MR that was opened earlier and already changes
+  them (approving is not a write of the file). The upgrade guide says this
+  (`docs/upgrade/3.39-to-3.40.md` step 3.1).
+
+Verification: `test_scale_workflow.py` (FastAPI's 404 is "not deployed",
+with its exact words and the outcome `unavailable`, and the run reads as
+none; a 404 with other words, other fields or an HTML page is a refusal
+in its words); `tests/api/test_scale_api.py` (an orchestrator without
+update-nodepool: `GET .../scale` 200, `GET .../scale-run` `404 NOT_FOUND`,
+`POST .../scale` `502 DEPENDENCY_UNAVAILABLE` with the words);
+`apps/web/e2e/tests/cluster-scale.spec.ts` (the tab loads with no run,
+and the confirmation shows the heading and the words).

@@ -27,6 +27,7 @@ from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
 from wingman_day1.infrastructure.fake_scale import FakePool, FakeScaleWorkflow
+from wingman_day1.infrastructure.scale_workflow import HttpScaleWorkflow
 
 Auth = Callable[[User], dict[str, str]]
 
@@ -464,3 +465,37 @@ async def test_a_lost_answer_is_an_ambiguous_write_and_is_logged(
     )
     assert (response.status_code, response.json()["code"]) == (504, "AMBIGUOUS_WRITE")
     assert any("scale start unconfirmed" in r.getMessage() for r in caplog.records)
+
+
+async def test_an_orchestrator_without_update_nodepool_leaves_scale_readable_and_says_so(
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    scale: FakeScaleWorkflow,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Turned on before the workflow is deployed: the tab loads, a start says why nothing ran."""
+
+    def before_update_nodepool(request: httpx.Request) -> httpx.Response:
+        if request.url.path.startswith("/workflows/runs/"):
+            return httpx.Response(404, json={"detail": "Workflow not found"})
+        return httpx.Response(404, json={"detail": "Not Found"})  # FastAPI: no such route
+
+    orchestrator = HttpScaleWorkflow(
+        base_url="http://workflows-orchestrator-api.test:8080",
+        transport=httpx.MockTransport(before_update_nodepool),
+    )
+    monkeypatch.setattr(scale, "start", orchestrator.start)
+    monkeypatch.setattr(scale, "run", orchestrator.run)
+    alice = auth(support.ALICE)
+    assert (await on.get(f"{BASE}/scale", headers=alice)).status_code == 200
+    run = await on.get(f"{BASE}/scale-run", headers=alice)
+    assert (run.status_code, run.json()["code"]) == (404, "NOT_FOUND")
+    started = await on.post(f"{BASE}/scale", json={"replicas": 1, "nodepool": SMALL}, headers=alice)
+    assert (started.status_code, started.json()["code"]) == (502, "DEPENDENCY_UNAVAILABLE")
+    assert started.json()["detail"] == (
+        "update-nodepool is not deployed on this orchestrator yet (it has no POST "
+        f"/workflows/server-lifecycle/update-nodepool): nothing was started for {LARK}. "
+        "Scaling works as soon as the workflow is deployed there, with no change to Wingman."
+    )
+    await orchestrator.aclose()

@@ -231,7 +231,10 @@ start. Time-series legends list only the series with something to show.
   a run of that cluster is going, or an upgrade-cluster run of it (the
   orchestrator's 409, shown in its words). `rejected`: a body the
   orchestrator refused (its 422). `ambiguous`: sent, answer lost; look at the
-  cluster's scale run before asking again (never retried). Reading the run
+  cluster's scale run before asking again (never retried). `unavailable`:
+  nothing started, because the orchestrator could not be reached, failed,
+  or has no update-nodepool deployed yet (its 404 for a path it has no
+  route for, ADR-0062's 2026-11-19 amendment). Reading the run
   is `get_run`, twice while its scale-up or scale-down child runs (the
   child's phase is read by its id). No cluster and no NodePool in the labels.
 - `segments_manager` `get_segment` is one cluster's segment, read for its

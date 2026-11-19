@@ -205,6 +205,49 @@ async def test_a_422_lists_what_the_orchestrator_refused() -> None:
     assert raised.value.problems == ("nodepool: String should match pattern",)
 
 
+def before_update_nodepool(request: httpx.Request) -> httpx.Response:
+    """An orchestrator without update-nodepool: FastAPI's 404 for the start, no run of it."""
+    if request.url.path.startswith("/workflows/runs/"):
+        workflow_id = request.url.path.rsplit("/", 1)[-1]
+        return httpx.Response(404, json={"detail": f"Workflow not found: {workflow_id}"})
+    return httpx.Response(404, json={"detail": "Not Found"})
+
+
+async def test_an_orchestrator_without_update_nodepool_has_no_run_and_says_so_on_a_start() -> None:
+    workflow, requests = make(before_update_nodepool)
+    assert await workflow.run(RUN) is None  # the cluster's Scale loads: no run yet
+    with pytest.raises(WorkflowsUnavailableError) as raised:
+        await workflow.start(BY_NAME)
+    assert type(raised.value) is WorkflowsUnavailableError  # not a refusal of the request
+    assert str(raised.value) == (
+        f"update-nodepool is not deployed on this orchestrator yet (it has no POST {START}): "
+        f"nothing was started for {CLUSTER}. Scaling works as soon as the workflow is deployed "
+        "there, with no change to Wingman."
+    )
+    assert [(r.method, r.url.path) for r in requests] == [
+        ("GET", f"/workflows/runs/{RUN}"),
+        ("POST", START),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("response", "words"),
+    [
+        (httpx.Response(404, json={"detail": "no NodePool x"}), ": no NodePool x"),
+        (httpx.Response(404, json={"detail": "Not Found", "more": 1}), ": Not Found"),
+        (httpx.Response(404, content=b"<html>Application is not available</html>"), ""),
+    ],
+)
+async def test_any_other_404_is_a_refusal_in_the_orchestrators_words(
+    response: httpx.Response, words: str
+) -> None:
+    workflow, requests = make(lambda _request: response)
+    with pytest.raises(WorkflowRefusedError) as raised:
+        await workflow.start(BY_NAME)
+    assert str(raised.value) == f"the orchestrator refused the scale of {CLUSTER} (404){words}"
+    assert len(requests) == 1
+
+
 @pytest.mark.parametrize(
     ("handler", "error"),
     [
@@ -408,6 +451,7 @@ async def test_starts_and_reads_are_counted_with_bounded_labels() -> None:
         (answer(409, {"detail": BUSY}), lambda w: w.start(BY_NAME)),
         (answer(422, {"detail": "no"}), lambda w: w.start(BY_NAME)),
         (answer(504, {}), lambda w: w.start(BY_NAME)),
+        (before_update_nodepool, lambda w: w.start(BY_NAME)),
         (answer(200, COMPLETED), lambda w: w.run(RUN)),
     ]
     for handler, call in calls:
@@ -419,7 +463,6 @@ async def test_starts_and_reads_are_counted_with_bounded_labels() -> None:
         labels = {"dependency": "workflows", "operation": operation, "outcome": outcome}
         return metrics.registry.get_sample_value("wingman_dependency_requests_total", labels)
 
-    assert [
-        count("start_update_nodepool", o) for o in ("ok", "conflict", "rejected", "ambiguous")
-    ] == [1.0, 1.0, 1.0, 1.0]
+    outcomes = ("ok", "conflict", "rejected", "ambiguous", "unavailable")
+    assert [count("start_update_nodepool", o) for o in outcomes] == [1.0] * 5
     assert count("get_run", "ok") == 1.0
