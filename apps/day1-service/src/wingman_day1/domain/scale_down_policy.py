@@ -7,7 +7,7 @@ policy is, in this order (the workflow's rule):
 1. the run's own ``scale_down_policy``, for that run only;
 2. the NodePool's ``redbull.io/scale-down-policy``, which the
    hostedclusters-setup chart renders from the ``nodepool[]`` entry's
-   ``annotations`` (team-redbull/helm-charts-hostedclusters-setup PR #4);
+   ``annotations`` map, as written, after its own ``argocd.argoproj.io/sync-wave``;
 3. none: nothing is marked, and CAPI picks at random.
 
 Under every policy, Machines CAPI counts unhealthy go first, then Nodes that
@@ -23,7 +23,8 @@ are missing, NotReady or cordoned. The values are the workflow's
 A cluster file declares a NodePool's own policy as that annotation. Wingman
 writes it at create from the template input ``nodepools[].scale_down_policy``
 (none writes nothing: the platform default). A flavor may preset or lock it
-(ADR-0026), and an edit may set it only to a policy the workflow knows. A
+(ADR-0026), and an edit may set it only to a policy the workflow knows, and
+may not give an entry the sync-wave annotation the chart writes itself. A
 specs-project template that does not render the input is refused, as for
 image mirrors (ADR-0063): at a flavor save that gives it, and at a create
 whose rendered file does not hold it as given.
@@ -41,6 +42,8 @@ from wingman_day1.domain.nodepool_infra_envs import nodepool_entries
 from wingman_day1.domain.template import analyze_template
 
 SCALE_DOWN_POLICY: Final = "redbull.io/scale-down-policy"
+SYNC_WAVE: Final = "argocd.argoproj.io/sync-wave"
+"""The chart's own NodePool annotation: an entry's ``annotations`` never set it."""
 """The key update-nodepool reads off a NodePool to choose the servers a scale-down removes."""
 ANNOTATIONS: Final = "annotations"
 """The ``nodepool[]`` entry's map the chart renders onto its NodePool."""
@@ -183,16 +186,24 @@ def lock_problem(path: str, values: Mapping[str, object]) -> str | None:
 
 
 def edit_problems(old: Mapping[str, object], new: Mapping[str, object]) -> list[str]:
-    """Each nodepool an edit gives a policy the workflow does not know.
+    """Each nodepool an edit gives a policy the workflow does not know, or the chart's sync-wave.
 
     Only a policy the edit sets or changes: an unknown one the file already
     holds stays the workflow's to refuse, at its next scale-down. Nodepools
     are matched by ``name``, else ``infraEnvName``, else position, as the
-    other edit rules match them.
+    other edit rules match them. The chart writes the NodePool's
+    ``argocd.argoproj.io/sync-wave`` itself, before the entry's annotations,
+    so an entry that sets it would give the NodePool the key twice.
     """
     before = {_key(i, p): policy_of(p) for i, p in nodepool_entries(old, "nodepool")}
     problems: list[str] = []
     for index, pool in nodepool_entries(new, "nodepool"):
+        annotations = pool.get(ANNOTATIONS)
+        if isinstance(annotations, Mapping) and SYNC_WAVE in annotations:
+            problems.append(
+                f"nodepool[{index}].{ANNOTATIONS}: {SYNC_WAVE} is the hostedclusters-setup "
+                "chart's own; remove it from the entry"
+            )
         policy = policy_of(pool)
         if policy is None or policy == before.get(_key(index, pool)):
             continue

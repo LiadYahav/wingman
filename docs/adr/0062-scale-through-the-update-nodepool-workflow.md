@@ -490,9 +490,10 @@ ownership rule (5) do not change.
 
 The NodePool's own policy is its `redbull.io/scale-down-policy` annotation,
 which the hostedclusters-setup chart renders from the `nodepool[]` entry's
-`annotations` map (team-redbull/helm-charts-hostedclusters-setup PR #4,
-`feat/nodepool-annotations`, open: values as strings, beside the chart's own
-`argocd.argoproj.io/sync-wave`, which an entry may not set). Wingman reads it
+`annotations` map, as written (`toYaml`), after the chart's own
+`argocd.argoproj.io/sync-wave` (a change to `templates/nodepool.yaml`,
+approved by the chart's owner, not merged upstream yet; the air-gapped chart
+gets it from a separate package). Wingman reads it
 there since 3.42.0; now it writes it too. It is day1's create path, not
 Scale's: it works whether Scale is on or off, and needs no setting.
 
@@ -526,7 +527,10 @@ Scale's: it works whether Scale is on or off, and needs no setting.
   `annotations` byte for byte, and an edit (the YAML editor, a review edit)
   may set the policy only to one the workflow knows
   (`scale_down_policy.edit_problems`, in `cluster_file.edit_problems`): an
-  unknown value the file already holds is left to the workflow. Changing
+  unknown value the file already holds is left to the workflow. The chart
+  does not refuse an entry's own `argocd.argoproj.io/sync-wave`, which would
+  reach the NodePool twice; Wingman never writes it, and refuses an edit
+  that adds it to an entry's `annotations`. Changing
   the annotation rolls no node: HyperShift does not roll a NodePool for its
   metadata.
 - **The web** reads the template schema as the switch, as for the other

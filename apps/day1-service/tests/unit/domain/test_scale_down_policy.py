@@ -110,3 +110,11 @@ def test_an_edit_may_set_only_a_policy_the_workflow_knows(
             f"nodepool[0].annotations.{KEY}: 'random' is not a scale-down policy update-nodepool "
             "knows; use fewest-pods, least-requested or least-utilized, or remove the annotation"
         ]
+
+
+def test_an_edit_may_not_give_a_nodepool_the_charts_own_sync_wave() -> None:
+    wave = {"nodepool": [entry() | {"annotations": {"argocd.argoproj.io/sync-wave": "1"}}]}
+    assert edit_problems({"nodepool": [entry()]}, wave) == [
+        "nodepool[0].annotations: argocd.argoproj.io/sync-wave is the hostedclusters-setup "
+        "chart's own; remove it from the entry"
+    ]
