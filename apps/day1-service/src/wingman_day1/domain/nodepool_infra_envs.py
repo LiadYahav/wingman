@@ -4,7 +4,7 @@ An agent nodepool names its InfraEnv in ``infraEnvName``: the chart derives the
 NodePool's name from it (``<clusterName>-<infraEnvName>``) and the team's
 workflows read it. ``additionalInfraEnvNames`` lists more InfraEnvs it may draw
 from; the chart then selects ``infraenvs.agent-install.openshift.io In`` the
-first and these, sorted and unique. A new Machine takes the first free Agent of
+first and these, in that order. A new Machine takes the first free Agent of
 any of them, with no preference. Without the key the file, and the NodePool,
 are what they always were. The template input is ``additional_infra_envs``.
 

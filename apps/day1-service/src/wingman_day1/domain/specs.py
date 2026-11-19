@@ -30,6 +30,7 @@ from pydantic import (
 
 from wingman_day1.domain.addons import AddonKey, RequestedAddon
 from wingman_day1.domain.errors import InvalidSpecError
+from wingman_day1.domain.excluded_agent_labels import flavor_problems as agent_label_problems
 from wingman_day1.domain.image_mirrors import mirror_problems, mirror_template_problems
 from wingman_day1.domain.locks import Lock, enforced_locks, lock_problems
 from wingman_day1.domain.nodepool_infra_envs import template_problems as infra_env_template_problems
@@ -275,6 +276,7 @@ def rule_problems(spec: ClusterSpec) -> list[str]:
         *mirror_template_problems(values, spec.spec.day1.template),
         *infra_env_template_problems(values, spec.spec.day1.template),
         *policy_problems(values),
+        *agent_label_problems(values),
         *policy_template_problems(values, spec.spec.day1.template),
         *lock_problems(spec.spec.day1.locked_paths, values),
         *ratio_problems(

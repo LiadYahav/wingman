@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from wingman_core.web.errors import FeatureDisabled
+from wingman_day1.application.agent_labels import AgentLabelsService
 from wingman_day1.application.approvals import ApprovalService, RepoKey
 from wingman_day1.application.audit import AuditService
 from wingman_day1.application.auth import AuthService
@@ -83,6 +84,8 @@ class Day1Context:
     """The Server Scan area (ADR-0048); ``None`` when ``SERVER_SCAN_URL`` is empty: 501."""
     scale: ScaleService | None = None
     """``None`` when ``DAY1_SCALE_NODEPOOLS`` is off: the scale routes answer 501 (ADR-0062)."""
+    agent_labels: AgentLabelsService | None = None
+    """A cluster's excluded Agent labels MR (ADR-0065); without keys its routes answer 501."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -182,6 +185,20 @@ def scale_service(context: Annotated[Day1Context, Depends(day1_context)]) -> Sca
     return context.scale
 
 
+AGENT_LABELS_NOT_SET = (
+    "This deployment excludes no Agent labels: DAY1_EXCLUDED_AGENT_LABELS is empty (ADR-0065)."
+)
+
+
+def agent_labels_service(
+    context: Annotated[Day1Context, Depends(day1_context)],
+) -> AgentLabelsService:
+    """A cluster's excluded Agent labels merge request, or 501 when the setting is empty."""
+    if context.agent_labels is None or not context.agent_labels.labels:
+        raise FeatureDisabled(AGENT_LABELS_NOT_SET)
+    return context.agent_labels
+
+
 INVENTORY_NOT_AVAILABLE = (
     "Inventory Management is not set up in this deployment: it counts server-scan's servers, "
     "and SERVER_SCAN_URL is empty."
@@ -211,6 +228,7 @@ def server_scan_service(
     return context.server_scan
 
 
+AgentLabels = Annotated[AgentLabelsService, Depends(agent_labels_service)]
 Context = Annotated[Day1Context, Depends(day1_context)]
 DeleteWorkflow = Annotated[ClusterDeleteWorkflow, Depends(delete_workflow)]
 Inventory = Annotated[InventoryService, Depends(inventory_service)]

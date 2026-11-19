@@ -1,253 +1,127 @@
-From 6acbef62472feac3b785e00102b04c87c8acec33 Mon Sep 17 00:00:00 2001
+From 816152ed76ee8bd1f7d392214593b8b05ba2f099 Mon Sep 17 00:00:00 2001
 From: Roi Blum <roiblum05@gmail.com>
-Date: Wed, 18 Nov 2026 19:10:48 +0200
+Date: Thu, 19 Nov 2026 13:19:34 +0200
 Subject: [PATCH 2/3] feat: a nodepool may draw Agents from several InfraEnvs
  (additionalInfraEnvNames)
 
-nodepool[].additionalInfraEnvNames lists more InfraEnvs a NodePool may take
-Agents from. With it, the agentLabelSelector is one matchExpressions
-requirement, infraenvs.agent-install.openshift.io In (infraEnvName plus the
-list, sorted and unique); without it, the single matchLabels it always was,
-so every existing cluster file renders exactly as before (the golden tests
-still pass).
+An entry's additionalInfraEnvNames lists more InfraEnvs its NodePool draws
+Agents from. The NodePool's agentLabelSelector is then one matchExpressions
+requirement, infraenvs.agent-install.openshift.io In [infraEnvName, ...these],
+instead of matchLabels. The name still derives from infraEnvName, so adding or
+removing an InfraEnv never renames the NodePool.
 
-The NodePool's name still derives from infraEnvName alone, so adding or
-removing an InfraEnv never renames it. On an InPlace NodePool a changed
-selector touches no running node; on Replace it rolls every node.
+On an InPlace NodePool (the default) a changed selector touches no running
+node: the Agent provider reads it only when a new Machine claims an Agent. On
+a Replace NodePool the same change replaces every node.
 
-The render fails on KubeVirt (a VM pool draws from no InfraEnv), with the
-legacy agentLabelSelector.nodeLabelKey (it names one label, not a set), on a
-value that is not a list, and on an entry that is not a name.
+Without the key the render is unchanged: the golden parity tests pass.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_016gPPBP4UxCerc81DKaJHKm
 ---
- README.md                        |  16 +++++
- templates/nodepool.yaml          |  33 +++++++++
- tests/test_nodepool_infraenvs.py | 119 +++++++++++++++++++++++++++++++
- values.yaml                      |   3 +
- 4 files changed, 171 insertions(+)
- create mode 100644 tests/test_nodepool_infraenvs.py
+ README.md                         |  1 +
+ templates/nodepool.yaml           | 17 +++++++++++++++--
+ tests/test_nodepool_entry_keys.py | 27 +++++++++++++++++++++++++--
+ 3 files changed, 41 insertions(+), 4 deletions(-)
 
 diff --git a/README.md b/README.md
-index 6fcee3a..b0672e2 100644
+index 80f0b06..21be17e 100644
 --- a/README.md
 +++ b/README.md
-@@ -259,6 +259,22 @@ lists them):
+@@ -258,6 +258,7 @@ lists them):
+ | `services` | the GitLab branches (`serviceType`) | unset: LoadBalancer API, Routes, which is also HyperShift's KubeVirt default |
  | `pausedUntil` | unset | the upgrade workflow's abort writes `"true"`: HostedCluster and every NodePool |
  | `nodepool[].storageClass` | unset | the KubeVirt root volume's storage class |
- | `nodepool[].annotations` | none | passed onto the NodePool as written, values as strings, next to the chart's own sync-wave (which an entry may not set). The workflows' update-nodepool reads `redbull.io/scale-down-policy` (`fewest-pods`, `least-requested`, `least-utilized`) from it |
-+| `nodepool[].additionalInfraEnvNames` | unset | Agent platform: more InfraEnvs the NodePool may draw Agents from (below) |
-+
-+**A nodepool may draw from several InfraEnvs.** With `additionalInfraEnvNames`, the
-+NodePool's `agentLabelSelector` is one `matchExpressions` requirement,
-+`infraenvs.agent-install.openshift.io In (...)`, over `infraEnvName` and the list,
-+sorted and unique; without it, the single `matchLabels` it always was. The name
-+still derives from `infraEnvName` alone (`<clusterName>-<infraEnvName>`), so adding
-+or removing an InfraEnv never renames the NodePool; keep `infraEnvName` the first
-+InfraEnv the nodepool had, or set `name`. A new Machine takes the first free Agent
-+of any listed InfraEnv, with no preference; every InfraEnv must be in the
-+HostedCluster's agent namespace (`hostInventory`). On an `InPlace` NodePool (the
-+default) a changed selector touches no running node; on `Replace` it rolls every
-+node. The render fails on KubeVirt, and with the legacy
-+`agentLabelSelector.nodeLabelKey` (set `infraEnvName` instead). herzi counts a NodePool's
-+demand only from a single `matchLabels`, so it skips one with this selector ("not
-+tied to an InfraEnv") and orders no servers for it.
++| `nodepool[].additionalInfraEnvNames` | none | more InfraEnvs the NodePool draws Agents from: its `agentLabelSelector` is then `matchExpressions: [{key: infraenvs.agent-install.openshift.io, operator: In, values: [infraEnvName, ...these]}]` instead of `matchLabels`. The name still derives from `infraEnvName` |
+ | `nodepool[].annotations` | none | written onto the NodePool's `metadata.annotations` as given (`toYaml`), after the chart's own `argocd.argoproj.io/sync-wave`; values must be strings, and an entry does not set the sync-wave. The workflows' update-nodepool reads `redbull.io/scale-down-policy` (`fewest-pods`, `least-requested`, `least-utilized`) from it |
  
  `releaseRepo` (and `cpoRepo`) must describe the same layout as the upgrade rules'
- `release` block in the values repo (`upgrade/ladder.yaml`): the upgrade workflow
 diff --git a/templates/nodepool.yaml b/templates/nodepool.yaml
-index 710a2e5..3c376fd 100644
+index c913d38..798f856 100644
 --- a/templates/nodepool.yaml
 +++ b/templates/nodepool.yaml
-@@ -43,6 +43,29 @@
- {{- fail (printf "nodepool name %q is used twice. A derived name is <clusterName>-<infraEnvName>, so nodepools sharing an infraEnv must each set name." $name) }}
- {{- end }}
- {{- $_ := set $seen $name $derived }}
-+{{- /* additionalInfraEnvNames: the other InfraEnvs a nodepool draws Agents from. The
-+       NodePool then selects infraEnvName plus these (matchExpressions In, sorted and
-+       unique); its name still derives from infraEnvName, so adding or removing one
-+       never renames it. Agent platform only, and only with infraEnvName: the legacy
-+       agentLabelSelector names one label, not a set. Without the key the selector is
-+       the single matchLabels it always was. */}}
-+{{- $more := .additionalInfraEnvNames | default list }}
-+{{- if $more }}
-+{{- if not (kindIs "slice" $more) }}
-+{{- fail (printf "nodepool %q: additionalInfraEnvNames must be a list of InfraEnv names." $name) }}
-+{{- end }}
-+{{- if eq $platform "kubevirt" }}
-+{{- fail (printf "nodepool %q: additionalInfraEnvNames is for the agent platform; a KubeVirt nodepool draws from no InfraEnv." $name) }}
-+{{- end }}
-+{{- if $selector.nodeLabelKey }}
-+{{- fail (printf "nodepool %q: additionalInfraEnvNames cannot be combined with agentLabelSelector.nodeLabelKey. Set infraEnvName instead of agentLabelSelector." $name) }}
-+{{- end }}
-+{{- range $more }}
-+{{- if not (and (kindIs "string" .) .) }}
-+{{- fail (printf "nodepool %q: every additionalInfraEnvNames entry must be an InfraEnv name, not %v." $name .) }}
-+{{- end }}
-+{{- end }}
-+{{- end }}
- {{- /* hasKey rather than default throughout: an explicit 0 or false must win. */}}
- {{- $replicas := ternary .replicas 1 (hasKey . "replicas") | int }}
- {{- $allowDeletion := ternary $labels.allowDeletion "false" (hasKey $labels "allowDeletion") }}
-@@ -125,8 +148,18 @@ spec:
+@@ -6,7 +6,8 @@
+        volume's storageClass and kubevirtInfra: local, where the VMs sit on the
+        MCE's own pod network, so no additionalNetworks / attachDefaultNetwork
+        unless a nodepool sets them. Also fixed: a tuningConfig rendered the key
+-       twice. A nodepool's annotations reach its NodePool, as written. */}}
++       twice. A nodepool's annotations reach its NodePool, as written, and a
++       nodepool may draw Agents from more InfraEnvs (additionalInfraEnvNames). */}}
+ {{- if include "hc.enabled" . }}
+ {{- $clusterName := include "hc.clusterName" . }}
+ {{- $platform := .Values.platform | default "" }}
+@@ -118,9 +119,21 @@ spec:
+     type: KubeVirt
    {{- else }}
      agent:
++      {{- $labelKey := $selector.nodeLabelKey | default "infraenvs.agent-install.openshift.io" }}
        agentLabelSelector:
-+        {{- if $more }}
++        {{- if not .additionalInfraEnvNames }}
+         matchLabels:
+-          {{ $selector.nodeLabelKey | default "infraenvs.agent-install.openshift.io" }}: {{ $infraEnv }}
++          {{ $labelKey }}: {{ $infraEnv }}
++        {{- else }}
 +        matchExpressions:
-+        - key: infraenvs.agent-install.openshift.io
++        - key: {{ $labelKey }}
 +          operator: In
 +          values:
-+          {{- range concat (list $infraEnv) $more | uniq | sortAlpha }}
++          - {{ $infraEnv | quote }}
++          {{- range .additionalInfraEnvNames }}
 +          - {{ . | quote }}
 +          {{- end }}
-+        {{- else }}
-         matchLabels:
-           {{ $selector.nodeLabelKey | default "infraenvs.agent-install.openshift.io" }}: {{ $infraEnv }}
 +        {{- end }}
      type: Agent
    {{- end }}
    release:
-diff --git a/tests/test_nodepool_infraenvs.py b/tests/test_nodepool_infraenvs.py
-new file mode 100644
-index 0000000..cd37b4f
---- /dev/null
-+++ b/tests/test_nodepool_infraenvs.py
-@@ -0,0 +1,119 @@
-+"""A nodepool that draws Agents from several InfraEnvs: nodepool[].additionalInfraEnvNames.
-+
-+The NodePool's agentLabelSelector is then one matchExpressions requirement,
-+infraenvs.agent-install.openshift.io In (infraEnvName plus the others), sorted
-+and unique. Four properties, each of which would fail quietly if broken:
-+
-+1. Without the key the NodePool is byte for byte what it was: one matchLabels.
-+   Every cluster file in the values repo renders as before.
-+2. The name still derives from infraEnvName alone, so adding or removing an
-+   InfraEnv never renames the NodePool (a new name is a new NodePool: every node
-+   replaced).
-+3. The legacy agentLabelSelector.nodeLabelKey names one label, so combining it
-+   with the key fails instead of silently selecting one InfraEnv.
-+4. KubeVirt nodepools draw from no InfraEnv, so the key fails there.
-+
-+On an InPlace NodePool (the default) a changed selector touches no running node:
-+the Agent provider applies it only when a new Machine claims an Agent. On a
-+Replace NodePool the same change rolls every node.
-+
-+Requirements: helm CLI on PATH (module-level skip marker).
-+"""
-+import shutil
-+import subprocess
-+from pathlib import Path
-+
-+import pytest
-+import yaml
-+
-+CHART = Path(__file__).resolve().parent.parent
-+FIXTURES = CHART / "tests" / "fixtures" / "hostedcluster"
+diff --git a/tests/test_nodepool_entry_keys.py b/tests/test_nodepool_entry_keys.py
+index 79a43d5..14f02c8 100644
+--- a/tests/test_nodepool_entry_keys.py
++++ b/tests/test_nodepool_entry_keys.py
+@@ -1,8 +1,10 @@
+ """Keys of a nodepool[] entry that reach its NodePool beyond the GitLab copy's.
+ 
+ An entry's annotations reach the NodePool as written, after the chart's own
+-sync-wave. Without the key every cluster file renders exactly as before: the
+-golden parity tests hold that.
++sync-wave. An entry's additionalInfraEnvNames make its agentLabelSelector one
++matchExpressions In over infraEnvName and these, instead of matchLabels; the
++name still derives from infraEnvName. Without the keys every cluster file
++renders exactly as before: the golden parity tests hold that.
+ 
+ Requirements: helm CLI on PATH (module-level skip marker).
+ """
+@@ -15,6 +17,7 @@ import yaml
+ 
+ CHART = Path(__file__).resolve().parent.parent
+ FIXTURES = CHART / "tests" / "fixtures" / "hostedcluster"
 +LABEL = "infraenvs.agent-install.openshift.io"
-+
-+pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm CLI not available")
-+
-+
-+def _helm(fixture: str, *args: str) -> subprocess.CompletedProcess:
-+    return subprocess.run(
-+        ["helm", "template", "t", str(CHART), "--set-string", "clusterName=tenant-a",
-+         "-f", str(FIXTURES / f"{fixture}.yaml"), *args],
-+        capture_output=True, text=True,
-+    )
+ POOL = {"infraEnvName": "dell-r660-128c-1024gb", "replicas": 3, "labels": {"allowDeletion": False}}
+ 
+ pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm CLI not available")
+@@ -45,3 +48,23 @@ def test_an_entrys_annotations_reach_the_nodepool_after_the_charts_sync_wave(tmp
+ 
+ def test_without_annotations_the_nodepool_has_the_charts_alone(tmp_path):
+     assert _nodepool(tmp_path)["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "4"}
 +
 +
-+def _pools(*args: str, fixture: str = "production-agent") -> dict[str, dict]:
-+    r = _helm(fixture, *args)
-+    assert r.returncode == 0, r.stderr
-+    docs = [d for d in yaml.safe_load_all(r.stdout) if d]
-+    return {d["metadata"]["name"]: d for d in docs if d["kind"] == "NodePool"}
++def _selector(nodepool: dict) -> dict:
++    return nodepool["spec"]["platform"]["agent"]["agentLabelSelector"]
 +
 +
-+def _selector(pool: dict) -> dict:
-+    return pool["spec"]["platform"]["agent"]["agentLabelSelector"]
++def test_without_other_infraenvs_the_selector_is_the_one_label_it_always_was(tmp_path):
++    assert _selector(_nodepool(tmp_path)) == {"matchLabels": {LABEL: "dell-r660-128c-1024gb"}}
 +
 +
-+def test_without_the_key_the_selector_is_the_one_label_it_always_was():
-+    pools = _pools()
-+    assert _selector(pools["tenant-a-zone-a"]) == {"matchLabels": {LABEL: "dell-r660-128c-1024gb"}}
-+    assert _selector(pools["tenant-a-hp-dl380-64c-512gb"]) == {"matchLabels": {LABEL: "hp-dl380-64c-512gb"}}
-+
-+
-+def test_an_empty_list_is_no_extra_infraenv():
-+    pools = _pools("--set", "nodepool[1].additionalInfraEnvNames=null")
-+    assert _selector(pools["tenant-a-hp-dl380-64c-512gb"]) == {"matchLabels": {LABEL: "hp-dl380-64c-512gb"}}
-+
-+
-+def test_extra_infraenvs_select_all_of_them_sorted_and_unique():
-+    pools = _pools(
-+        "--set-string", "nodepool[1].additionalInfraEnvNames={zz-infraenv,hp-dl380-64c-512gb,aa-infraenv,zz-infraenv}",
-+    )
-+    assert _selector(pools["tenant-a-hp-dl380-64c-512gb"]) == {
++def test_other_infraenvs_make_one_in_requirement_with_the_first_first(tmp_path):
++    nodepool = _nodepool(tmp_path, additionalInfraEnvNames=["dell-r760-128c-1024gb", "hp-dl380-64c-512gb"])
++    assert _selector(nodepool) == {
 +        "matchExpressions": [
-+            {"key": LABEL, "operator": "In", "values": ["aa-infraenv", "hp-dl380-64c-512gb", "zz-infraenv"]}
-+        ]
++            {"key": LABEL, "operator": "In",
++             "values": ["dell-r660-128c-1024gb", "dell-r760-128c-1024gb", "hp-dl380-64c-512gb"]},
++        ],
 +    }
++    assert nodepool["metadata"]["name"] == "tenant-a-dell-r660-128c-1024gb"
 +
-+
-+def test_the_name_still_derives_from_infra_env_name_alone():
-+    before = _pools()
-+    after = _pools("--set-string", "nodepool[1].additionalInfraEnvNames={aa-infraenv}")
-+    assert set(after) == set(before)
-+    pool = after["tenant-a-hp-dl380-64c-512gb"]
-+    # Everything but the selector is as before.
-+    del pool["spec"]["platform"]["agent"], before["tenant-a-hp-dl380-64c-512gb"]["spec"]["platform"]["agent"]
-+    assert pool == before["tenant-a-hp-dl380-64c-512gb"]
-+
-+
-+def test_infraenv_names_that_read_as_numbers_stay_strings():
-+    pools = _pools("--set-string", "nodepool[1].additionalInfraEnvNames={1234}")
-+    (requirement,) = _selector(pools["tenant-a-hp-dl380-64c-512gb"])["matchExpressions"]
-+    assert requirement["values"] == ["1234", "hp-dl380-64c-512gb"]
-+
-+
-+def test_combined_with_the_legacy_node_label_key_it_fails():
-+    r = _helm(
-+        "production-agent",
-+        "--set-string", "nodepool[1].agentLabelSelector.nodeLabelKey=" + LABEL,
-+        "--set-string", "nodepool[1].agentLabelSelector.nodeLabelValue=hp-dl380-64c-512gb",
-+        "--set-string", "nodepool[1].additionalInfraEnvNames={aa-infraenv}",
-+    )
-+    assert r.returncode != 0
-+    assert "additionalInfraEnvNames cannot be combined with agentLabelSelector.nodeLabelKey" in r.stderr
-+
-+
-+def test_on_kubevirt_it_fails():
-+    r = _helm("lab-kubevirt-local", "--set-string", "nodepool[0].additionalInfraEnvNames={aa-infraenv}")
-+    assert r.returncode != 0
-+    assert "additionalInfraEnvNames is for the agent platform" in r.stderr
-+
-+
-+def test_a_value_that_is_not_a_list_fails():
-+    r = _helm("production-agent", "--set-string", "nodepool[1].additionalInfraEnvNames=aa-infraenv")
-+    assert r.returncode != 0
-+    assert "additionalInfraEnvNames must be a list of InfraEnv names" in r.stderr
-+
-+
-+def test_an_entry_that_is_not_a_name_fails():
-+    r = _helm("production-agent", "--set", "nodepool[1].additionalInfraEnvNames[0]=")
-+    assert r.returncode != 0
-+    assert "every additionalInfraEnvNames entry must be an InfraEnv name" in r.stderr
-diff --git a/values.yaml b/values.yaml
-index e25ab3c..c65c180 100644
---- a/values.yaml
-+++ b/values.yaml
-@@ -305,6 +305,9 @@ release_segment:
- #   services                                 unset = the GitLab branches (serviceType)
- #   pausedUntil                              unset; "true" or an RFC 3339 time pauses the
- #                                            HostedCluster and every NodePool (upgrade abort)
-+#   nodepool[].additionalInfraEnvNames       unset = the NodePool selects infraEnvName alone;
-+#                                            a list adds InfraEnvs it may draw Agents from
-+#                                            (matchExpressions In), agent platform only
- #
- # None of them is set here on purpose: an empty value is a choice ("no SSH key"),
- # and a key set in this file could not be removed by a values file. This chart
 -- 
 2.54.0 (Apple Git-157)
 

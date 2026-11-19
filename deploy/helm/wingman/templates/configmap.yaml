@@ -63,6 +63,9 @@ data:
   {{- fail "day1.serverScanRefresh.enabled needs serverScan.url: Fetch now asks server-scan to read the server" }}
   {{- end }}
   DAY1_SERVER_SCAN_REFRESH: {{ if and .Values.day1.serverScanRefresh .Values.day1.serverScanRefresh.enabled }}"true"{{ else }}"false"{{ end }}
+  # Agent label keys every agent NodePool excludes (ADR-0065); empty for values
+  # kept from a release before it.
+  DAY1_EXCLUDED_AGENT_LABELS: {{ join "," (.Values.day1.excludedAgentLabels | default list) | quote }}
   DAY2_SERVICE_URL: "http://wingman-day2:8002"
 
   # ── day2 ─────────────────────────────────────────────────────────────────────

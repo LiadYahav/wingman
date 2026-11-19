@@ -39,6 +39,7 @@ from yaml.resolver import BaseResolver
 
 from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.errors import InvalidClusterFileError
+from wingman_day1.domain.excluded_agent_labels import edit_problems as agent_label_problems
 from wingman_day1.domain.nodepool_infra_envs import additional_of, infra_envs_of
 from wingman_day1.domain.nodepool_infra_envs import edit_problems as infra_env_problems
 from wingman_day1.domain.replicas_ownership import replicas_problems
@@ -351,7 +352,8 @@ def rendered_file_problems(content: str) -> list[str]:
 class WorkflowKeys:
     """What this deployment lets an edit change: never the keys a platform workflow owns.
 
-    And a nodepool's ``additionalInfraEnvNames`` only with ``infra_envs`` (ADR-0064).
+    And a nodepool's ``additionalInfraEnvNames`` only with ``infra_envs`` (ADR-0064); the
+    Agent labels every new nodepool excludes (ADR-0065) travel with them.
     """
 
     versions: bool = False
@@ -360,6 +362,8 @@ class WorkflowKeys:
     """``DAY1_SCALE_NODEPOOLS`` (ADR-0062): the replicas of each NodePool already on ``main``."""
     infra_envs: bool = False
     """``DAY1_MULTI_INFRAENV_NODEPOOLS`` (ADR-0064): a nodepool may draw from several InfraEnvs."""
+    excluded_agent_labels: tuple[str, ...] = ()
+    """``DAY1_EXCLUDED_AGENT_LABELS`` (ADR-0065): what every new agent nodepool excludes."""
 
 
 NO_WORKFLOW_KEYS: Final = WorkflowKeys()
@@ -377,7 +381,8 @@ def edit_problems(
     the cluster), must keep exactly the values they have in ``current``. No
     NodePool is renamed by its InfraEnvs, nor a Replace one's InfraEnvs changed
     (``nodepool_infra_envs.edit_problems``), and a scale-down policy the edit
-    sets is one update-nodepool knows (``scale_down_policy.edit_problems``).
+    sets is one update-nodepool knows (``scale_down_policy.edit_problems``), and no
+    existing Replace NodePool's excluded Agent labels change (ADR-0065).
     With ``owned.versions`` so must
     the version keys the upgrade workflow owns (``upgrades.version_problems``),
     and with ``owned.replicas`` each NodePool's replicas as ``main`` (the file
@@ -403,7 +408,7 @@ def edit_problems(
         problems += version_problems(old, new)
     if owned.replicas:
         problems += replicas_problems(old if main is None else _lenient_values(main), new)
-    problems += policy_problems(old, new)
+    problems += policy_problems(old, new) + agent_label_problems(old, new)
     return problems + infra_env_problems(old, new, enabled=owned.infra_envs)
 
 

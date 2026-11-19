@@ -33,6 +33,7 @@ from wingman_day1.domain.errors import (
     ResourceNotFoundError,
     StaleError,
 )
+from wingman_day1.domain.excluded_agent_labels import INPUT as AGENT_LABELS
 from wingman_day1.domain.image_mirrors import given_mirror_inputs
 from wingman_day1.domain.machine_configs import flavor_config_problems
 from wingman_day1.domain.nodepool_infra_envs import given as infra_envs_given
@@ -107,6 +108,7 @@ class SpecCatalog:
         """The template's inputs, for the create form and the flavor editor."""
         template = await self.template()
         found = analyze_template(template, include_reserved=include_reserved) if template else []
+        found = [f for f in found if f.name != AGENT_LABELS]  # the deployment's (ADR-0065)
         return found if self._infra_envs else without_input(found)
 
     async def entries(self) -> list[SpecEntry]:

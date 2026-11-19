@@ -11,6 +11,7 @@ from typing import Final
 
 from fastapi import APIRouter
 
+from wingman_day1.api.v1 import agent_labels as agent_labels_api
 from wingman_day1.api.v1 import approvals as approvals_api
 from wingman_day1.api.v1 import audit as audit_api
 from wingman_day1.api.v1 import auth as auth_api
@@ -41,6 +42,7 @@ ROUTERS: Final[tuple[APIRouter, ...]] = (
     *SERVER_SCAN_ROUTERS,
     upgrades_api.router,
     scale_api.router,
+    agent_labels_api.router,
     approvals_api.router,
     audit_api.router,
     webhooks_api.router,

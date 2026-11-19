@@ -51,6 +51,7 @@ from wingman_day1 import platform_adapters as platform
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.api.errors import register_day1_error_handlers
 from wingman_day1.api.v1.routers import ROUTERS
+from wingman_day1.application.agent_labels import AgentLabelsService
 from wingman_day1.application.approvals import ApprovalService, RepoKey
 from wingman_day1.application.audit import AuditService
 from wingman_day1.application.auth import AuthService
@@ -69,7 +70,6 @@ from wingman_day1.application.sync import SyncService
 from wingman_day1.compose_inventory import add_server_workflow, inventory_service
 from wingman_day1.compose_quick_links import quick_links_service
 from wingman_day1.compose_scale import scale_service, scale_workflow
-from wingman_day1.domain.cluster_file import WorkflowKeys
 from wingman_day1.domain.names import HostedClusterNaming
 from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
@@ -283,8 +283,7 @@ def build_context(
         snapshots=snapshots,
     )
     naming = HostedClusterNaming(settings.day1_cluster_name_strip_prefix)
-    infra_envs = settings.day1_multi_infraenv_nodepools
-    owned = WorkflowKeys(settings.day1_upgrades, settings.day1_scale_nodepools, infra_envs)
+    owned = settings.workflow_keys()
     site_catalog = SiteCatalog(day1)
     machine_configs = MachineConfigService(day1, specs_repo)
     spec_catalog = SpecCatalog(
@@ -295,7 +294,7 @@ def build_context(
         ),
         machine_configs,
         specs_root=settings.specs_root_path,
-        infra_envs=infra_envs,
+        infra_envs=owned.infra_envs,
     )
     day1_writer = MergeRequestWriter(gitlab, day1, repo=Repo.DAY1, label="day1", clock=clock)
     provisioner = GitClusterProvisioner(day1_writer)
@@ -422,6 +421,7 @@ def build_context(
         ),
         upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service, cache),
         scale=scale_service(settings, adapters.scale, cluster_service, spec_catalog),
+        agent_labels=AgentLabelsService(cluster_service, owned.excluded_agent_labels),
         inventory=inventory_service(
             settings,
             site_catalog,

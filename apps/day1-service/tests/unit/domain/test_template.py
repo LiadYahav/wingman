@@ -278,6 +278,8 @@ def test_the_fixture_template_asks_for_exactly_the_values_file_inputs() -> None:
                 {"name": "tuning_config", "type": "list", "required": False, "default": []},
             ],
         },
+        # The deployment's (ADR-0065): the API's form schema leaves it out
+        {"name": "excluded_agent_labels", "type": "list", "required": False, "default": []},
     ]
     reserved = [f.name for f in analyze_template(fixture_template(), include_reserved=True)]
     assert reserved == [
@@ -289,6 +291,7 @@ def test_the_fixture_template_asks_for_exactly_the_values_file_inputs() -> None:
         "image_content_sources",
         "disable_idms_merge",
         "nodepools",
+        "excluded_agent_labels",
     ]
 
 
