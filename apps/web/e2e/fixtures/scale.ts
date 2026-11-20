@@ -106,13 +106,15 @@ async function mockScale(page: Page, scale: Scale) {
 /**
  * The cluster page with scaling on (unless `scale` is `null`: day1's 501, the
  * dashboard mocks' default), on its Nodes tab. Live status is off unless
- * `nodes` gives the MCE's NodePools, shown as cards.
+ * `nodes` gives the MCE's NodePools, shown as cards, or answers the nodes
+ * read itself (a route handler).
  */
 export async function openNodes(
   page: Page,
   scale: Scale | null,
   { viewer = false, upgrade, drift = notDrifted, tab = "nodes", nodes }: {
-    viewer?: boolean; upgrade?: UpgradeRun; drift?: ClusterDrift; tab?: string; nodes?: ClusterNodes;
+    viewer?: boolean; upgrade?: UpgradeRun; drift?: ClusterDrift; tab?: string;
+    nodes?: ClusterNodes | ((route: Route) => Promise<void> | void);
   } = {}
 ) {
   await injectAdminAuth(page);

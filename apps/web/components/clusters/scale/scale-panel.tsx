@@ -3,18 +3,12 @@
 import { Scaling } from "lucide-react";
 import { ProblemList } from "@/components/common/problem-list";
 import { useScaleOptions, useScaleRun } from "@/lib/scale";
+import type { LiveCards } from "@/lib/scale-model";
 import { plural } from "@/lib/utils";
 import type { ScaleNodePool, ScaleOptions } from "@/types";
 import { SizeRow } from "./scale-pool";
 import { ScaleRunCard } from "./scale-run-card";
 import { BUSY_ID, useScaleTab } from "./scale-tab";
-
-/**
- * Which NodePools the Nodes tab shows as cards from the MCE: their names,
- * `none` (live status off, the nodes unreadable or none listed), or
- * `loading`. Each card scales its own NodePool; the rest are rows here.
- */
-export type LiveCards = ReadonlySet<string> | "none" | "loading";
 
 function Subtitle({ options, cards }: { options: ScaleOptions; cards: ReadonlySet<string> | null }) {
   const lock = options.flavor ? <>; replicas flavor {options.flavor} locks stay as it sets them</> : null;

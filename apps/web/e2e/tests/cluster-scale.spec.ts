@@ -209,6 +209,35 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     expect(scale.starts).toEqual([{ nodepool: ZONE_B, replicas: 2 }]);
   });
 
+  test("the nodes unreadable (404): a scale-down's confirmation reads them no more and holds still; picking waits, and says why", async ({ page }) => {
+    let reads = 0;
+    await openNodes(page, scaleOf(), {
+      nodes: (route) => {
+        reads += 1;
+        return fulfillProblem(route, 404, "NOT_FOUND", `the MCE has no HostedCluster ${LARK} yet`);
+      },
+    });
+    await expect(page.getByTestId("cluster-nodes-error")).toBeVisible();
+    const before = reads;
+    await fewer(page, ZONE_B).click();
+    await page.getByTestId("scale-pool-1").getByTestId("scale-start").click();
+    const choice = confirmation(page).getByTestId("scale-leave-choice");
+    await expect(choice).toBeVisible();
+    // Open for two seconds: the same choice all along, and not one read of the nodes
+    const shown = await choice.elementHandle();
+    await page.waitForTimeout(2_000);
+    expect(reads).toBe(before);
+    expect(await shown?.evaluate((el) => el.isConnected)).toBe(true);
+    // Picking needs the nodes: it waits, and says why; the other choices take a click
+    await expect(confirmation(page).getByRole("radio", { name: /^Pick the servers/ })).toBeDisabled();
+    await expect(confirmation(page).getByTestId("scale-pick-none")).toHaveText("Needs this NodePool's nodes from the MCE (live status).");
+    const another = confirmation(page).getByRole("radio", { name: /^Another policy for this run/ });
+    await another.check();
+    await expect(another).toBeChecked();
+    await expect(yes(page)).toBeEnabled();
+    expect(reads).toBe(before);
+  });
+
   test("a scale-down's confirmation names what each policy removes, CAPI's at random without one, and an unknown one refused", async ({ page }) => {
     const policies: [string | null, string][] = [
       ["fewest-pods", `Removes the 2 nodes running the fewest pods (fewest-pods). ${UNHEALTHY}`],

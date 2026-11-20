@@ -472,7 +472,11 @@ ownership rule (5) do not change.
   (`least-utilized` says it needs the metrics API); **Pick the servers**
   opens the picker of the amendment above, which is no longer optional once
   chosen: Yes waits for exactly as many as leave. Without the MCE's nodes it
-  cannot be chosen, and says why. The confirmation's main line follows the
+  cannot be chosen, and says why; a failed nodes read is read again by the
+  Nodes tab's Retry only, never by the confirmation opening, and the sizes'
+  rows stay while it is (2026-11-20: a 404 read again on each opening
+  unmounted the open confirmation, which opened again, in a loop). The
+  confirmation's main line follows the
   choice ("…(least-requested, for this run only)"), and an unknown policy of
   the NodePool's own is still said to be refused, with another policy the
   way out. Changing the choice drops the ticks; Cancel, Escape and a new
