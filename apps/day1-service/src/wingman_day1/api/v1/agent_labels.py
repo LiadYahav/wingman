@@ -31,6 +31,7 @@ class AgentLabelsPoolOut(BaseModel):
 
     index: int
     name: str
+    """Its NodePool's, as the MCE shows it: ``name``, else ``<clusterName>-<infraEnvName>``."""
     excludes: list[str]
     """Its ``excludeAgentLabels`` as written; ``[]`` without."""
     change: bool

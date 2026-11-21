@@ -65,8 +65,10 @@ every node (as in ADR-0064).
 5. **An existing cluster takes it through its own merge request, never all
    at once.**
    - `GET /api/day1/clusters/{name}/excluded-agent-labels` (anyone signed in)
-     lists each nodepool, what it excludes now, and whether the merge request
-     changes it, with why; `POST` (admin, `{last_commit_id}` from the read)
+     lists each nodepool by its NodePool's name, as the MCE shows it (the
+     entry's `name`, else `<clusterName>-<infraEnvName>`), what it excludes
+     now, and whether the merge request changes it, with why; `POST` (admin,
+     `{last_commit_id}` from the read)
      opens that one merge request (201): the deployment's keys on each
      nodepool that lacks exactly them, in the file's text, every other line
      byte for byte (ADR-0037), through the cluster's modify. Nothing to
@@ -77,7 +79,9 @@ every node (as in ADR-0064).
 6. **A Replace NodePool keeps its list.** An edit that changes the list of a
    NodePool that already exists and is `upgradeType: Replace` (before or
    after) is refused: every node would be replaced. The per-cluster merge
-   request leaves such a NodePool out (skips it) and says why. A new NodePool
+   request leaves such a NodePool out (skips it) and says why, in the plan
+   and in its own text, which lists each NodePool it leaves out ("upgradeType
+   Replace: the change would replace every node"). A new NodePool
    may be Replace with the list: nothing runs yet. Whatever the setting. So
    Wingman never adds `excludeAgentLabels` to a running Replace NodePool, and,
    by ADR-0064's rule 6, never changes its `additionalInfraEnvNames` either:
@@ -129,12 +133,13 @@ every node (as in ADR-0064).
 - `apps/day1-service/tests/unit/domain/test_excluded_agent_labels.py`: the
   keys, the setting, a create's input (KubeVirt none, another list or a
   flavor's refused), the rendered check, the edit rules (a Replace NodePool,
-  a new one, the keys), the plan.
+  a new one, the keys), the plan, the merge request's text.
 - `apps/day1-service/tests/api/test_excluded_agent_labels_api.py`: a create
   with and without the setting, the schema, a request and a flavor that set
   the input, a stale template, 501 when empty, the plan and the per-cluster
-  merge request (every other line kept, 403 for a viewer), a Replace
-  NodePool left out and its edit refused.
+  merge request (every other line kept, 403 for a viewer, NodePools by
+  name), a Replace NodePool left out, in the plan and the merge request's
+  text, and its edit refused.
 - `apps/day1-service/tests/unit/test_settings.py` (the setting refused when
   not label keys) and `tests/repo/test_chart_env_contract.py` (the chart
   value joined with commas, refused by the schema when not label keys).

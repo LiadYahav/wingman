@@ -15,6 +15,7 @@ from wingman_day1.domain.excluded_agent_labels import (
     plan,
     rendered_problems,
     setting_problems,
+    summary,
     with_labels,
 )
 
@@ -113,17 +114,45 @@ def test_the_plan_writes_the_keys_where_they_are_missing_and_says_why_not_elsewh
             pool("a"),
             pool("b", excludeAgentLabels=[USED]),
             pool("c", excludeAgentLabels=["old"]),
-            pool("r", upgradeType="Replace"),
+            {**pool("r", upgradeType="Replace"), "name": "prod-x-site1-replaced"},
         ]
     }
-    assert [(p.name, p.have, p.change) for p in plan(values, (USED,))] == [
-        ("a", (), True),
-        ("b", (USED,), False),
-        ("c", ("old",), True),
-        ("r", (), False),
+    pools = plan(values, (USED,), cluster_name="prod-x-site1")
+    assert [(p.name, p.have, p.change) for p in pools] == [
+        ("prod-x-site1-a", (), True),
+        ("prod-x-site1-b", (USED,), False),
+        ("prod-x-site1-c", ("old",), True),
+        ("prod-x-site1-replaced", (), False),
     ]
-    assert plan(values, (USED,))[3].reason.startswith("upgradeType Replace")
-    kubevirt = plan({"platform": "kubevirt", "nodepool": [{"replicas": 1}]}, (USED,))
+    assert pools[3].reason == "upgradeType Replace: the change would replace every node"
+    kubevirt = plan(
+        {"platform": "kubevirt", "nodepool": [{"replicas": 1}]}, (USED,), cluster_name="x"
+    )
     assert [(p.name, p.change, p.reason) for p in kubevirt] == [
-        ("#0", False, "KubeVirt: takes no Agents")
+        ("nodepool[0]", False, "KubeVirt: takes no Agents")
     ]
+
+
+def test_the_merge_requests_text_names_the_nodepools_it_changes_and_each_it_leaves_out() -> None:
+    values = {
+        "nodepool": [
+            pool("hp"),
+            {**pool("dell", upgradeType="Replace"), "name": "prod-x-site1-dell-b"},
+            pool("done", excludeAgentLabels=[USED]),
+        ]
+    }
+    text = summary("ocp4-prod-x-site1", (USED,), plan(values, (USED,), cluster_name="prod-x-site1"))
+    first, blank, *left = text.splitlines()
+    assert first.startswith(
+        f"Exclude Agents labelled {USED} from NodePools prod-x-site1-hp of **ocp4-prod-x-site1**"
+    )
+    assert (blank, left) == (
+        "",
+        [
+            "Left out:",
+            "- prod-x-site1-dell-b (upgradeType Replace: the change would replace every node)",
+            "- prod-x-site1-done (excludes them already)",
+        ],
+    )
+    only = summary("c", (USED,), plan({"nodepool": [pool("a")]}, (USED,), cluster_name="c"))
+    assert "Left out" not in only

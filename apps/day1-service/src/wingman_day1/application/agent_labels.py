@@ -2,10 +2,11 @@
 
 ADR-0065: a cluster created before ``DAY1_EXCLUDED_AGENT_LABELS`` was set, or
 before its keys changed, takes them only through its own merge request,
-never all at once. The plan says, per nodepool, what it excludes now and
-whether the merge request writes the deployment's keys on it; a Replace
-NodePool (every node would be replaced) and a KubeVirt cluster's (no Agents)
-are left out, with why. The merge request is an edit of the file's text,
+never all at once. The plan says, per NodePool (by the name the MCE shows),
+what it excludes now and whether the merge request writes the deployment's
+keys on it; a Replace NodePool (every node would be replaced) and a KubeVirt
+cluster's (no Agents) are left out, with why, and the merge request's text
+lists each NodePool it leaves out, and why. The merge request is an edit of the file's text,
 every other line byte for byte (ADR-0037), through the cluster's own modify,
 guarded by the commit the plan was read at (ADR-0006).
 """
@@ -21,7 +22,7 @@ from wingman_day1.domain.cluster_edits import SetValue
 from wingman_day1.domain.cluster_file import load_values
 from wingman_day1.domain.cluster_text import edit_values
 from wingman_day1.domain.errors import InvalidClusterFileError, InvalidInputError
-from wingman_day1.domain.excluded_agent_labels import FILE_KEY, PoolPlan, plan
+from wingman_day1.domain.excluded_agent_labels import FILE_KEY, PoolPlan, plan, summary
 from wingman_day1.domain.input_paths import InputPath
 from wingman_day1.domain.paths import ClusterRef
 
@@ -61,7 +62,7 @@ class AgentLabelsService:
             raise InvalidInputError(
                 f"cluster {ref.name!r} cannot be planned: its file does not parse", exc.problems
             ) from exc
-        pools = plan(values, self.labels)
+        pools = plan(values, self.labels, cluster_name=cluster.hosted_cluster.cluster_name)
         return AgentLabelsPlan(ref, self.labels, cluster.last_commit_id, pools, cluster.content)
 
     async def apply(
@@ -79,15 +80,10 @@ class AgentLabelsService:
             SetValue(InputPath(("nodepool", p.index, FILE_KEY)), list(self.labels))
             for p in planned.changes
         ]
-        names = ", ".join(p.name for p in planned.changes)
         return await self._clusters.modify(
             ref,
             edit_values(planned.content, edits),
             user=user,
-            summary=(
-                f"Exclude Agents labelled {', '.join(self.labels)} from NodePools {names} of "
-                f"**{ref.name}** (ADR-0065). An InPlace NodePool's running nodes are untouched: "
-                "the selector is read only when a new node claims an Agent."
-            ),
+            summary=summary(ref.name, self.labels, planned.nodepools),
             last_commit_id=last_commit_id or planned.last_commit_id,
         )
