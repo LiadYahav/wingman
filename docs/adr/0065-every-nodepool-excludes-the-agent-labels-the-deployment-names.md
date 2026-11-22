@@ -73,6 +73,12 @@ every node (as in ADR-0064).
      nodepool that lacks exactly them, in the file's text, every other line
      byte for byte (ADR-0037), through the cluster's modify. Nothing to
      change is a 422 with the reasons. Empty setting: both answer 501.
+   - One at a time, as a sync's and a create's: while an open Wingman merge
+     request that modifies the cluster already has the keys wherever the
+     plan would write them (its branch's file plans no change, whoever wrote
+     them there), the plan names it (`open_merge_request`) and the `POST`
+     answers 409 `ALREADY_EXISTS` naming it, opening nothing. The plan's
+     `change` still says what `main` lacks.
    - A person's edit may add or change a nodepool's list (each a label key).
    - A flavor's sync and rollout write only locked values: they keep the key
      byte for byte and never add it.
@@ -138,8 +144,9 @@ every node (as in ADR-0064).
   with and without the setting, the schema, a request and a flavor that set
   the input, a stale template, 501 when empty, the plan and the per-cluster
   merge request (every other line kept, 403 for a viewer, NodePools by
-  name), a Replace NodePool left out, in the plan and the merge request's
-  text, and its edit refused.
+  name), a second one refused while the first is open (another open edit
+  carries nothing), a Replace NodePool left out, in the plan and the merge
+  request's text, and its edit refused.
 - `apps/day1-service/tests/unit/test_settings.py` (the setting refused when
   not label keys) and `tests/repo/test_chart_env_contract.py` (the chart
   value joined with commas, refused by the schema when not label keys).

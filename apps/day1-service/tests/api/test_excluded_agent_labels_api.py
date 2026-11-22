@@ -5,8 +5,9 @@ agent nodepool (``excludeAgentLabels``), the form schema never offers the
 input, and a request or a flavor that sets it is refused; a template that does
 not render it refuses the create. An existing cluster takes the keys through
 its own merge request, ``POST .../excluded-agent-labels``, which leaves a
-Replace NodePool out; an edit may not change an existing Replace NodePool's
-list. Empty (the default), both routes answer 501 and nothing changes.
+Replace NodePool out, and is not opened again while it is open; an edit may
+not change an existing Replace NodePool's list. Empty (the default), both
+routes answer 501 and nothing changes.
 """
 
 from __future__ import annotations
@@ -193,6 +194,40 @@ async def test_one_merge_request_writes_the_keys_on_the_clusters_nodepools_every
     description = opened.json()["description"]
     assert f"from NodePools {POOL_DELL}, {POOL_R760} of **{LARK}** (ADR-0065)" in description
     assert "Left out" not in description
+
+
+async def test_while_its_merge_request_is_open_the_plan_names_it_and_another_is_refused(
+    on: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    alice = auth(support.ALICE)
+    # An open edit of the cluster that does not write the keys carries nothing
+    cluster = (await on.get(BASE, headers=alice)).json()
+    edit = cluster["yaml"].replace("  replicas: 3\n", "  replicas: 4\n", 1)
+    other = await on.patch(
+        BASE,
+        json={"updated_yaml": edit, "last_commit_id": cluster["last_commit_id"]},
+        headers=alice,
+    )
+    assert other.status_code == 200, other.text
+    plan = (await on.get(f"{BASE}/excluded-agent-labels", headers=alice)).json()
+    assert plan["open_merge_request"] is None
+
+    first = await on.post(
+        f"{BASE}/excluded-agent-labels",
+        json={"last_commit_id": plan["last_commit_id"]},
+        headers=alice,
+    )
+    assert first.status_code == 201, first.text
+    again = (await on.get(f"{BASE}/excluded-agent-labels", headers=alice)).json()
+    assert [p["change"] for p in again["nodepools"]] == [True, True], "main still lacks them"
+    assert again["open_merge_request"]["iid"] == first.json()["iid"]
+    second = await on.post(
+        f"{BASE}/excluded-agent-labels",
+        json={"last_commit_id": again["last_commit_id"]},
+        headers=alice,
+    )
+    assert (second.status_code, second.json()["code"]) == (409, "ALREADY_EXISTS")
+    assert f"!{first.json()['iid']} {first.json()['web_url']}" in second.json()["detail"]
 
 
 async def test_a_replace_nodepool_is_left_out_and_an_edit_may_not_change_its_list(

@@ -3,7 +3,9 @@
 ``DAY1_EXCLUDED_AGENT_LABELS`` names the Agent labels every NodePool
 excludes; a new cluster gets them at create, an existing one through this
 merge request, one cluster at a time. Empty, both routes answer 501. Reading
-the plan needs a session; opening the merge request needs an admin.
+the plan needs a session; opening the merge request needs an admin. While an
+open merge request already carries the change, the plan names it and the
+``POST`` answers 409 (``ALREADY_EXISTS``) naming it.
 """
 
 from __future__ import annotations
@@ -59,15 +61,21 @@ class AgentLabelsPlanOut(BaseModel):
     last_commit_id: str
     """The commit the file was read at; send it back with the ``POST``."""
     nodepools: list[AgentLabelsPoolOut]
+    """Each nodepool against ``main``: ``change`` is what ``main`` lacks."""
+    open_merge_request: MRDetailOut | None
+    """An open merge request that already writes the keys where ``change`` says; the ``POST``
+    then answers 409 naming it. ``None`` when none does."""
 
     @classmethod
     def of(cls, plan: AgentLabelsPlan) -> AgentLabelsPlanOut:
         """From the plan."""
+        opened = plan.open_merge_request
         return cls(
             cluster=plan.ref.name,
             labels=list(plan.labels),
             last_commit_id=plan.last_commit_id,
             nodepools=[AgentLabelsPoolOut.of(p) for p in plan.nodepools],
+            open_merge_request=change_out(RepoKey.DAY1, opened) if opened else None,
         )
 
 
@@ -104,7 +112,10 @@ async def open_agent_labels(
     site: Site = None,
     mce: Mce = None,
 ) -> MRDetailOut:
-    """Open the cluster's one merge request that writes the deployment's keys on its NodePools."""
+    """Open the cluster's one merge request that writes the deployment's keys on its NodePools.
+
+    409 while an open merge request already does (the plan's ``open_merge_request``).
+    """
     ref = await context.clusters.locate(name, site=site, mce=mce)
     result = await labels.apply(ref, user=user, last_commit_id=body.last_commit_id)
     return change_out(RepoKey.DAY1, result.merge_request)
