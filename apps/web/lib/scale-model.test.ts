@@ -5,6 +5,7 @@ import {
   currentOf,
   directionOf,
   failureHint,
+  liveCardsOf,
   needsRestore,
   nodepoolBlock,
   phaseWords,
@@ -15,7 +16,7 @@ import {
   stepped,
   typedReplicas,
 } from "./scale-model";
-import type { ScaleNodePool, ScaleRun } from "@/types";
+import type { ClusterNodes, ScaleNodePool, ScaleRun } from "@/types";
 
 const run = (overrides: Partial<ScaleRun> = {}): ScaleRun => ({
   workflow_id: "update-nodepool-ocp4-prod-lark-site1",
@@ -187,5 +188,21 @@ describe("a stepper's number", () => {
     expect(changeWords(4, 1)).toBe("4 → 1 (\u22123)");
     expect(changeWords(3, 3)).toBe("3 → 3");
     expect(changeWords(null, 3)).toBe("— → 3");
+  });
+});
+
+describe("the cards the Nodes tab shows", () => {
+  const nodes = (names: string[]) => ({ off: false, data: { node_pools: names.map((name) => ({ name })) } as unknown as ClusterNodes }) as const;
+
+  it("are the MCE's NodePools by name, or none when it lists none or live status is off", () => {
+    expect(liveCardsOf(nodes(["a", "b"]), true)).toEqual(new Set(["a", "b"]));
+    expect(liveCardsOf(nodes([]), true)).toBe("none");
+    expect(liveCardsOf({ off: true, detail: "Live cluster status is disabled." }, true)).toBe("none");
+  });
+
+  it("load only until the first read settles: a read again after a failure keeps the rows", () => {
+    expect(liveCardsOf(undefined, false)).toBe("loading");
+    // Failed, then read again (Retry): React Query shows it pending with no error, but it has settled once
+    expect(liveCardsOf(undefined, true)).toBe("none");
   });
 });

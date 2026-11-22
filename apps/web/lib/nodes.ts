@@ -7,7 +7,7 @@
  * phases, and a phase the workflow adds or renames needs no change here.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
 import type { ClusterNodes, NodeState, ServerRecord, UninstallNodeRequest, WorkflowRun } from "@/types";
@@ -57,14 +57,18 @@ export function humanize(slug: string): string {
 /**
  * `GET /clusters/{name}/nodes{where}`, read where it is shown (`enabled`).
  * Read again every 10 s while something moves (or `watching`: a run was just
- * started here), else every minute.
+ * started here), else every minute. A failed read is shown with its Retry
+ * and is not read again by a mount (`retryOnMount`): React Query's default
+ * reads a query that failed with no data again for every component that
+ * mounts on it, and the Nodes tab mounts some where a read can unmount them
+ * (a scale-down's server picker), which then read in a loop.
  */
-export function useClusterNodes(
+export function nodesQuery(
   name: string,
   where: string,
   { enabled = true, watching = false }: { enabled?: boolean; watching?: boolean } = {}
 ) {
-  return useQuery<NodesRead>({
+  return queryOptions<NodesRead>({
     queryKey: day1Keys.clusters.nodes(name),
     queryFn: async () => {
       try {
@@ -78,12 +82,18 @@ export function useClusterNodes(
     staleTime: 10_000,
     // A problem is day1's answer (a 502 says the MCE did not answer): show it, with a retry
     retry: (count, error) => !isApiError(error) && count < 2,
+    retryOnMount: false,
     refetchInterval: (query) => {
       const read = query.state.data;
       if (!read || read.off) return false;
       return watching || isBusy(read.data) ? BUSY_POLL_MS : IDLE_POLL_MS;
     },
   });
+}
+
+/** The nodes read (`nodesQuery`), for a component. */
+export function useClusterNodes(name: string, where: string, options: { enabled?: boolean; watching?: boolean } = {}) {
+  return useQuery(nodesQuery(name, where, options));
 }
 
 /**

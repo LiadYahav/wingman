@@ -28,7 +28,7 @@ flowchart LR
 | Process | Port | What it does |
 |---|---|---|
 | nginx | 8080 | The one entry point, behind one Route or Ingress (ADR-0058). It splits the paths above, gzips, holds the timeouts and the body size, passes the status stream through, and answers its own `/healthz`. When day1 or day2 cannot answer, it answers a problem with code `DEPENDENCY_UNAVAILABLE` and the status it met; a service's own answers pass through untouched. |
-| web | 3000 | The UI (`apps/web`). Pages run in the browser, which calls `/api/...` by relative paths with TanStack Query. The Next.js server holds no state and never calls the services; `proxy.ts` only redirects on the session cookie (to `/login` without it). |
+| web | 3000 | The UI (`apps/web`). Pages run in the browser, which calls `/api/...` by relative paths with TanStack Query. The Next.js server holds no state and never calls the services; `proxy.ts` only redirects on the session cookie (to `/login` without it); the cookie is the session, so `/login` drops a signed-in state the browser kept without it (localStorage `wingman-auth`) instead of going back. |
 | day1 | 8001 | `wingman_day1`: hosted clusters, flavors (the specs project), sites and MCEs (read only, ADR-0018), approvals and audit of the day1 and specs projects, login, and every platform system below. |
 | day2 | 8002 | `wingman_day2`: add-ons on the hub, MCEs, hosted and UPI clusters (ADR-0020), through the team projects in the sigs group; it reads the day1 project, never writes it. |
 

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { isApiError } from "@/lib/api-client";
+import { getToken, isApiError } from "@/lib/api-client";
 import { day1Api } from "@/lib/api/day1";
 import { useAuthStore } from "@/stores/auth-store";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -49,7 +49,7 @@ function Spinner() {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, isAuthenticated } = useAuthStore();
+  const { login, logout, isAuthenticated } = useAuthStore();
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +80,16 @@ function LoginContent() {
   }, [searchParams, login, router]);
 
   useEffect(() => {
-    if (isAuthenticated && !searchParams.get("code")) {
-      router.replace(safeRedirect(searchParams.get("redirect")));
+    if (!isAuthenticated || searchParams.get("code")) return;
+    // The session is the cookie, which the proxy reads; the store's copy in localStorage can outlive
+    // it (expired, deleted). Without the cookie the proxy sends every page back here, so going on
+    // would loop: the stale copy is dropped and the form shows.
+    if (!getToken()) {
+      logout();
+      return;
     }
-  }, [isAuthenticated, searchParams, router]);
+    router.replace(safeRedirect(searchParams.get("redirect")));
+  }, [isAuthenticated, searchParams, router, logout]);
 
   useEffect(() => {
     day1Api.auth.config()

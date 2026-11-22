@@ -421,7 +421,7 @@ def build_context(
         ),
         upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service, cache),
         scale=scale_service(settings, adapters.scale, cluster_service, spec_catalog),
-        agent_labels=AgentLabelsService(cluster_service, owned.excluded_agent_labels),
+        agent_labels=AgentLabelsService(cluster_service, day1, owned.excluded_agent_labels),
         inventory=inventory_service(
             settings,
             site_catalog,

@@ -6,7 +6,7 @@
  */
 
 import { isApiError } from "@/lib/api-client";
-import { humanize } from "@/lib/nodes";
+import { humanize, type NodesRead } from "@/lib/nodes";
 import type { ErrorCode, ScaleNodePool, ScaleRun, StartScaleRequest } from "@/types";
 
 /** The most replicas the form takes: a guard against a typo, not the workflow's rule. */
@@ -157,4 +157,24 @@ export function refusalTitle(error: unknown): string {
   if (isApiError(error, "FEATURE_DISABLED")) return "Scaling is not turned on in this deployment.";
   if (isApiError(error, "FORBIDDEN")) return "Only an admin can scale a cluster.";
   return "The scale did not start.";
+}
+
+/**
+ * Which NodePools the Nodes tab shows as cards from the MCE (the NodePool
+ * sizes show the others as rows): their names, `none` (live status off, the
+ * nodes unreadable or none listed), or `loading`.
+ */
+export type LiveCards = ReadonlySet<string> | "none" | "loading";
+
+/**
+ * The cards of the Nodes tab's read. `loading` holds only until the first
+ * read settles (`settled`: it succeeded or failed once). Reading again after
+ * a failure starts with no data, which React Query shows as pending with the
+ * error cleared; back at `loading`, the sizes' rows would unmount for the
+ * read, and with them a scale-down's confirmation open on one of them.
+ */
+export function liveCardsOf(read: NodesRead | undefined, settled: boolean): LiveCards {
+  const cards = read && !read.off ? read.data.node_pools : [];
+  if (cards.length > 0) return new Set(cards.map((p) => p.name));
+  return read || settled ? "none" : "loading";
 }

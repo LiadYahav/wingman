@@ -8,10 +8,11 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ProblemList } from "@/components/common/problem-list";
 import { NodePoolCard, UnassignedServers, type NodeActions } from "@/components/clusters/node-pools";
 import { UninstallNodeDialog, type UninstallTarget } from "@/components/clusters/uninstall-node-dialog";
-import { ScalePanel, type LiveCards } from "@/components/clusters/scale/scale-panel";
+import { ScalePanel } from "@/components/clusters/scale/scale-panel";
 import { CardScaleBelow, CardScaleControl } from "@/components/clusters/scale/scale-pool";
 import { ScaleTab } from "@/components/clusters/scale/scale-tab";
 import { useClusterNodes } from "@/lib/nodes";
+import { liveCardsOf } from "@/lib/scale-model";
 import { cn } from "@/lib/utils";
 import type { ClusterNodes as Nodes, ServerRecord, WorkflowRun } from "@/types";
 
@@ -111,7 +112,8 @@ function Notes({ data, isAdmin }: { data: Nodes; isAdmin: boolean }) {
  * each card scales its own NodePool, and without cards (live status off, the
  * MCE unread) the sizes' rows do, so Scale needs no live status.
  *
- * Mount it where it is shown: it reads the nodes when mounted.
+ * Mount it where it is shown: it reads the nodes when mounted (a failed
+ * read waits for its Retry; `useClusterNodes`).
  */
 export function ClusterNodes({
   name,
@@ -127,7 +129,7 @@ export function ClusterNodes({
 }) {
   const [started, setStarted] = useState<Record<string, Started>>({});
   const [uninstalling, setUninstalling] = useState<{ target: UninstallTarget; trigger: HTMLElement } | null>(null);
-  const { data: read, error, isPending, isFetching, refetch } = useClusterNodes(name, where, {
+  const { data: read, error, isPending, isFetched, isFetching, refetch } = useClusterNodes(name, where, {
     enabled,
     watching: Object.keys(started).length > 0,
   });
@@ -167,10 +169,8 @@ export function ClusterNodes({
     </div>
   ) : null;
 
-  // Each NodePool the MCE shows as a card scales on it; without cards, on the sizes' rows
-  const cards = read && !read.off ? read.data.node_pools : [];
-  const live: LiveCards = cards.length > 0 ? new Set(cards.map((p) => p.name)) : read || error ? "none" : "loading";
-  const scale = <ScalePanel name={name} where={where} enabled={enabled} live={live} />;
+  // Each NodePool the MCE shows as a card scales on it; without cards, on the sizes' rows, which a read again keeps
+  const scale = <ScalePanel name={name} where={where} enabled={enabled} live={liveCardsOf(read, isFetched)} />;
   const tab = (children: React.ReactNode) => (
     <ScaleTab name={name} where={where} isAdmin={isAdmin} enabled={enabled}>
       {children}

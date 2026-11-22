@@ -5,8 +5,9 @@ agent nodepool (``excludeAgentLabels``), the form schema never offers the
 input, and a request or a flavor that sets it is refused; a template that does
 not render it refuses the create. An existing cluster takes the keys through
 its own merge request, ``POST .../excluded-agent-labels``, which leaves a
-Replace NodePool out; an edit may not change an existing Replace NodePool's
-list. Empty (the default), both routes answer 501 and nothing changes.
+Replace NodePool out, and is not opened again while it is open; an edit may
+not change an existing Replace NodePool's list. Empty (the default), both
+routes answer 501 and nothing changes.
 """
 
 from __future__ import annotations
@@ -34,6 +35,9 @@ LARK = "ocp4-prod-lark-site1"
 BASE = f"/api/day1/clusters/{LARK}"
 LARK_PATH = f"sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/{LARK}.yaml"
 DELL, HP = "dell-r660-site1-128c-1024gb-5tb", "hp-gen11-site1-64c"
+R760 = "dell-r760-site1-64c-512gb-20tb"
+POOL_DELL, POOL_R760 = f"prod-lark-site1-{DELL}", f"prod-lark-site1-{R760}"
+"""Lark's NodePools as the MCE names them: ``clusterName`` (no ``ocp4-``), then the InfraEnv."""
 WEBHOOK = {"X-Gitlab-Token": "test-webhook-secret", "X-Gitlab-Event": "Push Hook"}
 TEMPLATE = (default_fixture_root() / "wingman/cluster-specs/cluster-template.j2").read_text()
 _START = TEMPLATE.index("{% if excluded_agent_labels")
@@ -171,8 +175,8 @@ async def test_one_merge_request_writes_the_keys_on_the_clusters_nodepools_every
     plan = (await on.get(f"{BASE}/excluded-agent-labels", headers=viewer)).json()
     assert plan["labels"] == [USED]
     assert [(p["name"], p["excludes"], p["change"]) for p in plan["nodepools"]] == [
-        (DELL, [], True),
-        ("dell-r760-site1-64c-512gb-20tb", [], True),
+        (POOL_DELL, [], True),
+        (POOL_R760, [], True),
     ]
     forbidden = await on.post(f"{BASE}/excluded-agent-labels", json={}, headers=viewer)
     assert forbidden.status_code == 403
@@ -187,7 +191,43 @@ async def test_one_merge_request_writes_the_keys_on_the_clusters_nodepools_every
     main = (await gitlab.read_file(pid, RepoPath(LARK_PATH), "main")).content
     assert edited.count(LINE) == 2
     assert edited.replace(LINE, "") == main
-    assert "ADR-0065" in opened.json()["description"]
+    description = opened.json()["description"]
+    assert f"from NodePools {POOL_DELL}, {POOL_R760} of **{LARK}** (ADR-0065)" in description
+    assert "Left out" not in description
+
+
+async def test_while_its_merge_request_is_open_the_plan_names_it_and_another_is_refused(
+    on: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    alice = auth(support.ALICE)
+    # An open edit of the cluster that does not write the keys carries nothing
+    cluster = (await on.get(BASE, headers=alice)).json()
+    edit = cluster["yaml"].replace("  replicas: 3\n", "  replicas: 4\n", 1)
+    other = await on.patch(
+        BASE,
+        json={"updated_yaml": edit, "last_commit_id": cluster["last_commit_id"]},
+        headers=alice,
+    )
+    assert other.status_code == 200, other.text
+    plan = (await on.get(f"{BASE}/excluded-agent-labels", headers=alice)).json()
+    assert plan["open_merge_request"] is None
+
+    first = await on.post(
+        f"{BASE}/excluded-agent-labels",
+        json={"last_commit_id": plan["last_commit_id"]},
+        headers=alice,
+    )
+    assert first.status_code == 201, first.text
+    again = (await on.get(f"{BASE}/excluded-agent-labels", headers=alice)).json()
+    assert [p["change"] for p in again["nodepools"]] == [True, True], "main still lacks them"
+    assert again["open_merge_request"]["iid"] == first.json()["iid"]
+    second = await on.post(
+        f"{BASE}/excluded-agent-labels",
+        json={"last_commit_id": again["last_commit_id"]},
+        headers=alice,
+    )
+    assert (second.status_code, second.json()["code"]) == (409, "ALREADY_EXISTS")
+    assert f"!{first.json()['iid']} {first.json()['web_url']}" in second.json()["detail"]
 
 
 async def test_a_replace_nodepool_is_left_out_and_an_edit_may_not_change_its_list(
@@ -201,8 +241,21 @@ async def test_a_replace_nodepool_is_left_out_and_an_edit_may_not_change_its_lis
     )
     await push(on, support, gitlab, support.DAY1, LARK_PATH, replace)
     plan = (await on.get(f"{BASE}/excluded-agent-labels", headers=alice)).json()
-    assert [p["change"] for p in plan["nodepools"]] == [False, True]
-    assert plan["nodepools"][0]["reason"].startswith("upgradeType Replace")
+    assert [(p["name"], p["change"]) for p in plan["nodepools"]] == [
+        (POOL_DELL, False),
+        (POOL_R760, True),
+    ]
+    replaced = "upgradeType Replace: the change would replace every node"
+    assert plan["nodepools"][0]["reason"] == replaced
+    opened = await on.post(
+        f"{BASE}/excluded-agent-labels",
+        json={"last_commit_id": plan["last_commit_id"]},
+        headers=alice,
+    )
+    assert opened.status_code == 201, opened.text
+    text = opened.json()["description"].split("\n---\n")[0].rstrip()
+    assert f"from NodePools {POOL_R760} of **{LARK}**" in text
+    assert text.endswith(f"\n\nLeft out:\n- {POOL_DELL} ({replaced})")
 
     cluster = (await on.get(BASE, headers=alice)).json()
     edit = cluster["yaml"].replace("  upgradeType: Replace\n", f"  upgradeType: Replace\n{LINE}", 1)

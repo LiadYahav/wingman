@@ -2,6 +2,7 @@
  * Dev login on the rewritten day1 service (mocked): it needs the server's
  * DEV_AUTH_SECRET (401 without it, 404 when dev login is off), and a refused
  * login stays on the page with a clear message instead of bouncing to /login.
+ * A session the browser kept without its cookie is dropped, not followed.
  */
 
 import { test, expect, type Page, type Route, type Request } from "@playwright/test";
@@ -89,5 +90,46 @@ test.describe("Dev login", () => {
     await openLogin(page, false);
     await expect(page.getByRole("button", { name: "Log in via OpenShift" })).toBeVisible();
     await expect(page.getByLabel("Dev login secret")).toHaveCount(0);
+  });
+});
+
+test.describe("A session the browser kept without its cookie", () => {
+  const ALICE = { username: "alice", groups: ["wingman-dev-admins"], uid: "dev-alice", full_name: "Dev User (alice)", role: "admin" };
+
+  test("is dropped: the form shows, once, and signing in goes to the page asked for", async ({ page }) => {
+    await mockDashboardApis(page);
+    // Signed in before, then the cookie went (expired, deleted): localStorage still says signed in
+    await page.addInitScript((user) => {
+      if (sessionStorage.getItem("e2e-seeded")) return;
+      sessionStorage.setItem("e2e-seeded", "1");
+      localStorage.setItem("wingman-auth", JSON.stringify({ state: { user, isAuthenticated: true }, version: 0 }));
+    }, ALICE);
+    await page.route("**/api/auth/config", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ authorize_url: "", dev_auth_enabled: true }) })
+    );
+    const navigations: string[] = [];
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) navigations.push(frame.url());
+    });
+
+    await page.goto("/clusters");
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByLabel("Username")).toBeVisible();
+    await page.waitForTimeout(1_500);
+    expect(new URL(page.url()).pathname).toBe("/login");
+    expect(navigations.length).toBeLessThanOrEqual(2);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wingman-auth") ?? "null")?.state?.isAuthenticated)).toBe(false);
+
+    await page.route("**/api/auth/dev-login", (r: Route) =>
+      r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ access_token: "fake-e2e-token", token_type: "bearer", user: ALICE }) })
+    );
+    await page.getByLabel("Username").fill("alice");
+    await page.getByLabel("Dev login secret").fill("test-dev-secret-never-real-000001");
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.waitForURL((url) => url.pathname === "/clusters");
+    const signedIn = navigations.length;
+    await page.waitForTimeout(1_000);
+    expect(new URL(page.url()).pathname).toBe("/clusters");
+    expect(navigations.length).toBe(signedIn);
   });
 });

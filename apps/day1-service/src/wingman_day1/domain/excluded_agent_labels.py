@@ -180,6 +180,7 @@ class PoolPlan:
 
     index: int
     name: str
+    """Its NodePool's: the entry's ``name``, else ``<clusterName>-<infraEnvName>``."""
     have: tuple[str, ...]
     """Its ``excludeAgentLabels`` as written (none: empty)."""
     change: bool
@@ -188,27 +189,52 @@ class PoolPlan:
     """Why it changes, or why not."""
 
 
-def plan(values: Mapping[str, object], labels: Sequence[str]) -> tuple[PoolPlan, ...]:
+def _nodepool_name(index: int, pool: Mapping[str, object], cluster_name: str) -> str:
+    """The NodePool the chart renders: ``value_drift.nodepool_name``'s rule (an import cycle)."""
+    if pool.get("name"):
+        return str(pool["name"])
+    if pool.get("infraEnvName"):
+        return f"{cluster_name}-{pool['infraEnvName']}"
+    return f"nodepool[{index}]"
+
+
+def plan(
+    values: Mapping[str, object], labels: Sequence[str], *, cluster_name: str
+) -> tuple[PoolPlan, ...]:
     """Each nodepool and whether the per-cluster merge request writes the setting's keys on it.
 
     A nodepool that already excludes exactly them is left; a KubeVirt
     cluster's take no Agents; a Replace NodePool would have every node
-    replaced, so it is left and says so; every other gets the keys.
+    replaced, so it is left and says so; every other gets the keys. Each is
+    named by its NodePool, the name the MCE shows (``cluster_name`` is the
+    chart's ``clusterName``).
     """
     kubevirt = values.get("platform") == _KUBEVIRT
     found: list[PoolPlan] = []
     for index, pool in nodepool_entries(values, "nodepool"):
         have = tuple(keys_of(pool) or ())
-        name = _key(index, pool)
+        name = _nodepool_name(index, pool, cluster_name)
         if kubevirt:
             found.append(PoolPlan(index, name, have, False, "KubeVirt: takes no Agents"))
         elif list(have) == list(labels):
             found.append(PoolPlan(index, name, have, False, "excludes them already"))
         elif pool.get("upgradeType") == REPLACE:
-            reason = "upgradeType Replace: the change would replace every node; left as it is"
+            reason = "upgradeType Replace: the change would replace every node"
             found.append(PoolPlan(index, name, have, False, reason))
         else:
             found.append(
                 PoolPlan(index, name, have, True, "the selector is read for new nodes only")
             )
     return tuple(found)
+
+
+def summary(cluster: str, labels: Sequence[str], pools: Sequence[PoolPlan]) -> str:
+    """The merge request's own text: the NodePools it changes, then each it leaves out, and why."""
+    changed = ", ".join(p.name for p in pools if p.change)
+    text = (
+        f"Exclude Agents labelled {', '.join(labels)} from NodePools {changed} of **{cluster}** "
+        "(ADR-0065). An InPlace NodePool's running nodes are untouched: the selector is read "
+        "only when a new node claims an Agent."
+    )
+    left = [f"- {p.name} ({p.reason})" for p in pools if not p.change]
+    return "\n".join([text, "", "Left out:", *left]) if left else text
