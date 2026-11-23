@@ -407,7 +407,7 @@ Wingman's admins: a link to server-scan's own UI (`uiUrl`, else `url`), in a new
 team keeps server-scan apart from Wingman (ADR-0048's 2026-11-23 amendment): its in-app
 Server Scan area was removed after 3.52.0, with `day1.serverScanRefresh` and
 `day1.serverScanArea` and the Secret's `adminKey` and `auditorKey`, which a values file may
-still set: they are accepted and ignored ([upgrade guide](../../../docs/upgrade/3.52-to-3.53.md)).
+still set: they are accepted and ignored ([upgrade guide](../../../docs/upgrade/3.52.0-to-3.52.1.md)).
 Set `uiUrl` to server-scan's browser address when `url` is its in-cluster API Service, or the
 links name an address a laptop cannot reach.
 

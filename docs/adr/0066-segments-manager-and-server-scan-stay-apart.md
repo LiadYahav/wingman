@@ -70,7 +70,7 @@ and reads only what its own features need.
 
 - An admin and a viewer see what they saw in 3.52.0, where the areas were
   off. Nothing an operator set changes behaviour; the guide is
-  `docs/upgrade/3.52-to-3.53.md`.
+  `docs/upgrade/3.52.0-to-3.52.1.md`.
 - To bring an area back, start from git history: the last release that
   shipped both is v3.52.0 (off by default), and ADR-0047 and ADR-0048 say what
   they did. It would be a new decision, with its own ADR.
