@@ -47,9 +47,10 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final
 
+from wingman_day1.domain.herzi_marks import HerziMarks
 from wingman_day1.domain.infra_env_pools import Pool
 from wingman_day1.domain.mce_capacity import SPARE_STATE, usable
 from wingman_day1.domain.servers import ServerRow
@@ -137,6 +138,8 @@ class PoolCount:
     """Why its agentLabels name no servers: the workflow refuses a pool draw into it."""
     used: tuple[str, ...] = ()
     """Its used Agents' servers, by name: herzi removes them; never available."""
+    herzi: HerziMarks = field(default_factory=HerziMarks)
+    """What herzi marked on its InfraEnv: ignored, paused, an order in flight, no hardware."""
 
     @property
     def total(self) -> int:
@@ -209,6 +212,7 @@ def _pool(
         server_prefix=pool.server_prefix if pool else None,
         label_problems=pool.label_problems if pool else (),
         used=tuple(u.server for u in used),
+        herzi=pool.herzi if pool else HerziMarks(),
     )
 
 

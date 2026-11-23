@@ -42,6 +42,20 @@ export interface PoolCount extends PoolNames {
   total: number;
   /** Its used Agents' servers, by name (ADR-0057's 3.55.0 amendment): herzi removes them; never available or in `total`. */
   used: string[];
+  /** What herzi marked on its InfraEnv; all off when it said nothing (or the row has no InfraEnv). */
+  herzi: HerziMarks;
+}
+
+/** herzi's marks on an InfraEnv (herzi `main`): `herzi.redbull.io/ignore`, `/paused`, `/blocked-until`, `/state`. */
+export interface HerziMarks {
+  /** herzi does not read the pool, and orders nothing. */
+  ignored: boolean;
+  /** herzi orders nothing (nor removes used Agents, by its plan). */
+  paused: boolean;
+  /** An order in flight or unclear: herzi orders nothing more until then. */
+  blocked_until: string | null;
+  /** Its last order found no hardware, and it has not recovered since. */
+  no_hardware_since: string | null;
 }
 
 /** An agent nodepool of the MCE's cluster files that does not exclude every used-Agent key (ADR-0065). */

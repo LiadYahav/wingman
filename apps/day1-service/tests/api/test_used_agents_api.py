@@ -3,6 +3,7 @@
 site1-a's free Dell Agents are ``s1`` (fresh), ``s2`` (``redbull.io/ever-installed``,
 herzi's label) and ``s3`` (``example.com/used``); ``s4`` carries herzi's label
 but an AgentMachine holds it. server-scan has a healthy spare row for each.
+herzi paused the Dell InfraEnv, and its block marker is set.
 The fixtures' cluster files on site1-a (heron and lark, two nodepools each)
 exclude no label.
 """
@@ -10,6 +11,7 @@ exclude no label.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -18,6 +20,7 @@ from fastapi import FastAPI
 
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
+from wingman_day1.domain.herzi_marks import HerziMarks
 from wingman_day1.domain.machines import (
     AGENT_MACHINE_REF_LABEL,
     BMH_LABEL,
@@ -36,6 +39,8 @@ A = "ocp4-prod-mce-site1-a"
 DELL = "dell-r660-site1-128c-1024gb-5tb"
 OTHER = "example.com/used"
 SERVER_SCAN = "http://server-scan-api.inventory.svc:8000"
+BLOCKED = datetime(2026, 11, 23, 10, 5, tzinfo=UTC)
+"""herzi's block marker on the Dell InfraEnv, which it also paused."""
 
 
 def agent(server: str, *labels: str) -> AgentObservation:
@@ -60,6 +65,7 @@ def hub() -> FakeHubApi:
                 agent("s4", HERZI_LABEL, AGENT_MACHINE_REF_LABEL),
             ]
         },
+        herzi={A: {DELL: HerziMarks(paused=True, blocked_until=BLOCKED)}},
     )
 
 
@@ -196,3 +202,19 @@ async def test_without_live_status_the_used_agents_are_unknown(
         site1_a = next(m for m in body["mces"] if m["mce"] == A)
         assert (site1_a["used"], site1_a["used_error"], site1_a["available"]) == (None, None, 4)
         assert site1_a["unguarded"], "the cluster files are read without live status"
+
+
+async def test_a_pool_carries_herzis_marks_on_its_infraenv(
+    day1: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    body = await inventory(day1, auth(support.VIEWER))
+    site1_a = next(m for m in body["mces"] if m["mce"] == A)
+    dell = next(p for p in site1_a["pools"] if p["infra_env"] == DELL)
+    assert dell["herzi"] == {
+        "ignored": False,
+        "paused": True,
+        "blocked_until": "2026-11-23T10:05:00+00:00",
+        "no_hardware_since": None,
+    }
+    other = next(p for p in site1_a["pools"] if p["infra_env"] is None)
+    assert other["herzi"]["paused"] is False, "the row of servers no pool names has no InfraEnv"

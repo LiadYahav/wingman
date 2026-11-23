@@ -74,6 +74,24 @@ test("once the deployment excludes the label, the NodePools still lacking it are
   await expect(card(page, SITE1_A).getByTestId("mce-unguarded")).toBeVisible();
 });
 
+test("a pool herzi paused says so, and that its used Agents wait for it", async ({ page }) => {
+  const overview = withUsed();
+  overview.mces[0] = {
+    ...overview.mces[0],
+    pools: overview.mces[0].pools.map((p) => (p.infra_env === R650 ? { ...p, herzi: { ...p.herzi, paused: true } } : p)),
+  };
+  await setUpInventory(page, { overview });
+  await go(page, "/inventory");
+  const pool = card(page, SITE1_A).locator(`tr[data-pool="${R650}"]`);
+  await expect(pool.getByTestId("pool-herzi")).toHaveText("herzi paused");
+  await pool.getByTestId("pool-herzi").hover();
+  await expect(tooltip(page)).toContainText("herzi watches this pool but orders nothing for it");
+  await page.mouse.move(0, 0);
+  await pool.getByTestId("pool-used").hover();
+  await expect(tooltip(page)).toContainText("herzi is paused on this pool, so it removes none of them");
+  await expect(card(page, SITE1_A).locator(`tr[data-pool="${OVERVIEW.mces[0].pools[0].infra_env}"]`).getByTestId("pool-herzi")).toHaveCount(0);
+});
+
 test("used Agents that could not be read say why", async ({ page }) => {
   const overview = withUsed("herzi", null);
   overview.mces[0] = { ...overview.mces[0], used_error: "HubDenied: MCE 'ocp4-prod-mce-site1-a' denied Wingman's token" };

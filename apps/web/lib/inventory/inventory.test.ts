@@ -36,7 +36,7 @@ describe("the pools", () => {
       mce("b", "site2"),
       mce("c", "site1", { known: false }),
       mce("d", "site1", { known: false, pools: [{ infra_env: "p", available: 0, usable: 0, hardware: [], ready: 0, needs_fix: 0, total: 0,
-                                                    server_prefix: "ocp-p-mtl-site1-", label_problems: [], used: [] }] }),
+                                                    server_prefix: "ocp-p-mtl-site1-", label_problems: [], used: [], herzi: { ignored: false, paused: false, blocked_until: null, no_hardware_since: null } }] }),
     ]);
     expect(groups.map((g) => [g.site, g.mces.map((m) => m.mce), g.quiet.map((m) => m.mce)])).toEqual([
       ["site1", ["a", "d"], ["c"]],

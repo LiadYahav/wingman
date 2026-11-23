@@ -13,9 +13,10 @@ import type { MceInventory, UnguardedNodepool, UsedLabels } from "@/types/invent
 const keysText = (labels: UsedLabels): string => labels.keys.join(", ");
 
 /** The tooltip of a used count: which servers, and why they are not available. */
-export function usedHint(labels: UsedLabels, servers: string[]): string {
+export function usedHint(labels: UsedLabels, servers: string[], paused = false): string {
   const named = servers.length > 0 ? `: ${servers.join(", ")}` : "";
-  return `Used, waiting for herzi to remove${named}. Each was installed in a cluster and is free again, labelled ${keysText(labels)}: no NodePool that excludes the label takes it, and herzi takes it out of the MCE (remove-server-from-mce). Not counted as available or in the total.`;
+  const held = paused ? " herzi is paused on this pool, so it removes none of them until it is resumed." : "";
+  return `Used, waiting for herzi to remove${named}. Each was installed in a cluster and is free again, labelled ${keysText(labels)}: no NodePool that excludes the label takes it, and herzi takes it out of the MCE (remove-server-from-mce). Not counted as available or in the total.${held}`;
 }
 
 /**

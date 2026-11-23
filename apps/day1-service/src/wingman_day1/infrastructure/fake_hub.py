@@ -26,6 +26,7 @@ from wingman_day1.domain.errors import (
     HubObjectNotFoundError,
     HubUnavailableError,
 )
+from wingman_day1.domain.herzi_marks import HerziMarks
 from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
     AGENT_MACHINE_REF_LABEL,
@@ -59,6 +60,7 @@ class FakeHubApi:
         node_pools: Mapping[Key, Iterable[NodePoolObservation]] | None = None,
         infra_envs: Mapping[str, Mapping[str, Iterable[str]]] | None = None,
         agent_labels: Mapping[str, Mapping[str, Mapping[str, str]]] | None = None,
+        herzi: Mapping[str, Mapping[str, HerziMarks]] | None = None,
         machines: Mapping[Key, Iterable[MachineObservation]] | None = None,
         machine_sets: Mapping[Key, Iterable[MachineSetObservation]] | None = None,
         agent_machines: Mapping[Key, Iterable[AgentMachineObservation]] | None = None,
@@ -77,6 +79,7 @@ class FakeHubApi:
             node_pools: Per ``(mce, namespace)``, the NodePools there.
             infra_envs: Per MCE, InfraEnv names per namespace.
             agent_labels: Per MCE, the agentLabels of its InfraEnvs by name (none: no labels).
+            herzi: Per MCE, herzi's marks on its InfraEnvs by name (none: none).
             machines: Per ``(mce, control-plane namespace)``, the Machines there.
             machine_sets: Per ``(mce, control-plane namespace)``, the MachineSets.
             agent_machines: Per ``(mce, control-plane namespace)``, the AgentMachines.
@@ -99,6 +102,7 @@ class FakeHubApi:
             mce: {ns: list(names) for ns, names in by_ns.items()}
             for mce, by_ns in (infra_envs or {}).items()
         }
+        self._herzi = {mce: dict(by_name) for mce, by_name in (herzi or {}).items()}
         self._agent_labels = {
             mce: {name: dict(labels) for name, labels in by_name.items()}
             for mce, by_name in (agent_labels or {}).items()
@@ -159,8 +163,11 @@ class FakeHubApi:
         self._check(mce)
         by_ns = self._infra_envs.get(mce, {})
         names = by_ns.get(namespace, []) if namespace else [n for ns in by_ns.values() for n in ns]
-        labels = self._agent_labels.get(mce, {})
-        return [InfraEnvObservation(name, labels.get(name, {})) for name in sorted(names)]
+        labels, marks = self._agent_labels.get(mce, {}), self._herzi.get(mce, {})
+        return [
+            InfraEnvObservation(name, labels.get(name, {}), marks.get(name, HerziMarks()))
+            for name in sorted(names)
+        ]
 
     async def machines(self, mce: str, *, namespace: str) -> list[MachineObservation]:
         """See HubApi.machines."""

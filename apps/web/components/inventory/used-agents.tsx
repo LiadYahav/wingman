@@ -15,18 +15,21 @@ export function UsedCount({
   labels,
   count,
   servers = [],
+  paused = false,
   testId,
   big = false,
 }: {
   labels: UsedLabels;
   count: number;
   servers?: string[];
+  /** herzi paused the pool: it removes none of them until resumed. */
+  paused?: boolean;
   testId: string;
   big?: boolean;
 }) {
   if (count <= 0) return null;
   return (
-    <Hint hint={usedHint(labels, servers)} label={`${count} used, waiting for herzi to remove: why`} testId={testId}>
+    <Hint hint={usedHint(labels, servers, paused)} label={`${count} used, waiting for herzi to remove: why`} testId={testId}>
       <span className="text-status-warning-fg">
         {big ? <span className="font-semibold tabular-nums">{count}</span> : count} used
       </span>

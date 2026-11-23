@@ -4,7 +4,7 @@ import { serverCapacity } from "./capacity";
 
 const pool = (infra_env: string | null, available: number): PoolCount => ({
   infra_env, available, usable: available, hardware: [], ready: infra_env ? 0 : null, needs_fix: infra_env ? 0 : null,
-  total: available, server_prefix: infra_env ? "ocp-r650-mtl-site1-" : null, label_problems: [], used: [],
+  total: available, server_prefix: infra_env ? "ocp-r650-mtl-site1-" : null, label_problems: [], used: [], herzi: { ignored: false, paused: false, blocked_until: null, no_hardware_since: null },
 });
 
 const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory => ({

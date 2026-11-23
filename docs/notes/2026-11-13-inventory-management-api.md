@@ -61,11 +61,16 @@ name, with `missing`, and `replace` for an `upgradeType: Replace` one, which
 the cluster's merge request leaves out): herzi removes no used Agent of
 their InfraEnvs until each excludes it (herzi's plan, rule 6).
 
-**Not shown in the alpha: herzi's InfraEnv annotations**
-(`herzi.redbull.io/blocked-until`, `herzi.redbull.io/state`). Day1's MCE
-read lists InfraEnv names and `spec.agentLabels`; reading their annotations
-is a new hub read and a new grant. herzi's numbers and decisions (demand, target, need, dry
-run) are in its metrics and logs only, which Wingman cannot read.
+**herzi's InfraEnv marks (since 3.55.0).** The InfraEnv list day1 already
+reads carries them in `metadata`, so they need no new read or grant (the
+alpha thought otherwise): `pools[].herzi` is `ignored` (the label
+`herzi.redbull.io/ignore`), `paused` (`herzi.redbull.io/paused: "true"`),
+`blocked_until` (`herzi.redbull.io/blocked-until`, an order in flight or
+unclear) and `no_hardware_since` (`herzi.redbull.io/state`'s `capFailAt`
+when newer than its `lastOKAt`), all off on a row with no InfraEnv or a
+malformed mark. herzi's numbers and decisions (demand, target, need, dry run,
+a pool excluded or paused in its config) are in its metrics, logs and
+ConfigMap only, which Wingman cannot read.
 
 ## 1. `GET /api/day1/inventory`: every MCE's pools
 
@@ -103,7 +108,8 @@ run) are in its metrics and logs only, which Wingman cannot read.
           "total": 4,
           "server_prefix": "ocp-r650-mtl-site1-",
           "label_problems": [],
-          "used": ["ocp-r650-mtl-site1-dlfake0901"]
+          "used": ["ocp-r650-mtl-site1-dlfake0901"],
+          "herzi": {"ignored": false, "paused": true, "blocked_until": null, "no_hardware_since": null}
         },
         {
           "infra_env": null,

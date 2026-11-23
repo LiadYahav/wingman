@@ -75,7 +75,9 @@ own.
   records no `requested_by`, so Wingman never guesses.
 - **herzi's own marks are left out of the alpha.** Its InfraEnv annotations
   (`blocked-until`, `state`) need a new MCE read and grant; its numbers and
-  decisions live in its metrics and logs. Both are named as missing.
+  decisions live in its metrics and logs. Both are named as missing. (Since
+  3.55.0 the marks are shown, from the InfraEnv list already read: the
+  3.55.0 amendment.)
 - **Metrics**: the `workflows` operation `start_add_server`; the runs reuse
   `list_runs` and `get_run` (ADR-0010).
 - **The fake fleet** (`DAY1_FAKE_FLEET`, development) fakes the runs: they
@@ -385,7 +387,7 @@ named install without labels); `tests/api/test_inventory_api.py`,
 `apps/web/e2e/tests/inventory-names.spec.ts`.
 
 
-## Amendment (2026-11-23, 3.55.0): herzi's used Agents apart, and the NodePools that do not exclude its label
+## Amendment (2026-11-23, 3.55.0): herzi's used Agents apart, the NodePools that do not exclude its label, and herzi's marks
 
 herzi's plan to retire used servers (team-redbull/herzi, branch
 `docs/retire-used-servers-plan`, `578edf1`, its decisions approved; not on
@@ -435,6 +437,20 @@ planned (2026-11-23).
   merge request.
 - `GET /api/day1/inventory` gains `used_labels` (`keys`, and `source`:
   `setting` or `herzi`).
+- **herzi's marks on a pool's InfraEnv** (herzi's `main`), read from the
+  InfraEnv list Wingman already lists, its `metadata` this time
+  (`domain/herzi_marks.py`; no new read or grant, unlike what the decision
+  above assumed): `herzi.redbull.io/ignore` (the label, herzi's default
+  `ignoreLabel`: herzi does not read the pool), `herzi.redbull.io/paused:
+  "true"` (herzi orders nothing, and by its plan removes nothing),
+  `herzi.redbull.io/blocked-until` (an order in flight or unclear) and
+  `herzi.redbull.io/state`'s `capFailAt` newer than its `lastOKAt` (its last
+  order found no hardware). Each pool carries them (`pools[].herzi`); the
+  row shows a quiet badge, the first that applies ("herzi paused"), its
+  tooltip saying each, and a paused pool's used count says herzi removes
+  none of them until it is resumed. A deadline that has passed is not shown.
+  Malformed marks are none. herzi's config (an excluded or paused pool, dry
+  run) and its metrics stay out of reach.
 
 Rejected:
 
@@ -463,7 +479,9 @@ from available and the totals, a pool no InfraEnv lists, not read);
 `tests/unit/domain/test_used_agents.py` (retiring, the unguarded
 nodepools); `tests/unit/infrastructure/test_hub_used_agents.py` (the
 selector per key, namespace, paging, each Agent once, a bad key never sent,
-the fake, the cache); `tests/api/test_used_agents_api.py` (the overview with
-herzi's label and with the setting's, the unguarded nodepools, no live
-status); `apps/web/lib/inventory/used.test.ts` (Vitest) and
-`apps/web/e2e/tests/inventory-used.spec.ts`.
+the fake, the cache); `tests/unit/domain/test_herzi_marks.py` (each mark,
+Go's times, a recovered or malformed state, the adapter's parse);
+`tests/api/test_used_agents_api.py` (the overview with herzi's label and
+with the setting's, the unguarded nodepools, no live status, a pool's
+marks); `apps/web/lib/inventory/used.test.ts` and `herzi.test.ts` (Vitest)
+and `apps/web/e2e/tests/inventory-used.spec.ts`.

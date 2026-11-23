@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from typing import Final
 
+from wingman_day1.domain.herzi_marks import herzi_marks
 from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
     DEPLOYMENT_NAME_LABEL,
@@ -135,9 +136,14 @@ def hosted_cluster_from(raw: JSON, *, namespace: str, name: str) -> HostedCluste
 
 
 def infra_env_from(raw: JSON) -> InfraEnvObservation:
-    """An InfraEnv (``agent-install.openshift.io/v1beta1``): its name and ``spec.agentLabels``."""
-    labels = _mapping(_mapping(raw).get("spec")).get("agentLabels")
-    return InfraEnvObservation(_metadata_name(raw), _strings(labels, "spec.agentLabels"))
+    """An InfraEnv (``agent-install.openshift.io/v1beta1``): name, agentLabels, herzi's marks."""
+    _, labels, annotations = _metadata(raw)
+    agent_labels = _mapping(_mapping(raw).get("spec")).get("agentLabels")
+    return InfraEnvObservation(
+        _metadata_name(raw),
+        _strings(agent_labels, "spec.agentLabels"),
+        herzi_marks(labels, annotations),
+    )
 
 
 def node_pool_from(raw: JSON) -> NodePoolObservation:

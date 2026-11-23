@@ -68,6 +68,13 @@ export function InventorySection() {
         <InlineCode>Replace</InlineCode> NodePool is left out of it. Used Agents are read from the MCE, so with live
         status off they are not shown.
       </Callout>
+      <p className="text-sm text-muted-foreground leading-relaxed mt-4 mb-5">
+        A pool also shows what herzi marked on its InfraEnv, as a small badge with the details in its tooltip:{" "}
+        <strong>herzi ignores</strong> (it does not read the pool), <strong>herzi paused</strong> (it orders and
+        removes nothing there), <strong>herzi ordering</strong> (an order in flight; it orders nothing more until the
+        time shown) or <strong>no hardware</strong> (its last order found none, and it tries one server at a time).
+        herzi&apos;s own settings and numbers are in its config and metrics, which Wingman does not read.
+      </p>
 
       <h3 className="text-base font-semibold mb-3">The runs</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-5">

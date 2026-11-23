@@ -22,6 +22,7 @@ from wingman_day1.domain.add_server import (
     RunTarget,
     StartedRun,
 )
+from wingman_day1.domain.herzi_marks import HerziMarks
 from wingman_day1.domain.inventory import (
     FROM_DAY1,
     Candidate,
@@ -65,6 +66,29 @@ class HardwareOut(BaseModel):
         )
 
 
+class HerziOut(BaseModel):
+    """What herzi marked on the pool's InfraEnv (its ``main``): all off when it said nothing."""
+
+    ignored: bool
+    """``herzi.redbull.io/ignore``: herzi does not read the pool, and orders nothing."""
+    paused: bool
+    """``herzi.redbull.io/paused: "true"``: herzi orders nothing (nor removes, by its plan)."""
+    blocked_until: str | None
+    """``herzi.redbull.io/blocked-until``: an order in flight or unclear, until then."""
+    no_hardware_since: str | None
+    """Its state's ``capFailAt``, unrecovered: its last order found no hardware."""
+
+    @classmethod
+    def of(cls, marks: HerziMarks) -> HerziOut:
+        """From the domain."""
+        return cls(
+            ignored=marks.ignored,
+            paused=marks.paused,
+            blocked_until=_iso(marks.blocked_until),
+            no_hardware_since=_iso(marks.no_hardware_since),
+        )
+
+
 class PoolOut(BaseModel):
     """One InfraEnv pool; ``infra_env`` null: available servers matched to no one InfraEnv."""
 
@@ -84,6 +108,7 @@ class PoolOut(BaseModel):
     """Why its agentLabels name no servers: the workflow refuses a pool draw into it."""
     used: list[str]
     """Its used Agents' servers, by name: herzi removes them; never available or in ``total``."""
+    herzi: HerziOut
 
     @classmethod
     def of(cls, pool: PoolCount) -> PoolOut:
@@ -99,6 +124,7 @@ class PoolOut(BaseModel):
             server_prefix=pool.server_prefix,
             label_problems=list(pool.label_problems),
             used=list(pool.used),
+            herzi=HerziOut.of(pool.herzi),
         )
 
 

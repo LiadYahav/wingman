@@ -5,6 +5,7 @@ import { Info, Plus, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Hint } from "@/components/common/hint";
 import { useCandidates } from "@/lib/api/inventory";
+import { herziNote } from "@/lib/inventory/herzi";
 import { hardwareLabel, unnamedReason } from "@/lib/inventory/pools";
 import { cn } from "@/lib/utils";
 import type { InstallTarget } from "@/lib/inventory/install";
@@ -29,7 +30,13 @@ function Available({ pool, usedLabels }: { pool: PoolCount; usedLabels: UsedLabe
         </Hint>
       )}
       <span className="text-[11px]">
-        <UsedCount labels={usedLabels} count={pool.used.length} servers={pool.used} testId="pool-used" />
+        <UsedCount
+          labels={usedLabels}
+          count={pool.used.length}
+          servers={pool.used}
+          paused={pool.herzi.paused}
+          testId="pool-used"
+        />
       </span>
     </span>
   );
@@ -86,6 +93,17 @@ function Dash({ why }: { why?: string | null }) {
   );
 }
 
+/** What herzi marked on the InfraEnv, as a quiet badge whose tooltip says each mark. */
+function HerziBadge({ pool }: { pool: PoolCount }) {
+  const note = herziNote(pool.herzi);
+  if (note === null) return null;
+  return (
+    <Hint hint={note.hint} label={`${note.label}: why`} testId="pool-herzi">
+      <span className="rounded border px-1 font-sans text-[10px] text-muted-foreground">{note.label}</span>
+    </Hint>
+  );
+}
+
 /** The InfraEnv, and a warning when its agentLabels name no servers: the workflow refuses a pool draw. */
 function PoolName({ pool }: { pool: PoolCount }) {
   if (pool.infra_env === null) {
@@ -109,6 +127,7 @@ function PoolName({ pool }: { pool: PoolCount }) {
           <TriangleAlert aria-hidden className="h-3.5 w-3.5 text-status-warning-fg" />
         </Hint>
       )}
+      <HerziBadge pool={pool} />
     </span>
   );
 }
