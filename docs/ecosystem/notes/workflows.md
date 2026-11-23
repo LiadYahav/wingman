@@ -12,6 +12,29 @@ Sources:
 
 Key rationale files: `README.md` (61 KB), `CLAUDE.md` (108 KB; §2 naming/API, §4 every external dependency, §5 Temporal rules, §9 deploy/auth), `.claude/rules/*.md`, `docs/site/**` (one page per workflow), `docs/design/*.md`.
 
+> **Since then (`main` at `29ef001`, read 2026-11-23; [team-repos-2026-11-23.md](team-repos-2026-11-23.md) §3).**
+> This study is `00b3324`. What it says that is no longer so:
+> - **Create is built** as `provision-cluster` (`ff1aba7`, 2026-11-11; queues `provision-cluster-workflow`
+>   and `cluster-lifecycle-activity`, id `provision-cluster-<stem>`, `POST /workflows/cluster-lifecycle/provision-cluster?cluster=&mce=`
+>   with a YAML body). It ends after the merge, the day2 registration and a console shortcut, not at the
+>   control plane. GitLab is its only Git provider. The §3b design and the "create-cluster" plans below are
+>   history.
+> - **allocate-segment writes no Git**: `{cluster, site, type=HC}`, `values_branch` a 422, normally
+>   provision-cluster's child. The day1 CI's allocate call (§3a step 6) is removed by the workflows' air-gap
+>   guide, and Wingman's §5.6 advice to let the pipeline call it no longer works.
+> - **add-server-to-mce** takes one server a run, allocated by server-scan's `POST /servers/available`;
+>   `candidate_count` is a 422; a pool draw matches `^ocp-<flavor>-<size>-<site>-` from the InfraEnv's
+>   `redbull.io/flavor|size|site` labels, not `^ocp-<infra_env>`; no candidate loop.
+> - **uninstall-server-from-hc** takes no lock and ends at a free Agent in the MCE (`kept_in_inventory`); it
+>   no longer starts `remove-server-from-mce`, which is its own run.
+> - **update-nodepool** (children scale-up-nodepool, scale-down-nodepool) is on `main` (`5856f96`,
+>   2026-11-19), id `update-nodepool-<cluster>`, `POST /workflows/server-lifecycle/update-nodepool`: it owns
+>   NodePool shrinks, which this study calls undecided.
+> - **create-vm**'s hub limb is deployed by redbull-platform; its KV agents are not, and its redesign is PR
+>   #26. provision-dell-server is leaving `main` (PR #27).
+> - The saved OpenAPI has 26 operations (not 25); `main` adds update-nodepool. The names in §4 below are
+>   `main`'s code, not the platform's naming convention of 2026-11-22 ([kubevirt-platform.md](kubevirt-platform.md) §4).
+
 ---
 
 ## 0. Architecture in one paragraph

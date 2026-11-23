@@ -219,8 +219,8 @@ way: the mark and the backfill before the exclusion.
   yet: the create-vm child for VM pools (AD29)".
 - **create-vm's design** is in `team-redbull/workflows`, `docs/design/create-vm-placement.md` on
   branch `docs/create-vm-placement` (`5e9441b`, 11-19), "authoritative"; the corrected plan is
-  `KVW/docs/review/create-vm-plan-corrected.md`; the code is workflows PR #26, "in review"
-  (`components.json`). It replaces the deployed shape, whose two HTTP agents per KV cluster
+  `KVW/docs/review/create-vm-plan-corrected.md`; workflows PR #26 (open, docs only: nothing is implemented "until the operator approves") carries it, "in review"
+  (`components.json`). It names seeds `ocp4-<lifecycle>-seed-<site>-<id>` and InfraEnvs `<flavor>-kv<cpu>-<site>-<zone>`, the draft before the convention moved the zone and dropped the site. It replaces the deployed shape, whose two HTTP agents per KV cluster
   (`kv-capacity`, `kv-vm-api`) were never deployed, so "the deployed version cannot succeed".
   The design:
   - **The zone's KV clusters come from day1**: the hosted clusters of the site's seed folders,

@@ -57,7 +57,7 @@ need > 0 -> POST add-server-to-mce {infra_env, mce_cluster, namespace, count<=20
 - **herzi does not pick servers or BMHs.** It sends only a count per InfraEnv:
   `POST <installURL>/workflows/server-lifecycle/add-server-to-mce` with body `{"infra_env","mce_cluster","namespace","count"}` (`internal/installer/installer.go`, `testdata/request.json`).
 - The **workflows** Temporal workflow `add-server-to-mce` then does the rest:
-  - `acquire_servers` picks hardware from **server-scan**, which refreshes about every 15 min.
+  - `acquire_servers` picks hardware from **server-scan**, which refreshes cluster membership every 5 min (its `nodes-status` jobs) and hardware every 3 h (the collectors); the 15 min is herzi's own assumption (`docs/design/herzi-design.md`).
   - It resolves a VLAN through segment-lifecycle activities (the segment queue).
   - It installs the server, which registers as an Agent in that InfraEnv. Agents are auto-approved by the hub.
 - herzi itself never calls server-scan or segments-manager. It only reads Kubernetes and Temporal (DescribeWorkflowExecution on fixed workflow IDs `add-server-to-mce-<mce>_<infraEnv>_<slot 1..100>`, plus DescribeTaskQueue).
@@ -263,9 +263,9 @@ Two keys Wingman needs are not on the chart's `main`. The change the chart's own
             operator: DoesNotExist
 ```
 
-- **Why `excludeAgentLabels`.** herzi's collector of used Agents: an uninstall or a scale-down does not return a used Agent to the inventory cleanly, so herzi labels every Agent installed in a cluster as used and deletes a free Agent that carries the label. Every NodePool's `DoesNotExist` on that key keeps a freed used Agent from being bound again before herzi deletes it. The label's name is herzi's to choose and not final (`redbull.io/claimed` is proposed), so the value is a generic list of keys.
+- **Why `excludeAgentLabels`.** herzi's planned collector of used Agents: an uninstall or a scale-down does not return a used Agent to the inventory cleanly, so herzi is to label every Agent installed in a cluster as used and have a free Agent that carries the label removed (by starting `remove-server-from-mce`, never by its own delete). Every NodePool's `DoesNotExist` on that key keeps a freed used Agent from being bound again before then. **Not built** (2026-11-23): herzi `main` (`0ef4d2a`) is add-only, labels nothing and can only read Agents. Two proposals differ on the label's name, so the value is a generic list of keys: `redbull.io/claimed` (herzi PR #1, a draft, and the platform's naming convention) and `redbull.io/ever-installed` (the plan on herzi's branch `docs/retire-used-servers-plan`, no PR).
 - **Where to set it.** Per nodepool, in each cluster file, one merge request per cluster: Wingman's `DAY1_EXCLUDED_AGENT_LABELS` (ADR-0065) writes it on each new cluster's nodepools, and an existing cluster's through its own merge request; it never adds it to an existing `Replace` NodePool. The approved change has no chart-wide list.
-- **What a changed selector does.** On an `InPlace` NodePool (the default) nothing to running nodes: the Agent provider reads the selector only when a new Machine claims an Agent. On a `Replace` NodePool, every node is replaced. herzi on `main` blocks the InfraEnv's pool (§1.2).
+- **What a changed selector does.** On an `InPlace` NodePool (the default) nothing to running nodes: the Agent provider reads the selector only when a new Machine claims an Agent. On a `Replace` NodePool, every node is replaced. herzi on `main` blocks the InfraEnv's pool (§1.2). The `docs/retire-used-servers-plan` plan would accept exactly the InfraEnv's own label plus one `DoesNotExist` on `redbull.io/ever-installed`, and still block a pool for any other key.
 - **Checked:** on the port, the patches' tests (`tests/test_nodepool_entry_keys.py`) and the chart's golden parity tests pass, and `helm lint` is clean.
 ---
 

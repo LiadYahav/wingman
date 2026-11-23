@@ -1,7 +1,9 @@
 # server-scan in Wingman
 
 server-scan (team-redbull/server-scan, public) is the platform's inventory of
-bare-metal servers. Wingman reads two of its routes for its own pages. This
+bare-metal servers and, where a KubeVirt cluster runs its collector, of that
+cluster's VMs (vendor `kubevirt`, `server_type: vm`; server-scan's ADR-0058 to
+ADR-0060). Wingman reads two of its routes for its own pages. This
 guide says what Wingman reads, where that code lives, and how to bring
 Wingman to a new server-scan release. How server-scan itself works is
 [its study](../ecosystem/notes/server-scan.md).
@@ -24,7 +26,7 @@ linked from an admin's top bar (`GET /api/day1/platforms`).
 - **Links, not calls**: a node's server link opens server-scan's own server
   page, built by day1 from `SERVER_SCAN_UI_URL`.
 - **Never**: a write of any kind, `/servers/available` and reservations (the
-  workflows' and herzi's calls), server-scan's login and personal tokens, and
+  workflows' calls; herzi calls no server-scan route), server-scan's login and personal tokens, and
   the browser calling server-scan (day1 reads it).
 - **Token**: the viewer token only (`SERVER_SCAN_TOKEN`), or none for an
   instance that runs with auth off (the root README's Environment Variables).
@@ -78,3 +80,12 @@ removed area; git has them.
 ## Known gaps
 
 - **None found at v6.6.0** (checked 2026-11-18).
+- **Newer than v6.6.0** (checked 2026-11-23 at v6.9.2, `911d2c7`): the two
+  routes Wingman reads are unchanged (the detail only adds
+  `profile_deployment`), so `synced_at` can move with no code change, by the
+  steps above.
+- **VMs count like servers.** day1 reads no `server_type`, so a KubeVirt
+  cluster's VMs, once its collector runs, are Nodes-tab servers, placement's
+  spare servers and Inventory Management's pool servers like bare metal. A
+  stopped VM is `UNKNOWN`, which is not usable. Seeds and KV clusters:
+  [the readiness review](../ideas/kubevirt-seed-kv-readiness.md).
