@@ -1,7 +1,7 @@
 # ADR-0064: A nodepool may draw from several InfraEnvs: `infraEnvName` stays and names it, the others are `additionalInfraEnvNames`, behind a setting
 
 Date: 2026-11-18
-Status: Accepted; amended 2026-11-19 (the chart change the owner approved: `In [infraEnvName, ...others]`, unsorted, and no checks in the chart)
+Status: Parked 2026-11-23 (the team runs no such NodePool for now: the chart and the specs template don't carry `additionalInfraEnvNames`, and the setting stays off); Accepted, amended 2026-11-19 (the chart change the owner approved: `In [infraEnvName, ...others]`, unsorted, and no checks in the chart)
 
 ## Context
 
@@ -261,3 +261,26 @@ chart; the air-gapped chart gets the same change from a separate package.
 Nothing in Wingman changes: it reads the live NodePool's selector with
 Kubernetes' rules (ADR-0038), and compares InfraEnvs as sets.
 
+## Amendment (2026-11-23): parked
+
+The team decided that no NodePool draws Agents from more than one InfraEnv
+for now; they will add it later. So the feature is parked, not removed:
+
+- Wingman keeps it as decided above, behind `DAY1_MULTI_INFRAENV_NODEPOOLS`
+  (`day1.multiInfraEnvNodepools.enabled`), off by default. Its code and
+  tests stay; the reference template in `dev/gitlab-fixtures` keeps the
+  input block, which the tests use.
+- The hostedclusters-setup chart and the specs project's
+  `cluster-template.j2` don't carry `additionalInfraEnvNames`. The chart
+  patch for it (patch 0002 of the 2026-11-19 amendment) is dropped from
+  `docs/upgrade/patches/hostedclusters-setup/`; `excludeAgentLabels`
+  (ADR-0065) is now patch 0002, made on the annotations patch alone, and
+  keeps `matchLabels` beside its `DoesNotExist` requirements.
+- **The setting must stay off until the team adds such NodePools.** On, a
+  file could carry the list and a chart without the change would give the
+  NodePool its first InfraEnv alone, without a word (Alternatives rejected,
+  the last point).
+
+To bring it back: the chart change (the 2026-11-19 amendment's shape, made
+again on the current patches), the template block of decision 3 in the
+specs project, a herzi rule for such a NodePool's demand, then the setting.

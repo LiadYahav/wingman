@@ -1,7 +1,7 @@
 # ADR-0065: Every NodePool excludes the Agent labels the deployment names, written into each cluster file
 
 Date: 2026-11-19
-Status: Accepted
+Status: Accepted; amended 2026-11-23 (the chart change is patch 0002 and renders `matchLabels` plus a `DoesNotExist` per key, without the InfraEnvs' `In`)
 
 ## Context
 
@@ -123,7 +123,8 @@ every node (as in ADR-0064).
 
 ## Consequences
 
-- Before the setting is set: chart patch 0003, the specs project's template
+- Before the setting is set: chart patch 0002 (0003 before the 2026-11-23
+  amendment), the specs project's template
   block above, and a herzi that accepts the exclusion
   (`docs/upgrade/3.48-to-3.49.md`, its excluded Agent labels section).
 - Placement and Inventory Management count free Agents as before: a freed
@@ -150,3 +151,26 @@ every node (as in ADR-0064).
 - `apps/day1-service/tests/unit/test_settings.py` (the setting refused when
   not label keys) and `tests/repo/test_chart_env_contract.py` (the chart
   value joined with commas, refused by the schema when not label keys).
+
+## Amendment (2026-11-23): the selector without the InfraEnvs' `In`
+
+ADR-0064 is parked: no NodePool draws from several InfraEnvs for now, and
+the chart change for `additionalInfraEnvNames` is dropped. The exclusion is
+now patch 0002 in `docs/upgrade/patches/hostedclusters-setup/`, made on the
+annotations patch alone. With `excludeAgentLabels` the selector keeps its
+`matchLabels` and gains one `DoesNotExist` per key, with no `In`
+requirement:
+
+```yaml
+agentLabelSelector:
+  matchLabels:
+    infraenvs.agent-install.openshift.io: <infraEnvName>
+  matchExpressions:
+    - key: <label>
+      operator: DoesNotExist
+```
+
+It selects the same Agents as the shape above, whose `In [infraEnvName]`
+added nothing to the label. Nothing in Wingman changes: it writes the key,
+not the selector, and the Nodes tab applies the live selector with
+Kubernetes' rules (ADR-0038). herzi's rule 8 is unchanged.

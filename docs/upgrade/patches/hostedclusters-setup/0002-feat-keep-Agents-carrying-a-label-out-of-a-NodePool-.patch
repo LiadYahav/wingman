@@ -1,43 +1,44 @@
-From 816152ed76ee8bd1f7d392214593b8b05ba2f099 Mon Sep 17 00:00:00 2001
+From fc28fef7a44cd010e3eed31585efcb4e82d41c02 Mon Sep 17 00:00:00 2001
 From: Roi Blum <roiblum05@gmail.com>
-Date: Thu, 19 Nov 2026 13:19:34 +0200
-Subject: [PATCH 2/3] feat: a nodepool may draw Agents from several InfraEnvs
- (additionalInfraEnvNames)
+Date: Mon, 23 Nov 2026 15:00:03 +0200
+Subject: [PATCH 2/2] feat: keep Agents carrying a label out of a NodePool
+ (excludeAgentLabels)
 
-An entry's additionalInfraEnvNames lists more InfraEnvs its NodePool draws
-Agents from. The NodePool's agentLabelSelector is then one matchExpressions
-requirement, infraenvs.agent-install.openshift.io In [infraEnvName, ...these],
-instead of matchLabels. The name still derives from infraEnvName, so adding or
-removing an InfraEnv never renames the NodePool.
+An entry's excludeAgentLabels lists Agent label keys its NodePool never
+takes an Agent with. Its agentLabelSelector keeps the InfraEnv's matchLabels
+and gains matchExpressions: {key: <label>, operator: DoesNotExist} for each.
+An empty or missing list adds nothing.
 
-On an InPlace NodePool (the default) a changed selector touches no running
-node: the Agent provider reads it only when a new Machine claims an Agent. On
-a Replace NodePool the same change replaces every node.
+herzi's collector of used Agents labels every Agent installed in a cluster
+and deletes a free one that carries the label; excluding the label keeps a
+freed used Agent from being bound again before herzi deletes it.
 
-Without the key the render is unchanged: the golden parity tests pass.
+On an InPlace NodePool (the default) the change touches no running node; on
+a Replace NodePool it replaces every node. Without the key the render is
+unchanged: the golden parity tests pass.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_016gPPBP4UxCerc81DKaJHKm
 ---
  README.md                         |  1 +
- templates/nodepool.yaml           | 17 +++++++++++++++--
- tests/test_nodepool_entry_keys.py | 27 +++++++++++++++++++++++++--
- 3 files changed, 41 insertions(+), 4 deletions(-)
+ templates/nodepool.yaml           | 10 +++++++++-
+ tests/test_nodepool_entry_keys.py | 29 +++++++++++++++++++++++++++--
+ 3 files changed, 37 insertions(+), 3 deletions(-)
 
 diff --git a/README.md b/README.md
-index 80f0b06..21be17e 100644
+index 80f0b06..bcd9ce4 100644
 --- a/README.md
 +++ b/README.md
 @@ -258,6 +258,7 @@ lists them):
  | `services` | the GitLab branches (`serviceType`) | unset: LoadBalancer API, Routes, which is also HyperShift's KubeVirt default |
  | `pausedUntil` | unset | the upgrade workflow's abort writes `"true"`: HostedCluster and every NodePool |
  | `nodepool[].storageClass` | unset | the KubeVirt root volume's storage class |
-+| `nodepool[].additionalInfraEnvNames` | none | more InfraEnvs the NodePool draws Agents from: its `agentLabelSelector` is then `matchExpressions: [{key: infraenvs.agent-install.openshift.io, operator: In, values: [infraEnvName, ...these]}]` instead of `matchLabels`. The name still derives from `infraEnvName` |
++| `nodepool[].excludeAgentLabels` | none | Agent label keys the NodePool never takes an Agent with: its `agentLabelSelector` keeps `matchLabels` and gains `matchExpressions`, one `{key: <label>, operator: DoesNotExist}` for each. herzi's collector of used Agents labels them, so a freed used Agent is not bound again before it is deleted |
  | `nodepool[].annotations` | none | written onto the NodePool's `metadata.annotations` as given (`toYaml`), after the chart's own `argocd.argoproj.io/sync-wave`; values must be strings, and an entry does not set the sync-wave. The workflows' update-nodepool reads `redbull.io/scale-down-policy` (`fewest-pods`, `least-requested`, `least-utilized`) from it |
  
  `releaseRepo` (and `cpoRepo`) must describe the same layout as the upgrade rules'
 diff --git a/templates/nodepool.yaml b/templates/nodepool.yaml
-index c913d38..798f856 100644
+index c913d38..c9129b9 100644
 --- a/templates/nodepool.yaml
 +++ b/templates/nodepool.yaml
 @@ -6,7 +6,8 @@
@@ -46,51 +47,41 @@ index c913d38..798f856 100644
         unless a nodepool sets them. Also fixed: a tuningConfig rendered the key
 -       twice. A nodepool's annotations reach its NodePool, as written. */}}
 +       twice. A nodepool's annotations reach its NodePool, as written, and a
-+       nodepool may draw Agents from more InfraEnvs (additionalInfraEnvNames). */}}
++       nodepool may keep out Agents carrying a label (excludeAgentLabels). */}}
  {{- if include "hc.enabled" . }}
  {{- $clusterName := include "hc.clusterName" . }}
  {{- $platform := .Values.platform | default "" }}
-@@ -118,9 +119,21 @@ spec:
-     type: KubeVirt
-   {{- else }}
-     agent:
-+      {{- $labelKey := $selector.nodeLabelKey | default "infraenvs.agent-install.openshift.io" }}
+@@ -121,6 +122,13 @@ spec:
        agentLabelSelector:
-+        {{- if not .additionalInfraEnvNames }}
          matchLabels:
--          {{ $selector.nodeLabelKey | default "infraenvs.agent-install.openshift.io" }}: {{ $infraEnv }}
-+          {{ $labelKey }}: {{ $infraEnv }}
-+        {{- else }}
+           {{ $selector.nodeLabelKey | default "infraenvs.agent-install.openshift.io" }}: {{ $infraEnv }}
++        {{- with .excludeAgentLabels }}
 +        matchExpressions:
-+        - key: {{ $labelKey }}
-+          operator: In
-+          values:
-+          - {{ $infraEnv | quote }}
-+          {{- range .additionalInfraEnvNames }}
-+          - {{ . | quote }}
++          {{- range . }}
++          - key: {{ . }}
++            operator: DoesNotExist
 +          {{- end }}
 +        {{- end }}
      type: Agent
    {{- end }}
    release:
 diff --git a/tests/test_nodepool_entry_keys.py b/tests/test_nodepool_entry_keys.py
-index 79a43d5..14f02c8 100644
+index 79a43d5..6339fe9 100644
 --- a/tests/test_nodepool_entry_keys.py
 +++ b/tests/test_nodepool_entry_keys.py
-@@ -1,8 +1,10 @@
+@@ -1,8 +1,9 @@
  """Keys of a nodepool[] entry that reach its NodePool beyond the GitLab copy's.
  
  An entry's annotations reach the NodePool as written, after the chart's own
 -sync-wave. Without the key every cluster file renders exactly as before: the
 -golden parity tests hold that.
-+sync-wave. An entry's additionalInfraEnvNames make its agentLabelSelector one
-+matchExpressions In over infraEnvName and these, instead of matchLabels; the
-+name still derives from infraEnvName. Without the keys every cluster file
-+renders exactly as before: the golden parity tests hold that.
++sync-wave. An entry's excludeAgentLabels add one DoesNotExist requirement each
++beside the InfraEnv's matchLabels. Without the keys every cluster file renders
++exactly as before: the golden parity tests hold that.
  
  Requirements: helm CLI on PATH (module-level skip marker).
  """
-@@ -15,6 +17,7 @@ import yaml
+@@ -15,6 +16,7 @@ import yaml
  
  CHART = Path(__file__).resolve().parent.parent
  FIXTURES = CHART / "tests" / "fixtures" / "hostedcluster"
@@ -98,7 +89,7 @@ index 79a43d5..14f02c8 100644
  POOL = {"infraEnvName": "dell-r660-128c-1024gb", "replicas": 3, "labels": {"allowDeletion": False}}
  
  pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm CLI not available")
-@@ -45,3 +48,23 @@ def test_an_entrys_annotations_reach_the_nodepool_after_the_charts_sync_wave(tmp
+@@ -45,3 +47,26 @@ def test_an_entrys_annotations_reach_the_nodepool_after_the_charts_sync_wave(tmp
  
  def test_without_annotations_the_nodepool_has_the_charts_alone(tmp_path):
      assert _nodepool(tmp_path)["metadata"]["annotations"] == {"argocd.argoproj.io/sync-wave": "4"}
@@ -108,20 +99,23 @@ index 79a43d5..14f02c8 100644
 +    return nodepool["spec"]["platform"]["agent"]["agentLabelSelector"]
 +
 +
-+def test_without_other_infraenvs_the_selector_is_the_one_label_it_always_was(tmp_path):
++def test_without_excluded_labels_the_selector_is_the_one_label_it_always_was(tmp_path):
 +    assert _selector(_nodepool(tmp_path)) == {"matchLabels": {LABEL: "dell-r660-128c-1024gb"}}
 +
 +
-+def test_other_infraenvs_make_one_in_requirement_with_the_first_first(tmp_path):
-+    nodepool = _nodepool(tmp_path, additionalInfraEnvNames=["dell-r760-128c-1024gb", "hp-dl380-64c-512gb"])
++def test_excluded_labels_add_one_does_not_exist_each_beside_the_infraenv(tmp_path):
++    nodepool = _nodepool(tmp_path, excludeAgentLabels=["example.com/used", "b"])
 +    assert _selector(nodepool) == {
++        "matchLabels": {LABEL: "dell-r660-128c-1024gb"},
 +        "matchExpressions": [
-+            {"key": LABEL, "operator": "In",
-+             "values": ["dell-r660-128c-1024gb", "dell-r760-128c-1024gb", "hp-dl380-64c-512gb"]},
++            {"key": "example.com/used", "operator": "DoesNotExist"},
++            {"key": "b", "operator": "DoesNotExist"},
 +        ],
 +    }
-+    assert nodepool["metadata"]["name"] == "tenant-a-dell-r660-128c-1024gb"
 +
++
++def test_an_empty_list_excludes_nothing(tmp_path):
++    assert _selector(_nodepool(tmp_path, excludeAgentLabels=[])) == {"matchLabels": {LABEL: "dell-r660-128c-1024gb"}}
 -- 
 2.54.0 (Apple Git-157)
 

@@ -125,7 +125,7 @@ nodepool:
 **Optional per-cluster fields:**
 - `platform: kubevirt` with cores, memory, size, storageClass, vlan
 - `nodeLabels`, `tuningConfig`, `upgradeType`
-- `additionalInfraEnvNames`: more InfraEnvs a nodepool draws Agents from beside `infraEnvName`, which still names the NodePool. It needs the hostedclusters-setup chart change (drafted, not merged), and Wingman writes it only with `DAY1_MULTI_INFRAENV_NODEPOOLS` (ADR-0064)
+- `additionalInfraEnvNames`: more InfraEnvs a nodepool draws Agents from beside `infraEnvName`, which still names the NodePool. Parked since 2026-11-23: the team runs no such NodePool for now, so the hostedclusters-setup chart and the specs template don't carry it, and `DAY1_MULTI_INFRAENV_NODEPOOLS`, without which Wingman never writes it, stays off (ADR-0064)
 - `imageContentSources`, `disableIdmsMerge` (a flavor's image mirrors, ADR-0063), `workertag`, `pausedUntil`
 
 **Written only by automation. Wingman must never write these:**

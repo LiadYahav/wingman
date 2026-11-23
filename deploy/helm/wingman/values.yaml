@@ -133,9 +133,10 @@ day1:
     enabled: false
   # A nodepool may draw Agents from several InfraEnvs (ADR-0064): the create form
   # and the flavor editor offer more InfraEnvs beside a nodepool's own, written as
-  # nodepool[].additionalInfraEnvNames. Needs a hostedclusters-setup chart that
-  # renders the key (an older chart silently selects the first InfraEnv alone) and
-  # a specs-project template that writes it (docs/upgrade/3.46-to-3.47.md).
+  # nodepool[].additionalInfraEnvNames. Parked since 2026-11-23: leave it off. The
+  # team runs no such NodePool for now, so the hostedclusters-setup chart (which
+  # without the change silently selects the first InfraEnv alone) and the
+  # specs-project template don't carry the key.
   # Off, Wingman never writes the key; a file that has it is read and kept as it is.
   multiInfraEnvNodepools:
     enabled: false
@@ -151,7 +152,7 @@ day1:
   # used Agents, once herzi names it. Each new cluster's nodepools get
   # excludeAgentLabels (a DoesNotExist each); an existing cluster takes them
   # through its own merge request. Before setting it: the hostedclusters-setup
-  # chart change (patch 0003), the specs-project template lines and a herzi
+  # chart change (patch 0002), the specs-project template lines and a herzi
   # release that accepts the exclusion (docs/upgrade/3.48-to-3.49.md). Empty:
   # nothing changes; shipped empty.
   excludedAgentLabels: []
