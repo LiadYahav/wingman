@@ -162,9 +162,10 @@ export function SyncHeldReplicas({ name, where, held }: { name: string; where: s
 
 /**
  * A rollout's cluster whose MR leaves locked replicas out: what is left, and
- * where it is restored (the cluster's Nodes tab). No run is read here.
+ * where it is restored (the cluster's Nodes tab, an admin's: `nodesHref` only
+ * for them, ADR-0038). No run is read here.
  */
-export function HeldReplicasLinks({ held, nodesHref, className }: { held: HeldReplicas[] | undefined; nodesHref: string; className?: string }) {
+export function HeldReplicasLinks({ held, nodesHref, className }: { held: HeldReplicas[] | undefined; nodesHref?: string; className?: string }) {
   if (!held || held.length === 0) return null;
   return (
     <div className={cn("space-y-0.5 text-xs", className)} data-testid="held-replicas">
@@ -179,10 +180,12 @@ export function HeldReplicasLinks({ held, nodesHref, className }: { held: HeldRe
         ))}
         .
       </p>
-      <Link href={nodesHref} className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline">
-        Restore on its Nodes tab
-        <ArrowRight className="h-3 w-3" aria-hidden />
-      </Link>
+      {nodesHref && (
+        <Link href={nodesHref} className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline">
+          Restore on its Nodes tab
+          <ArrowRight className="h-3 w-3" aria-hidden />
+        </Link>
+      )}
     </div>
   );
 }

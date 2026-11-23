@@ -140,7 +140,8 @@ export function UpgradePanel({
   name: string;
   where: string;
   isAdmin: boolean;
-  onOpenNodesTab: () => void;
+  /** An admin's: opens the Nodes tab, which a viewer does not have (ADR-0038). */
+  onOpenNodesTab?: () => void;
 }) {
   const { data, error } = useUpgradeRun(name, where);
   if (!data || data.state !== "run") {
@@ -166,7 +167,7 @@ function RunPanel({
   run: UpgradeRun;
   error: unknown;
   isAdmin: boolean;
-  onOpenNodesTab: () => void;
+  onOpenNodesTab?: () => void;
 }) {
   const [dismissed, dismiss] = useDismissedRun(run);
   if (dismissed) return null;

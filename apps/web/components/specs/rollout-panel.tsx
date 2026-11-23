@@ -103,6 +103,8 @@ function MergeRequestLinks({ cluster: c }: { cluster: RolloutCluster }) {
 const withoutName = (reason: string, name: string) => (reason.startsWith(`${name}: `) ? reason.slice(name.length + 2) : reason);
 
 function ClusterRow({ cluster: c }: { cluster: RolloutCluster }) {
+  // Restore is on the cluster's Nodes tab, which a viewer does not have (ADR-0038)
+  const isAdmin = useIsAdmin();
   const byHand = c.state === "needs_decision" || c.state === "declined";
   return (
     <li
@@ -133,7 +135,7 @@ function ClusterRow({ cluster: c }: { cluster: RolloutCluster }) {
             {c.reasons.map((r, i) => <li key={i} className="break-words">{withoutName(r, c.name)}</li>)}
           </ul>
         )}
-        <HeldReplicasLinks held={c.held_replicas} nodesHref={`${clusterHref(c)}&tab=nodes`} className="pt-0.5" />
+        <HeldReplicasLinks held={c.held_replicas} nodesHref={isAdmin ? `${clusterHref(c)}&tab=nodes` : undefined} className="pt-0.5" />
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <MergeRequestLinks cluster={c} />

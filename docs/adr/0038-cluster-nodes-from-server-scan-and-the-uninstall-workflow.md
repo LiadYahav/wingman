@@ -218,6 +218,20 @@ the session token; nothing else about the nodes view changes.
   Wingman does not parse free text, and a customer needs those words to
   follow an upgrade that waits on them.
 
+- **The web follows the API.** For a viewer the cluster page has no Nodes
+  tab (`?tab=nodes` opens the Overview), the Overview's NodePools card lists
+  the file's nodepools without their nodes (live status's card keeps the
+  ready counts), and nothing points at the tab: the upgrade plan's rolling
+  NodePool is plain text, a flavor rollout's held replicas have no Restore
+  link. `lib/nodes.ts` sends the nodes read for an admin only, wherever it is
+  mounted. The role is known only once the page has mounted (the persisted
+  auth store), so until then the tab is drawn as the server drew it: an
+  admin's never flickers away, a viewer's goes. Scale lives on the Nodes tab,
+  so a viewer no longer sees a NodePool's sizes or its run (ADR-0062).
+
 Verification: `tests/api/test_nodes_api.py` (a viewer's 403, also with live
 status off), `test_scale_api.py` and `test_upgrades_api.py` (a viewer's run
-is the admin's without those fields).
+is the admin's without those fields); `apps/web/lib/cluster-tabs.test.ts`
+and `lib/nodes.test.ts`; the Playwright specs `cluster-nodes.spec.ts` (no
+Nodes tab, no inline nodes, no nodes read), `cluster-scale.spec.ts`,
+`cluster-upgrade.spec.ts` and `flavor-rollout.spec.ts`.

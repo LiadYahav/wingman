@@ -5,11 +5,14 @@
  * the platform's `uninstall-server-from-hc` workflow and shows its run: the
  * procedure and its checks are the workflow's, so nothing here knows its
  * phases, and a phase the workflow adds or renames needs no change here.
+ * The nodes are an admin's (ADR-0038, amended 2026-11-23): a viewer never
+ * reads them, wherever the read is mounted.
  */
 
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isApiError } from "@/lib/api-client";
 import { day1Api, day1Keys } from "@/lib/api/day1";
+import { useIsAdmin } from "@/stores/auth-store";
 import type { ClusterNodes, NodeState, ServerRecord, UninstallNodeRequest, WorkflowRun } from "@/types";
 
 /** The nodes, or "off": day1 answers 501 FEATURE_DISABLED when it cannot read the MCE (live status is off). */
@@ -55,7 +58,8 @@ export function humanize(slug: string): string {
 }
 
 /**
- * `GET /clusters/{name}/nodes{where}`, read where it is shown (`enabled`).
+ * `GET /clusters/{name}/nodes{where}`, read where it is shown (`enabled`) and
+ * only for an admin (`admin`): day1 refuses a viewer, so a viewer's page never asks.
  * Read again every 10 s while something moves (or `watching`: a run was just
  * started here), else every minute. A failed read is shown with its Retry
  * and is not read again by a mount (`retryOnMount`): React Query's default
@@ -66,7 +70,7 @@ export function humanize(slug: string): string {
 export function nodesQuery(
   name: string,
   where: string,
-  { enabled = true, watching = false }: { enabled?: boolean; watching?: boolean } = {}
+  { admin, enabled = true, watching = false }: { admin: boolean; enabled?: boolean; watching?: boolean }
 ) {
   return queryOptions<NodesRead>({
     queryKey: day1Keys.clusters.nodes(name),
@@ -78,7 +82,7 @@ export function nodesQuery(
         throw e;
       }
     },
-    enabled,
+    enabled: admin && enabled,
     staleTime: 10_000,
     // A problem is day1's answer (a 502 says the MCE did not answer): show it, with a retry
     retry: (count, error) => !isApiError(error) && count < 2,
@@ -91,9 +95,10 @@ export function nodesQuery(
   });
 }
 
-/** The nodes read (`nodesQuery`), for a component. */
+/** The nodes read (`nodesQuery`), for a component: never sent for a viewer. */
 export function useClusterNodes(name: string, where: string, options: { enabled?: boolean; watching?: boolean } = {}) {
-  return useQuery(nodesQuery(name, where, options));
+  const admin = useIsAdmin();
+  return useQuery(nodesQuery(name, where, { ...options, admin }));
 }
 
 /**

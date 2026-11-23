@@ -22,6 +22,7 @@ export function RolesSection() {
               "Create, edit and delete flavors and clusters; add existing clusters to a flavor and sync them",
               "Install, edit and remove charts",
               "Install a flavor's missing add-ons from a cluster's Drift tab",
+              "See a cluster's nodes, the servers it runs on: its Nodes tab and the nodes under each nodepool",
               "Approve, edit or reject other people's MRs",
               "Start the platform's workflows: Upgrade, Uninstall a server, Install servers and Scale, each where it is set up",
               "Open Quick Links, Segments and Server Scan; switch a server's maintenance and run server-scan's jobs",
@@ -47,7 +48,7 @@ export function RolesSection() {
           <ul className="space-y-2">
             {[
               "Browse clusters, flavors and add-ons",
-              "See drift, lints and live status",
+              "See drift, lints and live status, with each NodePool's replicas and ready count",
               "Read Inventory Management: each MCE's pools and the add-server runs",
               "Read pending approvals and their diffs",
               "Read the audit log",
@@ -81,6 +82,12 @@ export function RolesSection() {
           and you sign in with any lowercase username and the server&apos;s dev login secret. It exists only when
           the day1 service runs with <InlineCode>DEV_AUTH_ENABLED</InlineCode> and a{" "}
           <InlineCode>DEV_AUTH_SECRET</InlineCode> of at least 32 characters. A shared deployment uses OpenShift.
+        </Callout>
+        <Callout type="info" title="A cluster's nodes are for admins">
+          A Viewer sees a cluster, its nodepools and their counts, never the servers it runs on: the cluster page has
+          no <strong>Nodes</strong> tab for them (a link to it opens the Overview), a nodepool opens to no nodes, and
+          Wingman does not read them. A Scale run names no server for a Viewer and an upgrade shows no agent proposals;
+          what the workflows say in their own words is shown as it is.
         </Callout>
       </div>
     </section>

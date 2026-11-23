@@ -31,12 +31,15 @@ function StepIcon({ state }: { state: StepState }) {
   return <Circle className="h-4 w-4 text-muted-foreground/50" aria-hidden />;
 }
 
+/** A viewer's chips: there is no Nodes tab to point at (ADR-0038). */
+const POOL_TITLE_NO_NODES: Record<PoolState, string> = { ...POOL_TITLE, current: "Rolling now", alert: "Stopped here" };
+
 /**
  * The run's plan as a list of steps, from "now runs" to the target. Each step
  * is done, under way or pending from the run's own fields; a workers step
- * lists its NodePools, and one rolling now opens the Nodes tab.
+ * lists its NodePools, and for an admin (`onOpenNodesTab`) one rolling now opens the Nodes tab.
  */
-export function PlanSteps({ run, onOpenNodesTab }: { run: UpgradeRun; onOpenNodesTab: () => void }) {
+export function PlanSteps({ run, onOpenNodesTab }: { run: UpgradeRun; onOpenNodesTab?: () => void }) {
   const plan = run.plan;
   if (!plan) return null;
   const states = stepStates(run);
@@ -65,7 +68,7 @@ export function PlanSteps({ run, onOpenNodesTab }: { run: UpgradeRun; onOpenNode
                     const limit = run.max_unavailable[pool];
                     const chip = cn("rounded-md border px-1.5 py-0.5 font-mono text-xs break-all", POOL_STYLE[poolState]);
                     const label = limit ? `${pool} · max ${limit}` : pool;
-                    return poolState === "current" || poolState === "alert" ? (
+                    return onOpenNodesTab && (poolState === "current" || poolState === "alert") ? (
                       <button
                         key={pool}
                         type="button"
@@ -77,7 +80,7 @@ export function PlanSteps({ run, onOpenNodesTab }: { run: UpgradeRun; onOpenNode
                         {label}
                       </button>
                     ) : (
-                      <span key={pool} title={POOL_TITLE[poolState]} className={chip}>{label}</span>
+                      <span key={pool} title={(onOpenNodesTab ? POOL_TITLE : POOL_TITLE_NO_NODES)[poolState]} className={chip}>{label}</span>
                     );
                   })}
                 </div>

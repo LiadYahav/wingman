@@ -121,7 +121,8 @@ function ScaleDocs() {
         the chart&apos;s <InlineCode>day1.scaleNodepools.enabled</InlineCode>; off by default). An admin then sets a
         NodePool&apos;s replicas with the <strong>− N +</strong> on its card, one change at a time and after a short
         confirmation, and the platform&apos;s <InlineCode>update-nodepool</InlineCode> workflow does it: one commit to
-        day1, no merge request. The run shows under <strong>NodePool sizes</strong> for everyone.
+        day1, no merge request. The run shows under <strong>NodePool sizes</strong>, on the Nodes tab, which is an
+        admin&apos;s.
       </p>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
         On a scale-down the confirmation asks <strong>Which servers leave</strong>, one choice: the NodePool&apos;s own

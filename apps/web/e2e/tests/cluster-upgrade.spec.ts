@@ -263,6 +263,18 @@ test.describe("Upgrade a cluster through the upgrade-cluster workflow", () => {
     await expect(page.getByRole("tab", { name: "Nodes" })).toHaveAttribute("aria-selected", "true");
   });
 
+  test("a viewer sees the NodePool rolling now, with nothing that opens a Nodes tab", async ({ page }) => {
+    const rolling = run({
+      phase: "nodepool-roll", waiting_for: null, current_step: 1, current_nodepool: POOL_A, control_plane_version: "4.18.56",
+    });
+    await openCluster(page, { run: rolling, writes: [] }, { viewer: true });
+    const panel = page.getByTestId("upgrade-panel");
+    await expect(panel.getByTestId("upgrade-step").first()).toHaveAttribute("data-state", "done");
+    await expect(panel.getByTestId("upgrade-plan").getByTitle("Rolling now", { exact: true })).toContainText(POOL_A);
+    await expect(panel.getByTestId("upgrade-current-nodepool")).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "Nodes" })).toHaveCount(0);
+  });
+
   test("a viewer sees the run, with no decisions and no Upgrade", async ({ page }) => {
     await openCluster(page, { run: run(), writes: [] }, { viewer: true });
     await expect(page.getByTestId("upgrade-waiting-for")).toHaveText(WAITING);

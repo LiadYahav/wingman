@@ -434,6 +434,19 @@ test.describe("The flavor's rollout", () => {
     );
   });
 
+  test("a viewer reads which replicas are left out, with no link to a Nodes tab they do not have", async ({ page }) => {
+    const pool = "prod-held-site1-dell-r760-site1";
+    const held = mockRolloutCluster("ocp4-prod-held-site1", "pending", {
+      held_replicas: [{ index: 1, name: pool, replicas: 3, flavor_replicas: 2 }],
+    });
+    await openFlavor(page, { rollout: mockRollout({ spec_name: FLAVOR, version: "1.1.0", clusters: [held] }), asViewer: true });
+    await clustersTab(page);
+
+    const row = page.getByTestId("rollout-cluster-ocp4-prod-held-site1").getByTestId("held-replicas");
+    await expect(row).toContainText(`Not in its merge request, restored with update-nodepool: ${pool} 3 → 2.`);
+    await expect(row.getByRole("link")).toHaveCount(0);
+  });
+
   test("with no cluster following the flavor it says so, and offers nothing to reconcile", async ({ page }) => {
     await openFlavor(page, { rollout: mockRollout({ spec_name: FLAVOR, version: "1.1.0" }) });
     await clustersTab(page);

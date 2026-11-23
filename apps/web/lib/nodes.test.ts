@@ -13,9 +13,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** A component on the nodes read, as React mounts one: an observer, subscribed. */
-function mount(client: QueryClient) {
-  const observer = new QueryObserver(client, nodesQuery("ocp4-prod-new-site1", "?site=site1&mce=ocp4-prod-mce-site1-a"));
+/** A component on the nodes read, as React mounts one for an admin (or `admin: false`, a viewer): an observer, subscribed. */
+function mount(client: QueryClient, { admin = true }: { admin?: boolean } = {}) {
+  const observer = new QueryObserver(client, nodesQuery("ocp4-prod-new-site1", "?site=site1&mce=ocp4-prod-mce-site1-a", { admin }));
   const unmount = observer.subscribe(() => {});
   return { observer, unmount };
 }
@@ -50,6 +50,20 @@ describe("the nodes read", () => {
     await tab.observer.refetch();
     expect(fetch).toHaveBeenCalledTimes(2);
     tab.unmount();
+    client.clear();
+  });
+
+  it("is never sent for a viewer, wherever it is mounted (ADR-0038, amended 2026-11-23)", async () => {
+    const fetch = vi.fn(async () => notFound());
+    vi.stubGlobal("fetch", fetch);
+    const client = new QueryClient();
+    const card = mount(client, { admin: false });
+    const picker = mount(client, { admin: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(card.observer.getCurrentResult()).toMatchObject({ status: "pending", fetchStatus: "idle" });
+    expect(fetch).not.toHaveBeenCalled();
+    card.unmount();
+    picker.unmount();
     client.clear();
   });
 });

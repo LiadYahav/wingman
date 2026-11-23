@@ -1,7 +1,7 @@
 # ADR-0055: Upgrade a hosted cluster through the upgrade-cluster workflow, behind a setting
 
 Date: 2026-11-13
-Status: Accepted; amends ADR-0012 (who owns `mastertag`, `workertag` and `pausedUntil`); amended 2026-11-13 (3.19.0: the fleet's upgrades on the Clusters page; 3.20.0: upgrades inside the clusters list, its Upgrades view removed)
+Status: Accepted; amends ADR-0012 (who owns `mastertag`, `workertag` and `pausedUntil`); amended 2026-11-13 (3.19.0: the fleet's upgrades on the Clusters page; 3.20.0: upgrades inside the clusters list, its Upgrades view removed); amended by ADR-0038 (2026-11-23: a viewer's run has no agent proposals, and its current NodePool links nowhere)
 
 ## Context
 
@@ -40,7 +40,9 @@ The limbs are on the sandbox only, "not in production yet".
      read by its id `upgrade-cluster-<file stem>`: its status, its phase
      humanized, `waiting_for` verbatim, the plan's steps, the agent's
      verdict and proposals, the log, the error. The current NodePool links
-     to the Nodes tab (ADR-0038). Any signed-in user may read it.
+     to the Nodes tab (ADR-0038). Any signed-in user may read it (*since
+     2026-11-23 a viewer's run has no proposals and its current NodePool no
+     link: a viewer has no Nodes tab, ADR-0038's amendment*).
    - Admins press its decisions: approve, approve-admin-ack, continue,
      confirm-day2, pause, resume, abort (a reason required), retry, and
      approve or reject an agent's proposal.
