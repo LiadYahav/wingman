@@ -274,6 +274,12 @@ Mismatches:
 
 ## 3. kubevirt-workflows in detail
 
+> **Read again on 2026-11-23 at `3ba0835`: [kubevirt-platform.md](kubevirt-platform.md).** This section
+> is the `f7b714e` reading of 2026-10-22. Since then the repo added AD21 to AD33, the naming convention
+> (cluster, node and InfraEnv names, zones, labels, claimed Agents), procedure 19, the KV capacity
+> controller and the acceptance tests; the run ids, InfraEnv names and slot details below are the
+> older ones.
+
 ### 3.1 Platform model (docs/architecture.md, deployment-view.png)
 - Per AZ (3 zones): a **Seed** BM cluster (UPI-installed, MCE+HyperShift) hosting the **control planes of KV clusters** (AD17, AD18).
 - **KV cluster** = a HyperShift hosted cluster whose BM workers run OpenShift Virtualization; scoped to one AZ (AD8). A "cell" = one

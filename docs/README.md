@@ -33,7 +33,7 @@ template for a new one.
 | File | What it holds |
 |---|---|
 | [ecosystem/README.md](ecosystem/README.md) | The map of the team-redbull platform as read on 2026-11-07: who owns which data, how a cluster is created, the day1 values contract, the day2 layout, the team's open questions. Dated corrections mark what changed since |
-| [ecosystem/notes/](ecosystem/notes/) | One study per system, each at the commit it read: server-scan, segments-manager, workflows (with the orchestrator's OpenAPI), hosted clusters and the chart, HyperShift's node state, day2 and KubeVirt, and Wingman itself before the rewrite |
+| [ecosystem/notes/](ecosystem/notes/) | One study per system, each at the commit it read: server-scan, segments-manager, workflows (with the orchestrator's OpenAPI), hosted clusters and the chart, HyperShift's node state, day2 and KubeVirt (2026-10-22), the KubeVirt platform's model, names and procedures ([kubevirt-platform.md](ecosystem/notes/kubevirt-platform.md), 2026-11-23), what changed in the team repos up to 2026-11-23 ([team-repos-2026-11-23.md](ecosystem/notes/team-repos-2026-11-23.md)), and Wingman itself before the rewrite |
 
 Read it before changing day1 or day2, or before calling a platform system.
 

@@ -4,6 +4,29 @@ Repo: `team-redbull/server-scan` (read-only clone, `team-redbull/server-scan`, l
 All paths below are relative to that repo unless they start with `apps/` (= Wingman), and every ADR number is server-scan's own (its `docs/adr/`), not Wingman's.
 Live: `<sandbox URL, see CLAUDE.local.md>` (probed with GET only).
 
+> **Since then (v6.9.2, `911d2c7`, read 2026-11-23).** This study is server-scan at `f140914`. What it
+> says that is no longer so:
+> - **It lists VMs too.** A KubeVirt collector, one `server-scan-collectors` release per KubeVirt
+>   cluster (manager `mgr_kubevirt_<cluster>`), lists that cluster's VMs as servers of vendor `kubevirt`,
+>   source `KUBEVIRT`, `server_type: vm` (ADR-0058 to ADR-0060; v5.0.0, v6.3.0). A VM's `bmc_vendor` is
+>   null, it is always reachable, a stopped VM is `UNKNOWN`, and its host is on the detail only
+>   (`vm_host`, `GET /servers/{id}/vm-host`). The `^ocp` name filter applies to VMs; REDFISH_STANDALONE's
+>   inventory file is its own filter.
+> - **Collectors** live in `deploy/helm/server-scan-collectors/values.yaml` (every 3 h); cluster
+>   membership is the `nodes-status` jobs' (every 5 min).
+> - **Availability** (ADR-0063, v6.0.0): `GET /servers/available` reads stored data only (`max_health`,
+>   default MAJOR; `health` is a 400); the admin `POST /servers/available` locks one server, rechecks it
+>   while locked and returns it, which is what the workflows call now.
+> - **New writes**: `POST /servers/{id}/refresh` (v6.5.0), `DELETE /servers/{id}` (v6.8.0, 409
+>   `SERVER_DELETE_BLOCKED` without `?force=true`), and on the new Clusters page `POST
+>   /openshift/clusters/{kind}/{name}/decommission` (v6.9.0), with a `CLUSTER_NOT_REPORTING` event after
+>   7 days: a deleted cluster's servers are freed only by that decommission.
+> - **Health**: a `profile` category (a failed Dell OME profile deployment is CRITICAL, v6.7.0) and
+>   `raid.volume_degraded`/`raid.volume_failed` for UCS (v6.9.2).
+> - **No zone** anywhere in its backend, and nothing about seeds, KV clusters or `kv<cpu>` pools.
+>
+> What Wingman reads of it is [`../../integrations/server-scan.md`](../../integrations/server-scan.md).
+
 ---
 
 ## 1. Purpose, source of truth, where data lives, how it gets in

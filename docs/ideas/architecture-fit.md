@@ -7,6 +7,13 @@ does. This file states how they divide the work between the systems, and
 what that means for each idea in this folder. Facts about the systems
 themselves are in `docs/ecosystem/README.md`.
 
+> **Read again 2026-11-23 at `3ba0835`** ([../ecosystem/notes/kubevirt-platform.md](../ecosystem/notes/kubevirt-platform.md)):
+> AD21 to AD33 and the naming convention came after this file. Two of its lines are no longer the
+> architecture's: a released node is **never reused as it is** (AD23: a VM is destroyed, bare
+> metal wiped; every claimed Agent is marked and collected), and the capacity policy is a file
+> **Wingman edits by merge request** (AD31). What that asks of Wingman:
+> [kubevirt-seed-kv-readiness.md](kubevirt-seed-kv-readiness.md).
+>
 > **Changed 2026-11-12** by the architect's vision ([single-pane.md](single-pane.md)):
 > Wingman picks the MCE for a new cluster (question 1 below), ranks MCEs by
 > what they hold and have free (rule 2 below, amended), and shows

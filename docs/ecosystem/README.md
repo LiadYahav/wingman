@@ -31,13 +31,13 @@ What we learned on 2026-11-07 when we re-read the platform the team built over t
 
 | Component | Owns (source of truth for) | Store | Read API | Write path | Auth | What Wingman should do |
 |---|---|---|---|---|---|---|
-| **server-scan** | Physical servers (about 2.5k): BMC, MACs, hardware, health, site, free or in use, maintenance, install reservation lock | MongoDB (Redis is only a cache). Vendor collectors run every 3 h; `nodes-status` jobs run every 5 min | `GET /api/v1/sites`, `/api/v1/servers` (filters incl. `site_id`, `cluster_name`, `openshift_state`), `/api/v1/servers/rows` (whole fleet, ETag), `/api/v1/servers/{id}` | Admin only: `POST/DELETE /servers/{id}/reservation`, maintenance PUT/DELETE | Humans: AD/LDAP session (not OpenShift OAuth). Machines: static bearer tokens (admin/auditor/viewer) | **Read** with a viewer token: sites, MCEs per site, free capacity per MCE and hardware type, node hardware and health per cluster. **Never** call `/servers/available` (since server-scan v6.0.0 its admin `POST` locks one server and live-checks it, and the `GET` takes `max_health`; before, the `GET` itself rechecked and wrote) or reservations; those belong to workflows |
+| **server-scan** | Physical servers (about 2.5k) and, where a KubeVirt cluster runs its collector, its VMs (`server_type: vm`, v5.0.0): BMC, MACs, hardware, health, site, free or in use, maintenance, install reservation lock | MongoDB (Redis is only a cache). Vendor collectors run every 3 h; `nodes-status` jobs run every 5 min | `GET /api/v1/sites`, `/api/v1/servers` (filters incl. `site_id`, `cluster_name`, `openshift_state`), `/api/v1/servers/rows` (whole fleet, ETag), `/api/v1/servers/{id}` | Admin only: `POST/DELETE /servers/{id}/reservation`, maintenance PUT/DELETE | Humans: AD/LDAP session (not OpenShift OAuth). Machines: static bearer tokens (admin/auditor/viewer) | **Read** with a viewer token: sites, MCEs per site, free capacity per MCE and hardware type, node hardware and health per cluster. **Never** call `/servers/available` (since server-scan v6.0.0 its admin `POST` locks one server and live-checks it, and the `GET` takes `max_health`; before, the `GET` itself rechecked and wrote) or reservations; those belong to workflows |
 | **segments-manager** | Per-site pool of VLAN segments (/24) and which cluster holds each | MongoDB | Open (no token): `GET /api/sites`, `/api/stats`, `/api/segments?site=&status=&type=` (no cluster filter), `/search?q=`, `/by-segment` | `POST /api/segments/allocate`, `/release`, ... with one static bearer token held only by the workflow worker | Reads open; writes need one shared token | **Read**: site list, free segments per site (block create when none), a cluster's VLAN/CIDR/EPG. **Never write**: allocation is done by the `allocate-segment` workflow |
 | **workflows** (Temporal + orchestrator API) | All automation that changes things | Temporal | `GET /workflows/runs/{id}`, `GET /workflows/runs?workflow_type=<Class>` | `POST /workflows/<domain>/<workflow>` → 202 `{workflow_id, run_id}` | **None** (anyone who can reach the Route) | **Call from Wingman's backend as a proxy** (AdminUser for POST, CurrentUser for GET, fill `by`/`requested_by` from the JWT), show runs and progress |
 | **herzi** | Keeping each InfraEnv pool filled with ready Agents | No CRD or status object. Reads InfraEnv/Agent/NodePool and Temporal | Prometheus metrics `herzi_pool_demand/_need/_blocked{reason}`, InfraEnv annotations `herzi.redbull.io/state`, `blocked-until` | Starts `add-server-to-mce` (≤20 per call, ≤15 open per pool) | n/a | **Read** pool state; check that a cluster's InfraEnv pool is managed and live before creating it |
 | **hostedclusters-setup chart** | Renders HostedCluster, NodePools, NodePool ConfigMaps and the Crossplane DHCP scope from layered values | Git (day1 repo) | n/a | ArgoCD renders on merge to `main` | n/a | **Produce the short values file**, nothing more |
 | **gitops-day2** | Per-team addon (chart) deployment on every cluster type | A GitLab group of team repos (`sigs/<team>`) plus the `argocd-day2-platform` charts | n/a (a folder existing is the registration) | MRs to team repos | n/a | **Rewrite Wingman day2** to the new folder rules |
-| **kubevirt-workflows** | Design for KubeVirt tenant clusters and the inventory "slot" model, plus 18 procedures | Docs, flow animations, one Python prototype | n/a | n/a | n/a | Holds the **Day1 workflow spec** (procedure 03) and the future self-service catalog flows |
+| **kubevirt-workflows** | The platform's architecture (AD1 to AD33), its **naming convention** (cluster, node and InfraEnv names, zones, labels, the claimed-Agent mark; the source of truth since 2026-11-22), 19 procedures, the controller specifications and the acceptance tests | Docs, flow animations, a superseded Python prototype | n/a | n/a | n/a | Holds the rules Wingman's names, kinds and capacity checks follow, and the self-service catalog flows. Read at `3ba0835` (2026-11-23): [notes/kubevirt-platform.md](notes/kubevirt-platform.md) |
 
 ## How a hosted cluster gets created today
 
@@ -60,6 +60,8 @@ This flow is git plus CI, not one workflow.
 | 4 | The ArgoCD tier-3 ApplicationSet on the MCE makes one Application per file. The chart renders HostedCluster `ocp4-<cn>` (the file stem in production; checked live 2026-11-08, ADR-0015) in namespace `hcp-<cn>`, NodePool ConfigMaps, NodePools and the Crossplane DHCP scope. The exported values set no auto-sync for these Applications (**verify on a live MCE**) | ArgoCD | Automated (sync possibly manual) |
 | 5 | HyperShift brings up the control plane. NodePools claim Agents from the InfraEnv, and herzi tops the pool up | HyperShift, herzi | Automated (where herzi is live) |
 | 6 | **Delete:** remove the file through an MR. In the sandbox chart a PostDelete hook runs `release-segment`. **The production chart has no such hook, so the segment is never released** | A person + hook | Partly |
+
+> **Step 2 since 2026-11-11** (workflows `ff1aba7`): `allocate-segment` takes `{cluster, site, type}`, refuses `values_branch` (422) and writes nothing to the day1 repo. `provision-cluster` allocates the segment and publishes the file with `vlanId` and `dhcp_values` on its own branch; the workflows' guide for the air-gap removes the CI's allocate call, and the GitHub day1 mirror dropped it. A file pushed by hand, or by Wingman's default merge request, gets no VLAN there ([notes/team-repos-2026-11-23.md](notes/team-repos-2026-11-23.md) §3).
 
 **Manual or unowned today:**
 - choosing parameters and writing the file
@@ -160,23 +162,24 @@ All of these are registered in `workflow_domains/main_worker_init.py` and routed
 | Group | Workflow | What it does |
 |---|---|---|
 | Segments (hub worker) | `initialize-segment` | Create a segment in segments-manager |
-| | `allocate-segment` `{cluster, values_branch, type=HC}` | Reserve an HC VLAN and push `vlanId` + `dhcp_values` to the day1 branch (`[skip ci]`). Run id `allocate-segment-HC-<cluster>` |
+| | `allocate-segment` `{cluster, site, type=HC}` | Reserve an HC VLAN and verify it; since 2026-11-11 it writes nothing to the day1 repo (`values_branch` is a 422), and runs as `provision-cluster`'s child. Run id `allocate-segment-HC-<cluster>` |
 | | `release-segment` `{cluster}` | Delete a leftover DHCP scope, then release the segment |
-| Servers into an MCE (worker inside each MCE, queue `server-lifecycle-activity-<mce>`) | `add-server-to-mce` | Pick a server from server-scan and lock it, create the BMC Secret, BareMetalHost and NMStateConfig, then wait up to 1 h for the Agent. herzi calls this |
-| | `remove-server-from-mce`, `uninstall-server-from-hc`, `publish-infraenv-to-pxe-server` | Reverse paths and PXE publishing |
+| Cluster lifecycle (hub worker `cluster-lifecycle-worker`, since 2026-11-11) | `provision-cluster` | Takes a cluster file, allocates its segment, publishes the file with the allocation on its own branch, opens the merge request, waits for the merge, registers the cluster in day2's sig repos, makes a console shortcut. Run id `provision-cluster-<cluster>`. Wingman's Create starts it behind `DAY1_PROVISIONER=workflow` (ADR-0042) |
+| Servers into an MCE (worker inside each MCE, queue `server-lifecycle-activity-<mce>`) | `add-server-to-mce` | One server a run: server-scan allocates one locked, live-checked server (`POST /servers/available`); a pool draw picks by the InfraEnv's `agentLabels` (since 2026-11-22); then the BMC Secret, BareMetalHost and NMStateConfig, and up to 1 h for the Agent. herzi calls this |
+| | `remove-server-from-mce`, `uninstall-server-from-hc`, `publish-infraenv-to-pxe-server` | Reverse paths and PXE publishing. Since 2026-11-19 an uninstall ends at a free Agent in the MCE; leaving the MCE is `remove-server-from-mce`, a run of its own |
 | | `update-nodepool` (children `scale-up-nodepool`, `scale-down-nodepool`; merged from `feat/update-nodepool`, in production by 2026-11-23) | How many workers a hosted cluster runs: one NodePool's replicas a run (since 2026-11-18 its start takes `nodepool` only; a total over an InfraEnv kind is a 422). Commits only `replicas:` to day1 `main`, syncs the cluster's ArgoCD Application, checks the NodePools; on a scale-down the servers named, else the run's own `scale_down_policy`, else the NodePool's `redbull.io/scale-down-policy`, pick the servers that leave. One run per cluster, none while its upgrade runs. Its rule: NodePool replicas change only through it. Wingman starts it from the Nodes tab, on by default since 3.53.0 wherever Wingman has the orchestrator (ADR-0062) |
-| Servers (not deployed) | `provision-dell-server` | iDRAC IP to configured server (OME template, RAID, naming) |
-| KubeVirt (not on redbull-platform main yet) | `create-vm` | One KubeVirt VM per InfraEnv slot |
+| Servers (not deployed) | `provision-dell-server` | iDRAC IP to configured server (OME template, RAID, naming). PR #27 (open) takes it off `main` |
+| KubeVirt (the hub limb deployed by redbull-platform; its KV agents not, so a run waits) | `create-vm` | One KubeVirt VM per InfraEnv slot, by the older InfraEnv names. Its redesign (a worker per KV cluster, a zone lock) is PR #26, docs only; add-server-to-mce's VM branch does not exist yet ([notes/kubevirt-platform.md](notes/kubevirt-platform.md) §6) |
 | Cluster upgrade (sandbox only) | `upgrade-cluster` (child `upgrade-control-plane`), `upgrade-targets` (synchronous GET) | Changes only day1 git, then syncs ArgoCD. People make 10 kinds of decisions on a run, each sent as a Temporal Update. Also calls an LLM agent service and writes to a "Brain" repo |
 | Old names | `install-server` and three others | Kept only so old runs can finish; their routes return 410 |
 
 - **There are no day2/addon workflows and no UPI workflow.** UPI installs are manual.
-- **Live sandbox:** only `upgrade-cluster` has ever run (8 runs on `ocp4-upgrade-demo`).
+- **Live sandbox:** only `upgrade-cluster` has ever run (8 runs on `ocp4-upgrade-demo`). Since then `provision-cluster` has run end to end against the GitHub day1 mirror (2026-11-11).
 - **Don't trust the list endpoint for existence:** it returns `[]` even for unknown types.
 
 ### Orchestrator API cheat sheet
 
-The live spec is saved in [`notes/workflows-orchestrator-openapi.json`](notes/workflows-orchestrator-openapi.json): 25 operations and 38 schemas.
+The live spec is saved in [`notes/workflows-orchestrator-openapi.json`](notes/workflows-orchestrator-openapi.json): 26 operations and 38 schemas. `main` at `29ef001` adds `update-nodepool` (27), and some of the saved schemas are stale ([notes/team-repos-2026-11-23.md](notes/team-repos-2026-11-23.md) §3).
 
 - **Start:** `POST /workflows/<domain>/<workflow>`
   - Returns 202 `{workflow_id, run_id}`, or a per-run report for bulk/`count` requests.
@@ -244,7 +247,7 @@ This produces the ArgoCD app `redbull-ocp4-prod-herzi-site1-cert-manager-deploy`
 - **There are no quotas yet:** "Admission, which does not exist yet ... needs a pre-flight that either rejects the request with a capacity reason or accepts it with an honest estimate."
 - **Flows finish early:** "Not at workers ready".
 
-KubeVirt platform model:
+KubeVirt platform model (in full, with how it maps to day1: [notes/kubevirt-platform.md](notes/kubevirt-platform.md)):
 - Each zone has a bare-metal Seed cluster that hosts the control planes of the KubeVirt clusters.
 - Customer MCE hubs (one per OCP version band) host tenant hosted clusters.
 - Tenant workers are VMs acting as Agents, with three NodePools per cluster.
@@ -357,6 +360,7 @@ Related prior art to reuse rather than duplicate: **cluster-navigator** (`team-r
 6. **Orchestrator auth:** decided, see [Decisions](#decisions-2026-11-07).
 7. **Site codes don't match across sandboxes:** segments-manager `site1/2/3`, server-scan `nyc, tlv, bat-yam, five`, stack-export `site-a`. What is the canonical site token? segments-manager assumes it is the same token everywhere (its env key, the day1 path, the MCE name).
 8. **InfraEnv naming differs across docs:** `hp-gen11-nyc-64c-128gb` (server-scan; its server pool is `^ocp-<infraEnv>`), `<conf>-zone-<z>-metal|<cpu>` (workflows), `dell-r660-site-a-128c-1024gb-5tb` (stack-export).
+   **Answered (2026-11-22):** the naming convention sets `<flavor>-<mtl|kv<cpu>>-<zone>`, and pools draw by the InfraEnv's labels, not a name prefix ([notes/kubevirt-platform.md](notes/kubevirt-platform.md) §4).
 9. **InfraEnvs:** who creates them? Nothing in the repos does.
 10. **ArgoCD sync for per-cluster day1 apps:** auto or manual?
 11. **Air-gapped gitops-day2:** which phase is it on?
@@ -364,19 +368,22 @@ Related prior art to reuse rather than duplicate: **cluster-navigator** (`team-r
 
 ## Naming conventions cheat sheet
 
-- **MCE:** `ocp4-<env>-mce-<site>-<letter>`
-- **Seed:** `ocp4-seed-<site>-<zone>`
-- **KubeVirt cluster:** `ocp4-kubevirt-<site>-<zone>…`
-- **Hosted cluster file:** `ocp4-<env>-<name>-<site>[-<x>].yaml`. The file stem is the segments-manager `cluster_name` and the day2 folder/Argo cluster name. The HostedCluster is `ocp4-<cn>` (the stem in production) in `hcp-<cn>`.
+The platform's naming convention (kubevirt-workflows `docs/naming-convention.md`, the source of truth since 2026-11-22; [notes/kubevirt-platform.md](notes/kubevirt-platform.md) §4) sets the first five:
+
+- **MCE:** `ocp4-<lifecycle>-mce-<site>-<id>`, `<id>` one letter `a` to `z`
+- **Seed:** `ocp4-<lifecycle>-seed-<site>-<zone>-<id>`, a folder under `sites/<site>/mces/` like an MCE's
+- **KV cluster:** `ocp4-<lifecycle>-kv-<site>-<zone>-<id>`, a file under its seed's `hostedClusters/`. `mce`, `seed` and `kv` are reserved flavors: they tell these apart from MCEs and tenants in day1
+- **Hosted cluster file:** `ocp4-<lifecycle>-<flavor>-<site>-<id>.yaml` (Wingman's rule is still ADR-0014's `ocp4-<env>-<name>-<site>[-<x>]`). The file stem is the segments-manager `cluster_name` and the day2 folder/Argo cluster name. The HostedCluster is `ocp4-<cn>` (the stem in production) in `hcp-<cn>`.
+- **Node:** `ocp-<flavor>-<mtl|kv<cpu>>-<site>-<serial|mac>`; **InfraEnv:** `<flavor>-<mtl|kv<cpu>>-<zone>`, no site and no hub, so every hub at a site has the same pool names. A pool's Agents carry its `agentLabels` (`redbull.io/flavor`, `redbull.io/size`, `redbull.io/site`, `topology.kubernetes.io/zone`), and the convention has NodePools select by them (the hostedclusters-setup chart still selects by the InfraEnv's own `infraenvs.agent-install.openshift.io` label)
 - **Cluster names** are unique across the whole estate.
-- **Workflow ids are deterministic:** `allocate-segment-HC-<cluster>`, `create-hosted-cluster-<cluster>`, slot runs `<wf>-<mce>_<pool>_<n>`.
+- **Workflow ids are deterministic:** `allocate-segment-HC-<cluster>`, `provision-cluster-<cluster>`, `update-nodepool-<cluster>`, `upgrade-cluster-<cluster>`, slot runs `add-server-to-mce-<mce>_<infraEnv>_<slot>` (the 2026-11-07 spec named a `create-hosted-cluster-<cluster>`, never built).
 - **Task queues:** `<workflow>-workflow` for workflows; `<domain>-activity` for activities, with `-<mce>` added when the worker writes to an MCE.
 - **Segments:** /24 only; types `HC`, `MCE`, `INVENTORY` (an MCE's BMH boot network), `PXE`, `HUB`, `UPI`. Only UPI segments can be shared (`cluster_name` is a list).
 - **server-scan hostname rules:**
   - `^ocp4-hypershift[-data]` and `^ocp-<vendor>-<model>-<site>-<N>c-<M>gb…-<serial>` → HOSTED_CLUSTER
   - names containing `mce` → MCE
   - everything else → UPI
-  - Only hostnames matching `^ocp` are ingested. Server `name` is not unique; identity is `vendor` + `serial`.
+  - Only hostnames matching `^ocp` are ingested, VMs too (REDFISH_STANDALONE's inventory file is its own filter). Server `name` is not unique; identity is `vendor` + `serial`.
 - **server-scan states:**
   - `openshift.lifecycle_state`: an Agent that is bound becomes `INSTALLED` with `cluster_name`/`mce_name`; an unbound Agent becomes `INSTALLED_TO_INVENTORY`.
   - Health: HEALTHY, WARNING, MAJOR, CRITICAL, UNKNOWN (UNKNOWN means "not read").
@@ -403,6 +410,8 @@ We used only GET requests against these. We skipped server-scan `/servers/availa
 | helm-charts-hostedclusters-setup | `1820ce0` | 2026-10-31 | [notes/hosted-clusters.md](notes/hosted-clusters.md) |
 | gitops-day2-prod | `979e306` | 2026-09-29 | [notes/day2-kubevirt.md](notes/day2-kubevirt.md) |
 | kubevirt-workflows | `f7b714e` | 2026-10-22 | [notes/day2-kubevirt.md](notes/day2-kubevirt.md) |
+| kubevirt-workflows again (`github.com/Idan-Maimon/kubevirt-workflows`) | `3ba0835` | 2026-11-23 | [notes/kubevirt-platform.md](notes/kubevirt-platform.md) |
+| herzi, server-scan, workflows, redbull-platform, redbull-brain: what changed since 2026-11-10 (every branch, PRs by `gh api`) | `0ef4d2a`, `911d2c7` (v6.9.2), `29ef001`, `fb18769`, `52e251b` | 2026-11-23 | [notes/team-repos-2026-11-23.md](notes/team-repos-2026-11-23.md) |
 | gitops-day1-platform-config (GitHub mirror of the day1 values repo) | `d6e43de` | 2026-11-01 | This README |
 | gitops-day1-argocd-platform (day1 ApplicationSets) | `07f31d3` | 2026-09-15 | This README |
 | sim-day2-{argocd-day2-platform, sigs-falcon, sigs-lynx, sigs-orca, helm-charts, argo-appproject, day1-platform-config} (temporary day2 simulation, one repo per GitLab project) | 2026-09-29 | 2026-09-29 | This README |
