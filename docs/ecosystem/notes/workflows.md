@@ -135,14 +135,14 @@ Key rationale files: `README.md` (61 KB), `CLAUDE.md` (108 KB; §2 naming/API, �
    - Refuses if the Agent is bound (`AgentBoundToClusterError`).
    - Steps: power off; delete BMH and NMStateConfig, then the Agent last; clear PXE-map MACs on the MCE's own site; verify nothing is left; release this MCE's server-scan lock.
    - Phases `inspecting → powering-off → removing-host → removing-agent → removing-pxe-boot → verifying → releasing-server`.
-6. **uninstall-server-from-hc**: take a server out of its hosted cluster, then out of the MCE.
-   - Input `{server_names (str|list≤20), mce_cluster, namespace=inventory}` only. There is no HC or NodePool field: server-scan and the Agent binding say where the server is.
+6. **uninstall-server-from-hc**: take a server out of its hosted cluster and leave it a free Agent in its MCE (since 2026-11-19, the operator; read 2026-11-23 at team-redbull/workflows `29ef001`).
+   - Input `{server_names (str|list≤20), mce_cluster, namespace=inventory}` only. There is no HC or NodePool field: server-scan and the Agent binding say where the server is. The requests and responses did not change.
    - Steps:
-     - Check server-scan membership; inspect BMH, Agent, AgentMachine, Machine and HostedCluster; take the lock.
+     - Check server-scan membership; inspect BMH, Agent, AgentMachine, Machine and HostedCluster. No server-scan lock (the server is never `AVAILABLE` while it moves).
      - Delete the CAPI Machine; wait through `draining` (20 min) and `unbinding` (1 h).
-     - Verify the AgentMachine, the Node (through the HostedCluster admin kubeconfig) and the Agent.
-     - Run **remove-server-from-mce as an awaited child**, then release the lock.
-   - NodePool replicas are never changed, so the NodePool backfills (a replacement, not a shrink). Who owns a shrink is undecided (CLAUDE.md:493-495).
+     - Verify the AgentMachine, the Node (through the HostedCluster admin kubeconfig) and the Agent: unbound, approved, BMH present. The run completes there (`verifying-agent`).
+     - The server stays in its InfraEnv with its BareMetalHost, NMStateConfig, Agent and PXE mapping. Taking it out of the MCE is **remove-server-from-mce**, its own route. Runs recorded before 2026-11-19 still lock the server and end in remove-server-from-mce as an awaited child.
+   - NodePool replicas are never changed, so the NodePool backfills (a replacement, not a shrink), and may take this same Agent back (the run then stops, `AgentRetakenError`). Who owns a shrink is update-nodepool's.
    - Also cleans up what broken HyperShift deletions leave behind.
 7. **publish-infraenv-to-pxe-server**: write an InfraEnv's iPXE boot entry to the site's PXE VM (`/var/www/pxe-map/<mce>/<infraEnv>.ipxe`).
    - Input `{mce_cluster, infra_env, namespace=inventory}`.

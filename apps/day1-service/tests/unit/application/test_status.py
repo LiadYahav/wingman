@@ -11,6 +11,7 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.application.status import StatusService
 from wingman_day1.domain.errors import HubNotConfiguredError, HubUnavailableError
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.status import Condition, HostedClusterObservation, NodePoolObservation
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
@@ -220,7 +221,7 @@ class _CountingInfraEnvs(FakeHubApi):
         super().__init__(**kwargs)
         self.infra_env_reads = 0
 
-    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[str]:
+    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[InfraEnvObservation]:
         self.infra_env_reads += 1
         return await super().infra_envs(mce, namespace=namespace)
 

@@ -7,13 +7,17 @@
 # serials and MACs are invented, and the BMC addresses are in the
 # documentation range 192.0.2.0/24.
 #
-# - dell-r760-site1-64c-512gb-20tb: three servers for the fake herzi's pool
-#   (ocp4-prod-lark-site1's short NodePool on ocp4-prod-mce-site1-a).
-# - dell-r650-site1-96c-768gb: one a named install may pick (ready), one
-#   locked by another add-server run, one in maintenance (a donor), one
-#   CRITICAL and unreachable (needs a fix: installed only with the health
-#   checks waived).
-# - hp-gen12-site1-64c-512gb: one in WARNING health (needs a fix).
+# Their names follow the platform's naming convention (2026-11-22),
+# `ocp-<flavor>-<size>-<site>-<serial>`, lowercase: a pool draw takes the
+# servers its InfraEnv's agentLabels name (dev/fleet-fixtures/mce.yaml's
+# `hubs.<mce>.infra_envs`), whatever its zone.
+#
+# - ocp-r760-mtl-site1-: three servers for the fake herzi's pool, r760-mtl-az1
+#   on ocp4-prod-mce-site1-a (r760-mtl-az2 there names the same three).
+# - ocp-r650-mtl-site1-: one a named install may pick (ready), one locked by
+#   another add-server run, one in maintenance (a donor), one CRITICAL and
+#   unreachable (needs a fix: installed only with the health checks waived).
+# - ocp-g12-mtl-site1-: one in WARNING health (needs a fix).
 #
 # `phases` are a sample of the real workflow's steps, each `phase_seconds`
 # long; day1 passes the real ones through and keeps no list of them.
@@ -30,7 +34,7 @@ phase_seconds: 8
 
 herzi:
   mce: ocp4-prod-mce-site1-a
-  infra_env: dell-r760-site1-64c-512gb-20tb
+  infra_env: r760-mtl-az1
   first_after_seconds: 15
   every_seconds: 90
   probe_seconds: 600
@@ -41,10 +45,10 @@ runs:
     phase: completed
     server: ocp-dell-r650-site1-96c-768gb-DLFAKE0701
     minutes_ago: 190
-  - named: [ocp4-prod-mce-site1-b, ocp-dell-r650-site1-96c-768gb-DLFAKE0812]
+  - named: [ocp4-prod-mce-site1-b, ocp-r650-mtl-site1-dlfake0812]
     status: FAILED
     phase: reserving-server
-    error: "ServerReservedError: ocp-dell-r650-site1-96c-768gb-DLFAKE0812 is held by another add-server-to-mce run (fake)"
+    error: "ServerReservedError: ocp-r650-mtl-site1-dlfake0812 is held by another add-server-to-mce run (fake)"
     minutes_ago: 40
 
 x-free: &free {held: false, holder: null, mce_cluster: null, infra_env: null, expires_at: null}
@@ -52,7 +56,7 @@ x-no-maintenance: &no-maintenance {enabled: false, reason: null, created_by: nul
 
 items:
   - id: srv_00000000000000000000000000000801
-    name: ocp-dell-r760-site1-64c-512gb-20tb-DLFAKE0801
+    name: ocp-r760-mtl-site1-dlfake0801
     vendor: dell
     model: PowerEdge R760
     site_id: site1
@@ -74,7 +78,7 @@ items:
     bmc_host: 192.0.2.81
     macs: ["02:00:00:00:08:01", "02:00:00:00:08:02"]
   - id: srv_00000000000000000000000000000802
-    name: ocp-dell-r760-site1-64c-512gb-20tb-DLFAKE0802
+    name: ocp-r760-mtl-site1-dlfake0802
     vendor: dell
     model: PowerEdge R760
     site_id: site1
@@ -96,7 +100,7 @@ items:
     bmc_host: 192.0.2.82
     macs: ["02:00:00:00:08:03", "02:00:00:00:08:04"]
   - id: srv_00000000000000000000000000000803
-    name: ocp-dell-r760-site1-64c-512gb-20tb-DLFAKE0803
+    name: ocp-r760-mtl-site1-dlfake0803
     vendor: dell
     model: PowerEdge R760
     site_id: site1
@@ -118,7 +122,7 @@ items:
     bmc_host: 192.0.2.83
     macs: ["02:00:00:00:08:05", "02:00:00:00:08:06"]
   - id: srv_00000000000000000000000000000811
-    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0811
+    name: ocp-r650-mtl-site1-dlfake0811
     vendor: dell
     model: PowerEdge R650
     site_id: site1
@@ -140,7 +144,7 @@ items:
     bmc_host: 192.0.2.91
     macs: ["02:00:00:00:08:11", "02:00:00:00:08:12"]
   - id: srv_00000000000000000000000000000812
-    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0812
+    name: ocp-r650-mtl-site1-dlfake0812
     vendor: dell
     model: PowerEdge R650
     site_id: site1
@@ -152,7 +156,7 @@ items:
       held: true
       holder: add-server-to-mce
       mce_cluster: ocp4-prod-mce-site1-b
-      infra_env: dell-r650-site1-96c-768gb
+      infra_env: r650-mtl-az2
       expires_at: "2026-11-13T18:00:00Z"
     openshift_state: AVAILABLE
     cluster_name: null
@@ -167,7 +171,7 @@ items:
     bmc_host: 192.0.2.92
     macs: ["02:00:00:00:08:13", "02:00:00:00:08:14"]
   - id: srv_00000000000000000000000000000813
-    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0813
+    name: ocp-r650-mtl-site1-dlfake0813
     vendor: dell
     model: PowerEdge R650
     site_id: site1
@@ -189,7 +193,7 @@ items:
     bmc_host: 192.0.2.93
     macs: ["02:00:00:00:08:15", "02:00:00:00:08:16"]
   - id: srv_00000000000000000000000000000814
-    name: ocp-hp-gen12-site1-64c-512gb-HPFAKE0814
+    name: ocp-g12-mtl-site1-hpfake0814
     vendor: hp
     model: ProLiant DL360 Gen12
     site_id: site1
@@ -211,7 +215,7 @@ items:
     bmc_host: 192.0.2.94
     macs: ["02:00:00:00:08:17", "02:00:00:00:08:18"]
   - id: srv_00000000000000000000000000000815
-    name: ocp-dell-r650-site1-96c-768gb-DLFAKE0815
+    name: ocp-r650-mtl-site1-dlfake0815
     vendor: dell
     model: PowerEdge R650
     site_id: site1

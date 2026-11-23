@@ -25,6 +25,7 @@ from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import load_fleet
 from wingman_day1.infrastructure.fake_inventory_demo import (
     default_inventory_file,
+    load_agent_labels,
     load_inventory_demo,
 )
 from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
@@ -35,12 +36,14 @@ from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import
 
 Auth = Callable[[User], dict[str, str]]
 SITE1_A = "ocp4-prod-mce-site1-a"
-R650 = "dell-r650-site1-96c-768gb"
+R650 = "r650-mtl-az1"
 POOL = f"/api/day1/inventory/mces/{SITE1_A}/infra-envs/{R650}"
-FREE = f"ocp-{R650}-DLFAKE0811"
-LOCKED = f"ocp-{R650}-DLFAKE0812"
-DONOR = f"ocp-{R650}-DLFAKE0813"
-SICK = f"ocp-{R650}-DLFAKE0815"
+NAMES = "ocp-r650-mtl-site1"
+"""What the pool's agentLabels name its servers."""
+FREE = f"{NAMES}-dlfake0811"
+LOCKED = f"{NAMES}-dlfake0812"
+DONOR = f"{NAMES}-dlfake0813"
+SICK = f"{NAMES}-dlfake0815"
 """CRITICAL and unreachable in the fixture: it needs a fix."""
 
 
@@ -66,7 +69,8 @@ def inventory(moving: MovingClock) -> FakeServerInventory:
 
 @pytest.fixture
 def workflow(inventory: FakeServerInventory, moving: MovingClock) -> FakeAddServerWorkflow:
-    return FakeAddServerWorkflow(inventory, clock=moving, phase_seconds=1)
+    labels = load_agent_labels(default_mce_file())
+    return FakeAddServerWorkflow(inventory, clock=moving, phase_seconds=1, agent_labels=labels)
 
 
 @pytest.fixture
@@ -100,12 +104,14 @@ async def test_a_pool_says_what_is_ready_what_needs_a_fix_and_its_total(
     site1_a = next(m for m in body["mces"] if m["mce"] == SITE1_A)
     pools = {p["infra_env"]: p for p in site1_a["pools"]}
     r650 = pools[R650]
-    assert (r650["available"], r650["ready"], r650["needs_fix"], r650["total"]) == (2, 1, 1, 4)
+    assert (r650["available"], r650["ready"], r650["needs_fix"], r650["total"]) == (0, 1, 1, 2)
     assert "drawable" not in r650
     none = pools[None]
     assert (none["ready"], none["needs_fix"], none["total"]) == (None, None, none["available"])
-    named = [p for p in site1_a["pools"] if p["infra_env"] is not None]
-    assert site1_a["ready"] == sum(p["ready"] for p in named), "no pool shares a server here"
+    named = [
+        p for p in site1_a["pools"] if p["ready"] is not None and p["infra_env"] != "r760-mtl-az2"
+    ]
+    assert site1_a["ready"] == sum(p["ready"] for p in named), "az2 shares az1's servers"
     assert site1_a["needs_fix"] == sum(p["needs_fix"] for p in named)
     assert site1_a["total"] == site1_a["available"] + site1_a["ready"] + site1_a["needs_fix"]
 

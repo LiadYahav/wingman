@@ -1,7 +1,7 @@
 # ADR-0065: Every NodePool excludes the Agent labels the deployment names, written into each cluster file
 
 Date: 2026-11-19
-Status: Accepted; amended 2026-11-23 (the chart change is patch 0002 and renders `matchLabels` plus a `DoesNotExist` per key, without the InfraEnvs' `In`)
+Status: Accepted; amended 2026-11-23 (the chart change is patch 0002 and renders `matchLabels` plus a `DoesNotExist` per key, without the InfraEnvs' `In`); amended 2026-11-23 (herzi's label is `redbull.io/ever-installed`)
 
 ## Context
 
@@ -27,7 +27,8 @@ the selector keeps `matchLabels` when the nodepool draws from one InfraEnv
 and gains `matchExpressions`, the InfraEnvs' `In` requirement
 (`[infraEnvName, ...additionalInfraEnvNames]`, ADR-0064) then one
 `DoesNotExist` per key. It has no chart-wide list. The label's name is not
-final: herzi's design names it (`redbull.io/claimed` is proposed).
+final: herzi's design names it (`redbull.io/claimed` was proposed; the
+user chose `redbull.io/ever-installed`, the second 2026-11-23 amendment).
 
 What Kubernetes does with it: on an `InPlace` NodePool, the chart's default,
 a changed selector touches no running node; it is read only when a new
@@ -174,3 +175,19 @@ It selects the same Agents as the shape above, whose `In [infraEnvName]`
 added nothing to the label. Nothing in Wingman changes: it writes the key,
 not the selector, and the Nodes tab applies the live selector with
 Kubernetes' rules (ADR-0038). herzi's rule 8 is unchanged.
+
+## Amendment (2026-11-23): herzi's label is `redbull.io/ever-installed`
+
+The user decided (2026-11-23) that herzi marks a used Agent with
+`redbull.io/ever-installed`. The platform's naming convention (2026-11-22,
+§5) names the mark `redbull.io/claimed`; Wingman follows the user's
+decision, on purpose, and the PR that follows the convention (3.54.0) says
+so.
+
+- **Nothing in Wingman changes.** `DAY1_EXCLUDED_AGENT_LABELS`
+  (`day1.excludedAgentLabels`) stays a generic list of keys with **no
+  default**: it ships empty, the air-gap gets it empty, and it is set to
+  `redbull.io/ever-installed` only once herzi ships the label.
+- **Docs** name it where they named the proposal:
+  `docs/upgrade/3.48-to-3.49.md` step 9 and
+  `docs/ecosystem/notes/hosted-clusters.md`.

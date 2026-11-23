@@ -18,7 +18,6 @@ from wingman_day1.api.deps import Inventory
 from wingman_day1.api.v1.inventory_schemas import (
     AddServersIn,
     AddServersOut,
-    CandidateOut,
     CandidatesOut,
     InventoryOut,
     InventoryRunOut,
@@ -54,11 +53,12 @@ async def add_server_runs(user: CurrentUser, service: Inventory) -> InventoryRun
 async def candidates(
     mce: Mce, infra_env: InfraEnv, user: CurrentUser, service: Inventory
 ) -> CandidatesOut:
-    """The servers a named install into this pool may pick, and why a server is not offered."""
-    found = await service.candidates(mce, infra_env)
-    return CandidatesOut(
-        mce=mce, infra_env=infra_env, candidates=[CandidateOut.of(c) for c in found]
-    )
+    """The servers a named install into this pool may pick, and why a server is not offered.
+
+    The free servers the InfraEnv's agentLabels name (``server_prefix``), or every free
+    server when they are unknown or name none: the workflow checks the server named.
+    """
+    return CandidatesOut.of(mce, await service.candidates(mce, infra_env))
 
 
 @router.post("/mces/{mce}/infra-envs/{infra_env}/add-servers", status_code=202)

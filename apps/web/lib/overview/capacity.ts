@@ -8,7 +8,7 @@ import type { MceInventory, PoolCount } from "@/types/inventory";
 import { percent } from "./clusters";
 
 export interface PoolFree {
-  /** `null`: free servers whose name matches no InfraEnv on the MCE. */
+  /** `null`: free servers no one InfraEnv's agentLabels name, and no lock places. */
   infraEnv: string | null;
   free: number;
 }
@@ -23,7 +23,7 @@ export interface MceCapacity {
   servers: number;
   /** The share of the MCE's servers in a cluster, 0-100. */
   usedPercent: number;
-  /** Its pools, the most free first; the servers no InfraEnv names last. */
+  /** Its pools, the most free first; the servers no single InfraEnv names last. */
   pools: PoolFree[];
 }
 

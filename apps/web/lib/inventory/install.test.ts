@@ -12,7 +12,7 @@ import {
 
 const pool = (infraEnv: string | null, overrides: Partial<PoolCount> = {}): PoolCount => ({
   infra_env: infraEnv, available: 1, usable: 1, hardware: [], ready: infraEnv ? 2 : null, needs_fix: infraEnv ? 0 : null,
-  total: infraEnv ? 3 : 1, ...overrides,
+  total: infraEnv ? 3 : 1, server_prefix: infraEnv ? "ocp-r650-mtl-site1-" : null, label_problems: [], ...overrides,
 });
 
 const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory => ({

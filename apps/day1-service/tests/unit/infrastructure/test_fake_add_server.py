@@ -9,7 +9,11 @@ import pytest
 from wingman_day1.domain.add_server import AddServerRequest
 from wingman_day1.domain.errors import AddServerAlreadyRunningError, WorkflowsUnavailableError
 from wingman_day1.domain.servers import ServerRow
-from wingman_day1.infrastructure.fake_add_server import FakeAddServerWorkflow, HerziScript
+from wingman_day1.infrastructure.fake_add_server import (
+    AgentLabels,
+    FakeAddServerWorkflow,
+    HerziScript,
+)
 from wingman_day1.infrastructure.fake_fleet import load_fleet
 from wingman_day1.infrastructure.fake_inventory_demo import (
     default_inventory_file,
@@ -21,8 +25,12 @@ from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import
     default_fleet_file,
 )
 
-MCE = "ocp4-prod-mce-site1-a"
-POOL = "dell-r650-site1-96c-768gb"
+MCE = "ocp4-prod-mce-five-a"
+POOL = "r650-mtl-az1"
+NAMES = "ocp-r650-mtl-five"
+"""What the pool's agentLabels name its servers (``ocp-<flavor>-<size>-<site>-…``)."""
+POOL_LABELS = {"redbull.io/flavor": "r650", "redbull.io/size": "mtl", "redbull.io/site": "five"}
+LABELS = {MCE: {POOL: {**POOL_LABELS, "topology.kubernetes.io/zone": "az1"}}}
 PHASES = ("validating-infraenv", "acquiring-server", "registering-bmh")
 
 
@@ -45,18 +53,18 @@ def free(name: str, **fields: object) -> ServerRow:
 
 
 def setup(
-    *rows: ServerRow, herzi: HerziScript | None = None
+    *rows: ServerRow, herzi: HerziScript | None = None, labels: AgentLabels = LABELS
 ) -> tuple[Clock, FakeServerInventory, FakeAddServerWorkflow]:
     clock = Clock()
     inventory = FakeServerInventory(rows)
     workflow = FakeAddServerWorkflow(
-        inventory, clock=clock, phases=PHASES, phase_seconds=10, herzi=herzi
+        inventory, clock=clock, phases=PHASES, phase_seconds=10, herzi=herzi, agent_labels=labels
     )
     return clock, inventory, workflow
 
 
 async def test_a_pool_draw_takes_a_free_server_and_leaves_it_in_the_mces_inventory() -> None:
-    clock, inventory, workflow = setup(free(f"ocp-{POOL}-A"), free("ocp-other-B"))
+    clock, inventory, workflow = setup(free("ocp-r650-mtl-fivex-B"), free(f"{NAMES}-A"))
     result = await workflow.start(AddServerRequest(MCE, POOL, None, count=1))
     [run] = result.runs
     assert (result.started, run.slot) == (1, 1)
@@ -64,26 +72,26 @@ async def test_a_pool_draw_takes_a_free_server_and_leaves_it_in_the_mces_invento
     clock.advance(10)
     detail = await workflow.run(run.workflow_id)
     assert detail is not None
-    assert (detail.phase, detail.server_name) == ("acquiring-server", f"ocp-{POOL}-A")
-    taken = inventory.by_name(f"ocp-{POOL}-A")
+    assert (detail.phase, detail.server_name) == ("acquiring-server", f"{NAMES}-A")
+    taken = inventory.by_name(f"{NAMES}-A")
     assert taken is not None
     assert (taken.reserved_by, taken.reserved_for_mce) == ("add-server-to-mce", MCE)
     clock.advance(30)
     [listed] = await workflow.runs()
     assert listed.status == "completed"
-    done = inventory.by_name(f"ocp-{POOL}-A")
+    done = inventory.by_name(f"{NAMES}-A")
     assert done is not None
     assert (done.state, done.mce) == ("INSTALLED_TO_INVENTORY", MCE)
 
 
 async def test_two_draws_take_two_servers_and_then_none_is_left() -> None:
-    clock, _, workflow = setup(free(f"ocp-{POOL}-A"), free(f"ocp-{POOL}-B"))
+    clock, _, workflow = setup(free(f"{NAMES}-A"), free(f"{NAMES}-B"))
     await workflow.start(AddServerRequest(MCE, POOL, None, count=3))
     clock.advance(15)
     runs = {r.workflow_id[-1]: await workflow.run(r.workflow_id) for r in await workflow.runs()}
     assert {k: (v.status, v.server_name) for k, v in runs.items() if v} == {
-        "1": ("running", f"ocp-{POOL}-A"),
-        "2": ("running", f"ocp-{POOL}-B"),
+        "1": ("running", f"{NAMES}-A"),
+        "2": ("running", f"{NAMES}-B"),
         "3": ("failed", None),
     }
     third = runs["3"]
@@ -91,13 +99,37 @@ async def test_two_draws_take_two_servers_and_then_none_is_left() -> None:
     assert third.error.startswith("ServerNotAvailableError")
 
 
+async def test_a_pool_draw_into_an_infra_env_without_its_labels_fails_as_the_workflow_does() -> (
+    None
+):
+    lacking = {MCE: {POOL: {"redbull.io/flavor": "r650"}}}
+    clock, inventory, workflow = setup(free(f"{NAMES}-A"), labels=lacking)
+    [run] = (await workflow.start(AddServerRequest(MCE, POOL, None, count=1))).runs
+    clock.advance(10)
+    detail = await workflow.run(run.workflow_id)
+    assert detail is not None and detail.status == "failed"
+    assert detail.error is not None and detail.error.startswith("InfraEnvAgentLabelsError")
+    assert "redbull.io/size is missing; redbull.io/site is missing" in detail.error
+    taken = inventory.by_name(f"{NAMES}-A")
+    assert taken is not None and taken.reserved_by is None, "nothing was allocated"
+
+
+async def test_a_named_install_needs_no_labels_and_takes_any_free_server() -> None:
+    clock, _, workflow = setup(free("ocp-c200-mtl-five-x"), labels={})
+    request = AddServerRequest(MCE, POOL, None, server_names=("ocp-c200-mtl-five-x",))
+    [run] = (await workflow.start(request)).runs
+    clock.advance(40)
+    detail = await workflow.run(run.workflow_id)
+    assert detail is not None and detail.status == "completed"
+
+
 async def test_a_named_install_fails_on_a_locked_server_as_the_workflow_does() -> None:
-    locked = free(f"ocp-{POOL}-L", reserved_by="add-server-to-mce")
-    clock, _, workflow = setup(locked, free(f"ocp-{POOL}-M", maintenance=True))
+    locked = free(f"{NAMES}-L", reserved_by="add-server-to-mce")
+    clock, _, workflow = setup(locked, free(f"{NAMES}-M", maintenance=True))
     result = await workflow.start(
-        AddServerRequest(MCE, POOL, None, server_names=(f"ocp-{POOL}-L", f"ocp-{POOL}-M"))
+        AddServerRequest(MCE, POOL, None, server_names=(f"{NAMES}-L", f"{NAMES}-M"))
     )
-    assert [r.server_name for r in result.runs] == [f"ocp-{POOL}-L", f"ocp-{POOL}-M"]
+    assert [r.server_name for r in result.runs] == [f"{NAMES}-L", f"{NAMES}-M"]
     clock.advance(10)
     reads = [await workflow.run(r.workflow_id) for r in result.runs]
     errors = [read.error if read is not None else None for read in reads]
@@ -106,8 +138,8 @@ async def test_a_named_install_fails_on_a_locked_server_as_the_workflow_does() -
 
 
 async def test_a_named_server_already_installing_is_answered_already_running() -> None:
-    _, _, workflow = setup(free(f"ocp-{POOL}-A"))
-    request = AddServerRequest(MCE, POOL, None, server_names=(f"ocp-{POOL}-A",))
+    _, _, workflow = setup(free(f"{NAMES}-A"))
+    request = AddServerRequest(MCE, POOL, None, server_names=(f"{NAMES}-A",))
     await workflow.start(request)
     again = await workflow.start(request)
     assert (again.started, again.already_running) == (0, 1)
@@ -130,7 +162,7 @@ async def test_herzi_starts_pool_draws_and_waits_after_finding_no_server() -> No
         every=timedelta(seconds=60),
         probe=timedelta(seconds=600),
     )
-    clock, _, workflow = setup(free(f"ocp-{POOL}-A"), herzi=herzi)
+    clock, _, workflow = setup(free(f"{NAMES}-A"), herzi=herzi)
     assert await workflow.runs() == []
     clock.advance(5)
     assert len(await workflow.runs()) == 1, "herzi's first draw"
@@ -160,10 +192,14 @@ async def test_the_demo_adds_its_servers_and_past_runs() -> None:
     workflow = fake_add_server(inventory, clock=clock)
     demo = load_inventory_demo(default_inventory_file(), now=clock())
     assert all(inventory.by_id(row.id) == row for row in demo.rows)
-    locked = inventory.by_name("ocp-dell-r650-site1-96c-768gb-DLFAKE0812")
+    locked = inventory.by_name("ocp-r650-mtl-site1-dlfake0812")
     assert locked is not None and locked.reserved_by == "add-server-to-mce"
     runs = await workflow.runs()
     assert [r.status for r in runs] == ["failed", "completed"]
-    assert demo.herzi is not None and demo.herzi.mce == MCE
+    assert demo.herzi is not None and demo.herzi.mce == "ocp4-prod-mce-site1-a"
     clock.advance(demo.herzi.first_after.total_seconds())
-    assert len(await workflow.runs()) == 3, "herzi's first draw"
+    runs = await workflow.runs()
+    assert len(runs) == 3, "herzi's first draw"
+    clock.advance(demo.phase_seconds)
+    drawn = await workflow.run(runs[0].workflow_id)
+    assert drawn is not None and drawn.server_name == "ocp-r760-mtl-site1-dlfake0801"

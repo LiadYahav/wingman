@@ -9,7 +9,7 @@ const COLUMNS = [
   },
   {
     title: "Ready",
-    desc: "Free servers in server-scan named for this pool that a pool draw could pick today: healthy and reachable, unlocked, out of maintenance. The workflow still checks each one itself, so a run may still refuse one.",
+    desc: "Free servers in server-scan named for this pool that a pool draw could pick today: healthy and reachable, unlocked, out of maintenance. The workflow still checks each one itself, so a run may still refuse one. A dash when the pool's servers' names are unknown.",
   },
   {
     title: "Needs fix",
@@ -39,8 +39,13 @@ export function InventorySection() {
         One card per MCE, with its servers <strong>available</strong>, <strong>in clusters</strong> and its{" "}
         <strong>total</strong>, then a row per InfraEnv pool. Click an MCE&apos;s name to fold its pools away; this
         browser remembers it. The counts are server-scan&apos;s: an MCE it names no server on says{" "}
-        <strong>not in server-scan</strong>, never zero, and an available server whose name starts with no InfraEnv of
-        the MCE is counted under <strong>No InfraEnv</strong>, not guessed. Each number&apos;s header explains it in a
+        <strong>not in server-scan</strong>, never zero. A pool&apos;s servers are named by its InfraEnv&apos;s
+        agentLabels, as the workflow&apos;s pool draw names them: <InlineCode>ocp-&lt;flavor&gt;-&lt;size&gt;-&lt;site&gt;-…</InlineCode>{" "}
+        from <InlineCode>redbull.io/flavor</InlineCode>, <InlineCode>redbull.io/size</InlineCode> and{" "}
+        <InlineCode>redbull.io/site</InlineCode>. The zone is in no server&apos;s name, so the InfraEnvs of one flavor
+        in several zones draw from the same servers. An available server that no one InfraEnv&apos;s labels name (and
+        no lock places) is counted under <strong>No single InfraEnv</strong>, not guessed. An InfraEnv that lacks one of
+        the labels is marked: the workflow refuses a pool draw into it. Each number&apos;s header explains it in a
         tooltip:
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
@@ -50,7 +55,8 @@ export function InventorySection() {
       </div>
       <p className="text-sm text-muted-foreground leading-relaxed mb-5">
         Where this deployment does not read the MCE&apos;s own InfraEnv list (live status off), the pools are the
-        InfraEnvs its cluster files name, and the card says so in one quiet line.
+        InfraEnvs its cluster files name, and the card says so in one quiet line. Without their labels a pool&apos;s
+        servers&apos; names are unknown: it counts none ready, and its list is every free server.
       </p>
 
       <h3 className="text-base font-semibold mb-3">The runs</h3>
@@ -72,7 +78,8 @@ export function InventorySection() {
         </Step>
         <Step n={3} title="Let the pool pick, or choose servers">
           <strong>Let the pool pick</strong> takes a number (up to 20) and leaves the choice to the workflow.{" "}
-          <strong>Choose servers</strong> lists the free servers named for the pool (up to 20 at once). A locked,
+          <strong>Choose servers</strong> lists the free servers named for the pool, or every free server when the
+          pool&apos;s labels are unknown or lacking, saying so (up to 20 at once). A locked,
           in-maintenance or contested server is listed with why and cannot be chosen.
         </Step>
         <Step n={4} title="Install">

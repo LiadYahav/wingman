@@ -100,6 +100,7 @@ already have.
 | 3.52.1 | 3.52.2: docs only: the session notes (CLAUDE.md, `docs/notes/session-log.md`) | Generic: the images are unchanged |
 | 3.52 | 3.53.0: **Scale is on by default** (ADR-0062's 2026-11-23 amendment): update-nodepool is in production, so `day1.scaleNodepools.enabled` (`DAY1_SCALE_NODEPOOLS`) defaults to `true` and Scale is on wherever `workflows.url` is set: an admin scales one NodePool at a time on the Nodes tab, an edit that changes an existing NodePool's replicas is refused, and a flavor's sync or rollout leaves drifted locked replicas out of its MR and offers Restore with update-nodepool. Without `workflows.url` there is no Scale and nothing fails: the chart no longer refuses the value, and day1 starts as before. A NodePool's own scale-down policy still needs the hostedclusters-setup chart patch 0001; Scale itself needs no chart change | [3.52-to-3.53.md](3.52-to-3.53.md): with `workflows.url`, check update-nodepool on the orchestrator and on every MCE's worker first, or keep Scale off with `--set day1.scaleNodepools.enabled=false`. Upgrade with `--reset-then-reuse-values`: `--reuse-values` keeps 3.52's `false` |
 | 3.53.0 | 3.53.1: docs only: the KubeVirt platform as kubevirt-workflows describes it (`docs/ecosystem/notes/kubevirt-platform.md`: seeds, KV clusters, zones, the naming convention, claimed Agents, create-vm), where the team repos stood on 2026-11-23 (`docs/ecosystem/notes/team-repos-2026-11-23.md`), and what Wingman needs before seeds and KV clusters (`docs/ideas/kubevirt-seed-kv-readiness.md`) | Generic: the images are unchanged |
+| 3.53 | 3.54.0: **Inventory Management follows the platform's naming convention** (ADR-0057's 3.54.0 amendment): a pool's servers are the free ones its InfraEnv's agentLabels name (`ocp-<flavor>-<size>-<site>-`, as add-server-to-mce's pool draw asks server-scan since the workflows' `29ef001`; no zone), an InfraEnv lacking one of the labels is marked and the dialog says the workflow would refuse a pool draw, a pool whose labels Wingman cannot read (live status off) counts no ready server and lists every free one, a free Agent no one pool names is under "No single InfraEnv", and a named install may pick any free server that is not locked, in maintenance or contested. The uninstall confirmation and the fake fleet say a server stays a free Agent in its MCE (ADR-0038's 3.54.0 amendment). The MCE read adds `spec.agentLabels` to the same list: no new value, Secret or grant | [3.53-to-3.54.md](3.53-to-3.54.md): the generic upgrade, after checking which workflows release runs (2026-11-22 or later) and which InfraEnvs lack the labels |
 
 ### Skipping versions
 
@@ -121,7 +122,8 @@ come before Scale's scale-down policy or excluded Agent labels; they change
 no existing cluster, so they may go in at once. Several InfraEnvs per
 nodepool (3.47) stays off: it is parked (ADR-0064). Going past 3.52, do
 [3.52-to-3.53.md](3.52-to-3.53.md)'s checks before the upgrade: Scale turns on
-by default wherever `workflows.url` is set.
+by default wherever `workflows.url` is set. Going past 3.53, do [3.53-to-3.54.md](3.53-to-3.54.md)'s checks: which
+InfraEnvs lack the labels a pool draw needs.
 Rows marked Generic add nothing. A guide's checks still apply: run them
 before its upgrade step.
 

@@ -28,6 +28,7 @@ from wingman_day1.domain.errors import (
     WorkflowRefusedError,
     WorkflowsUnavailableError,
 )
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.mce_capacity import NodeObservation
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
@@ -55,6 +56,7 @@ def fake() -> FakeHubApi:
             (MCE, "hcp-x"): [NodePoolObservation("b", 2, 2), NodePoolObservation("a", 1, 0)]
         },
         infra_envs={"ocp4-prep-mce-site1-a": {"inventory": ["z", "y"], "other": ["x"]}},
+        agent_labels={"ocp4-prep-mce-site1-a": {"y": {"redbull.io/site": "site1"}}},
         mces=["ocp4-test-mce-site1-a"],
         unavailable=["ocp4-prod-mce-site2-a"],
     )
@@ -66,8 +68,12 @@ async def test_fake_hub_serves_what_was_seeded() -> None:
     assert [p.name for p in await hub.node_pools(MCE, namespace="hcp-x")] == ["a", "b"]
     assert await hub.node_pools(MCE, namespace="hcp-empty") == []
     prep = "ocp4-prep-mce-site1-a"
-    assert await hub.infra_envs(prep, namespace="inventory") == ["y", "z"]
-    assert await hub.infra_envs(prep, namespace=None) == ["x", "y", "z"]
+    in_inventory = await hub.infra_envs(prep, namespace="inventory")
+    assert in_inventory == [
+        InfraEnvObservation("y", {"redbull.io/site": "site1"}),
+        InfraEnvObservation("z"),
+    ]
+    assert [e.name for e in await hub.infra_envs(prep, namespace=None)] == ["x", "y", "z"]
     assert await hub.infra_envs("ocp4-test-mce-site1-a", namespace="inventory") == []
 
 

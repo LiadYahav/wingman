@@ -2,7 +2,9 @@
 
 More servers for the fake server-scan (``AVAILABLE`` ones, for pool draws and
 named installs), the sample phases a fake add-server run walks, the fake
-herzi's pool, and past runs (ADR-0057). Development only.
+herzi's pool, and past runs (ADR-0057). A pool draw's servers are named by the
+agentLabels of the fake MCE's InfraEnvs (``dev/fleet-fixtures/mce.yaml``,
+``hubs.<mce>.infra_envs``), as the fake hub serves them. Development only.
 """
 
 from __future__ import annotations
@@ -20,10 +22,12 @@ from wingman_day1.domain.add_server import ADD_SERVER_WORKFLOW_PREFIX, canonical
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.infrastructure.fake_add_server import (
     DEMO_PHASES,
+    AgentLabels,
     FakeAddServerWorkflow,
     FakeRun,
     HerziScript,
 )
+from wingman_day1.infrastructure.fake_mce import default_mce_file
 from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.parse import server_row
 
@@ -105,6 +109,19 @@ def load_inventory_demo(path: Path, *, now: datetime) -> InventoryDemo:
     )
 
 
+def load_agent_labels(path: Path) -> AgentLabels:
+    """Per MCE, its InfraEnvs' agentLabels in the fake MCE fixture (``hubs.<mce>.infra_envs``)."""
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    hubs: Mapping[str, Any] = (raw or {}).get("hubs") or {}
+    return {
+        str(mce): {
+            str(name): {str(k): str(v) for k, v in labels.items()}
+            for name, labels in (hub.get("infra_envs") or {}).items()
+        }
+        for mce, hub in hubs.items()
+    }
+
+
 def fake_add_server(
     inventory: FakeServerInventory, *, clock: Clock, path: Path | None = None
 ) -> FakeAddServerWorkflow:
@@ -119,4 +136,5 @@ def fake_add_server(
         phase_seconds=demo.phase_seconds,
         herzi=demo.herzi,
         runs=demo.runs,
+        agent_labels=load_agent_labels(default_mce_file()),
     )

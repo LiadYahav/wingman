@@ -7,7 +7,9 @@ as the real adapter.
 A run walks a few sample phases on the injected clock. At its second phase
 it takes a server in the fake server-scan, as the workflow takes server-scan's
 lock: a pool draw the first ``AVAILABLE``, healthy, reachable, unlocked server
-out of maintenance named ``ocp-<infraEnv>``; a named install its server, and
+out of maintenance that its InfraEnv's agentLabels name
+(``ocp-<flavor>-<size>-<site>-``; a label missing fails the run, as the
+workflow's ``InfraEnvAgentLabelsError``); a named install its server, and
 it fails as the workflow fails (locked, in maintenance, contested, not
 ``AVAILABLE``, or unhealthy or unreachable unless the start asked for
 ``allow_unhealthy``, which it then records as waived on the run). Done, the
@@ -22,7 +24,7 @@ runs look like a person's pool draws, as on the real orchestrator.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Final
@@ -43,18 +45,20 @@ from wingman_day1.domain.errors import (
     WorkflowsError,
     WorkflowsUnavailableError,
 )
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation, Pool
 from wingman_day1.domain.inventory import (
     AVAILABLE_STATE,
     UNREACHABLE,
     drawable,
     health_problems,
-    named_for,
     why_not,
 )
 from wingman_day1.domain.mce_capacity import SPARE_STATE
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import FakeServerInventory
 
+AgentLabels = Mapping[str, Mapping[str, Mapping[str, str]]]
+"""Per MCE, the agentLabels of its InfraEnvs by name."""
 HOLDER: Final = "add-server-to-mce"
 DEMO_PHASES: Final = ("validating-infraenv", "acquiring-server", "registering-bmh")
 """A few of the real workflow's steps, for the demo only."""
@@ -114,9 +118,14 @@ class FakeAddServerWorkflow:
         herzi: HerziScript | None = None,
         runs: Iterable[FakeRun] = (),
         unavailable: bool = False,
+        agent_labels: AgentLabels | None = None,
     ) -> None:
-        """Act on ``inventory``; ``runs`` are seeded as they are, in any order."""
+        """Act on ``inventory``; ``runs`` are seeded as they are, in any order.
+
+        ``agent_labels`` name each pool draw's servers; an InfraEnv without them fails its draw.
+        """
         self._inventory = inventory
+        self._agent_labels = agent_labels or {}
         self._clock = clock
         self._phases = tuple(phases)
         self._step = timedelta(seconds=phase_seconds)
@@ -253,23 +262,7 @@ class FakeAddServerWorkflow:
     def _candidate(self, run: FakeRun) -> ServerRow | str:
         """The run's server, or the error it fails with."""
         if not run.named:
-            rows = self._inventory.snapshot()
-            found = next(
-                (
-                    row
-                    for row in rows
-                    if row.state == AVAILABLE_STATE
-                    and named_for(row.name, run.infra_env)
-                    and drawable(row)
-                ),
-                None,
-            )
-            if found is None:
-                return (
-                    f"ServerNotAvailableError: no healthy free server named "
-                    f"^ocp-{run.infra_env} (fake)"
-                )
-            return found
+            return self._drawn(run)
         row = self._inventory.by_name(run.server or "")
         if row is None or row.state != AVAILABLE_STATE:
             return f"ServerNotAvailableError: {run.server} is not AVAILABLE (fake)"
@@ -284,6 +277,26 @@ class FakeAddServerWorkflow:
             return f"ServerNotAvailableError: {run.server} is not healthy: {sick} (fake)"
         run.waived = tuple(_waiver(row, problem) for problem in problems)
         return row
+
+    def _drawn(self, run: FakeRun) -> ServerRow | str:
+        """A pool draw's server, by its InfraEnv's agentLabels, or the error the run fails with."""
+        labels = self._agent_labels.get(run.mce, {}).get(run.infra_env, {})
+        pool = Pool.observed(InfraEnvObservation(run.infra_env, labels))
+        if pool.server_prefix is None:
+            problems = "; ".join(pool.label_problems)
+            return (
+                f"InfraEnvAgentLabelsError: InfraEnv {run.infra_env} on MCE {run.mce} cannot "
+                f"name the servers of a pool draw: {problems}. Nothing was allocated (fake)"
+            )
+        rows = self._inventory.snapshot()
+        drawn = (
+            r for r in rows if r.state == AVAILABLE_STATE and pool.names(r.name) and drawable(r)
+        )
+        found = next(drawn, None)
+        if found is None:
+            prefix = pool.server_prefix
+            return f"ServerNotAvailableError: no healthy free server named ^{prefix} (fake)"
+        return found
 
     def _fail(self, run: FakeRun, at: datetime, error: str) -> None:
         run.status, run.error, run.closed = "failed", error, at

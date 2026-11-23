@@ -11,7 +11,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, go, held } from "../fixtures/api-handlers";
 import {
-  DONOR, FREE, LOCKED, OVERVIEW, R650, SITE1_A, SITE1_B, SITE1_B_POOL, STARTED, off, setUpInventory,
+  DONOR, FREE, LOCKED, OVERVIEW, R650, R650_NAMES, SITE1_A, SITE1_B, SITE1_B_POOL, STARTED, off, setUpInventory,
 } from "../fixtures/inventory";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Main" });
@@ -74,7 +74,7 @@ test.describe("The pools", () => {
     await expect(r650.getByTestId("pool-available")).toContainText("2");
     await expect(r650.getByTestId("pool-available")).toContainText("1 not usable");
     await expect(r650).toContainText("dell PowerEdge R650 ×2");
-    await expect(pool(page, "")).toContainText("No InfraEnv");
+    await expect(pool(page, "")).toContainText("No single InfraEnv");
     await expect(pool(page, "").getByRole("button", { name: /Install servers/ })).toHaveCount(0);
     await expect(card(page, SITE1_B).getByTestId("mce-pools-from-day1")).toContainText("Pools named by this MCE's cluster files");
     await expect(card(page, SITE1_B).locator(`tr[data-pool="${SITE1_B_POOL}"]`)).toBeVisible();
@@ -215,7 +215,8 @@ test.describe("Install servers from the header", () => {
     await expect(dialog(page).getByRole("combobox", { name: "InfraEnv" })).toBeDisabled();
     await choose(page, dialog(page).getByRole("combobox", { name: "MCE" }), SITE1_B);
     await choose(page, dialog(page).getByRole("combobox", { name: "InfraEnv" }), SITE1_B_POOL);
-    await expect(page.getByTestId("add-servers-ready")).toHaveText("2 ready in server-scan");
+    // Its pools come from its cluster files: their agentLabels, and so their servers' names, are unknown
+    await expect(page.getByTestId("add-servers-ready")).toHaveCount(0);
     await submit.click();
     await expect(dialog(page)).toHaveCount(0);
     expect(calls.starts).toEqual([{ count: 1 }]);
@@ -272,7 +273,7 @@ test.describe("Inventory Management names a server", () => {
     await expect(page.getByTestId("run-row").nth(1)).toContainText("slot 1");
     await pool(page, R650).getByRole("button", { name: `1 ready in server-scan for ${R650}` }).click();
     await expect(page.getByTestId("candidate")).toHaveCount(4);
-    await expect(page.locator(`[data-testid="candidate"][data-server="${FREE}"]`)).toContainText(FREE.replace(`ocp-${R650}`, ""));
+    await expect(page.locator(`[data-testid="candidate"][data-server="${FREE}"]`)).toContainText(FREE.replace(R650_NAMES, ""));
     await openAdd(page);
     await dialog(page).getByRole("tab", { name: "Choose servers" }).click();
     await expect(dialog(page).locator(`[data-testid="candidate"][data-server="${FREE}"]`)).toBeVisible();

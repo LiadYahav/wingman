@@ -185,41 +185,41 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-23 — 3.48.2 to 3.52.1: chart patches, scale-down policy, excluded Agent labels, viewers without nodes, the areas removed.**
-- **hostedclusters-setup patches** (3.48.2, 3.50.2):
-  `docs/upgrade/patches/hostedclusters-setup/` holds a nodepool's
-  `annotations` (0001) and `excludeAgentLabels` (0002). `additionalInfraEnvNames`
-  was dropped when several InfraEnvs per nodepool was parked.
-- **Scale** (3.48.3, 3.49.0; ADR-0062's amendments): an orchestrator without
-  update-nodepool reads "not deployed yet". A NodePool's scale-down policy
-  (`annotations["redbull.io/scale-down-policy"]`) comes from the create form,
-  a flavor or Edit cluster. A scale-down may choose which servers leave.
-  Scale stayed off until 3.53.0 (Next).
-- **Excluded Agent labels** (3.50.0, 3.50.1; ADR-0065):
-  `DAY1_EXCLUDED_AGENT_LABELS`, empty until herzi marks used Agents.
-- **Team decisions of 2026-11-23:**
-  - No NodePool draws from several InfraEnvs for now (3.50.2, ADR-0064 Parked).
-  - A viewer never reads a cluster's nodes (3.51.0, ADR-0038's amendment).
-  - segments-manager and server-scan stay apart (3.52.0, ADR-0066). The
-    areas were off by default in 3.52.0 and removed in 3.52.1, about 36,000
-    lines. The top bar links to each system's own UI. Wingman still reads
-    both through their ports: the Nodes tab, placement, Inventory Management
-    and the EPG.
+**2026-11-23 — 3.54.0: Wingman follows the platform's naming convention.**
+- **The convention** (single source: Idan-Maimon/kubevirt-workflows
+  `docs/naming-convention.md`, out of draft 2026-11-22): InfraEnv
+  `<flavor>-<mtl|kv<cpu>>-<zone>` with agentLabels `redbull.io/flavor`,
+  `redbull.io/size`, `redbull.io/site`, `topology.kubernetes.io/zone`;
+  server `ocp-<flavor>-<size>-<site>-<serial|mac>`; cluster
+  `ocp4-<lifecycle>-<flavor>-<site>-<id>`. The workflows' main
+  (`29ef001`) follows it for add-server-to-mce only; its seed, KV and
+  InfraEnv-name parsers are still the older ones.
+- **Inventory Management** (ADR-0057's 3.54.0 amendment): a pool's servers
+  are the free ones its InfraEnv's labels name (`ocp-<flavor>-<size>-<site>-`,
+  the workflow's pool draw; no zone, server-scan has none). An InfraEnv
+  lacking a label is marked, and the dialog warns that a pool draw would be
+  refused. Without the labels (live status off) a pool counts no ready
+  server and lists every free one. A named install may pick any free
+  server. `HubApi.infra_envs` returns `spec.agentLabels` from the same list.
+- **Uninstall** (ADR-0038's 3.54.0 amendment): the workflow ends at a free
+  Agent in the MCE and takes no lock; the confirmation and the fake fleet
+  say so. Leaving the MCE is `remove-server-from-mce`, not in Wingman.
+- **Upgrade:** `docs/upgrade/3.53-to-3.54.md`, the generic upgrade after
+  checking the workflows release and which InfraEnvs lack the labels.
 
 **Next:**
-- The workflows changed (update-nodepool is merged):
-  - add-server-to-mce's pool draw picks Agents by the InfraEnv's agent
-    labels, not by the InfraEnv name that Inventory Management matches;
-  - an uninstall now ends at a free Agent.
-  Wingman's texts and matching follow once the user decides.
-- When herzi marks used Agents: set `day1.excludedAgentLabels`.
-- Scale is on by default since 3.53.0 (ADR-0062's 2026-11-23 amendment:
-  update-nodepool is in production) wherever `workflows.url` is set; off
-  without it or with `day1.scaleNodepools.enabled=false`. Next: upgrade the
-  air-gap by `docs/upgrade/3.52-to-3.53.md` (update-nodepool on the
-  orchestrator and every MCE's worker first). A NodePool's own scale-down
-  policy still needs the chart's patch 0001 and the template's lines.
-- Several InfraEnvs per nodepool: parked until the team asks for it again.
+- The user's decisions from the naming audit (the PR's description lists
+  each with file:line): requiring the `<id>` letter on new names, the
+  6-character site, a `test` lifecycle on the create form, seeds in
+  Inventory and as day2 destinations, attributing an available Agent by the
+  MCE's Agents, retiring ADR-0064; and the convention's items nothing
+  deployed needs yet (seed and KV day1 layout, reserved flavors, the chart's
+  label selectors and `nodeLabels`, the used-Agent mark).
+- When herzi ships its used-Agent label: set `day1.excludedAgentLabels`
+  to `redbull.io/ever-installed` (the user, 2026-11-23; ADR-0065's
+  amendment). It differs from the convention's §5 `redbull.io/claimed` on
+  purpose, and stays empty, with no default, until then.
+- The air-gap: `docs/upgrade/3.52-to-3.53.md`, then 3.53-to-3.54's checks.
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).
 - Flavors v2's "Left for later": missing add-ons in one MR per team, the

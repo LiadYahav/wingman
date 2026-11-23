@@ -5,7 +5,9 @@ as typed text; the workflow's first phase (``validating-infraenv``) checks
 the InfraEnv is on the MCE. Day1 does the same: the MCE must be a day1 MCE
 and the InfraEnv a DNS label, and no MCE read is needed to start a run or to
 list a pool's servers. Without the MCE's own InfraEnv list, the pools are the
-ones the MCE's day1 cluster files name.
+ones the MCE's day1 cluster files name; without their agentLabels their
+servers' names are unknown, so a pool lists every free server (ADR-0057's
+3.54.0 amendment).
 """
 
 from __future__ import annotations
@@ -36,8 +38,8 @@ from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import
 
 Auth = Callable[[User], dict[str, str]]
 SITE1_A = "ocp4-prod-mce-site1-a"
-R650 = "dell-r650-site1-96c-768gb"
-FREE = "ocp-dell-r650-site1-96c-768gb-DLFAKE0811"
+R650 = "r650-mtl-az1"
+FREE = "ocp-r650-mtl-site1-dlfake0811"
 DAY1_POOLS = [
     "dell-r660-site1-128c-1024gb-5tb",
     "dell-r760-site1-64c-512gb-20tb",
@@ -128,7 +130,8 @@ async def test_without_live_status_the_pools_are_the_ones_the_day1_files_name(
     named = [p["infra_env"] for p in site1_a["pools"] if p["infra_env"] is not None]
     assert named == DAY1_POOLS
     r760 = next(p for p in site1_a["pools"] if p["infra_env"] == DAY1_POOLS[1])
-    assert r760["ready"] == 3, "server-scan's free servers named for the pool"
+    assert (r760["ready"], r760["server_prefix"]) == (None, None), "no labels: names unknown"
+    assert r760["label_problems"] == [], "unread, not lacking"
     assert site1_a["available"] == 6, "the counts stay server-scan's"
 
 
@@ -156,8 +159,11 @@ async def test_a_pools_servers_are_listed_without_live_status(
         f"{pool(SITE1_A, R650)}/candidates", headers=auth(support.VIEWER)
     )
     assert response.status_code == 200
-    found = {c["name"]: c["offered"] for c in response.json()["candidates"]}
+    body = response.json()
+    found = {c["name"]: c["offered"] for c in body["candidates"]}
     assert found[FREE] is True
+    assert body["server_prefix"] is None, "not filtered by name: the workflow checks the server"
+    assert "ocp-r760-mtl-site1-dlfake0801" in found
 
 
 # ── Installing ───────────────────────────────────────────────────────────────
@@ -192,7 +198,7 @@ async def test_a_named_install_starts_without_live_status(
 async def test_an_infra_env_no_list_names_is_sent_and_the_workflow_judges_it(
     no_live_status: httpx.AsyncClient, auth: Auth, support: Any, workflow: FakeAddServerWorkflow
 ) -> None:
-    typed = "cisco-m6-site1-64c-512gb"
+    typed = "c200-mtl-az3"
     response = await no_live_status.post(
         f"{pool(SITE1_A, typed)}/add-servers", json={"count": 1}, headers=auth(support.ALICE)
     )

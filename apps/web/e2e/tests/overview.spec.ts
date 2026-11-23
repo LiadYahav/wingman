@@ -115,9 +115,9 @@ test.describe("Capacity", () => {
     await expect(mces).toHaveCount(2);
     await expect(mces.nth(0)).toHaveAccessibleName("ocp4-prod-mce-site1-a: 6 free of 16 servers");
     await expect(mces.nth(0)).toHaveAttribute("href", "/inventory");
-    // The most free pool first, the servers no InfraEnv names last; one free server cannot be used now
+    // The most free pool first, the servers no single InfraEnv names last; one free server cannot be used now
     await expect(mces.nth(0).getByTestId("overview-pools")).toHaveText(
-      "dell-r650-site1-96c-768gb2hp-gen12-site1-64c-512gb0no InfraEnv41 not usable"
+      "r650-mtl-az12hp-gen12-site1-64c-512gb0no single InfraEnv41 not usable"
     );
     await expect(servers.getByTestId("overview-servers-more")).toHaveText("1 MCE not in server-scan");
   });

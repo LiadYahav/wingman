@@ -1,9 +1,11 @@
 /**
  * Inventory Management mocks (docs/notes/2026-11-13-inventory-management-api.md),
- * typed so a shape change fails `tsc`. Made up: two MCEs at site1, one with a
- * pool whose names match no InfraEnv, one MCE server-scan does not know; a
- * pool's servers with a ready one, one that needs a fix, a locked one and one
- * in maintenance; runs of both origins, one failed.
+ * typed so a shape change fails `tsc`. Made up: two MCEs at site1, one with
+ * servers no one InfraEnv's agentLabels name and an InfraEnv that lacks them,
+ * one whose pools come from its cluster files (their servers' names unknown),
+ * one MCE server-scan does not know; a pool's servers with a ready one, one
+ * that needs a fix, a locked one and one in maintenance; runs of both
+ * origins, one failed. Names follow the platform's naming convention.
  */
 
 import type { Page, Route } from "@playwright/test";
@@ -19,15 +21,20 @@ import type {
 } from "../../types/inventory";
 
 export const SITE1_A = "ocp4-prod-mce-site1-a";
-export const R650 = "dell-r650-site1-96c-768gb";
-export const FREE = `ocp-${R650}-DLFAKE0811`;
-export const LOCKED = `ocp-${R650}-DLFAKE0812`;
-export const DONOR = `ocp-${R650}-DLFAKE0813`;
+export const R650 = "r650-mtl-az1";
+/** What R650's agentLabels name its servers (flavor r650, size mtl, site site1). */
+export const R650_NAMES = "ocp-r650-mtl-site1-";
+export const FREE = `${R650_NAMES}dlfake0811`;
+export const LOCKED = `${R650_NAMES}dlfake0812`;
+export const DONOR = `${R650_NAMES}dlfake0813`;
 /** CRITICAL and unreachable: offered, but a pool draw never picks it (needs a fix). */
-export const SICK = `ocp-${R650}-DLFAKE0815`;
+export const SICK = `${R650_NAMES}dlfake0815`;
+/** An InfraEnv made before the convention: its agentLabels name no servers. */
+export const UNLABELLED = "hp-gen12-site1-64c-512gb";
+export const UNLABELLED_PROBLEMS = ["redbull.io/flavor is missing", "redbull.io/size is missing", "redbull.io/site is missing"];
 export const SITE1_B = "ocp4-prod-mce-site1-b";
-/** The one InfraEnv site1-b's cluster files name: its own list could not be read. */
-export const SITE1_B_POOL = "dell-r760-site1-64c-512gb-20tb";
+/** The one InfraEnv site1-b's cluster files name: its own list, and so its labels, could not be read. */
+export const SITE1_B_POOL = "r760-mtl-az1";
 
 export const OVERVIEW: InventoryOverview = {
   mces: [
@@ -35,19 +42,21 @@ export const OVERVIEW: InventoryOverview = {
       site: "site1", mce: SITE1_A, known: true, servers: 16, in_clusters: 10, available: 6, usable: 5,
       ready: 1, needs_fix: 1, total: 8,
       pools: [
-        { infra_env: R650, available: 2, usable: 1, ready: 1, needs_fix: 1, total: 4,
+        { infra_env: UNLABELLED, available: 0, usable: 0, ready: null, needs_fix: null, total: 0, hardware: [],
+          server_prefix: null, label_problems: UNLABELLED_PROBLEMS },
+        { infra_env: R650, available: 2, usable: 1, ready: 1, needs_fix: 1, total: 4, server_prefix: R650_NAMES, label_problems: [],
           hardware: [{ vendor: "dell", model: "PowerEdge R650", available: 2, usable: 1 }] },
-        { infra_env: "hp-gen12-site1-64c-512gb", available: 0, usable: 0, ready: 0, needs_fix: 0, total: 0, hardware: [] },
-        { infra_env: null, available: 4, usable: 4, ready: null, needs_fix: null, total: 4,
+        { infra_env: null, available: 4, usable: 4, ready: null, needs_fix: null, total: 4, server_prefix: null, label_problems: [],
           hardware: [{ vendor: "dell", model: "PowerEdge R760", available: 4, usable: 4 }] },
       ],
-      infra_envs: [R650, "hp-gen12-site1-64c-512gb"],
+      infra_envs: [UNLABELLED, R650],
       infra_envs_error: null, infra_envs_from: "mce",
     },
     {
       site: "site1", mce: "ocp4-prod-mce-site1-b", known: true, servers: 4, in_clusters: 0, available: 4, usable: 4,
-      ready: 2, needs_fix: 0, total: 6,
-      pools: [{ infra_env: SITE1_B_POOL, available: 0, usable: 0, ready: 2, needs_fix: 0, total: 2, hardware: [] }],
+      ready: 0, needs_fix: 0, total: 4,
+      pools: [{ infra_env: SITE1_B_POOL, available: 0, usable: 0, ready: null, needs_fix: null, total: 0, hardware: [],
+                server_prefix: null, label_problems: [] }],
       infra_envs: [SITE1_B_POOL], infra_envs_from: "day1",
       infra_envs_error: "HubUnavailable: MCE 'ocp4-prod-mce-site1-b' hub API unreachable",
     },
@@ -68,6 +77,8 @@ const candidate = (name: string, overrides: Partial<Candidate> = {}): Candidate 
 const CANDIDATES: Candidates = {
   mce: SITE1_A,
   infra_env: R650,
+  server_prefix: R650_NAMES,
+  label_problems: [],
   candidates: [
     candidate(FREE),
     candidate(SICK, { health: "CRITICAL", ready: false, health_problems: ["health CRITICAL", "BMC unreachable"] }),
@@ -88,7 +99,7 @@ const run = (overrides: Partial<InventoryRun>): InventoryRun => ({
 
 const RUNS: InventoryRuns = {
   runs: [
-    run({ phase: "waiting-for-agent", server_name: `ocp-${R650}-DLFAKE0701` }),
+    run({ phase: "waiting-for-agent", server_name: `${R650_NAMES}dlfake0701` }),
     run({
       workflow_id: `add-server-to-mce-ocp4-prod-mce-site1-b_${LOCKED.toLowerCase()}`, mce: "ocp4-prod-mce-site1-b",
       infra_env: null, slot: null, origin: "named", server_name: LOCKED, status: "failed", phase: "reserving-server",

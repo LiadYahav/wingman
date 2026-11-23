@@ -76,7 +76,8 @@ from wingman_day1.infrastructure.cached_day2 import CachedDay2Addons
 from wingman_day1.infrastructure.cached_hub import CachedHubApi
 from wingman_day1.infrastructure.cached_workflows import CachedUninstallWorkflow
 from wingman_day1.infrastructure.day2_client import HttpDay2Addons, HttpDay2Installs
-from wingman_day1.infrastructure.hub_api import HttpHubApi, load_mce_access
+from wingman_day1.infrastructure.hub_api import HttpHubApi
+from wingman_day1.infrastructure.mce_access import load_mce_access
 from wingman_day1.infrastructure.merge_requests import (
     GitClusterProvisioner,
     GitRolloutMergeRequests,
@@ -90,7 +91,6 @@ from wingman_day1.integrations.segments_manager import compose as segments_manag
 from wingman_day1.integrations.segments_manager.ports import SegmentLedger
 from wingman_day1.integrations.server_scan import compose as server_scan
 from wingman_day1.integrations.server_scan.ports import ServerInventory
-from wingman_day1.platform_adapters import Close
 from wingman_day1.ports import (
     AddServerWorkflow,
     ClusterDeleteWorkflow,
@@ -145,7 +145,7 @@ class Adapters:
     """The upgrade-cluster workflow; ``None`` unless ``DAY1_UPGRADES`` (ADR-0055)."""
     scale: ScaleWorkflow | None = None
     """The update-nodepool workflow; ``None`` while Scale is off (ADR-0062)."""
-    closers: tuple[Close, ...] = field(default=())
+    closers: tuple[platform.Close, ...] = field(default=())
 
 
 def build_adapters(
@@ -163,7 +163,7 @@ def build_adapters(
     ``rollout_token`` the admin one a flavor's rollout asks day2 to install
     add-ons with (ADR-0044).
     """
-    closers: list[Close] = []
+    closers: list[platform.Close] = []
     if runtime.git_backend is GitBackend.FAKE:
         from wingman_core.testing.fixtures import (
             default_fixture_root,

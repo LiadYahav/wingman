@@ -194,7 +194,7 @@ async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -
         assert isinstance(adapters.inventory, FakeServerInventory)
         assert isinstance(adapters.uninstall, FakeUninstallWorkflow)
         assert isinstance(adapters.add_server, FakeAddServerWorkflow)
-        demo = adapters.inventory.by_name("ocp-dell-r650-site1-96c-768gb-DLFAKE0811")
+        demo = adapters.inventory.by_name("ocp-r650-mtl-site1-dlfake0811")
         assert demo is not None, "Inventory's demo servers join the fake fleet"
         assert len(await adapters.inventory.rows()) > 10
         assert isinstance(adapters.hub, FakeHubApi), "the fake MCE, not the tokens file"

@@ -7,15 +7,18 @@ not found (a list that was not seeded is empty, as a namespace without
 objects lists on a real hub). Each hub's own nodes and its pods per node are
 seeded per MCE (placement's free pods, ADR-0050).
 
-``remove_server`` is what a completed uninstall leaves on a real MCE: the
-server's Agent, AgentMachine and Machine are gone, and the NodePool's
-MachineSet creates a replacement Machine that waits for a free Agent.
+``free_server`` is what a completed uninstall leaves on a real MCE since
+uninstall-server-from-hc ends at a free Agent: the server's AgentMachine and
+Machine are gone, its Agent is unbound and free in its InfraEnv, and the
+NodePool's MachineSet creates a replacement Machine that waits for a free Agent
+(the provider may take this one again; the fake does not pick for it).
 """
 
 from __future__ import annotations
 
 import itertools
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 
 from wingman_day1.domain.errors import (
     HubDeniedError,
@@ -23,7 +26,9 @@ from wingman_day1.domain.errors import (
     HubObjectNotFoundError,
     HubUnavailableError,
 )
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
+    AGENT_MACHINE_REF_LABEL,
     INFRA_ENV_LABEL,
     AgentMachineObservation,
     AgentObservation,
@@ -53,6 +58,7 @@ class FakeHubApi:
         hosted_clusters: Mapping[str, Iterable[HostedClusterObservation]] | None = None,
         node_pools: Mapping[Key, Iterable[NodePoolObservation]] | None = None,
         infra_envs: Mapping[str, Mapping[str, Iterable[str]]] | None = None,
+        agent_labels: Mapping[str, Mapping[str, Mapping[str, str]]] | None = None,
         machines: Mapping[Key, Iterable[MachineObservation]] | None = None,
         machine_sets: Mapping[Key, Iterable[MachineSetObservation]] | None = None,
         agent_machines: Mapping[Key, Iterable[AgentMachineObservation]] | None = None,
@@ -70,6 +76,7 @@ class FakeHubApi:
             hosted_clusters: Per MCE, the HostedClusters on its hub.
             node_pools: Per ``(mce, namespace)``, the NodePools there.
             infra_envs: Per MCE, InfraEnv names per namespace.
+            agent_labels: Per MCE, the agentLabels of its InfraEnvs by name (none: no labels).
             machines: Per ``(mce, control-plane namespace)``, the Machines there.
             machine_sets: Per ``(mce, control-plane namespace)``, the MachineSets.
             agent_machines: Per ``(mce, control-plane namespace)``, the AgentMachines.
@@ -91,6 +98,10 @@ class FakeHubApi:
         self._infra_envs = {
             mce: {ns: list(names) for ns, names in by_ns.items()}
             for mce, by_ns in (infra_envs or {}).items()
+        }
+        self._agent_labels = {
+            mce: {name: dict(labels) for name, labels in by_name.items()}
+            for mce, by_name in (agent_labels or {}).items()
         }
         self._machines = _lists(machines)
         self._machine_sets = _lists(machine_sets)
@@ -143,13 +154,13 @@ class FakeHubApi:
         self._check(mce)
         return sorted(self._node_pools.get((mce, namespace), []), key=lambda pool: pool.name)
 
-    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[str]:
+    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[InfraEnvObservation]:
         """See HubApi.infra_envs."""
         self._check(mce)
         by_ns = self._infra_envs.get(mce, {})
-        if namespace:
-            return sorted(by_ns.get(namespace, []))
-        return sorted(name for names in by_ns.values() for name in names)
+        names = by_ns.get(namespace, []) if namespace else [n for ns in by_ns.values() for n in ns]
+        labels = self._agent_labels.get(mce, {})
+        return [InfraEnvObservation(name, labels.get(name, {})) for name in sorted(names)]
 
     async def machines(self, mce: str, *, namespace: str) -> list[MachineObservation]:
         """See HubApi.machines."""
@@ -206,17 +217,21 @@ class FakeHubApi:
         self._check(mce)
         return dict(self._pods.get(mce, {}))
 
-    def remove_server(self, server_name: str) -> bool:
-        """Remove the Agent, AgentMachine and Machine of a server, and backfill its Machine.
+    def free_server(self, server_name: str) -> bool:
+        """Unbind a server's Agent, remove its AgentMachine and Machine, and backfill the Machine.
 
         The server is found by its Agent's BareMetalHost label (ignoring case).
-        Returns whether anything was removed.
+        Returns whether it was found.
         """
         for (mce, _), agents in self._agents.items():
             agent = next((a for a in agents if (a.bmh or "").lower() == server_name.lower()), None)
             if agent is None:
                 continue
-            agents.remove(agent)
+            labels = {k: v for k, v in agent.labels.items() if k != AGENT_MACHINE_REF_LABEL}
+            free = replace(
+                agent, labels=labels, state="known-unbound", stage=None, conditions=FREE_AGENT
+            )
+            agents[agents.index(agent)] = free
             for (am_mce, namespace), agent_machines in self._agent_machines.items():
                 if am_mce != mce:
                     continue

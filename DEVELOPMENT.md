@@ -120,13 +120,16 @@ hubs, server-scan, the workflows orchestrator and segments-manager with fakes se
   the files except for `ocp4-prod-herzi-site1`, whose VLAN differs on purpose (1418 against the
   file's 1410), so the card's warning can be seen. `ocp4-prod-hawk-site1` has no segment yet:
   its VLAN and segment are pending.
-- `inventory.yaml` adds servers in no MCE to the fleet (one locked by another add-server run,
-  one in maintenance), the add-server runs' sample phases, past runs, and a fake herzi that
-  starts a pool draw on `ocp4-prod-lark-site1`'s short pool now and then (ADR-0057).
+- `inventory.yaml` adds servers in no MCE to the fleet, named by the naming convention
+  (`ocp-<flavor>-mtl-site1-<serial>`; one locked by another add-server run, one in
+  maintenance), the add-server runs' sample phases, past runs, and a fake herzi that starts a
+  pool draw on `r760-mtl-az1` now and then (ADR-0057). A pool draw takes the servers its
+  InfraEnv's agentLabels name: `mce.yaml`'s `hubs.<mce>.infra_envs` (the fixture clusters'
+  older InfraEnvs have none, so Inventory marks them).
 
 The fake MCE also serves live status and InfraEnvs, as if `CLUSTER_STATUS_ENABLED` were on. An
-uninstall walks a few sample phases, about 8 s each, then frees the server and removes its
-Machine; the NodePool's replacement Machine then waits for a free Agent. On Inventory Management
+uninstall walks a few sample phases, about 8 s each, then leaves the server a free Agent in its
+MCE and removes its Machine; the NodePool's replacement Machine then waits for a free Agent. On Inventory Management
 (`/inventory`), add `DAY1_ADD_SERVERS=true` to add servers: a run walks a few sample phases,
 about 8 s each, takes a server and leaves it in the MCE's inventory; herzi's runs show beside it. The fake fleet is
 refused unless `WINGMAN_ENVIRONMENT=development`, and it works with either Git backend.

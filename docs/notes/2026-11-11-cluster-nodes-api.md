@@ -214,10 +214,13 @@ checks nothing else: the workflow does its own checks. It then starts it with
 What the run does, for a short summary in the confirmation dialog (the
 workflow's documentation is the authority):
 - It drains the node and deletes its Machine.
-- The server leaves the hosted cluster, then the MCE: powered off, and its
-  BareMetalHost and Agent removed. It is free in server-scan afterwards.
+- The server leaves the hosted cluster and stays in the MCE, a free Agent in
+  its InfraEnv with its BareMetalHost (since 2026-11-19; before, the run took
+  it out of the MCE too). Leaving the MCE is `remove-server-from-mce`, which
+  Wingman does not start. A new run takes no server-scan lock.
 - The NodePool's replicas are never changed, so the NodePool binds a
-  replacement node. This is a replacement, not a shrink.
+  replacement node, which may be this same server. This is a replacement,
+  not a shrink.
 - Nothing is undone on failure; a re-run resumes.
 
 Most refusals happen inside the run: it fails, and its `error` says why.
@@ -244,7 +247,7 @@ Most refusals happen inside the run: it fails, and its `error` says why.
 | `WORKFLOWS_API_URL` | empty (off) | The orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. It has no auth: day1 is its only caller from Wingman, admins only. |
 | `WORKFLOWS_SSL_VERIFY` | `true` | As above. |
 | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request. |
-| `DAY1_FAKE_FLEET` | `false` | Development only (refused otherwise): an in-memory server-scan, orchestrator and MCE (NodePools, Machines, AgentMachines, Agents) seeded from `dev/fleet-fixtures/`. An uninstall walks through a few sample phases, frees the server, and the NodePool's replacement Machine then waits for a free Agent. |
+| `DAY1_FAKE_FLEET` | `false` | Development only (refused otherwise): an in-memory server-scan, orchestrator and MCE (NodePools, Machines, AgentMachines, Agents) seeded from `dev/fleet-fixtures/`. An uninstall walks through a few sample phases and leaves the server a free Agent in its MCE (`INSTALLED_TO_INVENTORY`), and the NodePool's replacement Machine then waits for a free Agent. |
 
 ## 4. What the MCE token must be allowed to read
 

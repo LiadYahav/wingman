@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@/lib/api-client";
 import type { ErrorCode } from "@/types";
 import type { InventoryRun, MceInventory } from "@/types/inventory";
-import { bySite, hardwareLabel, totalAvailable } from "./pools";
+import { bySite, hardwareLabel, totalAvailable, unnamedReason } from "./pools";
 import { originLabel, readablePhase, runSubject, runTone, runningCount, startedAgo } from "./runs";
 import { MAX_SERVERS, addRequest, isSettled, refusalTitle, startSummary, toggled } from "./start";
 
@@ -20,13 +20,23 @@ const run = (overrides: Partial<InventoryRun> = {}): InventoryRun => ({
 const problem = (status: number, code: ErrorCode) =>
   new ApiError(status, { type: "x", title: "x", status, detail: "d", instance: "/", code, request_id: null, details: {} }, "x");
 
+describe("a pool's servers by name", () => {
+  it("are named by its agentLabels, else it says why not: lacking labels, or unread", () => {
+    expect(unnamedReason({ server_prefix: "ocp-c200-mtl-five-", label_problems: [] })).toBeNull();
+    const lacking = unnamedReason({ server_prefix: null, label_problems: ["redbull.io/site is missing"] });
+    expect(lacking).toContain("(redbull.io/site is missing): the workflow refuses a pool draw into it");
+    expect(unnamedReason({ server_prefix: null, label_problems: [] })).toContain("could not read this InfraEnv's agentLabels");
+  });
+});
+
 describe("the pools", () => {
   it("are grouped by site, in day1's order, an MCE with nothing to show kept as a name", () => {
     const groups = bySite([
       mce("a", "site1"),
       mce("b", "site2"),
       mce("c", "site1", { known: false }),
-      mce("d", "site1", { known: false, pools: [{ infra_env: "p", available: 0, usable: 0, hardware: [], ready: 0, needs_fix: 0, total: 0 }] }),
+      mce("d", "site1", { known: false, pools: [{ infra_env: "p", available: 0, usable: 0, hardware: [], ready: 0, needs_fix: 0, total: 0,
+                                                    server_prefix: "ocp-p-mtl-site1-", label_problems: [] }] }),
     ]);
     expect(groups.map((g) => [g.site, g.mces.map((m) => m.mce), g.quiet.map((m) => m.mce)])).toEqual([
       ["site1", ["a", "d"], ["c"]],

@@ -21,7 +21,7 @@ function HeaderHint({ label, hint }: { label: string; hint: string }) {
 }
 
 const READY_HINT =
-  "Free servers in server-scan named for this pool that a pool draw could pick today: healthy and reachable, unlocked, out of maintenance. The workflow still checks each one itself (its NICs' links, a live recheck), so a run may still refuse one.";
+  "Free servers in server-scan named for this pool (ocp-<flavor>-<size>-<site>-…, from its InfraEnv's agentLabels) that a pool draw could pick today: healthy and reachable, unlocked, out of maintenance. The workflow still checks each one itself (its NICs' links, a live recheck), so a run may still refuse one. A dash: its agentLabels are unknown, or name no servers.";
 const NEEDS_FIX_HINT =
   "Free servers named for this pool that a pool draw never picks: server-scan does not call them healthy, or cannot reach their BMC. An admin may install one by name, with the workflow's health checks waived, after confirming.";
 const TOTAL_HINT =
@@ -39,7 +39,7 @@ function PoolsFromDay1({ mce }: { mce: MceInventory }) {
       <FileText aria-hidden className="h-3.5 w-3.5 shrink-0" />
       Pools named by this MCE&apos;s cluster files
       <Hint
-        hint={`${why} The pools are the InfraEnvs its cluster files name. Install servers takes any other InfraEnv too; the workflow checks the MCE has it.`}
+        hint={`${why} The pools are the InfraEnvs its cluster files name. Without their agentLabels, which name a pool's servers, no free server is counted, and a pool lists every free server. Install servers takes any other InfraEnv too; the workflow checks the MCE has it.`}
         label="Why these pools"
       >
         <Info aria-hidden className="h-3 w-3" />

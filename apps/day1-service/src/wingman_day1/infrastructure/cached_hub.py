@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from wingman_core.infrastructure.cache import TtlCache
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
     AgentMachineObservation,
     AgentObservation,
@@ -51,7 +52,7 @@ class CachedHubApi:
             ttl=self._ttl,
         )
 
-    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[str]:
+    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[InfraEnvObservation]:
         """See HubApi.infra_envs."""
         return await self._cache.get_or_fetch(
             keys.hub(mce, "infraenvs", namespace or "*"),

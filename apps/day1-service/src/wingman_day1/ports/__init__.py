@@ -31,6 +31,7 @@ from wingman_day1.domain.addons import (
 )
 from wingman_day1.domain.auth import Identity
 from wingman_day1.domain.changes import ClusterChange, ProvisionResult, SpecChange
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
     AgentMachineObservation,
     AgentObservation,
@@ -218,8 +219,8 @@ class HubApi(Protocol):
         """Every NodePool in a namespace, sorted by name."""
         ...
 
-    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[str]:
-        """InfraEnv names in ``namespace`` (or the whole hub), sorted."""
+    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[InfraEnvObservation]:
+        """The InfraEnvs in ``namespace`` (or the whole hub), with their agentLabels, by name."""
         ...
 
     async def machines(self, mce: str, *, namespace: str) -> list[MachineObservation]:

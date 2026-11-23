@@ -17,7 +17,7 @@ from wingman_day1.domain.errors import (
     WorkflowsUnavailableError,
 )
 from wingman_day1.domain.names import HostedClusterNaming
-from wingman_day1.domain.servers import UNINSTALL_HOLDER, ServerRow, uninstall_workflow_id
+from wingman_day1.domain.servers import ServerRow, uninstall_workflow_id
 from wingman_day1.domain.workflows import WorkflowRun
 from wingman_day1.infrastructure.fake_fleet import (
     DEMO_PHASES,
@@ -112,12 +112,12 @@ def test_a_run_names_a_server_the_fixture_has(tmp_path: Path) -> None:
         load_fleet(fixture)
 
 
-async def test_an_uninstall_walks_the_demo_phases_then_frees_the_server() -> None:
+async def test_an_uninstall_walks_the_demo_phases_then_leaves_a_free_agent_in_the_mce() -> None:
     inventory, workflow, clock = fleet()
     started = await workflow.start(server_name=NODE.name.upper(), mce=MCE, namespace=None)
     workflow_id = uninstall_workflow_id(NODE.name)
     assert started == WorkflowRun(workflow_id, "running")
-    assert (await inventory.rows())[0].reserved_by == UNINSTALL_HOLDER
+    assert (await inventory.rows())[0].reserved_by is None, "it takes no server-scan lock"
     seen = []
     for _ in DEMO_PHASES:
         run = await workflow.run(workflow_id)
@@ -130,11 +130,11 @@ async def test_an_uninstall_walks_the_demo_phases_then_frees_the_server() -> Non
     assert done.status == "completed"
     freed = (await inventory.rows())[0]
     assert (freed.state, freed.cluster_name, freed.mce, freed.reserved_by) == (
-        "AVAILABLE",
+        "INSTALLED_TO_INVENTORY",
         None,
+        NODE.mce,
         None,
-        None,
-    )
+    ), "out of its cluster, still in its MCE: leaving the MCE is remove-server-from-mce"
     assert [r.status for r in await workflow.runs()] == ["completed"]
 
 
