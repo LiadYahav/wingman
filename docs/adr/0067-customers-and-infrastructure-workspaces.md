@@ -1,4 +1,4 @@
-# ADR-0067: Seeds and KV clusters are kinds of their own, and a viewer never knows of them or of the MCEs
+# ADR-0067: Two workspaces, Customers and Infrastructure: seeds and KV clusters are kinds of their own, and a viewer never knows of them or of the MCEs
 
 Date: 2026-11-23
 Status: Accepted
@@ -23,7 +23,10 @@ signed-in user read the MCE lists, placement and Inventory Management
 The user (2026-11-23): "KV cluster and MCE seed and MCEs they are for admins
 only no viewer should know. In addition to inventory management — Herzi keep
 the place of the customers and filling their request." About KV clusters:
-"it's HostedCluster for everything. I do want to manage it."
+"it's HostedCluster for everything. I do want to manage it." And about the
+top bar, which linked out to segments-manager and server-scan (ADR-0066):
+"The top bar replace the server scanner and ss with them please. I meaning
+like split the current where they are at both tabs."
 
 ### What the deployed workflows read
 
@@ -115,7 +118,50 @@ gives the env; before, a seed was left out only because its name gives no
 env. A create whose MCE is a seed is refused by its kind ("… is a seed: it
 hosts KV clusters, never a tenant's cluster"), with placement's admission.
 
-### 5. Fixtures
+### 5. Two workspaces in the web
+
+The web has two workspaces, each a sidebar of its own; the top bar is the
+switch between them, for admins.
+
+| Workspace | Who | Sidebar | Why there |
+|---|---|---|---|
+| **Customers** (`/`) | Everyone; a viewer has nothing else and no switch | Platform: Dashboard, Clusters, Flavors, Addons. Governance: Approvals, Audit, Lints. Help: Documentation, Settings | The tenants' side: their hosted clusters, the flavors they are made from, the add-ons on them, and the changes to all three |
+| **Infrastructure** (`/infrastructure`) | Admins | Infrastructure: Overview, Customer MCEs (`/mces`), Seeds & KV Clusters (`/seeds`), Inventory Management (`/inventory`). Tools: Quick Links, then Segments Manager and Server Scan, each its own UI in a new tab. Help: Documentation, Settings | What serves the tenants: the hubs, the seeds and the KV clusters that host their VMs, the servers herzi draws from, and the links to the systems the team keeps apart |
+
+- **The top bar** (`WorkspaceSwitch`) is a two-segment switch, Customers and
+  Infrastructure, each going to its workspace's home, the one you are in
+  marked (`aria-current="true"`). It is drawn for admins only. The links to
+  segments-manager's and server-scan's own UIs left it for Infrastructure's
+  sidebar (`GET /api/day1/platforms`, unchanged); a node's server still opens
+  its page in server-scan (ADR-0066).
+- **Where a page belongs** is `lib/workspaces.ts`'s `workspaceOf`: the
+  Infrastructure routes by path; one cluster's pages by its kind once read (a
+  KV cluster's are Infrastructure's, a tenant's Customers'), the workspace
+  before until then; Help's pages keep the workspace you came from. Every
+  cluster keeps its one page, `/clusters/<name>` (one view per thing): a KV
+  cluster's goes back to Seeds & KV Clusters, wears a "KV cluster · zone"
+  badge, names its folder a seed, and its Delete asks for its name.
+- **The Customers lists count tenants only**: the Clusters list and the
+  Dashboard's numbers, health, drift and versions leave an admin's KV
+  clusters out (`tenantClusters`); a viewer never receives one.
+- **The Dashboard's two cards that name MCEs move**: Where Clusters Run (the
+  tenants' clusters by site and Customer MCE) and Free Servers (each MCE's
+  free Agents) are the Infrastructure Overview's, under its numbers: Customer
+  MCEs and their sites, seeds and their zones, KV clusters, free servers. The
+  Customers Dashboard keeps its numbers, Cluster Health, Pending Approvals and
+  OpenShift Versions.
+- **Customer MCEs** lists each site's Customer MCEs from `GET /api/day1/mces`
+  (env, hub version, default mastertag, cluster count, an off-convention name
+  and stray files marked). **Seeds & KV Clusters** lists each site's seeds
+  with their zone and hub version, and under each its KV clusters with their
+  mastertag and live phase, each opening the cluster page; a KV-named cluster
+  outside a seed is listed apart, since create-vm never finds it there.
+- **Inventory Management and Quick Links** keep their routes and move to
+  Infrastructure. An Infrastructure page opened by a viewer says it is an
+  admin's (`AdminsOnly`) and reads nothing; Quick Links keeps its own answer
+  to day1's 403.
+
+### 6. Fixtures
 
 `dev/gitlab-fixtures` has a seed, `sites/site1/mces/ocp4-prod-seed-site1-az1-a/`
 (its `values.yaml`, `version.yaml` and `upgrade/mces/` rule) with two KV
@@ -125,6 +171,16 @@ and `-a`'s two hypervisors, so its Nodes tab, Scale and uninstall show
 locally. The existing fixtures keep their names.
 
 ## Alternatives rejected
+
+- **Keep one sidebar, with admin-only entries**: the Infrastructure entries
+  would sit among the tenants' and the top bar would still link out; the user
+  asked for the top bar to split the two sides.
+- **A page of its own for a KV cluster** (`/seeds/<name>`): a second view of
+  one thing; the cluster page already manages a hosted cluster, and its
+  workspace follows the cluster's kind.
+- **Move Inventory Management and Quick Links under `/infrastructure/...`**:
+  every bookmark, e2e spec and doc names `/inventory` and `/quick-links`; the
+  workspace is the sidebar's, not the URL's.
 
 - **Hide them in the web only**: a viewer's token reads the API; the user
   said no viewer should know, so the services say it.
@@ -140,6 +196,11 @@ locally. The existing fixtures keep their names.
   cluster; the deployed workflows filter by the folder too.
 
 ## Consequences
+
+- An admin switches workspaces from the top bar; the links out to
+  segments-manager and server-scan are one click further, in Infrastructure's
+  sidebar. A viewer's screens are the Customers workspace, without Inventory
+  Management.
 
 - A viewer loses Inventory Management, the MCE lists and placement, and no
   longer sees the seed's KV clusters anywhere; an admin sees what they saw,
@@ -172,3 +233,11 @@ locally. The existing fixtures keep their names.
   destinations without an MCE or a KV cluster, and naming one is a 404.
 - `apps/day1-service/tests/api/test_inventory_api.py`: a viewer's 403 on
   every Inventory read.
+- `apps/web/lib/workspaces.test.ts` (where each page belongs, a cluster's by
+  its kind, Help's keeping the last), `lib/infrastructure.test.ts` (the
+  groups and counts) and `lib/platforms.test.ts` (the links out).
+- `apps/web/e2e/tests/workspaces.spec.ts`: the switch and both sidebars,
+  Customer MCEs, Seeds & KV Clusters, a KV cluster's page in Infrastructure and
+  its Delete's name, the Clusters list without it, a viewer's sidebar and the
+  admins-only pages; `overview.spec.ts` (both Overviews) and
+  `platforms-apart.spec.ts` (the links out in Infrastructure's sidebar).

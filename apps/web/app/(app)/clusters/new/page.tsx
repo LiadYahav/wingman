@@ -628,7 +628,7 @@ export default function NewClusterPage() {
   const flavorName = selectedSpec?.metadata.name;
   const versionsRead = usePlacement(step === "vars" && site && env ? { site, env, flavor: flavorName } : null);
   const versionsFresh = env !== "" && versionsRead.isSuccess && !versionsRead.isPlaceholderData;
-  const offConventionMces = mces.filter((m) => !m.follows_convention);
+  const offConventionMces = mces.filter((m) => m.kind !== "seed" && !m.follows_convention); // never a seed (ADR-0067)
   const ocpVersions = versionsFresh ? versionsRead.data.versions : [];
   const versionsLoading = env !== "" && (versionsRead.isLoading || versionsRead.isPlaceholderData);
   const versionsError = env !== "" ? versionsRead.error : null;

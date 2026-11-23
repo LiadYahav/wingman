@@ -50,7 +50,8 @@ export function ClusterInfoCard({ cluster, mastertagAction }: { cluster: Cluster
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         <Row label="Site">{cluster.site}</Row>
-        <Row label="MCE">{cluster.mce}</Row>
+        {/* A KV cluster's folder is a seed (ADR-0067) */}
+        <Row label={cluster.kind === "kv" ? "Seed" : "MCE"}>{cluster.mce}</Row>
         <Row label="Mastertag">
           {mastertag ? (
             <span className="inline-flex flex-wrap items-center justify-end gap-1.5">

@@ -7,7 +7,7 @@ export function QuickLinksSection() {
     <section>
       <SectionHeader id="quick-links" icon={Link2} title="Quick Links" subtitle="Every cluster's ArgoCD and console, and the team's own links, on one page" badge="Admins" />
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-        <strong>Quick Links</strong>, in the sidebar, is a launcher for Wingman&apos;s admins. It starts with a card for
+        <strong>Quick Links</strong>, in the Infrastructure workspace&apos;s sidebar, is a launcher for Wingman&apos;s admins. It starts with a card for
         the hub Wingman runs on, then one for every MCE of the day1 repo, a section per site: each opens that
         cluster&apos;s ArgoCD, with its console beside it. The team&apos;s own links follow, in the sections your
         operator writes. Search with the box at the top, or press <InlineCode>/</InlineCode> to jump to it.

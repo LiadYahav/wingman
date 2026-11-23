@@ -58,10 +58,15 @@ export const clustersApi = {
   network: (name: string, where: string) => api.get<ClusterNetworkRead>(`${clusterPath(name)}/network${where}`),
   modify: (name: string, where: string, body: ModifyClusterRequest) =>
     api.patch<MRDetail>(`${clusterPath(name)}${where}`, body),
-  /** A delete MR, guarded by the commit the file was read at. */
-  remove: (name: string, where: string, lastCommitId: string) =>
+  /**
+   * A delete MR, guarded by the commit the file was read at. A KV cluster's
+   * needs its name typed in, `confirm` (day1 refuses it otherwise, ADR-0067).
+   */
+  remove: (name: string, where: string, lastCommitId: string, confirm = "") =>
     api.del<MRDetail>(
-      `${clusterPath(name)}${where ? `${where}&` : "?"}last_commit_id=${encodeURIComponent(lastCommitId)}`
+      `${clusterPath(name)}${where ? `${where}&` : "?"}last_commit_id=${encodeURIComponent(lastCommitId)}${
+        confirm ? `&confirm=${encodeURIComponent(confirm)}` : ""
+      }`
     ),
   syncPreview: (name: string, where: string, body: SyncPreviewRequest) =>
     api.post<SyncPreview>(`${clusterPath(name)}/sync/preview${where}`, body),

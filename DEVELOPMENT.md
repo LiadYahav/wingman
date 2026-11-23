@@ -106,8 +106,8 @@ WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1
 Add `DAY1_FAKE_FLEET=true` to day1's line for the cluster page's Nodes tab and node uninstall
 (ADR-0038), and the EPG on its **HostedCluster & network** card (ADR-0039). It replaces the MCE
 hubs, server-scan, the workflows orchestrator and segments-manager with fakes seeded from
-`dev/fleet-fixtures/`. An admin's top bar then links to `http://segments-manager.example` and
-`http://server-scan.example` (nothing answers there locally):
+`dev/fleet-fixtures/`. An admin's Infrastructure sidebar then links to `http://segments-manager.example`
+and `http://server-scan.example` (nothing answers there locally):
 - `servers.yaml` is a made-up fleet in server-scan's own row shape: the servers under each
   cluster's nodes, placement's spare servers and Inventory Management's pools;
 - `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update

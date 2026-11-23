@@ -20,6 +20,7 @@ import { RefusalsSection } from "./refusals";
 import { RolesSection } from "./roles";
 import { SpecialFeaturesSection } from "./special-features";
 import { TroubleshootingSection } from "./troubleshooting";
+import { WorkspacesSection } from "./workspaces";
 
 // ── Low-level primitives ──────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ const NAV_SECTIONS = [
   { id: "overview", label: "Platform Overview" },
   { id: "concepts", label: "Core Concepts" },
   { id: "roles", label: "Roles & Access" },
+  { id: "workspaces", label: "Workspaces" },
   { id: "gitops", label: "GitOps Workflow" },
   { id: "home", label: "The Overview Page" },
   { id: "specs", label: "Flavors" },
@@ -132,6 +134,7 @@ export default function DocsPage() {
         <OverviewSection />
         <ConceptsSection />
         <RolesSection />
+        <WorkspacesSection />
         <GitOpsSection />
         <HomeSection />
         <FlavorsSection />

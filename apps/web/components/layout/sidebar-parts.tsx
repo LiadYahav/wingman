@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
+import { ExternalLink, type LucideIcon } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useSidebarRail } from "./use-sidebar-rail";
@@ -73,6 +73,31 @@ export function SidebarLink({ href, label, icon: Icon, active }: SidebarLinkProp
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={10} data-testid="sidebar-tooltip">
         {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * An entry that leaves Wingman: another system's own UI in a new tab,
+ * marked as leaving with a trailing arrow and in its accessible name. Never
+ * marked as where you are.
+ */
+export function SidebarExternalLink({ href, label, icon: Icon }: Omit<SidebarLinkProps, "active">) {
+  const { collapsed } = useSidebarRail();
+  return (
+    <Tooltip disabled={!collapsed}>
+      <TooltipTrigger
+        render={<a href={href} target="_blank" rel="noopener noreferrer" />}
+        className="group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-sidebar-foreground transition-colors duration-150 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground rail:h-8 rail:justify-center rail:px-0"
+      >
+        <Icon aria-hidden className="h-4 w-4 shrink-0 text-sidebar-foreground/60 transition-colors group-hover:text-sidebar-foreground" />
+        <span className="min-w-0 flex-1 truncate rail:sr-only">{label}</span>
+        <ExternalLink aria-hidden className="h-3 w-3 shrink-0 text-sidebar-foreground/40 rail:hidden" />
+        <span className="sr-only">(opens in a new tab)</span>
+      </TooltipTrigger>
+      <TooltipContent side="right" sideOffset={10} data-testid="sidebar-tooltip">
+        {label} (opens in a new tab)
       </TooltipContent>
     </Tooltip>
   );

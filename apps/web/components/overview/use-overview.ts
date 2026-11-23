@@ -6,6 +6,7 @@ import { useBulkStatus } from "@/hooks/use-bulk-status";
 import { liveStatusToPhase } from "@/lib/live-status";
 import { driftCounts, healthCounts } from "@/lib/overview/health";
 import { newestFirst } from "@/lib/utils";
+import { isKvCluster, tenantClusters } from "@/lib/workspaces";
 import type { ClusterStatus, DriftSummaryItem, MRDetail, SpecEntry } from "@/types";
 
 /**
@@ -15,10 +16,15 @@ import type { ClusterStatus, DriftSummaryItem, MRDetail, SpecEntry } from "@/typ
  * two cards calling one hook make one request.
  */
 
+/**
+ * The tenants' clusters: the Customers workspace counts only theirs, so an
+ * admin's KV clusters (ADR-0067) are left out here, as a viewer never has them.
+ */
 export function useOverviewClusters() {
-  return useQuery<ClusterStatus[]>({
+  return useQuery<ClusterStatus[], Error, ClusterStatus[]>({
     queryKey: day1Keys.clusters.all,
     queryFn: day1Api.clusters.list,
+    select: tenantClusters,
   });
 }
 
@@ -54,7 +60,22 @@ export function useOverviewDrift() {
     staleTime: 60_000, // drift asks day2 about every linked cluster
     gcTime: 5 * 60_000,
   });
-  return { drift, counts: driftCounts(drift.data) };
+  // The tenants' drift only: an admin's summary has the KV clusters' too (ADR-0067)
+  const kv = useKvClusterNames();
+  const rows = drift.data?.filter((d) => !kv.has(d.name));
+  return { drift, counts: driftCounts(rows) };
+}
+
+const kvNames = (clusters: ClusterStatus[]) => new Set(clusters.filter(isKvCluster).map((c) => c.name));
+
+/** The KV clusters' names, from the clusters list (an admin's; a viewer's has none). */
+function useKvClusterNames(): Set<string> {
+  const read = useQuery<ClusterStatus[], Error, Set<string>>({
+    queryKey: day1Keys.clusters.all,
+    queryFn: day1Api.clusters.list,
+    select: kvNames,
+  });
+  return read.data ?? new Set();
 }
 
 function useApprovals(service: "day1" | "day2") {

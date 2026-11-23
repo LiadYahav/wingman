@@ -14,6 +14,7 @@ import type { ClusterPreview, ClusterSpec, Mce, OpenShiftVersions, TemplateField
 import { inputCls } from "./controls";
 import { pathLabel, type FlavorDraft, type ValueLine } from "./model";
 import { previewPlan, previewRelease, sampleClusterName } from "./preview-plan";
+import { isSeed } from "@/lib/workspaces";
 
 const codeCls =
   "max-h-[32rem] overflow-auto rounded-lg border bg-muted/40 p-4 font-mono text-xs leading-5 text-foreground/90 dark:bg-black/30";
@@ -92,7 +93,8 @@ function ClusterFilePreview({
     staleTime: 60_000,
     enabled: Boolean(saved) && seen,
   });
-  const usable = mces.filter((m) => m.follows_convention && m.env);
+  // A Customer MCE that names its env; never a seed, which hosts no tenant's cluster (ADR-0067)
+  const usable = mces.filter((m) => !isSeed(m) && m.follows_convention && m.env);
   const mce = usable.find((m) => m.name === mceChoice) ?? usable[0];
   const { data: offered, error: versionsError } = useQuery<OpenShiftVersions>({
     queryKey: day1Keys.fleet.openshiftVersions(mce?.name),

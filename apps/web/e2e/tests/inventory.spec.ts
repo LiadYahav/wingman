@@ -35,25 +35,31 @@ async function choose(page: Page, combobox: ReturnType<Page["getByRole"]>, optio
 const ADDING_OFF = "Installing servers is off on this Wingman (DAY1_ADD_SERVERS=false).";
 
 test.describe("Who sees it", () => {
-  test("an admin opens it from the sidebar", async ({ page }) => {
+  test("an admin opens it from the Infrastructure workspace's sidebar", async ({ page }) => {
     await setUpInventory(page);
     await go(page, "/");
+    // Not a Customers entry (ADR-0067): the top bar switches to Infrastructure first
+    await expect(nav(page).getByRole("link", { name: "Inventory Management" })).toHaveCount(0);
+    await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Infrastructure" }).click();
     await nav(page).getByRole("link", { name: "Inventory Management" }).click();
     await expect(page).toHaveURL(/\/inventory$/);
     await expect(page.getByRole("heading", { level: 1, name: "Inventory Management" })).toBeVisible();
   });
 
-  test("a viewer sees the pools and the runs from the sidebar, with no Install", async ({ page }) => {
+  test("a viewer has no entry, and the page says it is an admin's without reading it", async ({ page }) => {
+    // herzi fills the customers' demand: Inventory Management is an admin's (ADR-0067)
     const calls = await setUpInventory(page, { viewer: true });
+    const reads: string[] = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/day1/inventory")) reads.push(request.url());
+    });
     await go(page, "/");
-    await nav(page).getByRole("link", { name: "Inventory Management" }).click();
-    await expect(card(page, SITE1_A).getByTestId("mce-available")).toHaveText("6 available");
-    await expect(page.getByTestId("run-row")).toHaveCount(2);
-    await expect(page.getByRole("button", { name: /Install servers/ })).toHaveCount(0);
-    await expect(page.getByTestId("install-servers")).toHaveCount(0);
-    await expect(page.getByTestId("install-servers-off")).toHaveCount(0);
-    await pool(page, R650).getByRole("button", { name: `1 ready in server-scan for ${R650}` }).click();
-    await expect(page.getByTestId("candidate")).toHaveCount(4);
+    await expect(nav(page).getByRole("link", { name: "Clusters" })).toBeVisible();
+    await expect(nav(page).getByRole("link", { name: "Inventory Management" })).toHaveCount(0);
+    await page.goto("/inventory");
+    await expect(page.getByTestId("admins-only")).toContainText("For admins");
+    await expect(card(page, SITE1_A)).toHaveCount(0);
+    expect(reads).toEqual([]);
     expect(calls.starts).toEqual([]);
   });
 

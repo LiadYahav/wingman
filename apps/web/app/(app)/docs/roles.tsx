@@ -25,7 +25,7 @@ export function RolesSection() {
               "See a cluster's nodes, the servers it runs on: its Nodes tab and the nodes under each nodepool",
               "Approve, edit or reject other people's MRs",
               "Start the platform's workflows: Upgrade, Uninstall a server, Install servers and Scale, each where it is set up",
-              "Open Quick Links, and the top bar's links to Segments Manager and Server Scan",
+              "Switch to the Infrastructure workspace: the Customer MCEs, the seeds and their KV clusters, Inventory Management, Quick Links, and the links to Segments Manager and Server Scan",
               "Everything a Viewer can do",
             ].map((item) => (
               <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -47,9 +47,8 @@ export function RolesSection() {
           </div>
           <ul className="space-y-2">
             {[
-              "Browse clusters, flavors and add-ons",
+              "Browse the customers' clusters, flavors and add-ons",
               "See drift, lints and live status, with each NodePool's replicas and ready count",
-              "Read Inventory Management: each MCE's pools and the add-server runs",
               "Read pending approvals and their diffs",
               "Read the audit log",
               "Open anything in GitLab",
@@ -71,12 +70,13 @@ export function RolesSection() {
           neither is turned away: &quot;You are not in a Wingman group&quot;. The role is fixed when you sign
           in, so after a group change sign out and in again (a session lasts 8 hours by default).
         </Callout>
-        <Callout type="info" title="For admins only, for now">
-          <strong>Quick Links</strong> and the top bar&apos;s links to <strong>Segments</strong> and{" "}
-          <strong>Server Scan</strong> are for Wingman&apos;s admins until Wingman has finer roles. A viewer does not
-          see them in the sidebar or the top bar, and Quick Links opened by its address says it is for admins. The two
-          links open segments-manager&apos;s and server-scan&apos;s own UIs in a new tab (the team keeps both apart
-          from Wingman), and each appears only once your operator has set its system up.
+        <Callout type="info" title="The Infrastructure workspace is for admins">
+          The Customer MCEs, the seeds and their KV clusters, <strong>Inventory Management</strong> (herzi fills the
+          customers&apos; demand), <strong>Quick Links</strong> and the links to <strong>Segments Manager</strong> and{" "}
+          <strong>Server Scan</strong> are in the Infrastructure workspace, which only admins see. A Viewer has no
+          workspace switch, those pages opened by their address say they are for admins, and Wingman&apos;s services refuse
+          the reads: a KV cluster is a missing cluster for a Viewer, and no list a Viewer reads holds one. The two links
+          open segments-manager&apos;s and server-scan&apos;s own UIs in a new tab, each once your operator has set it up.
         </Callout>
         <Callout type="warning" title="Dev login is for local development only">
           A local stack can run without OpenShift: the login page then shows a <strong>Dev mode</strong> banner,

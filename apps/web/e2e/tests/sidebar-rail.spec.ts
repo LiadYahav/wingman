@@ -143,7 +143,7 @@ test.describe("The sidebar's icon rail", () => {
     const clusters = nav.getByRole("link", { name: "Clusters", exact: true });
 
     // Expanded, the label is on the row: no tooltip
-    await expect(nav.getByRole("link", { name: "Quick Links", exact: true })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Approvals", exact: true })).toBeVisible();
     await clusters.hover();
     await page.waitForTimeout(300);
     await expect(page.getByTestId("sidebar-tooltip")).toHaveCount(0);

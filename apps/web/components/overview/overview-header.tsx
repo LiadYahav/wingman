@@ -28,7 +28,7 @@ export function OverviewHeader() {
         >
           Overview
         </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">OpenShift cluster platform at a glance</p>
+        <p className="text-sm text-muted-foreground mt-0.5">The customers&apos; clusters at a glance</p>
       </div>
       <div className="flex flex-wrap items-center gap-2" data-testid="overview-actions">
         {isAdmin && (
