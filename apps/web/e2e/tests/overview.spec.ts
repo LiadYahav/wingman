@@ -8,8 +8,6 @@
 import { test, expect } from "@playwright/test";
 import { fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockDashboardApis } from "../fixtures/api-handlers";
 import { OVERVIEW as INVENTORY } from "../fixtures/inventory";
-import { SITES as SEGMENT_SITES, STATS as SEGMENT_STATS } from "../fixtures/segments";
-import { failing, mockSites, off } from "../fixtures/server-scan";
 import { openOverview, RUNS, SITE1_A, SITE1_B, UPGRADES_OFF } from "../fixtures/overview";
 
 test.describe("The Overview's header", () => {
@@ -104,12 +102,10 @@ test.describe("Where clusters run and on which version", () => {
 });
 
 test.describe("Capacity", () => {
-  test("free servers per MCE and free segments per site, each opening its page", async ({ page }) => {
+  test("free servers per MCE, each opening Inventory Management", async ({ page }) => {
     await openOverview(page, {
       before: async (p) => {
         await p.route("**/api/day1/inventory", (route) => json(route, INVENTORY));
-        await p.route("**/api/day1/segments/sites", (route) => json(route, SEGMENT_SITES));
-        await p.route("**/api/day1/segments/stats", (route) => json(route, SEGMENT_STATS));
       },
     });
 
@@ -124,23 +120,14 @@ test.describe("Capacity", () => {
       "dell-r650-site1-96c-768gb2hp-gen12-site1-64c-512gb0no InfraEnv41 not usable"
     );
     await expect(servers.getByTestId("overview-servers-more")).toHaveText("1 MCE not in server-scan");
-
-    const segments = page.getByTestId("overview-segments");
-    await expect(segments.getByTestId("overview-segments-total")).toHaveText("3free across 3 sites");
-    const sites = segments.getByTestId("overview-segment-site");
-    await expect(sites.nth(0)).toHaveAccessibleName("site1: 1 free of 5 segments");
-    await expect(sites.nth(2)).toHaveAccessibleName("site3: 0 free of 0 segments");
-    await sites.nth(1).click();
-    await expect(page).toHaveURL(/\/segments\?status=available&site=site2$/);
   });
 
-  test("off here, Free Servers says so in one muted line and Free Segments is not shown", async ({ page }) => {
+  test("off here, Free Servers says so in one muted line", async ({ page }) => {
     await openOverview(page);
 
     await expect(page.getByTestId("overview-servers-off")).toContainText("Not set up here");
     await expect(page.getByTestId("overview-servers").getByRole("alert")).toHaveCount(0);
     await expect(page.getByTestId("overview-versions")).toBeVisible();
-    await expect(page.getByTestId("overview-segments")).toHaveCount(0);
   });
 
   test("a failed read fails its own card only", async ({ page }) => {
@@ -156,84 +143,14 @@ test.describe("Capacity", () => {
     await expect(page.getByTestId("health-empty")).toHaveCount(0);
   });
 
-  test("a viewer sees Free Servers, never Free Segments, and never asks for it", async ({ page }) => {
-    let segmentReads = 0;
+  test("a viewer sees Free Servers too", async ({ page }) => {
     await openOverview(page, {
       viewer: true,
       before: async (p) => {
         await p.route("**/api/day1/inventory", (route) => json(route, INVENTORY));
-        await p.route("**/api/day1/segments/**", (route) => {
-          segmentReads += 1;
-          return fulfillProblem(route, 403, "FORBIDDEN", "This needs the admin role.");
-        });
       },
     });
 
     await expect(page.getByTestId("overview-mce")).toHaveCount(2);
-    await expect(page.getByTestId("overview-segments")).toHaveCount(0);
-    expect(segmentReads).toBe(0);
-  });
-});
-
-test.describe("Server fleet health", () => {
-  test("counts each site's servers by health and in maintenance, each count opening the Servers page filtered", async ({ page }) => {
-    await openOverview(page, {
-      before: async (p) => {
-        await p.route("**/api/day1/server-scan/sites", (route) => json(route, mockSites()));
-        await p.route("**/api/day1/segments/sites", (route) => json(route, SEGMENT_SITES));
-        await p.route("**/api/day1/segments/stats", (route) => json(route, SEGMENT_STATS));
-      },
-    });
-
-    const card = page.getByTestId("overview-health");
-    await expect(card.getByTestId("overview-health-fleet")).toContainText("38servers across 3 sites");
-    const sites = card.getByTestId("overview-health-site");
-    await expect(sites).toHaveCount(4);
-    const site1 = card.locator("[data-site=site1]");
-    const counts = site1.getByTestId("overview-health-counts").getByRole("link");
-    await expect(counts).toHaveText(["●27 healthy", "◆2 critical", "⬟1 major", "▲1 warning", "⏸1 in maintenance"]);
-    await expect(counts.nth(1)).toHaveAttribute("href", "/server-scan/servers?site_id=site1&health_overall=CRITICAL");
-    await expect(counts.nth(4)).toHaveAttribute("href", "/server-scan/servers?site_id=site1&maintenance=true");
-    await expect(site1.getByRole("link", { name: "Site 1" })).toHaveAttribute("href", "/server-scan/servers?site_id=site1");
-    await expect(card.locator("[data-site=site3]")).toContainText("no servers");
-    // The fifth card is alone on its row: it takes both columns
-    const grid = (await page.getByTestId("overview-sections").boundingBox())!;
-    expect((await card.boundingBox())!.width).toBeGreaterThan(grid.width * 0.9);
-  });
-
-  test("a failing server-scan is the card's problem; not set up, there is no card", async ({ page }) => {
-    let reads = 0;
-    await openOverview(page, {
-      before: (p) => p.route("**/api/day1/server-scan/sites", (route) => {
-        reads += 1;
-        return failing(route);
-      }),
-    });
-    await expect(page.getByTestId("overview-health").getByRole("alert")).toContainText("server-scan unreachable");
-    // Asked by the area switch, then once by the card: never again and again
-    await page.waitForTimeout(1_000);
-    expect(reads).toBeLessThanOrEqual(3);
-
-    await page.unroute("**/api/day1/server-scan/sites");
-    await page.route("**/api/day1/server-scan/sites", off);
-    await page.evaluate(() => localStorage.removeItem("wingman-query-cache"));
-    await page.reload();
-    await expect(page.getByTestId("overview-servers")).toBeVisible();
-    await expect(page.getByTestId("overview-health")).toHaveCount(0);
-  });
-
-  test("a viewer never sees it, and never asks server-scan", async ({ page }) => {
-    let reads = 0;
-    await openOverview(page, {
-      viewer: true,
-      before: (p) => p.route("**/api/day1/server-scan/**", (route) => {
-        reads += 1;
-        return fulfillProblem(route, 403, "FORBIDDEN", "This needs the admin role.");
-      }),
-    });
-
-    await expect(page.getByTestId("overview-servers")).toBeVisible();
-    await expect(page.getByTestId("overview-health")).toHaveCount(0);
-    expect(reads).toBe(0);
   });
 });

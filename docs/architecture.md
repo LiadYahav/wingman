@@ -148,9 +148,10 @@ area's routers and schemas) and `compose.py`; their tests are in
 `tests/integrations/<system>/` (ADR-0001's 2026-11-17 amendment). Wingman's
 own features that use their data (the Nodes tab, placement, Inventory
 Management, a cluster's network check, the Overview) stay in day1's layers and
-import an integration's `domain` and `ports` only. The web's counterpart is
-`apps/web/features/<area>/` (`api/`, `types/`, `lib/`, `components/`), with
-the page routes in `app/` (ADR-0056's 2026-11-17 amendment).
+import an integration's `domain` and `ports` only. The web has no
+counterpart since its Segments and Server Scan areas were removed (ADR-0056's
+2026-11-23 amendment): what it shows of those systems' data is a Wingman
+feature in `components/<area>/` and `lib/`.
 
 `uv run lint-imports` enforces this with the contracts in `pyproject.toml`
 (`[tool.importlinter]`): forbidden contracts for each layer, of day1's and of

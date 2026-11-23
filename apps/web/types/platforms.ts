@@ -7,14 +7,11 @@
 
 /** One system day1 is configured for. */
 export interface Platform {
-  /** The web's area id, also when the area is off. */
   id: "segments" | "server-scan";
   /** Its own name: "Segments Manager", "Server Scan". */
   name: string;
   /** Its own UI, for the browser (`*_UI_URL`, else its API's URL). */
   url: string;
-  /** Whether Wingman's area for it is on (`DAY1_SEGMENTS_AREA`, `DAY1_SERVER_SCAN_AREA`). */
-  area: boolean;
 }
 
 export interface Platforms {

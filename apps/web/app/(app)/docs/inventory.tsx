@@ -58,8 +58,7 @@ export function InventorySection() {
         <strong>Runs</strong> lists the platform&apos;s add-server runs, herzi&apos;s and people&apos;s, newest first: when
         each started, who, its pool, its server, its status and its error, in the workflow&apos;s words. A run that named
         its server is a <strong>Person</strong>&apos;s; a pool draw is <strong>herzi or a person</strong>, since the
-        orchestrator does not record who. For admins with the Server Scan area, a server opens its page there. A run
-        installed with its health checks waived says <strong>checks waived</strong>, with which in a tooltip.
+        orchestrator does not record who. A run installed with its health checks waived says <strong>checks waived</strong>, with which in a tooltip.
       </p>
 
       <h3 className="text-base font-semibold mb-3">Install servers</h3>

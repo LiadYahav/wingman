@@ -6,10 +6,7 @@ import { DataTable } from "@/components/data-table/data-table";
 import { useDataTable } from "@/components/data-table/use-data-table";
 import { EmptyState } from "@/components/common/empty-state";
 import { Hint } from "@/components/common/hint";
-import { ServerLink } from "@/features/server-scan/components/server-link";
-import { useServerScanArea } from "@/features/server-scan/api/server-scan";
-import { originHint, originLabel, readablePhase, runSubject, runTone, type RunTone } from "@/lib/inventory/runs";
-import { updatedAgo } from "@/features/segments/lib/sites";
+import { originHint, originLabel, readablePhase, runSubject, runTone, startedAgo, type RunTone } from "@/lib/inventory/runs";
 import { cn } from "@/lib/utils";
 import type { InventoryRun } from "@/types/inventory";
 
@@ -28,7 +25,7 @@ function Started({ run, now }: { run: InventoryRun; now: number }) {
   const at = Date.parse(run.started_at);
   return (
     <span className="whitespace-nowrap text-xs tabular-nums" title={run.started_at}>
-      {updatedAgo(at, Math.max(now, at))}
+      {startedAgo(at, Math.max(now, at))}
     </span>
   );
 }
@@ -72,22 +69,10 @@ function Status({ run }: { run: InventoryRun }) {
   );
 }
 
-/** The run's server: a link to its page in the Server Scan area when `linked` and server-scan names it, else text. */
-function Server({ run, linked }: { run: InventoryRun; linked: boolean }) {
-  const subject = runSubject(run);
-  if (linked && run.server_id) {
-    return (
-      <ServerLink id={run.server_id} className="font-mono text-xs">
-        {subject}
-      </ServerLink>
-    );
-  }
-  return <span className="font-mono text-xs">{subject}</span>;
-}
 
 const column = createColumnHelper<InventoryRun>();
 
-function runColumns(now: number, linked: boolean): ColumnDef<InventoryRun, never>[] {
+function runColumns(now: number): ColumnDef<InventoryRun, never>[] {
   return [
     column.display({ id: "started", header: "Started", meta: { label: "Started" }, cell: (c) => <Started run={c.row.original} now={now} /> }),
     column.display({ id: "origin", header: "Who", meta: { label: "Who" }, cell: (c) => <Origin run={c.row.original} /> }),
@@ -106,7 +91,7 @@ function runColumns(now: number, linked: boolean): ColumnDef<InventoryRun, never
       id: "server",
       header: "Server",
       meta: { label: "Server" },
-      cell: (c) => <Server run={c.row.original} linked={linked} />,
+      cell: (c) => <span className="font-mono text-xs">{runSubject(c.row.original)}</span>,
     }),
     column.display({ id: "status", header: "Status", meta: { label: "Status" }, cell: (c) => <Status run={c.row.original} /> }),
     column.display({
@@ -123,12 +108,8 @@ function runColumns(now: number, linked: boolean): ColumnDef<InventoryRun, never
   ] as ColumnDef<InventoryRun, never>[];
 }
 
-/**
- * The add-server runs, newest first, as the orchestrator lists them. A run's
- * server links to its page for whoever has the Server Scan area.
- */
+/** The add-server runs, newest first, as the orchestrator lists them. */
 export function RunsTable({ runs }: { runs: InventoryRun[] }) {
-  const linked = useServerScanArea() === true;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 5_000);
@@ -136,7 +117,7 @@ export function RunsTable({ runs }: { runs: InventoryRun[] }) {
   }, []);
   const table = useDataTable({
     data: runs,
-    columns: runColumns(now, linked),
+    columns: runColumns(now),
     getRowId: (run) => `${run.workflow_id}@${run.started_at ?? ""}`,
     columnVisibility: NO_VISIBILITY,
     onColumnVisibilityChange: keepVisibility,

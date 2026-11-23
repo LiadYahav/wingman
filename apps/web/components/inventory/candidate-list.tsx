@@ -5,8 +5,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/common/hint";
 import { ProblemList } from "@/components/common/problem-list";
-import { ServerLink } from "@/features/server-scan/components/server-link";
-import { useServerScanArea } from "@/features/server-scan/api/server-scan";
 import { hardwareLabel } from "@/lib/inventory/pools";
 import { groupCandidates, type GroupInfo } from "@/lib/inventory/waiver";
 import { cn } from "@/lib/utils";
@@ -29,32 +27,14 @@ function Why({ candidate }: { candidate: Candidate }) {
   );
 }
 
-/**
- * The name, its pool's shared prefix muted and cut first, so the part that
- * differs stays whole. With `link`, a link to the server's page in the Server
- * Scan area (in a new tab from the install dialog's picker, `newTab`).
- */
-function ServerName({ candidate, prefix, link, newTab }: { candidate: Candidate; prefix: string; link: boolean; newTab: boolean }) {
+/** The name, its pool's shared prefix muted and cut first, so the part that differs stays whole. */
+function ServerName({ candidate, prefix }: { candidate: Candidate; prefix: string }) {
   const { name } = candidate;
   const shared = name.startsWith(prefix) ? prefix : "";
-  const text = (
-    <>
+  return (
+    <span className="flex min-w-0 flex-1 font-mono" title={name}>
       {shared && <span className="truncate text-muted-foreground">{shared}</span>}
       <span className="shrink-0">{name.slice(shared.length)}</span>
-    </>
-  );
-  if (!link) {
-    return (
-      <span className="flex min-w-0 flex-1 font-mono" title={name}>
-        {text}
-      </span>
-    );
-  }
-  return (
-    <span className="flex min-w-0 flex-1" title={name}>
-      <ServerLink id={candidate.id} newTab={newTab} className="flex min-w-0 font-mono">
-        {text}
-      </ServerLink>
     </span>
   );
 }
@@ -89,13 +69,11 @@ function GroupHeading({ group, count }: { group: GroupInfo; count: number }) {
 function CandidateRow({
   candidate: c,
   infraEnv,
-  linked,
   selected,
   onToggle,
 }: {
   candidate: Candidate;
   infraEnv: string;
-  linked: boolean;
   selected?: string[];
   onToggle?: (name: string) => void;
 }) {
@@ -117,7 +95,7 @@ function CandidateRow({
         className={cn("h-1.5 w-1.5 shrink-0 rounded-full", HEALTH_TONE[c.health] ?? "bg-muted-foreground/50")}
         title={c.health}
       />
-      <ServerName candidate={c} prefix={`ocp-${infraEnv}`} link={linked} newTab={Boolean(selected)} />
+      <ServerName candidate={c} prefix={`ocp-${infraEnv}`} />
       <span className="hidden shrink-0 sm:inline">{hardwareLabel(c)}</span>
       <Problems candidate={c} />
       <Why candidate={c} />
@@ -147,8 +125,6 @@ export function CandidateList({
   selected?: string[];
   onToggle?: (name: string) => void;
 }) {
-  // A server's page is in the Server Scan area: a link for whoever has it, text for anyone else
-  const linked = useServerScanArea() === true;
   if (isLoading) return <Skeleton className="h-16 w-full" />;
   if (error) return <ProblemList error={error} title="The pool's servers could not be read" />;
   if (!candidates || candidates.length === 0) {
@@ -161,7 +137,7 @@ export function CandidateList({
           <GroupHeading group={group} count={members.length} />
           <ul className="divide-y divide-border/60">
             {members.map((c) => (
-              <CandidateRow key={c.id} candidate={c} infraEnv={infraEnv} linked={linked} selected={selected} onToggle={onToggle} />
+              <CandidateRow key={c.id} candidate={c} infraEnv={infraEnv} selected={selected} onToggle={onToggle} />
             ))}
           </ul>
         </section>

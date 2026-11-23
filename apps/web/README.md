@@ -4,7 +4,7 @@ Next.js frontend for the Wingman Internal Developer Platform.
 
 ## Features
 
-- **Overview**: the home page (`/`, `components/overview/`): the clusters, ready, pending approvals and drifted counts, Cluster Health and the newest approvals, then Where Clusters Run, OpenShift Versions, Free Servers, Free Segments and Server Fleet Health, each read from its own source and loading, failing and empty on its own; a source that is off here says so
+- **Overview**: the home page (`/`, `components/overview/`): the clusters, ready, pending approvals and drifted counts, Cluster Health and the newest approvals, then Where Clusters Run, OpenShift Versions and Free Servers, each read from its own source and loading, failing and empty on its own; a source that is off here says so
 - **Cluster Management**: Create, edit and delete hosted clusters by MR; each is one values file for the hostedclusters-setup chart, with `vlanId`/`dhcp_values` (allocate-segment workflow) and `mcFiles`/`mcConfigMap` (CI) left to automation and shown as pending until written
 - **Create through provision-cluster** (with `DAY1_PROVISIONER=workflow`, off by default, ADR-0042): Create renders and checks the file as before, then starts the platform's `provision-cluster` workflow; the create page then shows the run (its phase, its merge request, its error in its own words), read again every 10 s while it runs (`components/clusters/provision-run.tsx`)
 - **Specs**: Presets for the create form (nodepool shape, preset template inputs, the Day2 addons a cluster should get); every spec fills the one shared `cluster-template.j2`, and "immutable after create" is a hint, not enforced
@@ -27,12 +27,11 @@ Next.js frontend for the Wingman Internal Developer Platform.
 - **Nodepool ratio**: a flavor may size its nodepools by a ratio (`1:2:1`); the create form asks for one size and fills in each sized nodepool's replicas
 - **Approval Workflow**: Aggregated view of open MRs from the day1, specs and team repos; an approval names the commit the reviewer saw, so a branch that moved since is refused, and nobody approves their own change
 - **Audit Trail**: Track all cluster lifecycle events with GitLab commit links
-- **Segments** (`/segments`, admins, with `SEGMENTS_MANAGER_URL`; ADR-0047): segments-manager's page rebuilt on the shared data table: a card per site, then every segment with sorting, status tabs, column filters, search, a column picker and a CSV or Excel export, every filter in the URL (the cluster page links to its own segments), re-read every 30 s; read only
-- **Server Scan** (`/server-scan`, admins, with `SERVER_SCAN_URL`; ADR-0048): server-scan's UI rebuilt page by page, with its own mark and sidebar: Sites, Servers (and a server's maintenance on and off), a server's page, Claude, Architecture, Confs, Rules & Policies, Events and Jobs (with Run job)
+- **Segments Manager and Server Scan** (admins): the top bar links to each system's own UI, in a new tab (`components/layout/area-switch.tsx`, from `GET /api/day1/platforms`); the team keeps both apart from Wingman, whose own areas for them were removed after 3.52 (ADR-0047, ADR-0048)
 - **Inventory Management** (`/inventory`, everyone signed in; ADR-0057): each MCE's free Agents by InfraEnv pool as Ready, Needs fix and Total, and the add-server runs, herzi's included; with `DAY1_ADD_SERVERS`, admins install servers into a pool by count or by name
 - **Quick Links** (`/quick-links`, admins; ADR-0052): the hub's and every MCE's Argo CD and console, by site, then the team's own links from the chart's ConfigMap; Wingman lists the links and never calls them
 - **In-App Documentation**: Full platform guide at `/docs`
-- **Sidebar icon rail**: on a desktop, the button beside the brand or **Ctrl+B / ⌘B** (not while typing in a field) collapses every area's sidebar to a 56 px rail of icons, each with its label (and a site's count) in a tooltip, and expands it again. The choice is kept in this browser (`localStorage` key `wingman-sidebar`) and applied by an inline script in `<head>` before the first paint (`lib/sidebar-rail.ts`), so the page never opens at the wrong width. Phones keep the slide-out menu
+- **Sidebar icon rail**: on a desktop, the button beside the brand or **Ctrl+B / ⌘B** (not while typing in a field) collapses the sidebar to a 56 px rail of icons, each with its label in a tooltip, and expands it again. The choice is kept in this browser (`localStorage` key `wingman-sidebar`) and applied by an inline script in `<head>` before the first paint (`lib/sidebar-rail.ts`), so the page never opens at the wrong width. Phones keep the slide-out menu
 
 ## Getting Started
 
@@ -153,10 +152,6 @@ components/
 ├── clusters/           # Cluster facts, drift, live status, the template-driven form
 ├── addons/             # A destination's charts (values editor, cards, bulk install), the authoring flow (sync options, dry-run plans, confirmations), and an add-on's scope panels (per-destination values, deploy on specific MCEs)
 └── specs/              # Spec-specific components
-
-features/               # An external system's area, all of it in one folder: api/ (day1 calls, keys, hooks), types/, lib/ (pure logic and its Vitest), components/
-├── segments/           # Segments, segments-manager's page (ADR-0047); its route stays in app/(app)/segments/
-└── server-scan/        # Server Scan (ADR-0048); its routes stay in app/(app)/server-scan/
 
 hooks/
 └── use-bulk-status.ts  # Live status of every listed cluster in one request

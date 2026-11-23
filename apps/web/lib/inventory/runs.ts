@@ -29,6 +29,16 @@ export function runSubject(run: InventoryRun): string {
   return "—";
 }
 
+/** `just now`, `12 s ago`, `3 min ago`, `2 h ago`: how long since `then` (ms epoch), at `now`. */
+export function startedAgo(then: number, now: number): string {
+  const seconds = Math.max(0, Math.floor((now - then) / 1000));
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds} s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  return `${Math.floor(minutes / 60)} h ago`;
+}
+
 /** `waiting-for-agent` → `waiting for agent`; the word stays the workflow's. `null` when it adds nothing. */
 export function readablePhase(phase: string | null, status = ""): string | null {
   if (!phase || phase.toLowerCase() === status.toLowerCase()) return null;

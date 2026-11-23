@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AreaMark } from "./area-mark";
-import { areaById, type AreaId } from "@/lib/areas";
+import { WINGMAN } from "@/lib/areas";
 
 const CREDITS_EVENT = "wingman:credits";
 const SHOW_MS = 5000;
@@ -11,16 +10,13 @@ const ACCENT = "#5b78b8";
 const CONSOLE_SIGNATURE = [
   "\n%c  /\\  /\\  \n /  \\/  \\ \n/ Wingman \\\n",
   `color:${ACCENT};font-family:monospace;font-size:13px;font-weight:bold;`,
-  `%cWingman Platform — Internal Developer Platform\nBuilt by ${areaById("wingman").credits.map((c) => c.name).join(" & ")}\n`,
+  `%cWingman Platform — Internal Developer Platform\nBuilt by ${WINGMAN.credits.map((c) => c.name).join(" & ")}\n`,
   "font-family:monospace;font-size:11px;color:#888;",
 ];
 
-/** The area's name as its brand writes it: Wingman's two-tone word and "Platform", any other area its name. */
-function CardTitle({ area }: { area: AreaId }) {
+/** Wingman's name as its brand writes it: the two-tone word and "Platform". */
+function CardTitle() {
   const grotesk = { fontFamily: "var(--font-grotesk)", letterSpacing: "-0.03em" };
-  if (area !== "wingman") {
-    return <div className="text-sm font-medium text-white" style={grotesk}>{areaById(area).brand.name}</div>;
-  }
   return (
     <div>
       <div className="text-sm font-medium text-white" style={grotesk}>
@@ -33,9 +29,8 @@ function CardTitle({ area }: { area: AreaId }) {
   );
 }
 
-/** Who built the area, for five seconds or until clicked. */
-function SignatureCard({ area, onClose }: { area: AreaId; onClose: () => void }) {
-  const { brand, credits } = areaById(area);
+/** Who built Wingman, for five seconds or until clicked. */
+function SignatureCard({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const t = setTimeout(onClose, SHOW_MS);
@@ -45,7 +40,6 @@ function SignatureCard({ area, onClose }: { area: AreaId; onClose: () => void })
   return (
     <div
       data-testid="credits"
-      data-area={area}
       role="status"
       className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300 motion-reduce:animate-none"
       onClick={onClose}
@@ -56,8 +50,9 @@ function SignatureCard({ area, onClose }: { area: AreaId; onClose: () => void })
         style={{ background: "#0b1733", boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}
       >
         <div className="flex items-center gap-3 mb-3">
-          <AreaMark mark={brand.mark} />
-          <CardTitle area={area} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/wingman-logo.svg" alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg" />
+          <CardTitle />
         </div>
 
         <div className="h-px mb-3" style={{ background: "rgba(255,255,255,0.08)" }} />
@@ -66,7 +61,7 @@ function SignatureCard({ area, onClose }: { area: AreaId; onClose: () => void })
           Built by
         </div>
         <div className="space-y-1.5">
-          {credits.map(({ name, years }, i) => (
+          {WINGMAN.credits.map(({ name, years }, i) => (
             <div key={name} data-testid="credit">
               <div
                 className="text-xl leading-snug text-white"
@@ -89,8 +84,8 @@ function SignatureCard({ area, onClose }: { area: AreaId; onClose: () => void })
 let consolePrinted = false;
 
 export function EasterEgg() {
-  const [area, setArea] = useState<AreaId | null>(null);
-  const close = useCallback(() => setArea(null), []);
+  const [shown, setShown] = useState(false);
+  const close = useCallback(() => setShown(false), []);
 
   useEffect(() => {
     if (!consolePrinted) {
@@ -100,16 +95,16 @@ export function EasterEgg() {
   }, []);
 
   useEffect(() => {
-    const handler = (e: Event) => setArea((e as CustomEvent<AreaId>).detail);
+    const handler = () => setShown(true);
     window.addEventListener(CREDITS_EVENT, handler);
     return () => window.removeEventListener(CREDITS_EVENT, handler);
   }, []);
 
-  if (!area) return null;
-  return <SignatureCard key={area} area={area} onClose={close} />;
+  if (!shown) return null;
+  return <SignatureCard onClose={close} />;
 }
 
-/** Show who built `area` (the brand's five quick clicks). */
-export function triggerEasterEgg(area: AreaId) {
-  window.dispatchEvent(new CustomEvent<AreaId>(CREDITS_EVENT, { detail: area }));
+/** Show who built Wingman (the brand's five quick clicks). */
+export function triggerEasterEgg() {
+  window.dispatchEvent(new Event(CREDITS_EVENT));
 }

@@ -2,7 +2,8 @@
 
 Date: 2026-11-13
 Status: Accepted; amended 2026-11-17 (an external system's area is one folder per side:
-`apps/web/features/<area>/` and `wingman_day1/integrations/<system>/`)
+`apps/web/features/<area>/` and `wingman_day1/integrations/<system>/`), and 2026-11-23 (the
+web's two areas were removed, and `apps/web/features/` with them)
 
 ## Context
 
@@ -188,3 +189,17 @@ that date) it is one folder on each side:
 
 The limits are unchanged; the moves added no baseline entry or exemption, and
 `main.py`'s ceiling went from 538 to 536.
+
+## Amendment (2026-11-23): the web has no external system's area
+
+The Segments and Server Scan areas were removed (ADR-0047's and ADR-0048's
+amendments of that date): the team keeps segments-manager and server-scan
+apart from Wingman, and the top bar links to their own UIs. With them went
+`apps/web/features/`, its only two folders. What Wingman shows of an external
+system's data is a Wingman feature again, placed by the web rules above
+(`components/<area>/`, `lib/`, `types/`): a node's server link is
+`components/clusters/node-server-link.tsx`, the add-server runs' "started …
+ago" is `lib/inventory/runs.ts`. Should Wingman ever rebuild a system's UI
+again, the 2026-11-17 amendment above says where it goes. day1's
+`integrations/<system>/` stays: it holds the adapters Wingman's own features
+read through.

@@ -25,7 +25,7 @@ export function RolesSection() {
               "See a cluster's nodes, the servers it runs on: its Nodes tab and the nodes under each nodepool",
               "Approve, edit or reject other people's MRs",
               "Start the platform's workflows: Upgrade, Uninstall a server, Install servers and Scale, each where it is set up",
-              "Open Quick Links, Segments and Server Scan; switch a server's maintenance and run server-scan's jobs",
+              "Open Quick Links, and the top bar's links to Segments Manager and Server Scan",
               "Everything a Viewer can do",
             ].map((item) => (
               <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -72,12 +72,11 @@ export function RolesSection() {
           in, so after a group change sign out and in again (a session lasts 8 hours by default).
         </Callout>
         <Callout type="info" title="For admins only, for now">
-          <strong>Quick Links</strong>, <strong>Segments</strong> and <strong>Server Scan</strong> are for Wingman&apos;s
-          admins until Wingman has finer roles. A viewer does not see them in the sidebar or the top bar, a page opened by
-          its address says it is for admins, and the Overview shows Free Segments and Server Fleet Health only to those
-          who have the area. Segments and Server Scan also appear only once your operator has set them up, and while
-          their areas are off (the default: the team keeps both systems apart) an admin&apos;s top bar links to each
-          system&apos;s own UI instead.
+          <strong>Quick Links</strong> and the top bar&apos;s links to <strong>Segments</strong> and{" "}
+          <strong>Server Scan</strong> are for Wingman&apos;s admins until Wingman has finer roles. A viewer does not
+          see them in the sidebar or the top bar, and Quick Links opened by its address says it is for admins. The two
+          links open segments-manager&apos;s and server-scan&apos;s own UIs in a new tab (the team keeps both apart
+          from Wingman), and each appears only once your operator has set its system up.
         </Callout>
         <Callout type="warning" title="Dev login is for local development only">
           A local stack can run without OpenShift: the login page then shows a <strong>Dev mode</strong> banner,

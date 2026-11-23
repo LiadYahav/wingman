@@ -58,8 +58,9 @@ features that use its data stay in day1's layers and import only its `domain` an
 `uv run lint-imports` refuses anything else, and an import between two integrations. Its
 settings go in day1's `settings.py`, its cache keys in `infrastructure/cache_keys.py`, its
 errors in `domain/errors.py` (mapped in `api/errors.py`), its use case's dependency in
-`api/deps.py`, and its fake's fixtures in `dev/fleet-fixtures/`. Its web area goes in
-`apps/web/features/<area>/` (`api/`, `types/`, `lib/`, `components/`; ADR-0056).
+`api/deps.py`, and its fake's fixtures in `dev/fleet-fixtures/`. What the web shows of its
+data is a Wingman feature, in `components/<area>/` and `lib/` (ADR-0056's 2026-11-23
+amendment).
 
 A system whose code or UI Wingman ports (server-scan, segments-manager) has a guide and a map
 in `docs/integrations/`: [server-scan.md](docs/integrations/server-scan.md) and

@@ -1,13 +1,10 @@
 /**
  * What is free to build on: each MCE's free servers by InfraEnv pool
- * (Inventory Management's counts, server-scan's) and each site's free
- * segments (segments-manager's statistics). Pure: the numbers are the
- * sources'; this only orders them and works out the shares.
+ * (Inventory Management's counts, server-scan's). Pure: the numbers are the
+ * source's; this only orders them and works out the shares.
  */
 
-import { siteCard } from "@/features/segments/lib/sites";
 import type { MceInventory, PoolCount } from "@/types/inventory";
-import type { SiteSegmentStats } from "@/features/segments/types/segments";
 import { percent } from "./clusters";
 
 export interface PoolFree {
@@ -58,29 +55,4 @@ export function serverCapacity(mces: readonly MceInventory[]): ServerCapacity {
     free: known.reduce((total, m) => total + m.available, 0),
     unknown: mces.filter((m) => !m.known).map((m) => m.mce),
   };
-}
-
-export interface SiteSegments {
-  site: string;
-  free: number;
-  total: number;
-  /** The share of the site's segments allocated, 0-100. */
-  usedPercent: number;
-  /** Every segment of the site is allocated. */
-  full: boolean;
-}
-
-/** Each site's free segments, in segments-manager's order, and their sum. */
-export function segmentCapacity(stats: readonly SiteSegmentStats[]): { sites: SiteSegments[]; free: number } {
-  const sites = stats.map((stat) => {
-    const card = siteCard(stat);
-    return {
-      site: card.site,
-      free: Math.max(0, card.total - card.allocated),
-      total: card.total,
-      usedPercent: percent(card.allocated, card.total),
-      full: card.full,
-    };
-  });
-  return { sites, free: sites.reduce((total, s) => total + s.free, 0) };
 }

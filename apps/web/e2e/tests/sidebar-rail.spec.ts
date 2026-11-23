@@ -1,14 +1,13 @@
 /**
  * The sidebar collapses to an icon rail (mocked): by its button and by
  * Ctrl+B / ⌘B (never while typing), remembered in this browser and applied
- * before the page's scripts run, in Wingman and in every area's sidebar from
- * one choice. In the rail each entry is its icon, still a named link, with its
- * label (and a site's count) in a tooltip. Phones keep the slide-out sheet.
+ * before the page's scripts run. In the rail each entry is its icon, still a
+ * named link, with its label in a tooltip. Phones keep the slide-out sheet.
  */
 
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { go, mockAllApis } from "../fixtures/api-handlers";
-import { setUpSegments } from "../fixtures/segments";
+import { setUpQuickLinks } from "../fixtures/quick-links";
 
 const RAIL = 56;
 const FULL = 220;
@@ -16,7 +15,6 @@ const FULL = 220;
 const toggle = (page: Page) => page.getByTestId("sidebar-toggle");
 const desktop = (page: Page) => page.locator("#app-sidebar");
 const wingmanNav = (page: Page) => page.getByRole("navigation", { name: "Main" });
-const segmentsNav = (page: Page) => page.getByRole("navigation", { name: "Segments" });
 /** The open entry tooltip (the one just left may still be fading out). */
 const tooltip = (page: Page) => page.locator("[data-testid=sidebar-tooltip][data-open]");
 const brand = (page: Page) => page.getByTestId("brand");
@@ -87,9 +85,8 @@ test.describe("The sidebar's icon rail", () => {
   });
 
   test("Ctrl+B and ⌘B toggle it, but not while typing in a field", async ({ page }) => {
-    await setUpSegments(page);
-    await go(page, "/segments");
-    await expect(page.getByTestId("segment-row")).toHaveCount(8);
+    await setUpQuickLinks(page);
+    await go(page, "/quick-links");
 
     await page.keyboard.press("Control+b");
     await expect(toggle(page)).toHaveAttribute("aria-expanded", "false");
@@ -98,7 +95,7 @@ test.describe("The sidebar's icon rail", () => {
     await expect(toggle(page)).toHaveAttribute("aria-expanded", "true");
     await expectWidth(desktop(page), FULL);
 
-    const search = page.getByRole("searchbox", { name: "Search segments" });
+    const search = page.getByRole("searchbox", { name: "Search links" });
     await search.click();
     await page.keyboard.press("ControlOrMeta+b");
     await expect(search).toBeFocused();
@@ -167,42 +164,6 @@ test.describe("The sidebar's icon rail", () => {
     await page.keyboard.press("Tab");
     await expect(dashboard).toBeFocused();
     await expect(tooltip(page)).toHaveText("Dashboard");
-  });
-
-  test("Segments' sidebar follows the same choice: the brand is its mark, a site's count moves to its tooltip", async ({ page }) => {
-    await setUpSegments(page);
-    await go(page, "/");
-    await setSidebar(page, "collapsed");
-
-    await page.getByRole("navigation", { name: "Platform" }).getByRole("link", { name: "Segments" }).click();
-    await expect(brand(page)).toHaveAttribute("data-area", "segments");
-    await expect(toggle(page)).toHaveAttribute("aria-expanded", "false");
-    await expectWidth(desktop(page), RAIL);
-    await expect(brand(page)).toHaveAccessibleName("Segments Manager");
-    expect(await width(brand(page))).toBeLessThanOrEqual(RAIL);
-    await expectScreenReaderOnly(brand(page).getByText("Segments Manager"));
-
-    const nav = segmentsNav(page);
-    const site1 = nav.getByTestId("area-nav-site:site1");
-    await expect(site1).toHaveAccessibleName(/^site1\s*4\/5\s*: 4 of 5 segments allocated$/);
-    await expectScreenReaderOnly(site1.getByText("4/5"));
-    await expectScreenReaderOnly(nav.getByText("Sites", { exact: true }));
-    await site1.hover();
-    await expect(tooltip(page)).toHaveText(/^site1\s*4\/5$/);
-
-    await site1.click();
-    await expect(page).toHaveURL(/site=site1/);
-    await expect(site1).toHaveAttribute("aria-current", "page");
-    await expect(page.getByTestId("segment-row")).toHaveCount(5);
-
-    // Expanding here expands Wingman's too: one choice for every area
-    await setSidebar(page, "expanded");
-    await expect(site1.getByText("4/5")).toBeVisible();
-    expect(await width(site1.getByText("4/5"))).toBeGreaterThan(1);
-    await page.getByRole("navigation", { name: "Platform" }).getByRole("link", { name: "Wingman" }).click();
-    await expect(brand(page)).toHaveAttribute("data-area", "wingman");
-    await expect(toggle(page)).toHaveAttribute("aria-expanded", "true");
-    await expectWidth(desktop(page), FULL);
   });
 });
 

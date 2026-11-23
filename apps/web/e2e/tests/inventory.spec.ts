@@ -9,8 +9,7 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { fulfillProblem, go, held, json } from "../fixtures/api-handlers";
-import { mockSites } from "../fixtures/server-scan";
+import { fulfillProblem, go, held } from "../fixtures/api-handlers";
 import {
   DONOR, FREE, LOCKED, OVERVIEW, R650, SITE1_A, SITE1_B, SITE1_B_POOL, STARTED, off, setUpInventory,
 } from "../fixtures/inventory";
@@ -250,7 +249,7 @@ test.describe("Install servers from the header", () => {
   });
 });
 
-test.describe("Inventory Management links to a server's page", () => {
+test.describe("Inventory Management names a server", () => {
   const RUNS = {
     runs: [
       {
@@ -266,31 +265,17 @@ test.describe("Inventory Management links to a server's page", () => {
     ],
   };
 
-  test("for an admin with the Server Scan area: a pool's servers and a run's server are links", async ({ page }) => {
-    await setUpInventory(page, { runs: RUNS });
-    await page.route("**/api/day1/server-scan/sites", (route) => json(route, mockSites()));
-    await go(page, "/inventory");
-    const run = page.getByTestId("run-row").nth(0);
-    await expect(run.getByRole("link", { name: FREE })).toHaveAttribute("href", "/server-scan/servers/srv_0811");
-    await expect(page.getByTestId("run-row").nth(1).getByTestId("ss-server-link")).toHaveCount(0);
-    await pool(page, R650).getByRole("button", { name: `1 ready in server-scan for ${R650}` }).click();
-    const candidate = page.locator(`[data-testid="candidate"][data-server="${FREE}"]`);
-    await expect(candidate.getByTestId("ss-server-link")).toHaveAttribute("href", "/server-scan/servers/srv_0811");
-    await expect(candidate.getByTestId("ss-server-link")).not.toHaveAttribute("target", "_blank");
-    // In the install dialog's picker the link opens a new tab, so the choice stays
-    await openAdd(page);
-    await dialog(page).getByRole("tab", { name: "Choose servers" }).click();
-    const picked = dialog(page).locator(`[data-testid="candidate"][data-server="${FREE}"]`).getByTestId("ss-server-link");
-    await expect(picked).toHaveAttribute("target", "_blank");
-    await expect(picked).toHaveAttribute("href", "/server-scan/servers/srv_0811");
-  });
-
-  test("for anyone without the area they stay text", async ({ page }) => {
+  test("as text: a run's server and a pool's servers, also in the install dialog's picker", async ({ page }) => {
     await setUpInventory(page, { runs: RUNS });
     await go(page, "/inventory");
     await expect(page.getByTestId("run-row").nth(0)).toContainText(FREE);
+    await expect(page.getByTestId("run-row").nth(1)).toContainText("slot 1");
     await pool(page, R650).getByRole("button", { name: `1 ready in server-scan for ${R650}` }).click();
     await expect(page.getByTestId("candidate")).toHaveCount(4);
-    await expect(page.getByTestId("ss-server-link")).toHaveCount(0);
+    await expect(page.locator(`[data-testid="candidate"][data-server="${FREE}"]`)).toContainText(FREE.replace(`ocp-${R650}`, ""));
+    await openAdd(page);
+    await dialog(page).getByRole("tab", { name: "Choose servers" }).click();
+    await expect(dialog(page).locator(`[data-testid="candidate"][data-server="${FREE}"]`)).toBeVisible();
+    await expect(page.locator('a[href^="/server-scan"]')).toHaveCount(0);
   });
 });
