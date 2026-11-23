@@ -36,7 +36,13 @@ async def call(
 ) -> list[httpx.Response]:
     """GET each of ``paths``, in order, on one app over ``ledger`` (none: segments-manager off)."""
     app = support.build_app(
-        gitlab=gitlab, hub=None, identity=None, day2=FakeDay2Addons(), clock=clock, ledger=ledger
+        gitlab=gitlab,
+        hub=None,
+        identity=None,
+        day2=FakeDay2Addons(),
+        clock=clock,
+        ledger=ledger,
+        **support.SEGMENTS_AREA,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:

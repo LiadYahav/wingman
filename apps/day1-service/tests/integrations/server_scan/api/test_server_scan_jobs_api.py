@@ -70,6 +70,7 @@ def client(
         identity=None,
         day2=FakeDay2Addons(),
         clock=clock,
+        **support.SERVER_SCAN_AREA,
         inventory=inventory,
         **settings,
     )

@@ -22,6 +22,14 @@ now built, and what is still not here.
   other optional features do, and the web hides the area. With
   `DAY1_FAKE_FLEET=true` (development only) a fake ledger from
   `dev/fleet-fixtures/segments.yaml` answers.
+- **Off by default since 2026-11-23** (ADR-0047's amendment of that day): the
+  team keeps segments-manager apart from Wingman, so with segments-manager
+  configured every route still answers `501 FEATURE_DISABLED`, with
+  `details.setting: "DAY1_SEGMENTS_AREA"`, until `DAY1_SEGMENTS_AREA=true`
+  (chart: `day1.segmentsArea.enabled`). The web reads it as "no area", and the
+  top bar links to segments-manager's own UI instead, from
+  `GET /api/day1/platforms` (`{"platforms": [{"id": "segments", "name":
+  "Segments Manager", "url": <its UI>, "area": false}, ...]}`, admins only).
 - **segments-manager failing** is `502 DEPENDENCY_UNAVAILABLE` on these routes
   only. It never fails a cluster read: the cluster page's network card keeps
   ADR-0039's behaviour (`ledger_error`, the file's values shown).

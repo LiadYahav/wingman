@@ -278,9 +278,15 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 |--------|----------|-------------|
 | `GET` | `/api/day1/quick-links` | The launcher's sections and cards: the hub and every MCE's ArgoCD and console, by site, then the links file's sections, with the links file's problems ([API note](docs/notes/2026-11-12-quick-links-api.md)) |
 
+#### Platforms (admins only; ADR-0047 and ADR-0048, 2026-11-23)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/day1/platforms` | The top bar's systems: `{"platforms": [{"id", "name", "url", "area"}]}`, segments-manager (`segments`, "Segments Manager") then server-scan (`server-scan`, "Server Scan"), each only when day1 is configured for it; `url` is its own UI (`SEGMENTS_MANAGER_UI_URL` or `SERVER_SCAN_UI_URL`, else its API's URL), `area` whether Wingman's area for it is on (`DAY1_SEGMENTS_AREA`, `DAY1_SERVER_SCAN_AREA`). Read from the settings: nothing is called |
+
 #### Segments (admins only, ADR-0047)
 
-Read only, from segments-manager's open GETs; `501 FEATURE_DISABLED` while `SEGMENTS_MANAGER_URL` is empty, `502 DEPENDENCY_UNAVAILABLE` when segments-manager fails ([API note](docs/notes/2026-11-13-segments-area-api.md)).
+Read only, from segments-manager's open GETs; `501 FEATURE_DISABLED` while `SEGMENTS_MANAGER_URL` is empty or the area is off (`DAY1_SEGMENTS_AREA`, off by default: `details.setting` names it), `502 DEPENDENCY_UNAVAILABLE` when segments-manager fails ([API note](docs/notes/2026-11-13-segments-area-api.md)).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -290,7 +296,7 @@ Read only, from segments-manager's open GETs; `501 FEATURE_DISABLED` while `SEGM
 
 #### Server Scan (admins only, ADR-0048)
 
-server-scan's pages, read through day1 in server-scan's own shapes; `501 FEATURE_DISABLED` while `SERVER_SCAN_URL` is empty, `502 DEPENDENCY_UNAVAILABLE` when server-scan fails or refuses a token ([API note](docs/notes/2026-11-13-server-scan-area-api.md)).
+server-scan's pages, read through day1 in server-scan's own shapes; `501 FEATURE_DISABLED` while `SERVER_SCAN_URL` is empty or the area is off (`DAY1_SERVER_SCAN_AREA`, off by default: `details.setting` names it; the Nodes tab, placement and Inventory Management read server-scan through their own routes either way), `502 DEPENDENCY_UNAVAILABLE` when server-scan fails or refuses a token ([API note](docs/notes/2026-11-13-server-scan-area-api.md)).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -490,8 +496,8 @@ DAY1_STATUS_POLL_SECONDS=30               # the live status stream (the chart do
 
 # The nodes' servers from server-scan, uninstall through the workflows orchestrator (ADR-0038; off by default);
 # the same server-scan feeds Inventory Management (ADR-0057) and the Server Scan area for admins (ADR-0048)
-SERVER_SCAN_URL=                          # e.g. http://server-scan-api.<ns>.svc:8000; empty: nodes without servers, no uninstall, no Server Scan area
-SERVER_SCAN_UI_URL=                       # server-scan's UI: node links for anyone without the Server Scan area, the Claude page's zip, MCP command and token link, and where day1 reads the Architecture page's diagrams; default SERVER_SCAN_URL
+SERVER_SCAN_URL=                          # e.g. http://server-scan-api.<ns>.svc:8000; empty: nodes without servers, no uninstall, no Server Scan area, no top-bar link
+SERVER_SCAN_UI_URL=                       # server-scan's UI: the top bar's link and node links for anyone without the Server Scan area, the Claude page's zip, MCP command and token link, and where day1 reads the Architecture page's diagrams; default SERVER_SCAN_URL
 SERVER_SCAN_TOKEN=                        # a server-scan viewer token (Bearer), from a Secret, for every read (the Server Scan area too); empty: no header
 SERVER_SCAN_ADMIN_TOKEN=                  # server-scan's admin token, for the maintenance toggle on Servers and the Jobs page; empty with a viewer token: the toggle is off
 SERVER_SCAN_AUDITOR_TOKEN=                # server-scan's auditor token, for a server's History only; empty with a viewer token: History is off
@@ -510,10 +516,12 @@ DAY1_SCALE_NODEPOOLS=false                # Scale on the Nodes tab through updat
 DAY1_MULTI_INFRAENV_NODEPOOLS=false       # a nodepool may draw from several InfraEnvs, nodepool[].additionalInfraEnvNames (ADR-0064); parked: leave it off, the chart and the specs template don't carry the key; off, Wingman never writes it
 DAY1_EXCLUDED_AGENT_LABELS=               # Agent label keys every agent NodePool excludes (ADR-0065), comma-separated: herzi's label for used Agents; written on new clusters' nodepools (excludeAgentLabels), an existing cluster's through its own MR; empty: nothing changes
 DAY1_SERVER_SCAN_REFRESH=false            # Fetch now in the Server Scan area (ADR-0048): one server read from its vendor manager now; needs SERVER_SCAN_URL, server-scan v6.5.0 or later and SERVER_SCAN_ADMIN_TOKEN; off: no button, the route answers 501
+DAY1_SERVER_SCAN_AREA=false               # the Server Scan area inside Wingman, for admins (ADR-0048's 2026-11-23 amendment); needs SERVER_SCAN_URL; off: the top bar links to server-scan's own UI and the area's routes answer 501
 
 # segments-manager: the cluster's EPG, checked against the file (ADR-0039), and the Segments area (ADR-0047); off by default; read only
 SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG, no Segments area
-SEGMENTS_MANAGER_UI_URL=                  # where the cluster page's links point (its UI); default SEGMENTS_MANAGER_URL; both empty: no link
+SEGMENTS_MANAGER_UI_URL=                  # where the cluster page's links and the top bar's link point (its UI); default SEGMENTS_MANAGER_URL; both empty: no link
+DAY1_SEGMENTS_AREA=false                  # the Segments area inside Wingman, for admins (ADR-0047's 2026-11-23 amendment); needs SEGMENTS_MANAGER_URL; off: the top bar links to segments-manager's own UI and the area's routes answer 501
 SEGMENTS_MANAGER_SSL_VERIFY=true          # true, false, or a CA bundle path
 SEGMENTS_MANAGER_TIMEOUT_SECONDS=5
 

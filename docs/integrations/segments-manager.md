@@ -12,7 +12,7 @@ segments-manager itself works is [its study](../ecosystem/notes/segments-manager
 
 ## What Wingman mirrors, and what it never does
 
-- **The area**, for admins (ADR-0047): the per-site cards, then every segment
+- **The area**, for admins, off by default since 2026-11-23 (`DAY1_SEGMENTS_AREA`; ADR-0047's amendment: the team keeps segments-manager apart, and the top bar links to its own UI): the per-site cards, then every segment
   in one table with the original's columns and words, its status tabs, search,
   a filter on every column, sort, the CSV and Excel exports of the rows shown,
   Refresh and the connection dot. Each row also says where segments-manager

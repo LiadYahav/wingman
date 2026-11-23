@@ -7,7 +7,7 @@ build their own with fakes. Nothing here constructs a client.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -33,6 +33,7 @@ from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.status import StatusService
 from wingman_day1.application.sync import SyncService
 from wingman_day1.application.upgrades import UpgradeService
+from wingman_day1.domain.platforms import Platforms
 from wingman_day1.integrations.segments_manager.application.segments import SegmentsService
 from wingman_day1.integrations.server_scan.application.area import ServerScanService
 from wingman_day1.ports import ClusterDeleteWorkflow, RepoReads
@@ -86,6 +87,9 @@ class Day1Context:
     """``None`` when ``DAY1_SCALE_NODEPOOLS`` is off: the scale routes answer 501 (ADR-0062)."""
     agent_labels: AgentLabelsService | None = None
     """A cluster's excluded Agent labels MR (ADR-0065); without keys its routes answer 501."""
+    platforms: Platforms = field(default_factory=Platforms)
+    """segments-manager and server-scan for the top bar, and whether each one's area is on
+    (2026-11-23): an area that is off answers 501, as one whose system is not configured."""
 
 
 def day1_context(request: Request) -> Day1Context:
@@ -152,10 +156,18 @@ def quick_links_service(
 SEGMENTS_NOT_AVAILABLE = "Segments is not set up in this deployment: SEGMENTS_MANAGER_URL is empty."
 
 
+SEGMENTS_AREA_OFF = (
+    "The Segments area is off in this deployment (DAY1_SEGMENTS_AREA=false): segments-manager "
+    "stays apart from Wingman, and the top bar links to its own UI."
+)
+
+
 def segments_service(context: Annotated[Day1Context, Depends(day1_context)]) -> SegmentsService:
-    """The Segments area's use case, or 501 when segments-manager is not configured."""
+    """The Segments area's use case, or 501 when segments-manager is not configured or it is off."""
     if context.segments is None:
         raise FeatureDisabled(SEGMENTS_NOT_AVAILABLE)
+    if not context.platforms.area("segments"):
+        raise FeatureDisabled(SEGMENTS_AREA_OFF, details={"setting": "DAY1_SEGMENTS_AREA"})
     return context.segments
 
 
@@ -217,14 +229,20 @@ def inventory_service(
 SERVER_SCAN_NOT_AVAILABLE = (
     "Server Scan is not set up in this deployment: SERVER_SCAN_URL is empty."
 )
+SERVER_SCAN_AREA_OFF = (
+    "The Server Scan area is off in this deployment (DAY1_SERVER_SCAN_AREA=false): server-scan "
+    "stays apart from Wingman, and the top bar links to its own UI."
+)
 
 
 def server_scan_service(
     context: Annotated[Day1Context, Depends(day1_context)],
 ) -> ServerScanService:
-    """The Server Scan area's use cases, or 501 when server-scan is not configured (ADR-0048)."""
+    """The Server Scan area's use cases, or 501 when server-scan is not configured or it is off."""
     if context.server_scan is None:
         raise FeatureDisabled(SERVER_SCAN_NOT_AVAILABLE)
+    if not context.platforms.area("server-scan"):
+        raise FeatureDisabled(SERVER_SCAN_AREA_OFF, details={"setting": "DAY1_SERVER_SCAN_AREA"})
     return context.server_scan
 
 

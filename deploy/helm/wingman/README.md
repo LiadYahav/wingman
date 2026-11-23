@@ -93,6 +93,8 @@ the names are explained in the root README's [Environment Variables](../../../RE
 | `day1.multiInfraEnvNodepools.enabled` | `DAY1_MULTI_INFRAENV_NODEPOOLS` | `false` | A nodepool may draw Agents from several InfraEnvs (ADR-0064): the create form and the flavor editor offer more InfraEnvs beside a nodepool's own, written as `nodepool[].additionalInfraEnvNames`. **Parked, leave it off** (ADR-0064's 2026-11-23 amendment): the team runs no such NodePool for now, so the hostedclusters-setup chart (which without the change silently selects the first InfraEnv alone) and the specs-project template don't carry the key ([upgrade guide](../../../docs/upgrade/3.46-to-3.47.md)). Off, Wingman never writes the key, and an edit leaves it as it is |
 | `day1.excludedAgentLabels` | `DAY1_EXCLUDED_AGENT_LABELS` | `[]` | Agent label keys every agent NodePool excludes, each a `DoesNotExist` in its selector (ADR-0065): herzi's label for used Agents, so a freed used Agent is never bound again before herzi deletes it. Written on each new cluster's nodepools (`excludeAgentLabels`); an existing cluster takes them through its own merge request (`POST /api/day1/clusters/{name}/excluded-agent-labels`). Needs the hostedclusters-setup chart patch 0002 (`docs/upgrade/patches/hostedclusters-setup/`), the specs-project template lines and a herzi release that accepts the exclusion ([upgrade guide](../../../docs/upgrade/3.48-to-3.49.md)). Empty: nothing changes |
 | `day1.serverScanRefresh.enabled` | `DAY1_SERVER_SCAN_REFRESH` | `false` | Fetch now in the Server Scan area (ADR-0048's 2026-11-18 amendment): an admin reads one server from its vendor manager now, on its page and on every Servers row. Needs `serverScan.url`, server-scan v6.5.0 or later and its admin token (`serverScan.tokenSecret.adminKey`, as maintenance); off, no button is shown and the route answers 501 |
+| `day1.segmentsArea.enabled` | `DAY1_SEGMENTS_AREA` | `false` | The **Segments** area inside Wingman, for admins (ADR-0047's 2026-11-23 amendment). Off, the team keeps segments-manager apart: an admin's top bar links to its own UI in a new tab (`segmentsManager.uiUrl`, else `url`), `/segments` and its Overview card are not offered, and the area's routes answer 501. The cluster page's network card reads segments-manager either way. Needs `segmentsManager.url` |
+| `day1.serverScanArea.enabled` | `DAY1_SERVER_SCAN_AREA` | `false` | The **Server Scan** area inside Wingman, for admins (ADR-0048's 2026-11-23 amendment). Off, the team keeps server-scan apart: an admin's top bar links to its own UI in a new tab (`serverScan.uiUrl`, else `url`), `/server-scan`, its sidebar and its Overview card are not offered, a node's server opens its page in server-scan, and the area's routes answer 501. The Nodes tab, placement and Inventory Management read server-scan either way. Needs `serverScan.url` |
 | `day2.cacheTtlSeconds` | `DAY2_CACHE_TTL_SECONDS` | `15` | Per replica, at most 60 (ADR-0011) |
 | `auth.openshiftOAuthHost` | `OPENSHIFT_OAUTH_HOST` | | The OAuth server's host ([Login](#login-openshift-oauth)) |
 | `auth.openshiftApiHost` | `OPENSHIFT_API_HOST` | | The API server, `host:port` |
@@ -110,8 +112,8 @@ the names are explained in the root README's [Environment Variables](../../../RE
 | `clusterStatus.mceDomain` | `MCE_API_DOMAIN` | `""` | A hub is `https://api.{mce}.{mceDomain}:6443`, unless the tokens Secret gives it its own `url` (ADR-0045) |
 | `clusterStatus.sslVerify` | `MCE_SSL_VERIFY` | `"false"` | `"true"`, `"false"` or a CA bundle path |
 | `clusterStatus.tokensSecretName` | | `mce-sa-tokens` | The Secret whose key `tokens` (a YAML map of MCE name to token, or to `{token, url}`) is mounted as `MCE_TOKENS_FILE` |
-| `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. The nodes' servers, Inventory Management, and the **Server Scan** area for admins ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)). Empty: nodes are listed without their servers, no Inventory Management, no Server Scan area |
-| `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the node links point; the Server Scan area's Claude page writes it into the skill's zip, its MCP command and its token link, and day1 reads the Architecture page's diagrams there. Empty: `serverScan.url` |
+| `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. The nodes' servers, Inventory Management, the top bar's link for admins, and the **Server Scan** area with `day1.serverScanArea.enabled` ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)). Empty: nodes are listed without their servers, no Inventory Management, no link, no Server Scan area |
+| `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the top bar's link and the node links point; the Server Scan area's Claude page writes it into the skill's zip, its MCP command and its token link, and day1 reads the Architecture page's diagrams there. Empty: `serverScan.url` |
 | `serverScan.sslVerify` | `SERVER_SCAN_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token (every read, the Server Scan area's Sites included). Empty: no token, for a server-scan with auth off |
@@ -122,8 +124,8 @@ the names are explained in the root README's [Environment Variables](../../../RE
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `workflows.targetsTimeoutSeconds` | `WORKFLOWS_TARGETS_TIMEOUT_SECONDS` | `65` | An upgrade's targets read, at most 120: the orchestrator waits up to 60 s for it. nginx gives that one path 130 s |
-| `segmentsManager.url` | `SEGMENTS_MANAGER_URL` | `""` | segments-manager's API, e.g. `http://segments-manager.<ns>.svc:8000`. The cluster page shows its EPG for the cluster's segment and where it disagrees with the file, and admins get the **Segments** area ([segments-manager](#segments-manager)). Empty: no EPG, no Segments area |
-| `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The cluster page links to it and to its search for the cluster's segment. Empty: `segmentsManager.url`; both empty: no link |
+| `segmentsManager.url` | `SEGMENTS_MANAGER_URL` | `""` | segments-manager's API, e.g. `http://segments-manager.<ns>.svc:8000`. The cluster page shows its EPG for the cluster's segment and where it disagrees with the file, and admins get the top bar's link to it, or the **Segments** area with `day1.segmentsArea.enabled` ([segments-manager](#segments-manager)). Empty: no EPG, no link, no Segments area |
+| `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The top bar links to it for admins, and the cluster page to it and to its search for the cluster's segment. Empty: `segmentsManager.url`; both empty: no link |
 | `segmentsManager.sslVerify` | `SEGMENTS_MANAGER_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `segmentsManager.timeoutSeconds` | `SEGMENTS_MANAGER_TIMEOUT_SECONDS` | `5` | Per request, at most 60 |
 | `quickLinks.hubName` | `QUICK_LINKS_HUB_NAME` | `""` | The hub Wingman runs on, as in `apps.<hubName>.<domain>`: its card on Quick Links ([Quick Links](#quick-links)). Empty: no hub card |
@@ -403,9 +405,12 @@ workflows:
 day1 reads the token at start: restart it (`oc rollout restart deploy/wingman-day1`) after
 replacing the Secret.
 
-The same `serverScan.url` turns on the **Server Scan** area for Wingman's admins
-(`/server-scan`, from the top bar's area switch; ADR-0048): server-scan's UI rebuilt in
-Wingman, one page at a time. Its first page, **Sites**, reads server-scan's own per-site
+The same `serverScan.url` puts **Server Scan** in the top bar's platform switch for
+Wingman's admins: a link to server-scan's own UI (`uiUrl`, else `url`), in a new tab.
+The team keeps server-scan apart from Wingman for now (ADR-0048's 2026-11-23 amendment),
+so the **Server Scan** area is off unless `day1.serverScanArea.enabled` is `true`; then the
+switch opens it instead (`/server-scan`): server-scan's UI rebuilt in Wingman, one page at
+a time. What follows describes the area with it on. Its first page, **Sites**, reads server-scan's own per-site
 counts with the same viewer token (no new Secret or key), kept 10 seconds per day1 replica.
 Its second, **Servers**, reads the fleet's rows from the cache the Nodes tab already keeps
 (`DAY1_CACHE_TTL_SECONDS`), revalidated against server-scan's `ETag`, however many pages
@@ -474,8 +479,11 @@ segments-manager disagrees with the file (another VLAN, another cluster, a segme
 Allocated, or none). day1 never writes to segments-manager, and segments-manager down only
 hides the EPG.
 
-The same setting turns on the **Segments** area for Wingman's admins (`/segments`, from the top
-bar's area switch; ADR-0047): segments-manager's page rebuilt in Wingman, read only, from its
+The same setting puts **Segments** in the top bar's platform switch for Wingman's admins: a
+link to segments-manager's own UI (`uiUrl`, else `url`), in a new tab. The team keeps
+segments-manager apart from Wingman for now (ADR-0047's 2026-11-23 amendment), so the
+**Segments** area is off unless `day1.segmentsArea.enabled` is `true`; then the switch opens
+it instead (`/segments`): segments-manager's page rebuilt in Wingman, read only, from its
 open reads of the sites, the per-site statistics and the segments (and a fresh read for
 Refresh, at most once per 5 seconds per replica). day1 makes the calls, so only day1 needs to
 reach `url`; the browser never calls segments-manager. Viewers have no Segments area, for now.

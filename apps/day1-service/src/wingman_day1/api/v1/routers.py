@@ -18,6 +18,7 @@ from wingman_day1.api.v1 import auth as auth_api
 from wingman_day1.api.v1 import clusters as clusters_api
 from wingman_day1.api.v1 import inventory as inventory_api
 from wingman_day1.api.v1 import placement as placement_api
+from wingman_day1.api.v1 import platforms as platforms_api
 from wingman_day1.api.v1 import quick_links as quick_links_api
 from wingman_day1.api.v1 import scale as scale_api
 from wingman_day1.api.v1 import sites as sites_api
@@ -37,6 +38,7 @@ ROUTERS: Final[tuple[APIRouter, ...]] = (
     *NODEPOOL_CATALOG_ROUTERS,
     placement_api.router,
     quick_links_api.router,
+    platforms_api.router,
     inventory_api.router,
     segments_api.router,
     *SERVER_SCAN_ROUTERS,

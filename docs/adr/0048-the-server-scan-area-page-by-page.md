@@ -1,7 +1,7 @@
 # ADR-0048: The Server Scan area is server-scan's UI rebuilt in Wingman page by page, on the one server-scan client, starting with Sites
 
 Date: 2026-11-13
-Status: Accepted
+Status: Accepted; amended page by page (below), and 2026-11-23 (off by default: the top bar links to server-scan's own UI)
 
 ## Context
 
@@ -865,3 +865,35 @@ e2e specs `server-scan.spec.ts` (the health bar, Physical, VM and vendor bars
 and their links), `server-scan-servers.spec.ts` (Type, a ticked severity, the
 BMC copy, every row's Fetch now, the box), `server-scan-server.spec.ts` (Fetch
 now, the type line) and `server-scan-events.spec.ts` (the box).
+
+**2026-11-23: the team keeps server-scan apart; the area is off by default,
+and the top bar links out.** As ADR-0047's amendment of the same day, for
+server-scan: the team keeps it apart from Wingman for now, and the area's
+code stays behind a setting, so it can come back.
+
+- **`DAY1_SERVER_SCAN_AREA`** (the chart's `day1.serverScanArea.enabled`),
+  off by default. Off: every route under `/api/day1/server-scan` answers
+  `501 FEATURE_DISABLED` naming the switch in `details.setting`: Sites,
+  Servers, a server's page, its VM host and History, Events, Confs, Rules &
+  Policies, Jobs and Run job, the Claude page and its zip, Architecture,
+  maintenance and Fetch now. `/server-scan`, its sidebar and the Overview's
+  Server Fleet Health card are not offered, and a page opened by its address
+  says the area is off. On: everything above, as before; Fetch now still
+  needs `DAY1_SERVER_SCAN_REFRESH` too. It needs `SERVER_SCAN_URL`.
+- **What keeps reading server-scan:** the Nodes tab (ADR-0038), placement
+  (ADR-0050) and Inventory Management (ADR-0057), through their own routes
+  and the one cache. Only `ServerScanService`, the area's use case, is behind
+  the switch.
+- **The top bar's Server Scan entry** links to server-scan's own UI
+  (`SERVER_SCAN_UI_URL`, else `SERVER_SCAN_URL`) in a new tab while the area
+  is off, for admins, from `GET /api/day1/platforms` (ADR-0047's amendment).
+- **A node's server** opens server-scan's own server page (`server.url`,
+  which day1 builds), as it did for anyone without the area (3.26.0): the
+  web's `nodeServerLink` falls back to it when the area is not on. In
+  Inventory Management a server's name is text, as it was for a viewer.
+
+Rejected: as ADR-0047's amendment; and **turning off server-scan as a
+whole** (the Nodes tab, placement and Inventory Management need it, and the
+team keeps those).
+
+Verification: as ADR-0047's amendment, whose tests cover both areas.

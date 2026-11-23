@@ -1,7 +1,7 @@
 # ADR-0047: The Segments area is Wingman's own read-only page over segments-manager's open reads, for admins, built as an alpha
 
 Date: 2026-11-13
-Status: Accepted; amended 2026-11-13 (each area has its own sidebar and brand), and 2026-11-13 for 3.21.0 (full parity)
+Status: Accepted; amended 2026-11-13 (each area has its own sidebar and brand), 2026-11-13 for 3.21.0 (full parity), and 2026-11-23 (off by default: the top bar links to segments-manager's own UI)
 
 ## Context
 
@@ -197,6 +197,47 @@ Verification: `apps/web/lib/table/column-filters.test.ts`,
 `apps/web/e2e/tests/segments-columns.spec.ts` (it reads the downloaded
 `.xlsx` back and compares it with the CSV), and the dot's tests in
 `apps/web/e2e/tests/segments.spec.ts`.
+
+**2026-11-23: the team keeps segments-manager apart; the area is off by
+default, and the top bar links out.** The team decided that segments-manager
+and server-scan stay apart from Wingman for now. The area is not removed: the
+user may bring it back, so its code stays, behind a setting.
+
+- **`DAY1_SEGMENTS_AREA`** (the chart's `day1.segmentsArea.enabled`), off by
+  default. Off: every route under `/api/day1/segments` answers
+  `501 FEATURE_DISABLED`, its `details.setting` naming the switch. The web
+  already reads that answer as "no area", so `/segments`, its sidebar and the
+  Overview's Free Segments card are not offered, and a page opened by its
+  address says the area is off. On: everything above, as before. It needs
+  `SEGMENTS_MANAGER_URL`; settings and the chart refuse it without.
+- **The top bar keeps its platform switch.** While the area is off, its
+  **Segments** entry is a link to segments-manager's own UI
+  (`SEGMENTS_MANAGER_UI_URL`, else `SEGMENTS_MANAGER_URL`), in a new tab with
+  an external-link mark. It shows to admins only, and only when
+  segments-manager is configured, as the area did; a viewer still sees no
+  switch. The web reads both from a new admins-only `GET /api/day1/platforms`:
+  each configured system with its UI's address and whether its area is on,
+  built from the settings at start, nothing called. Its `Platforms` value is
+  in `wingman_day1/domain/platforms.py`, composed in `compose_platforms.py`.
+- **Unchanged:** the cluster page's network card (the EPG, ADR-0039) and its
+  links to segments-manager's UI. With the area off "This cluster's
+  segments" opens segments-manager's own page, as it did for anyone without
+  the area.
+
+Rejected: **deleting the area** (the user may bring it back, and a setting
+costs one check per route); **a redirect from `/segments` to
+segments-manager** (Wingman would decide for the person where they go; the
+page says why it is off instead); **reading the switch from the web's
+build** (one image serves every deployment; the switch is day1's, like every
+other).
+
+Verification: `apps/day1-service/tests/api/test_platforms_api.py` (admins
+only, the shape, the UI's address, every area route 501 naming its switch,
+the network card still read), `tests/unit/test_settings.py` (off by default,
+refused without its URL), `tests/repo/test_chart_env_contract.py` (the
+chart's value), `apps/web/lib/areas.test.ts` (the switch's entries) and
+`apps/web/e2e/tests/platforms-apart.spec.ts` (the links out, no `/segments`
+or `/server-scan` offered, a viewer's top bar).
 
 ## Verification
 

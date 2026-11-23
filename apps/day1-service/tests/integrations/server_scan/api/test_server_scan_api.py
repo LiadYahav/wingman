@@ -44,6 +44,7 @@ async def call(
         identity=None,
         day2=FakeDay2Addons(),
         clock=clock,
+        **support.SERVER_SCAN_AREA,
         inventory=inventory,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
