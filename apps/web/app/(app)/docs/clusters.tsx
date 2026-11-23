@@ -165,7 +165,7 @@ function ClusterPageDocs() {
       <h3 className="text-base font-semibold mt-6 mb-3">The cluster page</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         The tabs are <strong>Overview</strong> (the cluster, its HostedCluster and network, nodepools, flavor and,
-        when it is on, live status), <strong>Nodes</strong> (below), <strong>YAML</strong>, <strong>Drift</strong> and <strong>History</strong>{" "}
+        when it is on, live status), <strong>Nodes</strong> (below; admins only), <strong>YAML</strong>, <strong>Drift</strong> and <strong>History</strong>{" "}
         (the cluster file&apos;s commits in the day1 repo, and its chart values&apos; commits in the team repos).
         The header has <strong>GitLab</strong> (the file), <strong>Addons</strong> (its charts) and, for admins,{" "}
         <strong>Edit</strong> and <strong>Delete</strong>. A name off the naming convention is flagged{" "}
@@ -227,14 +227,16 @@ function ClusterPageDocs() {
 
       <h3 className="text-base font-semibold mt-6 mb-3">Nodes</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        The cluster page&apos;s <strong>Nodes</strong> tab shows each NodePool as the cluster&apos;s MCE reports it.
+        The cluster page&apos;s <strong>Nodes</strong> tab, for admins only (a Viewer never sees a cluster&apos;s servers;
+        see <a href="#roles" className="text-primary hover:underline">Roles &amp; Access</a>), shows each NodePool as the cluster&apos;s MCE reports it.
         Its header sums it up: how many nodes are ready of how many it wants (or the range it autoscales in), the
         version it last finished updating to, whether an update reboots its nodes in place (<strong>InPlace</strong>)
         or replaces them (<strong>Replace</strong>), and which Agents it takes. Under it is one row per Machine: the
         server behind it, with its serial, hardware, Machine, Agent, state and health, and flags for a server in
         maintenance, stale, unreachable or contested (claimed by two clusters). The server&apos;s name opens its page:
-        for an admin with the Server Scan area, its page in <a href="#server-scan" className="text-primary hover:underline">Server Scan</a>,
-        here in Wingman; for everyone else, its page in server-scan&apos;s own UI, in a new tab.
+        with the Server Scan area, its page in <a href="#server-scan" className="text-primary hover:underline">Server Scan</a>,
+        here in Wingman; without it, its page in server-scan&apos;s own UI, in a new tab. On the Overview, each
+        nodepool opens to the same nodes.
         Health server-scan could not determine shows as <strong>Unknown</strong>, never as healthy. Ready, healthy
         rows stay quiet, so what needs a look stands out.
       </p>

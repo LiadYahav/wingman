@@ -2,13 +2,15 @@
 
 Off by default: every route answers 501 and versions are edited as before.
 With ``DAY1_UPGRADES`` on, admins read the targets, start a run and decide;
-anyone signed in reads the run; who asked is always the signed-in user; and
-a modify or a review edit may not change the versions the workflow owns.
+anyone signed in reads the run (a viewer's without the agent's proposals);
+who asked is always the signed-in user; and a modify or a review edit may
+not change the versions the workflow owns.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -18,6 +20,7 @@ import pytest
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.domain.errors import AmbiguousDecisionError, AmbiguousStartError
+from wingman_day1.domain.upgrades import AgentVerdict, PendingAction, UpgradeRun
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
@@ -206,6 +209,36 @@ async def test_a_start_takes_who_asked_from_the_session_and_walks_through_decisi
     assert approved.json()["decision"] == "approve"
     assert approved.json()["run"]["phase"] == "waiting-for-slot"
     assert upgrade.decisions[-1] == (f"upgrade-cluster-{LARK}", "approve", "bob", "reviewed")
+
+
+async def test_a_viewer_reads_the_run_without_the_agents_proposals(
+    on: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    upgrade: FakeUpgradeWorkflow,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-0038's 2026-11-23 amendment: a proposal may act on a node; only admins decide them."""
+    cordon = PendingAction(
+        "act-1", "cordon", "node/worker-7", {}, "it keeps failing", "pending", None, False, None
+    )
+    verdict = AgentVerdict("worker-7 keeps failing its drain", "observed", "needs_human")
+    read = upgrade.run
+
+    async def proposing(workflow_id: str) -> UpgradeRun | None:
+        found = await read(workflow_id)
+        return found and replace(found, pending_actions=(cordon,), last_verdict=verdict)
+
+    monkeypatch.setattr(upgrade, "run", proposing)
+    alice = auth(support.ALICE)
+    await on.post(f"{BASE}/upgrade", json={"target_version": "4.18.56"}, headers=alice)
+    admin = (await on.get(f"{BASE}/upgrade-run", headers=alice)).json()
+    viewer = (await on.get(f"{BASE}/upgrade-run", headers=auth(support.VIEWER))).json()
+    assert [a["target"] for a in admin["pending_actions"]] == ["node/worker-7"]
+    assert viewer["pending_actions"] == []
+    assert {k: v for k, v in viewer.items() if k != "pending_actions"} == {
+        k: v for k, v in admin.items() if k != "pending_actions"
+    }
 
 
 async def test_decisions_are_checked_for_what_the_workflow_requires(

@@ -54,14 +54,14 @@ const CHARTS: DestinationCharts = {
 };
 
 /**
- * Sign in (as a viewer if asked), open the cluster page with `nodes` as the
- * nodes read, and open its Nodes tab. `serverScan`: server-scan is set up, so
+ * Sign in (as a viewer if asked) and open the cluster page with `nodes` as the
+ * nodes read, on `?tab=` when given. `serverScan`: server-scan is set up, so
  * an admin has the Server Scan area (it is off otherwise).
  */
-async function openNodesTab(
+async function openCluster(
   page: Page,
   nodes: ClusterNodes | ((route: Route) => Promise<void> | void),
-  { viewer = false, serverScan = false }: { viewer?: boolean; serverScan?: boolean } = {}
+  { viewer = false, serverScan = false, tab }: { viewer?: boolean; serverScan?: boolean; tab?: string } = {}
 ) {
   await injectAdminAuth(page);
   if (viewer) await injectViewerAuth(page);
@@ -80,9 +80,34 @@ async function openNodesTab(
   await page.route(`**/api/day2/clusters/${LARK}/addons?**`, (r) => json(r, CHARTS));
   await page.route("**/api/day2/addons", (r) => json(r, []));
   await mockClusterNodes(page, LARK, nodes);
-  await go(page, `/clusters/${LARK}?site=${SITE}&mce=${MCE}`);
+  await go(page, `/clusters/${LARK}?site=${SITE}&mce=${MCE}${tab ? `&tab=${tab}` : ""}`);
+}
+
+/** The cluster page as an admin, on its Nodes tab. */
+async function openNodesTab(
+  page: Page,
+  nodes: ClusterNodes | ((route: Route) => Promise<void> | void),
+  options: { serverScan?: boolean } = {}
+) {
+  await openCluster(page, nodes, options);
   await page.getByRole("tab", { name: "Nodes" }).click();
   return page.getByTestId("cluster-nodes");
+}
+
+/** Every server the board links: each pool's, then those in no NodePool. */
+const linked = (board: ClusterNodes): ServerRecord[] => [
+  ...board.node_pools.flatMap((p) => p.nodes.flatMap((n) => (n.server ? [n.server] : []))),
+  ...board.unassigned,
+];
+
+/** Every nodes read the page sends, from now on. */
+function nodeReads(page: Page): string[] {
+  const reads: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (/\/api\/day1\/clusters\/[^/]+\/nodes$/.test(path)) reads.push(path);
+  });
+  return reads;
 }
 
 const pool = (page: Page, name: string) => page.getByTestId(`node-pool-${name}`);
@@ -390,12 +415,50 @@ test.describe("Uninstall", () => {
     await expect(tab.getByTestId("nodes-uninstall-unavailable")).toContainText("the workflows orchestrator is not configured");
   });
 
-  test("a viewer sees the board but no Uninstall", async ({ page }) => {
-    const tab = await openNodesTab(page, mockNodesBoard(), { viewer: true });
+});
 
-    await expect(tab.getByRole("link", { name: BOARD.readyA.name })).toBeVisible();
-    await expect(tab.getByRole("button", { name: /uninstall/i })).toHaveCount(0);
-    await expect(tab.getByTestId("nodes-uninstall-unavailable")).toHaveCount(0);
+test.describe("A viewer never sees the cluster's nodes (ADR-0038, amended 2026-11-23)", () => {
+  test("an admin's page reads the nodes with the page and offers the Nodes tab", async ({ page }) => {
+    const reads = nodeReads(page);
+    await openCluster(page, mockNodesBoard());
+
+    await expect(page.getByRole("tab", { name: "Nodes" })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Show the nodes of ${R660}` })).toBeVisible();
+    await expect.poll(() => reads.length).toBeGreaterThan(0);
+  });
+
+  test("no Nodes tab, no nodes on the NodePool cards, and no nodes read", async ({ page }) => {
+    const reads = nodeReads(page);
+    const board = mockNodesBoard();
+    await openCluster(page, board, { viewer: true, serverScan: true });
+
+    await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Nodes" })).toHaveCount(0);
+    // The file's nodepool and its replicas stay; it opens to no nodes
+    const nodepool = page.getByTestId("nodepool-row-0");
+    await expect(nodepool).toContainText("dell-r660-site1");
+    await expect(nodepool).toContainText("3");
+    await expect(page.getByRole("button", { name: /^Show the nodes of / })).toHaveCount(0);
+    await nodepool.click();
+    await expect(page.getByTestId("pool-nodes-inline")).toHaveCount(0);
+    await page.waitForTimeout(1_000);
+    expect(reads).toEqual([]);
+    for (const server of linked(board)) await expect(page.getByText(server.name)).toHaveCount(0);
+  });
+
+  test("?tab=nodes opens a viewer's Overview, and an admin's Nodes tab", async ({ page }) => {
+    const reads = nodeReads(page);
+    await openCluster(page, mockNodesBoard(), { viewer: true, tab: "nodes" });
+    await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("nodepool-row-0")).toBeVisible();
+    await expect(page.getByTestId("cluster-nodes")).toHaveCount(0);
+    await page.waitForTimeout(1_000);
+    expect(reads).toEqual([]);
+
+    await injectAdminAuth(page);
+    await go(page, `/clusters/${LARK}?site=${SITE}&mce=${MCE}&tab=nodes`);
+    await expect(page.getByRole("tab", { name: "Nodes" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("cluster-nodes")).toBeVisible();
   });
 });
 
@@ -500,12 +563,6 @@ test.describe("The Overview's nodepools open to their nodes", () => {
 });
 
 test.describe("A node's server opens its one view (ADR-0048's 3.26.0 amendment)", () => {
-  /** Every server the board links: each pool's, then those in no NodePool. */
-  const linked = (board: ClusterNodes): ServerRecord[] => [
-    ...board.node_pools.flatMap((p) => p.nodes.flatMap((n) => (n.server ? [n.server] : []))),
-    ...board.unassigned,
-  ];
-
   test("an admin with the Server Scan area gets the server's page in Wingman, in this tab", async ({ page }) => {
     const board = mockNodesBoard();
     await openNodesTab(page, board, { serverScan: true });
@@ -525,25 +582,5 @@ test.describe("A node's server opens its one view (ADR-0048's 3.26.0 amendment)"
     await inline.click();
     await expect(page).toHaveURL(new RegExp(`/server-scan/servers/${BOARD.readyA.id}$`));
     expect(page.context().pages()).toHaveLength(1);
-  });
-
-  test("a viewer keeps server-scan's own page, in a new tab, until RBAC opens the area", async ({ page }) => {
-    const board = mockNodesBoard();
-    await openNodesTab(page, board, { viewer: true, serverScan: true });
-
-    for (const server of linked(board)) {
-      const name = `${server.name}, its server-scan page (opens in a new tab)`;
-      const link = row(page, server.name).getByRole("link", { name, exact: true });
-      await expect(link).toHaveAttribute("href", server.url);
-      await expect(link).toHaveAttribute("target", "_blank");
-      await expect(link).toHaveAttribute("rel", "noopener noreferrer");
-      await expect(link.locator("svg")).toHaveCount(1);
-    }
-    await page.getByRole("tab", { name: "Overview" }).click();
-    await page.getByRole("button", { name: `Show the nodes of ${R660}` }).click();
-    const name = `${BOARD.readyA.name}, its server-scan page (opens in a new tab)`;
-    const inline = page.getByTestId("pool-nodes-inline").getByRole("link", { name, exact: true });
-    await expect(inline).toHaveAttribute("href", BOARD.readyA.url);
-    await expect(inline).toHaveAttribute("target", "_blank");
   });
 });

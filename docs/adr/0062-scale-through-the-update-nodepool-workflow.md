@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave; then it may choose its own policy instead, and a nodepool declares its own at create); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave; then it may choose its own policy instead, and a nodepool declares its own at create); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed); amended by ADR-0038 (2026-11-23: the Nodes tab, and so Scale's sizes and run, are an admin's; a viewer's run names no server)
 
 ## Context
 
@@ -41,7 +41,8 @@ change only through update-nodepool.**
    (no new page). A "NodePool sizes" panel lists the cluster file's
    NodePools on `main` (not the MCE's, so it works with live status off),
    an admin's **Scale** opens a dialog with the API's two ways, and the run
-   shows in place for anyone signed in:
+   shows in place for anyone signed in (*an admin only since 2026-11-23: a
+   viewer has no Nodes tab, ADR-0038's amendment*):
    - **By hardware kind** (*removed 2026-11-18, below: the workflow takes
      one NodePool only*): a new total for the NodePools of one InfraEnv
      kind; the dialog shows which of this cluster's NodePools the kind

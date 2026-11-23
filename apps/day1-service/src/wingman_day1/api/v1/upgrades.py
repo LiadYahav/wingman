@@ -4,7 +4,8 @@ ADR-0055, docs/notes/2026-11-13-upgrade-cluster-workflow-api.md. Behind
 ``DAY1_UPGRADES``: off, every route answers 501. ``{name}`` is the cluster
 file's stem, which is the workflow's ``cluster``. Reading a run, or the
 fleet's runs, needs a session; the targets, a start and every decision need
-an admin, who is the ``by`` the workflow records.
+an admin, who is the ``by`` the workflow records. A viewer's run has no
+agent proposals (ADR-0038, amended 2026-11-23).
 """
 
 from __future__ import annotations
@@ -85,9 +86,12 @@ async def upgrade_run(
     site: Site = None,
     mce: Mce = None,
 ) -> UpgradeRunOut:
-    """The cluster's newest upgrade run, read by its id (404 when it never had one)."""
-    ref = await _ref(context, name, site, mce)
-    return UpgradeRunOut.of(await upgrades.run(ref))
+    """The cluster's newest upgrade run, read by its id (404 when it never had one).
+
+    For a viewer, ``pending_actions`` is empty: a proposal may act on one of the cluster's nodes.
+    """
+    run = await upgrades.run(await _ref(context, name, site, mce))
+    return UpgradeRunOut.of(run if user.is_admin else run.without_proposals())
 
 
 @router.post("/clusters/{name}/upgrade-run/actions/{action_id}/{verdict}")

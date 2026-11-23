@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, cast
 
 from wingman_day1.domain.locks import MISSING, Lock, cluster_file_key
@@ -153,6 +153,16 @@ class ScaleRun:
     def error_type(self) -> str | None:
         """The failure's type when its words name one (a child's: ``<Type>: <message>``)."""
         return error_type(self.error)
+
+    def without_servers(self) -> ScaleRun:
+        """The run as a viewer reads it: no server, Machine or node it chose or saw leave.
+
+        A cluster's nodes are for admins (ADR-0038, amended 2026-11-23). The
+        NodePools before and after, their counts and the workflow's words stay.
+        """
+        if self.result is None:
+            return self
+        return replace(self, result=replace(self.result, chosen=(), deleting=()))
 
 
 def error_type(error: str | None) -> str | None:

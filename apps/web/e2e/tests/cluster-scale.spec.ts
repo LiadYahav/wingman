@@ -10,7 +10,8 @@
  * scale-down chose, what a run ignored, and a run recorded by kind before
  * then), refusals and failures in words, a NodePool whose replicas a flavor
  * locks, and a flavor sync's replicas restored by their own run. Scaling
- * off, or a viewer: no steppers. Every API is mocked.
+ * off: no steppers. A viewer has no Nodes tab (ADR-0038's 2026-11-23
+ * amendment), so no Scale at all. Every API is mocked.
  */
 import { test, expect, type Page } from "@playwright/test";
 import { fulfillProblem, json } from "../fixtures/api-handlers";
@@ -60,14 +61,21 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
   });
 
-  test("a viewer sees the sizes and the run, with no steppers and no Restore", async ({ page }) => {
-    await openNodes(page, scaleOf({ run: DONE }), { viewer: true });
-    await expect(page.getByTestId("scale-pool-0")).toContainText("3 replicas");
-    await expect(page.getByTestId("scale-pool-2")).toContainText(`Locked by flavor ${FLAVOR} at 2`);
-    await expect(page.getByTestId("scale-pool-3")).toContainText(/1 replica(?!s)/);
-    await expect(page.getByTestId("scale-run")).toBeVisible();
+  test("a viewer has no Nodes tab, so no sizes, steppers or run, and reads none of them", async ({ page }) => {
+    const reads: string[] = [];
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (/\/(scale|scale-run|nodes)$/.test(path)) reads.push(path);
+    });
+    await openNodes(page, scaleOf({ run: DONE }), { viewer: true, nodes: CARDS });
+    await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Nodes" })).toHaveCount(0);
+    // The fixture's file lists no nodepool; a viewer's card does not read the MCE's
+    await expect(page.getByText("Nodepools (0)")).toBeVisible();
+    await expect(page.getByTestId("scale-panel")).toHaveCount(0);
     await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
-    await expect(page.getByTestId("restore-replicas")).toHaveCount(0);
+    await page.waitForTimeout(1_000);
+    expect(reads).toEqual([]);
   });
 
   test("live status off: each NodePool scales on its sizes row; Scale up asks first, then sends its exact replicas, once", async ({ page }) => {
@@ -311,14 +319,6 @@ test.describe("Scale a cluster's NodePools through update-nodepool", () => {
     const extra = card(page, "prod-lark-site1-extra");
     await expect(extra.getByTestId("scale-stepper")).toHaveCount(0);
     await expect(extra.getByTestId("scale-card-unmatched")).toHaveText("Not named in the day1 file");
-  });
-
-  test("on the cards, a viewer sees the lock and the ready count, with no stepper", async ({ page }) => {
-    await openNodes(page, scaleOf(), { viewer: true, nodes: CARDS });
-    await expect(card(page, R760).getByTestId("scale-pool-locked")).toHaveText(`Locked by flavor ${FLAVOR} at 2.`);
-    await expect(card(page, ZONE_A).getByTestId("node-pool-ready")).toContainText("3 / 3 ready");
-    await expect(page.getByTestId("scale-stepper")).toHaveCount(0);
-    await expect(page.getByTestId("restore-replicas")).toHaveCount(0);
   });
 
   test("the run in place: the workflow's phase and its child's, then the plan and the servers chosen, a run by kind too", async ({ page }) => {

@@ -298,7 +298,9 @@ the workflow's, passed through.
 
 - `status` is lowercase. While it is `running`, the run is open.
 - `pending_actions[]` is each agent proposal flattened: `{action_id, kind,
-  target, args, rationale, decision, decided_by, executed, result}`.
+  target, args, rationale, decision, decided_by, executed, result}`. Empty
+  for a viewer since 2026-11-23: a proposal may act on one of the cluster's
+  nodes, and only admins decide them (ADR-0038's amendment).
 - `last_verdict` is `{diagnosis, confidence, verdict}` or `null`.
 - `log` is in the workflow's order (oldest first); the web shows it newest first.
 - Once completed: `outcome` (`done`, `cancelled`, `aborted`), `steps_completed`,

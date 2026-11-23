@@ -30,6 +30,7 @@ import { FileProblems, NamingNotice } from "@/components/clusters/cluster-notice
 import { ClusterFileEditor } from "@/components/clusters/cluster-file-editor";
 import { computeFullFileDiff } from "@/lib/diff";
 import { clusterQuery } from "@/lib/clusters";
+import { offersNodesTab, requestedTab, shownTab } from "@/lib/cluster-tabs";
 import { day2Api, day2Keys } from "@/lib/day2";
 import { useClusterLiveStatus } from "@/lib/live-status";
 import { toastMrOpened } from "@/lib/mr-toast";
@@ -112,11 +113,10 @@ function ClusterDetailContent() {
     });
   }, [queryClient, chartsQuery, mce]);
 
-  // `?tab=drift` opens a tab (the flavor's rollout links a cluster that needs a decision to its drift)
-  const [activeTab, setActiveTab] = useState(() => {
-    const tab = searchParams.get("tab");
-    return tab && ["overview", "nodes", "yaml", "drift", "history"].includes(tab) ? tab : "overview";
-  });
+  // `?tab=drift` opens a tab. A viewer never sees the cluster's nodes (ADR-0038): no Nodes tab once the role is known.
+  const [requested, setActiveTab] = useState(() => requestedTab(searchParams.get("tab")));
+  const nodesTab = offersNodesTab({ mounted, isAdmin });
+  const activeTab = shownTab(requested, nodesTab);
   const [editYaml, setEditYaml] = useState("");
   const [editBase, setEditBase] = useState<{ yaml: string; lastCommitId: string } | null>(null);
   const isEditing = editBase !== null;
@@ -302,12 +302,12 @@ function ClusterDetailContent() {
         value={activeTab}
         onValueChange={(v) => {
           // Tabs stay on the file while editing, so Cancel/Submit keep their context
-          if (!isEditing) setActiveTab(v as string);
+          if (!isEditing) setActiveTab(requestedTab(v as string));
         }}
       >
         <TabsList>
           <TabsTrigger value="overview" disabled={isEditing}>Overview</TabsTrigger>
-          <TabsTrigger value="nodes" disabled={isEditing}>Nodes</TabsTrigger>
+          {nodesTab && <TabsTrigger value="nodes" disabled={isEditing}>Nodes</TabsTrigger>}
           <TabsTrigger value="yaml">YAML</TabsTrigger>
           <TabsTrigger value="drift" disabled={isEditing}>
             Drift
@@ -325,7 +325,7 @@ function ClusterDetailContent() {
             <>
               <FileProblems problems={cluster.problems} />
               <NamingNotice cluster={cluster} />
-              <UpgradePanel name={name} where={where} isAdmin={isAdmin} onOpenNodesTab={() => setActiveTab("nodes")} />
+              <UpgradePanel name={name} where={where} isAdmin={isAdmin} onOpenNodesTab={isAdmin ? () => setActiveTab("nodes") : undefined} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <ClusterInfoCard cluster={cluster} mastertagAction={<UpgradeAction name={name} where={where} isAdmin={isAdmin} />} />
                 <HostedClusterCard cluster={cluster} where={where} />
@@ -341,12 +341,12 @@ function ClusterDetailContent() {
               {cluster.values && (
                 <NodePoolsCard
                   values={cluster.values}
-                  nodes={{
+                  nodes={isAdmin ? {
                     name,
                     where,
                     clusterName: cluster.hosted_cluster.cluster_name,
                     onOpenNodesTab: () => setActiveTab("nodes"),
-                  }}
+                  } : undefined}
                 />
               )}
               <SpecCard cluster={cluster} />
@@ -354,14 +354,16 @@ function ClusterDetailContent() {
           )}
         </TabsContent>
 
-        {/* The servers server-scan places in the cluster; read when the tab opens (inactive panels unmount) */}
-        <TabsContent value="nodes" className="mt-4">
-          {mounted ? (
-            <ClusterNodes name={name} where={where} isAdmin={isAdmin} enabled={activeTab === "nodes"} />
-          ) : (
-            <Skeleton className="h-40 w-full rounded-xl" />
-          )}
-        </TabsContent>
+        {/* The servers server-scan places in the cluster, an admin's; read when the tab opens (inactive panels unmount) */}
+        {nodesTab && (
+          <TabsContent value="nodes" className="mt-4">
+            {mounted ? (
+              <ClusterNodes name={name} where={where} isAdmin={isAdmin} enabled={activeTab === "nodes"} />
+            ) : (
+              <Skeleton className="h-40 w-full rounded-xl" />
+            )}
+          </TabsContent>
+        )}
 
         <TabsContent value="yaml" className="mt-4">
           <Card>
