@@ -6,13 +6,13 @@ const REFUSALS = [
   {
     code: "409 REVISION_CONFLICT",
     see: "“… changed since you opened it”, or “The branch moved since you loaded this MR”: most pages offer Reload, and a chart's values editor reloads itself and says so",
-    why: "Someone committed to the file or the MR branch after you loaded it: another person, the day1 CI or the allocate-segment workflow. Nothing was written or merged.",
+    why: "Someone committed to the file or the MR branch after you loaded it: another person, the day1 CI or a platform workflow. Nothing was written or merged.",
     fix: "Reload if the page has not, look at what changed, and make your change (or review) again.",
   },
   {
     code: "409 ALREADY_EXISTS",
     see: "“This cluster name is taken”, “A spec named … already exists”, or a chart that is already on the destination",
-    why: "The name is used by a cluster anywhere in the day1 repo or by an open create MR; the spec exists; the chart is already installed there, or is a fleet default of that kind.",
+    why: "The name is used by a cluster anywhere in the day1 repo or by the provision-cluster workflow's open merge request, or a run for it is already going; the spec exists; the chart is already installed there, or is a fleet default of that kind.",
     fix: "Pick another name, or edit what exists. For a fleet default, edit its values for this cluster instead.",
   },
   {

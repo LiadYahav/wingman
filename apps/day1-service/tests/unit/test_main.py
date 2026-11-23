@@ -22,9 +22,11 @@ from wingman_day1.infrastructure.fake_add_server import FakeAddServerWorkflow
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_fleet import FakeUninstallWorkflow
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
+from wingman_day1.infrastructure.provision_workflow import HttpProvisionWorkflow
 from wingman_day1.infrastructure.scale_workflow import HttpScaleWorkflow
 from wingman_day1.infrastructure.upgrade_workflow import HttpUpgradeWorkflow
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
@@ -55,6 +57,16 @@ def settings(**values: object) -> Day1Settings:
     return Day1Settings(**base)  # ty: ignore[invalid-argument-type]
 
 
+def in_memory(gitlab: InMemoryGitLab | None = None, **more: object) -> Adapters:
+    """The in-memory GitLab, day2 and provision-cluster, and ``more``."""
+    return Adapters(
+        gitlab=gitlab or InMemoryGitLab(),
+        day2=FakeDay2Addons(),
+        provision=FakeProvisionWorkflow(),
+        **more,  # ty: ignore[invalid-argument-type]
+    )
+
+
 async def close(adapters: Adapters) -> None:
     for closer in adapters.closers:
         await closer()
@@ -70,6 +82,7 @@ async def test_the_fake_backend_is_seeded_with_every_fixture_project() -> None:
         assert adapters.hub is None
         assert adapters.identity is None
         assert (adapters.inventory, adapters.uninstall, adapters.ledger) == (None, None, None)
+        assert isinstance(adapters.provision, FakeProvisionWorkflow), "no orchestrator here"
         assert len(adapters.closers) == 1, "only the day2 client holds a connection"
     finally:
         await close(adapters)
@@ -125,7 +138,8 @@ async def test_server_scan_and_the_orchestrator_get_real_adapters_when_configure
         assert isinstance(adapters.uninstall, HttpUninstallWorkflow)
         assert isinstance(adapters.add_server, HttpAddServerWorkflow), "its runs, even when off"
         assert isinstance(adapters.scale, HttpScaleWorkflow), "Scale is on by default (ADR-0062)"
-        assert len(adapters.closers) == 5
+        assert isinstance(adapters.provision, HttpProvisionWorkflow), "every create (ADR-0042)"
+        assert len(adapters.closers) == 6
     finally:
         await close(adapters)
 
@@ -154,8 +168,8 @@ async def test_upgrades_get_the_orchestrators_adapter_only_when_turned_on() -> N
     try:
         assert isinstance(adapters.upgrade, HttpUpgradeWorkflow)
         assert adapters.upgrade._targets_timeout.read == 70
-        assert len(adapters.closers) == 6, (
-            "day2, server-scan, uninstall, add-server, upgrade, scale"
+        assert len(adapters.closers) == 7, (
+            "day2, server-scan, uninstall, provision, add-server, upgrade, scale"
         )
     finally:
         await close(adapters)
@@ -208,6 +222,7 @@ async def test_the_fake_fleet_is_seeded_from_the_fleet_fixture(tmp_path: Path) -
         assert herzi.cluster_name == "ocp4-prod-herzi-site1"
         assert isinstance(adapters.upgrade, FakeUpgradeWorkflow)
         assert (await adapters.upgrade.targets("ocp4-prod-lark-site1")).targets
+        assert isinstance(adapters.provision, FakeProvisionWorkflow)
         assert len(adapters.closers) == 1, "the fakes hold no connection"
     finally:
         await close(adapters)
@@ -219,7 +234,7 @@ def test_the_nodes_view_needs_the_mce_hubs(app: FastAPI) -> None:
         settings=settings(),
         auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
         runtime=FAKE,
-        adapters=Adapters(gitlab=InMemoryGitLab(), day2=FakeDay2Addons()),
+        adapters=in_memory(),
     )
     assert off.state.day1.nodes is None
     assert off.state.day1.upgrades is None, "upgrades are off by default (ADR-0055)"
@@ -232,7 +247,18 @@ def test_the_fake_fleet_refuses_to_start_outside_development() -> None:
             settings=settings(day1_fake_fleet=True),
             auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
             runtime=test_runtime,
-            adapters=Adapters(gitlab=InMemoryGitLab(), day2=FakeDay2Addons()),
+            adapters=in_memory(),
+        )
+
+
+def test_production_refuses_to_start_without_the_orchestrator() -> None:
+    """ADR-0042, amended 2026-11-23: a create starts provision-cluster, the only create."""
+    with pytest.raises(ValueError, match="WORKFLOWS_API_URL is required"):
+        create_app(
+            settings=settings(),
+            auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
+            runtime=REAL,
+            adapters=in_memory(),
         )
 
 
@@ -337,7 +363,7 @@ async def test_without_the_specs_project_day1_is_not_ready_until_gitlab_has_both
         settings=settings(),
         auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
         runtime=FAKE,
-        adapters=Adapters(gitlab=gitlab, day2=FakeDay2Addons(), closers=()),
+        adapters=in_memory(gitlab, closers=()),
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://day1"
@@ -364,7 +390,7 @@ async def test_shutting_down_closes_every_adapter() -> None:
         settings=settings(),
         auth=AuthSettings(jwt_secret_key=SecretStr("j" * 40)),
         runtime=FAKE,
-        adapters=Adapters(gitlab=InMemoryGitLab(), day2=FakeDay2Addons(), closers=(closer, closer)),
+        adapters=in_memory(closers=(closer, closer)),
     )
     async with app.router.lifespan_context(app):
         assert closed == []

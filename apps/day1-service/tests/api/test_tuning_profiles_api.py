@@ -245,24 +245,6 @@ async def test_a_create_with_an_unknown_name_is_a_422(
     ]
 
 
-async def test_a_create_by_merge_request_writes_names_and_never_the_configmap(
-    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
-) -> None:
-    body = with_tuning(support, ["tuned-sysctl-baseline", "tuned-network-latency"])
-    response = await client.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
-    assert response.status_code in (200, 201, 202), response.text
-    branch = gitlab.snapshot(
-        await support.project_id(gitlab, support.DAY1), response.json()["source_branch"]
-    )
-    (path,) = [p for p in branch if p.endswith("/ocp4-prod-falcon-site1.yaml")]
-    values = yaml.safe_load(branch[path])
-    assert values["nodepool"][0]["tuningConfig"] == [
-        "tuned-sysctl-baseline",
-        "tuned-network-latency",
-    ]
-    assert "tuningConfigmap" not in values
-
-
 async def test_a_create_through_provision_cluster_carries_names_and_never_the_configmap(
     support: Any, gitlab: InMemoryGitLab, hub: Any, identity: Any, day2: Any, clock: Any, auth: Auth
 ) -> None:

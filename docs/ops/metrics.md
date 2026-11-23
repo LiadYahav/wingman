@@ -126,8 +126,8 @@ start. Time-series legends list only the series with something to show.
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the
   orchestrator's "already uninstalling"; `rejected` is a body it refused.
-- `workflows` `start_provision` is a create that starts the provision-cluster
-  workflow (`DAY1_PROVISIONER=workflow`, ADR-0042). `ambiguous`: sent, answer
+- `workflows` `start_provision` is a create: every create starts the
+  provision-cluster workflow (ADR-0042). `ambiguous`: sent, answer
   lost; look at the cluster's provision run before creating it again.
   `conflict`: a run for the cluster is already going. `rejected`: the
   orchestrator refused the name or the file (its 422).

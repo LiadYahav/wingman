@@ -555,7 +555,7 @@ SENTINEL_NAMES: Mapping[str, frozenset[str]] = {
     "DEVELOPMENT.md": frozenset({"DAY2_SERVICE_URL", "WINGMAN_GIT_BACKEND", "ROUTERS"}),
     "deploy/helm/wingman/README.md": frozenset({"GITLAB_TOKEN", "OPENSHIFT_OAUTH_CLIENT_SECRET"}),
     "apps/web/README.md": frozenset({"WINGMAN_DEV_DAY1_URL", "DEV_AUTH_SECRET"}),
-    "docs/architecture.md": frozenset({"JWT_SECRET_KEY", "WORKFLOWS_API_URL", "DAY1_PROVISIONER"}),
+    "docs/architecture.md": frozenset({"JWT_SECRET_KEY", "WORKFLOWS_API_URL", "DAY1_UPGRADES"}),
     "docs/ops/images.md": frozenset({"WINGMAN_VERSION", "PYTHON_BUILD_STANDALONE_URL", "VERSION"}),
     "docs/ops/metrics.md": frozenset({"GITLAB_TOKEN"}),
     "docs/ops/runbook.md": frozenset({"GITLAB_TOKEN", "GITLAB_VERIFY_TLS"}),

@@ -18,7 +18,6 @@ from wingman_day1.domain.openshift_versions import OpenShiftVersions
 from wingman_day1.domain.placement import (
     LIVE_READS_OFF,
     MAX_REASON,
-    Admission,
     Candidate,
     Check,
     Choice,
@@ -28,7 +27,6 @@ from wingman_day1.domain.placement import (
     Status,
     Step,
     admit,
-    describe_placement,
     fold_reason,
     place,
 )
@@ -426,71 +424,3 @@ def test_not_checked_is_not_unknown_an_unknown_still_blocks() -> None:
     placement = place(INPUTS, [unknown, unread(B, clusters=9)])
     assert placement.pick == B
     assert statuses(placement.candidates[1])[Check.FREE_PODS] is Status.UNKNOWN
-
-
-def test_the_description_says_what_was_not_checked() -> None:
-    placement = place(INPUTS, [unread(A), unread(B, clusters=9)], live_reads=False)
-    text = describe_placement(Admission(placement, A))
-    assert (
-        "Free pods and servers were **not checked**: live MCE reads are off "
-        "(`CLUSTER_STATUS_ENABLED=false`). Wingman decided on the day1 repo and server-scan only."
-    ) in text
-    assert (
-        f"| `{A}` (pick, chosen) | 1 | 3 | 2 (4) | not checked | not checked | "
-        "pass (free pods, servers, readable not checked) |"
-    ) in text
-
-
-# ── The merge request's record ───────────────────────────────────────────────
-
-
-def test_the_description_records_the_pick_the_inputs_and_every_number() -> None:
-    placement = place(
-        INPUTS,
-        [
-            picture(A, clusters=5, owner_clusters=2),
-            picture(B, clusters=1, owner_clusters=0, spare=None, spare_detail="unknown"),
-            picture(C, pods=None, hub_error="it did not answer."),
-        ],
-    )
-    text = describe_placement(Admission(placement, B))
-    assert text.splitlines()[:3] == [
-        "### MCE placement",
-        "",
-        f"Wingman picked `{B}`: {B} has the fewest clusters of owner 7: 0, against 2 on {A}.",
-    ]
-    assert "Site `site1`, prod, OpenShift 4.18.22, owner 7, flavor `rcs`" in text
-    assert f"| `{B}` (pick, chosen) | 0 | 1 | unknown | 200 | — | pass |" in text
-    assert f"| `{A}` | 2 | 5 | 2 (4) | 200 | — | pass |" in text
-    assert f"| `{C}` | 1 | 3 | 2 (4) | unknown | — | not offered: Unknown: Wingman could" in text
-
-
-def test_the_description_records_the_servers_of_each_type() -> None:
-    placement = place(
-        NEEDS,
-        [
-            picture(A, node_types=(supply(DELL, 6, 7, 6), supply(HP, 2, 2, 2))),
-            picture(B, node_types=(supply(DELL, 6, 6, 2), supply(HP, 2, None, None))),
-        ],
-    )
-    text = describe_placement(Admission(placement, A))
-    assert "a new cluster needs 70 free pods and 6 `dell-r650`, 2 `hp-gen11` servers." in text
-    assert (
-        f"| `{A}` (pick, chosen) | 1 | 3 | 2 (4) | 200 | dell-r650 6/6, hp-gen11 2/2 | pass |"
-        in text
-    )
-    assert (
-        f"| `{B}` | 1 | 3 | 2 (4) | 200 | dell-r650 2/6, hp-gen11 unknown/2 | not offered:" in text
-    )
-
-
-def test_the_description_records_an_override_and_quotes_its_reason_harmlessly() -> None:
-    placement = place(INPUTS, [picture(A, clusters=5), picture(B, clusters=1)])
-    admission = admit(placement, A, Choice(pick=B, reason="ask @alice | `rm` *now*"))
-    text = describe_placement(admission)
-    assert (
-        f"An admin chose `{A}` over Wingman's pick `{B}`. Reason: `ask @alice | 'rm' *now*`"
-    ) in text
-    assert f"Wingman's pick: {B} has the fewest clusters" in text
-    assert f"| `{A}` (chosen) |" in text
-    assert f"| `{B}` (pick) |" in text

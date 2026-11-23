@@ -1,4 +1,4 @@
-"""``/api/day1/approvals`` and ``/api/day1/audit`` over HTTP."""
+"""``/api/day1/approvals`` and ``/api/day1/audit`` over HTTP, on Wingman's day1 and specs MRs."""
 
 from __future__ import annotations
 
@@ -12,16 +12,25 @@ from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 
 Auth = Callable[[User], dict[str, str]]
-NEW = "ocp4-prod-falcon-site1"
-NEW_PATH = f"sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/{NEW}.yaml"
+LARK = "ocp4-prod-lark-site1"
+LARK_PATH = f"sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/{LARK}.yaml"
 SPEC = {"metadata": {"name": "agent-mini", "version": "1.0.0"}}
 
 
 async def open_cluster_mr(client: httpx.AsyncClient, auth: Auth, support: Any) -> dict[str, Any]:
-    response = await client.post(
-        "/api/day1/clusters", json=support.create_body(), headers=auth(support.ALICE)
+    """Alice's merge request that scales lark's first nodepool from 3 to 4."""
+    alice = auth(support.ALICE)
+    lark = (await client.get(f"/api/day1/clusters/{LARK}", headers=alice)).json()
+    response = await client.patch(
+        f"/api/day1/clusters/{LARK}",
+        json={
+            "updated_yaml": lark["yaml"].replace("replicas: 3", "replicas: 4"),
+            "change_summary": "Scale lark",
+            "last_commit_id": lark["last_commit_id"],
+        },
+        headers=alice,
     )
-    assert response.status_code == 201, response.text
+    assert response.status_code == 200, response.text
     return response.json()
 
 
@@ -51,8 +60,8 @@ async def test_expanding_an_mr_without_repo_reaches_the_day1_project(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["mr"]["repo"] == "day1"
-    assert [d["new_path"] for d in body["diffs"]] == [NEW_PATH]
-    assert body["diffs"][0]["new_file"] is True
+    assert [d["new_path"] for d in body["diffs"]] == [LARK_PATH]
+    assert body["diffs"][0]["new_file"] is False
 
 
 async def test_the_same_iid_in_the_specs_project_is_addressed_by_repo(
@@ -89,26 +98,26 @@ async def test_a_push_after_review_blocks_the_merge_until_reviewed_again(
     mr = await open_cluster_mr(client, auth, support)
     bob = auth(support.BOB)
     pid = await support.project_id(gitlab, support.DAY1)
-    content = gitlab.snapshot(pid, mr["source_branch"])[NEW_PATH]
+    content = gitlab.snapshot(pid, mr["source_branch"])[LARK_PATH]
     await support.push(
         gitlab,
         support.DAY1,
         branch=mr["source_branch"],
-        file=NEW_PATH,
-        content=content + "vlanId: 412\n",
+        file=LARK_PATH,
+        content=content + "# refreshed by CI\n",
     )
     stale = await client.post(
         f"/api/day1/approvals/{mr['iid']}/approve", json={"sha": mr["sha"]}, headers=bob
     )
     assert (stale.status_code, stale.json()["code"]) == (409, "REVISION_CONFLICT")
-    assert NEW_PATH not in gitlab.snapshot(pid, "main")
+    assert "replicas: 4" not in gitlab.snapshot(pid, "main")[LARK_PATH]
 
     head = (await client.get(f"/api/day1/approvals/{mr['iid']}", headers=bob)).json()["mr"]["sha"]
     merged = await client.post(
         f"/api/day1/approvals/{mr['iid']}/approve", json={"sha": head}, headers=bob
     )
     assert merged.json()["state"] == "merged"
-    assert "vlanId: 412" in gitlab.snapshot(pid, "main")[NEW_PATH]
+    assert "# refreshed by CI" in gitlab.snapshot(pid, "main")[LARK_PATH]
 
 
 async def test_reject_closes_and_the_list_forgets_it(
@@ -130,7 +139,7 @@ async def test_put_commits_edited_files_on_top_of_the_branch(
     mr = await open_cluster_mr(client, auth, support)
     bob = auth(support.BOB)
     pid = await support.project_id(gitlab, support.DAY1)
-    content = gitlab.snapshot(pid, mr["source_branch"])[NEW_PATH]
+    content = gitlab.snapshot(pid, mr["source_branch"])[LARK_PATH]
 
     outside = await client.put(
         f"/api/day1/approvals/{mr['iid']}",
@@ -142,7 +151,7 @@ async def test_put_commits_edited_files_on_top_of_the_branch(
     edited = content.replace("replicas: 2", "replicas: 3", 1)
     stale = await client.put(
         f"/api/day1/approvals/{mr['iid']}",
-        json={"files": [{"path": NEW_PATH, "content": edited}], "sha": "0" * 40},
+        json={"files": [{"path": LARK_PATH, "content": edited}], "sha": "0" * 40},
         headers=bob,
     )
     assert (stale.status_code, stale.json()["code"]) == (409, "REVISION_CONFLICT")
@@ -150,7 +159,7 @@ async def test_put_commits_edited_files_on_top_of_the_branch(
     ok = await client.put(
         f"/api/day1/approvals/{mr['iid']}",
         json={
-            "files": [{"path": NEW_PATH, "content": edited}],
+            "files": [{"path": LARK_PATH, "content": edited}],
             "sha": mr["sha"],
             "message": "3 workers",
         },
@@ -174,7 +183,7 @@ async def test_a_viewer_cannot_decide_or_edit(
         await client.post(f"/api/day1/approvals/{mr['iid']}/reject", headers=viewer),
         await client.put(
             f"/api/day1/approvals/{mr['iid']}",
-            json={"files": [{"path": NEW_PATH, "content": "x"}]},
+            json={"files": [{"path": LARK_PATH, "content": "x"}]},
             headers=viewer,
         ),
     ):
@@ -254,5 +263,5 @@ async def test_an_approved_merge_names_the_requester_in_history(
     await client.post(
         f"/api/day1/approvals/{mr['iid']}/approve", json={"sha": mr["sha"]}, headers=bob
     )
-    history = (await client.get(f"/api/day1/clusters/{NEW}/history", headers=bob)).json()
+    history = (await client.get(f"/api/day1/clusters/{LARK}/history", headers=bob)).json()
     assert "Alice Admin" in [c["author"] for c in history]

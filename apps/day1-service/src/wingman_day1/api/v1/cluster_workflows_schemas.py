@@ -1,10 +1,9 @@
 """The bodies of the platform workflows the clusters router starts or shows.
 
-``GET /provisioner`` says whether Create opens Wingman's MR or starts
-``provision-cluster`` (ADR-0042), and ``/{name}/provision-run`` shows that run;
-``/{name}/delete-workflow`` shows and starts the delete-cluster workflow
-(ADR-0033). A run's own body, ``WorkflowRunOut``, is in ``schemas.py``: node
-uninstall answers with it too.
+A create answers the ``provision-cluster`` run it started (ADR-0042), and
+``/{name}/provision-run`` shows that run; ``/{name}/delete-workflow`` shows
+and starts the delete-cluster workflow (ADR-0033). A run's own body,
+``WorkflowRunOut``, is in ``schemas.py``: node uninstall answers with it too.
 """
 
 from __future__ import annotations
@@ -43,12 +42,6 @@ class ProvisionRunOut(BaseModel):
             merge_request_url=run.merge_request_url,
             merge_request_state=run.merge_request_state,
         )
-
-
-class ProvisionerOut(BaseModel):
-    """``GET /clusters/provisioner``: what Create does in this deployment (ADR-0042)."""
-
-    mode: Literal["merge-request", "workflow"]
 
 
 class DeleteWorkflowOut(BaseModel):

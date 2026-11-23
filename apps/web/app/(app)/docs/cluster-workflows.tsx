@@ -13,8 +13,8 @@ export function ClusterWorkflowsSection() {
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         Some changes are not Wingman&apos;s merge requests: an admin starts one of the platform&apos;s workflows, and the
         workflow does the work and its own checks. Wingman starts the run and shows it in the workflow&apos;s own words,
-        and never retries a start. Each is something your operator turns on; until then a create opens Wingman&apos;s
-        own merge request, and the other buttons are greyed out with why, or not there. Installing servers into an MCE
+        and never retries a start. Every create starts one; the others are something your operator turns on, and
+        until then their buttons are greyed out with why, or not there. Installing servers into an MCE
         is the same kind of run, on{" "}
         <a href="#inventory" className="text-primary hover:underline">Inventory Management</a>.
       </p>
@@ -26,16 +26,15 @@ export function ClusterWorkflowsSection() {
   );
 }
 
-/** Create through provision-cluster (ADR-0042), behind DAY1_PROVISIONER. */
+/** Create through provision-cluster (ADR-0042): every create starts it. */
 function ProvisionDocs() {
   return (
     <>
       <h3 className="text-base font-semibold mb-3">Create through provision-cluster</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        By default a create opens Wingman&apos;s own merge request. With <InlineCode>DAY1_PROVISIONER=workflow</InlineCode>{" "}
-        (the chart&apos;s <InlineCode>day1.provisioner</InlineCode>), it starts the platform&apos;s{" "}
-        <InlineCode>provision-cluster</InlineCode> workflow instead. The form and its checks stay the same; the review
-        dialog says the file goes to the workflow, and its button is <strong>Confirm — Start provision-cluster</strong>.
+        Every create starts the platform&apos;s <InlineCode>provision-cluster</InlineCode> workflow; Wingman opens no
+        create merge request of its own. The form runs its checks first; the review dialog says the file goes to the
+        workflow, and its button is <strong>Confirm — Start provision-cluster</strong>.
         The workflow reserves the segment, adds <InlineCode>vlanId</InlineCode> and <InlineCode>dhcp_values</InlineCode>,
         pushes the file on its own branch and opens the merge request; a person merges it.
       </p>

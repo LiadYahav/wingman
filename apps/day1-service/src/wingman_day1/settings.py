@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Final, Literal, Self
+from typing import Final, Self
 from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, AnyHttpUrl, Field, SecretStr, field_validator, model_validator
@@ -101,9 +101,13 @@ class Day1Settings(BaseSettings):
     # ── Live status stream ───────────────────────────────────────────────────
     day1_status_poll_seconds: float = Field(default=30.0, ge=5, le=600)
 
-    # ── Cluster nodes from server-scan, uninstall through the orchestrator ───
-    # (ADR-0038; both off by default). Empty URLs switch them off: the routes
-    # answer 501. DAY1_FAKE_FLEET replaces both with fakes, in development only.
+    # ── server-scan and the workflows orchestrator (ADR-0038, ADR-0042) ──────
+    # The orchestrator is required in production: a create starts its
+    # provision-cluster workflow, and uninstall, upgrades, Scale and adding
+    # servers start its others. In development and tests an empty
+    # WORKFLOWS_API_URL starts creates on an in-memory provision-cluster.
+    # server-scan is optional: empty, the routes that need it answer 501.
+    # DAY1_FAKE_FLEET replaces both with fakes, in development only.
     server_scan_url: str = ""
     server_scan_ui_url: str = ""
     server_scan_token: SecretStr = SecretStr("")
@@ -113,12 +117,6 @@ class Day1Settings(BaseSettings):
     workflows_ssl_verify: str = "true"
     workflows_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
     day1_fake_fleet: bool = False
-
-    # ── How a create is proposed (ADR-0042) ──────────────────────────────────
-    # merge-request (default): Wingman's own commit and merge request. workflow:
-    # start the platform's provision-cluster workflow, which opens the merge
-    # request itself; needs WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development).
-    day1_provisioner: Literal["merge-request", "workflow"] = "merge-request"
 
     # ── Upgrades through the upgrade-cluster workflow (ADR-0055) ─────────────
     # Off by default. On: the cluster page starts the platform's upgrade-cluster
@@ -277,20 +275,6 @@ class Day1Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _workflow_creates_have_an_orchestrator(self) -> Self:
-        """Starting provision-cluster needs the orchestrator; without it no create could run."""
-        if (
-            self.day1_provisioner == "workflow"
-            and not self.workflows_api_url
-            and not self.day1_fake_fleet
-        ):
-            raise ValueError(
-                "DAY1_PROVISIONER=workflow needs WORKFLOWS_API_URL: creates start the "
-                "provision-cluster workflow there"
-            )
-        return self
-
-    @model_validator(mode="after")
     def _upgrades_have_an_orchestrator(self) -> Self:
         """The upgrade is the orchestrator's workflow; without it no upgrade could start."""
         if self.day1_upgrades and not self.workflows_api_url and not self.day1_fake_fleet:
@@ -397,14 +381,21 @@ class Day1Settings(BaseSettings):
 
 
 def check_runtime(settings: Day1Settings, runtime: RuntimeSettings) -> None:
-    """Refuse to start with ``DAY1_FAKE_FLEET=true`` outside development (ADR-0009).
+    """Refuse the fake fleet outside development, and production without the orchestrator.
 
-    The fake fleet invents servers, segments and EPGs, and pretends to
+    ADR-0009, ADR-0042. The fake fleet invents servers, segments and EPGs, and pretends to
     uninstall servers; anywhere but a developer's machine that would show
-    nodes and networks that do not exist.
+    nodes and networks that do not exist. A create starts the orchestrator's
+    provision-cluster workflow, the only way Wingman creates a cluster: in
+    production there is no create without it.
     """
     if settings.day1_fake_fleet and runtime.environment is not Environment.DEVELOPMENT:
         raise ValueError(
             "DAY1_FAKE_FLEET=true is refused unless WINGMAN_ENVIRONMENT=development "
             f"(it is {runtime.environment.value})"
+        )
+    if runtime.environment is Environment.PRODUCTION and not settings.workflows_api_url:
+        raise ValueError(
+            "WORKFLOWS_API_URL is required: a create starts the platform's provision-cluster "
+            "workflow there (ADR-0042). Only WINGMAN_ENVIRONMENT=development runs without it."
         )

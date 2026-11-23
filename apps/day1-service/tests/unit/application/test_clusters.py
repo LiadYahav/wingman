@@ -1,4 +1,8 @@
-"""Cluster use cases on the seeded in-memory GitLab: create, preview, list, edit, delete."""
+"""Cluster use cases on the seeded in-memory GitLab: create, preview, list, edit, delete.
+
+A create starts the provision-cluster workflow (ADR-0042), here its in-memory
+fake; edits and deletes are Wingman's merge requests.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +25,7 @@ from wingman_day1.domain.errors import (
     StaleError,
 )
 from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 
 NEW = "ocp4-prod-falcon-site1"
 NEW_PATH = f"sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/{NEW}.yaml"
@@ -60,47 +65,41 @@ async def delete_file(gitlab: InMemoryGitLab, project: str, path: str) -> None:
 # ── Create ───────────────────────────────────────────────────────────────────
 
 
-async def test_create_commits_one_new_file_on_a_new_branch_and_opens_one_mr(
-    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+async def test_create_starts_provision_cluster_and_writes_nothing_itself(
+    context: Day1Context, support: Any, gitlab: InMemoryGitLab, provision: FakeProvisionWorkflow
 ) -> None:
     pid = await support.project_id(gitlab, support.DAY1)
     before = gitlab.snapshot(pid, "main")
-    result = await context.clusters.create(request(support), user=support.ALICE)
-    mr = result.merge_request
-    assert mr.target_branch == "main"
-    branch = gitlab.snapshot(pid, mr.source_branch)
-    assert set(branch) - set(before) == {NEW_PATH}
+    run = await context.clusters.create(request(support), user=support.ALICE)
+    assert (run.workflow_id, run.cluster, run.status) == (
+        f"provision-cluster-{NEW}",
+        NEW,
+        "running",
+    )
+    (started,) = provision.starts
+    assert started["cluster"] == "prod-falcon-site1"  # the stem without ocp4-
+    assert started["mce"] == "ocp4-prod-mce-site1-a"
     assert gitlab.snapshot(pid, "main") == before
-    commits = await gitlab.list_commits(pid, ref=mr.source_branch, limit=2)
-    assert commits[0].author_name == "Alice Admin"
-    assert commits[0].author_email == "alice@openshift.local"
-    assert "Requested-by: alice" in commits[0].message
-    assert "Author: alice" in mr.description
-    assert "Resource: cluster/ocp4-prod-falcon-site1" in mr.description
+    assert await gitlab.list_merge_requests(pid, state=None) == []
 
 
-async def test_preview_is_exactly_the_committed_file(
-    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+async def test_preview_is_exactly_the_file_a_create_sends(
+    context: Day1Context, support: Any, provision: FakeProvisionWorkflow
 ) -> None:
     rendered = await context.clusters.preview(request(support))
-    result = await context.clusters.create(request(support), user=support.ALICE)
-    pid = await support.project_id(gitlab, support.DAY1)
-    committed = gitlab.snapshot(pid, result.merge_request.source_branch)[NEW_PATH]
-    assert committed == rendered.content
+    await context.clusters.create(request(support), user=support.ALICE)
+    assert provision.starts[0]["content"] == rendered.content
     assert str(rendered.ref.path) == NEW_PATH
 
 
 async def test_addon_overrides_given_at_create_are_kept_in_the_file_header(
-    context: Day1Context, support: Any, gitlab: InMemoryGitLab
+    context: Day1Context, support: Any, provision: FakeProvisionWorkflow
 ) -> None:
     # Legacy: CreateClusterRequest.addon_overrides was accepted and ignored, so the values
     # a user chose for the spec's day2 addons were lost and "Fix" installed with {}.
     overrides = {"redbull/cluster-roles": {"a": 1, "nested": {"b": "two"}}}
-    result = await context.clusters.create(
-        request(support, addon_overrides=overrides), user=support.ALICE
-    )
-    pid = await support.project_id(gitlab, support.DAY1)
-    content = gitlab.snapshot(pid, result.merge_request.source_branch)[NEW_PATH]
+    await context.clusters.create(request(support, addon_overrides=overrides), user=support.ALICE)
+    content = provision.starts[-1]["content"]
     header = [line for line in content.splitlines() if line.startswith("#")]
     assert header[:2] == ['# specName: "agent-standard"', '# specVersion: "1.0.0"']
     assert '"override_values": {"a": 1, "nested": {"b": "two"}}' in header[2]
@@ -302,15 +301,21 @@ async def test_a_file_with_a_clustername_key_names_its_hosted_cluster(
 async def test_history_names_the_user_who_asked_for_the_change(
     context: Day1Context, support: Any
 ) -> None:
-    result = await context.clusters.create(request(support), user=support.ALICE)
+    current = await context.clusters.get(HERZI)
+    result = await context.clusters.modify(
+        HERZI,
+        current.content + "# by alice\n",
+        user=support.ALICE,
+        summary="Note",
+        last_commit_id=current.last_commit_id,
+    )
     await context.approvals.approve(
         RepoKey.DAY1,
         result.merge_request.ref.iid,
         sha=result.merge_request.sha,
         approver=support.BOB,
     )
-    ref = await context.clusters.locate(NEW)
-    authors = [c.author_name for c in await context.clusters.history(ref)]
+    authors = [c.author_name for c in await context.clusters.history(HERZI)]
     assert "Alice Admin" in authors
 
 

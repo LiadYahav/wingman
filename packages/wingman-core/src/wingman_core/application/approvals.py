@@ -10,8 +10,8 @@ merges it as Wingman's service account; rejecting it closes it. Two rules:
   are addressed by ``(project, iid)``: never by number alone.
 
 The merge carries the commit the approver reviewed, so commits pushed after
-the review (by a person, by CI or by the allocate-segment workflow) are not
-merged unseen (ADR-0006).
+the review (by a person, by CI or by a platform workflow) are not merged
+unseen (ADR-0006).
 """
 
 from __future__ import annotations

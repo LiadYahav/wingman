@@ -2,7 +2,9 @@
 
 The workflows orchestrator (provision, uninstall and upgrade, ADR-0038,
 ADR-0042, ADR-0055) and server-scan, real or none; or, with ``DAY1_FAKE_FLEET``
-(development only), their fakes from ``dev/fleet-fixtures``. server-scan's
+(development only), their fakes from ``dev/fleet-fixtures``. Provision is
+never none: without the orchestrator (development and tests only, which
+``check_runtime`` enforces) the in-memory provision-cluster stands in. server-scan's
 HTTP adapter is built by its integration's ``compose``, its fake by the
 integration's ``infrastructure/fakes/fleet.py``; segments-manager's adapter is
 its integration's ``compose`` too.
@@ -11,6 +13,7 @@ its integration's ``compose`` too.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Final
 
@@ -29,6 +32,8 @@ from wingman_day1.integrations.server_scan.ports import ServerInventory
 from wingman_day1.ports import HubApi, ProvisionWorkflow, UninstallWorkflow, UpgradeWorkflow
 from wingman_day1.settings import Day1Settings
 
+logger = logging.getLogger(__name__)
+
 Close = Callable[[], Awaitable[None]]
 FLEET_RUNS_TTL_SECONDS: Final = 10.0
 """The longest the fleet's upgrade runs are kept: the clusters list reads them every 15 s."""
@@ -36,13 +41,20 @@ FLEET_RUNS_TTL_SECONDS: Final = 10.0
 
 def provision_workflow(
     settings: Day1Settings, *, metrics: WingmanMetrics, clock: Clock, closers: list[Close]
-) -> ProvisionWorkflow | None:
-    """The provision-cluster workflow when creates start it; or, with the fake fleet, its fake."""
-    if settings.day1_provisioner != "workflow":
-        return None
-    if settings.day1_fake_fleet:
+) -> ProvisionWorkflow:
+    """The provision-cluster workflow every create starts (ADR-0042).
+
+    With the fake fleet, or without ``WORKFLOWS_API_URL`` (outside production
+    only), the in-memory one.
+    """
+    if settings.day1_fake_fleet or not settings.workflows_api_url:
         from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 
+        if not settings.day1_fake_fleet:
+            logger.warning(
+                "WORKFLOWS_API_URL is empty: creates start an in-memory provision-cluster "
+                "that writes nothing (development only)"
+            )
         return FakeProvisionWorkflow(clock=clock)
     workflow = HttpProvisionWorkflow(
         base_url=settings.workflows_api_url,

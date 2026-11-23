@@ -11,6 +11,9 @@ import yaml
 from wingman_core.domain.git import RepoPath
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
+from wingman_day1.api.deps import Day1Context
+from wingman_day1.application.approvals import RepoKey
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 
 Auth = Callable[[User], dict[str, str]]
 
@@ -179,14 +182,18 @@ async def test_history_and_the_text_at_a_commit(
 
 
 async def test_a_specs_clusters_and_their_drift(
-    client: httpx.AsyncClient, auth: Auth, support: Any
+    client: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    gitlab: InMemoryGitLab,
+    provision: FakeProvisionWorkflow,
+    context: Day1Context,
 ) -> None:
     alice, bob = auth(support.ALICE), auth(support.BOB)
-    mr = (await client.post("/api/day1/clusters", json=support.create_body(), headers=alice)).json()
-    detail = (await client.get(f"/api/day1/approvals/{mr['iid']}", headers=bob)).json()
-    await client.post(
-        f"/api/day1/approvals/{mr['iid']}/approve", json={"sha": detail["mr"]["sha"]}, headers=bob
-    )
+    created = await client.post("/api/day1/clusters", json=support.create_body(), headers=alice)
+    assert created.status_code == 202, created.text
+    await support.provisioned(gitlab, provision.starts[-1])  # its merge request merged
+    context.repos[RepoKey.DAY1].forget_files()  # GitLab's push webhook
     clusters = (await client.get("/api/day1/specs/agent-standard/clusters", headers=bob)).json()
     assert clusters == [
         {

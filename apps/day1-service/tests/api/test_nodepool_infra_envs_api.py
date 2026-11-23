@@ -23,6 +23,7 @@ from wingman_day1.domain.nodepool_infra_envs import FILE_KEY, INPUT, SETTING
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_identity import FakeIdentityProvider
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 
 Auth = Callable[[User], dict[str, str]]
 
@@ -35,7 +36,6 @@ LARK = "ocp4-prod-lark-site1"
 BASE = f"/api/day1/clusters/{LARK}"
 HOSTED = "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters"
 LARK_PATH = f"{HOSTED}/{LARK}.yaml"
-FALCON_PATH = f"{HOSTED}/ocp4-prod-falcon-site1.yaml"
 WEBHOOK = {"X-Gitlab-Token": "test-webhook-secret", "X-Gitlab-Event": "Push Hook"}
 
 
@@ -47,6 +47,7 @@ async def on(
     identity: FakeIdentityProvider,
     day2: FakeDay2Addons,
     clock: Any,
+    provision: FakeProvisionWorkflow,
 ) -> AsyncIterator[httpx.AsyncClient]:
     app: FastAPI = support.build_app(
         gitlab=gitlab,
@@ -54,6 +55,7 @@ async def on(
         identity=identity,
         day2=day2,
         clock=clock,
+        provision=provision,
         day1_multi_infraenv_nodepools=True,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
@@ -114,7 +116,7 @@ async def test_off_the_form_schema_does_not_offer_the_input_and_on_it_does(
 
 
 async def test_off_a_create_that_sets_extras_is_refused_and_one_without_is_as_before(
-    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+    client: httpx.AsyncClient, auth: Auth, support: Any, provision: FakeProvisionWorkflow
 ) -> None:
     alice = auth(support.ALICE)
     refused = await client.post("/api/day1/clusters", json=create(support, HP), headers=alice)
@@ -123,23 +125,22 @@ async def test_off_a_create_that_sets_extras_is_refused_and_one_without_is_as_be
         f"({SETTING} is off)"
     ]
     created = await client.post("/api/day1/clusters", json=create(support), headers=alice)
-    assert created.status_code == 201, created.text
-    assert FILE_KEY not in await opened_file(gitlab, support, created.json(), FALCON_PATH)
+    assert created.status_code == 202, created.text
+    assert FILE_KEY not in provision.starts[-1]["content"]
 
 
 async def test_on_a_create_writes_the_other_infraenvs_after_the_first(
-    on: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+    on: httpx.AsyncClient, auth: Auth, support: Any, provision: FakeProvisionWorkflow
 ) -> None:
     created = await on.post(
         "/api/day1/clusters", json=create(support, DELL7, HP), headers=auth(support.ALICE)
     )
-    assert created.status_code == 201, created.text
-    text = await opened_file(gitlab, support, created.json(), FALCON_PATH)
+    assert created.status_code == 202, created.text
+    text = provision.starts[-1]["content"]
     assert (
         f'  - infraEnvName: {DELL}\n    {FILE_KEY}: ["{DELL7}", "{HP}"]\n    replicas: 2\n' in text
     )
     assert f"  - infraEnvName: {HP}\n    replicas: 2\n" in text, "the second pool is as before"
-    assert f"InfraEnv `{DELL}`, also `{DELL7}`, also `{HP}`" in created.json()["description"]
 
 
 async def test_on_names_that_are_not_infraenvs_are_refused_at_their_field(

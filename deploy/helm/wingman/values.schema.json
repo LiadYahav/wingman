@@ -102,10 +102,7 @@
           "$ref": "#/definitions/seconds60"
         },
         "provisioner": {
-          "enum": [
-            "merge-request",
-            "workflow"
-          ]
+          "description": "Deprecated: removed in 3.56.0 and ignored; delete it (docs/upgrade/3.55-to-3.56.md): every create starts the provision-cluster workflow (ADR-0042)"
         },
         "placementMinFreePods": {
           "type": "integer",

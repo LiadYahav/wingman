@@ -177,25 +177,23 @@ def test_a_nodepool_read_failure_is_a_hostedcluster_problem_not_silence() -> Non
 # ── Changes ──────────────────────────────────────────────────────────────────
 
 
-def test_a_create_carries_content_and_no_revision() -> None:
-    change = ClusterChange(ClusterAction.CREATE, REF, ALICE, "why", content="a: 1\n")
-    assert change.last_commit_id is None
-    with pytest.raises(ValueError, match="no previous revision"):
-        ClusterChange(ClusterAction.CREATE, REF, ALICE, "why", content="a", last_commit_id="abc")
+def test_there_is_no_cluster_create_change() -> None:
+    """A new cluster is the provision-cluster workflow's (ADR-0042), never a ClusterChange."""
+    assert "create" not in {str(action) for action in ClusterAction}
 
 
-def test_a_modify_or_delete_needs_the_revision_it_was_read_at() -> None:
+def test_every_change_needs_the_revision_it_was_read_at() -> None:
     for action, content in ((ClusterAction.MODIFY, "a: 1\n"), (ClusterAction.DELETE, None)):
         with pytest.raises(ValueError, match="last_commit_id"):
             ClusterChange(action, REF, ALICE, "why", content=content)
         ClusterChange(action, REF, ALICE, "why", content=content, last_commit_id="a" * 40)
 
 
-def test_a_delete_carries_no_content_and_a_create_needs_some() -> None:
+def test_a_delete_carries_no_content_and_a_modify_needs_some() -> None:
     with pytest.raises(ValueError, match="carries no content"):
         ClusterChange(ClusterAction.DELETE, REF, ALICE, "why", content="x", last_commit_id="a")
     with pytest.raises(ValueError, match="carries no content"):
-        ClusterChange(ClusterAction.CREATE, REF, ALICE, "why")
+        ClusterChange(ClusterAction.MODIFY, REF, ALICE, "why", last_commit_id="a")
 
 
 def test_an_import_is_one_guarded_file_and_names_the_flavor_it_links() -> None:

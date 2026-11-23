@@ -22,6 +22,8 @@ Key rationale files: `README.md` (61 KB), `CLAUDE.md` (108 KB; §2 naming/API, �
 > - **allocate-segment writes no Git**: `{cluster, site, type=HC}`, `values_branch` a 422, normally
 >   provision-cluster's child. The day1 CI's allocate call (§3a step 6) is removed by the workflows' air-gap
 >   guide, and Wingman's §5.6 advice to let the pipeline call it no longer works.
+> - **Wingman's §5.6 switch is made**: since Wingman 3.56.0 every create starts provision-cluster with the
+>   rendered file and shows its run; Wingman opens no create MR of its own (ADR-0042's 2026-11-23 amendment).
 > - **add-server-to-mce** takes one server a run, allocated by server-scan's `POST /servers/available`;
 >   `candidate_count` is a 422; a pool draw matches `^ocp-<flavor>-<size>-<site>-` from the InfraEnv's
 >   `redbull.io/flavor|size|site` labels, not `^ocp-<infra_env>`; no candidate loop.

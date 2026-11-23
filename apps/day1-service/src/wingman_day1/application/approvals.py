@@ -2,14 +2,13 @@
 
 A merge request is addressed by ``(repo, iid)`` where ``repo`` maps to exactly
 one project (ADR-0007). Approving merges the commit the approver reviewed
-(``sha``); if CI, the allocate-segment workflow or a person pushed since,
-the merge is refused rather than merging what nobody saw (ADR-0006).
+(``sha``); if CI or a person pushed since, the merge is refused rather
+than merging what nobody saw (ADR-0006).
 
 Editing an MR's files adds a commit on top of its branch, never a force-push,
 guarded per file by the revision the reviewer saw. A cluster file edited this
 way must keep every automation-owned key as the branch has it, and, with
-``DAY1_UPGRADES`` on, its versions too unless the cluster is still being
-created (ADR-0055).
+``DAY1_UPGRADES`` on, its versions too (ADR-0055).
 
 The list also shows the provision-cluster workflow's open day1 MRs, marked
 as the workflow's; they are reviewed and merged in GitLab, never here: the
@@ -209,7 +208,7 @@ class ApprovalService:
         return [p.merge_request for p in await provision_merge_requests(day1)]
 
     async def _on_target(self, ref: MergeRequestRef, path: RepoPath, branch: str) -> str | None:
-        """``path`` on ``branch``; ``None`` when it is not there (a create MR's cluster)."""
+        """``path`` on ``branch``; ``None`` when it is not there (a file the MR adds)."""
         try:
             return (await self._gitlab.read_file(ref.project_id, path, branch)).content
         except NotFoundError:
@@ -242,9 +241,7 @@ class ApprovalService:
                 if self._owned != NO_WORKFLOW_KEYS
                 else None
             )
-            # A cluster not on the target branch yet is a create: no workflow owns its keys
-            owned = self._owned if main is not None else NO_WORKFLOW_KEYS
-            problems = edit_problems(current.content, content, owned=owned, main=main)
+            problems = edit_problems(current.content, content, owned=self._owned, main=main)
             if problems:
                 raise InvalidInputError(f"the edit of {path} is not valid", problems)
         if repo is RepoKey.SPECS and str(path).endswith(paths.SPEC_SUFFIX):

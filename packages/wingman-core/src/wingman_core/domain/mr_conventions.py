@@ -4,7 +4,9 @@ These formats are a contract (ADR-0007): the audit view reads them back from
 GitLab history, and approvals recover the real user from the description
 because GitLab shows the service account as the author. Changing a format
 breaks parsing of every MR already opened, so the parsers accept exactly
-what the builders produce, and a round-trip test pins it.
+what the builders produce, and a round-trip test pins it. Day1 no longer
+opens ``Create cluster`` MRs (the provision-cluster workflow opens its own,
+ADR-0042), but the parsers still read the ones in GitLab's history.
 
 Branch:       ``platform/{username}/{action}-{resource}-{YYYYmmddTHHMMSS}``
 Rollout:      ``platform/rollout/{flavor}/v{version}/{cluster}``: one branch per
@@ -94,12 +96,12 @@ def branch_name(*, username: str, action: str, resource: str, at: datetime) -> s
 
     Args:
         username: The user the change is made for.
-        action: What is done, e.g. ``create-cluster``.
+        action: What is done, e.g. ``modify-cluster``.
         resource: What it is done to, e.g. the cluster name.
         at: When; rendered in UTC so two replicas agree.
 
     Returns:
-        For example ``platform/jane.doe/create-cluster-ocp4-prod-a-site1-20260418T143022``.
+        For example ``platform/jane.doe/modify-cluster-ocp4-prod-a-site1-20260418T143022``.
     """
     stamp = at.astimezone(UTC).strftime("%Y%m%dT%H%M%S")
     return (
@@ -158,7 +160,7 @@ def parse_rollout_branch(branch: str) -> RolloutBranch | None:
 def mr_title(
     repo: Repo, verb: Verb, resource_type: ResourceType, resource_name: str, extra: str = ""
 ) -> str:
-    """Build an MR title, e.g. ``[Wingman/Day1] Create cluster ocp4-prod-a-site1 from spec x``."""
+    """Build an MR title, e.g. ``[Wingman/Day1] Sync cluster ocp4-prod-a-site1 to spec x v2``."""
     if not resource_name or any(c.isspace() for c in resource_name):
         raise ValueError(f"resource name must be one non-empty word: {resource_name!r}")
     title = f"[Wingman/{repo}] {verb} {resource_type} {resource_name}"

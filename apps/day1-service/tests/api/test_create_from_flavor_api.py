@@ -10,6 +10,8 @@ import yaml
 
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
+from wingman_day1.api.deps import Day1Context
+from wingman_day1.application.approvals import RepoKey
 
 Auth = Callable[[User], dict[str, str]]
 
@@ -39,7 +41,11 @@ async def merged(support: Any, gitlab: InMemoryGitLab, document: dict[str, Any])
 
 
 async def test_the_name_is_suggested_from_the_flavor_and_the_next_letter(
-    client: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
+    client: httpx.AsyncClient,
+    auth: Auth,
+    support: Any,
+    gitlab: InMemoryGitLab,
+    context: Day1Context,
 ) -> None:
     alice = auth(support.ALICE)
     await merged(support, gitlab, flavor("rcs"))
@@ -55,10 +61,12 @@ async def test_the_name_is_suggested_from_the_flavor_and_the_next_letter(
         "problems": [],
     }
 
-    # An open create MR holds its name: the next suggestion is -b
+    # The provision-cluster workflow's open MR holds its name: the next suggestion is -b
     body = support.create_body("ocp4-prod-rcs-site1-a", spec_name="rcs")
     created = await client.post("/api/day1/clusters", json=body, headers=alice)
-    assert created.status_code == 201, created.text
+    assert created.status_code == 202, created.text
+    await support.open_provision_mr(gitlab, "ocp4-prod-rcs-site1-a")
+    context.repos[RepoKey.DAY1].forget_merge_requests()  # GitLab's MR webhook
     second = await client.get(SUGGEST, params={**PROD, "flavor": "rcs"}, headers=viewer)
     assert second.json()["name"] == "ocp4-prod-rcs-site1-b"
 

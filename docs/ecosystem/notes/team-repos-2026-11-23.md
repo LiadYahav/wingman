@@ -184,6 +184,7 @@ day1 CI's allocate call (`APPLY-PROVISION-CLUSTER.md:24-31`) and says a hand-pus
 allocate step (`gitops-day1-platform-config` `8ff90dd`, 11-11). Where the workflows release is
 `91298e1` or later, **a cluster created by Wingman's merge request (`DAY1_PROVISIONER=merge-request`,
 the default) gets no VLAN**: only `DAY1_PROVISIONER=workflow` does (ADR-0042).
+Since Wingman 3.56.0 that merge request is gone: every create starts provision-cluster (ADR-0042's 2026-11-23 amendment).
 
 ---
 

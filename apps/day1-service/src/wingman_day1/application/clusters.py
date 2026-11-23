@@ -1,8 +1,10 @@
 """Hosted clusters: list, show, preview, create, modify, delete.
 
-Reads come from the day1 repo's default branch; changes go through the
-``ClusterProvisioner`` (today a merge request, ADR-0017). A new cluster file
-is rendered from the shared template, then checked against the values-file
+Reads come from the day1 repo's default branch. A create starts the
+platform's provision-cluster workflow with the new file, which reserves the
+segment and opens the merge request (ADR-0042); a modify or delete goes
+through the ``ClusterProvisioner``, a merge request (ADR-0017). A new cluster
+file is rendered from the shared template, then checked against the values-file
 contract before anything is written (ADR-0012), its name against the
 naming rules (ADR-0014), and its release against what the MCE can host
 (ADR-0034), and, with placement on, its MCE against the placement rule
@@ -25,14 +27,6 @@ from dataclasses import dataclass, field
 
 from wingman_core.domain.errors import NotFoundError
 from wingman_core.domain.git import Commit, FileContent
-from wingman_core.domain.merge_request import MRState
-from wingman_core.domain.mr_conventions import (
-    WINGMAN_LABEL,
-    Repo,
-    ResourceType,
-    Verb,
-    parse_mr_title,
-)
 from wingman_core.domain.users import User
 from wingman_day1.application.machine_configs import MachineConfigService
 from wingman_day1.application.parsed_files import ParsedFiles
@@ -43,17 +37,14 @@ from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import read_tree
 from wingman_day1.domain import rendered_file
-from wingman_day1.domain.addons import RequestedAddon
 from wingman_day1.domain.changes import ClusterAction, ClusterChange, ProvisionResult
 from wingman_day1.domain.cluster_file import (
     NO_WORKFLOW_KEYS,
     ClusterValues,
     Provenance,
     WorkflowKeys,
-    describe_for_review,
     edit_problems,
     load_values,
-    read_values,
     require_valid,
     with_provenance,
 )
@@ -64,7 +55,6 @@ from wingman_day1.domain.errors import (
     RenderError,
     ResourceNotFoundError,
     StaleError,
-    WorkflowsNotConfiguredError,
 )
 from wingman_day1.domain.image_mirrors import mirror_problems
 from wingman_day1.domain.locks import apply_locks, lock_conflicts
@@ -86,7 +76,7 @@ from wingman_day1.domain.names import (
 from wingman_day1.domain.openshift_versions import unhostable_problems
 from wingman_day1.domain.owners import owner_problems
 from wingman_day1.domain.paths import ClusterRef
-from wingman_day1.domain.placement import Admission, Choice, Decision, describe_placement
+from wingman_day1.domain.placement import Admission, Choice, Decision
 from wingman_day1.domain.sizing import sizing_problems
 from wingman_day1.domain.specs import ClusterSpec
 from wingman_day1.domain.template import build_inputs, check_inputs, render_cluster_file
@@ -98,8 +88,6 @@ from wingman_day1.ports import ClusterProvisioner, ProvisionWorkflow, RepoReads
 logger = logging.getLogger(__name__)
 
 MAX_LIST_CONCURRENCY = 16
-_CREATE_CLUSTER = (Repo.DAY1, Verb.CREATE, ResourceType.CLUSTER)
-"""What an MR title that creates a cluster says (ADR-0007)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,12 +124,10 @@ class CreateCluster:
 
 @dataclass(frozen=True, slots=True)
 class RenderedCluster:
-    """What a create would commit."""
+    """The file a create hands the provision-cluster workflow."""
 
     ref: ClusterRef
     content: str
-    spec: ClusterSpec
-    requested_addons: tuple[RequestedAddon, ...]
     admission: Admission | None = None
     """The MCE, accepted by the placement rule; ``None`` with placement off."""
 
@@ -158,15 +144,14 @@ class ClusterService:
         machine_configs: MachineConfigService,
         *,
         naming: HostedClusterNaming,
-        provision: ProvisionWorkflow | None = None,
+        provision: ProvisionWorkflow,
         placement: PlacementService | None = None,
         owned: WorkflowKeys = NO_WORKFLOW_KEYS,
     ) -> None:
-        """Read through ``day1`` (cached), write through ``provisioner``.
+        """Read through ``day1`` (cached); write through ``provision`` and ``provisioner``.
 
-        With ``provision``, a create starts the provision-cluster workflow
-        instead of opening a merge request (``DAY1_PROVISIONER=workflow``,
-        ADR-0042); every other change still goes through ``provisioner``.
+        A create starts the provision-cluster workflow (ADR-0042); a modify or
+        delete opens a merge request through ``provisioner``.
         With ``placement``, a new cluster's MCE must pass the placement rule
         (ADR-0050). With ``owned``, a modify may not change the keys a
         workflow owns: versions (ADR-0055), NodePool replicas (ADR-0062).
@@ -260,8 +245,8 @@ class ClusterService:
     async def suggest_name(self, *, site: str, mce: str, flavor: str) -> NameSuggestion:
         """A free name for a new cluster from ``flavor`` under ``site``/``mce`` (ADR-0040).
 
-        Taken are every cluster file under any site and every open create MR,
-        the provision-cluster workflow's included. Raises
+        Taken are every cluster file under any site and every open merge
+        request of the provision-cluster workflow. Raises
         ``ResourceNotFoundError`` for an unknown site, MCE or flavor.
         """
         await self._sites.require_mce(site, mce)
@@ -297,9 +282,7 @@ class ClusterService:
         await self._require_hostable(ref.mce, content)
         admission = await self._admit(ref, content, request, counted=counted)
         provenance = Provenance(spec.metadata.name, spec.metadata.version, tuple(addons))
-        return RenderedCluster(
-            ref, with_provenance(content, provenance), spec, tuple(addons), admission
-        )
+        return RenderedCluster(ref, with_provenance(content, provenance), admission)
 
     async def _admit(
         self, ref: ClusterRef, content: str, request: CreateCluster, *, counted: bool
@@ -316,56 +299,14 @@ class ClusterService:
                 self._placement.record(Decision.REFUSED)
             raise
 
-    async def create(self, request: CreateCluster, *, user: User) -> ProvisionResult:
-        """Propose a new cluster: one new file, in one commit, in one MR."""
-        rendered = await self._prepare(request, counted=True)
-        values = read_values(load_values(rendered.content))
-        addons = ", ".join(f"`{a.key}@{a.version}`" for a in rendered.requested_addons)
-        placement = f"{describe_placement(rendered.admission)}\n\n" if rendered.admission else ""
-        summary = (
-            f"Creating hosted cluster **{rendered.ref.name}** from spec "
-            f"`{rendered.spec.metadata.name}` v{rendered.spec.metadata.version}.\n\n"
-            f"Site `{rendered.ref.site}`, MCE `{rendered.ref.mce}`.\n\n"
-            f"{placement}"
-            f"{describe_for_review(values)}\n\n"
-            f"Day2 addons requested by the spec: {addons or 'none'}.\n\n"
-            "After this branch is pushed, CI and the allocate-segment workflow add `vlanId`, "
-            "`dhcp_values` and `mcConfigMap` to the file; merge once they have."
-        )
-        if rendered.admission is not None:
-            log_placement(rendered.admission, rendered.ref, user)
-        result = await self._provisioner.apply(
-            ClusterChange(
-                action=ClusterAction.CREATE,
-                cluster=rendered.ref,
-                requested_by=user,
-                summary=summary,
-                content=rendered.content,
-                spec_name=rendered.spec.metadata.name,
-                spec_version=rendered.spec.metadata.version,
-            )
-        )
-        self._record(rendered.admission)
-        return result
-
-    def _record(self, admission: Admission | None) -> None:
-        if admission is not None and self._placement is not None:
-            self._placement.record(admission.decision)
-
-    @property
-    def creates_by_workflow(self) -> bool:
-        """Whether a create starts the provision-cluster workflow (ADR-0042)."""
-        return self._provision is not None
-
-    async def provision(self, request: CreateCluster, *, user: User) -> ProvisionRun:
+    async def create(self, request: CreateCluster, *, user: User) -> ProvisionRun:
         """Start the provision-cluster workflow for a new cluster (ADR-0042).
 
-        The file is rendered and checked exactly as for a merge request; the
-        workflow then judges it, reserves the segment, opens the merge request
-        and waits for it. Never retried (ADR-0006).
+        The file is rendered and checked as for a preview; the workflow then
+        judges it, reserves the segment, pushes it on its own branch with
+        ``vlanId`` and ``dhcp_values``, opens the merge request and waits for
+        it. Never retried (ADR-0006).
         """
-        if self._provision is None:
-            raise WorkflowsNotConfiguredError("this deployment creates clusters by merge request")
         rendered = await self._prepare(request, counted=True)
         ref = rendered.ref
         logger.info(
@@ -382,13 +323,12 @@ class ClusterService:
             mce=ref.mce,
             content=rendered.content,
         )
-        self._record(rendered.admission)
+        if rendered.admission is not None and self._placement is not None:
+            self._placement.record(rendered.admission.decision)
         return run
 
     async def provision_run(self, name: str) -> ProvisionRun:
         """The provision run of the cluster file ``<name>.yaml``; 404 when there is none."""
-        if self._provision is None:
-            raise WorkflowsNotConfiguredError("this deployment creates clusters by merge request")
         run = await self._provision.run(provision_workflow_id(name))
         if run is None:
             raise ResourceNotFoundError(f"no provision run for cluster {name!r}")
@@ -497,7 +437,7 @@ class ClusterService:
             raise InvalidInputError(f"OpenShift {version} is not offered on MCE {mce}", problems)
 
     async def _require_unused(self, ref: ClusterRef) -> None:
-        """Cluster names are unique across the whole repo, and across open create MRs."""
+        """Cluster names are unique across the whole repo, and across open provision MRs."""
         existing = (await read_tree(self._day1)).find(ref.name)
         if existing:
             where = existing[0]
@@ -513,21 +453,11 @@ class ClusterService:
     async def _open_creates(self) -> list[tuple[str, str]]:
         """``(cluster name, MR URL)`` of every open MR that creates a cluster.
 
-        Wingman's own, by their title, and the provision-cluster workflow's, by
-        their branch, whoever started the run (ADR-0042's amendment).
+        The provision-cluster workflow's, by their branch, whoever started the
+        run (ADR-0042's amendment).
         """
-        labelled, provisions = await asyncio.gather(
-            self._day1.merge_requests(state=MRState.OPENED, labels=(WINGMAN_LABEL,)),
-            provision_merge_requests(self._day1),
-        )
-        creates = [
-            (title.resource_name, merge_request.web_url)
-            for merge_request in labelled
-            if (title := parse_mr_title(merge_request.title)) is not None
-            and (title.repo, title.verb, title.resource_type) == _CREATE_CLUSTER
-        ]
-        creates += [(p.stem, p.merge_request.web_url) for p in provisions]
-        return creates
+        provisions = await provision_merge_requests(self._day1)
+        return [(p.stem, p.merge_request.web_url) for p in provisions]
 
     async def _read(self, ref: ClusterRef) -> FileContent:
         try:

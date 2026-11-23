@@ -35,8 +35,9 @@ pool draw. The items it covers are marked **(naming branch)**.
   nothing to the day1 repo, so a cluster created by Wingman's default merge request
   (`DAY1_PROVISIONER=merge-request`) gets no `vlanId` wherever the workflows release is
   `91298e1` or later and the day1 CI no longer calls it; only `DAY1_PROVISIONER=workflow` does
-  ([the survey](../ecosystem/notes/team-repos-2026-11-23.md) §3). And an uninstall now leaves
-  the server in its MCE as a free Agent, where Wingman's dialog says it leaves the MCE.
+  ([the survey](../ecosystem/notes/team-repos-2026-11-23.md) §3). (Done in 3.56.0: every create
+  starts provision-cluster, and the setting is gone; ADR-0042.) And an uninstall now leaves
+  the server in its MCE as a free Agent (Wingman's dialog says so since 3.54.0).
 - **Before seeds and KV clusters go live**, Wingman needs: kinds for seeds and KV clusters (with
   the actions that are not a tenant's taken away), the convention's names, a supply check that
   knows VM pools and claimed Agents, the zone on every nodepool, and later the capacity policy
@@ -108,7 +109,7 @@ so the existing traps (no placeholder, no sidecar) hold there too.
 
 | # | Change | Why | Where | Size | Waits on |
 |---|---|---|---|---|---|
-| 0 | **The default create's VLAN, and the uninstall's words** (not KubeVirt, but first): make `DAY1_PROVISIONER=workflow` the default or refuse a merge-request create where nothing allocates; say an uninstall leaves the server in its MCE, and offer `remove-server-from-mce` where a person takes it out | allocate-segment writes no file since 2026-11-11, so the merge request's cluster has no `vlanId`; uninstall-server-from-hc ends at a free Agent since 2026-11-19 | `settings.py` (`DAY1_PROVISIONER`), ADR-0042, `apps/web/components/clusters/uninstall-node-dialog.tsx:22`, `apps/web/app/(app)/docs/cluster-workflows.tsx:62`, CLAUDE.md's key facts | S | Which workflows release and day1 CI each deployment runs |
+| 0 | **The default create's VLAN, and the uninstall's words** (not KubeVirt, but first): make `DAY1_PROVISIONER=workflow` the default or refuse a merge-request create where nothing allocates (**done in 3.56.0**: every create starts provision-cluster, and Wingman's create merge request and the setting are gone, ADR-0042's 2026-11-23 amendment); say an uninstall leaves the server in its MCE (**done in 3.54.0**, ADR-0038's amendment), and offer `remove-server-from-mce` where a person takes it out (not in Wingman, 3.54.0) | allocate-segment writes no file since 2026-11-11, so the merge request's cluster has no `vlanId`; uninstall-server-from-hc ends at a free Agent since 2026-11-19 | `settings.py` (`DAY1_PROVISIONER`), ADR-0042, `apps/web/components/clusters/uninstall-node-dialog.tsx:22`, `apps/web/app/(app)/docs/cluster-workflows.tsx:62`, CLAUDE.md's key facts | S | Which workflows release and day1 CI each deployment runs |
 | 1 | **Know the cluster kinds**: tell a seed folder and a KV cluster file from an MCE and a tenant by the reserved flavor (`ocp4-<lc>-seed-<site>-<zone>-<id>`, `ocp4-<lc>-kv-<site>-<zone>-<id>`), list them as Seed and KV cluster, and stop flagging them | Today they are "off-convention" MCEs and clusters | `domain/names.py`, `application/tree.py`, `application/sites.py`, the cluster list and notices | M | Nothing: the convention is decided **(naming branch, in part)** |
 | 2 | **Take a tenant's actions away from KV clusters**: no Edit, Delete, Scale, uninstall or upgrade from Wingman; a refusal naming the procedure (06-09, 16) | Deleting or shrinking a KV cluster takes down other tenants' VMs; its growth is the KV Capacity Controller's (AD27) | `application/clusters.py:399-447`, `application/scale.py`, `application/nodes.py`, `application/upgrades.py`, the cluster page | S | 1 |
 | 3 | **The convention's names on create**: `<id>` required, `mce`/`seed`/`kv` refused as a flavor or a cluster's `<name>`, the reserved names refused as flavor names | Acceptance P7; a tenant named like a KV cluster would be offered to create-vm's placement | `domain/names.py:182-280`, `application/specs.py` | S | Nothing **(naming branch)** |
@@ -124,7 +125,7 @@ so the existing traps (no placeholder, no sidecar) hold there too.
 | 13 | **`platform: kubevirt` marked lab-only** in the template's comment and the flavor form | It is not the production model (§2) | the specs template (`cluster-template.j2:60-64`), the docs page `apps/web/app/(app)/docs/clusters.tsx:133` | S | Nothing |
 | 14 | **A KV cluster view (read only)**: per zone, the seed, its KV clusters oldest first, their role (active, standby, full) and free CPU | The capacity controller's state, for the platform team | a page reading the controller's metrics or the seed | L | The KV Capacity Controller (specification only) |
 
-Item 0 is needed now; items 1 to 5 before the first seed folder is merged; 6 to 8 before the first VM pool
+Item 0 is done (the uninstall's words in 3.54.0, the VLAN in 3.56.0); items 1 to 5 before the first seed folder is merged; 6 to 8 before the first VM pool
 serves a tenant; 9 to 14 when their dependency ships.
 
 ## 5. Questions for the team

@@ -15,7 +15,7 @@ Two things make a linked cluster ``drifted`` (ADR-0036):
   the verdict, never counted as drift (ADR-0025).
 
 Day1 cannot re-render a cluster to compare files: the file legitimately
-changes after create (CI and the allocate-segment workflow add keys, people
+changes after create (the provision-cluster workflow and CI add keys, people
 edit what is not locked). A cluster whose state cannot be determined (its
 file or flavor is gone or unreadable, day2 did not answer and nothing else
 drifted) is ``unknown``, never in sync (ADR-0004; herzi's "unknown is not

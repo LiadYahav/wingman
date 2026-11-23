@@ -41,8 +41,8 @@ export function ConceptsSection() {
           {
             term: "Merge Request",
             color: "bg-pink-500/10 text-pink-500",
-            description: "Every create, edit and delete in Wingman opens a GitLab MR from a platform/{you}/… branch. Nothing changes until another admin approves it, which merges it. The MR and its commit name the person who asked for the change.",
-            example: "Creating ocp4-prod-herzi-site1 opens “[Wingman/Day1] Create cluster ocp4-prod-herzi-site1 from spec agent-standard”",
+            description: "Every edit and delete in Wingman opens a GitLab MR from a platform/{you}/… branch (a create starts the provision-cluster workflow, which opens its own). Nothing changes until another admin approves it, which merges it. The MR and its commit name the person who asked for the change.",
+            example: "Editing ocp4-prod-herzi-site1 opens “[Wingman/Day1] Modify cluster ocp4-prod-herzi-site1”",
           },
         ].map(({ term, color, description, example }) => (
           <div key={term} className="rounded-xl border bg-card p-5">

@@ -13,37 +13,33 @@ from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_core.testing.fixtures import default_fixture_root, load_fixture_projects
 from wingman_day1.api.deps import Day1Context
 from wingman_day1.application.approvals import RepoKey
-from wingman_day1.application.clusters import CreateCluster
 from wingman_day1.domain.errors import InvalidInputError, StaleError
+from wingman_day1.domain.paths import ClusterRef
 from wingman_day1.domain.specs import validate_spec
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 
-NEW = "ocp4-prod-falcon-site1"
-NEW_PATH = f"sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters/{NEW}.yaml"
+LARK = ClusterRef("site1", "ocp4-prod-mce-site1-a", "ocp4-prod-lark-site1")
+LARK_PATH = str(LARK.path)
 
 
-def create_request(support: Any, name: str = NEW) -> CreateCluster:
-    body = support.create_body(name)
-    return CreateCluster(
-        name=body["name"],
-        site=body["site"],
-        mce=body["mce"],
-        spec_name=body["spec_name"],
-        spec_version=body["spec_version"],
-        variables=body["variables"],
-    )
-
-
-async def open_create(context: Day1Context, support: Any) -> MergeRequest:
+async def open_edit(context: Day1Context, support: Any) -> MergeRequest:
+    """Alice's merge request that scales lark's first nodepool from 3 to 4."""
+    current = await context.clusters.get(LARK)
     return (
-        await context.clusters.create(create_request(support), user=support.ALICE)
+        await context.clusters.modify(
+            LARK,
+            current.content.replace("replicas: 3", "replicas: 4"),
+            user=support.ALICE,
+            summary="Scale lark",
+            last_commit_id=current.last_commit_id,
+        )
     ).merge_request
 
 
 async def test_pending_lists_open_wingman_mrs_of_both_projects_newest_first(
     context: Day1Context, support: Any
 ) -> None:
-    cluster_mr = await open_create(context, support)
+    cluster_mr = await open_edit(context, support)
     spec = validate_spec({"metadata": {"name": "agent-mini", "version": "1"}})
     spec_mr = (await context.specs.create(spec, user=support.ALICE)).merge_request
     pending = await context.approvals.pending()
@@ -60,7 +56,7 @@ async def test_the_cached_list_reflects_every_write_at_once(
     # Legacy: writes cleared "approvals:day1:list" while the list was cached under
     # "approvals:combined:list", so new and decided MRs showed only after the TTL.
     assert await context.approvals.pending() == []
-    cluster_mr = await open_create(context, support)
+    cluster_mr = await open_edit(context, support)
     assert [c.pending.merge_request.ref for c in await context.approvals.pending()] == [
         cluster_mr.ref
     ]
@@ -90,20 +86,20 @@ async def test_a_project_whose_default_branch_is_not_main_works(
         gitlab=gitlab, hub=hub, identity=identity, day2=FakeDay2Addons(), clock=clock
     )
     context: Day1Context = app.state.day1
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     assert mr.target_branch == "production"
     assert [c.pending.merge_request.ref for c in await context.approvals.pending()] == [mr.ref]
     merged = await context.approvals.approve(
         RepoKey.DAY1, mr.ref.iid, sha=mr.sha, approver=support.BOB
     )
     assert merged.pending.merge_request.state is MRState.MERGED
-    assert NEW in [c.ref.name for c in await context.clusters.clusters()]
+    assert "replicas: 4" in (await context.clusters.get(LARK)).content
 
 
 async def test_the_requester_cannot_approve_their_own_change(
     context: Day1Context, support: Any
 ) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     with pytest.raises(SelfApprovalError):
         await context.approvals.approve(
             RepoKey.DAY1, mr.ref.iid, sha=mr.sha, approver=support.ALICE
@@ -113,50 +109,51 @@ async def test_the_requester_cannot_approve_their_own_change(
 async def test_a_commit_pushed_after_review_is_not_merged_unseen(
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     pid = await support.project_id(gitlab, support.DAY1)
-    content = gitlab.snapshot(pid, mr.source_branch)[NEW_PATH]
-    # The allocate-segment workflow commits vlanId onto the MR branch after the review.
+    content = gitlab.snapshot(pid, mr.source_branch)[LARK_PATH]
+    # CI commits onto the MR branch after the review.
     await support.push(
         gitlab,
         support.DAY1,
         branch=mr.source_branch,
-        file=NEW_PATH,
-        content=content + "vlanId: 412\n",
+        file=LARK_PATH,
+        content=content + "# refreshed by CI\n",
     )
     with pytest.raises(RevisionConflictError):
         await context.approvals.approve(RepoKey.DAY1, mr.ref.iid, sha=mr.sha, approver=support.BOB)
-    assert NEW_PATH not in gitlab.snapshot(pid, "main")
+    assert "replicas: 4" not in gitlab.snapshot(pid, "main")[LARK_PATH]
 
     change, _ = await context.approvals.get(RepoKey.DAY1, mr.ref.iid)
     await context.approvals.approve(
         RepoKey.DAY1, mr.ref.iid, sha=change.pending.merge_request.sha, approver=support.BOB
     )
-    assert "vlanId: 412" in gitlab.snapshot(pid, "main")[NEW_PATH]
+    assert "# refreshed by CI" in gitlab.snapshot(pid, "main")[LARK_PATH]
 
 
 async def test_reject_closes_without_merging(
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     closed = await context.approvals.reject(RepoKey.DAY1, mr.ref.iid)
     assert closed.pending.merge_request.state is MRState.CLOSED
     pid = await support.project_id(gitlab, support.DAY1)
-    assert NEW_PATH not in gitlab.snapshot(pid, "main")
+    assert "replicas: 4" not in gitlab.snapshot(pid, "main")[LARK_PATH]
 
 
 async def test_get_returns_the_mr_and_its_diff(context: Day1Context, support: Any) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     change, diffs = await context.approvals.get(RepoKey.DAY1, mr.ref.iid)
     assert change.repo is RepoKey.DAY1
-    assert [str(d.new_path) for d in diffs] == [NEW_PATH]
-    assert diffs[0].new_file
+    assert [str(d.new_path) for d in diffs] == [LARK_PATH]
+    assert not diffs[0].new_file
+    assert "+  replicas: 4" in diffs[0].diff
 
 
 async def test_an_edit_may_only_touch_files_the_mr_changes(
     context: Day1Context, support: Any
 ) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     with pytest.raises(InvalidInputError, match="only files this merge request changes"):
         await context.approvals.update(
             RepoKey.DAY1,
@@ -169,17 +166,14 @@ async def test_an_edit_may_only_touch_files_the_mr_changes(
 async def test_an_edit_of_a_cluster_file_keeps_what_automation_wrote(
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     pid = await support.project_id(gitlab, support.DAY1)
-    content = gitlab.snapshot(pid, mr.source_branch)[NEW_PATH] + "vlanId: 412\n"
-    await support.push(
-        gitlab, support.DAY1, branch=mr.source_branch, file=NEW_PATH, content=content
-    )
+    content = gitlab.snapshot(pid, mr.source_branch)[LARK_PATH]
     with pytest.raises(InvalidInputError) as caught:
         await context.approvals.update(
             RepoKey.DAY1,
             mr.ref.iid,
-            {NEW_PATH: content.replace("vlanId: 412", "vlanId: 500")},
+            {LARK_PATH: content.replace("vlanId: 1412", "vlanId: 500")},
             user=support.BOB,
         )
     assert any("vlanId" in p for p in caught.value.problems)
@@ -188,49 +182,49 @@ async def test_an_edit_of_a_cluster_file_keeps_what_automation_wrote(
 async def test_an_edit_commits_on_top_of_the_branch_as_the_editor(
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     pid = await support.project_id(gitlab, support.DAY1)
-    content = gitlab.snapshot(pid, mr.source_branch)[NEW_PATH] + "vlanId: 412\n"
+    content = gitlab.snapshot(pid, mr.source_branch)[LARK_PATH] + "# refreshed by CI\n"
     await support.push(
-        gitlab, support.DAY1, branch=mr.source_branch, file=NEW_PATH, content=content
+        gitlab, support.DAY1, branch=mr.source_branch, file=LARK_PATH, content=content
     )
     head = (await context.approvals.get(RepoKey.DAY1, mr.ref.iid))[0].pending.merge_request.sha
     edited = content.replace("replicas: 2", "replicas: 3")
     change, _ = await context.approvals.update(
-        RepoKey.DAY1, mr.ref.iid, {NEW_PATH: edited}, user=support.BOB, sha=head, message="more"
+        RepoKey.DAY1, mr.ref.iid, {LARK_PATH: edited}, user=support.BOB, sha=head, message="more"
     )
     commits = await gitlab.list_commits(pid, ref=mr.source_branch, limit=3)
     assert [c.title for c in commits] == [
         "more",
         "outside push [skip ci]",
-        f"Create cluster {NEW} from spec agent-standard",
+        f"Modify cluster {LARK.name}",
     ]
     assert commits[0].author_name == "Bob Admin"
     assert commits[0].parent_ids == (head,)
-    assert gitlab.snapshot(pid, mr.source_branch)[NEW_PATH] == edited
+    assert gitlab.snapshot(pid, mr.source_branch)[LARK_PATH] == edited
     assert change.pending.merge_request.sha == commits[0].id
 
 
 async def test_an_edit_of_a_moved_branch_is_refused(
     context: Day1Context, support: Any, gitlab: InMemoryGitLab
 ) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     pid = await support.project_id(gitlab, support.DAY1)
-    content = gitlab.snapshot(pid, mr.source_branch)[NEW_PATH]
+    content = gitlab.snapshot(pid, mr.source_branch)[LARK_PATH]
     await support.push(
-        gitlab, support.DAY1, branch=mr.source_branch, file=NEW_PATH, content=content + "a: 1\n"
+        gitlab, support.DAY1, branch=mr.source_branch, file=LARK_PATH, content=content + "a: 1\n"
     )
     with pytest.raises(StaleError, match="moved since it was reviewed"):
         await context.approvals.update(
-            RepoKey.DAY1, mr.ref.iid, {NEW_PATH: content}, user=support.BOB, sha=mr.sha
+            RepoKey.DAY1, mr.ref.iid, {LARK_PATH: content}, user=support.BOB, sha=mr.sha
         )
 
 
 async def test_an_edit_of_a_closed_mr_is_refused(context: Day1Context, support: Any) -> None:
-    mr = await open_create(context, support)
+    mr = await open_edit(context, support)
     await context.approvals.reject(RepoKey.DAY1, mr.ref.iid)
     with pytest.raises(StaleError, match="only an open MR"):
-        await context.approvals.update(RepoKey.DAY1, mr.ref.iid, {NEW_PATH: "x"}, user=support.BOB)
+        await context.approvals.update(RepoKey.DAY1, mr.ref.iid, {LARK_PATH: "x"}, user=support.BOB)
 
 
 async def test_an_edit_of_a_spec_file_must_stay_a_valid_spec(

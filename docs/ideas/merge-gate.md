@@ -4,6 +4,11 @@
 the push, track the platform-config pipeline and the allocate-segment run,
 and only then mark the MR ready to merge.
 
+**Since 3.56.0** Wingman opens no new cluster's MR: provision-cluster pushes
+the file with `vlanId` and `dhcp_values` and opens the MR, which Approvals
+lists view only and GitLab merges (ADR-0042). The problem below, as first
+written, was Wingman's own create MR; the gate still fits Wingman's other MRs.
+
 ## The problem
 
 A new cluster's MR is not ready when Wingman opens it. Before a merge is safe:

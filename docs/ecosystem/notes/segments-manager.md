@@ -163,6 +163,11 @@ No reserve/hold step separate from allocate; no IP-level allocation; no VIP endp
 ## 4. Role in creating a hosted cluster / UPI cluster; connections
 
 ### Hosted cluster (HC) — today's real flow
+
+> **Since 2026-11-11** (workflows `ff1aba7`): allocate-segment takes `{cluster, site, type}`, refuses `values_branch` (422) and writes
+> nothing to Git. `provision-cluster` runs it as a child and pushes the file with `vlanId` and `dhcp_values` on its own branch
+> `provision-cluster/<stem>`, then opens the MR. Since 3.56.0 every Wingman create starts `provision-cluster` (ADR-0042). Steps 1–3
+> below are the flow before that.
 1. Human (→ Wingman) pushes a **temp branch** in the day1 values repo (`team-redbull/day1` GitHub / `gitops-day1/platform-config` GitLab)
    with `sites/<site>/mces/<mce>/hostedClusters/<cluster>.yaml`.
 2. The day1 repo's **GitLab CI pipeline** (non-main branches) calls orchestrator
@@ -253,6 +258,8 @@ Delete: `05-delete-hosted-cluster.md`. Version-band migration allocates a NEW se
 ### CALL (order during HC creation) — prefer the orchestrator, not SM writes
 Wingman should **not** hold the SM token or call `POST /api/segments/allocate` itself; the ecosystem routes every SM write through
 Temporal workflows (durable retry, read-back verification, values-file write, DHCP coupling).
+Since 3.56.0 Wingman follows neither (a) nor (b) below: every create starts `provision-cluster` with the file, which allocates the
+segment, writes `vlanId`/`dhcp_values` and opens the MR (ADR-0042).
 1. Pre-flight: `GET /api/sites` (site valid), `GET /api/stats` (free > 0), name not already holding an HC segment.
 2. Write `sites/<site>/mces/<mce>/hostedClusters/<cluster>.yaml` on a new branch + MR (Wingman already does this; layout already matches).
    Do **not** write `vlanId`/`dhcp_values.network` yourself — the marker block is the workflow's; a foreign top-level `vlanId`/`dhcp_values` makes it refuse.

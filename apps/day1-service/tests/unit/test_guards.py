@@ -7,7 +7,7 @@
 - The legacy MCE-create path wrote ``hostedClusters/.gitkeep``, which breaks
   the MCE's ApplicationSet, and read ``<cluster>.wingman.yaml`` sidecars from
   the same folder. Every change the provisioner makes is exactly the cluster
-  file.
+  file (a new one is the provision-cluster workflow's, ADR-0042).
 """
 
 from __future__ import annotations
@@ -104,7 +104,6 @@ class _Recorded(Exception):
 @pytest.mark.parametrize(
     "change",
     [
-        ClusterChange(ClusterAction.CREATE, REF, ALICE, "s", content="mastertag: 4.18.22\n"),
         ClusterChange(
             ClusterAction.MODIFY, REF, ALICE, "s", content="a: 1\n", last_commit_id="a" * 8
         ),

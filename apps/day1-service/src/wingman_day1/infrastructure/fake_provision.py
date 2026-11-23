@@ -1,9 +1,12 @@
 """FakeProvisionWorkflow: the provision-cluster workflow in memory (ADR-0042).
 
-Tests seed and drive it directly; ``DAY1_FAKE_FLEET=true`` (development only)
-uses it so the local demo can start runs. A run walks a few sample phases on
-the injected clock and then waits for its merge request, as the real one
-waits for a person. The phases are a sample for the demo, nothing more: day1
+Tests seed and drive it directly; in development it stands in for the
+orchestrator with ``DAY1_FAKE_FLEET=true`` or without ``WORKFLOWS_API_URL``,
+so the local demo can start runs (it writes nothing to the day1 repo). A run
+walks a few sample phases on the injected clock and then waits for its merge
+request, as the real one waits for a person; the merge request is ``open``
+(the workflow's word, not GitLab's ``opened``). The phases are a sample for
+the demo, nothing more: day1
 passes the real workflow's phases through and keeps no list of them. A
 second start while one runs answers like the orchestrator's 409, and a file
 without a ``mastertag`` fails its run, as the real one's checks do: refusals
@@ -98,7 +101,7 @@ class FakeProvisionWorkflow:
             phase=run.phase,
             error=run.error,
             merge_request_url=f"{MERGE_REQUESTS}/{100 + run.number}" if opened else None,
-            merge_request_state="opened" if opened else None,
+            merge_request_state="open" if opened else None,
         )
 
     def _check(self) -> None:

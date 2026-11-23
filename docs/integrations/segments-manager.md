@@ -23,8 +23,9 @@ UI, linked from an admin's top bar (`GET /api/day1/platforms`).
   to its open `GET /api/segments/search?q=<file stem>` (its UI reads no URL
   parameters, so a link can only name what to search for). Both come from
   `SEGMENTS_MANAGER_UI_URL`, else `SEGMENTS_MANAGER_URL`.
-- **Never**: a write (allocation and release are the allocate-segment
-  workflow's and its release's), the raw application log (`/api/logs`), its
+- **Never**: a write (allocation is the provision-cluster workflow's, which
+  every create starts and which runs allocate-segment, ADR-0042; release is
+  release-segment's), the raw application log (`/api/logs`), its
   exports, and the browser calling segments-manager (day1 reads it).
 
 ## The commit Wingman matches

@@ -41,6 +41,7 @@ from wingman_core.testing.fixtures import default_fixture_root, load_fixture_pro
 from wingman_day1.domain.status import Condition, HostedClusterObservation
 from wingman_day1.infrastructure.fake_day2 import FakeDay2Addons
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
+from wingman_day1.infrastructure.fake_provision import FakeProvisionWorkflow
 from wingman_day1.main import Adapters, create_app
 from wingman_day1.settings import Day1Settings
 
@@ -147,7 +148,12 @@ async def main() -> None:
             wingman_admin_groups="admins",
         ),
         runtime=RuntimeSettings(environment=Environment.TEST, git_backend=GitBackend.FAKE),
-        adapters=Adapters(gitlab=gitlab, day2=FakeDay2Addons({}), hub=hub),  # ty: ignore[invalid-argument-type]
+        adapters=Adapters(
+            gitlab=gitlab,  # ty: ignore[invalid-argument-type]
+            day2=FakeDay2Addons({}),
+            provision=FakeProvisionWorkflow(),
+            hub=hub,  # ty: ignore[invalid-argument-type]
+        ),
     )
     bench = User(username="bench", role=Role.ADMIN, groups=("admins",))
     token = app.state.session_tokens.issue(bench)

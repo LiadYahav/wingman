@@ -123,6 +123,8 @@ class Adapters:
 
     gitlab: GitLabPort
     day2: Day2Addons
+    provision: ProvisionWorkflow
+    """The provision-cluster workflow every create starts (ADR-0042)."""
     hub: HubApi | None = None
     """``None`` when ``CLUSTER_STATUS_ENABLED`` is off (the fake MCE with ``DAY1_FAKE_FLEET``)."""
     identity: IdentityProvider | None = None
@@ -135,8 +137,6 @@ class Adapters:
     """The orchestrator's uninstall workflow; ``None`` when ``WORKFLOWS_API_URL`` is empty."""
     ledger: SegmentLedger | None = None
     """segments-manager; ``None`` when ``SEGMENTS_MANAGER_URL`` is empty (ADR-0039)."""
-    provision: ProvisionWorkflow | None = None
-    """The provision-cluster workflow; ``None`` unless ``DAY1_PROVISIONER=workflow`` (ADR-0042)."""
     day2_installs: Day2Installs | None = None
     """Day2 opening a rollout's add-on MRs (ADR-0044); ``None``: listed for a person instead."""
     add_server: AddServerWorkflow | None = None

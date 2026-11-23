@@ -120,7 +120,7 @@ async def test_a_create_that_breaks_a_lock_is_a_422(
     assert problem.startswith("nodepools[0].configs: locked by flavor agent-dell to ")
     del body["variables"]["nodepools"][0]["configs"]
     created = await client.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
-    assert created.status_code == 201, created.text
+    assert created.status_code == 202, created.text
 
 
 async def test_a_flavor_with_a_lock_that_fixes_nothing_is_a_422_and_a_stored_one_warns(

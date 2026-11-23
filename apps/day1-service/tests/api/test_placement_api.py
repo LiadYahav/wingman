@@ -19,7 +19,7 @@ import pytest
 from fastapi import FastAPI
 
 from wingman_core.domain.git import FileDiff, RepoPath
-from wingman_core.domain.merge_request import MRState, NewMergeRequest
+from wingman_core.domain.merge_request import NewMergeRequest
 from wingman_core.domain.users import User
 from wingman_core.infrastructure.fake_gitlab import InMemoryGitLab
 from wingman_day1.api.v1.placement import parse_needs
@@ -117,6 +117,7 @@ async def placed_app(
     identity: FakeIdentityProvider,
     day2: FakeDay2Addons,
     clock: Any,
+    provision: FakeProvisionWorkflow,
 ) -> FastAPI:
     await add_mces(support, gitlab)
     inventory = FakeServerInventory(fleet())
@@ -127,6 +128,7 @@ async def placed_app(
         day2=day2,
         clock=clock,
         inventory=inventory,
+        provision=provision,
     )
 
 
@@ -266,6 +268,7 @@ async def live_off(
     identity: FakeIdentityProvider,
     day2: FakeDay2Addons,
     clock: Any,
+    provision: FakeProvisionWorkflow,
 ) -> AsyncIterator[tuple[httpx.AsyncClient, FastAPI]]:
     """Live status off (no hub, as on the sandbox), server-scan on."""
     await add_mces(support, gitlab)
@@ -276,6 +279,7 @@ async def live_off(
         day2=day2,
         clock=clock,
         inventory=FakeServerInventory(fleet()),
+        provision=provision,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
@@ -323,8 +327,11 @@ async def test_without_live_reads_no_version_still_means_no_pick(
     assert (body["pick"], body["problems"]) == (None, ["Choose an OpenShift version."])
 
 
-async def test_without_live_reads_create_follows_the_same_rule_and_the_mr_says_so(
-    live_off: tuple[httpx.AsyncClient, FastAPI], auth: Auth, support: Any, gitlab: InMemoryGitLab
+async def test_without_live_reads_create_follows_the_same_rule(
+    live_off: tuple[httpx.AsyncClient, FastAPI],
+    auth: Auth,
+    support: Any,
+    provision: FakeProvisionWorkflow,
 ) -> None:
     client, app = live_off
     refused = await client.post(
@@ -336,13 +343,8 @@ async def test_without_live_reads_create_follows_the_same_rule_and_the_mr_says_s
         json=support.create_body(mce=B, placement={"pick": B}),
         headers=auth(support.ALICE),
     )
-    assert created.status_code == 201, created.text
-    (text,) = await descriptions(gitlab, support)
-    assert "Free pods and servers were **not checked**: live MCE reads are off" in text
-    assert (
-        f"| `{B}` (pick, chosen) | 0 | 0 | 4 (4) | not checked | not checked | "
-        "pass (free pods, servers, readable not checked) |"
-    ) in text
+    assert created.status_code == 202, created.text
+    assert [start["mce"] for start in provision.starts] == [B]
     assert sample(app, "picked") == 1
     failing = await client.post(
         "/api/day1/clusters/preview",
@@ -389,13 +391,19 @@ def sample(app: FastAPI, decision: str) -> float:
     return value or 0.0
 
 
-async def descriptions(gitlab: InMemoryGitLab, support: Any) -> list[str]:
-    pid = await support.project_id(gitlab, support.DAY1)
-    return [mr.description for mr in await gitlab.list_merge_requests(pid, state=MRState.OPENED)]
+def chosen(caplog: pytest.LogCaptureFixture) -> Any:
+    """The one ``mce_placement_chosen`` event the create logged (ADR-0050)."""
+    (event,) = [r for r in caplog.records if getattr(r, "event", None) == "mce_placement_chosen"]
+    return event
 
 
-async def test_creating_on_the_pick_records_it_in_the_merge_request(
-    placed: httpx.AsyncClient, placed_app: FastAPI, auth: Auth, support: Any, gitlab: InMemoryGitLab
+async def test_creating_on_the_pick_starts_it_there_and_logs_the_numbers(
+    placed: httpx.AsyncClient,
+    placed_app: FastAPI,
+    auth: Auth,
+    support: Any,
+    provision: FakeProvisionWorkflow,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     body = support.create_body(
         mce=B, name="ocp4-prod-falcon-site1", placement={"pick": B, "reason": None}
@@ -405,20 +413,24 @@ async def test_creating_on_the_pick_records_it_in_the_merge_request(
     )
     assert preview.status_code == 200, preview.text
     assert sample(placed_app, "picked") == 0, "a preview is not a decision"
-    created = await placed.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
-    assert created.status_code == 201, created.text
-    (text,) = await descriptions(gitlab, support)
-    assert "### MCE placement" in text
-    assert f"Wingman picked `{B}`: {B} has the fewest clusters of owner 7" in text
-    servers = f"{DELL} 2/2, {HP} 2/2"
-    assert f"| `{B}` (pick, chosen) | 0 | 0 | 4 (4) | 450 | {servers} | pass |" in text
-    assert f"| `{C}` | 0 | 0 | unknown | 40 | {DELL} 0/2, {HP} 0/2 | not offered:" in text
-    assert text.index("### MCE placement") < text.index("\n---\n"), "above the footer"
+    with caplog.at_level("INFO"):
+        created = await placed.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
+    assert created.status_code == 202, created.text
+    assert [start["mce"] for start in provision.starts] == [B]
+    event = chosen(caplog)
+    assert (event.mce, event.pick, event.override, event.reason) == (B, B, False, None)
+    numbers = {c["mce"]: c for c in event.candidates}
+    assert (numbers[B]["clusters"], numbers[B]["free_pods"], numbers[B]["failures"]) == (0, 450, [])
+    assert numbers[C]["free_pods"] == 40
     assert sample(placed_app, "picked") == 1
 
 
 async def test_another_mce_needs_a_reason_and_the_reason_is_recorded(
-    placed: httpx.AsyncClient, placed_app: FastAPI, auth: Auth, support: Any, gitlab: InMemoryGitLab
+    placed: httpx.AsyncClient,
+    placed_app: FastAPI,
+    auth: Auth,
+    support: Any,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     body = support.create_body(placement={"pick": B})
     refused = await placed.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
@@ -426,12 +438,12 @@ async def test_another_mce_needs_a_reason_and_the_reason_is_recorded(
     assert refused.json()["detail"] == f"Choosing {A} over Wingman's pick {B} needs a reason"
     assert sample(placed_app, "refused") == 1
     body["placement"] = {"pick": B, "reason": "Next to the owner's\nstorage"}
-    created = await placed.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
-    assert created.status_code == 201, created.text
-    (text,) = await descriptions(gitlab, support)
-    assert (
-        f"An admin chose `{A}` over Wingman's pick `{B}`. Reason: `Next to the owner's storage`"
-    ) in text
+    with caplog.at_level("INFO"):
+        created = await placed.post("/api/day1/clusters", json=body, headers=auth(support.ALICE))
+    assert created.status_code == 202, created.text
+    event = chosen(caplog)
+    assert (event.mce, event.pick, event.override) == (A, B, True)
+    assert event.reason == "Next to the owner's storage"
     assert sample(placed_app, "override") == 1
 
 
@@ -464,20 +476,6 @@ async def test_a_pick_that_moved_since_the_form_is_a_conflict_naming_the_new_pic
     assert stale.json()["detail"].startswith(f"Wingman's pick changed from {A} to {B}")
 
 
-async def test_an_open_create_counts_on_its_mce_and_for_its_owner(
-    placed: httpx.AsyncClient, auth: Auth, support: Any
-) -> None:
-    first = support.create_body(mce=B, name="ocp4-prod-falcon-site1", placement={"pick": B})
-    assert (
-        await placed.post("/api/day1/clusters", json=first, headers=auth(support.ALICE))
-    ).status_code == 201
-    body = await get_placement(placed, auth(support.VIEWER), version=VERSION, owner="7")
-    found = by_mce(body)
-    assert (found[B]["clusters"], found[B]["open_creates"], found[B]["owner_clusters"]) == (1, 1, 1)
-    assert body["pick"] == B, "owner 7 has one on each now; B has fewer clusters"
-    assert found[A]["behind_on"] == "clusters"
-
-
 async def test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_owner(
     placed: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
 ) -> None:
@@ -487,6 +485,8 @@ async def test_the_provision_workflows_open_mr_counts_on_its_mce_and_for_its_own
     body = await get_placement(placed, auth(support.VIEWER), version=VERSION, owner="7")
     found = by_mce(body)
     assert (found[B]["clusters"], found[B]["open_creates"], found[B]["owner_clusters"]) == (1, 1, 1)
+    assert body["pick"] == B, "owner 7 has one on each now; B has fewer clusters"
+    assert found[A]["behind_on"] == "clusters"
     assert body["problems"] == []
 
 
@@ -529,14 +529,13 @@ async def test_an_open_create_whose_diff_is_not_ready_is_named_and_not_counted(
     placed: httpx.AsyncClient, auth: Auth, support: Any, gitlab: InMemoryGitLab
 ) -> None:
     pid = await support.project_id(gitlab, support.DAY1)
-    await gitlab.create_branch(pid, "platform/olga/create-cluster-x", "main")
+    await gitlab.create_branch(pid, "provision-cluster/ocp4-prod-x-site1", "main")
     await gitlab.create_merge_request(
         pid,
         NewMergeRequest(
-            source_branch="platform/olga/create-cluster-x",
+            source_branch="provision-cluster/ocp4-prod-x-site1",
             target_branch="main",
-            title="[Wingman/Day1] Create cluster ocp4-prod-x-site1 from spec rcs v1.0.0",
-            labels=("wingman",),
+            title=f"Provision hosted cluster ocp4-prod-x-site1 on {A}",
         ),
     )
     body = await get_placement(placed, auth(support.VIEWER), version=VERSION)

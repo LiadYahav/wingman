@@ -7,12 +7,12 @@
    ``wingman/cluster-specs`` (from dev/gitlab-fixtures) in the group
    ``wingman-day1-e2e``, so the shared seeded projects are never touched.
 2. Starts ``uvicorn wingman_day1.main:app`` on them (``WINGMAN_GIT_BACKEND=gitlab``,
-   dev login), and over HTTP: lists sites, MCEs and clusters; creates a
-   cluster from ``agent-standard``; pushes the allocate-segment workflow's
-   ``vlanId``/``dhcp_values`` onto the MR branch as a bot would; checks that
-   approving the stale commit is refused; approves the new head as a second
-   user; edits the merged file; approves the edit; opens the delete MR and
-   approves it.
+   dev login, the in-memory provision-cluster), and over HTTP: lists sites,
+   MCEs and clusters; creates from ``agent-standard`` (a provision run, ADR-0042);
+   pushes the file with its segment on ``provision-cluster/<stem>`` and merges
+   it in GitLab, as the workflow would; edits it; checks that the requester
+   cannot approve and a head CI moved is refused; approves as a second user;
+   opens the delete MR and approves it.
    Then flavors v2 (ADR-0037): imports two hand-written clusters into
    ``agent-baseline`` (only the header changes), syncs one after another file
    moved (GitLab takes the older commit as the guard), and checks a sync of a
@@ -54,6 +54,7 @@ CLUSTER_PATH = f"sites/{SITE}/mces/{MCE}/hostedClusters/{CLUSTER}.yaml"
 # Throwaway secrets for the day1 process this script starts and stops.
 DEV_SECRET = "e2e-dev-login-secret-0123456789abcdef"  # noqa: S105
 JWT_SECRET = "e2e-jwt-secret-0123456789abcdef-0123456789"  # noqa: S105
+HOOK_SECRET = "e2e-webhook-secret-0123456789"  # noqa: S105
 
 
 def step(text: str) -> None:
@@ -142,6 +143,7 @@ def start_service(
         "SPECS_GITLAB_PROJECT_ID": paths["specs"],
         "DEV_AUTH_ENABLED": "true",
         "DEV_AUTH_SECRET": DEV_SECRET,
+        "GITLAB_WEBHOOK_SECRET": HOOK_SECRET,
         "DAY2_SERVICE_URL": "http://127.0.0.1:9",
     }
     return subprocess.Popen(  # noqa: S603 - fixed argv, no shell
@@ -243,53 +245,36 @@ async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str
         },
         "addon_overrides": {"redbull/cluster-roles": {"extraRoles": ["viewer"]}},
     }
+    preview = await api.post("/api/day1/clusters/preview", json=body, headers=alice)
     created = await api.post("/api/day1/clusters", json=body, headers=alice)
-    check(
-        created.status_code == 201, f"create MR opened ({created.status_code} {created.text[:200]})"
-    )
-    mr = created.json()
-    print(f"   {mr['title']}  branch={mr['source_branch']}  labels={mr['labels']}")
-    pending = (await api.get("/api/day1/approvals", headers=alice)).json()
-    check([p["iid"] for p in pending] == [mr["iid"]], "the new MR is pending at once")
+    check(created.status_code == 202, f"provision-cluster started ({created.text[:200]})")
+    print(f"   {created.json()['workflow_id']}  status={created.json()['status']}")
 
-    step("the allocate-segment workflow commits onto the MR branch")
-    project = quote(paths["day1"], safe="")
-    file_url = f"/projects/{project}/repository/files/{quote(CLUSTER_PATH, safe='')}"
-    raw = await admin.get(file_url, params={"ref": mr["source_branch"]})
-    raw.raise_for_status()
-    content = base64.b64decode(raw.json()["content"]).decode()
-    allocated = content + 'vlanId: 412\ndhcp_values:\n  network: "10.20.99.0"\n'
-    pushed = await admin.put(
-        file_url,
-        json={
-            "branch": mr["source_branch"],
-            "content": allocated,
-            "commit_message": "allocate-segment: vlanId 412 [skip ci]",
-            "author_name": "allocate-segment",
-            "author_email": "workflow@example.invalid",
-        },
+    step("the workflow's merge request, merged in GitLab")
+    repo, branch = f"/projects/{quote(paths['day1'], safe='')}", f"provision-cluster/{CLUSTER}"
+    allocated = preview.json()["yaml"] + '\nvlanId: 412\ndhcp_values:\n  network: "10.20.99.0"\n'
+    action = {"action": "create", "file_path": CLUSTER_PATH, "content": allocated}
+    commit = {
+        "branch": branch,
+        "start_branch": "main",
+        "commit_message": branch,
+        "actions": [action],
+    }
+    (await admin.post(f"{repo}/repository/commits", json=commit)).raise_for_status()
+    new = {"source_branch": branch, "target_branch": "main", "title": f"Provision {CLUSTER}"}
+    opened = (await admin.post(f"{repo}/merge_requests", json=new)).raise_for_status().json()
+    for _ in range(20):  # GitLab computes mergeability in the background
+        merged = await admin.put(f"{repo}/merge_requests/{opened['iid']}/merge")
+        if merged.status_code == 200:
+            break
+        await asyncio.sleep(1)
+    check(merged.status_code == 200, f"the workflow's MR merged ({merged.status_code})")
+    hook = {"X-Gitlab-Token": HOOK_SECRET, "X-Gitlab-Event": "Push Hook"}
+    await api.post(
+        "/api/webhooks/gitlab", json={"project": {"id": opened["project_id"]}}, headers=hook
     )
-    pushed.raise_for_status()
-    stale = await api.post(
-        f"/api/day1/approvals/{mr['iid']}/approve", json={"sha": mr["sha"]}, headers=bob
-    )
-    check(
-        stale.status_code == 409,
-        f"approving the reviewed-but-stale head is refused ({stale.status_code})",
-    )
-    own = await api.get(f"/api/day1/approvals/{mr['iid']}", headers=alice)
-    refused = await api.post(
-        f"/api/day1/approvals/{mr['iid']}/approve",
-        json={"sha": own.json()["mr"]["sha"]},
-        headers=alice,
-    )
-    check(
-        refused.status_code == 403, f"the requester cannot approve ({refused.json().get('code')})"
-    )
-    await approve(api, mr["iid"], bob)
 
     step("the merged cluster")
-    await asyncio.sleep(1)
     detail = (await api.get(f"/api/day1/clusters/{CLUSTER}", headers=alice)).json()
     check(
         detail["values"]["network"]["vlan_id"] == 412,
@@ -318,7 +303,21 @@ async def flow(api: httpx.AsyncClient, admin: httpx.AsyncClient, paths: dict[str
         headers=alice,
     )
     check(edited.status_code == 200, f"modify MR opened ({edited.status_code} {edited.text[:200]})")
-    await approve(api, edited.json()["iid"], bob)
+    mr = edited.json()
+    file_url = f"{repo}/repository/files/{quote(CLUSTER_PATH, safe='')}"
+    raw = await admin.get(file_url, params={"ref": mr["source_branch"]})
+    content = base64.b64decode(raw.json()["content"]).decode() + "# refreshed by CI\n"
+    ci = {"branch": mr["source_branch"], "content": content, "commit_message": "CI refresh"}
+    (await admin.put(file_url, json=ci)).raise_for_status()
+    stale = await api.post(
+        f"/api/day1/approvals/{mr['iid']}/approve", json={"sha": mr["sha"]}, headers=bob
+    )
+    check(stale.status_code == 409, f"approving a head CI moved is refused ({stale.status_code})")
+    own = await api.get(f"/api/day1/approvals/{mr['iid']}", headers=alice)
+    sha = {"sha": own.json()["mr"]["sha"]}
+    refused = await api.post(f"/api/day1/approvals/{mr['iid']}/approve", json=sha, headers=alice)
+    check(refused.status_code == 403, f"the requester cannot approve ({refused.status_code})")
+    await approve(api, mr["iid"], bob)
     await asyncio.sleep(1)
     final = (await api.get(f"/api/day1/clusters/{CLUSTER}", headers=alice)).json()
     check(final["values"]["nodepools"][1]["replicas"] == 3, "the edit is on main")

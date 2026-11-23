@@ -26,8 +26,8 @@ export function ApprovalsSection() {
       </div>
       <div className="space-y-3">
         <Callout type="info" title="You approve the commit you reviewed">
-          If anything was pushed to the branch since you loaded it (the day1 CI and the allocate-segment workflow
-          commit to cluster MRs), nothing is merged: <strong>Reload</strong> and review the new diff. Nobody
+          If anything was pushed to the branch since you loaded it (the day1 CI commits to cluster MRs), nothing
+          is merged: <strong>Reload</strong> and review the new diff. Nobody
           approves a change they requested themselves; the button is disabled on your own MRs.
         </Callout>
         <Callout type="info" title="The provision-cluster workflow's MRs">

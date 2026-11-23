@@ -97,10 +97,9 @@ day1:
   # (ADR-0015): "ocp4-" as production's ApplicationSet does, "" for the sandbox.
   clusterNameStripPrefix: "ocp4-"
   cacheTtlSeconds: 30     # GitLab reads, per replica (ADR-0011; at most 60)
-  # How a create is proposed (ADR-0042): "merge-request" (Wingman opens the MR)
-  # or "workflow" (Wingman starts the platform's provision-cluster workflow,
-  # which opens it; needs workflows.url, which needs serverScan.url).
-  provisioner: merge-request
+  # provisioner (3.7.0 to 3.55) chose between Wingman's own create MR and the
+  # provision-cluster workflow: every create starts the workflow now (ADR-0042,
+  # amended 2026-11-23), so it is accepted, ignored and best deleted.
   # MCE placement (ADR-0050): Wingman picks a new cluster's MCE. The cost of one
   # hosted control plane: with clusterStatus.enabled, an MCE is offered only with
   # at least this many free pods (allocatable less in use) on its workers
@@ -334,12 +333,16 @@ serverScan:
     name: ""
     key: "token"
 
-# ── Node uninstall through the workflows orchestrator (ADR-0038) ──────────────
-# Off by default. With a url, day1 starts the platform's uninstall-server-from-hc
-# workflow and shows its run. The orchestrator has no auth. Needs serverScan.url
-# (an uninstall checks the server in server-scan first): the chart fails without it.
+# ── The workflows orchestrator (ADR-0042, ADR-0038) ───────────────────────────
+# Required: every create starts the platform's provision-cluster workflow
+# there, and the chart fails without url (only environment: "development"
+# runs without it, on an in-memory stand-in). day1 also starts its
+# uninstall-server-from-hc, upgrade-cluster, update-nodepool and
+# add-server-to-mce workflows there and shows their runs. The orchestrator
+# has no auth. Needs serverScan.url (an uninstall checks the server in
+# server-scan first): the chart fails without it.
 workflows:
-  url: ""                 # e.g. "http://workflows-orchestrator-api.<ns>.svc:8080"; empty: off
+  url: ""                 # required, e.g. "http://workflows-orchestrator-api.<ns>.svc:8080"
   sslVerify: "true"       # "true", "false" (or true, false) or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
   targetsTimeoutSeconds: 65  # the upgrade targets read (the orchestrator waits up to 60 s), at most 120

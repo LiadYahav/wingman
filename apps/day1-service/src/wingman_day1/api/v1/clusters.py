@@ -2,7 +2,8 @@
 
 Reads need a session (``CurrentUser``), but a cluster's nodes, the servers
 it runs on, need an admin (ADR-0038, amended 2026-11-23); every change needs
-an admin (``AdminUser``) and is a merge request. Static paths come before
+an admin (``AdminUser``). A create starts the provision-cluster workflow
+(ADR-0042); an edit or a delete is a merge request. Static paths come before
 ``/{name}`` so a cluster can never shadow them.
 """
 
@@ -12,7 +13,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import APIRouter, Path, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from wingman_core.domain.errors import GitError
@@ -24,7 +25,6 @@ from wingman_day1.api.v1.cluster_status_schemas import BulkStatusIn, ClusterLive
 from wingman_day1.api.v1.cluster_sync_schemas import SyncIn, SyncOut, SyncPreviewIn, SyncPreviewOut
 from wingman_day1.api.v1.cluster_workflows_schemas import (
     DeleteWorkflowOut,
-    ProvisionerOut,
     ProvisionRunOut,
     StartDeleteWorkflowIn,
 )
@@ -142,34 +142,20 @@ async def bulk_status(
 
 @router.post("/preview")
 async def preview_cluster(body: CreateClusterIn, context: Context, user: AdminUser) -> PreviewOut:
-    """Exactly the file a create would commit, after every check a create runs."""
+    """Exactly the file a create hands provision-cluster, after every check a create runs."""
     rendered = await context.clusters.preview(_create(body))
     return PreviewOut(yaml=rendered.content, path=str(rendered.ref.path))
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=202)
 async def create_cluster(
-    body: CreateClusterIn, context: Context, user: AdminUser, response: Response
-) -> MRDetailOut | ProvisionRunOut:
-    """Open the MR that adds the cluster's file, or start the provision-cluster workflow.
+    body: CreateClusterIn, context: Context, user: AdminUser
+) -> ProvisionRunOut:
+    """Start the provision-cluster workflow with the new file (ADR-0042): 202 with the run.
 
-    ``DAY1_PROVISIONER=workflow`` (ADR-0042): 202 with the started run; the
-    workflow opens the merge request. Otherwise 201 with Wingman's MR.
+    The workflow reserves the segment and opens the merge request; a person merges it.
     """
-    if context.clusters.creates_by_workflow:
-        run = await context.clusters.provision(_create(body), user=user)
-        response.status_code = 202
-        return ProvisionRunOut.of(run)
-    result = await context.clusters.create(_create(body), user=user)
-    return change_out(RepoKey.DAY1, result.merge_request)
-
-
-@router.get("/provisioner")
-async def provisioner(context: Context, user: CurrentUser) -> ProvisionerOut:
-    """What Create does here: open a merge request, or start the provision-cluster workflow."""
-    return ProvisionerOut(
-        mode="workflow" if context.clusters.creates_by_workflow else "merge-request"
-    )
+    return ProvisionRunOut.of(await context.clusters.create(_create(body), user=user))
 
 
 # ── One cluster ──────────────────────────────────────────────────────────────
@@ -314,7 +300,7 @@ async def provision_run(
 
     The cluster has no file on main until the workflow's merge request is
     merged, so ``name`` is the new file's stem, not a cluster day1 can read.
-    404 when the orchestrator has no run; 501 when creates open merge requests.
+    404 when the orchestrator has no run.
     """
     return ProvisionRunOut.of(await context.clusters.provision_run(name))
 

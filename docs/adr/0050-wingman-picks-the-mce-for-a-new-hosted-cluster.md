@@ -1,7 +1,7 @@
 # ADR-0050: Wingman picks the MCE for a new hosted cluster, and shows why
 
 Date: 2026-11-12
-Status: Accepted; amends rule 2 of `docs/ideas/architecture-fit.md` (Wingman checks the free pods a control plane needs and the servers a cluster needs, ranks MCEs, and still reserves nothing); amended 2026-11-12: placement always runs (see the amendment); amended 2026-11-23: herzi's used Agents are no free servers
+Status: Accepted; amends rule 2 of `docs/ideas/architecture-fit.md` (Wingman checks the free pods a control plane needs and the servers a cluster needs, ranks MCEs, and still reserves nothing); amended 2026-11-12: placement always runs (see the amendment); amended 2026-11-23: herzi's used Agents are no free servers; amended by ADR-0042 (2026-11-23: there is no create merge request, so rule 11's description section is gone and the record is the `mce_placement_chosen` log line and the metric; open creates are the provision-cluster workflow's merge requests)
 
 **The free pods rule** (the user, 2026-11-12): free = allocatable pods − pods
 in use, on the worker nodes only, and it must be at least the cost of one
