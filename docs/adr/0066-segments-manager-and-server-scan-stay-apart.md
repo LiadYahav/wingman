@@ -35,7 +35,8 @@ and reads only what its own features need.
 - **Links instead of pages**: a node's server opens its page in server-scan
   (`server.url`, built by day1); the cluster card opens segments-manager's UI
   and names the cluster to search for. Inventory Management names a server as
-  text.
+  text, so its runs no longer carry a `server_id` for the link, and `ServerRow`
+  keeps only the fields Wingman's features read.
 - **Gone**: every route under `/api/day1/segments` and `/api/day1/server-scan`
   (a 404 now), their use cases, schemas, adapter methods, fakes and fixtures;
   the settings `DAY1_SEGMENTS_AREA`, `DAY1_SERVER_SCAN_AREA` and
