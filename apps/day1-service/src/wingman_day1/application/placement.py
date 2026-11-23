@@ -37,7 +37,6 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from wingman_core.domain.cluster_kinds import MceKind, mce_kind
 from wingman_core.domain.errors import GitError, NotFoundError
 from wingman_core.domain.git import FileDiff
 from wingman_core.domain.merge_request import MergeRequest
@@ -54,6 +53,7 @@ from wingman_day1.domain.errors import (
     InvalidInputError,
     ServerScanUnavailableError,
 )
+from wingman_day1.domain.kind_names import customer_mces, require_customer_mce
 from wingman_day1.domain.machines import AgentObservation
 from wingman_day1.domain.mce_capacity import (
     FreePods,
@@ -256,11 +256,7 @@ class PlacementService:
             raise InvalidInputError("the placement's inputs are not acceptable", problems)
         if needs is None:
             needs = await self._flavor_needs(flavor)
-        names = await self._sites.mce_names(site)
-        # A seed hosts KV clusters only: never a candidate, by its kind (ADR-0067)
-        candidates = [
-            m for m in names if mce_kind(m) is MceKind.MCE and describe_mce(m, site=site).env is env
-        ]
+        candidates = customer_mces(await self._sites.mce_names(site), site=site, env=env)
         inputs = PlacementInputs(
             site=site,
             env=env,
@@ -297,10 +293,7 @@ class PlacementService:
         form's pick is no longer the pick.
         """
         values = load_values(content)
-        if mce_kind(ref.mce) is MceKind.SEED:
-            raise InvalidInputError(
-                f"{ref.mce!r} is a seed: it hosts KV clusters, never a tenant's cluster (ADR-0067)"
-            )
+        require_customer_mce(ref.mce)
         env = describe_mce(ref.mce, site=ref.site).env
         if env is None:
             raise InvalidInputError(

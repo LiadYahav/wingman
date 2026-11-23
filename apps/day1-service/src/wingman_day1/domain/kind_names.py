@@ -17,6 +17,7 @@ tenant's cluster keep their rules (``names.py``).
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 
 from wingman_core.domain.cluster_kinds import (
     HostedClusterKind,
@@ -24,6 +25,7 @@ from wingman_core.domain.cluster_kinds import (
     hosted_cluster_kind,
     mce_kind,
 )
+from wingman_day1.domain.errors import InvalidInputError
 from wingman_day1.domain.names import (
     ClusterNaming,
     Env,
@@ -88,6 +90,25 @@ def describe_kv_cluster(stem: str, *, site: str) -> ClusterNaming:
         return ClusterNaming(stem, site, None, None, None, tuple(problems), zone=zone)
     problems.append(f"KV cluster {stem!r} does not follow {expected}")
     return ClusterNaming(stem, site, None, None, None, tuple(problems))
+
+
+def customer_mces(names: Iterable[str], *, site: str, env: Env) -> list[str]:
+    """The Customer MCEs among ``names`` whose name gives ``env``: placement's candidates.
+
+    A seed hosts KV clusters only, so it is never one, by its kind (ADR-0050's
+    amendment by ADR-0067), whatever its name says.
+    """
+    return [
+        m for m in names if mce_kind(m) is MceKind.MCE and describe_mce(m, site=site).env is env
+    ]
+
+
+def require_customer_mce(mce: str) -> None:
+    """Refuse a seed as a new tenant cluster's MCE (``InvalidInputError``, 422)."""
+    if mce_kind(mce) is MceKind.SEED:
+        raise InvalidInputError(
+            f"{mce!r} is a seed: it hosts KV clusters, never a tenant's cluster (ADR-0067)"
+        )
 
 
 def describe_cluster_file(ref: ClusterRef) -> ClusterNaming:
