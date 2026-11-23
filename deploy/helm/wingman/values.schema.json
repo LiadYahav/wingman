@@ -134,7 +134,8 @@
           "type": "object",
           "properties": {
             "enabled": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Scale through update-nodepool (ADR-0062). true, the default since 3.53.0: on wherever workflows.url is set, off without it. false: off."
             }
           },
           "additionalProperties": false

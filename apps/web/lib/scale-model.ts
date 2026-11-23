@@ -154,7 +154,7 @@ export function refusalTitle(error: unknown): string {
   }
   if (isApiError(error, "VALIDATION_ERROR")) return "Wingman refused the request.";
   if (isApiError(error, "DEPENDENCY_UNAVAILABLE")) return "Nothing started: the workflows orchestrator could not start update-nodepool.";
-  if (isApiError(error, "FEATURE_DISABLED")) return "Scaling is not turned on in this deployment.";
+  if (isApiError(error, "FEATURE_DISABLED")) return "Scaling is off in this deployment.";
   if (isApiError(error, "FORBIDDEN")) return "Only an admin can scale a cluster.";
   return "The scale did not start.";
 }

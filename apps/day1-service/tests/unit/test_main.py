@@ -25,6 +25,7 @@ from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_upgrade import FakeUpgradeWorkflow
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.openshift_oauth import OpenShiftOAuth
+from wingman_day1.infrastructure.scale_workflow import HttpScaleWorkflow
 from wingman_day1.infrastructure.upgrade_workflow import HttpUpgradeWorkflow
 from wingman_day1.infrastructure.workflows_api import HttpUninstallWorkflow
 from wingman_day1.integrations.segments_manager.infrastructure.adapter import HttpSegmentLedger
@@ -123,7 +124,8 @@ async def test_server_scan_and_the_orchestrator_get_real_adapters_when_configure
         assert isinstance(adapters.inventory, HttpServerInventory)
         assert isinstance(adapters.uninstall, HttpUninstallWorkflow)
         assert isinstance(adapters.add_server, HttpAddServerWorkflow), "its runs, even when off"
-        assert len(adapters.closers) == 4
+        assert isinstance(adapters.scale, HttpScaleWorkflow), "Scale is on by default (ADR-0062)"
+        assert len(adapters.closers) == 5
     finally:
         await close(adapters)
 
@@ -152,7 +154,9 @@ async def test_upgrades_get_the_orchestrators_adapter_only_when_turned_on() -> N
     try:
         assert isinstance(adapters.upgrade, HttpUpgradeWorkflow)
         assert adapters.upgrade._targets_timeout.read == 70
-        assert len(adapters.closers) == 5, "day2, server-scan, uninstall, add-server, upgrade"
+        assert len(adapters.closers) == 6, (
+            "day2, server-scan, uninstall, add-server, upgrade, scale"
+        )
     finally:
         await close(adapters)
 

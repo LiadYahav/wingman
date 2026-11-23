@@ -51,7 +51,7 @@ export function OverviewSection() {
         <FeatureCard
           icon={Workflow}
           title="Platform Workflows"
-          description="Where your operator turns them on: create through provision-cluster, upgrade a cluster, scale a NodePool, uninstall a server, install servers into an MCE's pool. Wingman starts the platform's workflow and shows its run in the workflow's own words."
+          description="With the platform's workflows orchestrator: scale a NodePool and uninstall a server; where your operator turns them on, create through provision-cluster, upgrade a cluster, install servers into an MCE's pool. Wingman starts the platform's workflow and shows its run in the workflow's own words."
         />
         <FeatureCard
           icon={Server}

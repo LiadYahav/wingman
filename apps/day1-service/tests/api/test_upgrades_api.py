@@ -361,10 +361,11 @@ async def test_a_review_edit_may_not_change_an_existing_clusters_versions(
 ) -> None:
     alice, bob = auth(support.ALICE), auth(support.BOB)
     cluster = (await on.get(BASE, headers=alice)).json()
+    # Not its replicas: with the orchestrator, Scale is on by default and owns them (ADR-0062)
     opened = await on.patch(
         BASE,
         json={
-            "updated_yaml": cluster["yaml"].replace("replicas: 3", "replicas: 4", 1),
+            "updated_yaml": cluster["yaml"].replace('mador: "7"', 'mador: "8"', 1),
             "last_commit_id": cluster["last_commit_id"],
         },
         headers=alice,

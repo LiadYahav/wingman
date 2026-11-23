@@ -194,7 +194,7 @@ and write yours here.
   update-nodepool reads "not deployed yet". A NodePool's scale-down policy
   (`annotations["redbull.io/scale-down-policy"]`) comes from the create form,
   a flavor or Edit cluster. A scale-down may choose which servers leave.
-  Scale stays off.
+  Scale stayed off until 3.53.0 (Next).
 - **Excluded Agent labels** (3.50.0, 3.50.1; ADR-0065):
   `DAY1_EXCLUDED_AGENT_LABELS`, empty until herzi marks used Agents.
 - **Team decisions of 2026-11-23:**
@@ -213,8 +213,12 @@ and write yours here.
   - an uninstall now ends at a free Agent.
   Wingman's texts and matching follow once the user decides.
 - When herzi marks used Agents: set `day1.excludedAgentLabels`.
-- Scale: turn it on once update-nodepool is deployed everywhere and the
-  chart and template carry the annotation.
+- Scale is on by default since 3.53.0 (ADR-0062's 2026-11-23 amendment:
+  update-nodepool is in production) wherever `workflows.url` is set; off
+  without it or with `day1.scaleNodepools.enabled=false`. Next: upgrade the
+  air-gap by `docs/upgrade/3.52-to-3.53.md` (update-nodepool on the
+  orchestrator and every MCE's worker first). A NodePool's own scale-down
+  policy still needs the chart's patch 0001 and the template's lines.
 - Several InfraEnvs per nodepool: parked until the team asks for it again.
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).

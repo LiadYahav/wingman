@@ -4,7 +4,8 @@ Every write of an existing cluster file keeps each NodePool's replicas as
 main has them: a person's YAML (the raw editor, a review edit) is refused,
 pointing to Scale; a change Wingman writes (a flavor's sync, a rollout's MR)
 leaves them out and lists the NodePools to restore. A new cluster, a new
-nodepool and a removed one are left alone. Off, nothing changes.
+nodepool and a removed one are left alone. Scale is on by default wherever the
+orchestrator is (3.53.0); off (no orchestrator, or turned off), nothing changes.
 """
 
 from __future__ import annotations
@@ -34,6 +35,11 @@ HOSTED = "sites/site1/mces/ocp4-prod-mce-site1-a/hostedClusters"
 PATH = f"{HOSTED}/{LARK}.yaml"
 SMALL = "prod-lark-site1-dell-r660-site1-128c-1024gb-5tb"
 WEBHOOK = {"X-Gitlab-Token": "test-webhook-secret", "X-Gitlab-Event": "Push Hook"}
+# With the orchestrator, Scale is on unless turned off (DAY1_SCALE_NODEPOOLS=false)
+ORCHESTRATOR = {
+    "workflows_api_url": "http://workflows-orchestrator-api.test:8080",
+    "server_scan_url": "http://server-scan.test:8000",
+}
 REFUSED = f"nodepool dell-r660-site1-128c-1024gb-5tb replicas: 3 → 4. {REPLICAS_BY_SCALE}"
 SIZED = """\
 apiVersion: wingman.io/v1
@@ -69,9 +75,7 @@ def scaling(
         day2=day2,
         clock=clock,
         scale=FakeScaleWorkflow(clock=clock),
-        day1_scale_nodepools=True,
-        workflows_api_url="http://workflows-orchestrator-api.test:8080",
-        server_scan_url="http://server-scan.test:8000",
+        **ORCHESTRATOR,
     )
 
 
@@ -118,6 +122,33 @@ async def test_off_an_edit_may_change_replicas(
     edited = await modify(
         client, auth(support.ALICE), lambda y: y.replace("replicas: 3", "replicas: 4", 1)
     )
+    assert edited.status_code == 200, edited.text
+
+
+async def test_turned_off_beside_the_orchestrator_an_edit_may_change_replicas(
+    support: Any,
+    gitlab: InMemoryGitLab,
+    hub: FakeHubApi,
+    identity: FakeIdentityProvider,
+    day2: FakeDay2Addons,
+    clock: Any,
+    auth: Auth,
+) -> None:
+    app = support.build_app(
+        gitlab=gitlab,
+        hub=hub,
+        identity=identity,
+        day2=day2,
+        clock=clock,
+        scale=FakeScaleWorkflow(clock=clock),
+        day1_scale_nodepools=False,
+        **ORCHESTRATOR,
+    )
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
+        edited = await modify(
+            client, auth(support.ALICE), lambda y: y.replace("replicas: 3", "replicas: 4", 1)
+        )
     assert edited.status_code == 200, edited.text
 
 

@@ -98,6 +98,7 @@ already have.
 | 3.51 | 3.52.0: **the Segments and Server Scan areas are off by default** (the 2026-11-23 amendments of ADR-0047 and ADR-0048): the team keeps segments-manager and server-scan apart from Wingman, so an admin's top bar links to each one's own UI in a new tab (`segmentsManager.uiUrl` and `serverScan.uiUrl`, else their `url`; from the new admins-only `GET /api/day1/platforms`), `/segments`, `/server-scan`, their sidebars and their Overview cards are not offered, a node's server opens its page in server-scan, and the areas' routes answer `501` naming `day1.segmentsArea.enabled` (`DAY1_SEGMENTS_AREA`) or `day1.serverScanArea.enabled` (`DAY1_SERVER_SCAN_AREA`). The cluster page's network card, the Nodes tab, placement and Inventory Management are unchanged | [3.51-to-3.52.md](3.51-to-3.52.md): an existing deployment loses the two areas on upgrade; to keep them, set the two values. Check each system's `uiUrl` first, since the top bar's link is its UI's address |
 | 3.52.0 | 3.52.1: **the Segments and Server Scan areas are removed** (ADR-0066, superseding ADR-0047 and ADR-0048): `/segments`, `/server-scan` and every route under `/api/day1/segments` and `/api/day1/server-scan` are gone (404), with the settings `DAY1_SEGMENTS_AREA`, `DAY1_SERVER_SCAN_AREA` and `DAY1_SERVER_SCAN_REFRESH` and server-scan's admin and auditor tokens; `GET /api/day1/platforms` drops `area`; the areas' metric operations are retired. An admin's top bar, node links, the Nodes tab, placement, Inventory Management and the EPG are unchanged | [3.52.0-to-3.52.1.md](3.52.0-to-3.52.1.md): nothing to set. A values file that still sets `day1.segmentsArea`, `day1.serverScanArea`, `day1.serverScanRefresh` or `serverScan.tokenSecret.adminKey`/`auditorKey` is accepted and ignored; a deployment that had an area on loses it |
 | 3.52.1 | 3.52.2: docs only: the session notes (CLAUDE.md, `docs/notes/session-log.md`) | Generic: the images are unchanged |
+| 3.52 | 3.53.0: **Scale is on by default** (ADR-0062's 2026-11-23 amendment): update-nodepool is in production, so `day1.scaleNodepools.enabled` (`DAY1_SCALE_NODEPOOLS`) defaults to `true` and Scale is on wherever `workflows.url` is set: an admin scales one NodePool at a time on the Nodes tab, an edit that changes an existing NodePool's replicas is refused, and a flavor's sync or rollout leaves drifted locked replicas out of its MR and offers Restore with update-nodepool. Without `workflows.url` there is no Scale and nothing fails: the chart no longer refuses the value, and day1 starts as before. A NodePool's own scale-down policy still needs the hostedclusters-setup chart patch 0001; Scale itself needs no chart change | [3.52-to-3.53.md](3.52-to-3.53.md): with `workflows.url`, check update-nodepool on the orchestrator and on every MCE's worker first, or keep Scale off with `--set day1.scaleNodepools.enabled=false`. Upgrade with `--reset-then-reuse-values`: `--reuse-values` keeps 3.52's `false` |
 
 ### Skipping versions
 
@@ -117,7 +118,9 @@ needed before the first flavor with image mirrors. Going past 3.46, the
 chart patches of [patches/hostedclusters-setup/](patches/hostedclusters-setup/README.md)
 come before Scale's scale-down policy or excluded Agent labels; they change
 no existing cluster, so they may go in at once. Several InfraEnvs per
-nodepool (3.47) stays off: it is parked (ADR-0064).
+nodepool (3.47) stays off: it is parked (ADR-0064). Going past 3.52, do
+[3.52-to-3.53.md](3.52-to-3.53.md)'s checks before the upgrade: Scale turns on
+by default wherever `workflows.url` is set.
 Rows marked Generic add nothing. A guide's checks still apply: run them
 before its upgrade step.
 

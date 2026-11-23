@@ -136,13 +136,15 @@ class Day1Settings(BaseSettings):
     day1_add_servers: bool = False
 
     # ── Scaling NodePools through the update-nodepool workflow (ADR-0062) ────
-    # Off by default. On: an admin scales a cluster's NodePools from its Nodes
-    # tab by starting the platform's update-nodepool workflow (it commits the
-    # replicas to day1 main and syncs Argo CD itself), and while it is on no
-    # Wingman merge request changes an existing NodePool's replicas: an edit
-    # that does is refused, a flavor's sync leaves them out. Needs
-    # WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development).
-    day1_scale_nodepools: bool = False
+    # On by default since 3.53.0, wherever the orchestrator is: Scale is on
+    # with WORKFLOWS_API_URL (or DAY1_FAKE_FLEET in development) and off
+    # without it, whatever this says (scale_nodepools); false turns it off.
+    # On: an admin scales a cluster's NodePools from its Nodes tab by starting
+    # the platform's update-nodepool workflow (it commits the replicas to day1
+    # main and syncs Argo CD itself), and no Wingman merge request changes an
+    # existing NodePool's replicas: an edit that does is refused, a flavor's
+    # sync leaves them out.
+    day1_scale_nodepools: bool = True
 
     # ── A nodepool that draws from several InfraEnvs (ADR-0064) ──────────────
     # Off by default. On: the create form and the flavor editor let a nodepool
@@ -232,7 +234,7 @@ class Day1Settings(BaseSettings):
         """What this deployment lets an edit change, and the Agent labels its NodePools exclude."""
         return WorkflowKeys(
             self.day1_upgrades,
-            self.day1_scale_nodepools,
+            self.scale_nodepools,
             self.day1_multi_infraenv_nodepools,
             parse_agent_labels(self.day1_excluded_agent_labels),
         )
@@ -306,16 +308,6 @@ class Day1Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _scaling_has_an_orchestrator(self) -> Self:
-        """Scaling starts update-nodepool; without the orchestrator no scale could start."""
-        if self.day1_scale_nodepools and not self.workflows_api_url and not self.day1_fake_fleet:
-            raise ValueError(
-                "DAY1_SCALE_NODEPOOLS=true needs WORKFLOWS_API_URL: scaling starts the "
-                "update-nodepool workflow there"
-            )
-        return self
-
-    @model_validator(mode="after")
     def _login_is_possible_and_safe(self) -> Self:
         """Dev login needs a strong secret; without it, OpenShift OAuth must be complete."""
         if self.dev_auth_enabled:
@@ -345,6 +337,15 @@ class Day1Settings(BaseSettings):
                 "or DEV_AUTH_ENABLED=true with a DEV_AUTH_SECRET for local use"
             )
         return self
+
+    @property
+    def scale_nodepools(self) -> bool:
+        """Scale is on: ``DAY1_SCALE_NODEPOOLS`` (true by default) and an orchestrator (ADR-0062).
+
+        Without ``WORKFLOWS_API_URL`` (or ``DAY1_FAKE_FLEET`` in development) no scale could
+        start, so there is none, and an edit may change replicas.
+        """
+        return self.day1_scale_nodepools and bool(self.workflows_api_url or self.day1_fake_fleet)
 
     @property
     def openshift_tls_verify(self) -> bool | str:

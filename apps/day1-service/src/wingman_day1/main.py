@@ -144,7 +144,7 @@ class Adapters:
     upgrade: UpgradeWorkflow | None = None
     """The upgrade-cluster workflow; ``None`` unless ``DAY1_UPGRADES`` (ADR-0055)."""
     scale: ScaleWorkflow | None = None
-    """The update-nodepool workflow; ``None`` unless ``DAY1_SCALE_NODEPOOLS`` (ADR-0062)."""
+    """The update-nodepool workflow; ``None`` while Scale is off (ADR-0062)."""
     closers: tuple[Close, ...] = field(default=())
 
 

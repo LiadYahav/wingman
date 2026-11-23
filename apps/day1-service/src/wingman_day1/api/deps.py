@@ -78,7 +78,8 @@ class Day1Context:
     inventory: InventoryService | None = None
     """Inventory Management (ADR-0057); ``None`` when ``SERVER_SCAN_URL`` is empty: 501."""
     scale: ScaleService | None = None
-    """``None`` when ``DAY1_SCALE_NODEPOOLS`` is off: the scale routes answer 501 (ADR-0062)."""
+    """``None`` when Scale is off (``DAY1_SCALE_NODEPOOLS=false``, or no orchestrator): the
+    scale routes answer 501 (ADR-0062)."""
     agent_labels: AgentLabelsService | None = None
     """A cluster's excluded Agent labels MR (ADR-0065); without keys its routes answer 501."""
     platforms: tuple[Platform, ...] = ()
@@ -160,13 +161,13 @@ def upgrade_service(context: Annotated[Day1Context, Depends(day1_context)]) -> U
 
 
 SCALE_NOT_AVAILABLE = (
-    "Scaling NodePools is not turned on in this deployment (DAY1_SCALE_NODEPOOLS=false): "
-    "a NodePool's replicas change by editing its cluster file."
+    "Scaling NodePools is off in this deployment (DAY1_SCALE_NODEPOOLS=false, or no "
+    "WORKFLOWS_API_URL): a NodePool's replicas change by editing its cluster file."
 )
 
 
 def scale_service(context: Annotated[Day1Context, Depends(day1_context)]) -> ScaleService:
-    """The scale use case, or 501 when ``DAY1_SCALE_NODEPOOLS`` is off (ADR-0062)."""
+    """The scale use case, or 501 when Scale is off (ADR-0062)."""
     if context.scale is None:
         raise FeatureDisabled(SCALE_NOT_AVAILABLE)
     return context.scale

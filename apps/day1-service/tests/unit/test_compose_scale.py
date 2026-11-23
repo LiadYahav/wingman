@@ -1,12 +1,12 @@
-"""Scaling's part of the composition root (ADR-0062): off by default, real or the fake fleet's."""
+"""Scaling's part of the composition root (ADR-0062): on by default wherever the orchestrator is,
+real or the fake fleet's."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from prometheus_client import CollectorRegistry
-from pydantic import SecretStr, ValidationError
+from pydantic import SecretStr
 
 from wingman_core.domain.users import Role, User
 from wingman_core.observability.metrics import WingmanMetrics
@@ -40,24 +40,33 @@ def settings(**values: object) -> Day1Settings:
     return Day1Settings(**base)  # ty: ignore[invalid-argument-type]
 
 
-def test_scaling_is_off_by_default_and_needs_an_orchestrator() -> None:
-    assert settings().day1_scale_nodepools is False
-    with pytest.raises(ValidationError, match="DAY1_SCALE_NODEPOOLS=true needs WORKFLOWS_API_URL"):
-        settings(day1_scale_nodepools=True)
-    on = settings(
-        day1_scale_nodepools=True, workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN
-    )
-    assert on.day1_scale_nodepools is True
-    assert settings(day1_scale_nodepools=True, day1_fake_fleet=True).day1_scale_nodepools is True
+def test_scaling_is_on_by_default_wherever_the_orchestrator_is() -> None:
+    """Since 3.53.0 (update-nodepool in production): on with an orchestrator, off without one
+    whatever DAY1_SCALE_NODEPOOLS says, so day1 starts as before and an edit may change replicas;
+    false turns it off."""
+    orchestrator = {"workflows_api_url": WORKFLOWS, "server_scan_url": SERVER_SCAN}
+    assert settings().day1_scale_nodepools is True
+    assert settings(**orchestrator).scale_nodepools is True
+    assert settings(day1_fake_fleet=True).scale_nodepools is True
+    assert settings().scale_nodepools is False, "no orchestrator: no Scale, and day1 starts"
+    assert settings(day1_scale_nodepools=True).scale_nodepools is False
+    assert settings().workflow_keys().replicas is False, "an edit may change replicas"
+    assert settings(**orchestrator).workflow_keys().replicas is True
+    off = settings(day1_scale_nodepools=False, **orchestrator)
+    assert off.scale_nodepools is False
+    assert off.workflow_keys().replicas is False
+    assert settings(day1_scale_nodepools=False, day1_fake_fleet=True).scale_nodepools is False
 
 
-async def test_the_orchestrators_adapter_only_when_turned_on() -> None:
+async def test_the_orchestrators_adapter_by_default_and_none_when_turned_off() -> None:
     closers: list[Close] = []
-    off = settings(workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN)
-    assert scale_workflow(off, metrics=metrics(), clock=system_clock, closers=closers) is None
-    on = settings(
-        day1_scale_nodepools=True, workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN
+    off = settings(
+        day1_scale_nodepools=False, workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN
     )
+    assert scale_workflow(off, metrics=metrics(), clock=system_clock, closers=closers) is None
+    alone = settings()
+    assert scale_workflow(alone, metrics=metrics(), clock=system_clock, closers=closers) is None
+    on = settings(workflows_api_url=WORKFLOWS, server_scan_url=SERVER_SCAN)
     workflow = scale_workflow(on, metrics=metrics(), clock=system_clock, closers=closers)
     assert isinstance(workflow, HttpScaleWorkflow)
     assert len(closers) == 1
@@ -72,6 +81,8 @@ async def test_the_fake_fleets_runs_plan_from_the_day1_files(context: Day1Contex
     service = scale_service(fleet, fake, context.clusters, context.specs)
     assert service is not None
     assert scale_service(settings(), fake, context.clusters, context.specs) is None
+    turned_off = settings(day1_scale_nodepools=False, day1_fake_fleet=True)
+    assert scale_service(turned_off, fake, context.clusters, context.specs) is None
     admin = User(username="alice", role=Role.ADMIN)
     await service.start(LARK, ScaleTarget(4, nodepool=STORAGE), user=admin)
     assert (fake.started[0].mce_cluster, fake.started[0].cluster) == (LARK.mce, LARK.name)
