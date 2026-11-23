@@ -52,6 +52,8 @@ class NodeTypeOut(BaseModel):
     not_in_server_scan: int
     health_checked: bool
     """``False`` when this deployment has no server-scan: free Agents counted as they are."""
+    used: int
+    """Free Agents left out: they carry a used-Agent label, and herzi removes them."""
     status: Literal["pass", "fail", "unknown"]
     detail: str
 
@@ -117,6 +119,7 @@ class PlacementCandidateOut(BaseModel):
                     healthy=t.healthy,
                     not_in_server_scan=t.not_in_server_scan,
                     health_checked=t.health_checked,
+                    used=t.used,
                     status=t.status.value,
                     detail=t.detail,
                 )

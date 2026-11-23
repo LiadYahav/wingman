@@ -11,7 +11,8 @@ needs:
 - each candidate's free pods, from its own nodes and pods, read when asked
   (a cache of seconds, shared; never the minutes another source would be);
 - each candidate's healthy free servers of every node type the new cluster
-  needs: its free Agents in those InfraEnvs, joined to server-scan's servers.
+  needs: its free Agents in those InfraEnvs, joined to server-scan's servers,
+  less the used ones (a used-Agent label: herzi removes them, ``used_agents``).
   The needs come from the form (each nodepool's InfraEnvs and replicas), else
   from the flavor's presets, and at create from the rendered file; a
   nodepool that draws from several InfraEnvs needs ``a + b`` (ADR-0064);
@@ -86,6 +87,7 @@ from wingman_day1.domain.placement import (
     place,
 )
 from wingman_day1.domain.servers import ServerRow
+from wingman_day1.domain.used_agents import HERZI_LABEL
 from wingman_day1.integrations.server_scan.ports import ServerInventory
 from wingman_day1.ports import HubApi, RepoReads
 
@@ -203,6 +205,7 @@ class PlacementService:
         infraenv_namespace: str | None = None,
         scan_names: Mapping[str, str] | None = None,
         record: Record | None = None,
+        used_agent_labels: Sequence[str] = (HERZI_LABEL,),
     ) -> None:
         """``hub`` should be cached for seconds only; ``inventory`` is server-scan, if configured.
 
@@ -214,7 +217,8 @@ class PlacementService:
         Agents are listed; ``None`` lists them across the hub. ``scan_names``
         maps a day1 MCE folder to the name server-scan gives it, where they
         differ (none do yet: they are matched exactly). ``record`` counts each
-        create's decision (the metric).
+        create's decision (the metric). A free Agent carrying one of
+        ``used_agent_labels`` (``WorkflowKeys.used_agent_labels``) is no free server.
         """
         self._day1 = day1
         self._sites = sites
@@ -225,6 +229,7 @@ class PlacementService:
         self._infraenv_namespace = infraenv_namespace or None
         self._scan_names = dict(scan_names or {})
         self._record = record
+        self._used_labels = tuple(used_agent_labels)
         self._owners: OrderedDict[bytes, str | None] = OrderedDict()
 
     @property
@@ -361,7 +366,11 @@ class PlacementService:
             hub_error=hub_error,
             node_types=(
                 node_type_supply(
-                    inputs.needs, agents, rows, server_scan=self._inventory is not None
+                    inputs.needs,
+                    agents,
+                    rows,
+                    server_scan=self._inventory is not None,
+                    used_labels=self._used_labels,
                 )
                 if self._hub is not None
                 else ()

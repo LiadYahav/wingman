@@ -299,8 +299,7 @@ def build_context(
     provisioner = GitClusterProvisioner(day1_writer)
     rollout_writer = GitRolloutMergeRequests(gitlab, day1, day1_writer)
     inventory = server_scan.cached_inventory(adapters.inventory, cache, ttl=ttl)
-    # Placement always runs (ADR-0050). An MCE's nodes, pods and Agents are read when a
-    # create asks, kept for seconds; without live reads it decides on Git and server-scan.
+    # Placement always runs (ADR-0050): MCE reads kept for seconds, else Git and server-scan
     placement = PlacementService(
         day1,
         site_catalog,
@@ -310,6 +309,7 @@ def build_context(
         specs=spec_catalog,
         infraenv_namespace=settings.mce_infraenv_namespace or None,
         record=metrics.observe_placement if metrics is not None else None,
+        used_agent_labels=owned.used_agent_labels,
     )
     cluster_service = ClusterService(
         day1,

@@ -13,7 +13,11 @@ has the infra role, is not Ready, is cordoned, or has a ``NoSchedule`` or
 nodepools use, the MCE's free Agents there (the Agent provider's rule, as in
 the nodes view: ``node_pools.why_not_free``), each joined to its server in
 server-scan (``node_pools.ServerFinder``) and counted when that server is
-usable. The new cluster needs at least its replicas of each type.
+usable. The new cluster needs at least its replicas of each type. A free
+Agent that carries a used-Agent label (``used_agents``: herzi's
+``redbull.io/ever-installed``, or the deployment's excluded labels) is no
+free server: the new cluster's NodePools exclude it and herzi removes it; it
+is counted apart (``used``).
 
 A nodepool that draws from several InfraEnvs (ADR-0064) is one node type,
 ``a + b``: a free Agent of either counts for it. Node types that share an
@@ -40,6 +44,7 @@ from typing import Final
 from wingman_day1.domain.machines import AgentObservation
 from wingman_day1.domain.node_pools import ServerFinder, why_not_free
 from wingman_day1.domain.servers import ServerRow
+from wingman_day1.domain.used_agents import used_label
 
 CONTROL_PLANE_ROLES: Final = (
     "node-role.kubernetes.io/master",
@@ -218,6 +223,8 @@ class NodeTypeSupply:
     """``False`` when this deployment has no server-scan: free Agents are counted as they are."""
     within: NodeTypeSupply | None = None
     """A part of it that falls shorter, for the nodepools that draw only on that part."""
+    used: int = 0
+    """Free Agents left out: they carry a used-Agent label, and herzi removes them."""
 
     @property
     def infra_envs(self) -> tuple[str, ...]:
@@ -256,18 +263,21 @@ class NodeTypeSupply:
         if self.free_agents is None:
             return f"{self.infra_env}: {self.needed} needed; the MCE's Agents could not be read"
         if not self.health_checked:
-            return (
+            text = (
                 f"{self.infra_env}: {self.free_agents} free of {self.needed} needed, their health "
                 "not checked (server-scan is not configured)"
             )
-        if self.healthy is None:
-            return (
+        elif self.healthy is None:
+            text = (
                 f"{self.infra_env}: {self.free_agents} free of {self.needed} needed, their "
                 "health unknown without server-scan"
             )
-        text = f"{self.infra_env}: {self.healthy} healthy free of {self.needed} needed"
-        if self.not_in_server_scan:
-            text += f" ({self.not_in_server_scan} more free, not in server-scan)"
+        else:
+            text = f"{self.infra_env}: {self.healthy} healthy free of {self.needed} needed"
+            if self.not_in_server_scan:
+                text += f" ({self.not_in_server_scan} more free, not in server-scan)"
+        if self.used:
+            text += f"; {self.used} used, left out (herzi removes {_them(self.used)})"
         return text
 
 
@@ -298,15 +308,19 @@ def node_type_supply(
     rows: Sequence[ServerRow] | None,
     *,
     server_scan: bool = True,
+    used_labels: Sequence[str] = (),
 ) -> tuple[NodeTypeSupply, ...]:
     """For each need, the MCE's free Agents of that type and how many are healthy in server-scan.
 
     ``agents`` is ``None`` when the MCE's Agents could not be read, ``rows``
     when server-scan could not be. ``server_scan`` is ``False`` when this
     deployment has none: the free Agents are then counted without their health.
-    Needs whose node types share an InfraEnv are one row (:func:`judged_together`).
+    A free Agent carrying one of ``used_labels`` is no free server, counted as
+    ``used``. Needs whose node types share an InfraEnv are one row
+    (:func:`judged_together`).
     """
-    count = _Count(agents, ServerFinder(rows) if rows is not None else None, server_scan)
+    finder = ServerFinder(rows) if rows is not None else None
+    count = _Count(agents, finder, server_scan, used_labels)
     return tuple(_judged(group, count) for group in judged_together(needs))
 
 
@@ -340,6 +354,7 @@ class _Count:
         agents: Sequence[AgentObservation] | None,
         finder: ServerFinder | None,
         server_scan: bool,
+        used_labels: Sequence[str],
     ) -> None:
         self._known = agents is not None
         self._checked = server_scan
@@ -348,8 +363,12 @@ class _Count:
         self._free: dict[str, int] = {}
         self._healthy: dict[str, int] = {}
         self._missing: dict[str, int] = {}
+        self._used: dict[str, int] = {}
         for agent in agents or ():
             if agent.infra_env is None or why_not_free(agent) is not None:
+                continue
+            if used_label(agent, used_labels) is not None:
+                _add(self._used, agent.infra_env)
                 continue
             _add(self._free, agent.infra_env)
             row = finder.find(agent) if finder is not None else None
@@ -365,14 +384,21 @@ class _Count:
         if not self._known:
             return NodeTypeSupply(label, needed, None, None)
         free = sum(self._free.get(env, 0) for env in envs)
+        used = sum(self._used.get(env, 0) for env in envs)
         if not self._checked:
-            return NodeTypeSupply(label, needed, free, None, health_checked=False)
+            return NodeTypeSupply(label, needed, free, None, health_checked=False, used=used)
         if not self._health_known:
-            return NodeTypeSupply(label, needed, free, None)
+            return NodeTypeSupply(label, needed, free, None, used=used)
         healthy = sum(self._healthy.get(env, 0) for env in envs)
         missing = sum(self._missing.get(env, 0) for env in envs)
-        return NodeTypeSupply(label, needed, free, healthy=healthy, not_in_server_scan=missing)
+        return NodeTypeSupply(
+            label, needed, free, healthy=healthy, not_in_server_scan=missing, used=used
+        )
 
 
 def _add(counts: dict[str, int], key: str) -> None:
     counts[key] = counts.get(key, 0) + 1
+
+
+def _them(count: int) -> str:
+    return "it" if count == 1 else "them"

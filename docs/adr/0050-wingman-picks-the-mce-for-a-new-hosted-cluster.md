@@ -1,7 +1,7 @@
 # ADR-0050: Wingman picks the MCE for a new hosted cluster, and shows why
 
 Date: 2026-11-12
-Status: Accepted; amends rule 2 of `docs/ideas/architecture-fit.md` (Wingman checks the free pods a control plane needs and the servers a cluster needs, ranks MCEs, and still reserves nothing); amended 2026-11-12: placement always runs (see the amendment)
+Status: Accepted; amends rule 2 of `docs/ideas/architecture-fit.md` (Wingman checks the free pods a control plane needs and the servers a cluster needs, ranks MCEs, and still reserves nothing); amended 2026-11-12: placement always runs (see the amendment); amended 2026-11-23: herzi's used Agents are no free servers
 
 **The free pods rule** (the user, 2026-11-12): free = allocatable pods − pods
 in use, on the worker nodes only, and it must be at least the cost of one
@@ -319,3 +319,45 @@ all.
 - `apps/web/e2e/tests/mce-placement.spec.ts`: the form without live reads
   (the pick, the "not checked" note), the field order site → prod/prep →
   version, no MCE dropdown, and a failed read shown with a retry.
+
+## Amendment (2026-11-23): herzi's used Agents are no free servers
+
+herzi's plan to retire used servers (team-redbull/herzi, branch
+`docs/retire-used-servers-plan`, `578edf1`, its owner's decisions D1 to D7
+marked approved; herzi's `main`, `0ef4d2a`, labels nothing yet) labels every
+Agent bound to a tenant cluster `redbull.io/ever-installed: "true"` as it
+binds, and once such an Agent is free again it starts `remove-server-from-mce`
+for it: a labelled free Agent is *retiring*, never supply to herzi (its
+§4.2), and every NodePool excludes the label so none binds it again
+(ADR-0065). The platform's naming convention says the same of its mark (§5
+rule 8: a marked free Agent is not spare). Placement counted it as a free
+server of its type (`docs/ideas/kubevirt-seed-kv-readiness.md`, item 5).
+
+- **A free Agent that carries a used-Agent key is no free server** of its
+  type: the servers check leaves it out, and counts it apart, as the node
+  type's `used` and in its sentence ("dell-r660: 1 healthy free of 2
+  needed; 2 used, left out (herzi removes them)"). Key presence, whatever
+  its value, as a `DoesNotExist` tests it.
+- **The keys come from one place**, `WorkflowKeys.used_agent_labels`
+  (`domain/used_agents.py`): `DAY1_EXCLUDED_AGENT_LABELS` when it is set,
+  which is what the new cluster's NodePools will exclude; else herzi's
+  label, `redbull.io/ever-installed` (the user's decision, ADR-0065's
+  amendment). With the setting empty no NodePool excludes the label yet, so
+  the Agent provider could still bind such an Agent, but it is used
+  hardware herzi is about to remove: picking an MCE on it would pick one on
+  servers that leave. Until herzi labels Agents no Agent carries the key,
+  and nothing changes.
+- **No new read**: placement already lists the Agents of the needed
+  InfraEnvs whole, labels included. `GET /api/day1/placement` gains
+  `node_types[].used`.
+
+Rejected: the setting's keys and herzi's label together (two sources for
+one rule; the setting names the label when it is set); leaving them in
+until the setting is set (as soon as herzi labels, every MCE's supply would
+count servers that leave, until the last cluster's merge request).
+
+Verification: `apps/day1-service/tests/unit/domain/test_used_agents.py`
+(the keys, a used Agent left out and counted apart, the sentence with and
+without server-scan, another key when the setting names it) and
+`apps/day1-service/tests/api/test_used_agents_api.py` (the read with
+herzi's label, and with the setting's key).
