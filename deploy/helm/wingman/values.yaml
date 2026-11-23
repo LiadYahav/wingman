@@ -151,12 +151,15 @@ day1:
   # (segmentsManager.uiUrl and serverScan.uiUrl, else their url). A values file
   # that still sets them is accepted and ignored (docs/upgrade/3.52.0-to-3.52.1.md).
   # Agent label keys every agent NodePool excludes (ADR-0065): herzi's label for
-  # used Agents, once herzi names it. Each new cluster's nodepools get
+  # used Agents, ["redbull.io/ever-installed"] and nothing else (herzi's plan
+  # accepts that one DoesNotExist). Each new cluster's nodepools get
   # excludeAgentLabels (a DoesNotExist each); an existing cluster takes them
-  # through its own merge request. Before setting it: the hostedclusters-setup
-  # chart change (patch 0002), the specs-project template lines and a herzi
-  # release that accepts the exclusion (docs/upgrade/3.48-to-3.49.md). Empty:
-  # nothing changes; shipped empty.
+  # through its own merge request. Set it only once herzi's release that
+  # accepts the exclusion runs on every MCE, with the hostedclusters-setup
+  # chart change (patch 0002) and the specs-project template lines
+  # (docs/upgrade/3.54-to-3.55.md step 6): herzi's main blocks the pool of any
+  # NodePool that carries it. Shipped empty. Empty, placement and Inventory
+  # Management still treat an Agent carrying herzi's label as used.
   excludedAgentLabels: []
 day2:
   cacheTtlSeconds: 15     # GitLab reads, per replica (ADR-0011; at most 60)
