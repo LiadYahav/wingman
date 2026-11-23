@@ -2,9 +2,7 @@
 
 The core handlers already cover Git errors, self-approval and unmanaged MRs;
 this maps day1's own. ``details.problems`` lists every rule a request broke,
-so the form can show them all at once; ``details.setting`` names the setting
-a ``501`` waits for when it is not ``SERVER_SCAN_URL`` (the auditor token, or
-the admin token: maintenance, Jobs and Fetch now; or Fetch now's own switch).
+so the form can show them all at once.
 """
 
 from __future__ import annotations
@@ -23,12 +21,10 @@ from wingman_core.web.errors import (
     DependencyUnavailable,
     FeatureDisabled,
     Forbidden,
-    JobAlreadyRunning,
     NodeNotInCluster,
     NotFound,
     RevisionConflict,
     ScaleAlreadyRunning,
-    ServerRefreshRefused,
     Unauthorized,
     UninstallAlreadyRunning,
     UpgradeAlreadyRunning,
@@ -42,7 +38,6 @@ from wingman_day1.domain.errors import (
     AlreadyInUseError,
     AmbiguousDecisionError,
     AmbiguousNameError,
-    AmbiguousServerScanWriteError,
     AmbiguousStartError,
     Day1Error,
     Day2UnavailableError,
@@ -60,16 +55,8 @@ from wingman_day1.domain.errors import (
     ScaleAlreadyRunningError,
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
-    ServerScanAuditOffError,
-    ServerScanDiagramNotFoundError,
-    ServerScanJobNotFoundError,
-    ServerScanJobRunningError,
     ServerScanNotConfiguredError,
-    ServerScanRefreshOffError,
-    ServerScanRefreshRefusedError,
-    ServerScanSkillMissingError,
     ServerScanUnavailableError,
-    ServerScanWritesOffError,
     StaleError,
     UninstallAlreadyRunningError,
     UpgradeAlreadyRunningError,
@@ -78,8 +65,6 @@ from wingman_day1.domain.errors import (
     WorkflowsNotConfiguredError,
     WorkflowsUnavailableError,
 )
-from wingman_day1.integrations.server_scan.domain.events import AUDITOR_SETTING
-from wingman_day1.integrations.server_scan.domain.servers import ADMIN_SETTING, REFRESH_SETTING
 
 _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (InvalidInputError, ValidationFailed),
@@ -96,17 +81,8 @@ _MAPPING: Final[tuple[tuple[type[Day1Error], type[AppError]], ...]] = (
     (LoginRefusedError, Forbidden),
     (Day2UnavailableError, DependencyUnavailable),
     (ServerNotFoundError, NotFound),
-    (ServerScanSkillMissingError, NotFound),
-    (ServerScanDiagramNotFoundError, NotFound),
-    (ServerScanJobNotFoundError, NotFound),
-    (ServerScanJobRunningError, JobAlreadyRunning),
-    (ServerScanRefreshRefusedError, ServerRefreshRefused),
     (ServerScanNotConfiguredError, FeatureDisabled),
-    (ServerScanWritesOffError, FeatureDisabled),
-    (ServerScanRefreshOffError, FeatureDisabled),
-    (ServerScanAuditOffError, FeatureDisabled),
     (ServerScanUnavailableError, DependencyUnavailable),
-    (AmbiguousServerScanWriteError, AmbiguousWrite),
     (NodeNotInClusterError, NodeNotInCluster),
     (WorkflowsNotConfiguredError, FeatureDisabled),
     (WorkflowsUnavailableError, DependencyUnavailable),
@@ -129,12 +105,6 @@ def to_app_error(error: Day1Error) -> AppError:
         details["problems"] = list(error.problems)
     if isinstance(error, PlacementChangedError):
         details["pick"] = error.pick
-    if isinstance(error, ServerScanAuditOffError):
-        details["setting"] = AUDITOR_SETTING
-    if isinstance(error, ServerScanWritesOffError):
-        details["setting"] = ADMIN_SETTING
-    if isinstance(error, ServerScanRefreshOffError):
-        details["setting"] = REFRESH_SETTING
     for domain_type, app_type in _MAPPING:
         if isinstance(error, domain_type):
             return app_type(str(error), details=details)

@@ -234,8 +234,9 @@ Delete: `05-delete-hosted-cluster.md`. Version-band migration allocates a NEW se
 ## 6. Integration points for Wingman
 
 ### READ (direct, public GETs, no token)
-- *Wingman reads (2026-11-13)*: `by-segment` for the cluster page's EPG (ADR-0039), and `GET /api/sites`, `/api/stats` and
-  `/api/segments` (`fresh=true` for Refresh) for its Segments area (ADR-0047). Still no writes.
+- *Wingman reads (2026-11-23)*: `by-segment` for the cluster page's EPG (ADR-0039), and nothing else. Its Segments area
+  (ADR-0047), which also read `GET /api/sites`, `/api/stats` and `/api/segments`, was removed after 3.52.0; an admin's
+  top bar links to segments-manager's own UI instead. Still no writes.
 - `GET /api/sites` → site dropdown / validation (replace Wingman's GitLab-folder-derived site list as the authority, or intersect them).
 - `GET /api/stats` (or `/api/health` `sites_summary`) → "N free segments at site X" badge; block cluster creation when 0 free (HC pool empty → allocate 503).
 - `GET /api/segments?site=X&status=Available` → optional free-segment list (display only; allocation picks lowest VLAN, you can't choose).

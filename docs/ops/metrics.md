@@ -41,9 +41,20 @@ Operations of the other dependencies (day1):
 | `kubernetes` | `get_hosted_cluster`, `list_node_pools`, `list_infra_envs`, `list_machines`, `list_machine_sets`, `list_agent_machines`, `list_agents`, `list_nodes`, `list_pods` |
 | `openshift_oauth` | `discover`, `exchange_code`, `get_user` |
 | `day2` | `list_installed_addons`, `list_open_installs`, `install_addons` |
-| `server_scan` | `list_server_rows`, `get_server`, `list_sites`, `enable_maintenance`, `disable_maintenance`, `get_server_record`, `get_vm_host`, `list_server_events`, `list_events`, `list_event_actors`, `get_skill`, `download_skill`, `get_architecture_diagram`, `list_confs`, `list_classification_rules`, `list_health_policies`, `list_jobs`, `get_job_logs`, `run_job`, `refresh_server` |
+| `server_scan` | `list_server_rows`, `get_server` |
 | `workflows` | `list_runs`, `get_run`, `start_uninstall`, `start_provision`, `upgrade_targets`, `start_upgrade`, `decide_upgrade`, `start_add_server`, `start_update_nodepool` |
-| `segments_manager` | `get_segment`, `list_sites`, `get_stats`, `list_segments`, `refresh_segments` |
+| `segments_manager` | `get_segment` |
+
+The Segments and Server Scan areas' values are retired with their areas
+(removed after 3.52.0, ADR-0047 and ADR-0048's 2026-11-23 amendments):
+`server_scan` `list_sites`, `enable_maintenance`, `disable_maintenance`,
+`get_server_record`, `get_vm_host`, `list_server_events`, `list_events`,
+`list_event_actors`, `get_skill`, `download_skill`,
+`get_architecture_diagram`, `list_confs`, `list_classification_rules`,
+`list_health_policies`, `list_jobs`, `get_job_logs`, `run_job` and
+`refresh_server`, and `segments_manager` `list_sites`, `get_stats`,
+`list_segments` and `refresh_segments`. No series carries them any more; a
+dashboard or alert that reads one reads nothing.
 
 ## The dashboard
 
@@ -60,7 +71,7 @@ checks every name, label and label value it reads against the code.
 
 | Row | What it shows |
 |---|---|
-| Overview | Targets up; the running builds (component, version, short commit); GitLab token rejected (10m) and ambiguous writes (30m), the alerts' counts. Over the dashboard's range: MRs opened, MRs merged, approvals (GitLab `ok` calls of `create_merge_request`, `merge_merge_request`, `approve_merge_request`), workflow runs started (`workflows` `start_*`), server-scan writes (`enable_maintenance`, `disable_maintenance`, `run_job`, `refresh_server`); systems failing (each `dependency` with `unavailable` or `error` calls in the last 10m, or None) |
+| Overview | Targets up; the running builds (component, version, short commit); GitLab token rejected (10m) and ambiguous writes (30m), the alerts' counts. Over the dashboard's range: MRs opened, MRs merged, approvals (GitLab `ok` calls of `create_merge_request`, `merge_merge_request`, `approve_merge_request`), workflow runs started (`workflows` `start_*`); systems failing (each `dependency` with `unavailable` or `error` calls in the last 10m, or None) |
 | Activity | Per hour: MRs opened, approved, merged and closed; workflow starts by operation; flavor rollout runs by `trigger`; rollout MRs by `outcome`; MCE placement decisions by `decision` |
 | API | Requests per second and p95 by route, the 5xx ratio (over 10m, as `WingmanHighServerErrorRate`), responses by status class; tables of the 10 slowest routes by p95 over the range (status streams left out) and of the routes that answered 5xx, with their share |
 | External systems | Calls per second, outcomes, p95 and the unavailable + error ratio by `dependency`; a table of each system's calls, ok share, failure share and p95 over the last 15m |
@@ -106,95 +117,10 @@ start. Time-series legends list only the series with something to show.
   answered with an error. The nodes are still listed, without their servers,
   and the answer's `server_scan_error` says why; an uninstall answers 502.
 - `server_scan` `list_server_rows` is the fleet's rows: the Nodes tab,
-  placement, Inventory Management and the Server Scan area's Servers page
-  read them from one cache entry, at most once per replica per
-  `DAY1_CACHE_TTL_SECONDS` however many pages poll, each a `304` from
-  server-scan while nothing changed (ADR-0048's 3.23.0 amendment).
-- `server_scan` `list_sites` is the Server Scan area's Sites page
-  (server-scan's per-site counts, ADR-0048), also read by an admin's top bar to know
-  the area is on: at most one call per replica per 10 seconds (its cache),
-  whoever asks, and none while no admin is signed in. `denied` (the viewer
-  token refused) and `unavailable` on it are the area's `502`; the Nodes
-  tab, placement and Inventory Management are not affected.
-- `server_scan` `enable_maintenance` and `disable_maintenance` are the Server
-  Scan area's one write, a server's maintenance on and off by an admin
-  (ADR-0048's 3.23.0 amendment), each logged with the person
-  (`server_maintenance_started`, `_ended`). `denied` means server-scan
-  refused **its admin token** (`SERVER_SCAN_ADMIN_TOKEN`); `not_found` a
-  server it does not have; `rejected` a body it refused (its `422`);
-  `ambiguous` a write sent whose answer was lost (logged as
-  `server_maintenance_unconfirmed`): never retried, look at the server's row
-  before trying again.
-- `server_scan` `list_classification_rules` and `list_health_policies` are
-  the Server Scan area's Rules & Policies page (ADR-0048's 3.30.0
-  amendment): server-scan's enabled classification rules and health
-  policies, one call each per page open, and again when it is opened after
-  30 seconds, never cached by day1. `denied` is the viewer token refused
-  (`SERVER_SCAN_TOKEN`); `unavailable` includes an answer day1 could not read.
-- `server_scan` `get_server_record`, `get_vm_host` and `list_server_events`
-  are the Server Scan area's server page (ADR-0048's 3.25.0 amendment): the
-  server whole, a VM's host and the server's History, one call each per page
-  open or History page, never cached by day1 (server-scan caches the record
-  itself). `not_found` is an id server-scan does not have, or a VM host asked
-  of a server that is not a VM. `denied` on `get_server_record` and
-  `get_vm_host` is the viewer token refused (`SERVER_SCAN_TOKEN`); on
-  `list_server_events` it is **the auditor token** (`SERVER_SCAN_AUDITOR_TOKEN`).
-  `get_server` stays the uninstall's fresh check of a server's cluster.
-- `server_scan` `list_events` and `list_event_actors` are the Server Scan
-  area's Events page (ADR-0048's 3.31.0 amendment): one page of the fleet's
-  audit trail per page shown (filters and cursors, never cached by day1),
-  and who wrote it, at most once a minute per open page. Both use **the
-  auditor token**: `denied` is `SERVER_SCAN_AUDITOR_TOKEN` refused.
-  `rejected` on `list_events` is a cursor server-scan refused (its `400`, a
-  `422` to the page); `unavailable` includes an answer day1 could not read.
-- `server_scan` `get_skill` and `download_skill` are the Server Scan area's
-  Claude page (ADR-0048's 3.27.0 amendment): server-scan's Claude Code skill,
-  at most one call per replica per minute (its cache), and its zip, one call
-  per download, never cached. Both use the viewer token: `denied` is
-  `SERVER_SCAN_TOKEN` refused. `not_found` is a server-scan that carries no
-  skill (the page says so); `unavailable` on `download_skill` includes
-  server-scan refusing the address written into the zip (check
-  `SERVER_SCAN_UI_URL`).
-- `server_scan` `get_architecture_diagram` is the Server Scan area's
-  Architecture page (ADR-0048's 3.28.0 amendment): one of server-scan's
-  diagrams, read from **its UI** (`SERVER_SCAN_UI_URL`, else
-  `SERVER_SCAN_URL`) with no token, at most once per diagram per replica per
-  5 minutes (its cache). `not_found` is a diagram server-scan's UI does not
-  serve, or an address that is not its UI (its API has no diagrams);
-  `unavailable` its UI unreachable or answering anything but the page.
-- `server_scan` `list_confs` is the Server Scan area's Confs page, the
-  hardware catalog (ADR-0048's 3.29.0 amendment): one call per page open, and
-  again when it is opened after 30 seconds, never cached by day1 (a small
-  collection server-scan reads per call). `denied` is the viewer token
-  refused (`SERVER_SCAN_TOKEN`); `unavailable` includes an answer day1 could
-  not read.
-- `server_scan` `list_jobs` and `get_job_logs` are the Server Scan area's
-  Jobs page (ADR-0048's 3.32.0 amendment): server-scan's triggerable
-  CronJobs with their runs, every 5 seconds per open page while a Job runs
-  and every 30 seconds otherwise, and an open pod's log every 3 seconds while
-  its Job runs; never cached by day1. Both go with **the admin token**
-  (server-scan keeps its Jobs for its admins, reads included): `denied` is
-  `SERVER_SCAN_ADMIN_TOKEN` refused; `not_found` a CronJob, Job or pod
-  server-scan does not have (or its feature off); `unavailable` includes an
-  answer day1 could not read.
-- `server_scan` `run_job` is the Jobs page's Run job, the area's second write
-  (ADR-0048's 3.32.0 amendment): a real Job of a collector or prune CronJob,
-  by an admin, logged with the person (`server_scan_job_started`). `conflict`
-  is server-scan's "already has an unfinished Job" (its `409`); `not_found` a
-  CronJob it may not start (or its feature off); `denied` the admin token
-  refused; `ambiguous` a start sent whose answer was lost (logged as
-  `server_scan_job_unconfirmed`): never retried, look at the CronJob's runs
-  before starting it again.
-- `server_scan` `refresh_server` is Fetch now, on a server's page and every
-  Servers row (ADR-0048's v6.6.0 amendment): one server read from its vendor
-  manager now by an admin, logged with the person (`server_refreshed`), with
-  **the admin token**, waiting up to 120 seconds (the manager's own read).
-  `rejected` is server-scan's `409` (not connected to that manager, or the
-  manager no longer reports the server; nothing changed); `not_found` a
-  server it does not have; `unavailable` the manager failing (its `503`);
-  `denied` the admin token refused; `ambiguous` a Fetch now sent whose answer
-  was lost (logged as `server_refresh_unconfirmed`): never retried, reload
-  the server and look at when it was last seen.
+  placement and Inventory Management read them from one cache entry, at most
+  once per replica per `DAY1_CACHE_TTL_SECONDS` however many pages poll, each
+  a `304` from server-scan while nothing changed. `get_server` is the
+  uninstall's fresh check of a server's cluster.
 - `workflows` `start_uninstall` `ambiguous` means an uninstall start was sent
   and its answer was lost (ADR-0006, ADR-0038). It is never retried: look at
   the node's uninstall run before starting it again. `conflict` is the
@@ -242,11 +168,3 @@ start. Time-series legends list only the series with something to show.
   an answer, shown as a warning. `unavailable` means it could not be reached
   or answered with an error; the cluster's VLAN and segment are still shown
   (they are the file's), and the answer's `ledger_error` says why.
-- `segments_manager` `list_sites`, `get_stats` and `list_segments` are the
-  Segments area's reads (ADR-0047). An open page re-reads every 30 seconds,
-  and the pages a replica serves share one read of each per 10 seconds (its
-  cache); none while nobody has the page open.
-  `refresh_segments` is its Refresh button (`fresh=true`: segments-manager
-  reads its database, not its cache), at most one per replica per 5 seconds.
-  `unavailable` on them is the area's `502`; the cluster pages are not
-  affected.

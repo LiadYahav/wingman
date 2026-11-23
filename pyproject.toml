@@ -287,12 +287,10 @@ type = "independence"
 modules = ["wingman_day1.integrations.*"]
 # Independence follows indirect chains too, and Wingman's own code uses both systems:
 # its use cases read an integration's port (placement and Inventory read server-scan,
-# a cluster's network check segments-manager), and the routes' context names every
-# area's use case. A chain through those two is Wingman's, not one integration's; any
-# other path, direct or indirect, breaks this contract.
+# a cluster's network check segments-manager). A chain through that is Wingman's, not
+# one integration's; any other path, direct or indirect, breaks this contract.
 ignore_imports = [
     "wingman_day1.application.* -> wingman_day1.integrations.*.ports",
-    "wingman_day1.api.deps -> wingman_day1.integrations.*.application.*",
 ]
 
 [[tool.importlinter.contracts]]

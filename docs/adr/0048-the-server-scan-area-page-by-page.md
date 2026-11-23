@@ -1,7 +1,7 @@
 # ADR-0048: The Server Scan area is server-scan's UI rebuilt in Wingman page by page, on the one server-scan client, starting with Sites
 
 Date: 2026-11-13
-Status: Accepted; amended page by page (below), and 2026-11-23 (off by default: the top bar links to server-scan's own UI)
+Status: Superseded by ADR-0066 (2026-11-23: the area was removed; it last shipped in v3.52.0, off by default). Before that: accepted; amended page by page (below), and 2026-11-23 (off by default: the top bar links to server-scan's own UI)
 
 ## Context
 
@@ -897,3 +897,20 @@ whole** (the Nodes tab, placement and Inventory Management need it, and the
 team keeps those).
 
 Verification: as ADR-0047's amendment, whose tests cover both areas.
+
+**2026-11-23, later the same day: the area is removed (ADR-0066).** As
+ADR-0047's amendment of the same day, for server-scan: every page (Sites,
+Servers, a server's page, Confs, Rules & Policies, Events, Jobs, Claude,
+Architecture), every route under `/api/day1/server-scan` (404 now) and the
+three writes (maintenance, Run job, Fetch now) are gone, with
+`ServerScanService`, the port's methods beyond `rows` and `server`, the
+records, sites, skill, diagrams, confs, rules, events and jobs readers, their
+fakes and fixtures, the admin and auditor tokens, nginx's location for Fetch
+now, the server-scan palette and mark, and the settings
+`DAY1_SERVER_SCAN_AREA` and `DAY1_SERVER_SCAN_REFRESH` (the chart's keys,
+and `serverScan.tokenSecret.adminKey` and `auditorKey`, are accepted and
+ignored). What stays is ADR-0038's, ADR-0050's and ADR-0057's: the fleet's
+rows and one server, read with the viewer token through the one adapter,
+cache and fake; a node's server opens its page in server-scan, as 3.26.0
+did for anyone without the area. The area last shipped in v3.52.0, off by
+default; git history has it, and this record says what it did.

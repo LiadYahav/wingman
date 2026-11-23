@@ -32,8 +32,6 @@ ENV = (
     "SERVER_SCAN_URL",
     "SERVER_SCAN_UI_URL",
     "SERVER_SCAN_TOKEN",
-    "SERVER_SCAN_ADMIN_TOKEN",
-    "SERVER_SCAN_AUDITOR_TOKEN",
     "SERVER_SCAN_SSL_VERIFY",
     "SERVER_SCAN_TIMEOUT_SECONDS",
     "WORKFLOWS_API_URL",
@@ -44,8 +42,6 @@ ENV = (
     "SEGMENTS_MANAGER_UI_URL",
     "SEGMENTS_MANAGER_SSL_VERIFY",
     "SEGMENTS_MANAGER_TIMEOUT_SECONDS",
-    "DAY1_SEGMENTS_AREA",
-    "DAY1_SERVER_SCAN_AREA",
 )
 OAUTH = {
     "openshift_api_host": "api.hub.example.invalid:6443",
@@ -227,25 +223,6 @@ def test_a_url_setting_is_empty_or_an_http_url(field: str, url: str) -> None:
     values = {"server_scan_url": SERVER_SCAN, field: url}
     with pytest.raises(ValidationError, match="http"):
         dev(**values)
-
-
-def test_the_areas_are_off_by_default_and_each_needs_its_system() -> None:
-    """ADR-0047 and ADR-0048's 2026-11-23 amendments: the team keeps both systems apart."""
-    off = dev(server_scan_url=SERVER_SCAN, segments_manager_url=SEGMENTS_MANAGER)
-    assert (off.day1_segments_area, off.day1_server_scan_area) == (False, False)
-    with pytest.raises(ValidationError, match="DAY1_SEGMENTS_AREA=true needs SEGMENTS_MANAGER_URL"):
-        dev(day1_segments_area=True)
-    with pytest.raises(ValidationError, match="DAY1_SERVER_SCAN_AREA=true needs SERVER_SCAN_URL"):
-        dev(day1_server_scan_area=True)
-    on = dev(
-        day1_segments_area=True,
-        segments_manager_url=SEGMENTS_MANAGER,
-        day1_server_scan_area=True,
-        server_scan_url=SERVER_SCAN,
-    )
-    assert (on.day1_segments_area, on.day1_server_scan_area) == (True, True)
-    fake = dev(day1_segments_area=True, day1_server_scan_area=True, day1_fake_fleet=True)
-    assert (fake.day1_segments_area, fake.day1_server_scan_area) == (True, True)
 
 
 def test_the_orchestrator_without_server_scan_is_refused() -> None:

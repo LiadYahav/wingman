@@ -2,23 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from pydantic import BaseModel
 
-from wingman_day1.domain.platforms import Platform, PlatformId, Platforms
+from wingman_day1.domain.platforms import Platform, PlatformId
 
 
 class PlatformOut(BaseModel):
-    """One system: its own UI, and whether Wingman's area for it is on."""
+    """One system: its own UI, which the top bar opens in a new tab."""
 
     id: PlatformId
     name: str
     url: str
-    area: bool
 
     @classmethod
     def of(cls, platform: Platform) -> PlatformOut:
         """From the domain."""
-        return cls(id=platform.id, name=platform.name, url=platform.url, area=platform.area)
+        return cls(id=platform.id, name=platform.name, url=platform.url)
 
 
 class PlatformsOut(BaseModel):
@@ -27,6 +28,6 @@ class PlatformsOut(BaseModel):
     platforms: list[PlatformOut]
 
     @classmethod
-    def of(cls, platforms: Platforms) -> PlatformsOut:
+    def of(cls, platforms: Iterable[Platform]) -> PlatformsOut:
         """From the domain."""
-        return cls(platforms=[PlatformOut.of(platform) for platform in platforms.links()])
+        return cls(platforms=[PlatformOut.of(platform) for platform in platforms])

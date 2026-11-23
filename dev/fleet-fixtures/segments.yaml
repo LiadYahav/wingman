@@ -1,15 +1,11 @@
 # A made-up segments-manager ledger for DAY1_FAKE_FLEET=true (development only,
-# ADR-0039, ADR-0047).
+# ADR-0039).
 #
 # `items` has the exact shape of segments-manager's answers
-# (`GET /api/segments`, and `GET /api/segments/by-segment?segment=<cidr>` for
-# one), and day1 reads it with the same parser as the real answers
+# (`GET /api/segments/by-segment?segment=<cidr>` for one), and day1 reads it
+# with the same parser as the real answers
 # (wingman_day1.integrations.segments_manager.infrastructure.parse.segment_record).
 # Nothing here is real: the ids, VLANs, EPG names and holders are invented.
-#
-# `sites` is segments-manager's `SITE_NETWORKS` keys: the fake answers
-# `GET /api/sites` with it, and `GET /api/stats` with one entry per site,
-# counted from `items`. site3 has no segments yet, so its card shows 0 / 0.
 #
 # Every segment is a /24, and an allocated one's `cluster_name` is the cluster
 # file's stem (what allocate-segment gives segments-manager). The clusters in
@@ -17,7 +13,7 @@
 # segments below, and the two files agree, except on purpose for one:
 #
 # - ocp4-prod-herzi-site1: segments-manager has VLAN 1418 for 10.20.44.0/24,
-#   the file has 1410. The cluster page and the Segments area show a warning.
+#   the file has 1410. The cluster page shows a warning.
 #
 # The others cover what segments-manager records besides hosted clusters:
 # every type (MCE and INVENTORY held by an MCE, PXE, HUB, and a UPI segment two
@@ -27,8 +23,6 @@
 # and one record with the legacy keys live records still have, all null.
 #
 # What it follows upstream, and at which version: docs/integrations/segments-manager.yaml.
-
-sites: [site1, site2, site3]
 
 items:
   # ── site1 ──────────────────────────────────────────────────────────────────

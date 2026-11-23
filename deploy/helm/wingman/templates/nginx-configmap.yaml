@@ -113,14 +113,6 @@ data:
           error_page 502 503 504 @api_unavailable;
         }
 
-        # Fetch now: server-scan reads one server from its vendor manager while
-        # day1 waits, up to 120 s (ADR-0048's v6.6.0 amendment)
-        location ~ ^/api/day1/server-scan/servers/[^/]+/refresh$ {
-          proxy_read_timeout 130s;
-          proxy_pass http://day1;
-          error_page 502 503 504 @api_unavailable;
-        }
-
         # GitLab webhook receiver
         location /api/webhooks/ {
           proxy_pass http://day1;

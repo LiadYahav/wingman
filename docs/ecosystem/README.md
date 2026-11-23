@@ -4,7 +4,7 @@ What we learned on 2026-11-07 when we re-read the platform the team built over t
 
 > **Day1 status on 2026-11-07: there is no Day1 (create-cluster) workflow yet. It is planned and in progress.** Nothing about it exists in code, queues or the orchestrator API. Only the design exists (see [Day1 workflow: planned](#day1-workflow-planned-not-built)).
 >
-> **Since then:** the day1 workflow exists as `provision-cluster`, and Wingman's Create can start it, behind `DAY1_PROVISIONER=workflow`, off by default (2026-11-12, ADR-0042). Wingman also starts `upgrade-cluster` (2026-11-13, ADR-0055) and other platform workflows, and reads server-scan and segments-manager. This page stays the 2026-11-07 picture; Wingman as it is today is [`../architecture.md`](../architecture.md).
+> **Since then:** the day1 workflow exists as `provision-cluster`, and Wingman's Create can start it, behind `DAY1_PROVISIONER=workflow`, off by default (2026-11-12, ADR-0042). Wingman also starts `upgrade-cluster` (2026-11-13, ADR-0055) and other platform workflows, and reads server-scan and segments-manager for its own pages; an admin's top bar links to each one's own UI (2026-11-23). This page stays the 2026-11-07 picture; Wingman as it is today is [`../architecture.md`](../architecture.md).
 
 ## TL;DR
 

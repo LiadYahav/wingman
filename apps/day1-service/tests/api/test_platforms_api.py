@@ -1,15 +1,14 @@
-"""``GET /api/day1/platforms`` and the two areas' switches (ADR-0047, ADR-0048; 2026-11-23).
+"""``GET /api/day1/platforms``, the top bar's links (ADR-0047, ADR-0048; 2026-11-23).
 
 The team keeps segments-manager and server-scan apart from Wingman: an
-admin's top bar links to each one's own UI, and each area's routes answer 501
-until ``DAY1_SEGMENTS_AREA`` or ``DAY1_SERVER_SCAN_AREA`` turns it on. The
-cluster's network, the Nodes tab, placement and Inventory Management read the
-same systems through other routes, which the switches leave on.
+admin's top bar links to each one's own UI, and Wingman serves no page of its
+own for either (their areas were removed). The cluster's network, the Nodes
+tab, placement and Inventory Management read the same systems through their
+own routes.
 """
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -36,10 +35,6 @@ URLS: Mapping[str, object] = {
     "segments_manager_ui_url": "https://segments-manager.example",
     "server_scan_url": "http://server-scan-api.example:8000",
     "server_scan_ui_url": "https://server-scan.example",
-}
-AREA_PREFIXES = {
-    "/api/day1/segments": "DAY1_SEGMENTS_AREA",
-    "/api/day1/server-scan": "DAY1_SERVER_SCAN_AREA",
 }
 AMIT = "ocp4-prep-amit-site2-a"
 
@@ -82,7 +77,7 @@ async def test_only_admins_read_the_platforms(
     assert (await get(app, PLATFORMS, auth(support.ALICE))).status_code == 200
 
 
-async def test_each_system_links_its_own_ui_and_its_area_is_off_by_default(
+async def test_each_system_links_its_own_ui(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
     response = await get(app_of(support, gitlab, clock), PLATFORMS, auth(support.ALICE))
@@ -92,31 +87,24 @@ async def test_each_system_links_its_own_ui_and_its_area_is_off_by_default(
                 "id": "segments",
                 "name": "Segments Manager",
                 "url": "https://segments-manager.example",
-                "area": False,
             },
-            {
-                "id": "server-scan",
-                "name": "Server Scan",
-                "url": "https://server-scan.example",
-                "area": False,
-            },
+            {"id": "server-scan", "name": "Server Scan", "url": "https://server-scan.example"},
         ]
     }
 
 
-async def test_without_a_ui_url_the_link_is_the_api_s_and_an_area_on_says_so(
+async def test_without_a_ui_url_the_link_is_the_api_s(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
     api_only = {
         "segments_manager_url": URLS["segments_manager_url"],
         "server_scan_url": URLS["server_scan_url"],
-        "day1_server_scan_area": True,
     }
     app = app_of(support, gitlab, clock, api_only)
     body = (await get(app, PLATFORMS, auth(support.ALICE))).json()
-    assert [(p["id"], p["url"], p["area"]) for p in body["platforms"]] == [
-        ("segments", URLS["segments_manager_url"], False),
-        ("server-scan", URLS["server_scan_url"], True),
+    assert [(p["id"], p["url"]) for p in body["platforms"]] == [
+        ("segments", URLS["segments_manager_url"]),
+        ("server-scan", URLS["server_scan_url"]),
     ]
 
 
@@ -127,29 +115,18 @@ async def test_a_system_day1_does_not_have_is_not_listed(
     assert (await get(app, PLATFORMS, auth(support.ALICE))).json() == {"platforms": []}
 
 
-async def test_with_its_area_off_every_route_of_an_area_is_501_naming_the_switch(
+async def test_no_route_of_the_removed_areas_is_served(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
     app = app_of(support, gitlab, clock)
-    routes = [
-        (method.upper(), path, setting)
-        for path, operations in app.openapi()["paths"].items()
-        for prefix, setting in AREA_PREFIXES.items()
-        if path == prefix or path.startswith(f"{prefix}/")
-        for method in operations
-    ]
-    assert {setting for _, _, setting in routes} == set(AREA_PREFIXES.values())
-    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
-        for method, path, setting in routes:
-            url = re.sub(r"\{[^}]+\}", "x", path)
-            response = await client.request(method, url, headers=auth(support.ALICE))
-            body = response.json()
-            assert (response.status_code, body["code"]) == (501, "FEATURE_DISABLED"), url
-            assert body["details"] == {"setting": setting}, url
+    paths = app.openapi()["paths"]
+    gone = ("/api/day1/segments", "/api/day1/server-scan")
+    assert [p for p in paths if p.startswith(gone)] == []
+    for path in ("/api/day1/segments", "/api/day1/server-scan/sites"):
+        assert (await get(app, path, auth(support.ALICE))).status_code == 404
 
 
-async def test_the_areas_off_leave_the_network_and_inventory_reads_on(
+async def test_the_network_and_inventory_reads_stay(
     support: Any, gitlab: InMemoryGitLab, clock: Any, auth: Auth
 ) -> None:
     app = app_of(support, gitlab, clock)

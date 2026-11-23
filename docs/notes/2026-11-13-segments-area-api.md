@@ -1,5 +1,13 @@
 # The Segments area: the API the web reads (2026-11-13)
 
+> **2026-11-23: removed.** The Segments area and every route in this note
+> (`/api/day1/segments*`) were removed after 3.52.0
+> ([ADR-0066](../adr/0066-segments-manager-and-server-scan-stay-apart.md), superseding
+> [ADR-0047](../adr/0047-segments-area-native-read-only.md)): the team keeps segments-manager apart, and an admin's top bar
+> links to its own UI. This note is kept as history; git has the code. What
+> Wingman still reads is in
+> [integrations/segments-manager.md](../integrations/segments-manager.md).
+
 The **Segments** area (`/segments`) is segments-manager's read-only page
 rebuilt in Wingman's own design: per-site cards, then every segment in one
 table, with the original's columns and words (workstream 3 of

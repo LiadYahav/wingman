@@ -15,9 +15,7 @@ Families:
 - ``day2:installed:<site>:<mce>:<name>``  day2's installed addons for one cluster
 - ``hub:<mce>:<kind>:<namespace>[:<name>]`` an MCE hub read for the nodes view
 - ``server-scan:rows``                     server-scan's whole fleet, as rows
-- ``server-scan:sites``                    its per-site and fleet counts (ADR-0048)
 - ``segments-manager:segment:<cidr>``      segments-manager's answer for one segment
-- ``segments-manager:{sites,stats}``       its sites and per-site statistics (ADR-0047)
 - ``segments-manager:segments:...``        its segments for one query
 - ``workflows:uninstall:...``              the orchestrator's uninstall runs: the list, one run
 - ``workflows:add-server:...``             the orchestrator's add-server runs: the list, one run
@@ -76,45 +74,9 @@ def server_scan_rows() -> str:
     return "server-scan:rows"
 
 
-def server_scan_sites() -> str:
-    """server-scan's sites and fleet counts, the Server Scan area's Sites page (expires)."""
-    return "server-scan:sites"
-
-
-def server_scan_skill() -> str:
-    """server-scan's Claude Code skill, the Server Scan area's Claude page (expires)."""
-    return "server-scan:skill"
-
-
-def server_scan_diagram(slug: str) -> str:
-    """One of server-scan's architecture diagrams, from its UI (expires)."""
-    return f"server-scan:diagram:{slug}"
-
-
-def segments_manager_prefix() -> str:
-    """Everything cached from segments-manager; cleared by a ``fresh`` read (ADR-0047)."""
-    return "segments-manager:"
-
-
 def segment(cidr: str) -> str:
     """segments-manager's answer for one segment (expires; it has no webhook to day1)."""
-    return f"{segments_manager_prefix()}segment:{cidr}"
-
-
-def segment_sites() -> str:
-    """segments-manager's sites."""
-    return f"{segments_manager_prefix()}sites"
-
-
-def segment_stats() -> str:
-    """segments-manager's per-site statistics."""
-    return f"{segments_manager_prefix()}stats"
-
-
-def segment_list(site: str | None, status: str | None, type_: str | None) -> str:
-    """segments-manager's segments for one query (``*`` where it does not filter)."""
-    parts = (part.lower() if part else "*" for part in (site, status, type_))
-    return f"{segments_manager_prefix()}segments:{':'.join(parts)}"
+    return f"segments-manager:segment:{cidr}"
 
 
 def uninstall_runs_prefix() -> str:

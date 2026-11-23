@@ -5,7 +5,7 @@ tests and by ``WINGMAN_GIT_BACKEND=fake``. GitLab itself is
 ``wingman_core.ports.gitlab.GitLabPort``; :class:`RepoReads` is the cached
 read side of one project on top of it. update-nodepool's port is in
 :mod:`wingman_day1.ports.scale` (ADR-0062), re-exported here. server-scan's
-and segments-manager's are in their integrations' ``ports`` (ADR-0048,
+and segments-manager's are in their integrations' ``ports`` (ADR-0038,
 ADR-0039).
 """
 

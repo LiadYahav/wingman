@@ -46,11 +46,11 @@ day1 it gets a package of its own, `src/wingman_day1/integrations/<system>/` (AD
 
 | In `integrations/<system>/` | What |
 |-------|------|
-| `domain/` | Its answers typed in its shapes, and its area's pure rules; names without the system's prefix (`domain/events.py`) |
+| `domain/` | Its answers typed in its shapes, and its pure rules; names without the system's prefix (`domain/links.py`) |
 | `ports.py` | Its port: the one way day1 reads (or writes) it |
-| `application/` | Its area's use cases, if it has an area |
+| `application/` | Its use cases, if it has any of its own |
 | `infrastructure/` | `adapter.py` (the real one, through `infrastructure/http.py` and `observed.py`, so it is counted), `parse.py`, `cached.py`, and its fake: `fake.py`, or `fakes/` when it has several |
-| `api/` | Its area's routers and their `*_schemas.py`, listed in day1's `api/v1/routers.py` |
+| `api/` | Its routers and their `*_schemas.py`, if it has any, listed in day1's `api/v1/routers.py` |
 | `compose.py` | Builds its adapter, its cache and its use cases (with `DAY1_FAKE_FLEET`, over its fake); `main.py` and `platform_adapters.py` call it |
 
 Its tests go in `tests/integrations/<system>/` (`api/`, `unit/<layer>/`). Wingman's own
@@ -106,24 +106,10 @@ WINGMAN_DEV_DAY1_URL=http://127.0.0.1:8001 WINGMAN_DEV_DAY2_URL=http://127.0.0.1
 Add `DAY1_FAKE_FLEET=true` to day1's line for the cluster page's Nodes tab and node uninstall
 (ADR-0038), and the EPG on its **HostedCluster & network** card (ADR-0039). It replaces the MCE
 hubs, server-scan, the workflows orchestrator and segments-manager with fakes seeded from
-`dev/fleet-fixtures/`. The Segments and Server Scan areas below are off by default (the team
-keeps both systems apart; ADR-0047 and ADR-0048's 2026-11-23 amendments): the top bar then
-links to `http://segments-manager.example` and `http://server-scan.example`. Add
-`DAY1_SEGMENTS_AREA=true DAY1_SERVER_SCAN_AREA=true` to day1's line to see the areas:
-- `servers.yaml` is a made-up fleet in server-scan's own row shape, and its `sites` catalog
-  (server-scan's configured sites): the Server Scan area's Sites page (`/server-scan`,
-  ADR-0048) counts these rows by server-scan's rules over it; `site3` has no server, so its
-  card shows 0. The Servers page (`/server-scan/servers`) lists them, and its maintenance
-  toggle changes them in memory, recorded as by `dev` (no token, as on a server-scan with
-  auth off);
-- `server-records.yaml` is the hardware behind them, per model, in server-scan's shape: a
-  server's page (`/server-scan/servers/<id>`) shows its row with its model's CPU, memory,
-  drives, GPUs (the R760s), PSUs, NICs and Cisco's fabric uplinks, a few servers' health
-  reasons, unread fields and an unreachable BMC; its History is made up from the row plus
-  every maintenance change made since day1 started;
-- `architecture-diagram.html` is the fake server-scan UI's one diagram: the Architecture page
-  (`/server-scan/architecture`) shows it for every tab, with the tab's name, as a stand-in for
-  server-scan's archify pages;
+`dev/fleet-fixtures/`. An admin's top bar then links to `http://segments-manager.example` and
+`http://server-scan.example` (nothing answers there locally):
+- `servers.yaml` is a made-up fleet in server-scan's own row shape: the servers under each
+  cluster's nodes, placement's spare servers and Inventory Management's pools;
 - `mce.yaml` places those servers in NodePools. `ocp4-prod-lark-site1` has an in-place update
   half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
   approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace
@@ -137,10 +123,6 @@ links to `http://segments-manager.example` and `http://server-scan.example`. Add
 - `inventory.yaml` adds servers in no MCE to the fleet (one locked by another add-server run,
   one in maintenance), the add-server runs' sample phases, past runs, and a fake herzi that
   starts a pool draw on `ocp4-prod-lark-site1`'s short pool now and then (ADR-0057).
-- `skill/` is a short stand-in for server-scan's Claude Code skill (`SKILL.md` and one
-  reference): the Server Scan area's Claude page (`/server-scan/claude`) shows it, and its
-  download is it zipped as server-scan zips it, with `http://server-scan.example` written in
-  unless `SERVER_SCAN_UI_URL` says otherwise.
 
 The fake MCE also serves live status and InfraEnvs, as if `CLUSTER_STATUS_ENABLED` were on. An
 uninstall walks a few sample phases, about 8 s each, then frees the server and removes its

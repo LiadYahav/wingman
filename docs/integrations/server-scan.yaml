@@ -3,6 +3,9 @@
 # docs/integrations/server-scan.md. A path that ends in / is a folder.
 # tests/repo/test_integrations_map.py keeps it true: every wingman path
 # exists, and a file is listed here exactly when it names this map.
+#
+# Wingman's Server Scan area was removed after 3.52.0 (ADR-0048's 2026-11-23
+# amendments). What is left reads two routes: the fleet rows and one server.
 
 upstream: team-redbull/server-scan
 # v6.6.0 is 635e08a; Wingman was matched to v5.3.0 (92146d3), brought to
@@ -10,234 +13,23 @@ upstream: team-redbull/server-scan
 # in 3.48.0 (its 2026-11-18 amendment).
 synced_at: v6.6.0
 
-# What Wingman reads or ports: a change here matters even when no entry
-# below follows the file (a new route, schema, enum or page).
+# What Wingman reads: the two routes, their shapes and the values in them.
+# Every path here is followed below, so nothing is listed as not followed;
+# the rest of server-scan (its other routes, writes, reservations, login and
+# UI) is not watched.
 watch:
-  - backend/app/api/v1/
+  - backend/app/api/v1/servers.py
+  - backend/app/api/v1/schemas.py
   - backend/app/domain/enums/
-  - backend/app/domain/models/
-  - frontend/src/
-  - frontend/public/architecture/
-  - frontend/public/icons/app-icon.svg
-  - .claude/skills/server-scan-api/
-
-# Under watch, and deliberately not followed.
-not_followed:
-  - upstream:
-      - backend/app/api/v1/reservation_schemas.py
-    why: >-
-      the reservations and /servers/available are the workflows' calls (herzi's,
-      add-server-to-mce's); Wingman shows a reservation only as a server's record
-      carries it
-  - upstream:
-      - backend/app/api/v1/auth.py
-      - backend/app/api/v1/auth_schemas.py
-      - backend/app/api/v1/tokens.py
-      - backend/app/api/v1/token_schemas.py
-      - backend/app/api/v1/__init__.py
-      - backend/app/domain/models/api_token.py
-      - frontend/src/api/auth.ts
-      - frontend/src/api/personalToken.ts
-      - frontend/src/features/auth/
-      - frontend/src/features/skill/TokenSection.tsx
-      - frontend/src/components/AdminGate.tsx
-      - frontend/src/components/AuditGate.tsx
-    why: >-
-      server-scan's own login, roles and personal tokens: Wingman signs people in
-      itself and reaches server-scan with its shared tokens; a personal token is
-      made on server-scan's own Claude page
-  - upstream:
-      - frontend/src/api/client.ts
-      - frontend/src/api/queryKeys.ts
-      - frontend/src/api/platform.ts
-      - frontend/src/api/healthMetrics.ts
-      - frontend/src/features/classification/hooks.ts
-      - frontend/src/features/confs/hooks.ts
-      - frontend/src/features/events/hooks.ts
-      - frontend/src/features/health/hooks.ts
-      - frontend/src/features/inventory/hooks.ts
-      - frontend/src/features/servers/hooks.ts
-      - frontend/src/features/sites/hooks.ts
-      - frontend/src/lib/query-client.ts
-      - frontend/src/lib/toast.ts
-      - frontend/src/lib/clipboard.ts
-      - frontend/src/lib/useDebouncedValue.ts
-      - frontend/src/components/AppLayout.tsx
-      - frontend/src/components/AppFooter.tsx
-      - frontend/src/components/CopyButton.tsx
-      - frontend/src/components/RouteErrorBoundary.tsx
-      - frontend/src/components/Toaster.tsx
-      - frontend/src/routes/
-      - frontend/src/test/
-      - frontend/src/main.tsx
-      - frontend/src/router.tsx
-      - frontend/src/assets/
-      - frontend/src/vite-env.d.ts
-    why: >-
-      server-scan's own shell and data layer: Wingman reads day1's routes with
-      its own hooks (features/server-scan/api/), in its own layout and design
-  - upstream:
-      - frontend/src/features/inventory/InventoryPage.test.tsx
-      - frontend/src/features/inventory/MaintenanceToggle.test.tsx
-    why: >-
-      server-scan's render tests of its Servers page and its maintenance toggle,
-      through its own hooks, router and DOM; Wingman holds the page with its e2e
-      specs (apps/web/e2e/tests/server-scan-servers.spec.ts), and the pure rules
-      those tests reach with the cases of rows.test.ts, which the map follows
+  - backend/app/domain/models/openshift.py
 
 files:
-  # ── day1: server-scan's answers typed in its shapes (domain) ──────────────
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/servers.py
-    upstream:
-      - backend/app/api/v1/schemas.py
-      - backend/app/api/v1/maintenance_schemas.py
-      - backend/app/domain/models/maintenance.py
-      - backend/app/domain/enums/core.py
-      - backend/app/domain/enums/__init__.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/sites.py
-    upstream: [backend/app/api/v1/sites_schemas.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/record.py
-    upstream:
-      - backend/app/api/v1/schemas.py
-      - backend/app/domain/enums/core.py
-      - backend/app/domain/models/server.py
-      - backend/app/domain/models/reservation.py
-      - frontend/src/types/server.ts
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/hardware.py
-    upstream:
-      - backend/app/domain/models/hardware.py
-      - backend/app/domain/models/network.py
-      - backend/app/domain/models/connectivity.py
-      - frontend/src/types/server.ts
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/events.py
-    upstream:
-      - backend/app/api/v1/events_schemas.py
-      - backend/app/domain/models/audit_event.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/confs.py
-    upstream:
-      - backend/app/api/v1/confs_schemas.py
-      - backend/app/domain/models/conf.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/rules.py
-    upstream:
-      - backend/app/api/v1/classification_schemas.py
-      - backend/app/api/v1/health_policy_schemas.py
-      - backend/app/domain/models/classification_rule.py
-      - backend/app/domain/models/health_policy.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/jobs.py
-    upstream: [backend/app/api/v1/job_schemas.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/skill.py
-    upstream: [backend/app/api/v1/skill_schemas.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/architecture.py
-    upstream: [frontend/public/architecture/]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/domain/tokens.py
-    upstream: [backend/app/dependencies.py]
-
-  # ── day1: how each answer is read (infrastructure) ────────────────────────
   - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/adapter.py
-    upstream:
-      - backend/app/api/v1/servers.py
-      - backend/app/api/v1/sites.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/parse.py
-    upstream: [backend/app/api/v1/schemas.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/sites.py
-    upstream: [backend/app/api/v1/sites_schemas.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/record.py
-    upstream:
-      - backend/app/api/v1/servers.py
-      - backend/app/api/v1/events.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/events.py
-    upstream: [backend/app/api/v1/events.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/confs.py
-    upstream: [backend/app/api/v1/confs.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/rules.py
-    upstream:
-      - backend/app/api/v1/classification_rules.py
-      - backend/app/api/v1/health_policies.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/jobs.py
-    upstream: [backend/app/api/v1/jobs.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/skill.py
-    upstream: [backend/app/api/v1/skill.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/writes.py
-    upstream:
-      - backend/app/api/v1/servers.py
-      - backend/app/api/v1/maintenance_schemas.py
-      - backend/app/errors.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/architecture.py
-    upstream: [frontend/public/architecture/]
-  - wingman: apps/day1-service/src/wingman_day1/api/conditional.py
     upstream: [backend/app/api/v1/servers.py]
-    note: the rows' weak ETag and 304
-
-  # ── day1: the fakes that port server-scan's own rules ────────────────────
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/sites.py
-    upstream: [backend/app/api/v1/sites.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/events.py
-    upstream:
-      - backend/app/api/v1/events.py
-      - backend/app/infrastructure/mongodb/audit_event_repository.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/jobs.py
-    upstream: [backend/app/infrastructure/jobs/fake.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/skill.py
-    upstream: [backend/app/application/services/skill_bundle.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/fakes/refresh.py
-    upstream: [backend/app/application/services/server_refresh.py]
-
-  # ── day1: the area's routes, in server-scan's shapes and parameters ──────
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/api/servers_schemas.py
-    upstream: [backend/app/api/v1/schemas.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/api/sites_schemas.py
-    upstream: [backend/app/api/v1/sites_schemas.py]
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/api/record_schemas.py
+    note: GET /servers/rows (its weak ETag and 304) and GET /servers/{id}
+  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/infrastructure/parse.py
     upstream:
       - backend/app/api/v1/schemas.py
-      - backend/app/api/v1/events_schemas.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/api/events_schemas.py
-    upstream:
-      - backend/app/api/v1/events.py
-      - backend/app/api/v1/events_schemas.py
-  - wingman: apps/day1-service/src/wingman_day1/integrations/server_scan/api/skill_schemas.py
-    upstream: [backend/app/api/v1/skill_schemas.py]
-
-  # ── day1: tests held to server-scan's answers ────────────────────────────
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_sites.py
-    upstream:
-      - backend/app/api/v1/sites_schemas.py
-      - backend/app/api/v1/sites.py
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_record.py
-    upstream:
-      - backend/app/api/v1/schemas.py
-      - backend/app/api/v1/events_schemas.py
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_events.py
-    upstream:
-      - backend/app/api/v1/events_schemas.py
-      - backend/app/api/v1/events.py
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_confs.py
-    upstream: [backend/app/api/v1/confs_schemas.py]
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_rules.py
-    upstream:
-      - backend/app/api/v1/classification_schemas.py
-      - backend/app/api/v1/health_policy_schemas.py
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_jobs.py
-    upstream: [backend/app/api/v1/job_schemas.py]
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_skill.py
-    upstream: [backend/app/api/v1/skill.py]
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_architecture.py
-    upstream: [frontend/public/architecture/]
-  - wingman: apps/day1-service/tests/integrations/server_scan/unit/infrastructure/test_server_scan_refresh.py
-    upstream:
-      - backend/app/api/v1/servers.py
-      - backend/app/errors.py
-      - backend/app/application/services/server_refresh.py
-
-  # ── dev: the fake fleet's fixtures, in server-scan's shapes ──────────────
-  - wingman: dev/fleet-fixtures/confs.yaml
-    upstream: [backend/app/infrastructure/providers/fake/confs.py]
-  - wingman: dev/fleet-fixtures/rules.yaml
-    upstream: [backend/app/domain/services/health/health_policy_defaults.py]
-  - wingman: dev/fleet-fixtures/events.yaml
-    upstream:
-      - backend/app/application/services/audit_service.py
-      - backend/app/domain/models/audit_event.py
-  - wingman: dev/fleet-fixtures/skill/SKILL.md
-    upstream: [.claude/skills/server-scan-api/]
-    note: a short stand-in; only its format (the frontmatter, the BASE_URL= line) follows
+      - backend/app/domain/enums/
+      - backend/app/domain/models/openshift.py
+    note: ServerRowsResponse and ServerDetail's openshift.cluster_name

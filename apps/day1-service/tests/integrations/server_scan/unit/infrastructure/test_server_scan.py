@@ -19,29 +19,8 @@ from wingman_day1.domain.errors import (
     ServerScanUnavailableError,
 )
 from wingman_day1.domain.servers import ServerDetail, ServerRow
-from wingman_day1.integrations.server_scan.domain.architecture import ArchitectureDiagram
-from wingman_day1.integrations.server_scan.domain.confs import ConfList
-from wingman_day1.integrations.server_scan.domain.events import (
-    EventActorList,
-    EventPage,
-    EventQuery,
-)
-from wingman_day1.integrations.server_scan.domain.jobs import JobRun, JobsOverview, PodLogs
-from wingman_day1.integrations.server_scan.domain.record import ServerRecord, VmHostAnswer
-from wingman_day1.integrations.server_scan.domain.rules import (
-    ClassificationRuleList,
-    HealthPolicyList,
-)
-from wingman_day1.integrations.server_scan.domain.servers import (
-    FleetRows,
-    MaintenanceStart,
-    ServerMaintenance,
-)
-from wingman_day1.integrations.server_scan.domain.sites import FleetSites
-from wingman_day1.integrations.server_scan.domain.skill import Skill, SkillZip
 from wingman_day1.integrations.server_scan.infrastructure.adapter import HttpServerInventory
 from wingman_day1.integrations.server_scan.infrastructure.cached import CachedServerInventory
-from wingman_day1.integrations.server_scan.infrastructure.fakes.sites import count_sites
 
 TOKEN = "server-scan-viewer-token-never-shown-0001"
 SERVER_ID = "srv_d226c05c968244e19f68e4aa8f16bad3"
@@ -326,115 +305,21 @@ async def test_calls_are_counted_by_operation_and_outcome() -> None:
     assert count("get_server", "not_found") == 1
 
 
-RUN = {
-    "name": "",
-    "created_at": None,
-    "started_at": None,
-    "finished_at": None,
-    "active": 0,
-    "succeeded": 0,
-    "failed": 0,
-    "state": "pending",
-    "manual": True,
-    "triggered_by": "api-token-admin",
-}
-
-
 class CountingInventory:
-    rule_reads = 0
-    """Both reads of the Rules & Policies page."""
-
     def __init__(self) -> None:
         self.row_reads = 0
         self.server_reads = 0
-        self.site_reads = 0
-        self.conf_reads = 0
-        self.event_reads = 0
-        self.job_reads = 0
-        self.job_starts = 0
         self.fail = False
 
     async def rows(self) -> list[ServerRow]:
-        return list((await self.fleet()).rows)
-
-    async def fleet(self) -> FleetRows:
         self.row_reads += 1
         if self.fail:
             raise ServerScanUnavailableError("down")
-        return FleetRows(rows=(PARSED,), generated_at=None)
+        return [PARSED]
 
     async def server(self, server_id: str) -> ServerDetail:
         self.server_reads += 1
         return ServerDetail(server_id, "n", None)
-
-    async def sites(self) -> FleetSites:
-        self.site_reads += 1
-        if self.fail:
-            raise ServerScanUnavailableError("down")
-        return count_sites([PARSED], [("bat-yam", "Bat Yam")])
-
-    async def confs(self) -> ConfList:
-        self.conf_reads += 1
-        return ConfList(items=())
-
-    async def start_maintenance(self, server_id: str, start: MaintenanceStart) -> ServerMaintenance:
-        raise AssertionError("not written here")
-
-    async def end_maintenance(self, server_id: str) -> ServerMaintenance:
-        raise AssertionError("not written here")
-
-    async def refresh(self, server_id: str) -> ServerRecord:
-        raise AssertionError("not written here")
-
-    async def record(self, server_id: str) -> ServerRecord:
-        raise AssertionError("not read here")
-
-    async def vm_host(self, server_id: str) -> VmHostAnswer:
-        raise AssertionError("not read here")
-
-    async def server_events(
-        self, server_id: str, *, cursor: str | None, page_size: int
-    ) -> EventPage:
-        raise AssertionError("not read here")
-
-    async def events(self, query: EventQuery) -> EventPage:
-        self.event_reads += 1
-        return EventPage.model_validate_json(
-            '{"items": [], "page": {"next_cursor": null, "has_more": false, "page_size": 50}}'
-        )
-
-    async def event_actors(self) -> EventActorList:
-        self.event_reads += 1
-        return EventActorList(items=())
-
-    async def skill(self) -> Skill:
-        raise AssertionError("not read here")
-
-    async def skill_zip(self, base_url: str) -> SkillZip:
-        raise AssertionError("not read here")
-
-    async def architecture_diagram(self, slug: str) -> ArchitectureDiagram:
-        raise AssertionError("not read here")
-
-    async def classification_rules(self) -> ClassificationRuleList:
-        self.rule_reads += 1
-        return ClassificationRuleList(items=())
-
-    async def health_policies(self) -> HealthPolicyList:
-        self.rule_reads += 1
-        return HealthPolicyList(items=())
-
-    async def jobs(self) -> JobsOverview:
-        self.job_reads += 1
-        return JobsOverview(enabled=False, backend="off", namespace=None)
-
-    async def job_logs(self, cronjob: str, job: str, pod: str, *, tail: int) -> PodLogs:
-        self.job_reads += 1
-        return PodLogs(pod=pod, tail=tail, text="")
-
-    async def run_job(self, cronjob: str) -> JobRun:
-        self.job_starts += 1
-        return JobRun.model_validate(RUN | {"name": f"{cronjob}-manual-abc123"})
 
 
 async def test_the_cache_reads_the_fleet_once_per_ttl_and_one_server_every_time() -> None:
@@ -447,15 +332,6 @@ async def test_the_cache_reads_the_fleet_once_per_ttl_and_one_server_every_time(
     assert (inner.row_reads, inner.server_reads) == (1, 2)
 
 
-async def test_the_rules_and_policies_are_read_through_every_time() -> None:
-    inner = CountingInventory()
-    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
-    for _ in range(2):
-        await cached.classification_rules()
-        await cached.health_policies()
-    assert inner.rule_reads == 4
-
-
 async def test_a_failed_fleet_read_is_not_cached() -> None:
     inner = CountingInventory()
     inner.fail = True
@@ -464,74 +340,3 @@ async def test_a_failed_fleet_read_is_not_cached() -> None:
         await cached.rows()
     inner.fail = False
     assert await cached.rows() == [PARSED]
-
-
-async def test_the_sites_are_cached_for_their_own_ttl_apart_from_the_rows() -> None:
-    clock = [0.0]
-    inner = CountingInventory()
-    cached = CachedServerInventory(inner, TtlCache(clock=lambda: clock[0]), ttl=30, sites_ttl=10)
-    first = await cached.sites()
-    assert await cached.sites() == first
-    await cached.rows()
-    assert (inner.site_reads, inner.row_reads) == (1, 1)
-    clock[0] = 11.0
-    await cached.sites()
-    await cached.rows()
-    assert (inner.site_reads, inner.row_reads) == (2, 1)
-
-
-async def test_without_a_sites_ttl_the_sites_keep_the_rows_ttl() -> None:
-    clock = [0.0]
-    inner = CountingInventory()
-    cached = CachedServerInventory(inner, TtlCache(clock=lambda: clock[0]), ttl=30)
-    await cached.sites()
-    clock[0] = 29.0
-    await cached.sites()
-    assert inner.site_reads == 1
-
-
-async def test_a_failed_sites_read_is_not_cached() -> None:
-    inner = CountingInventory()
-    inner.fail = True
-    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
-    with pytest.raises(ServerScanUnavailableError):
-        await cached.sites()
-    inner.fail = False
-    assert (await cached.sites()).sites[0].site_id == "bat-yam"
-    assert inner.site_reads == 2
-
-
-async def test_the_confs_are_read_through_every_time() -> None:
-    inner = CountingInventory()
-    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
-    await cached.confs()
-    await cached.confs()
-    assert inner.conf_reads == 2
-
-
-async def test_the_events_and_their_actors_are_read_through_every_time() -> None:
-    inner = CountingInventory()
-    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
-    for _ in range(2):
-        await cached.events(EventQuery())
-        await cached.event_actors()
-    assert inner.event_reads == 4
-
-
-async def test_the_jobs_and_their_logs_are_read_through_every_time() -> None:
-    inner = CountingInventory()
-    cached = CachedServerInventory(inner, TtlCache(), ttl=30, sites_ttl=10)
-    for _ in range(2):
-        await cached.jobs()
-        await cached.job_logs("c", "j", "p", tail=5)
-    assert inner.job_reads == 4
-
-
-async def test_a_job_start_goes_through_once_and_clears_nothing() -> None:
-    inner = CountingInventory()
-    cache = TtlCache()
-    cached = CachedServerInventory(inner, cache, ttl=30, sites_ttl=10)
-    await cached.rows()
-    started = await cached.run_job("c")
-    await cached.rows()
-    assert (started.name, inner.job_starts, inner.row_reads) == ("c-manual-abc123", 1, 1)

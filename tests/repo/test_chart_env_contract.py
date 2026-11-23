@@ -115,48 +115,30 @@ def test_the_server_scan_token_comes_from_its_secret_to_day1_only() -> None:
     assert "SERVER_SCAN_TOKEN" not in chart_variables(), "the token is set with server-scan off"
 
 
-def test_the_server_scan_area_reads_with_the_viewer_token_and_its_own_keys() -> None:
-    """The Server Scan area (ADR-0048) reads with the viewer token; its maintenance
-    toggle (3.23.0) writes with the admin token, and a server's History (3.25.0)
-    reads with the auditor token, each an optional key of the same Secret
-    (docs/notes/2026-11-13-server-scan-area-api.md §4, §8.4, §9.5).
-    """
-    day1 = service_env(*ALL_ON)["wingman-day1"]
-    secret_refs = {
-        name: entry["valueFrom"]["secretKeyRef"]
-        for name, entry in day1.items()
-        if "secretKeyRef" in (entry.get("valueFrom") or {})
-    }
-    server_scan = {name for name in secret_refs if name.startswith("SERVER_SCAN_")}
-    assert server_scan == {
-        "SERVER_SCAN_TOKEN",
-        "SERVER_SCAN_ADMIN_TOKEN",
-        "SERVER_SCAN_AUDITOR_TOKEN",
-    }
-    assert {"SERVER_SCAN_ADMIN_TOKEN", "SERVER_SCAN_AUDITOR_TOKEN"} <= set(env_names(Day1Settings))
-    assert secret_refs["SERVER_SCAN_ADMIN_TOKEN"] == {
-        "name": "server-scan-viewer",
-        "key": "admin-token",
-        "optional": True,
-    }, "a Secret without the admin key still starts day1"
-    assert secret_refs["SERVER_SCAN_AUDITOR_TOKEN"] == {
-        "name": "server-scan-viewer",
-        "key": "auditor-token",
-        "optional": True,
-    }, "a Secret without the auditor key still starts day1"
-    assert "optional" not in secret_refs["SERVER_SCAN_TOKEN"]
-    day2 = service_env(*ALL_ON)["wingman-day2"]
-    assert not {"SERVER_SCAN_ADMIN_TOKEN", "SERVER_SCAN_AUDITOR_TOKEN"} & set(day2)
-
-
-@pytest.mark.parametrize(
-    ("key", "variable"),
-    [("adminKey", "SERVER_SCAN_ADMIN_TOKEN"), ("auditorKey", "SERVER_SCAN_AUDITOR_TOKEN")],
-)
-def test_the_admin_and_auditor_keys_can_be_left_out(key: str, variable: str) -> None:
-    no_key = service_env(*ALL_ON, "--set", f"serverScan.tokenSecret.{key}=")["wingman-day1"]
-    assert variable not in no_key
-    assert "SERVER_SCAN_TOKEN" in no_key
+def test_day1_reads_server_scan_with_the_viewer_token_only() -> None:
+    """One viewer token, from the Secret, for every read (ADR-0038). The admin and auditor
+    tokens went with the Server Scan area (removed after 3.52.0): their keys render nothing."""
+    with_keys = (
+        "--set",
+        "serverScan.tokenSecret.adminKey=admin-token",
+        "--set",
+        "serverScan.tokenSecret.auditorKey=auditor-token",
+    )
+    for extra in ((), with_keys):
+        day1 = service_env(*ALL_ON, *extra)["wingman-day1"]
+        secret_refs = {
+            name: entry["valueFrom"]["secretKeyRef"]
+            for name, entry in day1.items()
+            if "secretKeyRef" in (entry.get("valueFrom") or {})
+        }
+        assert {name for name in secret_refs if name.startswith("SERVER_SCAN_")} == {
+            "SERVER_SCAN_TOKEN"
+        }
+        assert "optional" not in secret_refs["SERVER_SCAN_TOKEN"]
+    assert not {"SERVER_SCAN_ADMIN_TOKEN", "SERVER_SCAN_AUDITOR_TOKEN"} & set(
+        env_names(Day1Settings)
+    )
+    assert "SERVER_SCAN_TOKEN" not in service_env(*ALL_ON)["wingman-day2"]
 
 
 def test_a_server_scan_with_auth_off_gets_no_token() -> None:
@@ -167,8 +149,7 @@ def test_a_server_scan_with_auth_off_gets_no_token() -> None:
         if pair[1] != "serverScan.tokenSecret.name=server-scan-viewer"
         for arg in pair
     ]
-    tokens = {"SERVER_SCAN_TOKEN", "SERVER_SCAN_ADMIN_TOKEN", "SERVER_SCAN_AUDITOR_TOKEN"}
-    assert not tokens & set(service_env(*auth_off).get("wingman-day1", {})), (
+    assert "SERVER_SCAN_TOKEN" not in service_env(*auth_off).get("wingman-day1", {}), (
         "a server-scan with auth off gets no token at all"
     )
 
@@ -302,46 +283,16 @@ def test_multi_infraenv_nodepools_are_off_unless_enabled() -> None:
     assert "multiInfraEnvNodepools" in wrong.stderr
 
 
-def test_fetch_now_is_off_unless_enabled_and_needs_server_scan() -> None:
-    """ADR-0048: ``day1.serverScanRefresh.enabled`` sets DAY1_SERVER_SCAN_REFRESH, also off for
-    values kept from 3.47 that have no such key; on, it needs ``serverScan.url``; not a boolean,
-    the schema refuses it."""
-    assert render()["wingman-config"]["data"]["DAY1_SERVER_SCAN_REFRESH"] == "false"
-    kept = render("--set", "day1.serverScanRefresh=null")["wingman-config"]["data"]
-    assert kept["DAY1_SERVER_SCAN_REFRESH"] == "false"
-    on = render(*ALL_ON, "--set", "day1.serverScanRefresh.enabled=true")["wingman-config"]["data"]
-    assert on["DAY1_SERVER_SCAN_REFRESH"] == "true"
-    refused = template("--set", "day1.serverScanRefresh.enabled=true")
-    assert refused.returncode != 0
-    assert "day1.serverScanRefresh.enabled needs serverScan.url" in refused.stderr
-    wrong = template(*ALL_ON, "--set-string", "day1.serverScanRefresh.enabled=yes")
-    assert wrong.returncode != 0
-    assert "serverScanRefresh" in wrong.stderr
-
-
-@pytest.mark.parametrize(
-    ("key", "variable", "needs"),
-    [
-        ("segmentsArea", "DAY1_SEGMENTS_AREA", "segmentsManager.url"),
-        ("serverScanArea", "DAY1_SERVER_SCAN_AREA", "serverScan.url"),
-    ],
-)
-def test_the_areas_are_off_unless_enabled_and_need_their_system(
-    key: str, variable: str, needs: str
-) -> None:
-    """ADR-0047 and ADR-0048's 2026-11-23 amendments: ``day1.<area>.enabled`` sets its variable,
-    off by default and for values kept from 3.50 that have no such key; on, it needs its system's
-    url; not a boolean, the schema refuses it."""
-    assert render()["wingman-config"]["data"][variable] == "false"
-    assert render("--set", f"day1.{key}=null")["wingman-config"]["data"][variable] == "false"
-    on = render(*ALL_ON, "--set", f"day1.{key}.enabled=true")["wingman-config"]["data"]
-    assert on[variable] == "true"
-    refused = template("--set", f"day1.{key}.enabled=true")
-    assert refused.returncode != 0
-    assert f"day1.{key}.enabled needs {needs}" in refused.stderr
-    wrong = template(*ALL_ON, "--set-string", f"day1.{key}.enabled=yes")
-    assert wrong.returncode != 0
-    assert key in wrong.stderr
+@pytest.mark.parametrize("key", ["serverScanRefresh", "segmentsArea", "serverScanArea"])
+def test_the_removed_areas_switches_are_accepted_and_render_nothing(key: str) -> None:
+    """The Segments and Server Scan areas were removed after 3.52.0 (ADR-0047, ADR-0048):
+    ``day1.<key>.enabled`` renders no variable, needs no system's url, and changes nothing."""
+    for base in ((), tuple(ALL_ON)):
+        on = render(*base, "--set", f"day1.{key}.enabled=true")
+        assert on == render(*base)
+    variables = {"DAY1_SERVER_SCAN_REFRESH", "DAY1_SEGMENTS_AREA", "DAY1_SERVER_SCAN_AREA"}
+    assert not variables & set(render()["wingman-config"]["data"])
+    assert not variables & set(env_names(Day1Settings))
 
 
 def test_excluded_agent_labels_are_label_keys_joined_with_commas() -> None:

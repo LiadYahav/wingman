@@ -414,9 +414,6 @@ def build_context(
         segments_manager_ui_url=segments_manager.segments_manager_ui(settings) or None,
         placement=placement,
         quick_links=quick_links,
-        segments=segments_manager.segments_service(
-            adapters.ledger, cache, cluster_service, ttl=ttl
-        ),
         upgrades=platform.upgrade_service(settings, adapters.upgrade, cluster_service, cache),
         scale=scale_service(settings, adapters.scale, cluster_service, spec_catalog),
         agent_labels=AgentLabelsService(cluster_service, day1, owned.excluded_agent_labels),
@@ -429,7 +426,6 @@ def build_context(
             workflows=adapters.add_server,
             cache=cache,
         ),
-        server_scan=server_scan.server_scan_service(inventory, settings),
         platforms=platforms(settings, ledger=adapters.ledger, inventory=adapters.inventory),
     )
 

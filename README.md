@@ -279,43 +279,7 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day1/platforms` | The top bar's systems: `{"platforms": [{"id", "name", "url", "area"}]}`, segments-manager (`segments`, "Segments Manager") then server-scan (`server-scan`, "Server Scan"), each only when day1 is configured for it; `url` is its own UI (`SEGMENTS_MANAGER_UI_URL` or `SERVER_SCAN_UI_URL`, else its API's URL), `area` whether Wingman's area for it is on (`DAY1_SEGMENTS_AREA`, `DAY1_SERVER_SCAN_AREA`). Read from the settings: nothing is called |
-
-#### Segments (admins only, ADR-0047)
-
-Read only, from segments-manager's open GETs; `501 FEATURE_DISABLED` while `SEGMENTS_MANAGER_URL` is empty or the area is off (`DAY1_SEGMENTS_AREA`, off by default: `details.setting` names it), `502 DEPENDENCY_UNAVAILABLE` when segments-manager fails ([API note](docs/notes/2026-11-13-segments-area-api.md)).
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/day1/segments/sites` | segments-manager's sites, in its order |
-| `GET` | `/api/day1/segments/stats` | Each site's allocated and total segments, and the allocated count per type |
-| `GET` | `/api/day1/segments` | Every segment (`site`, `status`, `type` filter), each holder joined to its cluster file in day1; `fresh=true` reads segments-manager's database, at most once per 5 seconds per replica |
-
-#### Server Scan (admins only, ADR-0048)
-
-server-scan's pages, read through day1 in server-scan's own shapes; `501 FEATURE_DISABLED` while `SERVER_SCAN_URL` is empty or the area is off (`DAY1_SERVER_SCAN_AREA`, off by default: `details.setting` names it; the Nodes tab, placement and Inventory Management read server-scan through their own routes either way), `502 DEPENDENCY_UNAVAILABLE` when server-scan fails or refuses a token ([API note](docs/notes/2026-11-13-server-scan-area-api.md)).
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/day1/server-scan/sites` | server-scan's Sites: every configured site in its order, then `unassigned`, and the fleet, each counted per vendor, health, maintenance, installation type and OpenShift state, as server-scan counts them (cached 10 seconds per replica) |
-| `GET` | `/api/day1/server-scan/classification-rules` | server-scan's enabled classification rules (what gives a server its installation type from its own fields), in its shape and the order it tries them; read now with the viewer token, not cached by day1 |
-| `GET` | `/api/day1/server-scan/health-policies` | server-scan's enabled health policies (what judges a server's health), in its shape, every condition node whole; read now with the viewer token, not cached by day1 |
-| `GET` | `/api/day1/server-scan/servers` | server-scan's fleet rows, every field, in its order, and `generated_at`, from the rows cache the Nodes tab and Inventory Management share; day1's own weak `ETag`, a bodiless `304` for a current `If-None-Match` |
-| `PUT` | `/api/day1/server-scan/servers/{server_id}/maintenance` | Put a server into maintenance (`{reason?, expected_end?}`), as server-scan's toggle does, with its admin token; logged with the person's name. `501` without the admin token (unless server-scan runs with auth off), `504 AMBIGUOUS_WRITE` when unanswered, never retried |
-| `GET` | `/api/day1/server-scan/servers/{server_id}` | One server whole, in server-scan's shape (the fields its server page reads; `reservation.held` judged by day1), with `maintenance_available`/`_detail` and `history_available`/`_detail`; read now, not cached by day1; 404 for an unknown server |
-| `GET` | `/api/day1/server-scan/servers/{server_id}/vm-host` | The host a KubeVirt VM runs on, resolved now, in server-scan's shape; 404 for a server that is not a VM |
-| `GET` | `/api/day1/server-scan/servers/{server_id}/events` | One page of the server's History, newest first (`cursor`, `page_size` 1-200, default 50), with server-scan's auditor token; `501` without it beside a viewer token (unless server-scan runs with auth off) |
-| `DELETE` | `/api/day1/server-scan/servers/{server_id}/maintenance` | End a server's maintenance; the same rules |
-| `POST` | `/api/day1/server-scan/servers/{server_id}/refresh` | Fetch now (with `DAY1_SERVER_SCAN_REFRESH`, off by default: else `501` naming it): read the server from its vendor manager now, as server-scan's button does (no body), with its admin token; the record as just read, in the shape of `GET …/servers/{server_id}` (its `revision` moves only when the content changed); logged with the person's name. `409 SERVER_REFRESH_REFUSED` in server-scan's words when it cannot read the server from its manager (nothing changed), `404` for an unknown server, `502` when the manager fails, `501` without the admin token beside a viewer token (unless server-scan runs with auth off), `504 AMBIGUOUS_WRITE` when unanswered (day1 waits up to 120 seconds), never retried |
-| `GET` | `/api/day1/server-scan/events` | One page of the fleet's audit trail, newest first, in server-scan's shape, with its filters passed on (`event_type`, `server_name`, `actor_id`, `server_id`, `since` inclusive and `until` exclusive with their zone, `cursor`, `page_size` 1-200, default 50) and checked first; with server-scan's auditor token, as History; `501` without it beside a viewer token (`details.setting`), `422` for a cursor server-scan refuses; not cached by day1 |
-| `GET` | `/api/day1/server-scan/events/actors` | Who wrote the audit trail, busiest first, each with its type, display and event count (the Events page's User filter); the auditor token and its `501`, as the list; not cached by day1 |
-| `GET` | `/api/day1/server-scan/skill` | server-scan's Claude Code skill in its shape (name, description, `when_to_use`, `allowed_tools`, version, files), with `server_scan_url` (the address for people and Claude Code) and `token_line` (the placeholder the zip names); cached 60 seconds per replica; 404 when server-scan carries no skill |
-| `GET` | `/api/day1/server-scan/skill/download` | server-scan's zip of the skill (`<name>.zip`), `server_scan_url` written into its `SKILL.md`; never cached |
-| `GET` | `/api/day1/server-scan/architecture/{slug}` | One of server-scan's architecture diagrams, `{slug, html}`: the page its UI serves at `<SERVER_SCAN_UI_URL>/architecture/<slug>.html`, read with no token, taken only if archify made it, cached 5 minutes per replica. 404 for one its UI does not serve (or an address that is not its UI), 422 for a slug no diagram can have |
-| `GET` | `/api/day1/server-scan/confs` | server-scan's hardware catalog, in its shape: every conf (server configuration) it can read, unpaged, in its natural `conf_id` order, and `unreadable`, the ids of the stored ones it could not read; read now with the viewer token, not cached by day1 |
-| `GET` | `/api/day1/server-scan/jobs` | server-scan's triggerable CronJobs (its collectors and prunes), each with its schedule, warning, `values.yaml` flag and recent Jobs, newest first, and their pods, in its shape; `enabled: false` when server-scan has the feature off. With server-scan's **admin** token (it keeps Jobs for its admins, reads too), none when it runs with auth off; `501` with a viewer token alone; not cached by day1 |
-| `GET` | `/api/day1/server-scan/jobs/{cronjob}/runs/{job}/pods/{pod}/logs?tail=` | A pod's last `tail` lines (default 500; server-scan caps them), only along CronJob → its Job → its pod (else `404`, server-scan's words); the admin token, as above |
-| `POST` | `/api/day1/server-scan/jobs/{cronjob}/run` | Start a Job of the CronJob now (no body; `201`, the new Job), as server-scan's Run job, with its admin token; logged with the person's name. `409 JOB_ALREADY_RUNNING` while it has an unfinished Job, `404` for one server-scan may not start, `504 AMBIGUOUS_WRITE` when unanswered, never retried |
+| `GET` | `/api/day1/platforms` | The top bar's systems: `{"platforms": [{"id", "name", "url"}]}`, segments-manager (`segments`, "Segments Manager") then server-scan (`server-scan`, "Server Scan"), each only when day1 is configured for it; `url` is its own UI (`SEGMENTS_MANAGER_UI_URL` or `SERVER_SCAN_UI_URL`, else its API's URL), which the top bar opens in a new tab. Read from the settings: nothing is called |
 
 #### Inventory Management (everyone reads, admins add; ADR-0057)
 
@@ -492,12 +456,10 @@ MCE_INFRAENV_CACHE_SECONDS=600            # how long a hub's InfraEnv list is ke
 DAY1_STATUS_POLL_SECONDS=30               # the live status stream (the chart does not set it yet)
 
 # The nodes' servers from server-scan, uninstall through the workflows orchestrator (ADR-0038; off by default);
-# the same server-scan feeds Inventory Management (ADR-0057) and the Server Scan area for admins (ADR-0048)
-SERVER_SCAN_URL=                          # e.g. http://server-scan-api.<ns>.svc:8000; empty: nodes without servers, no uninstall, no Server Scan area, no top-bar link
-SERVER_SCAN_UI_URL=                       # server-scan's UI: the top bar's link and node links for anyone without the Server Scan area, the Claude page's zip, MCP command and token link, and where day1 reads the Architecture page's diagrams; default SERVER_SCAN_URL
-SERVER_SCAN_TOKEN=                        # a server-scan viewer token (Bearer), from a Secret, for every read (the Server Scan area too); empty: no header
-SERVER_SCAN_ADMIN_TOKEN=                  # server-scan's admin token, for the maintenance toggle on Servers and the Jobs page; empty with a viewer token: the toggle is off
-SERVER_SCAN_AUDITOR_TOKEN=                # server-scan's auditor token, for a server's History only; empty with a viewer token: History is off
+# the same server-scan feeds placement (ADR-0050), Inventory Management (ADR-0057) and the top bar's link
+SERVER_SCAN_URL=                          # e.g. http://server-scan-api.<ns>.svc:8000; empty: nodes without servers, no uninstall, no Inventory Management, no top-bar link
+SERVER_SCAN_UI_URL=                       # server-scan's UI, where node links and the top bar's link point; default SERVER_SCAN_URL
+SERVER_SCAN_TOKEN=                        # a server-scan viewer token (Bearer), from a Secret, for every read; empty: no header
 SERVER_SCAN_SSL_VERIFY=true               # true, false, or a CA bundle path
 SERVER_SCAN_TIMEOUT_SECONDS=10
 WORKFLOWS_API_URL=                        # e.g. http://workflows-orchestrator-api.<ns>.svc:8080; needs SERVER_SCAN_URL
@@ -512,13 +474,10 @@ DAY1_ADD_SERVERS=false                    # Inventory Management (ADR-0057): adm
 DAY1_SCALE_NODEPOOLS=false                # Scale on the Nodes tab through update-nodepool (ADR-0062); needs WORKFLOWS_API_URL, not live status; on, no merge request changes an existing NodePool's replicas
 DAY1_MULTI_INFRAENV_NODEPOOLS=false       # a nodepool may draw from several InfraEnvs, nodepool[].additionalInfraEnvNames (ADR-0064); parked: leave it off, the chart and the specs template don't carry the key; off, Wingman never writes it
 DAY1_EXCLUDED_AGENT_LABELS=               # Agent label keys every agent NodePool excludes (ADR-0065), comma-separated: herzi's label for used Agents; written on new clusters' nodepools (excludeAgentLabels), an existing cluster's through its own MR; empty: nothing changes
-DAY1_SERVER_SCAN_REFRESH=false            # Fetch now in the Server Scan area (ADR-0048): one server read from its vendor manager now; needs SERVER_SCAN_URL, server-scan v6.5.0 or later and SERVER_SCAN_ADMIN_TOKEN; off: no button, the route answers 501
-DAY1_SERVER_SCAN_AREA=false               # the Server Scan area inside Wingman, for admins (ADR-0048's 2026-11-23 amendment); needs SERVER_SCAN_URL; off: the top bar links to server-scan's own UI and the area's routes answer 501
 
-# segments-manager: the cluster's EPG, checked against the file (ADR-0039), and the Segments area (ADR-0047); off by default; read only
-SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG, no Segments area
+# segments-manager: the cluster's EPG, checked against the file (ADR-0039), and the top bar's link; off by default; read only
+SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG, no top-bar link
 SEGMENTS_MANAGER_UI_URL=                  # where the cluster page's links and the top bar's link point (its UI); default SEGMENTS_MANAGER_URL; both empty: no link
-DAY1_SEGMENTS_AREA=false                  # the Segments area inside Wingman, for admins (ADR-0047's 2026-11-23 amendment); needs SEGMENTS_MANAGER_URL; off: the top bar links to segments-manager's own UI and the area's routes answer 501
 SEGMENTS_MANAGER_SSL_VERIFY=true          # true, false, or a CA bundle path
 SEGMENTS_MANAGER_TIMEOUT_SECONDS=5
 
