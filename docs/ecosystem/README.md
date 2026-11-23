@@ -37,7 +37,7 @@ What we learned on 2026-11-07 when we re-read the platform the team built over t
 | **herzi** | Keeping each InfraEnv pool filled with ready Agents | No CRD or status object. Reads InfraEnv/Agent/NodePool and Temporal | Prometheus metrics `herzi_pool_demand/_need/_blocked{reason}`, InfraEnv annotations `herzi.redbull.io/state`, `blocked-until` | Starts `add-server-to-mce` (≤20 per call, ≤15 open per pool) | n/a | **Read** pool state; check that a cluster's InfraEnv pool is managed and live before creating it |
 | **hostedclusters-setup chart** | Renders HostedCluster, NodePools, NodePool ConfigMaps and the Crossplane DHCP scope from layered values | Git (day1 repo) | n/a | ArgoCD renders on merge to `main` | n/a | **Produce the short values file**, nothing more |
 | **gitops-day2** | Per-team addon (chart) deployment on every cluster type | A GitLab group of team repos (`sigs/<team>`) plus the `argocd-day2-platform` charts | n/a (a folder existing is the registration) | MRs to team repos | n/a | **Rewrite Wingman day2** to the new folder rules |
-| **kubevirt-workflows** | Design for KubeVirt tenant clusters and the inventory "slot" model, plus 18 procedures | Docs, flow animations, one Python prototype | n/a | n/a | n/a | Holds the **Day1 workflow spec** (procedure 03) and the future self-service catalog flows |
+| **kubevirt-workflows** | The platform's architecture (AD1 to AD33), its **naming convention** (cluster, node and InfraEnv names, zones, labels, the claimed-Agent mark; the source of truth since 2026-11-22), 19 procedures, the controller specifications and the acceptance tests | Docs, flow animations, a superseded Python prototype | n/a | n/a | n/a | Holds the rules Wingman's names, kinds and capacity checks follow, and the self-service catalog flows. Read at `3ba0835` (2026-11-23): [notes/kubevirt-platform.md](notes/kubevirt-platform.md) |
 
 ## How a hosted cluster gets created today
 
@@ -244,7 +244,7 @@ This produces the ArgoCD app `redbull-ocp4-prod-herzi-site1-cert-manager-deploy`
 - **There are no quotas yet:** "Admission, which does not exist yet ... needs a pre-flight that either rejects the request with a capacity reason or accepts it with an honest estimate."
 - **Flows finish early:** "Not at workers ready".
 
-KubeVirt platform model:
+KubeVirt platform model (in full, with how it maps to day1: [notes/kubevirt-platform.md](notes/kubevirt-platform.md)):
 - Each zone has a bare-metal Seed cluster that hosts the control planes of the KubeVirt clusters.
 - Customer MCE hubs (one per OCP version band) host tenant hosted clusters.
 - Tenant workers are VMs acting as Agents, with three NodePools per cluster.
@@ -357,6 +357,7 @@ Related prior art to reuse rather than duplicate: **cluster-navigator** (`team-r
 6. **Orchestrator auth:** decided, see [Decisions](#decisions-2026-11-07).
 7. **Site codes don't match across sandboxes:** segments-manager `site1/2/3`, server-scan `nyc, tlv, bat-yam, five`, stack-export `site-a`. What is the canonical site token? segments-manager assumes it is the same token everywhere (its env key, the day1 path, the MCE name).
 8. **InfraEnv naming differs across docs:** `hp-gen11-nyc-64c-128gb` (server-scan; its server pool is `^ocp-<infraEnv>`), `<conf>-zone-<z>-metal|<cpu>` (workflows), `dell-r660-site-a-128c-1024gb-5tb` (stack-export).
+   **Answered (2026-11-22):** the naming convention sets `<flavor>-<mtl|kv<cpu>>-<zone>`, and pools draw by the InfraEnv's labels, not a name prefix ([notes/kubevirt-platform.md](notes/kubevirt-platform.md) §4).
 9. **InfraEnvs:** who creates them? Nothing in the repos does.
 10. **ArgoCD sync for per-cluster day1 apps:** auto or manual?
 11. **Air-gapped gitops-day2:** which phase is it on?
@@ -364,12 +365,15 @@ Related prior art to reuse rather than duplicate: **cluster-navigator** (`team-r
 
 ## Naming conventions cheat sheet
 
-- **MCE:** `ocp4-<env>-mce-<site>-<letter>`
-- **Seed:** `ocp4-seed-<site>-<zone>`
-- **KubeVirt cluster:** `ocp4-kubevirt-<site>-<zone>…`
-- **Hosted cluster file:** `ocp4-<env>-<name>-<site>[-<x>].yaml`. The file stem is the segments-manager `cluster_name` and the day2 folder/Argo cluster name. The HostedCluster is `ocp4-<cn>` (the stem in production) in `hcp-<cn>`.
+The platform's naming convention (kubevirt-workflows `docs/naming-convention.md`, the source of truth since 2026-11-22; [notes/kubevirt-platform.md](notes/kubevirt-platform.md) §4) sets the first five:
+
+- **MCE:** `ocp4-<lifecycle>-mce-<site>-<id>`, `<id>` one letter `a` to `z`
+- **Seed:** `ocp4-<lifecycle>-seed-<site>-<zone>-<id>`, a folder under `sites/<site>/mces/` like an MCE's
+- **KV cluster:** `ocp4-<lifecycle>-kv-<site>-<zone>-<id>`, a file under its seed's `hostedClusters/`. `mce`, `seed` and `kv` are reserved flavors: they tell these apart from MCEs and tenants in day1
+- **Hosted cluster file:** `ocp4-<lifecycle>-<flavor>-<site>-<id>.yaml` (Wingman's rule is still ADR-0014's `ocp4-<env>-<name>-<site>[-<x>]`). The file stem is the segments-manager `cluster_name` and the day2 folder/Argo cluster name. The HostedCluster is `ocp4-<cn>` (the stem in production) in `hcp-<cn>`.
+- **Node:** `ocp-<flavor>-<mtl|kv<cpu>>-<site>-<serial|mac>`; **InfraEnv:** `<flavor>-<mtl|kv<cpu>>-<zone>`, no site and no hub, so every hub at a site has the same pool names. A pool's Agents carry its `agentLabels` (`redbull.io/flavor`, `redbull.io/size`, `redbull.io/site`, `topology.kubernetes.io/zone`), and the convention has NodePools select by them (the hostedclusters-setup chart still selects by the InfraEnv's own `infraenvs.agent-install.openshift.io` label)
 - **Cluster names** are unique across the whole estate.
-- **Workflow ids are deterministic:** `allocate-segment-HC-<cluster>`, `create-hosted-cluster-<cluster>`, slot runs `<wf>-<mce>_<pool>_<n>`.
+- **Workflow ids are deterministic:** `allocate-segment-HC-<cluster>`, `provision-cluster-<cluster>`, `update-nodepool-<cluster>`, `upgrade-cluster-<cluster>`, slot runs `add-server-to-mce-<mce>_<infraEnv>_<slot>` (the 2026-11-07 spec named a `create-hosted-cluster-<cluster>`, never built).
 - **Task queues:** `<workflow>-workflow` for workflows; `<domain>-activity` for activities, with `-<mce>` added when the worker writes to an MCE.
 - **Segments:** /24 only; types `HC`, `MCE`, `INVENTORY` (an MCE's BMH boot network), `PXE`, `HUB`, `UPI`. Only UPI segments can be shared (`cluster_name` is a list).
 - **server-scan hostname rules:**
@@ -403,6 +407,7 @@ We used only GET requests against these. We skipped server-scan `/servers/availa
 | helm-charts-hostedclusters-setup | `1820ce0` | 2026-10-31 | [notes/hosted-clusters.md](notes/hosted-clusters.md) |
 | gitops-day2-prod | `979e306` | 2026-09-29 | [notes/day2-kubevirt.md](notes/day2-kubevirt.md) |
 | kubevirt-workflows | `f7b714e` | 2026-10-22 | [notes/day2-kubevirt.md](notes/day2-kubevirt.md) |
+| kubevirt-workflows again (`github.com/Idan-Maimon/kubevirt-workflows`) | `3ba0835` | 2026-11-23 | [notes/kubevirt-platform.md](notes/kubevirt-platform.md) |
 | gitops-day1-platform-config (GitHub mirror of the day1 values repo) | `d6e43de` | 2026-11-01 | This README |
 | gitops-day1-argocd-platform (day1 ApplicationSets) | `07f31d3` | 2026-09-15 | This README |
 | sim-day2-{argocd-day2-platform, sigs-falcon, sigs-lynx, sigs-orca, helm-charts, argo-appproject, day1-platform-config} (temporary day2 simulation, one repo per GitLab project) | 2026-09-29 | 2026-09-29 | This README |
