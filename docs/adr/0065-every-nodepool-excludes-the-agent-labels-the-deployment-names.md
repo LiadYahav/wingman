@@ -1,7 +1,7 @@
 # ADR-0065: Every NodePool excludes the Agent labels the deployment names, written into each cluster file
 
 Date: 2026-11-19
-Status: Accepted; amended 2026-11-23 (the chart change is patch 0002 and renders `matchLabels` plus a `DoesNotExist` per key, without the InfraEnvs' `In`); amended 2026-11-23 (herzi's label is `redbull.io/ever-installed`)
+Status: Accepted; amended 2026-11-23 (the chart change is patch 0002 and renders `matchLabels` plus a `DoesNotExist` per key, without the InfraEnvs' `In`); amended 2026-11-23 (herzi's label is `redbull.io/ever-installed`); amended 2026-11-23 (3.55.0: Wingman's side of herzi's plan, the value and when to set it)
 
 ## Context
 
@@ -191,3 +191,59 @@ so.
 - **Docs** name it where they named the proposal:
   `docs/upgrade/3.48-to-3.49.md` step 9 and
   `docs/ecosystem/notes/hosted-clusters.md`.
+
+## Amendment (2026-11-23, 3.55.0): Wingman's side of herzi's plan; the value and when to set it
+
+The user asked Wingman to follow what herzi has built and planned,
+branches included (2026-11-23). Read then: herzi's `main` (`0ef4d2a`,
+v1.2.1, nothing new since 2026-11-07) is add-only, labels nothing and
+blocks the pool of any NodePool with a `matchExpressions`; draft PR #1
+(`docs/multi-infraenv-tiering`, `7aec276`) proposes `redbull.io/claimed`;
+the branch `docs/retire-used-servers-plan` (`578edf1`, no PR, its owner's
+decisions D1 to D7 marked approved) is the plan the user's label comes
+from. That plan: herzi labels an Agent `redbull.io/ever-installed: "true"`
+on bind (D6); a labelled free Agent is *retiring*, never supply, and herzi
+starts `remove-server-from-mce` for it, in dry run first (D7); a NodePool may
+carry the InfraEnv's own `matchLabels` plus exactly that one `DoesNotExist`
+(anything else stays a pool problem, its §4.2); a removal waits while any
+Agent NodePool whose selector matches the Agent lacks the expression (its
+rule 6) and while its pool is paused (rule 7); rollout is herzi first, then
+the NodePools, one non-production NodePool first (its §10).
+
+- **The keys that mark a used Agent come from one place,**
+  `WorkflowKeys.used_agent_labels` (`domain/used_agents.py`): this
+  setting's keys when it is set, else herzi's label. Placement counts a free
+  Agent carrying one as no free server (ADR-0050's 2026-11-23 amendment)
+  and Inventory Management shows it apart, never as available (ADR-0057's
+  3.55.0 amendment). This replaces the Consequences' "Placement and
+  Inventory Management count free Agents as before": with the setting
+  empty no NodePool excludes the label, but an Agent herzi is about to
+  remove is no capacity, and until herzi labels, none carries it.
+- **The documented value is `["redbull.io/ever-installed"]`, that one key.**
+  The setting stays a generic list, validated as before, but herzi's plan
+  accepts only that expression: any other key, or a second one, is again a
+  pool problem in herzi. The chart's values, its README, README and
+  `settings.py` say so.
+- **Still shipped empty**, the air-gap included: herzi's `main` would block
+  the pool of every NodePool the value reaches. The checks that say when
+  to set it, per MCE (herzi's `agents` RBAC with `patch`, Agents labelled,
+  `dryRunRemove` in its ConfigMap; the chart patch; the template; one key),
+  are `docs/upgrade/3.54-to-3.55.md` step 6.
+- **The rollout of decision 5, made visible.** Inventory Management lists,
+  per MCE, the agent nodepools of its cluster files that lack the key
+  (`domain/used_agents.unguarded`), once herzi has used Agents there or the
+  setting is set; the list empties as each cluster's merge request merges.
+  A `Replace` NodePool stays on it, marked: decision 6 never gives it the
+  key, so herzi holds its InfraEnv's used Agents until a person changes it
+  to `InPlace`.
+
+Rejected: a default of `redbull.io/ever-installed` (herzi's `main` blocks
+the pool); refusing a key other than herzi's at start-up (the list stays
+generic, as decision 1 says, should herzi's label change); a button on
+Inventory Management that opens each cluster's merge request (the
+per-cluster merge request is the cluster's; its API stays as decision 5
+says, and the list links each cluster's page).
+
+Verification: as ADR-0050's and ADR-0057's amendments name
+(`apps/day1-service/tests/unit/domain/test_used_agents.py`,
+`tests/api/test_used_agents_api.py`, `apps/web/e2e/tests/inventory-used.spec.ts`).

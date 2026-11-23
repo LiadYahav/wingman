@@ -8,7 +8,7 @@ import { MAX_SERVERS, addRequest, isSettled, refusalTitle, startSummary, toggled
 
 const mce = (name: string, site: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
   site, mce: name, known: true, servers: 3, in_clusters: 1, available: 2, usable: 2,
-  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 0, ...overrides,
+  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 0, used: 0, used_error: null, unguarded: [], ...overrides,
 });
 
 const run = (overrides: Partial<InventoryRun> = {}): InventoryRun => ({
@@ -36,7 +36,7 @@ describe("the pools", () => {
       mce("b", "site2"),
       mce("c", "site1", { known: false }),
       mce("d", "site1", { known: false, pools: [{ infra_env: "p", available: 0, usable: 0, hardware: [], ready: 0, needs_fix: 0, total: 0,
-                                                    server_prefix: "ocp-p-mtl-site1-", label_problems: [] }] }),
+                                                    server_prefix: "ocp-p-mtl-site1-", label_problems: [], used: [], herzi: { ignored: false, paused: false, blocked_until: null, no_hardware_since: null } }] }),
     ]);
     expect(groups.map((g) => [g.site, g.mces.map((m) => m.mce), g.quiet.map((m) => m.mce)])).toEqual([
       ["site1", ["a", "d"], ["c"]],

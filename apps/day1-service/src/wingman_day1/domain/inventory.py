@@ -33,18 +33,28 @@ rechecks the server live, so a ready server's run may still be refused.
 A pool's **total** is its available Agents, its ready servers and those that
 need a fix: what it reaches once every one is fixed and installed. A pool
 whose servers' names are unknown counts none ready or needing a fix.
+
+A **used** Agent (``used_agents``: it carries herzi's
+``redbull.io/ever-installed``, or the deployment's excluded labels, and is
+bound to nothing) is in server-scan's ``INSTALLED_TO_INVENTORY`` like an
+available one, but no NodePool that excludes the label takes it and herzi
+removes it from the MCE: it is counted apart, in its InfraEnv label's pool,
+and never as available or in a total. Its row is found as the nodes view
+finds an Agent's server; one server-scan has no row for is still counted.
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final
 
+from wingman_day1.domain.herzi_marks import HerziMarks
 from wingman_day1.domain.infra_env_pools import Pool
 from wingman_day1.domain.mce_capacity import SPARE_STATE, usable
 from wingman_day1.domain.servers import ServerRow
+from wingman_day1.domain.used_agents import UsedAgent
 
 AVAILABLE_STATE: Final = "AVAILABLE"
 """server-scan's ``openshift_state`` of a server in no MCE: one the workflow may install."""
@@ -126,6 +136,10 @@ class PoolCount:
     """``ocp-<flavor>-<size>-<site>-`` from its agentLabels; ``None`` when unknown."""
     label_problems: tuple[str, ...] = ()
     """Why its agentLabels name no servers: the workflow refuses a pool draw into it."""
+    used: tuple[str, ...] = ()
+    """Its used Agents' servers, by name: herzi removes them; never available."""
+    herzi: HerziMarks = field(default_factory=HerziMarks)
+    """What herzi marked on its InfraEnv: ignored, paused, an order in flight, no hardware."""
 
     @property
     def total(self) -> int:
@@ -155,6 +169,10 @@ class MceInventory:
     """Free servers its pools name that a draw could pick, each counted once."""
     needs_fix: int = 0
     """Offered free servers its pools name that need a fix, each counted once."""
+    used: tuple[UsedAgent, ...] | None = None
+    """Its used Agents, herzi's to remove; ``None`` when they were not read."""
+    used_error: str | None = None
+    """Why its used Agents are unknown, when they could not be read."""
 
     @property
     def total(self) -> int:
@@ -176,7 +194,12 @@ def _split(free: Sequence[ServerRow], pools: Sequence[Pool]) -> tuple[int, int]:
     return ready, len(named) - ready
 
 
-def _pool(pool: Pool | None, rows: Sequence[ServerRow], free: Sequence[ServerRow]) -> PoolCount:
+def _pool(
+    pool: Pool | None,
+    rows: Sequence[ServerRow],
+    free: Sequence[ServerRow],
+    used: Sequence[UsedAgent] = (),
+) -> PoolCount:
     """One pool's counts; ``None``: the available servers no one pool names."""
     split = _split(free, [pool]) if pool is not None and pool.server_prefix else None
     return PoolCount(
@@ -188,6 +211,8 @@ def _pool(pool: Pool | None, rows: Sequence[ServerRow], free: Sequence[ServerRow
         needs_fix=split[1] if split else None,
         server_prefix=pool.server_prefix if pool else None,
         label_problems=pool.label_problems if pool else (),
+        used=tuple(u.server for u in used),
+        herzi=pool.herzi if pool else HerziMarks(),
     )
 
 
@@ -199,19 +224,33 @@ def mce_inventory(
     pools: Sequence[Pool],
     infra_envs_error: str | None = None,
     infra_envs_from: str = FROM_MCE,
+    used: Sequence[UsedAgent] | None = None,
+    used_error: str | None = None,
 ) -> MceInventory:
-    """``mce``'s counts from the whole fleet's ``rows`` and its pools (empty when unknown)."""
+    """``mce``'s counts from the whole fleet's ``rows`` and its pools (empty when unknown).
+
+    ``used`` are its used Agents (``None``: not read), their rows left out of
+    the available ones.
+    """
     on_mce = [row for row in rows if row.mce == mce]
-    available = [row for row in on_mce if row.state == SPARE_STATE]
+    taken = {u.row.id for u in used or () if u.row is not None}
+    available = [row for row in on_mce if row.state == SPARE_STATE and row.id not in taken]
     known = {pool.infra_env: pool for pool in pools}
     by_pool: dict[str | None, list[ServerRow]] = {name: [] for name in known}
     for row in available:
         by_pool.setdefault(infra_env_of(row, mce, pools), []).append(row)
+    used_by: dict[str | None, list[UsedAgent]] = {}
+    for agent in used or ():
+        used_by.setdefault(agent.infra_env, []).append(agent)
+        by_pool.setdefault(agent.infra_env, [])
     free = [row for row in rows if row.state == AVAILABLE_STATE]
     names = sorted(name for name in by_pool if name is not None)
-    counted = [_pool(known.get(name, Pool.unread(name)), by_pool[name], free) for name in names]
-    if by_pool.get(None):
-        counted.append(_pool(None, by_pool[None], free))
+    counted = [
+        _pool(known.get(name, Pool.unread(name)), by_pool[name], free, used_by.get(name, ()))
+        for name in names
+    ]
+    if by_pool.get(None) or used_by.get(None):
+        counted.append(_pool(None, by_pool.get(None, []), free, used_by.get(None, ())))
     ready, needs_fix = _split(free, pools)
     return MceInventory(
         site=site,
@@ -227,6 +266,8 @@ def mce_inventory(
         infra_envs_from=infra_envs_from,
         ready=ready,
         needs_fix=needs_fix,
+        used=tuple(used) if used is not None else None,
+        used_error=used_error,
     )
 
 

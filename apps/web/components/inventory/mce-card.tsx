@@ -6,8 +6,9 @@ import { Hint } from "@/components/common/hint";
 import { cn } from "@/lib/utils";
 import { totalSum } from "@/lib/inventory/waiver";
 import type { InstallTarget } from "@/lib/inventory/install";
-import type { MceInventory } from "@/types/inventory";
+import type { MceInventory, UsedLabels } from "@/types/inventory";
 import { PoolRow } from "./pool-row";
+import { UnguardedNotice, UsedCount, UsedUnread } from "./used-agents";
 
 function HeaderHint({ label, hint }: { label: string; hint: string }) {
   return (
@@ -49,7 +50,7 @@ function PoolsFromDay1({ mce }: { mce: MceInventory }) {
 }
 
 /** The card's counts line: shown collapsed too, so a collapsed MCE still says what it has. */
-function Counts({ mce }: { mce: MceInventory }) {
+function Counts({ mce, usedLabels }: { mce: MceInventory; usedLabels: UsedLabels }) {
   if (!mce.known) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -64,6 +65,7 @@ function Counts({ mce }: { mce: MceInventory }) {
       <span data-testid="mce-available">
         <span className="text-lg font-semibold tabular-nums text-foreground">{mce.available}</span> available
       </span>
+      <UsedCount labels={usedLabels} count={mce.used ?? 0} testId="mce-used" big />
       <span>{mce.in_clusters} in clusters</span>
       <span className="inline-flex items-center gap-0.5" data-testid="mce-total">
         <span>
@@ -86,12 +88,15 @@ function Counts({ mce }: { mce: MceInventory }) {
  */
 export function MceCard({
   mce,
+  usedLabels,
   canAdd,
   onAdd,
   collapsed,
   onToggle,
 }: {
   mce: MceInventory;
+  /** The keys that mark a used Agent here (herzi's label, or the deployment's). */
+  usedLabels: UsedLabels;
   canAdd: boolean;
   onAdd: (t: InstallTarget) => void;
   collapsed: boolean;
@@ -126,10 +131,12 @@ export function MceCard({
             <span>{mce.mce}</span>
           </button>
         </h3>
-        <Counts mce={mce} />
+        <Counts mce={mce} usedLabels={usedLabels} />
       </header>
       <div id={bodyId} hidden={collapsed}>
         <PoolsFromDay1 mce={mce} />
+        <UsedUnread mce={mce} />
+        <UnguardedNotice mce={mce} labels={usedLabels} />
         {mce.pools.length > 0 && (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-sm" aria-label={`Pools on ${mce.mce}`}>
@@ -154,7 +161,14 @@ export function MceCard({
               </thead>
               <tbody className="divide-y divide-border/50">
                 {mce.pools.map((pool) => (
-                  <PoolRow key={pool.infra_env ?? ""} mce={mce.mce} pool={pool} canAdd={canAdd} onAdd={onAdd} />
+                  <PoolRow
+                    key={pool.infra_env ?? ""}
+                    mce={mce.mce}
+                    pool={pool}
+                    usedLabels={usedLabels}
+                    canAdd={canAdd}
+                    onAdd={onAdd}
+                  />
                 ))}
               </tbody>
             </table>

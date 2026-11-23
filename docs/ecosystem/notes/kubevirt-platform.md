@@ -206,7 +206,9 @@ is `redbull.io/ever-installed`**, the user's decision (2026-11-23, ADR-0065's am
 unlike the convention and herzi PR #1 (draft), which say `redbull.io/claimed`. It is the plan on
 herzi's branch `docs/retire-used-servers-plan` (`578edf1`, 2026-11-19, no PR, its decisions marked
 approved), which lets a NodePool carry that one `DoesNotExist` and nothing else. The setting stays
-empty, with no default, until herzi ships the label.
+empty, with no default, until herzi ships the label (the checks: `docs/upgrade/3.54-to-3.55.md`
+step 6). Since 3.55.0 Wingman already treats a free Agent carrying the label as used, never free:
+placement leaves it out (ADR-0050) and Inventory Management shows it apart (ADR-0057).
 herzi main (`0ef4d2a`) labels nothing and collects nothing. The order is the convention's either
 way: the mark and the backfill before the exclusion.
 

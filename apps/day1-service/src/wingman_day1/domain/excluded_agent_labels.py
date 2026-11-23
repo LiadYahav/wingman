@@ -189,7 +189,7 @@ class PoolPlan:
     """Why it changes, or why not."""
 
 
-def _nodepool_name(index: int, pool: Mapping[str, object], cluster_name: str) -> str:
+def nodepool_name(index: int, pool: Mapping[str, object], cluster_name: str) -> str:
     """The NodePool the chart renders: ``value_drift.nodepool_name``'s rule (an import cycle)."""
     if pool.get("name"):
         return str(pool["name"])
@@ -213,7 +213,7 @@ def plan(
     found: list[PoolPlan] = []
     for index, pool in nodepool_entries(values, "nodepool"):
         have = tuple(keys_of(pool) or ())
-        name = _nodepool_name(index, pool, cluster_name)
+        name = nodepool_name(index, pool, cluster_name)
         if kubevirt:
             found.append(PoolPlan(index, name, have, False, "KubeVirt: takes no Agents"))
         elif list(have) == list(labels):

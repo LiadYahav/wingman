@@ -56,6 +56,13 @@ the install-server → add-server-to-mce rename and bump Go dependencies).
   One release per hub (`config.mceName`), so a seed gets its own.
 - Its metrics (`internal/metrics/metrics.go:56-117`, `herzi_pool_*`, `herzi_orders_total`, …):
   Wingman reads none.
+- **Wingman 3.55.0 follows the branch's plan and `main`'s marks** (ADR-0050's and ADR-0057's
+  2026-11-23 amendments, ADR-0065's 3.55.0 amendment): a free Agent labelled
+  `redbull.io/ever-installed` is no free server to placement and is shown apart in Inventory
+  Management, the NodePools that do not exclude the label are listed per MCE (the plan's rule 6
+  holds removals until they do), and each pool shows `main`'s InfraEnv marks (`ignore`, `paused`,
+  `blocked-until`, `state`). `DAY1_EXCLUDED_AGENT_LABELS` still ships empty; the checks that say when
+  to set it to that one key are `docs/upgrade/3.54-to-3.55.md` step 6.
 
 ---
 

@@ -46,11 +46,31 @@ cluster files name (`infra_envs_from: "day1"`), with no `server_prefix`
 fix), and `infra_envs_error` says why its own list is unknown. When the
 MCE's list is read, it is the only source (no union).
 
-**Not shown in the alpha: herzi's InfraEnv annotations**
-(`herzi.redbull.io/blocked-until`, `herzi.redbull.io/state`). Day1's MCE
-read lists InfraEnv names and `spec.agentLabels`; reading their annotations
-is a new hub read and a new grant. herzi's numbers and decisions (demand, target, need, dry
-run) are in its metrics and logs only, which Wingman cannot read.
+**Used Agents (since 3.55.0, ADR-0057's amendment).** A free Agent that
+carries a used-Agent key (herzi's `redbull.io/ever-installed`, or
+`DAY1_EXCLUDED_AGENT_LABELS`'s keys when set: `used_labels`) is herzi's to
+remove from the MCE, and no NodePool that excludes the label takes it. Day1
+reads only those from the hub, one label-selected list per key
+(`<key>,!agentMachineRef`, kept 30 s), joins each to its server-scan row as
+the nodes view does, and takes that row out of the available ones: it is
+counted in its InfraEnv label's pool (`pools[].used`, its servers by name)
+and on the MCE (`used`), never in a total. Without live status `used` is
+`null`; a failed read is `used_error`. `unguarded` lists the MCE's cluster
+files' agent nodepools whose `excludeAgentLabels` lacks a key (by NodePool
+name, with `missing`, and `replace` for an `upgradeType: Replace` one, which
+the cluster's merge request leaves out): herzi removes no used Agent of
+their InfraEnvs until each excludes it (herzi's plan, rule 6).
+
+**herzi's InfraEnv marks (since 3.55.0).** The InfraEnv list day1 already
+reads carries them in `metadata`, so they need no new read or grant (the
+alpha thought otherwise): `pools[].herzi` is `ignored` (the label
+`herzi.redbull.io/ignore`), `paused` (`herzi.redbull.io/paused: "true"`),
+`blocked_until` (`herzi.redbull.io/blocked-until`, an order in flight or
+unclear) and `no_hardware_since` (`herzi.redbull.io/state`'s `capFailAt`
+when newer than its `lastOKAt`), all off on a row with no InfraEnv or a
+malformed mark. herzi's numbers and decisions (demand, target, need, dry run,
+a pool excluded or paused in its config) are in its metrics, logs and
+ConfigMap only, which Wingman cannot read.
 
 ## 1. `GET /api/day1/inventory`: every MCE's pools
 
@@ -75,7 +95,8 @@ run) are in its metrics and logs only, which Wingman cannot read.
           "needs_fix": null,
           "total": 0,
           "server_prefix": null,
-          "label_problems": ["redbull.io/flavor is missing", "redbull.io/size is missing", "redbull.io/site is missing"]
+          "label_problems": ["redbull.io/flavor is missing", "redbull.io/size is missing", "redbull.io/site is missing"],
+          "used": []
         },
         {
           "infra_env": "r650-mtl-az1",
@@ -86,7 +107,9 @@ run) are in its metrics and logs only, which Wingman cannot read.
           "needs_fix": 1,
           "total": 4,
           "server_prefix": "ocp-r650-mtl-site1-",
-          "label_problems": []
+          "label_problems": [],
+          "used": ["ocp-r650-mtl-site1-dlfake0901"],
+          "herzi": {"ignored": false, "paused": true, "blocked_until": null, "no_hardware_since": null}
         },
         {
           "infra_env": null,
@@ -97,7 +120,8 @@ run) are in its metrics and logs only, which Wingman cannot read.
           "needs_fix": null,
           "total": 1,
           "server_prefix": null,
-          "label_problems": []
+          "label_problems": [],
+          "used": []
         }
       ],
       "infra_envs": ["dell-r760-site1-64c-512gb-20tb", "r650-mtl-az1"],
@@ -105,11 +129,23 @@ run) are in its metrics and logs only, which Wingman cannot read.
       "infra_envs_from": "mce",
       "ready": 1,
       "needs_fix": 1,
-      "total": 8
+      "total": 8,
+      "used": 1,
+      "used_error": null,
+      "unguarded": [
+        {
+          "cluster": "ocp4-prod-heron-site1",
+          "nodepool": "prod-heron-site1-r650",
+          "infra_envs": ["r650-mtl-az1"],
+          "missing": ["redbull.io/ever-installed"],
+          "replace": false
+        }
+      ]
     }
   ],
   "add_servers": {"available": true, "detail": null},
-  "runs": {"available": true, "detail": null}
+  "runs": {"available": true, "detail": null},
+  "used_labels": {"keys": ["redbull.io/ever-installed"], "source": "herzi"}
 }
 ```
 
@@ -132,6 +168,12 @@ run) are in its metrics and logs only, which Wingman cannot read.
   tooltip on its disabled Install servers), when `DAY1_ADD_SERVERS` is off
   or there is no orchestrator. Live status is not needed (3.19.0).
 - `runs.available` is `false`, with `detail`, without the orchestrator.
+- `used`, `used_error`, `pools[].used`, `unguarded` and `used_labels` (§0,
+  since 3.55.0): herzi's used Agents, apart from `available` and every
+  `total`, and the agent nodepools that do not exclude the used-Agent keys.
+  `used_labels.source` is `setting` (`DAY1_EXCLUDED_AGENT_LABELS`) or `herzi`
+  (its label, the setting empty). The page raises `unguarded` once it
+  matters: herzi has used Agents on the MCE, or the source is `setting`.
 
 | Status | `code` | When |
 |---|---|---|

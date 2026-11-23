@@ -40,6 +40,40 @@ export interface PoolCount extends PoolNames {
   needs_fix: number | null;
   /** `available` + `ready` + `needs_fix`: what the pool reaches once every one is fixed and installed. */
   total: number;
+  /** Its used Agents' servers, by name (ADR-0057's 3.55.0 amendment): herzi removes them; never available or in `total`. */
+  used: string[];
+  /** What herzi marked on its InfraEnv; all off when it said nothing (or the row has no InfraEnv). */
+  herzi: HerziMarks;
+}
+
+/** herzi's marks on an InfraEnv (herzi `main`): `herzi.redbull.io/ignore`, `/paused`, `/blocked-until`, `/state`. */
+export interface HerziMarks {
+  /** herzi does not read the pool, and orders nothing. */
+  ignored: boolean;
+  /** herzi orders nothing (nor removes used Agents, by its plan). */
+  paused: boolean;
+  /** An order in flight or unclear: herzi orders nothing more until then. */
+  blocked_until: string | null;
+  /** Its last order found no hardware, and it has not recovered since. */
+  no_hardware_since: string | null;
+}
+
+/** An agent nodepool of the MCE's cluster files that does not exclude every used-Agent key (ADR-0065). */
+export interface UnguardedNodepool {
+  cluster: string;
+  /** Its NodePool's name, as the MCE shows it. */
+  nodepool: string;
+  infra_envs: string[];
+  /** The keys it does not exclude. */
+  missing: string[];
+  /** `upgradeType: Replace`: its cluster's merge request leaves it out (every node would be replaced). */
+  replace: boolean;
+}
+
+/** The Agent label keys that mark a used Agent here: `DAY1_EXCLUDED_AGENT_LABELS`, else herzi's label. */
+export interface UsedLabels {
+  keys: string[];
+  source: "setting" | "herzi";
 }
 
 export interface MceInventory {
@@ -61,12 +95,18 @@ export interface MceInventory {
   ready: number;
   needs_fix: number;
   total: number;
+  /** Its used Agents, herzi's to remove; `null` when not read (live status off, or `used_error`). */
+  used: number | null;
+  used_error: string | null;
+  /** Its cluster files' agent nodepools that do not exclude every used-Agent key. */
+  unguarded: UnguardedNodepool[];
 }
 
 export interface InventoryOverview {
   mces: MceInventory[];
   add_servers: Availability;
   runs: Availability;
+  used_labels: UsedLabels;
 }
 
 // ── GET .../infra-envs/{infra_env}/candidates ─────────────────────────────────

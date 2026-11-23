@@ -4,12 +4,12 @@ import { serverCapacity } from "./capacity";
 
 const pool = (infra_env: string | null, available: number): PoolCount => ({
   infra_env, available, usable: available, hardware: [], ready: infra_env ? 0 : null, needs_fix: infra_env ? 0 : null,
-  total: available, server_prefix: infra_env ? "ocp-r650-mtl-site1-" : null, label_problems: [],
+  total: available, server_prefix: infra_env ? "ocp-r650-mtl-site1-" : null, label_problems: [], used: [], herzi: { ignored: false, paused: false, blocked_until: null, no_hardware_since: null },
 });
 
 const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
   site: "site1", mce: name, known: true, servers: 10, in_clusters: 6, available: 4, usable: 4,
-  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 0, ...overrides,
+  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 0, used: 0, used_error: null, unguarded: [], ...overrides,
 });
 
 describe("the free servers", () => {

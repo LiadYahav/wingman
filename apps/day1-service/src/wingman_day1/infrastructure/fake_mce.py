@@ -46,7 +46,7 @@ from wingman_day1.domain.names import HostedClusterNaming, HostedClusterRef
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.domain.status import HostedClusterObservation, NodePoolObservation
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
-from wingman_day1.infrastructure.hub_api import (
+from wingman_day1.infrastructure.hub_objects import (
     agent_from,
     agent_machine_from,
     hosted_cluster_from,

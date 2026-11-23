@@ -202,8 +202,9 @@ class HubApi(Protocol):
     """An MCE hub's Kubernetes API, read only.
 
     HostedClusters, NodePools and InfraEnvs, each cluster's Machines,
-    MachineSets, AgentMachines and Agents (ADR-0038), and the hub's own nodes
-    and how many pods each runs, for placement's free pods (ADR-0050).
+    MachineSets, AgentMachines and Agents (ADR-0038), the hub's own nodes
+    and how many pods each runs, for placement's free pods (ADR-0050), and
+    the used Agents herzi removes, for Inventory Management (ADR-0057).
 
     Raises ``HubNotConfiguredError``, ``HubObjectNotFoundError``,
     ``HubDeniedError`` or ``HubUnavailableError`` (``wingman_day1.domain.errors``).
@@ -247,6 +248,16 @@ class HubApi(Protocol):
         self, mce: str, *, infra_envs: Sequence[str], namespace: str | None
     ) -> list[AgentObservation]:
         """The Agents of these InfraEnvs, in ``namespace`` or the whole hub, sorted by name."""
+        ...
+
+    async def used_agents(
+        self, mce: str, *, labels: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """The Agents carrying one of these label keys, held by no AgentMachine, sorted by name.
+
+        In ``namespace`` or the whole hub: herzi's used Agents once free
+        (``domain/used_agents.py``), each once whichever keys it carries.
+        """
         ...
 
     async def pods_per_node(self, mce: str) -> dict[str, int]:

@@ -45,6 +45,7 @@ from wingman_day1.domain.nodepool_infra_envs import edit_problems as infra_env_p
 from wingman_day1.domain.replicas_ownership import replicas_problems
 from wingman_day1.domain.scale_down_policy import edit_problems as policy_problems
 from wingman_day1.domain.upgrades import version_problems
+from wingman_day1.domain.used_agents import used_labels
 
 AUTOMATION_KEYS: Final = ("vlanId", "dhcp_values", "mcFiles", "mcConfigMap", "tuningConfigmap")
 """Written on the MR branch by the allocate-segment workflow and CI; never by Wingman."""
@@ -364,6 +365,11 @@ class WorkflowKeys:
     """``DAY1_MULTI_INFRAENV_NODEPOOLS`` (ADR-0064): a nodepool may draw from several InfraEnvs."""
     excluded_agent_labels: tuple[str, ...] = ()
     """``DAY1_EXCLUDED_AGENT_LABELS`` (ADR-0065): what every new agent nodepool excludes."""
+
+    @property
+    def used_agent_labels(self) -> tuple[str, ...]:
+        """The keys that mark a used Agent: the excluded labels, else herzi's (``used_agents``)."""
+        return used_labels(self.excluded_agent_labels)
 
 
 NO_WORKFLOW_KEYS: Final = WorkflowKeys()

@@ -22,6 +22,7 @@ from wingman_day1.domain.add_server import (
     RunTarget,
     StartedRun,
 )
+from wingman_day1.domain.herzi_marks import HerziMarks
 from wingman_day1.domain.inventory import (
     FROM_DAY1,
     Candidate,
@@ -30,6 +31,7 @@ from wingman_day1.domain.inventory import (
     PoolCount,
 )
 from wingman_day1.domain.servers import ServerRow
+from wingman_day1.domain.used_agents import Unguarded
 
 
 def _iso(moment: datetime | None) -> str | None:
@@ -64,6 +66,29 @@ class HardwareOut(BaseModel):
         )
 
 
+class HerziOut(BaseModel):
+    """What herzi marked on the pool's InfraEnv (its ``main``): all off when it said nothing."""
+
+    ignored: bool
+    """``herzi.redbull.io/ignore``: herzi does not read the pool, and orders nothing."""
+    paused: bool
+    """``herzi.redbull.io/paused: "true"``: herzi orders nothing (nor removes, by its plan)."""
+    blocked_until: str | None
+    """``herzi.redbull.io/blocked-until``: an order in flight or unclear, until then."""
+    no_hardware_since: str | None
+    """Its state's ``capFailAt``, unrecovered: its last order found no hardware."""
+
+    @classmethod
+    def of(cls, marks: HerziMarks) -> HerziOut:
+        """From the domain."""
+        return cls(
+            ignored=marks.ignored,
+            paused=marks.paused,
+            blocked_until=_iso(marks.blocked_until),
+            no_hardware_since=_iso(marks.no_hardware_since),
+        )
+
+
 class PoolOut(BaseModel):
     """One InfraEnv pool; ``infra_env`` null: available servers matched to no one InfraEnv."""
 
@@ -81,6 +106,9 @@ class PoolOut(BaseModel):
     """``ocp-<flavor>-<size>-<site>-`` from the InfraEnv's agentLabels; null when unknown."""
     label_problems: list[str]
     """Why its agentLabels name no servers: the workflow refuses a pool draw into it."""
+    used: list[str]
+    """Its used Agents' servers, by name: herzi removes them; never available or in ``total``."""
+    herzi: HerziOut
 
     @classmethod
     def of(cls, pool: PoolCount) -> PoolOut:
@@ -95,6 +123,32 @@ class PoolOut(BaseModel):
             total=pool.total,
             server_prefix=pool.server_prefix,
             label_problems=list(pool.label_problems),
+            used=list(pool.used),
+            herzi=HerziOut.of(pool.herzi),
+        )
+
+
+class UnguardedOut(BaseModel):
+    """An agent nodepool of the MCE's cluster files that does not exclude every used-Agent key."""
+
+    cluster: str
+    nodepool: str
+    """Its NodePool's name, as the MCE shows it."""
+    infra_envs: list[str]
+    missing: list[str]
+    """The keys it does not exclude."""
+    replace: bool
+    """``upgradeType: Replace``: its cluster's merge request leaves it out (ADR-0065)."""
+
+    @classmethod
+    def of(cls, pool: Unguarded) -> UnguardedOut:
+        """From the domain."""
+        return cls(
+            cluster=pool.cluster,
+            nodepool=pool.nodepool,
+            infra_envs=list(pool.infra_envs),
+            missing=list(pool.missing),
+            replace=pool.replace,
         )
 
 
@@ -118,10 +172,15 @@ class MceInventoryOut(BaseModel):
     needs_fix: int
     """The pools' ready and needing a fix, each free server counted once."""
     total: int
+    used: int | None
+    """Its used Agents, herzi's to remove; null when not read (no live status, ``used_error``)."""
+    used_error: str | None
+    unguarded: list[UnguardedOut]
+    """Its cluster files' agent nodepools that do not exclude every used-Agent key."""
 
     @classmethod
-    def of(cls, mce: MceInventory) -> MceInventoryOut:
-        """From the domain."""
+    def of(cls, mce: MceInventory, unguarded: list[UnguardedOut]) -> MceInventoryOut:
+        """From the domain, with its unguarded nodepools."""
         return cls(
             site=mce.site,
             mce=mce.mce,
@@ -137,7 +196,18 @@ class MceInventoryOut(BaseModel):
             ready=mce.ready,
             needs_fix=mce.needs_fix,
             total=mce.total,
+            used=len(mce.used) if mce.used is not None else None,
+            used_error=mce.used_error,
+            unguarded=unguarded,
         )
+
+
+class UsedLabelsOut(BaseModel):
+    """The Agent label keys that mark a used Agent here, and where they come from."""
+
+    keys: list[str]
+    source: Literal["setting", "herzi"]
+    """``setting``: ``DAY1_EXCLUDED_AGENT_LABELS``. ``herzi``: herzi's label, the setting empty."""
 
 
 class InventoryOut(BaseModel):
@@ -146,14 +216,22 @@ class InventoryOut(BaseModel):
     mces: list[MceInventoryOut]
     add_servers: AvailabilityOut
     runs: AvailabilityOut
+    used_labels: UsedLabelsOut
 
     @classmethod
     def of(cls, overview: InventoryOverview) -> InventoryOut:
         """From the use case."""
+        lacking: dict[str, list[UnguardedOut]] = {}
+        for mce, pool in zip(overview.unguarded_mces, overview.unguarded, strict=True):
+            lacking.setdefault(mce, []).append(UnguardedOut.of(pool))
         return cls(
-            mces=[MceInventoryOut.of(mce) for mce in overview.mces],
+            mces=[MceInventoryOut.of(mce, lacking.get(mce.mce, [])) for mce in overview.mces],
             add_servers=AvailabilityOut.of(overview.add_servers),
             runs=AvailabilityOut.of(overview.runs),
+            used_labels=UsedLabelsOut(
+                keys=list(overview.used_labels),
+                source="setting" if overview.excluded else "herzi",
+            ),
         )
 
 

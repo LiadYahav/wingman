@@ -147,6 +147,13 @@ async def test_every_mce_is_counted_by_pool_as_server_scan_reports_it(
         "total": 2,
         "server_prefix": "ocp-r650-mtl-site1-",
         "label_problems": [],
+        "used": [],
+        "herzi": {
+            "ignored": False,
+            "paused": False,
+            "blocked_until": None,
+            "no_hardware_since": None,
+        },
     }
     assert pools["r760-mtl-az1"]["ready"] == 3, "herzi's pool can grow"
     assert pools["r760-mtl-az2"]["ready"] == 3, "the other zone names the same servers"

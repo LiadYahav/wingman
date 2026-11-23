@@ -4,7 +4,8 @@ Date: 2026-11-13
 Status: Accepted; amended 2026-11-13 (3.19.0: Install servers without live status); amended
 2026-11-16 (3.38.0: Ready and Needs fix, a pool's total, collapsing an MCE, installing a
 server with its health checks waived); amended 2026-11-23 (3.54.0: a pool's servers are named by
-its InfraEnv's agentLabels)
+its InfraEnv's agentLabels); amended 2026-11-23 (3.55.0: herzi's used Agents apart, and the
+NodePools that do not exclude its label)
 
 ## Context
 
@@ -74,7 +75,9 @@ own.
   records no `requested_by`, so Wingman never guesses.
 - **herzi's own marks are left out of the alpha.** Its InfraEnv annotations
   (`blocked-until`, `state`) need a new MCE read and grant; its numbers and
-  decisions live in its metrics and logs. Both are named as missing.
+  decisions live in its metrics and logs. Both are named as missing. (Since
+  3.55.0 the marks are shown, from the InfraEnv list already read: the
+  3.55.0 amendment.)
 - **Metrics**: the `workflows` operation `start_add_server`; the runs reuse
   `list_runs` and `get_run` (ADR-0010).
 - **The fake fleet** (`DAY1_FAKE_FLEET`, development) fakes the runs: they
@@ -382,3 +385,103 @@ named install without labels); `tests/api/test_inventory_api.py`,
 `test_inventory_install_api.py`, `test_inventory_waiver_api.py`;
 `apps/web/lib/inventory/inventory.test.ts` (Vitest) and
 `apps/web/e2e/tests/inventory-names.spec.ts`.
+
+
+## Amendment (2026-11-23, 3.55.0): herzi's used Agents apart, the NodePools that do not exclude its label, and herzi's marks
+
+herzi's plan to retire used servers (team-redbull/herzi, branch
+`docs/retire-used-servers-plan`, `578edf1`, its decisions approved; not on
+herzi's `main`, `0ef4d2a`, which labels nothing): herzi labels every Agent
+bound to a cluster `redbull.io/ever-installed` as it binds, and once such an
+Agent is free again (a scale-down, an uninstall, a deleted NodePool or
+cluster, a Replace rollout) it is *retiring*: never spare, and removed from
+the MCE through `remove-server-from-mce`. server-scan writes it as
+`INSTALLED_TO_INVENTORY`, like any free Agent, so the page counted it as
+available. herzi holds such an Agent's removal while any Agent NodePool
+whose selector matches it lacks the exclusion (its rule 6), and every
+NodePool takes the exclusion through its own cluster's merge request
+(ADR-0065). The user asked for Wingman to follow what herzi has built and
+planned (2026-11-23).
+
+- **Used Agents are read from the MCE**, only them: one label-selected list
+  per used-Agent key, `<key>,!agentMachineRef` (`HubApi.used_agents`), in
+  `MCE_INFRAENV_NAMESPACE` or the whole hub, kept 30 seconds (the page's
+  refresh). The keys are placement's (ADR-0050's 2026-11-23 amendment,
+  `WorkflowKeys.used_agent_labels`): `DAY1_EXCLUDED_AGENT_LABELS` when set,
+  else herzi's label. The existing grant (`list` on `agents`, the 3.4
+  ClusterRole) covers it; no new Secret or value. A hub answers with the
+  few labelled free Agents, not its inventory, so this reverses the 3.54.0
+  amendment's rejection of reading the MCE's Agents on every page load for
+  these Agents only. Without live status they are not read (`used: null`);
+  a read that fails says why on the card (`used_error`).
+- **Apart, never available.** A used Agent bound to nothing is joined to its
+  server-scan row as the nodes view joins an Agent (BareMetalHost name, MAC,
+  serial); that row leaves the available ones, and the used Agent is counted
+  in its InfraEnv label's pool, its servers by name (`pools[].used`), and on
+  the MCE (`used`). Neither counts in a total. One server-scan has no row
+  for still counts, by its BareMetalHost's name. On the page: "2 used", in
+  the warning colour, beside the MCE's available and in the pool's
+  Available cell, its tooltip naming the servers and why ("waiting for
+  herzi to remove").
+- **The NodePools that do not exclude the label**, from the MCE's cluster
+  files (`domain/used_agents.unguarded`; no new read): each agent nodepool
+  whose `excludeAgentLabels` lacks a key, by the NodePool name the MCE
+  shows, with its InfraEnvs and whether it is `upgradeType: Replace` (the
+  cluster's merge request leaves those out). KubeVirt clusters take no
+  Agents. `GET /api/day1/inventory` lists them per MCE (`unguarded`); the
+  page shows them once they matter, when herzi has used Agents on the MCE or
+  the deployment excludes the label: "3 NodePools in 2 clusters do not
+  exclude redbull.io/ever-installed", which opens to each cluster, linked to
+  its page, and its NodePools. The tooltip says herzi removes no used Agent
+  until each excludes it, and that each cluster takes it through its own
+  merge request.
+- `GET /api/day1/inventory` gains `used_labels` (`keys`, and `source`:
+  `setting` or `herzi`).
+- **herzi's marks on a pool's InfraEnv** (herzi's `main`), read from the
+  InfraEnv list Wingman already lists, its `metadata` this time
+  (`domain/herzi_marks.py`; no new read or grant, unlike what the decision
+  above assumed): `herzi.redbull.io/ignore` (the label, herzi's default
+  `ignoreLabel`: herzi does not read the pool), `herzi.redbull.io/paused:
+  "true"` (herzi orders nothing, and by its plan removes nothing),
+  `herzi.redbull.io/blocked-until` (an order in flight or unclear) and
+  `herzi.redbull.io/state`'s `capFailAt` newer than its `lastOKAt` (its last
+  order found no hardware). Each pool carries them (`pools[].herzi`); the
+  row shows a quiet badge, the first that applies ("herzi paused"), its
+  tooltip saying each, and a paused pool's used count says herzi removes
+  none of them until it is resumed. A deadline that has passed is not shown.
+  Malformed marks are none. herzi's config (an excluded or paused pool, dry
+  run) and its metrics stay out of reach.
+
+Rejected:
+
+- **Reading every Agent of the MCE** and filtering by label: the inventory
+  of every MCE on every refresh, for the few that are used.
+- **herzi's own numbers** (`herzi_pool_retiring`, `herzi_retiring_agents`):
+  planned metrics on herzi's Prometheus endpoint, which Wingman reads
+  nowhere; keep extras thin.
+- **Listing herzi's `remove-server-from-mce` runs** beside the add-server
+  runs: the run id carries no MCE and is also started by add-server-to-mce's
+  rollback and older uninstalls (herzi's plan, §3.1), so a run could not be
+  told to be herzi's; and herzi's remover is not built.
+- **A button that opens each cluster's merge request** from this page: the
+  per-cluster merge request has its API (ADR-0065) and is the cluster's,
+  not the inventory's; the list links each cluster.
+
+Consequences: until herzi labels Agents nothing changes on the page; once
+it does, a pool's available count leaves out servers that herzi is about to
+remove, and the clusters still to give the exclusion are one click from
+their pages. An `InPlace` NodePool that gains the exclusion touches no
+running node; a `Replace` one would replace every node, and is listed for a
+person to change first.
+
+Verification: `tests/unit/domain/test_inventory_used.py` (the join, apart
+from available and the totals, a pool no InfraEnv lists, not read);
+`tests/unit/domain/test_used_agents.py` (retiring, the unguarded
+nodepools); `tests/unit/infrastructure/test_hub_used_agents.py` (the
+selector per key, namespace, paging, each Agent once, a bad key never sent,
+the fake, the cache); `tests/unit/domain/test_herzi_marks.py` (each mark,
+Go's times, a recovered or malformed state, the adapter's parse);
+`tests/api/test_used_agents_api.py` (the overview with herzi's label and
+with the setting's, the unguarded nodepools, no live status, a pool's
+marks); `apps/web/lib/inventory/used.test.ts` and `herzi.test.ts` (Vitest)
+and `apps/web/e2e/tests/inventory-used.spec.ts`.

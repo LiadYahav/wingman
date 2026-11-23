@@ -23,6 +23,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Final
 
+from wingman_day1.domain.herzi_marks import HerziMarks
+
 NAME_PREFIX: Final = "ocp-"
 """What every server name starts with."""
 POOL_LABELS: Final = ("redbull.io/flavor", "redbull.io/size", "redbull.io/site")
@@ -32,10 +34,11 @@ _POOL_WORD = re.compile(r"[a-z0-9]+")
 
 @dataclass(frozen=True, slots=True)
 class InfraEnvObservation:
-    """One InfraEnv on an MCE hub: its name and its ``spec.agentLabels``."""
+    """One InfraEnv on an MCE hub: its name, its ``spec.agentLabels`` and herzi's marks."""
 
     name: str
     agent_labels: Mapping[str, str] = field(default_factory=dict)
+    herzi: HerziMarks = field(default_factory=HerziMarks)
 
 
 def pool_label_problems(agent_labels: Mapping[str, str]) -> tuple[str, ...]:
@@ -63,6 +66,8 @@ class Pool:
     infra_env: str
     server_prefix: str | None = None
     label_problems: tuple[str, ...] = ()
+    herzi: HerziMarks = field(default_factory=HerziMarks)
+    """What herzi marked on its InfraEnv (``domain/herzi_marks.py``); none when not read."""
 
     @classmethod
     def observed(cls, infra_env: InfraEnvObservation) -> Pool:
@@ -74,6 +79,7 @@ class Pool:
             infra_env.name,
             server_prefix=f"{NAME_PREFIX}{prefix}-" if prefix is not None else None,
             label_problems=problems,
+            herzi=infra_env.herzi,
         )
 
     @classmethod

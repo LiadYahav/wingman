@@ -630,6 +630,7 @@ async def test_the_needs_the_form_sends_are_checked_per_type(
         "healthy": 2,
         "not_in_server_scan": 1,
         "health_checked": True,
+        "used": 0,
         "status": "pass",
         "detail": f"{DELL}: 2 healthy free of 2 needed (1 more free, not in server-scan)",
     }
