@@ -30,24 +30,26 @@ after the dialog's confirmation (ADR-0057's 3.38.0 amendment).
 | In clusters | the same rows | `openshift_state` `INSTALLED` |
 | **Available** (Agents in the MCE's inventory, in no cluster) | the same rows | `openshift_state` `INSTALLED_TO_INVENTORY` |
 | Usable | the same rows | available, out of maintenance, reachable, not stale, neither `CRITICAL` nor `UNKNOWN`, not contested: placement's rule (`mce_capacity.usable`), shared |
-| The pools (InfraEnvs) | the MCE's InfraEnv list (hub, cached as for the create form); without it (live status off, or the hub unreadable), the InfraEnvs the MCE's day1 cluster files name (`nodepool[].infraEnvName`) | `infra_envs_from` says which: `mce` or `day1` |
-| A server's InfraEnv | the pools above | the InfraEnv `<e>` for which the server's name starts with `ocp-<e>` (the add-server workflow draws a pool with `^ocp-<infraEnv>`), the longest when several do; else the InfraEnv of a live lock on this MCE; else none (`infra_env: null`) |
+| The pools (InfraEnvs) | the MCE's InfraEnv list with each one's `spec.agentLabels` (hub, cached as for the create form); without it (live status off, or the hub unreadable), the InfraEnvs the MCE's day1 cluster files name (`nodepool[].infraEnvName`), with no labels | `infra_envs_from` says which: `mce` or `day1` |
+| A pool's server names (since 3.54.0) | the InfraEnv's agentLabels | `server_prefix` `ocp-<redbull.io/flavor>-<redbull.io/size>-<redbull.io/site>-`: what the add-server workflow's pool draw asks server-scan for (team-redbull/workflows `29ef001`, the naming convention of 2026-11-22). `null` when the labels were not read, or when one is missing or not one lowercase word (`label_problems`, in the workflow's words: it refuses a pool draw into such an InfraEnv). The zone is in no server's name and the draw does not filter by it |
+| A server's InfraEnv | the pools above | the one pool whose `server_prefix` starts the server's name; when none or several do (one flavor and size in several zones), the InfraEnv of a live lock on this MCE; else none (`infra_env: null`, the page's "No single InfraEnv") |
 | Hardware | the rows | `vendor` and `model` |
-| **Ready** (since 3.38.0; was `drawable`, the page's Free) | the rows | `AVAILABLE` servers named `ocp-<infraEnv>…`, unlocked, out of maintenance, not contested, `HEALTHY` and reachable: what a pool draw could pick today, by the rule the workflow asks server-scan with (`/servers/available?health=HEALTHY`). server-scan's view; the workflow decides (it also checks the network category, two link-up NICs and a live recheck, which the rows do not carry) |
+| **Ready** (since 3.38.0; was `drawable`, the page's Free) | the rows | `AVAILABLE` servers the pool's `server_prefix` names (`null` when it has none), unlocked, out of maintenance, not contested, `HEALTHY` and reachable: what a pool draw could pick today, by the rule the workflow asks server-scan with (`/servers/available?health=HEALTHY`). server-scan's view; the workflow decides (it also checks the network category, two link-up NICs and a live recheck, which the rows do not carry) |
 | **Needs fix** | the rows | the same, offered (unlocked, out of maintenance, not contested), but server-scan's health is not `HEALTHY` or the BMC is unreachable: a pool draw never picks it; a named install takes it only with `allow_unhealthy` (§5) |
 | **Total** | the counts above | available + ready + needs fix: what the pool reaches once every free server is fixed and installed. On the MCE, each free server named for any of its pools is counted once. Locked, in-maintenance and contested servers are not counted |
 
 An MCE that no row names is **unknown** (`known: false`), never zero.
 server-scan unreadable: the route answers 502. The MCE's own InfraEnv list
 unreadable (or live status off): its pools are the InfraEnvs its day1
-cluster files name (`infra_envs_from: "day1"`), its rows are counted against
-them, and `infra_envs_error` says why its own list is unknown. When the
+cluster files name (`infra_envs_from: "day1"`), with no `server_prefix`
+(only a held lock places a server in one, and none counts ready or needing a
+fix), and `infra_envs_error` says why its own list is unknown. When the
 MCE's list is read, it is the only source (no union).
 
 **Not shown in the alpha: herzi's InfraEnv annotations**
 (`herzi.redbull.io/blocked-until`, `herzi.redbull.io/state`). Day1's MCE
-read lists InfraEnv names only; reading their annotations is a new hub read
-and a new grant. herzi's numbers and decisions (demand, target, need, dry
+read lists InfraEnv names and `spec.agentLabels`; reading their annotations
+is a new hub read and a new grant. herzi's numbers and decisions (demand, target, need, dry
 run) are in its metrics and logs only, which Wingman cannot read.
 
 ## 1. `GET /api/day1/inventory`: every MCE's pools
@@ -65,13 +67,26 @@ run) are in its metrics and logs only, which Wingman cannot read.
       "usable": 6,
       "pools": [
         {
-          "infra_env": "dell-r650-site1-96c-768gb",
+          "infra_env": "dell-r760-site1-64c-512gb-20tb",
+          "available": 0,
+          "usable": 0,
+          "hardware": [],
+          "ready": null,
+          "needs_fix": null,
+          "total": 0,
+          "server_prefix": null,
+          "label_problems": ["redbull.io/flavor is missing", "redbull.io/size is missing", "redbull.io/site is missing"]
+        },
+        {
+          "infra_env": "r650-mtl-az1",
           "available": 2,
           "usable": 2,
           "hardware": [{"vendor": "dell", "model": "PowerEdge R650", "available": 2, "usable": 2}],
           "ready": 1,
           "needs_fix": 1,
-          "total": 4
+          "total": 4,
+          "server_prefix": "ocp-r650-mtl-site1-",
+          "label_problems": []
         },
         {
           "infra_env": null,
@@ -80,10 +95,12 @@ run) are in its metrics and logs only, which Wingman cannot read.
           "hardware": [{"vendor": "dell", "model": "PowerEdge R760", "available": 1, "usable": 1}],
           "ready": null,
           "needs_fix": null,
-          "total": 1
+          "total": 1,
+          "server_prefix": null,
+          "label_problems": []
         }
       ],
-      "infra_envs": ["dell-r650-site1-96c-768gb", "dell-r760-site1-64c-512gb-20tb"],
+      "infra_envs": ["dell-r760-site1-64c-512gb-20tb", "r650-mtl-az1"],
       "infra_envs_error": null,
       "infra_envs_from": "mce",
       "ready": 1,
@@ -104,7 +121,11 @@ run) are in its metrics and logs only, which Wingman cannot read.
 - `infra_envs_from`: `mce` (the MCE's own list) or `day1` (the InfraEnvs its
   day1 cluster files name, while its own list is unknown; `infra_envs_error`
   says why).
-- `ready`, `needs_fix` (§0; `null` on the `infra_env: null` row) and `total`
+- `server_prefix` and `label_problems` (§0, since 3.54.0): how the pool's
+  servers are named, or why not. A pool with `label_problems` is one the
+  workflow refuses a pool draw into; the page says so.
+- `ready`, `needs_fix` (§0; `null` on the `infra_env: null` row and on a pool
+  with no `server_prefix`) and `total`
   (always a number) per pool, and per MCE (a free server named for two of
   its pools counted once). Since 3.38.0; `drawable` is gone (it was `ready`).
 - `add_servers.available` is `false`, with `detail` (one line, the web's
@@ -119,18 +140,23 @@ run) are in its metrics and logs only, which Wingman cannot read.
 
 ## 2. `GET /api/day1/inventory/mces/{mce}/infra-envs/{infra_env}/candidates`
 
-A pool's servers, for the named-install picker: `AVAILABLE` servers named
-`ocp-<infra_env>…`, with only what picking needs. Not a fleet view: a
+A pool's servers, for the named-install picker: the `AVAILABLE` servers its
+`server_prefix` names (§0), or, when it has none (labels unread, or lacking),
+every `AVAILABLE` server, not filtered by name: the workflow does not match
+a named server to the pool, and checks the server itself. Only what picking
+needs. Not a fleet view: a
 server's full record belongs to the future Server Scan area.
 
 ```json
 {
   "mce": "ocp4-prod-mce-site1-a",
-  "infra_env": "dell-r650-site1-96c-768gb",
+  "infra_env": "r650-mtl-az1",
+  "server_prefix": "ocp-r650-mtl-site1-",
+  "label_problems": [],
   "candidates": [
     {
       "id": "srv_…",
-      "name": "ocp-dell-r650-site1-96c-768gb-<serial>",
+      "name": "ocp-r650-mtl-site1-<serial>",
       "vendor": "dell",
       "model": "PowerEdge R650",
       "health": "HEALTHY",
@@ -142,7 +168,7 @@ server's full record belongs to the future Server Scan area.
     },
     {
       "id": "srv_…",
-      "name": "ocp-dell-r650-site1-96c-768gb-<serial>",
+      "name": "ocp-r650-mtl-site1-<serial>",
       "vendor": "dell",
       "model": "PowerEdge R650",
       "health": "CRITICAL",
@@ -154,11 +180,11 @@ server's full record belongs to the future Server Scan area.
     },
     {
       "id": "srv_…",
-      "name": "ocp-dell-r650-site1-96c-768gb-<serial>",
+      "name": "ocp-r650-mtl-site1-<serial>",
       "vendor": "dell",
       "model": "PowerEdge R650",
       "health": "HEALTHY",
-      "lock": {"holder": "add-server-to-mce", "mce": "ocp4-prod-mce-site1-b", "infra_env": "dell-r650-site1-96c-768gb", "expires_at": "2026-11-13T18:00:00Z"},
+      "lock": {"holder": "add-server-to-mce", "mce": "ocp4-prod-mce-site1-b", "infra_env": "r650-mtl-az2", "expires_at": "2026-11-13T18:00:00Z"},
       "offered": false,
       "why_not": "locked by add-server-to-mce until 2026-11-13T18:00:00+00:00",
       "ready": false,
@@ -188,8 +214,9 @@ server's full record belongs to the future Server Scan area.
 | 501 | `FEATURE_DISABLED` | server-scan not configured |
 | 502 | `DEPENDENCY_UNAVAILABLE` | server-scan could not be read |
 
-No MCE read: an InfraEnv the MCE lacks lists the servers named for it all
-the same; an install into it fails in the workflow's `validating-infraenv`.
+The MCE's InfraEnv list is read (cached) for the pool's labels; an
+InfraEnv the list lacks, or no list, lists every free server, and an install
+into an InfraEnv the MCE lacks fails in the workflow's `validating-infraenv`.
 
 ## 3. server-scan's lock, and what the workflow does with it
 
@@ -206,15 +233,18 @@ Read 2026-11-13 from team-redbull's public repositories.
   server-scan's admin API (`POST/DELETE /servers/{id}/reservation`; its UI
   has no such button). **herzi never calls server-scan**: it starts pool
   draws with `count` and treats a reserved server as a shortage.
-- **A pool draw** asks server-scan for `AVAILABLE`, healthy, reachable,
-  unlocked servers out of maintenance named `^ocp-<infraEnv>`; one that loses
-  the race moves to its next candidate.
+- **A pool draw** asks server-scan for an `AVAILABLE`, healthy, reachable,
+  unlocked server out of maintenance named `^ocp-<flavor>-<size>-<site>-`,
+  from the InfraEnv's agentLabels (since team-redbull/workflows `29ef001`,
+  2026-11-22; a worker predating the labels draws by the InfraEnv name's first
+  three words). An InfraEnv missing one of the three labels fails the run
+  (`InfraEnvAgentLabelsError`), nothing allocated. No zone filter.
 - **A named install** is refused inside the run, as a FAILED run and never
   a 4xx at the start: a server that is not `AVAILABLE`, is contested or in
   maintenance (`ServerNotAvailableError`), or locked by another run
   (`ServerReservedError`). The workflow does not check a named server's
-  name against the InfraEnv: Wingman offers only servers named
-  `ocp-<infraEnv>…`.
+  name against the InfraEnv, and neither does day1 (since 3.54.0): the
+  picker lists the servers the pool's labels name, when it knows them.
 - **Health** (read 2026-11-16, team-redbull/workflows `health_waiver.py`):
   a named server `/servers/available` refuses is read once more and its
   reasons sorted. Safety (unknown to server-scan, claimed, contested, in

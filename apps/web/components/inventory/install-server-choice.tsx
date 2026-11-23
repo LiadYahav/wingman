@@ -1,10 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CopyPlus, Info, Network, Rows3 } from "lucide-react";
+import { CopyPlus, Info, Network, Rows3, TriangleAlert } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Hint } from "@/components/common/hint";
 import { useCandidates } from "@/lib/api/inventory";
+import { unnamedReason } from "@/lib/inventory/pools";
 import { MAX_SERVERS, toggled, type AddMode } from "@/lib/inventory/start";
 import type { PoolCount } from "@/types/inventory";
 import { CandidateList } from "./candidate-list";
@@ -58,6 +59,17 @@ function PoolFree({ counts }: { counts: PoolCount }) {
   );
 }
 
+/** A pool draw into an InfraEnv whose agentLabels name no servers: the workflow refuses it. */
+function DrawRefused({ counts }: { counts: PoolCount | null }) {
+  if (counts === null || counts.label_problems.length === 0) return null;
+  return (
+    <p className="flex items-start gap-1.5 text-xs text-status-warning-fg" role="status" data-testid="add-servers-labels-missing">
+      <TriangleAlert aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>The workflow would refuse a pool draw here. {unnamedReason(counts)}</span>
+    </p>
+  );
+}
+
 /**
  * Which servers: let the pool pick N, or name them from the pool's servers in
  * server-scan (a locked, maintenance or contested one cannot be picked; one
@@ -98,6 +110,7 @@ export function InstallServerChoice({
           <TabsTrigger value="named" disabled={disabled}>Choose servers</TabsTrigger>
         </TabsList>
       </Tabs>
+      {mode === "count" && <DrawRefused counts={counts} />}
       {mode === "count" ? (
         <label className="flex items-center gap-3 text-sm">
           <span className="text-muted-foreground">Servers</span>
@@ -118,8 +131,7 @@ export function InstallServerChoice({
       ) : (
         <div className="grid gap-1.5">
           <CandidateList
-            infraEnv={pool.infraEnv}
-            candidates={candidates.data?.candidates}
+            found={candidates.data}
             isLoading={candidates.isLoading}
             error={candidates.error}
             selected={names}

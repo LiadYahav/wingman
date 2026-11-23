@@ -7,7 +7,12 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from wingman_day1.application.inventory import Availability, InventoryOverview, ShownRun
+from wingman_day1.application.inventory import (
+    Availability,
+    InventoryOverview,
+    PoolServers,
+    ShownRun,
+)
 from wingman_day1.domain.add_server import (
     MAX_SERVERS,
     WAIVER_NEEDS_NAMES,
@@ -60,18 +65,22 @@ class HardwareOut(BaseModel):
 
 
 class PoolOut(BaseModel):
-    """One InfraEnv pool; ``infra_env`` null: available servers matched to no InfraEnv."""
+    """One InfraEnv pool; ``infra_env`` null: available servers matched to no one InfraEnv."""
 
     infra_env: str | None
     available: int
     usable: int
     hardware: list[HardwareOut]
     ready: int | None
-    """Free servers a pool draw could pick (server-scan's view); null without an InfraEnv."""
+    """Free servers a pool draw could pick (server-scan's view); null: their names are unknown."""
     needs_fix: int | None
     """Offered free servers a pool draw would not pick: unhealthy or unreachable."""
     total: int
     """``available`` + ``ready`` + ``needs_fix``."""
+    server_prefix: str | None
+    """``ocp-<flavor>-<size>-<site>-`` from the InfraEnv's agentLabels; null when unknown."""
+    label_problems: list[str]
+    """Why its agentLabels name no servers: the workflow refuses a pool draw into it."""
 
     @classmethod
     def of(cls, pool: PoolCount) -> PoolOut:
@@ -84,6 +93,8 @@ class PoolOut(BaseModel):
             ready=pool.ready,
             needs_fix=pool.needs_fix,
             total=pool.total,
+            server_prefix=pool.server_prefix,
+            label_problems=list(pool.label_problems),
         )
 
 
@@ -206,7 +217,22 @@ class CandidatesOut(BaseModel):
 
     mce: str
     infra_env: str
+    server_prefix: str | None
+    """The name the listed servers start with; null: every free server, not filtered by name."""
+    label_problems: list[str]
+    """Why the InfraEnv's agentLabels name no servers: the workflow refuses a pool draw into it."""
     candidates: list[CandidateOut]
+
+    @classmethod
+    def of(cls, mce: str, found: PoolServers) -> CandidatesOut:
+        """From the use case."""
+        return cls(
+            mce=mce,
+            infra_env=found.pool.infra_env,
+            server_prefix=found.pool.server_prefix,
+            label_problems=list(found.pool.label_problems),
+            candidates=[CandidateOut.of(c) for c in found.candidates],
+        )
 
 
 class InventoryRunOut(BaseModel):

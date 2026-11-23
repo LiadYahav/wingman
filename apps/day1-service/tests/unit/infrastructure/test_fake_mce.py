@@ -229,4 +229,15 @@ async def test_the_demo_has_a_node_type_short_on_each_of_two_mces() -> None:
         "ocp4-prod-mce-site1-b": [(dell, Supply.SHORT), (hp, Supply.ENOUGH)],
         "ocp4-prod-mce-site1-c": [(dell, Supply.SHORT), (hp, Supply.SHORT)],
     }
-    assert dell in await hub.infra_envs("ocp4-prod-mce-site1-b", namespace=None)
+    assert dell in [e.name for e in await hub.infra_envs("ocp4-prod-mce-site1-b", namespace=None)]
+
+
+async def test_the_demo_has_infra_envs_labelled_by_the_naming_convention() -> None:
+    by_name = {e.name: e for e in await fake().infra_envs("ocp4-prod-mce-site1-a", namespace=None)}
+    assert by_name["r760-mtl-az1"].agent_labels == {
+        "redbull.io/flavor": "r760",
+        "redbull.io/size": "mtl",
+        "redbull.io/site": "site1",
+        "topology.kubernetes.io/zone": "az1",
+    }
+    assert by_name["dell-r650-site1-96c-768gb"].agent_labels == {}, "made before the convention"

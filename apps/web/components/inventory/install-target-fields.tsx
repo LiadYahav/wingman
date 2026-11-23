@@ -5,10 +5,10 @@ import { Info } from "lucide-react";
 import { Combobox } from "@/components/ui/combobox";
 import { Hint } from "@/components/common/hint";
 import { OTHER_INFRA_ENV, infraEnvOptions, infraEnvProblem, knownInfraEnvs, mceOptions } from "@/lib/inventory/install";
+import { POOL_NAMES_HINT } from "@/lib/inventory/pools";
 import type { InventoryRun, MceInventory } from "@/types/inventory";
 
-const INFRA_ENV_HINT =
-  "The InfraEnv's name states the hardware, so it is also the pool: the healthy, unclaimed servers server-scan lists under ocp-<InfraEnv>. The workflow first checks the MCE has it.";
+const INFRA_ENV_HINT = `The pool. ${POOL_NAMES_HINT} The workflow first checks the MCE has the InfraEnv.`;
 
 function Label({ htmlFor, children, hint }: { htmlFor: string; children: string; hint?: string }) {
   return (
@@ -36,7 +36,7 @@ function TypedInfraEnv({ value, onChange, disabled }: { value: string; onChange:
         disabled={disabled}
         autoComplete="off"
         spellCheck={false}
-        placeholder="cisco-m6-site1-64c-512gb"
+        placeholder="c200-mtl-az1"
         aria-label="InfraEnv name"
         aria-invalid={problem !== null}
         aria-describedby={problem ? `${id}-problem` : undefined}

@@ -3,7 +3,8 @@
 Date: 2026-11-13
 Status: Accepted; amended 2026-11-13 (3.19.0: Install servers without live status); amended
 2026-11-16 (3.38.0: Ready and Needs fix, a pool's total, collapsing an MCE, installing a
-server with its health checks waived)
+server with its health checks waived); amended 2026-11-23 (3.54.0: a pool's servers are named by
+its InfraEnv's agentLabels)
 
 ## Context
 
@@ -294,3 +295,90 @@ run's waived checks); `apps/web/lib/inventory/waiver.test.ts` and
 draw never sending the waiver, the confirmation, Back sending nothing, the
 `422`).
 
+
+## Amendment (2026-11-23, 3.54.0): a pool's servers are named by its InfraEnv's agentLabels
+
+The platform's naming convention left draft on 2026-11-22 (its single
+source: Idan-Maimon/kubevirt-workflows `docs/naming-convention.md`). An
+InfraEnv is `<flavor>-<mtl|kv<cpu>>-<zone>` and lists its flavor, its size
+and its MCE's site as `spec.agentLabels` (`redbull.io/flavor`,
+`redbull.io/size`, `redbull.io/site`, with `topology.kubernetes.io/zone`);
+a server is `ocp-<flavor>-<mtl|kv<cpu>>-<site>-<serial|mac>`. The zone is in
+no server's name. add-server-to-mce follows it on main (team-redbull/workflows
+`6fdfe5d`, `29ef001`): its pool draw asks server-scan for
+`^ocp-<flavor>-<size>-<site>-` from those three labels, fails the run
+(`InfraEnvAgentLabelsError`, nothing allocated) when one is missing or not
+one lowercase word, and filters by no zone. A named install is not matched
+to the pool at all. Matching servers by `ocp-<infraEnv>`, as above, listed
+no candidate under the new names, and day1 refused a named install the
+workflow takes. The user approved the direction (2026-11-23).
+
+- **The labels name a pool's servers** (`domain/infra_env_pools.py`: the
+  workflow's `_POOL_LABELS`, `agent_label_problems` and
+  `pool_prefix_from_labels`, in Wingman's terms). `HubApi.infra_envs` now
+  returns each InfraEnv with its `spec.agentLabels`, from the same list call
+  and cache (`MCE_INFRAENV_CACHE_SECONDS`): no new read, no new grant. A
+  pool's `server_prefix` is `ocp-<flavor>-<size>-<site>-`, case as given;
+  `label_problems` says, in the workflow's words, why it has none.
+- **No zone.** The workflow does not filter by zone and server-scan
+  (v6.9.2) records none, so neither does Wingman: the InfraEnvs of one
+  flavor and size in several zones of a site draw from the same servers,
+  and each counts them as ready (the MCE's card counts each once).
+- **An available Agent's pool.** server-scan does not say which InfraEnv
+  an Agent is in. A server is in the one pool whose prefix names it; when
+  several do (the zones above), or none, a held lock on the MCE says which;
+  otherwise it is counted under none, now labelled "No single InfraEnv",
+  never guessed. A server named before the convention fits no prefix.
+- **Without the labels** (live status off, the hub unreadable, an InfraEnv
+  the MCE does not list) a pool's servers' names are unknown: it counts no
+  ready or needing a fix (a dash, with why), and its list is every free
+  server, said so above the list. The workflow checks the server named.
+- **An InfraEnv that lacks a label** is marked on its row, and the install
+  dialog says, before a pool draw, that the workflow would refuse it.
+  Wingman still sends it: day1 keeps no MCE read before an install (the
+  3.19.0 amendment), and a worker predating the labels draws by the
+  InfraEnv's name.
+- **A named install** is checked only for the safety refusals (no such
+  server, not `AVAILABLE`, locked, in maintenance, contested): day1 no
+  longer refuses a server whose name another pool's labels give, since the
+  workflow takes it.
+- **The fake fleet** follows the convention: `dev/fleet-fixtures/mce.yaml`
+  gives site1-a's new InfraEnvs (`r760-mtl-az1`, `r760-mtl-az2`,
+  `r650-mtl-az1`, `g12-mtl-az1`) their labels, and site1-b's `r650-mtl-az2`
+  labels without its site; Inventory's demo servers are named
+  `ocp-<flavor>-mtl-site1-<serial>`, lowercase; the fake herzi fills
+  `r760-mtl-az1`; the fake workflow draws by the labels and fails a draw
+  into an InfraEnv without them, as the workflow does. The fixture
+  clusters' older InfraEnvs have no labels.
+
+Rejected:
+
+- **Filtering by zone.** Nothing deployed does: the workflow's draw has no
+  zone, and server-scan exposes none (the convention's open item 2).
+- **Keeping `ocp-<infraEnv>` beside the labels**, for InfraEnvs made
+  before the convention: a second rule the deployed workflow no longer
+  uses.
+- **Reading the MCE's Agents** to place an available Agent in its InfraEnv
+  (their `infraenvs.agent-install.openshift.io` label): a new read per MCE
+  on every page load, while the counts stay server-scan's (above). Left to
+  the user.
+- **Refusing a pool draw into an InfraEnv that lacks a label.** The
+  workflow is the judge, and a worker predating the labels still draws by
+  the name.
+
+Consequences: under the convention a pool lists and counts the servers the
+workflow draws; an InfraEnv without its labels says so before a pool draw
+fails; with live status off a named install picks from every free server. A
+site whose name has a dash (`bat-yam`) is not a label value the workflow's
+pool draw accepts.
+
+Verification: `tests/unit/domain/test_infra_env_pools.py` (the prefix, the
+workflow's words, an unread pool); `test_inventory.py` and
+`test_inventory_ready.py` (one pool, two zones, a lock, unread pools, every
+free server, a named server of another pool);
+`tests/unit/infrastructure/test_hub_api.py` (agentLabels read) and
+`test_fake_add_server.py` (a draw by the labels, refused without them, a
+named install without labels); `tests/api/test_inventory_api.py`,
+`test_inventory_install_api.py`, `test_inventory_waiver_api.py`;
+`apps/web/lib/inventory/inventory.test.ts` (Vitest) and
+`apps/web/e2e/tests/inventory-names.spec.ts`.

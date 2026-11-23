@@ -1,11 +1,11 @@
 "use client";
 
 import { useId, useState } from "react";
-import { Info, Plus } from "lucide-react";
+import { Info, Plus, TriangleAlert } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Hint } from "@/components/common/hint";
 import { useCandidates } from "@/lib/api/inventory";
-import { hardwareLabel } from "@/lib/inventory/pools";
+import { hardwareLabel, unnamedReason } from "@/lib/inventory/pools";
 import { cn } from "@/lib/utils";
 import type { InstallTarget } from "@/lib/inventory/install";
 import type { PoolCount } from "@/types/inventory";
@@ -34,7 +34,7 @@ function Available({ pool }: { pool: PoolCount }) {
 /** The pool's servers in no MCE, read when opened. */
 function PoolServers({ mce, infraEnv }: { mce: string; infraEnv: string }) {
   const read = useCandidates(mce, infraEnv, { enabled: true });
-  return <CandidateList infraEnv={infraEnv} candidates={read.data?.candidates} isLoading={read.isLoading} error={read.error} />;
+  return <CandidateList found={read.data} isLoading={read.isLoading} error={read.error} />;
 }
 
 /** A count that opens the pool's servers: either count opens the one list, both groups in it. */
@@ -72,7 +72,42 @@ function CountButton({
   );
 }
 
-const Dash = () => <span className="text-muted-foreground">—</span>;
+/** No count: a pool whose servers' names are unknown says why. */
+function Dash({ why }: { why?: string | null }) {
+  if (!why) return <span className="text-muted-foreground">—</span>;
+  return (
+    <Hint hint={why} label="Why not counted">
+      <span className="text-muted-foreground">—</span>
+    </Hint>
+  );
+}
+
+/** The InfraEnv, and a warning when its agentLabels name no servers: the workflow refuses a pool draw. */
+function PoolName({ pool }: { pool: PoolCount }) {
+  if (pool.infra_env === null) {
+    return (
+      <span className="inline-flex items-center gap-1 font-sans text-muted-foreground">
+        No single InfraEnv
+        <Hint
+          hint="Available in server-scan, but nothing says which of this MCE's InfraEnvs it is in: no InfraEnv's agentLabels name it, or several do (the zone is in no server's name), and no lock names one."
+          label="About no single InfraEnv"
+        >
+          <Info aria-hidden className="h-3 w-3" />
+        </Hint>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      {pool.infra_env}
+      {pool.label_problems.length > 0 && (
+        <Hint hint={unnamedReason(pool) ?? ""} label={`${pool.infra_env} lacks agentLabels`} testId="pool-labels-missing">
+          <TriangleAlert aria-hidden className="h-3.5 w-3.5 text-status-warning-fg" />
+        </Hint>
+      )}
+    </span>
+  );
+}
 
 /**
  * One InfraEnv pool: its available Agents, then the free servers server-scan
@@ -84,18 +119,12 @@ export function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolC
   const infraEnv = pool.infra_env;
   const toggle = () => setOpen((now) => !now);
   const fix = pool.needs_fix ?? 0;
+  const why = infraEnv !== null ? unnamedReason(pool) : null;
   return (
     <>
       <tr data-testid="pool-row" data-pool={infraEnv ?? ""} className={cn("align-middle", open && "bg-muted/40")}>
         <td className="whitespace-nowrap py-1.5 pr-3 font-mono text-xs">
-          {infraEnv ?? (
-            <span className="inline-flex items-center gap-1 font-sans text-muted-foreground">
-              No InfraEnv
-              <Hint hint="Available in server-scan, but the server's name starts with no InfraEnv on this MCE." label="About no InfraEnv">
-                <Info aria-hidden className="h-3 w-3" />
-              </Hint>
-            </span>
-          )}
+          <PoolName pool={pool} />
         </td>
         <td className="py-1.5 pr-3" data-testid="pool-available"><Available pool={pool} /></td>
         <td className="py-1.5 pr-3 text-xs text-muted-foreground">
@@ -105,7 +134,7 @@ export function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolC
           {infraEnv !== null && pool.ready !== null ? (
             <CountButton count={pool.ready} label={`${pool.ready} ready in server-scan for ${infraEnv}`} open={open} controls={listId} onToggle={toggle} />
           ) : (
-            <Dash />
+            <Dash why={why} />
           )}
         </td>
         <td className="py-1.5 pr-3" data-testid="pool-needs-fix">
@@ -119,7 +148,7 @@ export function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolC
               className={fix > 0 ? "text-status-warning-fg" : "text-muted-foreground"}
             />
           ) : (
-            <Dash />
+            <Dash why={why} />
           )}
         </td>
         <td className="py-1.5 pr-3 font-medium tabular-nums" data-testid="pool-total">{pool.total}</td>

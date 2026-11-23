@@ -25,6 +25,7 @@ from wingman_day1.infrastructure.fake_fleet import load_fleet
 from wingman_day1.infrastructure.fake_hub import FakeHubApi
 from wingman_day1.infrastructure.fake_inventory_demo import (
     default_inventory_file,
+    load_agent_labels,
     load_inventory_demo,
 )
 from wingman_day1.infrastructure.fake_mce import default_mce_file, load_fake_mce
@@ -35,11 +36,14 @@ from wingman_day1.integrations.server_scan.infrastructure.fakes.inventory import
 
 Auth = Callable[[User], dict[str, str]]
 SITE1_A = "ocp4-prod-mce-site1-a"
-R650 = "dell-r650-site1-96c-768gb"
+R650 = "r650-mtl-az1"
+"""An InfraEnv of the naming convention, labelled flavor r650, size mtl, site site1."""
+LEGACY = "dell-r650-site1-96c-768gb"
+"""An InfraEnv made before the convention: no agentLabels."""
 POOL = f"/api/day1/inventory/mces/{SITE1_A}/infra-envs/{R650}"
-FREE = "ocp-dell-r650-site1-96c-768gb-DLFAKE0811"
-LOCKED = "ocp-dell-r650-site1-96c-768gb-DLFAKE0812"
-DONOR = "ocp-dell-r650-site1-96c-768gb-DLFAKE0813"
+FREE = "ocp-r650-mtl-site1-dlfake0811"
+LOCKED = "ocp-r650-mtl-site1-dlfake0812"
+DONOR = "ocp-r650-mtl-site1-dlfake0813"
 URLS = {
     "SERVER_SCAN_URL": "http://server-scan-api.inventory.svc:8000",
     "WORKFLOWS_API_URL": "http://workflows-orchestrator-api.redbull-workflows.svc:8080",
@@ -60,7 +64,8 @@ def inventory() -> FakeServerInventory:
 
 @pytest.fixture
 def workflow(inventory: FakeServerInventory) -> FakeAddServerWorkflow:
-    return FakeAddServerWorkflow(inventory, clock=FixedClock())
+    labels = load_agent_labels(default_mce_file())
+    return FakeAddServerWorkflow(inventory, clock=FixedClock(), agent_labels=labels)
 
 
 @pytest.fixture
@@ -134,15 +139,26 @@ async def test_every_mce_is_counted_by_pool_as_server_scan_reports_it(
     pools = {p["infra_env"]: p for p in site1_a["pools"]}
     assert pools[R650] == {
         "infra_env": R650,
-        "available": 2,
-        "usable": 2,
-        "hardware": [{"vendor": "dell", "model": "PowerEdge R650", "available": 2, "usable": 2}],
+        "available": 0,
+        "usable": 0,
+        "hardware": [],
         "ready": 1,
         "needs_fix": 1,
-        "total": 4,
+        "total": 2,
+        "server_prefix": "ocp-r650-mtl-site1-",
+        "label_problems": [],
     }
-    assert pools["dell-r760-site1-64c-512gb-20tb"]["ready"] == 3, "herzi's pool can grow"
-    assert pools[None]["available"] == 1, "a name that matches no InfraEnv is not guessed"
+    assert pools["r760-mtl-az1"]["ready"] == 3, "herzi's pool can grow"
+    assert pools["r760-mtl-az2"]["ready"] == 3, "the other zone names the same servers"
+    assert (site1_a["ready"], site1_a["needs_fix"]) == (4, 2), "each free server counted once"
+    legacy = pools[LEGACY]
+    assert (legacy["server_prefix"], legacy["ready"], legacy["needs_fix"]) == (None, None, None)
+    assert legacy["label_problems"] == [
+        "redbull.io/flavor is missing",
+        "redbull.io/size is missing",
+        "redbull.io/site is missing",
+    ], "the workflow refuses a pool draw into it"
+    assert pools[None]["available"] == 6, "no InfraEnv's labels name a server made before them"
     unknown = next(m for m in body["mces"] if m["mce"] == "ocp4-prod-mce-site1-c")
     assert unknown["known"] is False
 
@@ -158,7 +174,7 @@ async def test_a_pools_candidates_show_the_lock_and_offer_no_locked_server(
     assert found[LOCKED]["lock"] == {
         "holder": "add-server-to-mce",
         "mce": "ocp4-prod-mce-site1-b",
-        "infra_env": R650,
+        "infra_env": "r650-mtl-az2",
         "expires_at": "2026-11-13T18:00:00+00:00",
     }
     assert found[DONOR]["why_not"] == "in maintenance"
@@ -184,7 +200,33 @@ async def test_an_unknown_mce_is_not_found_and_an_infra_env_must_be_a_dns_label(
         f"/api/day1/inventory/mces/{SITE1_A}/infra-envs/nope/candidates",
         headers=auth(support.ALICE),
     )
-    assert response.json()["candidates"] == [], "the workflow judges the InfraEnv, not day1"
+    body = response.json()
+    assert (response.status_code, body["server_prefix"]) == (200, None)
+    assert FREE in {c["name"] for c in body["candidates"]}, "the workflow judges the InfraEnv"
+
+
+async def test_a_pools_candidates_are_the_servers_its_labels_name(
+    fleet: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    body = (await fleet.get(f"{POOL}/candidates", headers=auth(support.ALICE))).json()
+    assert (body["server_prefix"], body["label_problems"]) == ("ocp-r650-mtl-site1-", [])
+    assert {c["name"] for c in body["candidates"]} == {FREE, LOCKED, DONOR,
+                                                       "ocp-r650-mtl-site1-dlfake0815"}  # fmt: skip
+    legacy = f"/api/day1/inventory/mces/{SITE1_A}/infra-envs/{LEGACY}/candidates"
+    body = (await fleet.get(legacy, headers=auth(support.ALICE))).json()
+    assert body["server_prefix"] is None and len(body["label_problems"]) == 3
+    assert FREE in {c["name"] for c in body["candidates"]}, "every free server: not filtered"
+
+
+async def test_a_named_install_may_name_a_server_of_another_pool(
+    fleet: httpx.AsyncClient, auth: Auth, support: Any, workflow: FakeAddServerWorkflow
+) -> None:
+    other = "ocp-r760-mtl-site1-dlfake0801"
+    response = await fleet.post(
+        f"{POOL}/add-servers", json={"server_names": [other]}, headers=auth(support.ALICE)
+    )
+    assert response.status_code == 202, "the workflow does not match a named server to the pool"
+    assert workflow.starts[0].server_names == (other,)
 
 
 async def test_the_runs_say_who_may_have_started_them(
@@ -392,13 +434,14 @@ async def test_a_reused_slot_shows_its_read_on_the_newest_run_only(
     auth: Auth,
 ) -> None:
     moving = MovingClock()
-    workflow = FakeAddServerWorkflow(inventory, clock=moving, phase_seconds=1)
+    labels = load_agent_labels(default_mce_file())
+    workflow = FakeAddServerWorkflow(inventory, clock=moving, phase_seconds=1, agent_labels=labels)
     app = app_of(
         support, gitlab, clock, hub=mce, inventory=inventory, workflow=workflow,
         DAY1_ADD_SERVERS=True,
     )  # fmt: skip
     admin = auth(support.ALICE)
-    pool = f"/api/day1/inventory/mces/{SITE1_A}/infra-envs/dell-r760-site1-64c-512gb-20tb"
+    pool = f"/api/day1/inventory/mces/{SITE1_A}/infra-envs/r760-mtl-az1"
     async for client in serve(app):
         await client.post(f"{pool}/add-servers", json={"count": 1}, headers=admin)
         moving.now += timedelta(minutes=5)
@@ -408,5 +451,5 @@ async def test_a_reused_slot_shows_its_read_on_the_newest_run_only(
         newer, older = (await client.get("/api/day1/inventory/runs", headers=admin)).json()["runs"]
     assert newer["workflow_id"] == older["workflow_id"], "the pool's first slot, twice"
     assert (newer["status"], newer["phase"]) == ("running", "acquiring-server")
-    assert newer["server_name"] == "ocp-dell-r760-site1-64c-512gb-20tb-DLFAKE0802"
+    assert newer["server_name"] == "ocp-r760-mtl-site1-dlfake0802"
     assert (older["status"], older["phase"], older["server_name"]) == ("completed", None, None)

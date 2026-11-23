@@ -11,8 +11,8 @@ lowercased as a Kubernetes name is.
 
 Each hub's own nodes and pods (``hubs:``, for MCE placement's free pods,
 ADR-0050) are built as Node objects and a pod Table, read with the
-adapter's parsers too. An MCE that is neither in ``hubs`` nor hosts a
-fixture cluster is not configured, so placement never picks it.
+adapter's parsers too, and its ``infra_envs`` are InfraEnvs with agentLabels.
+An MCE in neither ``hubs`` nor a fixture cluster is not configured.
 """
 
 from __future__ import annotations
@@ -180,6 +180,7 @@ class _Builder:
         )
         self._agents: dict[tuple[str, str], list[AgentObservation]] = defaultdict(list)
         self._infra_envs: dict[str, set[str]] = defaultdict(set)
+        self._labels: dict[str, dict[str, dict[str, str]]] = defaultdict(dict)
         self._nodes: dict[str, list[NodeObservation]] = {}
         self._pods: dict[str, dict[str, int]] = {}
 
@@ -188,6 +189,9 @@ class _Builder:
         nodes: Sequence[Mapping[str, Any]] = raw.get("nodes") or []
         self._nodes[mce] = [node_from(_node_object(node)) for node in nodes]
         self._pods[mce] = pods_per_node_from(_pod_table(nodes))
+        for name, labels in (raw.get("infra_envs") or {}).items():
+            self._infra_envs[mce].add(str(name))
+            self._labels[mce][str(name)] = {str(k): str(v) for k, v in labels.items()}
         for free in raw.get("free_agents") or []:
             server, infra_env = str(free["server"]), str(free["infra_env"])
             self._infra_envs[mce].add(infra_env)
@@ -201,6 +205,7 @@ class _Builder:
             hosted_clusters=self._hosted,
             node_pools=self._pools,
             infra_envs={mce: {self._agent_ns: sorted(n)} for mce, n in self._infra_envs.items()},
+            agent_labels=self._labels,
             machines=self._machines,
             machine_sets=self._sets,
             agent_machines=self._agent_machines,

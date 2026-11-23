@@ -23,6 +23,7 @@ from wingman_day1.domain.errors import (
     HubObjectNotFoundError,
     HubUnavailableError,
 )
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
     INFRA_ENV_LABEL,
     AgentMachineObservation,
@@ -53,6 +54,7 @@ class FakeHubApi:
         hosted_clusters: Mapping[str, Iterable[HostedClusterObservation]] | None = None,
         node_pools: Mapping[Key, Iterable[NodePoolObservation]] | None = None,
         infra_envs: Mapping[str, Mapping[str, Iterable[str]]] | None = None,
+        agent_labels: Mapping[str, Mapping[str, Mapping[str, str]]] | None = None,
         machines: Mapping[Key, Iterable[MachineObservation]] | None = None,
         machine_sets: Mapping[Key, Iterable[MachineSetObservation]] | None = None,
         agent_machines: Mapping[Key, Iterable[AgentMachineObservation]] | None = None,
@@ -70,6 +72,7 @@ class FakeHubApi:
             hosted_clusters: Per MCE, the HostedClusters on its hub.
             node_pools: Per ``(mce, namespace)``, the NodePools there.
             infra_envs: Per MCE, InfraEnv names per namespace.
+            agent_labels: Per MCE, the agentLabels of its InfraEnvs by name (none: no labels).
             machines: Per ``(mce, control-plane namespace)``, the Machines there.
             machine_sets: Per ``(mce, control-plane namespace)``, the MachineSets.
             agent_machines: Per ``(mce, control-plane namespace)``, the AgentMachines.
@@ -91,6 +94,10 @@ class FakeHubApi:
         self._infra_envs = {
             mce: {ns: list(names) for ns, names in by_ns.items()}
             for mce, by_ns in (infra_envs or {}).items()
+        }
+        self._agent_labels = {
+            mce: {name: dict(labels) for name, labels in by_name.items()}
+            for mce, by_name in (agent_labels or {}).items()
         }
         self._machines = _lists(machines)
         self._machine_sets = _lists(machine_sets)
@@ -143,13 +150,13 @@ class FakeHubApi:
         self._check(mce)
         return sorted(self._node_pools.get((mce, namespace), []), key=lambda pool: pool.name)
 
-    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[str]:
+    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[InfraEnvObservation]:
         """See HubApi.infra_envs."""
         self._check(mce)
         by_ns = self._infra_envs.get(mce, {})
-        if namespace:
-            return sorted(by_ns.get(namespace, []))
-        return sorted(name for names in by_ns.values() for name in names)
+        names = by_ns.get(namespace, []) if namespace else [n for ns in by_ns.values() for n in ns]
+        labels = self._agent_labels.get(mce, {})
+        return [InfraEnvObservation(name, labels.get(name, {})) for name in sorted(names)]
 
     async def machines(self, mce: str, *, namespace: str) -> list[MachineObservation]:
         """See HubApi.machines."""

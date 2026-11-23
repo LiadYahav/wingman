@@ -22,7 +22,7 @@ function Pools({ mce }: { mce: MceCapacity }) {
     <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground" data-testid="overview-pools">
       {mce.pools.slice(0, POOLS_SHOWN).map((pool) => (
         <span key={pool.infraEnv ?? ""} className="inline-flex min-w-0 items-baseline gap-1">
-          <span className={pool.infraEnv ? "truncate font-mono" : "italic"}>{pool.infraEnv ?? "no InfraEnv"}</span>
+          <span className={pool.infraEnv ? "truncate font-mono" : "italic"}>{pool.infraEnv ?? "no single InfraEnv"}</span>
           <span className="tabular-nums text-foreground">{pool.free}</span>
         </span>
       ))}

@@ -2,22 +2,24 @@
 
 ADR-0057. The counts are server-scan's, through the one cached
 ``ServerInventory`` the Nodes tab and placement read; the MCEs are the day1
-repo's folders (read-only); each MCE's InfraEnvs come from its hub, cached as
-for the create form. Without them (live status off, or the hub unreadable)
-the pools are the InfraEnvs the MCE's day1 cluster files name, and the MCE
-says why its own list is unknown. server-scan unreadable fails the read: the
-page is its numbers.
+repo's folders (read-only); each MCE's InfraEnvs and their agentLabels come
+from its hub, cached as for the create form, and name each pool's servers
+(``domain/infra_env_pools.py``). Without them (live status off, or the hub
+unreadable) the pools are the InfraEnvs the MCE's day1 cluster files name,
+their servers' names unknown, and the MCE says why its own list is unknown.
+server-scan unreadable fails the read: the page is its numbers.
 
 Installing servers starts the platform's ``add-server-to-mce`` workflow and
 needs no hub (ADR-0057's amendment). Day1 checks only that the MCE is a day1
-MCE, that the InfraEnv is a DNS label, and that each named server is one the
-page offered (an ``AVAILABLE`` server named for the pool, not locked, out of
-maintenance, not contested). Whether the InfraEnv exists on the MCE is the
-workflow's first check (``validating-infraenv``), as on the orchestrator's
-own form. A start is never retried (ADR-0006) and is logged with who asked.
-``allow_unhealthy`` (the workflow's health waiver, ADR-0057's 3.38.0
-amendment) is refused without server names, before anything is sent, and a
-start that carries it is logged as one with health checks waived.
+MCE, that the InfraEnv is a DNS label, and that each named server is one a
+pool may offer (an ``AVAILABLE`` server, not locked, out of maintenance, not
+contested): the workflow does not match a named server to the pool. Whether
+the InfraEnv exists on the MCE is the workflow's first check
+(``validating-infraenv``), as on the orchestrator's own form. A start is
+never retried (ADR-0006) and is logged with who asked. ``allow_unhealthy``
+(the workflow's health waiver, ADR-0057's 3.38.0 amendment) is refused
+without server names, before anything is sent, and a start that carries it
+is logged as one with health checks waived.
 """
 
 from __future__ import annotations
@@ -47,6 +49,7 @@ from wingman_day1.domain.errors import (
     ResourceNotFoundError,
     WorkflowsNotConfiguredError,
 )
+from wingman_day1.domain.infra_env_pools import Pool
 from wingman_day1.domain.inventory import (
     FROM_DAY1,
     FROM_MCE,
@@ -90,6 +93,14 @@ class InventoryOverview:
     mces: tuple[MceInventory, ...]
     add_servers: Availability
     runs: Availability
+
+
+@dataclass(frozen=True, slots=True)
+class PoolServers:
+    """A pool, as its servers are matched, and the free servers it lists."""
+
+    pool: Pool
+    candidates: list[Candidate]
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,25 +166,32 @@ class InventoryService:
         """Every day1 MCE's servers and pools, as server-scan counts them."""
         tree = await self._sites.tree()
         rows = await self._inventory.rows()
-        found = await asyncio.gather(*(self._infra_envs(mce) for _, mce in tree.mces))
+        found = await asyncio.gather(*(self._pools(mce) for _, mce in tree.mces))
         named = await self._named_by_files() if any(e for _, e in found) else {}
         mces = tuple(
             mce_inventory(
                 site,
                 mce,
                 rows,
-                infra_envs=names if error is None else named.get(mce, []),
+                pools=pools if error is None else [Pool.unread(n) for n in named.get(mce, [])],
                 infra_envs_error=error,
                 infra_envs_from=FROM_MCE if error is None else FROM_DAY1,
             )
-            for (site, mce), (names, error) in zip(tree.mces, found, strict=True)
+            for (site, mce), (pools, error) in zip(tree.mces, found, strict=True)
         )
         return InventoryOverview(mces, self.add_availability, self.runs_availability)
 
-    async def candidates(self, mce: str, infra_env: str) -> list[Candidate]:
-        """The servers a named install into ``infra_env`` on ``mce`` may pick, and why not."""
+    async def candidates(self, mce: str, infra_env: str) -> PoolServers:
+        """The servers a named install into ``infra_env`` on ``mce`` may pick, and why not.
+
+        The free servers its agentLabels name; every free server when they are
+        unknown (live status off, the hub unreadable, an InfraEnv the MCE does
+        not list) or name none: the workflow checks the server named.
+        """
         await self._require_pool(mce, infra_env)
-        return candidates(await self._inventory.rows(), infra_env)
+        pools, _ = await self._pools(mce)
+        pool = next((p for p in pools if p.infra_env == infra_env), Pool.unread(infra_env))
+        return PoolServers(pool, candidates(await self._inventory.rows(), pool))
 
     async def runs(self) -> list[ShownRun]:
         """The newest add-server runs; the newest few read for their phase, server and error.
@@ -216,7 +234,7 @@ class InventoryService:
         if allow_unhealthy and not server_names:
             raise InvalidInputError(WAIVER_NEEDS_NAMES, ["allow_unhealthy: needs server_names"])
         await self._require_pool(mce, infra_env)
-        names = await self._offered(server_names, infra_env) if server_names else ()
+        names = await self._offered(server_names) if server_names else ()
         request = AddServerRequest(
             mce, infra_env, self._namespace, count, names, allow_unhealthy=allow_unhealthy
         )
@@ -249,10 +267,10 @@ class InventoryService:
         )
         return result
 
-    async def _offered(self, names: Sequence[str], infra_env: str) -> tuple[str, ...]:
+    async def _offered(self, names: Sequence[str]) -> tuple[str, ...]:
         """server-scan's own spelling of each named server; any not offered is a 422."""
         rows = await self._inventory.rows()
-        if problems := named_refusals(names, rows, infra_env):
+        if problems := named_refusals(names, rows):
             raise InvalidInputError(
                 "these servers cannot be offered for a named install; reload the list", problems
             )
@@ -289,12 +307,13 @@ class InventoryService:
             named.setdefault(found.ref.mce, set()).update(names)
         return {mce: sorted(names) for mce, names in named.items()}
 
-    async def _infra_envs(self, mce: str) -> tuple[list[str], str | None]:
-        """``mce``'s InfraEnvs, or why they are unknown."""
+    async def _pools(self, mce: str) -> tuple[list[Pool], str | None]:
+        """``mce``'s InfraEnvs as pools, by their agentLabels; or why they are unknown."""
         if self._hub is None:
             return [], NO_HUB
         try:
-            return await self._hub.infra_envs(mce, namespace=self._namespace), None
+            found = await self._hub.infra_envs(mce, namespace=self._namespace)
+            return [Pool.observed(infra_env) for infra_env in found], None
         except HubError as exc:
             return [], f"{type(exc).__name__.removesuffix('Error')}: {exc}"
 

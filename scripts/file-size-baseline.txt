@@ -17,7 +17,7 @@
   590  apps/day1-service/src/wingman_day1/domain/placement.py
   525  apps/day1-service/src/wingman_day1/domain/quick_links.py
   551  apps/day1-service/src/wingman_day1/domain/template.py
-  537  apps/day1-service/src/wingman_day1/infrastructure/fake_mce.py
+  536  apps/day1-service/src/wingman_day1/infrastructure/fake_mce.py
   710  apps/day1-service/src/wingman_day1/infrastructure/hub_api.py
   526  apps/day1-service/src/wingman_day1/main.py
   852  apps/day2-service/src/wingman_day2/application/authoring.py

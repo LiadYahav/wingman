@@ -19,16 +19,24 @@ export interface HardwareCount {
   usable: number;
 }
 
-export interface PoolCount {
-  /** `null`: available servers whose name matches no InfraEnv on the MCE. */
+/** How a pool's servers are known by name: its InfraEnv's agentLabels (ADR-0057's 3.54.0 amendment). */
+export interface PoolNames {
+  /** `ocp-<flavor>-<size>-<site>-`, what a pool draw's servers are named; `null` when unknown or the labels name none. */
+  server_prefix: string | null;
+  /** Why the InfraEnv's agentLabels name no servers: the workflow refuses a pool draw into it. */
+  label_problems: string[];
+}
+
+export interface PoolCount extends PoolNames {
+  /** `null`: available servers that no one InfraEnv's labels name, and no lock places. */
   infra_env: string | null;
   /** Agents in the MCE's inventory, in no cluster (server-scan's INSTALLED_TO_INVENTORY). */
   available: number;
   usable: number;
   hardware: HardwareCount[];
-  /** Servers in no MCE that a pool draw could pick today (server-scan's view); `null` without an InfraEnv. */
+  /** Servers in no MCE that a pool draw could pick today (server-scan's view); `null` when their names are unknown. */
   ready: number | null;
-  /** Servers in no MCE, offered, that a pool draw never picks: unhealthy or unreachable; `null` without an InfraEnv. */
+  /** Servers in no MCE, offered, that a pool draw never picks: unhealthy or unreachable; `null` when their names are unknown. */
   needs_fix: number | null;
   /** `available` + `ready` + `needs_fix`: what the pool reaches once every one is fixed and installed. */
   total: number;
@@ -87,7 +95,8 @@ export interface Candidate {
   health_problems: string[];
 }
 
-export interface Candidates {
+/** A pool's free servers: those its agentLabels name, or every free one (`server_prefix` `null`). */
+export interface Candidates extends PoolNames {
   mce: string;
   infra_env: string;
   candidates: Candidate[];

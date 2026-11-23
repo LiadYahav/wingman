@@ -37,6 +37,7 @@ from wingman_day1.domain.errors import (
     HubObjectNotFoundError,
     HubUnavailableError,
 )
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
     DEPLOYMENT_NAME_LABEL,
     INFRA_ENV_LABEL,
@@ -144,7 +145,7 @@ class HttpHubApi:
             HubOperation.LIST_NODE_POOLS, self._node_pools(mce, namespace)
         )
 
-    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[str]:
+    async def infra_envs(self, mce: str, *, namespace: str | None) -> list[InfraEnvObservation]:
         """See HubApi.infra_envs."""
         return await self._observer.call(
             HubOperation.LIST_INFRA_ENVS, self._infra_envs(mce, namespace or None)
@@ -253,7 +254,7 @@ class HttpHubApi:
             ) from exc
         return sorted(pools, key=lambda pool: pool.name)
 
-    async def _infra_envs(self, mce: str, namespace: str | None) -> list[str]:
+    async def _infra_envs(self, mce: str, namespace: str | None) -> list[InfraEnvObservation]:
         if namespace is None:
             path = f"{_AGENT_INSTALL}/infraenvs"
         else:
@@ -261,10 +262,10 @@ class HttpHubApi:
             path = f"{_AGENT_INSTALL}/namespaces/{namespace}/infraenvs"
         raw = await self._get(mce, path)
         try:
-            names = [_metadata_name(item) for item in _items(raw)]
+            found = [infra_env_from(item) for item in _items(raw)]
         except (KeyError, TypeError, ValueError) as exc:
             raise HubUnavailableError(f"MCE {mce!r} returned a malformed InfraEnv list") from exc
-        return sorted(names)
+        return sorted(found, key=lambda infra_env: infra_env.name)
 
     async def _list[T: Named](
         self, mce: str, namespace: str, path: str, parse: Callable[[JSON], T]
@@ -499,6 +500,12 @@ def hosted_cluster_from(raw: JSON, *, namespace: str, name: str) -> HostedCluste
         conditions=_conditions(status),
         agent_namespace=_text(agent.get("agentNamespace")),
     )
+
+
+def infra_env_from(raw: JSON) -> InfraEnvObservation:
+    """An InfraEnv (``agent-install.openshift.io/v1beta1``): its name and ``spec.agentLabels``."""
+    labels = _mapping(_mapping(raw).get("spec")).get("agentLabels")
+    return InfraEnvObservation(_metadata_name(raw), _strings(labels, "spec.agentLabels"))
 
 
 def node_pool_from(raw: JSON) -> NodePoolObservation:

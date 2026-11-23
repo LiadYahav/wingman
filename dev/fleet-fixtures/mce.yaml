@@ -43,6 +43,16 @@ agent_namespace: inventory
 # form picks -b; two dell-r650-site1-96c-768gb move the pick to -a (-b is one
 # healthy Dell short), two hp-gen12-site1-64c-512gb keep -b (-a is one short).
 # No fixture cluster uses these two types, so the nodes view is unchanged.
+#
+# `infra_envs`: InfraEnvs named and labelled by the platform's naming
+# convention (2026-11-22): `<flavor>-<mtl|kv<cpu>>-<zone>`, whose agentLabels
+# name its servers, `ocp-<flavor>-<size>-<site>-<serial>`
+# (dev/fleet-fixtures/inventory.yaml has them). The other InfraEnvs come from
+# the clusters' NodePools and the free Agents above, with no agentLabels:
+# Inventory Management says a pool draw into one would be refused. -a's two
+# r760 zones draw from the same servers (the zone is in no server's name);
+# -b's r650 InfraEnv lacks its site label, as an InfraEnv made before the
+# convention may.
 hubs:
   ocp4-prod-mce-site1-a:
     nodes:
@@ -56,6 +66,15 @@ hubs:
       - {server: ocp-dell-r650-site1-96c-768gb-DLFAKE0701, infra_env: dell-r650-site1-96c-768gb}
       - {server: ocp-dell-r650-site1-96c-768gb-DLFAKE0702, infra_env: dell-r650-site1-96c-768gb}
       - {server: ocp-hp-gen12-site1-64c-512gb-HPFAKE0703, infra_env: hp-gen12-site1-64c-512gb}
+    infra_envs:
+      r760-mtl-az1:
+        {redbull.io/flavor: r760, redbull.io/size: mtl, redbull.io/site: site1, topology.kubernetes.io/zone: az1}
+      r760-mtl-az2:
+        {redbull.io/flavor: r760, redbull.io/size: mtl, redbull.io/site: site1, topology.kubernetes.io/zone: az2}
+      r650-mtl-az1:
+        {redbull.io/flavor: r650, redbull.io/size: mtl, redbull.io/site: site1, topology.kubernetes.io/zone: az1}
+      g12-mtl-az1:
+        {redbull.io/flavor: g12, redbull.io/size: mtl, redbull.io/site: site1, topology.kubernetes.io/zone: az1}
   ocp4-prod-mce-site1-b:
     nodes:
       - {name: master-0, role: control-plane, pods: 95}
@@ -72,6 +91,8 @@ hubs:
       - {server: ocp-dell-r650-site1-96c-768gb-DLFAKE0602, infra_env: dell-r650-site1-96c-768gb}
       - {server: ocp-hp-gen12-site1-64c-512gb-HPFAKE0603, infra_env: hp-gen12-site1-64c-512gb}
       - {server: ocp-hp-gen12-site1-64c-512gb-HPFAKE0604, infra_env: hp-gen12-site1-64c-512gb}
+    infra_envs:
+      r650-mtl-az2: {redbull.io/flavor: r650, redbull.io/size: mtl, topology.kubernetes.io/zone: az2}
   ocp4-prod-mce-site1-c:
     nodes:
       - {name: master-0, role: control-plane, pods: 101}

@@ -83,7 +83,8 @@ class StatusService:
 
     async def infra_envs(self, mce: str) -> list[str]:
         """InfraEnv names on an MCE; errors propagate (the form falls back to free text)."""
-        return await self._infra_env_hub.infra_envs(mce, namespace=self._infraenv_namespace)
+        found = await self._infra_env_hub.infra_envs(mce, namespace=self._infraenv_namespace)
+        return [infra_env.name for infra_env in found]
 
     async def watch(
         self, name: str, mce: str, *, interval: float, sleep: Sleep = asyncio.sleep

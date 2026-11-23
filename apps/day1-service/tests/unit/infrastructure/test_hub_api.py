@@ -16,6 +16,7 @@ from wingman_day1.domain.errors import (
     HubObjectNotFoundError,
     HubUnavailableError,
 )
+from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.status import Condition
 from wingman_day1.infrastructure.hub_api import HttpHubApi
 from wingman_day1.infrastructure.mce_access import MceAccess, load_mce_access
@@ -148,8 +149,18 @@ async def test_node_pools_are_sorted_with_replica_defaults() -> None:
 async def test_infra_envs_namespaced_or_hub_wide(namespace: str | None, path: str) -> None:
     body = {"items": [{"metadata": {"name": "dell-b"}}, {"metadata": {"name": "dell-a"}}]}
     api, rec = make(reply(200, body))
-    assert await api.infra_envs(MCE, namespace=namespace) == ["dell-a", "dell-b"]
+    found = await api.infra_envs(MCE, namespace=namespace)
+    assert found == [InfraEnvObservation("dell-a"), InfraEnvObservation("dell-b")]
     assert rec.requests[0].url.path == path
+
+
+async def test_an_infra_env_carries_its_agent_labels() -> None:
+    labels = {"redbull.io/flavor": "c200", "redbull.io/size": "mtl", "redbull.io/site": "five"}
+    body = {"items": [{"metadata": {"name": "c200-mtl-az1"}, "spec": {"agentLabels": labels}}]}
+    api, _ = make(reply(200, body))
+    assert await api.infra_envs(MCE, namespace=None) == [
+        InfraEnvObservation("c200-mtl-az1", labels)
+    ]
 
 
 @pytest.mark.parametrize(

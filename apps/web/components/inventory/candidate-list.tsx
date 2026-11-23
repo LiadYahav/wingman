@@ -5,10 +5,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/common/hint";
 import { ProblemList } from "@/components/common/problem-list";
-import { hardwareLabel } from "@/lib/inventory/pools";
+import { hardwareLabel, unnamedReason } from "@/lib/inventory/pools";
 import { groupCandidates, type GroupInfo } from "@/lib/inventory/waiver";
 import { cn } from "@/lib/utils";
-import type { Candidate } from "@/types/inventory";
+import type { Candidate, Candidates } from "@/types/inventory";
 
 const HEALTH_TONE: Record<string, string> = {
   HEALTHY: "bg-status-ready",
@@ -28,9 +28,9 @@ function Why({ candidate }: { candidate: Candidate }) {
 }
 
 /** The name, its pool's shared prefix muted and cut first, so the part that differs stays whole. */
-function ServerName({ candidate, prefix }: { candidate: Candidate; prefix: string }) {
+function ServerName({ candidate, prefix }: { candidate: Candidate; prefix: string | null }) {
   const { name } = candidate;
-  const shared = name.startsWith(prefix) ? prefix : "";
+  const shared = prefix && name.startsWith(prefix) ? prefix : "";
   return (
     <span className="flex min-w-0 flex-1 font-mono" title={name}>
       {shared && <span className="truncate text-muted-foreground">{shared}</span>}
@@ -68,12 +68,12 @@ function GroupHeading({ group, count }: { group: GroupInfo; count: number }) {
 
 function CandidateRow({
   candidate: c,
-  infraEnv,
+  prefix,
   selected,
   onToggle,
 }: {
   candidate: Candidate;
-  infraEnv: string;
+  prefix: string | null;
   selected?: string[];
   onToggle?: (name: string) => void;
 }) {
@@ -95,7 +95,7 @@ function CandidateRow({
         className={cn("h-1.5 w-1.5 shrink-0 rounded-full", HEALTH_TONE[c.health] ?? "bg-muted-foreground/50")}
         title={c.health}
       />
-      <ServerName candidate={c} prefix={`ocp-${infraEnv}`} />
+      <ServerName candidate={c} prefix={prefix} />
       <span className="hidden shrink-0 sm:inline">{hardwareLabel(c)}</span>
       <Problems candidate={c} />
       <Why candidate={c} />
@@ -103,23 +103,35 @@ function CandidateRow({
   );
 }
 
+/** Why the list is every free server: the pool's agentLabels name none, or were not read. */
+function Unfiltered({ found }: { found: Candidates }) {
+  const why = unnamedReason(found);
+  if (why === null) return null;
+  return (
+    <p className="flex items-start gap-1 px-1 py-1 text-xs text-muted-foreground" data-testid="candidates-unfiltered">
+      <Info aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>Every free server in server-scan, not filtered by name. {why}</span>
+    </p>
+  );
+}
+
 /**
  * A pool's servers in no MCE, as server-scan reports them, in three groups:
  * ready (a pool draw could pick them), needing a fix (with why) and not
- * offered (locked, in maintenance, contested; with why). With `selected`, a
- * picker: a server that is not offered cannot be picked, one that needs a fix
- * can (the dialog then asks to waive its health checks).
+ * offered (locked, in maintenance, contested; with why). They are the free
+ * servers its InfraEnv's agentLabels name, or every free server, said so,
+ * when those name none. With `selected`, a picker: a server that is not
+ * offered cannot be picked, one that needs a fix can (the dialog then asks to
+ * waive its health checks).
  */
 export function CandidateList({
-  infraEnv,
-  candidates,
+  found,
   isLoading,
   error,
   selected,
   onToggle,
 }: {
-  infraEnv: string;
-  candidates: Candidate[] | undefined;
+  found: Candidates | undefined;
   isLoading: boolean;
   error: unknown;
   selected?: string[];
@@ -127,17 +139,35 @@ export function CandidateList({
 }) {
   if (isLoading) return <Skeleton className="h-16 w-full" />;
   if (error) return <ProblemList error={error} title="The pool's servers could not be read" />;
-  if (!candidates || candidates.length === 0) {
-    return <p className="px-1 py-2 text-xs text-muted-foreground">No free server in server-scan is named for this pool.</p>;
+  if (!found || found.candidates.length === 0) {
+    const named = found?.server_prefix ? "is named for this pool" : "is in no MCE";
+    return <p className="px-1 py-2 text-xs text-muted-foreground">No free server in server-scan {named}.</p>;
   }
   return (
+    <div className="grid gap-1">
+      <Unfiltered found={found} />
+      <CandidateGroups found={found} selected={selected} onToggle={onToggle} />
+    </div>
+  );
+}
+
+function CandidateGroups({
+  found,
+  selected,
+  onToggle,
+}: {
+  found: Candidates;
+  selected?: string[];
+  onToggle?: (name: string) => void;
+}) {
+  return (
     <div className="max-h-64 overflow-auto rounded-lg border" role="group" aria-label="Servers in no MCE">
-      {groupCandidates(candidates).map(({ group, candidates: members }) => (
+      {groupCandidates(found.candidates).map(({ group, candidates: members }) => (
         <section key={group.group} aria-label={group.label}>
           <GroupHeading group={group} count={members.length} />
           <ul className="divide-y divide-border/60">
             {members.map((c) => (
-              <CandidateRow key={c.id} candidate={c} infraEnv={infraEnv} selected={selected} onToggle={onToggle} />
+              <CandidateRow key={c.id} candidate={c} prefix={found.server_prefix} selected={selected} onToggle={onToggle} />
             ))}
           </ul>
         </section>

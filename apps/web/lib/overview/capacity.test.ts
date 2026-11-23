@@ -4,7 +4,7 @@ import { serverCapacity } from "./capacity";
 
 const pool = (infra_env: string | null, available: number): PoolCount => ({
   infra_env, available, usable: available, hardware: [], ready: infra_env ? 0 : null, needs_fix: infra_env ? 0 : null,
-  total: available,
+  total: available, server_prefix: infra_env ? "ocp-r650-mtl-site1-" : null, label_problems: [],
 });
 
 const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
@@ -13,7 +13,7 @@ const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory 
 });
 
 describe("the free servers", () => {
-  it("are each known MCE's, in day1's order, its pools the most free first and no InfraEnv last", () => {
+  it("are each known MCE's, in day1's order, its pools the most free first and no single InfraEnv last", () => {
     const capacity = serverCapacity([
       mce("b", { usable: 3, pools: [pool(null, 1), pool("small", 1), pool("big", 2), pool("again", 1)] }),
       mce("a", { site: "site2", servers: 4, in_clusters: 4, available: 0, usable: 0 }),
