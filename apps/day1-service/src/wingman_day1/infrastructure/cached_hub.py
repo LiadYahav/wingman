@@ -109,6 +109,17 @@ class CachedHubApi:
             ttl=self._ttl,
         )
 
+    async def used_agents(
+        self, mce: str, *, labels: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """See HubApi.used_agents."""
+        keys_text = ",".join(sorted(set(labels)))
+        return await self._cache.get_or_fetch(
+            keys.hub(mce, "used-agents", namespace or "*", keys_text),
+            lambda: self._inner.used_agents(mce, labels=labels, namespace=namespace),
+            ttl=self._ttl,
+        )
+
     async def pods_per_node(self, mce: str) -> dict[str, int]:
         """See HubApi.pods_per_node."""
         return dict(

@@ -35,6 +35,8 @@ export const UNLABELLED_PROBLEMS = ["redbull.io/flavor is missing", "redbull.io/
 export const SITE1_B = "ocp4-prod-mce-site1-b";
 /** The one InfraEnv site1-b's cluster files name: its own list, and so its labels, could not be read. */
 export const SITE1_B_POOL = "r760-mtl-az1";
+/** herzi's mark on a used Agent (ADR-0065's amendment): such a free Agent is never available. */
+export const HERZI_LABEL = "redbull.io/ever-installed";
 
 export const OVERVIEW: InventoryOverview = {
   mces: [
@@ -43,30 +45,34 @@ export const OVERVIEW: InventoryOverview = {
       ready: 1, needs_fix: 1, total: 8,
       pools: [
         { infra_env: UNLABELLED, available: 0, usable: 0, ready: null, needs_fix: null, total: 0, hardware: [],
-          server_prefix: null, label_problems: UNLABELLED_PROBLEMS },
+          server_prefix: null, label_problems: UNLABELLED_PROBLEMS, used: [] },
         { infra_env: R650, available: 2, usable: 1, ready: 1, needs_fix: 1, total: 4, server_prefix: R650_NAMES, label_problems: [],
-          hardware: [{ vendor: "dell", model: "PowerEdge R650", available: 2, usable: 1 }] },
+          hardware: [{ vendor: "dell", model: "PowerEdge R650", available: 2, usable: 1 }], used: [] },
         { infra_env: null, available: 4, usable: 4, ready: null, needs_fix: null, total: 4, server_prefix: null, label_problems: [],
-          hardware: [{ vendor: "dell", model: "PowerEdge R760", available: 4, usable: 4 }] },
+          hardware: [{ vendor: "dell", model: "PowerEdge R760", available: 4, usable: 4 }], used: [] },
       ],
       infra_envs: [UNLABELLED, R650],
       infra_envs_error: null, infra_envs_from: "mce",
+      used: 0, used_error: null, unguarded: [],
     },
     {
       site: "site1", mce: "ocp4-prod-mce-site1-b", known: true, servers: 4, in_clusters: 0, available: 4, usable: 4,
       ready: 0, needs_fix: 0, total: 4,
       pools: [{ infra_env: SITE1_B_POOL, available: 0, usable: 0, ready: null, needs_fix: null, total: 0, hardware: [],
-                server_prefix: null, label_problems: [] }],
+                server_prefix: null, label_problems: [], used: [] }],
       infra_envs: [SITE1_B_POOL], infra_envs_from: "day1",
       infra_envs_error: "HubUnavailable: MCE 'ocp4-prod-mce-site1-b' hub API unreachable",
+      used: null, used_error: null, unguarded: [],
     },
     {
       site: "site1", mce: "ocp4-prod-mce-site1-c", known: false, servers: 0, in_clusters: 0, available: 0, usable: 0,
       ready: 0, needs_fix: 0, total: 0, pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce",
+      used: 0, used_error: null, unguarded: [],
     },
   ],
   add_servers: { available: true, detail: null },
   runs: { available: true, detail: null },
+  used_labels: { keys: [HERZI_LABEL], source: "herzi" },
 };
 
 const candidate = (name: string, overrides: Partial<Candidate> = {}): Candidate => ({

@@ -422,7 +422,7 @@ def build_context(
             site_catalog,
             cluster_service,
             inventory=inventory,
-            infra_envs=infra_env_hub,
+            hub=adapters.hub,
             workflows=adapters.add_server,
             cache=cache,
         ),

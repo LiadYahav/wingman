@@ -317,7 +317,8 @@ The service account behind each token needs `get` and `list` on:
 
 Placement lists the pods as Table rows (name, status, node), only those not `Succeeded` or
 `Failed`, never their objects, logs or Secrets. Its servers check lists the Agents of the needed
-InfraEnvs across the hub (or in `MCE_INFRAENV_NAMESPACE`): the `agents` rule above already allows
+InfraEnvs across the hub (or in `MCE_INFRAENV_NAMESPACE`), and Inventory Management lists the used
+Agents herzi removes there (`<label>,!agentMachineRef`, since 3.55.0): the `agents` rule above already allows
 it, because the binding is cluster-wide.
 
 A control-plane namespace is created per cluster, so the grant is a ClusterRole with a

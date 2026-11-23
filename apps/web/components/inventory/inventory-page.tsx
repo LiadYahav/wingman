@@ -142,6 +142,7 @@ export function InventoryPage() {
               <MceCard
                 key={mce.mce}
                 mce={mce}
+                usedLabels={data.used_labels}
                 canAdd={canAdd}
                 onAdd={setTarget}
                 collapsed={collapsed.has(mce.mce)}

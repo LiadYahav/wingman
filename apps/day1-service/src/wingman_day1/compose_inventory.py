@@ -3,8 +3,9 @@
 The add-server-to-mce workflow's adapter (real, none, or the fake fleet's),
 and the page's use case: it reads server-scan through the one cached
 ``ServerInventory`` the Nodes tab and placement share (``main.py`` builds it),
-each MCE's InfraEnvs through the hub cache the create form uses (else from
-its day1 cluster files), and the add-server runs through their own short cache.
+each MCE's InfraEnvs kept as long as the create form keeps them (else from
+its day1 cluster files), its used Agents for as long as the page refreshes,
+and the add-server runs through their own short cache.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from wingman_day1.application.clusters import ClusterService
 from wingman_day1.application.inventory import InventoryService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.infrastructure.add_server_workflow import HttpAddServerWorkflow
+from wingman_day1.infrastructure.cached_hub import CachedHubApi
 from wingman_day1.infrastructure.cached_workflows import CachedAddServerWorkflow
 from wingman_day1.integrations.server_scan.ports import ServerInventory
 from wingman_day1.ports import AddServerWorkflow, HubApi
@@ -26,6 +28,8 @@ from wingman_day1.settings import Day1Settings
 
 RUNS_TTL_SECONDS: Final = 10.0
 """The longest an add-server run's phase is kept: the page re-reads the runs every 10 s."""
+USED_AGENTS_TTL_SECONDS: Final = 30.0
+"""The longest an MCE's used Agents are kept: the page re-reads its pools every 30 s."""
 
 Close = Callable[[], Awaitable[None]]
 
@@ -36,13 +40,20 @@ def inventory_service(
     clusters: ClusterService,
     *,
     inventory: ServerInventory | None,
-    infra_envs: HubApi | None,
+    hub: HubApi | None,
     workflows: AddServerWorkflow | None,
     cache: TtlCache,
 ) -> InventoryService | None:
-    """The page over the shared caches; ``None`` without server-scan (its routes answer 501)."""
+    """The page over the shared caches; ``None`` without server-scan (its routes answer 501).
+
+    ``hub`` is the MCE hubs' uncached reads (``None``: live status off).
+    """
     if inventory is None:
         return None
+    infra_envs = agents = None
+    if hub is not None:
+        infra_envs = CachedHubApi(hub, cache, ttl=settings.mce_infraenv_cache_seconds)
+        agents = CachedHubApi(hub, cache, ttl=USED_AGENTS_TTL_SECONDS)
     return InventoryService(
         sites,
         inventory,
@@ -57,6 +68,8 @@ def inventory_service(
         ),
         add_servers=settings.day1_add_servers,
         namespace=settings.mce_infraenv_namespace or None,
+        agents=agents,
+        excluded_agent_labels=settings.workflow_keys().excluded_agent_labels,
     )
 
 

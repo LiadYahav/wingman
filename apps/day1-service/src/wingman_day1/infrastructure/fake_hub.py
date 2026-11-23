@@ -212,6 +212,20 @@ class FakeHubApi:
         ]
         return sorted([*seeded, *roomy], key=lambda agent: agent.name)
 
+    async def used_agents(
+        self, mce: str, *, labels: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """See HubApi.used_agents: the seeded Agents with a key and no ``agentMachineRef``."""
+        self._check(mce)
+        found = [
+            agent
+            for (agent_mce, agent_ns), agents in self._agents.items()
+            if agent_mce == mce and (namespace is None or agent_ns == namespace)
+            for agent in agents
+            if agent.taken_by is None and any(key in agent.labels for key in labels)
+        ]
+        return sorted(found, key=lambda agent: agent.name)
+
     async def pods_per_node(self, mce: str) -> dict[str, int]:
         """See HubApi.pods_per_node."""
         self._check(mce)

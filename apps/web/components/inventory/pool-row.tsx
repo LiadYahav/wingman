@@ -8,13 +8,14 @@ import { useCandidates } from "@/lib/api/inventory";
 import { hardwareLabel, unnamedReason } from "@/lib/inventory/pools";
 import { cn } from "@/lib/utils";
 import type { InstallTarget } from "@/lib/inventory/install";
-import type { PoolCount } from "@/types/inventory";
+import type { PoolCount, UsedLabels } from "@/types/inventory";
 import { CandidateList } from "./candidate-list";
+import { UsedCount } from "./used-agents";
 
 /** A pool row's columns, for the list's row under it. */
 const POOL_COLUMNS = 7;
 
-function Available({ pool }: { pool: PoolCount }) {
+function Available({ pool, usedLabels }: { pool: PoolCount; usedLabels: UsedLabels }) {
   const unusable = pool.available - pool.usable;
   return (
     <span className="inline-flex items-center gap-1 tabular-nums">
@@ -27,6 +28,9 @@ function Available({ pool }: { pool: PoolCount }) {
           <span className="text-[11px] text-status-warning-fg">{unusable} not usable</span>
         </Hint>
       )}
+      <span className="text-[11px]">
+        <UsedCount labels={usedLabels} count={pool.used.length} servers={pool.used} testId="pool-used" />
+      </span>
     </span>
   );
 }
@@ -113,7 +117,19 @@ function PoolName({ pool }: { pool: PoolCount }) {
  * One InfraEnv pool: its available Agents, then the free servers server-scan
  * has for it, ready or needing a fix (either opens the list), and its total.
  */
-export function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolCount; canAdd: boolean; onAdd: (t: InstallTarget) => void }) {
+export function PoolRow({
+  mce,
+  pool,
+  usedLabels,
+  canAdd,
+  onAdd,
+}: {
+  mce: string;
+  pool: PoolCount;
+  usedLabels: UsedLabels;
+  canAdd: boolean;
+  onAdd: (t: InstallTarget) => void;
+}) {
   const [open, setOpen] = useState(false);
   const listId = useId();
   const infraEnv = pool.infra_env;
@@ -126,7 +142,7 @@ export function PoolRow({ mce, pool, canAdd, onAdd }: { mce: string; pool: PoolC
         <td className="whitespace-nowrap py-1.5 pr-3 font-mono text-xs">
           <PoolName pool={pool} />
         </td>
-        <td className="py-1.5 pr-3" data-testid="pool-available"><Available pool={pool} /></td>
+        <td className="py-1.5 pr-3" data-testid="pool-available"><Available pool={pool} usedLabels={usedLabels} /></td>
         <td className="py-1.5 pr-3 text-xs text-muted-foreground">
           {pool.hardware.map((h) => `${hardwareLabel(h)} ×${h.available}`).join(", ") || "—"}
         </td>

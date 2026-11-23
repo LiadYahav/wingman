@@ -37,8 +37,10 @@ from wingman_day1.domain.errors import (
     HubObjectNotFoundError,
     HubUnavailableError,
 )
+from wingman_day1.domain.excluded_agent_labels import label_key_problems
 from wingman_day1.domain.infra_env_pools import InfraEnvObservation
 from wingman_day1.domain.machines import (
+    AGENT_MACHINE_REF_LABEL,
     INFRA_ENV_LABEL,
     AgentMachineObservation,
     AgentObservation,
@@ -184,25 +186,23 @@ class HttpHubApi:
         """See HubApi.infra_env_agents: the Agents whose InfraEnv label is one of these, paged."""
         for infra_env in infra_envs:
             _object_name("InfraEnv", infra_env)
-        if namespace:
-            _object_name("namespace", namespace)
         if not infra_envs:
             return []
-        path = (
-            f"{_AGENT_INSTALL}/namespaces/{namespace}/agents"
-            if namespace
-            else (f"{_AGENT_INSTALL}/agents")
-        )
         selector = f"{INFRA_ENV_LABEL} in ({','.join(sorted(set(infra_envs)))})"
-        pages = await self._paged(
-            mce,
-            path,
-            HubOperation.LIST_AGENTS,
-            params={"labelSelector": selector},
-            accept=None,
-            parse=_agents,
-        )
-        return sorted((agent for page in pages for agent in page), key=lambda a: a.name)
+        return await self._selected_agents(mce, namespace, selector)
+
+    async def used_agents(
+        self, mce: str, *, labels: Sequence[str], namespace: str | None
+    ) -> list[AgentObservation]:
+        """See HubApi.used_agents: one paged list per key, ``<key>,!agentMachineRef``."""
+        found: dict[str, AgentObservation] = {}
+        for key in labels:
+            if label_key_problems(key):
+                raise HubObjectNotFoundError(f"{key!r} is not a label key, so no Agent carries it")
+            selector = f"{key},!{AGENT_MACHINE_REF_LABEL}"
+            for agent in await self._selected_agents(mce, namespace, selector):
+                found.setdefault(agent.name, agent)
+        return sorted(found.values(), key=lambda agent: agent.name)
 
     async def pods_per_node(self, mce: str) -> dict[str, int]:
         """See HubApi.pods_per_node: Table rows of the non-terminal pods, a page at a time."""
@@ -258,6 +258,23 @@ class HttpHubApi:
         except (KeyError, TypeError, ValueError) as exc:
             raise HubUnavailableError(f"MCE {mce!r} returned a malformed InfraEnv list") from exc
         return sorted(found, key=lambda infra_env: infra_env.name)
+
+    async def _selected_agents(
+        self, mce: str, namespace: str | None, selector: str
+    ) -> list[AgentObservation]:
+        """The Agents a label selector matches, in ``namespace`` or the whole hub, paged."""
+        if namespace:
+            _object_name("namespace", namespace)
+        path = f"{_AGENT_INSTALL}/namespaces/{namespace}/agents" if namespace else None
+        pages = await self._paged(
+            mce,
+            path or f"{_AGENT_INSTALL}/agents",
+            HubOperation.LIST_AGENTS,
+            params={"labelSelector": selector},
+            accept=None,
+            parse=_agents,
+        )
+        return sorted((agent for page in pages for agent in page), key=lambda a: a.name)
 
     async def _list[T: Named](
         self, mce: str, namespace: str, path: str, parse: Callable[[JSON], T]

@@ -1,4 +1,4 @@
-"""herzi's used Agents: the keys, which Agents are used, placement's count."""
+"""herzi's used Agents: the keys, which Agents are used, placement's count, unguarded nodepools."""
 
 from __future__ import annotations
 
@@ -14,7 +14,14 @@ from wingman_day1.domain.machines import (
 from wingman_day1.domain.mce_capacity import NodeTypeSupply, Supply, node_type_supply
 from wingman_day1.domain.servers import ServerRow
 from wingman_day1.domain.status import Condition
-from wingman_day1.domain.used_agents import HERZI_LABEL, used_label, used_labels
+from wingman_day1.domain.used_agents import (
+    HERZI_LABEL,
+    Unguarded,
+    retiring,
+    unguarded,
+    used_label,
+    used_labels,
+)
 
 DELL = "dell-r660"
 MCE = "ocp4-prod-mce-site1-a"
@@ -60,6 +67,13 @@ def test_an_agent_is_used_by_the_keys_presence_whatever_its_value() -> None:
     assert used_label(agent("s3", used="example.com/used"), (HERZI_LABEL,)) is None
 
 
+def test_retiring_is_used_and_bound_to_nothing() -> None:
+    keys = (HERZI_LABEL,)
+    assert retiring(agent("s1", used=HERZI_LABEL), keys)
+    assert not retiring(agent("s2", used=HERZI_LABEL, bound=True), keys), "herzi labels on bind"
+    assert not retiring(agent("s3"), keys)
+
+
 # ── Placement: a used Agent is no free server ────────────────────────────────
 
 
@@ -99,3 +113,32 @@ def test_another_key_marks_used_agents_when_the_deployment_names_it() -> None:
     (dell,) = node_type_supply([(DELL, 1)], agents, None, used_labels=("example.com/used",))
     assert (dell.free_agents, dell.used) == (1, 1), "the setting is the one source of the keys"
 
+
+# ── Agent nodepools that do not exclude the keys ─────────────────────────────
+
+
+def test_unguarded_lists_each_agent_nodepool_that_lacks_a_key() -> None:
+    values = {
+        "nodepool": [
+            {"infraEnvName": DELL, "excludeAgentLabels": [HERZI_LABEL]},
+            {"name": "workers-hp", "infraEnvName": "hp", "upgradeType": "Replace"},
+            {"infraEnvName": "g12", "excludeAgentLabels": ["example.com/other"]},
+            {"infraEnvName": "r650", "excludeAgentLabels": ["example.com/other", HERZI_LABEL]},
+        ]
+    }
+    found = unguarded(values, (HERZI_LABEL,), cluster="ocp4-prod-a-site1", cluster_name="prod-a")
+    assert found == [
+        Unguarded("ocp4-prod-a-site1", "workers-hp", ("hp",), (HERZI_LABEL,), replace=True),
+        Unguarded("ocp4-prod-a-site1", "prod-a-g12", ("g12",), (HERZI_LABEL,), replace=False),
+    ]
+
+
+def test_a_kubevirt_cluster_takes_no_agents_and_is_never_unguarded() -> None:
+    values = {"platform": "kubevirt", "nodepool": [{"name": "workers"}]}
+    assert unguarded(values, (HERZI_LABEL,), cluster="kv", cluster_name="kv") == []
+
+
+def test_every_key_must_be_excluded() -> None:
+    values = {"nodepool": [{"infraEnvName": DELL, "excludeAgentLabels": [HERZI_LABEL]}]}
+    (pool,) = unguarded(values, (HERZI_LABEL, "example.com/used"), cluster="c", cluster_name="c")
+    assert pool.missing == ("example.com/used",)

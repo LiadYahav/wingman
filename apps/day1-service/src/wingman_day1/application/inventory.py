@@ -9,6 +9,14 @@ unreadable) the pools are the InfraEnvs the MCE's day1 cluster files name,
 their servers' names unknown, and the MCE says why its own list is unknown.
 server-scan unreadable fails the read: the page is its numbers.
 
+Each MCE's used Agents (``domain/used_agents.py``: herzi's
+``redbull.io/ever-installed``, or the deployment's excluded labels) are read
+from its hub, only those labelled and held by no AgentMachine, for as long as
+the page refreshes; they are shown apart and never counted as available. Its
+agent nodepools that do not exclude those keys come from its cluster files:
+herzi removes no used Agent of their InfraEnvs until each does, and they may
+bind one meanwhile. Without live status the used Agents are unknown.
+
 Installing servers starts the platform's ``add-server-to-mce`` workflow and
 needs no hub (ADR-0057's amendment). Day1 checks only that the MCE is a day1
 MCE, that the InfraEnv is a DNS label, and that each named server is one a
@@ -31,7 +39,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from wingman_core.domain.users import User
-from wingman_day1.application.clusters import ClusterService
+from wingman_day1.application.clusters import ClusterFile, ClusterService
 from wingman_day1.application.sites import SiteCatalog
 from wingman_day1.domain.add_server import (
     WAIVER_NEEDS_NAMES,
@@ -42,9 +50,11 @@ from wingman_day1.domain.add_server import (
     RunTarget,
     run_target,
 )
+from wingman_day1.domain.cluster_file import load_values
 from wingman_day1.domain.errors import (
     AmbiguousStartError,
     HubError,
+    InvalidClusterFileError,
     InvalidInputError,
     ResourceNotFoundError,
     WorkflowsNotConfiguredError,
@@ -60,6 +70,14 @@ from wingman_day1.domain.inventory import (
     named_refusals,
 )
 from wingman_day1.domain.names import dns_label_problems
+from wingman_day1.domain.servers import ServerRow
+from wingman_day1.domain.used_agents import (
+    Unguarded,
+    UsedAgent,
+    unguarded,
+    used_labels,
+    used_servers,
+)
 from wingman_day1.integrations.server_scan.ports import ServerInventory
 from wingman_day1.ports import AddServerWorkflow, HubApi
 
@@ -93,6 +111,14 @@ class InventoryOverview:
     mces: tuple[MceInventory, ...]
     add_servers: Availability
     runs: Availability
+    used_labels: tuple[str, ...] = ()
+    """The keys that mark a used Agent here (``WorkflowKeys.used_agent_labels``)."""
+    excluded: bool = False
+    """Whether they are the deployment's excluded labels; else herzi's label alone."""
+    unguarded: tuple[Unguarded, ...] = ()
+    """Agent nodepools of the day1 repo that do not exclude every key, with their MCE."""
+    unguarded_mces: tuple[str, ...] = ()
+    """Each ``unguarded`` entry's MCE, in the same order."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,12 +157,16 @@ class InventoryService:
         workflows: AddServerWorkflow | None,
         add_servers: bool,
         namespace: str | None,
+        agents: HubApi | None = None,
+        excluded_agent_labels: Sequence[str] = (),
     ) -> None:
         """``hub`` lists InfraEnvs (``None``: live status off); ``workflows`` is the orchestrator.
 
         ``clusters`` names each MCE's InfraEnvs from its cluster files when its
         hub list is unknown. ``namespace`` is where InfraEnvs are listed and is
         sent to the workflow when set (the orchestrator's default is ``inventory``).
+        ``agents`` reads the used Agents (cached for seconds; ``None``: not
+        read); ``excluded_agent_labels`` is ``DAY1_EXCLUDED_AGENT_LABELS``.
         """
         self._sites = sites
         self._clusters = clusters
@@ -145,6 +175,9 @@ class InventoryService:
         self._workflows = workflows
         self._add_servers = add_servers
         self._namespace = namespace
+        self._agents = agents
+        self._excluded = bool(excluded_agent_labels)
+        self._used_labels = used_labels(excluded_agent_labels)
 
     @property
     def runs_availability(self) -> Availability:
@@ -166,8 +199,12 @@ class InventoryService:
         """Every day1 MCE's servers and pools, as server-scan counts them."""
         tree = await self._sites.tree()
         rows = await self._inventory.rows()
-        found = await asyncio.gather(*(self._pools(mce) for _, mce in tree.mces))
-        named = await self._named_by_files() if any(e for _, e in found) else {}
+        found, used, files = await asyncio.gather(
+            asyncio.gather(*(self._pools(mce) for _, mce in tree.mces)),
+            asyncio.gather(*(self._used(mce, rows) for _, mce in tree.mces)),
+            self._clusters.clusters(),
+        )
+        named = _named_by_files(files)
         mces = tuple(
             mce_inventory(
                 site,
@@ -176,10 +213,23 @@ class InventoryService:
                 pools=pools if error is None else [Pool.unread(n) for n in named.get(mce, [])],
                 infra_envs_error=error,
                 infra_envs_from=FROM_MCE if error is None else FROM_DAY1,
+                used=agents,
+                used_error=used_error,
             )
-            for (site, mce), (pools, error) in zip(tree.mces, found, strict=True)
+            for (site, mce), (pools, error), (agents, used_error) in zip(
+                tree.mces, found, used, strict=True
+            )
         )
-        return InventoryOverview(mces, self.add_availability, self.runs_availability)
+        lacking = [(f.ref.mce, pool) for f in files for pool in self._unguarded(f)]
+        return InventoryOverview(
+            mces,
+            self.add_availability,
+            self.runs_availability,
+            used_labels=self._used_labels,
+            excluded=self._excluded,
+            unguarded=tuple(pool for _, pool in lacking),
+            unguarded_mces=tuple(mce for mce, _ in lacking),
+        )
 
     async def candidates(self, mce: str, infra_env: str) -> PoolServers:
         """The servers a named install into ``infra_env`` on ``mce`` may pick, and why not.
@@ -294,18 +344,28 @@ class InventoryService:
         if problems := dns_label_problems(infra_env, what="InfraEnv"):
             raise InvalidInputError(f"InfraEnv {infra_env!r} is not a DNS label", problems)
 
-    async def _named_by_files(self) -> dict[str, list[str]]:
-        """Each MCE's InfraEnvs, as its day1 cluster files name them.
+    def _unguarded(self, found: ClusterFile) -> list[Unguarded]:
+        """The file's agent nodepools that do not exclude every used-Agent key."""
+        try:
+            values = load_values(found.content)
+        except InvalidClusterFileError:
+            return []  # its own page says why it does not parse
+        name = found.hosted_cluster.cluster_name
+        return unguarded(values, self._used_labels, cluster=found.ref.name, cluster_name=name)
 
-        Every InfraEnv a nodepool draws from: ``infraEnvName`` and its
-        ``additionalInfraEnvNames`` (ADR-0064).
-        """
-        named: dict[str, set[str]] = {}
-        for found in await self._clusters.clusters():
-            pools = found.values.nodepools if found.values is not None else ()
-            names = {name for pool in pools for name in pool.infra_envs}
-            named.setdefault(found.ref.mce, set()).update(names)
-        return {mce: sorted(names) for mce, names in named.items()}
+    async def _used(
+        self, mce: str, rows: Sequence[ServerRow]
+    ) -> tuple[list[UsedAgent] | None, str | None]:
+        """``mce``'s used Agents, joined to its rows; ``None`` and why, when not read."""
+        if self._agents is None:
+            return None, None
+        try:
+            agents = await self._agents.used_agents(
+                mce, labels=self._used_labels, namespace=self._namespace
+            )
+        except HubError as exc:
+            return None, f"{type(exc).__name__.removesuffix('Error')}: {exc}"
+        return used_servers(agents, self._used_labels, [r for r in rows if r.mce == mce]), None
 
     async def _pools(self, mce: str) -> tuple[list[Pool], str | None]:
         """``mce``'s InfraEnvs as pools, by their agentLabels; or why they are unknown."""
@@ -316,6 +376,20 @@ class InventoryService:
             return [Pool.observed(infra_env) for infra_env in found], None
         except HubError as exc:
             return [], f"{type(exc).__name__.removesuffix('Error')}: {exc}"
+
+
+def _named_by_files(files: Sequence[ClusterFile]) -> dict[str, list[str]]:
+    """Each MCE's InfraEnvs, as its day1 cluster files name them.
+
+    Every InfraEnv a nodepool draws from: ``infraEnvName`` and its
+    ``additionalInfraEnvNames`` (ADR-0064).
+    """
+    named: dict[str, set[str]] = {}
+    for found in files:
+        pools = found.values.nodepools if found.values is not None else ()
+        names = {name for pool in pools for name in pool.infra_envs}
+        named.setdefault(found.ref.mce, set()).update(names)
+    return {mce: sorted(names) for mce, names in named.items()}
 
 
 def _fields(event: Mapping[str, str]) -> str:

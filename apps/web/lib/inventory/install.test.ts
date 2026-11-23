@@ -12,12 +12,12 @@ import {
 
 const pool = (infraEnv: string | null, overrides: Partial<PoolCount> = {}): PoolCount => ({
   infra_env: infraEnv, available: 1, usable: 1, hardware: [], ready: infraEnv ? 2 : null, needs_fix: infraEnv ? 0 : null,
-  total: infraEnv ? 3 : 1, server_prefix: infraEnv ? "ocp-r650-mtl-site1-" : null, label_problems: [], ...overrides,
+  total: infraEnv ? 3 : 1, server_prefix: infraEnv ? "ocp-r650-mtl-site1-" : null, label_problems: [], used: [], ...overrides,
 });
 
 const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
   site: "site1", mce: name, known: true, servers: 3, in_clusters: 1, available: 2, usable: 2,
-  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 2, ...overrides,
+  pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 2, used: 0, used_error: null, unguarded: [], ...overrides,
 });
 
 const run = (mceName: string, infraEnv: string | null): InventoryRun => ({
