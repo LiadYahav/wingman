@@ -252,18 +252,26 @@ def test_adding_servers_is_off_unless_enabled_and_needs_the_orchestrator() -> No
     assert "day1.addServers.enabled needs workflows.url" in refused.stderr
 
 
-def test_scaling_nodepools_is_off_unless_enabled_and_needs_the_orchestrator() -> None:
-    """ADR-0062: ``day1.scaleNodepools.enabled`` sets DAY1_SCALE_NODEPOOLS, also off for values
-    kept from 3.39 that have no such key; on, it needs ``workflows.url``; not a boolean, the
-    schema refuses it."""
-    assert render()["wingman-config"]["data"]["DAY1_SCALE_NODEPOOLS"] == "false"
-    kept = render("--set", "day1.scaleNodepools=null")["wingman-config"]["data"]
-    assert kept["DAY1_SCALE_NODEPOOLS"] == "false"
-    on = render(*ALL_ON, "--set", "day1.scaleNodepools.enabled=true")["wingman-config"]["data"]
-    assert on["DAY1_SCALE_NODEPOOLS"] == "true"
-    refused = template("--set", "day1.scaleNodepools.enabled=true")
-    assert refused.returncode != 0
-    assert "day1.scaleNodepools.enabled needs workflows.url" in refused.stderr
+def scale(*extra: str) -> str:
+    return render(*extra)["wingman-config"]["data"]["DAY1_SCALE_NODEPOOLS"]
+
+
+def test_scaling_nodepools_is_on_by_default_wherever_the_orchestrator_is() -> None:
+    """ADR-0062's 2026-11-23 amendment: ``day1.scaleNodepools.enabled`` is true by default, and
+    DAY1_SCALE_NODEPOOLS is on wherever ``workflows.url`` is set, also for values kept from a
+    release before 3.40 that have no such key; false turns it off. Without ``workflows.url``
+    there is no Scale and nothing fails, whatever the value says. Not a boolean, the schema
+    refuses it."""
+    assert scale(*ALL_ON) == "true"
+    assert scale(*ALL_ON, "--set", "day1.scaleNodepools=null") == "true"
+    assert scale(*ALL_ON, "--set", "day1.scaleNodepools.enabled=true") == "true"
+    assert scale(*ALL_ON, "--set", "day1.scaleNodepools.enabled=false") == "false"
+    assert scale() == "false", "the default install without the orchestrator renders, no Scale"
+    assert scale("--set", "day1.scaleNodepools.enabled=true") == "false"
+    assert scale("--set", "day1.scaleNodepools=null") == "false"
+    for no_orchestrator in ((), ("--set", "workflows=null"), ("--set", "workflows.url=")):
+        assert template(*no_orchestrator).returncode == 0
+        assert scale(*no_orchestrator) == "false"
     wrong = template(*ALL_ON, "--set-string", "day1.scaleNodepools.enabled=yes")
     assert wrong.returncode != 0
     assert "scaleNodepools" in wrong.stderr

@@ -1,10 +1,12 @@
 """``/api/day1/clusters/{name}/scale*``: a cluster's NodePools scaled through update-nodepool.
 
-ADR-0062, docs/notes/2026-11-16-scale-nodepools-api.md. Behind
-``DAY1_SCALE_NODEPOOLS``: off, every route answers 501. ``{name}`` is the
-cluster file's stem, which is the workflow's ``cluster``. Reading what can
-be scaled, and the run, needs a session; a start needs an admin. A viewer's
-run names no server, Machine or node (ADR-0038, amended 2026-11-23).
+ADR-0062, docs/notes/2026-11-16-scale-nodepools-api.md. On by default
+wherever the orchestrator is (``Day1Settings.scale_nodepools``); off
+(``DAY1_SCALE_NODEPOOLS=false``, or no orchestrator), every route answers
+501. ``{name}`` is the cluster file's stem, which is the workflow's
+``cluster``. Reading what can be scaled, and the run, needs a session; a
+start needs an admin. A viewer's run names no server, Machine or node
+(ADR-0038, amended 2026-11-23).
 """
 
 from __future__ import annotations

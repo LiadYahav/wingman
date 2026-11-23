@@ -1,7 +1,8 @@
 """Scaling NodePools' part of the composition root (ADR-0062).
 
 The update-nodepool workflow's adapter (real, none, or the fake fleet's) and
-the use case, both only while ``DAY1_SCALE_NODEPOOLS`` is on: off, the scale
+the use case, both only while Scale is on (``Day1Settings.scale_nodepools``:
+``DAY1_SCALE_NODEPOOLS``, true by default, and an orchestrator): off, the scale
 routes answer 501 and nothing here is built. A cluster's run is read
 uncached, as a cluster's upgrade run is: the page polls it while it runs.
 """
@@ -28,7 +29,7 @@ def scale_workflow(
     settings: Day1Settings, *, metrics: WingmanMetrics, clock: Clock, closers: list[Close]
 ) -> ScaleWorkflow | None:
     """The update-nodepool workflow while scaling is on; or, with the fake fleet, its fake."""
-    if not settings.day1_scale_nodepools:
+    if not settings.scale_nodepools:
         return None
     if settings.day1_fake_fleet:
         from wingman_day1.infrastructure.fake_scale import FakeScaleWorkflow
@@ -50,11 +51,11 @@ def scale_service(
     clusters: ClusterService,
     specs: SpecCatalog,
 ) -> ScaleService | None:
-    """The scale use case while ``DAY1_SCALE_NODEPOOLS`` is on; else ``None`` (the routes' 501).
+    """The scale use case while Scale is on; else ``None`` (the routes' 501).
 
     The fake fleet's workflow reads each cluster's NodePools and policies from its day1 file.
     """
-    if not settings.day1_scale_nodepools or workflow is None:
+    if not settings.scale_nodepools or workflow is None:
         return None
     if settings.day1_fake_fleet:
         from wingman_day1.infrastructure.fake_scale import FakePool, FakeScaleWorkflow

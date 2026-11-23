@@ -93,7 +93,7 @@ day1 refuses to start without it (ADR-0009):
 | `upgrade-cluster` | `DAY1_UPGRADES` | the cluster page, the clusters list | ADR-0055 |
 | `uninstall-server-from-hc` | `WORKFLOWS_API_URL` with `SERVER_SCAN_URL` | the Nodes tab | ADR-0038 |
 | `add-server-to-mce` | `DAY1_ADD_SERVERS` | Inventory Management | ADR-0057 |
-| `update-nodepool` | `DAY1_SCALE_NODEPOOLS` (off by default) | Scale on the Nodes tab | ADR-0062 |
+| `update-nodepool` | `DAY1_SCALE_NODEPOOLS` (on by default since 3.53.0, with `WORKFLOWS_API_URL`; without it no Scale) | Scale on the Nodes tab | ADR-0062 |
 | `delete-cluster` | none: a contract and a panel, 501 until the workflow exists | the delete dialog | ADR-0033 |
 
 `DAY1_FAKE_FLEET` (development only) replaces the MCE hubs, server-scan, the
@@ -213,8 +213,8 @@ fake; a router never calls a client. Files and functions stay small
 - **People and automation own different keys** of a cluster file (ADR-0012):
   `vlanId` and `dhcp_values` are the allocate-segment workflow's, `mcFiles`,
   `mcConfigMap` and `tuningConfigmap` the day1 CI's. With `DAY1_UPGRADES` the
-  versions are upgrade-cluster's, and with `DAY1_SCALE_NODEPOOLS` an existing
-  NodePool's replicas are update-nodepool's. Wingman never writes them, and
+  versions are upgrade-cluster's, and while Scale is on (by default, wherever
+  the orchestrator is) an existing NodePool's replicas are update-nodepool's. Wingman never writes them, and
   expects their commits on its MR branches. Without
   `DAY1_MULTI_INFRAENV_NODEPOOLS` (parked, kept off: ADR-0064) an edit leaves
   a nodepool's `additionalInfraEnvNames` as it is, and no edit renames a

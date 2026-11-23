@@ -4,7 +4,8 @@
 workers, **built** 2026-11-11 (ADR-0038), with uninstalling one node through
 the platform's workflow; scaling a cluster's NodePools through the
 update-nodepool workflow **built** 2026-11-16 (ADR-0062, behind
-`DAY1_SCALE_NODEPOOLS`: Scale on the Nodes tab, one NodePool a run since
+`DAY1_SCALE_NODEPOOLS`, on by default since 3.53.0 wherever the orchestrator
+is: Scale on the Nodes tab, one NodePool a run since
 2026-11-18, the run in place); the rest proposed.
 Checked against [architecture-fit.md](architecture-fit.md): server-scan is
 the platform's state tracker for servers and VMs (AD15), and nodes come from

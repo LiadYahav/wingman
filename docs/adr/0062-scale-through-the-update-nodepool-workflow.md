@@ -1,7 +1,7 @@
 # ADR-0062: A hosted cluster's NodePools are scaled through the update-nodepool workflow, behind a setting, and while it is on their replicas change only that way
 
 Date: 2026-11-16
-Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave; then it may choose its own policy instead, and a nodepool declares its own at create); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed); amended by ADR-0038 (2026-11-23: the Nodes tab, and so Scale's sizes and run, are an admin's; a viewer's run names no server)
+Status: Accepted; amends ADR-0012 (who owns each NodePool's `replicas`), ADR-0037 and ADR-0044 (a sync's and a rollout's MR leave them out); amended 2026-11-16 (no Scale dialog: each NodePool scales on its card, a hardware type's total in a small dialog; then every scale confirmed first, with the scale-down policy); amended 2026-11-18 (one NodePool a run: the by-kind mode and the hardware type total removed, as the workflow did; then a scale-down may name the servers that leave; then it may choose its own policy instead, and a nodepool declares its own at create); amended 2026-11-19 (a 404 to the start is an orchestrator without update-nodepool, said so; Scale may be on before it is deployed); amended by ADR-0038 (2026-11-23: the Nodes tab, and so Scale's sizes and run, are an admin's; a viewer's run names no server); amended 2026-11-23 (on by default wherever the orchestrator is, since update-nodepool is in production; without one there is no Scale and nothing fails)
 
 ## Context
 
@@ -36,7 +36,10 @@ change only through update-nodepool.**
    refuses to start without it (ADR-0009). The chart sets it from
    `day1.scaleNodepools.enabled` (in `values.schema.json`; the chart refuses
    it without `workflows.url`). Off, the routes answer `501
-   FEATURE_DISABLED` and nothing else changes.
+   FEATURE_DISABLED` and nothing else changes. (*Since 2026-11-23 the
+   default is `true`, and Scale is on only where the orchestrator is:
+   without it there is none, and neither day1 nor the chart refuses it.
+   The last amendment.*)
 2. **Scale lives on the cluster page's Nodes tab**, where the NodePools are
    (no new page). A "NodePool sizes" panel lists the cluster file's
    NodePools on `main` (not the MCE's, so it works with live status off),
@@ -644,3 +647,71 @@ update-nodepool: `GET .../scale` 200, `GET .../scale-run` `404 NOT_FOUND`,
 `POST .../scale` `502 DEPENDENCY_UNAVAILABLE` with the words);
 `apps/web/e2e/tests/cluster-scale.spec.ts` (the tab loads with no run,
 and the confirmation shows the heading and the words).
+
+## Amendment (2026-11-23): on by default wherever the orchestrator is
+
+The user (2026-11-23): "now the scale is production so you can make it
+turned on by default". update-nodepool is merged in team-redbull/workflows
+and runs in production, so from 3.53.0 Scale is on by default.
+
+- **The default is `true`**: `DAY1_SCALE_NODEPOOLS` and the chart's
+  `day1.scaleNodepools.enabled` (decision 1). `false` still turns it off.
+- **Scale needs the orchestrator. Without one there is no Scale, and
+  nothing fails.** One switch, `Day1Settings.scale_nodepools`, is what
+  everything reads: the routes, the adapter and decision 5's replicas
+  rule. It is on when `DAY1_SCALE_NODEPOOLS` is true and there is an
+  orchestrator (`WORKFLOWS_API_URL`, or `DAY1_FAKE_FLEET` in development).
+  - Day1 no longer refuses to start with `DAY1_SCALE_NODEPOOLS=true` and
+    no `WORKFLOWS_API_URL`: that is now the default. It means no Scale:
+    the routes answer `501 FEATURE_DISABLED`, whose words now say
+    "DAY1_SCALE_NODEPOOLS=false, or no WORKFLOWS_API_URL", and an edit may
+    change replicas, as before.
+  - The chart no longer fails on `enabled` without `workflows.url`. It
+    renders `DAY1_SCALE_NODEPOOLS` as `"true"` only with `workflows.url`,
+    else `"false"`. Values kept from a release before 3.40 (no
+    `scaleNodepools` map) take the default, as `placementMinFreePods` does.
+  - So a default install without the orchestrator renders, starts and
+    behaves as before.
+- **Why not keep refusing an explicit `true` without the orchestrator**,
+  as `DAY1_UPGRADES` and `DAY1_ADD_SERVERS` do: neither day1 nor Helm can
+  tell an explicit `true` from the default, and the default install must
+  still render and start. Upgrades and adding servers stay off by
+  default, and keep their refusal.
+- **Everything Scale does while it is on is unchanged**:
+  - an edit (the YAML editor, a review edit) that changes an existing
+    NodePool's replicas is refused and points to Scale;
+  - a flavor's sync and a rollout's MR leave drifted locked replicas out,
+    list them in `held_replicas` and offer Restore with update-nodepool;
+  - a locked NodePool moves only back to its value, and one run per
+    cluster;
+  - a new cluster, a new `nodepool[]` entry and removing one are left
+    alone.
+- **On upgrade, an existing deployment with `workflows.url` gets Scale**
+  unless its values set `enabled: false`. A values file copied from an
+  older chart's `values.yaml` does set it, and so does `--reuse-values`,
+  which keeps the old release's default. `--reset-then-reuse-values`, which
+  every upgrade guide uses, takes the new default.
+  `docs/upgrade/3.52-to-3.53.md` checks first that update-nodepool is on
+  the orchestrator and on every MCE's worker, or turns Scale off. An
+  orchestrator without it reads "not deployed yet" (the 2026-11-19
+  amendment), and then nobody changes an existing NodePool's replicas from
+  Wingman.
+- **A NodePool's own scale-down policy still needs the hostedclusters-setup
+  chart patch 0001** (`docs/upgrade/patches/hostedclusters-setup/`).
+  Without it a nodepool entry's `annotations` never reach the NodePool, and
+  a scale-down picks by a policy set on the NodePool by hand, else CAPI at
+  random. Scale itself does not need it. Neither does a policy for one run
+  (`scale_down_policy`) or picking the servers.
+
+Verification: `apps/day1-service/tests/unit/test_compose_scale.py` (the
+default; on with an orchestrator or the fake fleet; off without one, whatever
+the setting says, and when turned off; the workflow keys follow; the adapter
+built by default, none when off); `tests/unit/test_main.py` (the
+orchestrator's adapters include update-nodepool's by default);
+`tests/api/test_scale_api.py` (on by default beside the orchestrator; `501`
+without one and when turned off, nothing started);
+`tests/api/test_replicas_ownership_api.py` (on by default an edit of
+replicas is refused; turned off beside the orchestrator it is not);
+`tests/repo/test_chart_env_contract.py` (on with `workflows.url`, also for
+kept values; off without it, with no failure, whatever the value; off when
+`false`; a value that is not a boolean refused).

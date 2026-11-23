@@ -1,7 +1,8 @@
 # Common changes as forms, an API for automation, and ticket links
 
 **Status:** proposed; **scaling a nodepool is built** 2026-11-16 (ADR-0062,
-3.40.0, behind `DAY1_SCALE_NODEPOOLS`): Scale on the Nodes tab starts the
+3.40.0, behind `DAY1_SCALE_NODEPOOLS`, on by default since 3.53.0 wherever
+the orchestrator is): Scale on the Nodes tab starts the
 update-nodepool workflow for one NodePool (no InfraEnv kind total since
 2026-11-18), and while it is on an edit may no longer change an existing NodePool's
 replicas. Checked against [architecture-fit.md](architecture-fit.md):
@@ -17,7 +18,7 @@ each:
 
 | Change | Form | Sent as |
 |---|---|---|
-| Scale a nodepool | one nodepool's replicas (a total for one InfraEnv kind until 2026-11-18) | **built** (ADR-0062): the update-nodepool workflow, from the Nodes tab, behind `DAY1_SCALE_NODEPOOLS`; off, one edit |
+| Scale a nodepool | one nodepool's replicas (a total for one InfraEnv kind until 2026-11-18) | **built** (ADR-0062): the update-nodepool workflow, from the Nodes tab, behind `DAY1_SCALE_NODEPOOLS` (on by default since 3.53.0 wherever the orchestrator is); off, one edit |
 | Add or remove a node label | key and value | one edit |
 | Add or remove a machine config | the config picker (flavors v2) | one edit; the MR names the reboot |
 | Change the owner | the three numbers | one edit |

@@ -111,14 +111,15 @@ function UpgradeDocs() {
   );
 }
 
-/** Scale through update-nodepool (ADR-0062): off by default, so only what turning it on brings. */
+/** Scale through update-nodepool (ADR-0062): on by default wherever the orchestrator is (3.53.0). */
 function ScaleDocs() {
   return (
     <>
       <h3 className="text-base font-semibold mt-6 mb-3">Scale a NodePool</h3>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        Scale appears on the Nodes tab when your operator turns it on (<InlineCode>DAY1_SCALE_NODEPOOLS</InlineCode>,
-        the chart&apos;s <InlineCode>day1.scaleNodepools.enabled</InlineCode>; off by default). An admin then sets a
+        Scale is on the Nodes tab wherever Wingman has the platform&apos;s workflows orchestrator: it is on by
+        default (<InlineCode>DAY1_SCALE_NODEPOOLS</InlineCode>, the chart&apos;s{" "}
+        <InlineCode>day1.scaleNodepools.enabled</InlineCode>), and your operator may turn it off. An admin sets a
         NodePool&apos;s replicas with the <strong>− N +</strong> on its card, one change at a time and after a short
         confirmation, and the platform&apos;s <InlineCode>update-nodepool</InlineCode> workflow does it: one commit to
         day1, no merge request. The run shows under <strong>NodePool sizes</strong>, on the Nodes tab, which is an
@@ -137,7 +138,8 @@ function ScaleDocs() {
         An edit that changes an existing NodePool&apos;s <InlineCode>replicas</InlineCode> is refused and points to
         Scale; a new cluster and a new NodePool still set their first replicas. A NodePool whose replicas its flavor
         locks is not scaled, and a flavor sync leaves replicas out and offers <strong>Restore</strong> instead.
-        Off, replicas change by editing the cluster or syncing it to its flavor, as everything else.
+        Off (no orchestrator, or turned off), replicas change by editing the cluster or syncing it to its flavor, as
+        everything else.
       </Callout>
     </>
   );

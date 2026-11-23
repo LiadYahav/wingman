@@ -1,6 +1,7 @@
 """A cluster's NodePools scaled through the update-nodepool workflow, over HTTP (ADR-0062).
 
-Off by default: every route answers 501. With ``DAY1_SCALE_NODEPOOLS`` on,
+On by default wherever the orchestrator is (3.53.0); without one, or with
+``DAY1_SCALE_NODEPOOLS=false``, every route answers 501. On,
 anyone signed in reads what can be scaled and the run (a viewer's names no
 server); admins start one for one NodePool of the cluster file; day1 fills the MCE and the cluster,
 refuses a NodePool it cannot map to one entry of the file (and the retired
@@ -101,7 +102,6 @@ async def on(
         day2=day2,
         clock=clock,
         scale=scale,
-        day1_scale_nodepools=True,
         workflows_api_url="http://workflows-orchestrator-api.test:8080",
         server_scan_url="http://server-scan.test:8000",
     )
@@ -127,10 +127,7 @@ async def follow(client: httpx.AsyncClient, support: Any, gitlab: InMemoryGitLab
         await client.post("/api/webhooks/gitlab", json={"project": {"id": pid}}, headers=WEBHOOK)
 
 
-async def test_off_every_scale_route_is_501(
-    client: httpx.AsyncClient, auth: Auth, support: Any
-) -> None:
-    alice = auth(support.ALICE)
+async def assert_off(client: httpx.AsyncClient, alice: dict[str, str]) -> None:
     for response in (
         await client.get(f"{BASE}/scale", headers=alice),
         await client.post(f"{BASE}/scale", json={"replicas": 1, "nodepool": SMALL}, headers=alice),
@@ -138,6 +135,39 @@ async def test_off_every_scale_route_is_501(
     ):
         assert (response.status_code, response.json()["code"]) == (501, "FEATURE_DISABLED")
         assert "DAY1_SCALE_NODEPOOLS" in response.json()["detail"]
+
+
+async def test_without_the_orchestrator_every_scale_route_is_501(
+    client: httpx.AsyncClient, auth: Auth, support: Any
+) -> None:
+    await assert_off(client, auth(support.ALICE))
+
+
+async def test_turned_off_beside_the_orchestrator_every_scale_route_is_501(
+    support: Any,
+    gitlab: InMemoryGitLab,
+    hub: FakeHubApi,
+    identity: FakeIdentityProvider,
+    day2: FakeDay2Addons,
+    clock: Any,
+    scale: FakeScaleWorkflow,
+    auth: Auth,
+) -> None:
+    app = support.build_app(
+        gitlab=gitlab,
+        hub=hub,
+        identity=identity,
+        day2=day2,
+        clock=clock,
+        scale=scale,
+        day1_scale_nodepools=False,
+        workflows_api_url="http://workflows-orchestrator-api.test:8080",
+        server_scan_url="http://server-scan.test:8000",
+    )
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://day1.test") as client:
+        await assert_off(client, auth(support.ALICE))
+    assert scale.started == []
 
 
 async def test_the_options_are_the_files_nodepools(

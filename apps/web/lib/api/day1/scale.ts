@@ -1,8 +1,9 @@
 /**
  * Scaling a cluster's NodePools through the platform's update-nodepool
  * workflow (ADR-0062): what Scale can change, a start and the cluster's run.
- * Part of `day1Api.clusters`. 501 FEATURE_DISABLED on all three while
- * DAY1_SCALE_NODEPOOLS is off. A start is never retried (ADR-0006).
+ * Part of `day1Api.clusters`. 501 FEATURE_DISABLED on all three while Scale
+ * is off (DAY1_SCALE_NODEPOOLS=false, or day1 has no orchestrator). A start is
+ * never retried (ADR-0006).
  *
  * `where` is the `?site=&mce=` query the cluster page reads the cluster with.
  */
