@@ -23,10 +23,8 @@ from wingman_day1.infrastructure.hub_api import (
     PAGE_SIZE,
     TABLE,
     HttpHubApi,
-    node_from,
-    pod_quantity,
-    pods_per_node_from,
 )
+from wingman_day1.infrastructure.hub_objects import node_from, pod_quantity, pods_per_node_from
 
 TOKEN = "sha256~hub-token-never-shown-0002"
 MCE = "ocp4-prod-mce-site1-a"
