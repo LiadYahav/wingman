@@ -7,10 +7,9 @@ import { cn } from "@/lib/utils";
 import { useSidebarRail } from "./use-sidebar-rail";
 
 /*
- * The pieces every area's sidebar is built of (Wingman's sidebar-nav.tsx and
- * the data-driven area-nav.tsx), so all of them collapse to the icon rail the
- * same way. The rail's look is CSS (`rail:`, globals.css), so it is right
- * before React hydrates; React adds only the tooltips.
+ * The pieces Wingman's sidebar is built of (sidebar-nav.tsx), so it collapses
+ * to the icon rail in one way. The rail's look is CSS (`rail:`, globals.css),
+ * so it is right before React hydrates; React adds only the tooltips.
  */
 
 /** The navigation landmark, `label` its name: groups of entries, closer together in the rail. */
@@ -40,11 +39,6 @@ export interface SidebarLinkProps {
   icon: LucideIcon;
   /** Marked as where you are. */
   active: boolean;
-  /** A short figure at the end of the row ("10/12"); in the rail it moves to the tooltip. */
-  meta?: string;
-  /** What `meta` means, for a title and screen readers. */
-  metaLabel?: string;
-  testId?: string;
 }
 
 /**
@@ -52,13 +46,12 @@ export interface SidebarLinkProps {
  * `aria-current`. In the rail only the icon shows; the label stays the
  * link's accessible name and shows in a tooltip on hover and focus.
  */
-export function SidebarLink({ href, label, icon: Icon, active, meta, metaLabel, testId }: SidebarLinkProps) {
+export function SidebarLink({ href, label, icon: Icon, active }: SidebarLinkProps) {
   const { collapsed } = useSidebarRail();
   return (
     <Tooltip disabled={!collapsed}>
       <TooltipTrigger
         render={<Link href={href} />}
-        data-testid={testId}
         aria-current={active ? "page" : undefined}
         className={cn(
           "group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors duration-150 rail:h-8 rail:justify-center rail:px-0",
@@ -77,16 +70,9 @@ export function SidebarLink({ href, label, icon: Icon, active, meta, metaLabel, 
           )}
         />
         <span className="min-w-0 flex-1 truncate rail:sr-only">{label}</span>
-        {meta && (
-          <span className="shrink-0 text-[11px] tabular-nums text-sidebar-foreground/60 rail:sr-only" title={metaLabel}>
-            {meta}
-            {metaLabel && <span className="sr-only">: {metaLabel}</span>}
-          </span>
-        )}
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={10} data-testid="sidebar-tooltip">
         {label}
-        {meta && <span className="tabular-nums opacity-70">{meta}</span>}
       </TooltipContent>
     </Tooltip>
   );

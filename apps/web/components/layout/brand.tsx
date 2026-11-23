@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useRef } from "react";
 import { triggerEasterEgg } from "./easter-egg";
-import { WINGMAN } from "@/lib/areas";
+import { WINGMAN } from "@/lib/platforms";
 
 const CLICKS_TO_TRIGGER = 5;
 const RESET_MS = 2000;
@@ -29,7 +29,7 @@ function useCreditsClicks() {
  * row beside the sidebar's toggle; in the icon rail it is the logo alone,
  * centred above it (the name stays the link's accessible name).
  */
-export function AreaBrand() {
+export function Brand() {
   const onClick = useCreditsClicks();
   return (
     <Link

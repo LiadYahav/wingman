@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Platform } from "@/types";
-import { WINGMAN, switchEntries } from "./areas";
+import { WINGMAN, switchEntries } from "./platforms";
 
 /** The two systems as day1 lists them for an admin. */
 const APART: Platform[] = [

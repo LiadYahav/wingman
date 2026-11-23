@@ -83,7 +83,7 @@ and reads only what its own features need.
   and inventory reads still served.
 - `tests/repo/test_chart_env_contract.py` and `tests/repo/test_chart_schema.py`:
   the removed keys render nothing and are accepted as deprecated.
-- `apps/web/lib/areas.test.ts` and `apps/web/e2e/tests/platforms-apart.spec.ts`:
+- `apps/web/lib/platforms.test.ts` and `apps/web/e2e/tests/platforms-apart.spec.ts`:
   the top bar's links out, nothing in Wingman leading to an area, a viewer's
   top bar; `cluster-nodes.spec.ts` and `cluster-network.spec.ts` the links to
   each system's own page.

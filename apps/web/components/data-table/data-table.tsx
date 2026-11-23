@@ -1,25 +1,14 @@
 "use client";
 
 import type { HTMLAttributes, ReactNode } from "react";
-import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
-import { flexRender, type Header, type RowData, type Table } from "@tanstack/react-table";
+import { flexRender, type RowData, type Table } from "@tanstack/react-table";
 import { cn } from "@/lib/utils";
-import { ColumnFilter, type DataTableFilters } from "./column-filter";
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- the names must match TanStack's declaration
   interface ColumnMeta<TData extends RowData, TValue> {
-    /** The header's words; the column picker lists them. */
-    label: string;
     /** Classes for the column's header and cells (width, alignment). */
     className?: string;
-    /** Classes for the header alone, after `className` (a table with headers of its own look). */
-    headerClassName?: string;
-    /**
-     * Opts the column in to the header's value filter (with the table's
-     * `filters`): the row's cell as text, as the caller's filtering reads it.
-     */
-    filterValue?: (row: TData) => string;
   }
 }
 
@@ -34,54 +23,23 @@ const DIVIDER = {
   header: "border-foreground/20 contrast-more:border-foreground/55",
 };
 
-export interface DataTableSort {
-  id: string;
-  desc: boolean;
-}
-
 /**
- * Wingman's one data table, on TanStack Table (ADR-0047): dense rows, sticky
- * headers, every column sortable by a header button (unless it sets
- * `enableSorting: false`), columns hidden through
- * the table's visibility state (`ColumnPicker`). The caller owns the rows'
- * order and filtering (pure functions, unit-tested) and the sort state, so
- * the state can live in the URL; the table renders what it is given.
- *
- * **Column filters (Excel-style).** A column opts in with `meta.filterValue`
- * (its cell as text); with `filters` set, its header gets a funnel that
- * opens the column's distinct values (from `filters.rows`, the rows before
- * any column filter) with checkboxes, select all or none, Apply and Clear,
- * and is marked while the column filters. The table only draws them: the
- * caller keeps `filters.value` (a `ColumnFilters`, often in the URL with
- * `readColumnFilters`/`writeColumnFilters`) and filters its rows with
- * `applyColumnFilters` from `lib/table/column-filters.ts`, the same text
- * function as `filterValue`, so its counts and exports match:
- *
- *     const base = pageFilters(all, view);            // search, tabs, …
- *     const rows = applyColumnFilters(base, view.filters, cellText);
- *     <DataTable table={useDataTable({ data: rows, … })}
- *       filters={{ rows: base, value: view.filters, onChange: (f) => setView({ ...view, filters: f }) }} … />
+ * Wingman's one data table, on TanStack Table: dense rows and a sticky
+ * header. The caller owns the rows' order; the table renders what it is
+ * given.
  */
 export function DataTable<T>({
   table,
   label,
-  sort,
-  onSort,
   rowProps,
-  filters,
   empty,
   className,
 }: {
   table: Table<T>;
   /** The table's accessible name. */
   label: string;
-  sort: DataTableSort | null;
-  /** A header was pressed: the caller decides the next sort (asc, desc, off). */
-  onSort?: (columnId: string) => void;
   /** Extra attributes for a row: test ids, a tint. */
   rowProps?: (row: T) => HTMLAttributes<HTMLTableRowElement> & Record<`data-${string}`, string | undefined>;
-  /** The value filters of the columns that opt in (`meta.filterValue`); none without it. */
-  filters?: DataTableFilters<T>;
   /** Shown in place of the rows when there are none. */
   empty?: ReactNode;
   className?: string;
@@ -95,7 +53,17 @@ export function DataTable<T>({
           {table.getHeaderGroups().map((group) => (
             <tr key={group.id} className={cn("border-b", DIVIDER.header)}>
               {group.headers.map((header) => (
-                <HeaderCell key={header.id} header={header} sort={sort} onSort={onSort} filters={filters} />
+                <th
+                  key={header.id}
+                  scope="col"
+                  data-column={header.column.id}
+                  className={cn(
+                    "whitespace-nowrap px-3 py-2 text-left text-xs font-semibold tracking-[0.01em] text-foreground/75",
+                    header.column.columnDef.meta?.className
+                  )}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </th>
               ))}
             </tr>
           ))}
@@ -126,52 +94,5 @@ export function DataTable<T>({
         </tbody>
       </table>
     </div>
-  );
-}
-
-/** A column's header: its words as a sort button (with `onSort`), and its value filter when it opts in. */
-function HeaderCell<T>({
-  header,
-  sort,
-  onSort,
-  filters,
-}: {
-  header: Header<T, unknown>;
-  sort: DataTableSort | null;
-  onSort?: (columnId: string) => void;
-  filters?: DataTableFilters<T>;
-}) {
-  const meta = header.column.columnDef.meta;
-  const sorted = sort?.id === header.column.id ? (sort.desc ? "descending" : "ascending") : undefined;
-  const SortIcon = sorted === "ascending" ? ArrowUp : sorted === "descending" ? ArrowDown : ChevronsUpDown;
-  const words = flexRender(header.column.columnDef.header, header.getContext());
-  return (
-    <th
-      scope="col"
-      aria-sort={sorted}
-      data-column={header.column.id}
-      className={cn("whitespace-nowrap px-3 py-2 text-left text-xs font-semibold tracking-[0.01em] text-foreground/75", meta?.className, meta?.headerClassName)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {onSort && header.column.getCanSort() ? (
-          <button
-            type="button"
-            onClick={() => onSort(header.column.id)}
-            className="group inline-flex items-center gap-1 rounded outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            {words}
-            <SortIcon
-              aria-hidden
-              className={cn("h-3 w-3 shrink-0", sorted ? "text-foreground" : "opacity-0 group-hover:opacity-60 group-focus-visible:opacity-60")}
-            />
-          </button>
-        ) : (
-          words
-        )}
-        {filters && meta?.filterValue && (
-          <ColumnFilter columnId={header.column.id} label={meta.label} text={meta.filterValue} filters={filters} />
-        )}
-      </span>
-    </th>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { WINGMAN } from "@/lib/areas";
+import { WINGMAN } from "@/lib/platforms";
 
 const CREDITS_EVENT = "wingman:credits";
 const SHOW_MS = 5000;

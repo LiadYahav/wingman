@@ -17,9 +17,6 @@ const TONE: Record<RunTone, string> = {
   other: "bg-muted text-muted-foreground",
 };
 
-const NO_VISIBILITY = {};
-const keepVisibility = () => {};
-
 function Started({ run, now }: { run: InventoryRun; now: number }) {
   if (!run.started_at) return <span className="text-muted-foreground">—</span>;
   const at = Date.parse(run.started_at);
@@ -74,12 +71,11 @@ const column = createColumnHelper<InventoryRun>();
 
 function runColumns(now: number): ColumnDef<InventoryRun, never>[] {
   return [
-    column.display({ id: "started", header: "Started", meta: { label: "Started" }, cell: (c) => <Started run={c.row.original} now={now} /> }),
-    column.display({ id: "origin", header: "Who", meta: { label: "Who" }, cell: (c) => <Origin run={c.row.original} /> }),
+    column.display({ id: "started", header: "Started", cell: (c) => <Started run={c.row.original} now={now} /> }),
+    column.display({ id: "origin", header: "Who", cell: (c) => <Origin run={c.row.original} /> }),
     column.display({
       id: "pool",
       header: "Pool",
-      meta: { label: "Pool" },
       cell: (c) => (
         <span className="block min-w-0">
           <span className="block font-mono text-xs">{c.row.original.infra_env ?? "—"}</span>
@@ -90,14 +86,13 @@ function runColumns(now: number): ColumnDef<InventoryRun, never>[] {
     column.display({
       id: "server",
       header: "Server",
-      meta: { label: "Server" },
       cell: (c) => <span className="font-mono text-xs">{runSubject(c.row.original)}</span>,
     }),
-    column.display({ id: "status", header: "Status", meta: { label: "Status" }, cell: (c) => <Status run={c.row.original} /> }),
+    column.display({ id: "status", header: "Status", cell: (c) => <Status run={c.row.original} /> }),
     column.display({
       id: "error",
       header: "Error",
-      meta: { label: "Error", className: "max-w-xs" },
+      meta: { className: "max-w-xs" },
       cell: (c) =>
         c.row.original.error ? (
           <span className="block truncate text-xs text-status-error" title={c.row.original.error}>
@@ -119,14 +114,11 @@ export function RunsTable({ runs }: { runs: InventoryRun[] }) {
     data: runs,
     columns: runColumns(now),
     getRowId: (run) => `${run.workflow_id}@${run.started_at ?? ""}`,
-    columnVisibility: NO_VISIBILITY,
-    onColumnVisibilityChange: keepVisibility,
   });
   return (
     <DataTable
       table={table}
       label="Add-server runs"
-      sort={null}
       rowProps={(run) => ({ "data-testid": "run-row", "data-workflow": run.workflow_id })}
       empty={<EmptyState title="No add-server runs" description="Neither herzi nor a person has added servers lately." />}
     />

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ExternalLink, Plane, ScanSearch, Server, type LucideIcon } from "lucide-react";
-import { switchEntries, type SwitchEntry } from "@/lib/areas";
+import { switchEntries, type SwitchEntry } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import { usePlatforms } from "./use-platforms";
 
@@ -18,7 +18,7 @@ const ENTRY =
  * Wingman. With Wingman's entry alone (a viewer, or neither system
  * configured) there is nothing to switch to, so it is not shown.
  */
-export function AreaSwitch() {
+export function PlatformSwitch() {
   const entries = switchEntries(usePlatforms());
   if (entries.length < 2) return null;
   return (

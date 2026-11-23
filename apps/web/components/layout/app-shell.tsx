@@ -3,8 +3,8 @@
 import { Menu } from "lucide-react";
 import { useState } from "react";
 import { UserMenu } from "./user-menu";
-import { AreaBrand } from "./area-brand";
-import { AreaSwitch } from "./area-switch";
+import { Brand } from "./brand";
+import { PlatformSwitch } from "./platform-switch";
 import { EasterEgg } from "./easter-egg";
 import { SidebarNav } from "./sidebar-nav";
 import { SidebarToggle } from "./sidebar-toggle";
@@ -22,7 +22,7 @@ function SidebarContent({ desktop = false }: { desktop?: boolean }) {
   return (
     <div className="flex h-full w-full flex-col border-r border-sidebar-border bg-sidebar">
       <div className="flex shrink-0 items-center pr-3 rail:flex-col rail:pb-1 rail:pr-0">
-        <AreaBrand />
+        <Brand />
         {desktop && <SidebarToggle controls={DESKTOP_SIDEBAR_ID} />}
       </div>
       <div className="flex-1 overflow-x-hidden overflow-y-auto pt-2">
@@ -67,7 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <AreaSwitch />
+          <PlatformSwitch />
           <div className="flex-1" />
           <UserMenu />
         </header>
