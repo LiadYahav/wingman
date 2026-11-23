@@ -50,8 +50,8 @@ need > 0 -> POST add-server-to-mce {infra_env, mce_cluster, namespace, count<=20
   - `replicas` must be set. Autoscaling NodePools count as a "no replicas" problem.
   - Paused or deleting NodePools are not counted as demand.
 - The chart's `nodepool.yaml` already renders exactly this shape, from `infraEnvName`.
-- A NodePool that draws from several InfraEnvs (`additionalInfraEnvNames`, ADR-0064) has an `In` expression and no label: herzi skips it ("not tied to an InfraEnv", a warning, not a pool problem) and counts none of its demand.
-- A NodePool that keeps labelled Agents out (`excludeAgentLabels`, §2.6) keeps its label and gains `matchExpressions` (the InfraEnv's `In` and a `DoesNotExist`): on herzi's `main` that is the pool problem above, so its InfraEnv's pool orders nothing for any cluster until herzi accepts the exclusion.
+- A NodePool that draws from several InfraEnvs (`additionalInfraEnvNames`, ADR-0064, parked since 2026-11-23: the team runs none for now) would have an `In` expression and no label: herzi skips it ("not tied to an InfraEnv", a warning, not a pool problem) and counts none of its demand.
+- A NodePool that keeps labelled Agents out (`excludeAgentLabels`, §2.6) keeps its label and gains `matchExpressions` (a `DoesNotExist` per key): on herzi's `main` that is the pool problem above, so its InfraEnv's pool orders nothing for any cluster until herzi accepts the exclusion.
 
 ### 1.3 Which servers go into which InfraEnv, and from where
 - **herzi does not pick servers or BMHs.** It sends only a count per InfraEnv:
@@ -133,9 +133,9 @@ chart values.yaml
 |---|---|
 | `infraEnvName` | **required on agent**. It is the value of label `infraenvs.agent-install.openshift.io`. Legacy form: `agentLabelSelector: {nodeLabelKey, nodeLabelValue}`; a disagreement fails the render |
 | `name` | `<clusterName>-<infraEnvName>`. **Required** when two pools share an InfraEnv (zones) |
-| `additionalInfraEnvNames` | **Needs chart patch 0002** (§2.6; upstream main ignores the key and selects `infraEnvName` alone). More InfraEnvs the NodePool may draw Agents from: the selector becomes `matchExpressions: [{key: infraenvs.agent-install.openshift.io, operator: In, values: [infraEnvName, ...these]}]` instead of `matchLabels`; the name still derives from `infraEnvName`. Agent only: Wingman refuses it on KubeVirt and with the legacy `agentLabelSelector.nodeLabelKey` (the chart does not check). Wingman writes it only with `DAY1_MULTI_INFRAENV_NODEPOOLS` (ADR-0064) |
+| `additionalInfraEnvNames` | **Parked** (2026-11-23, ADR-0064's amendment): the team runs no such NodePool for now, so neither the chart (upstream main ignores the key and selects `infraEnvName` alone; §2.6 has no patch for it) nor the specs template carries it, and `DAY1_MULTI_INFRAENV_NODEPOOLS` stays off. More InfraEnvs the NodePool may draw Agents from: the selector becomes `matchExpressions: [{key: infraenvs.agent-install.openshift.io, operator: In, values: [infraEnvName, ...these]}]` instead of `matchLabels`; the name still derives from `infraEnvName`. Agent only: Wingman refuses it on KubeVirt and with the legacy `agentLabelSelector.nodeLabelKey` (the chart does not check). Wingman writes it only with `DAY1_MULTI_INFRAENV_NODEPOOLS` (ADR-0064) |
 | `annotations` | **Needs chart patch 0001** (§2.6; upstream main ignores the key). Rendered onto the NodePool's `metadata.annotations` as written (`toYaml`), after the chart's own `argocd.argoproj.io/sync-wave`; values must be strings. Scale reads `redbull.io/scale-down-policy` (`fewest-pods`, `least-requested`, `least-utilized`) from it, and Wingman writes that key from a nodepool's `scale_down_policy`; the chart does not refuse an entry's own sync-wave, Wingman's edits do (ADR-0062) |
-| `excludeAgentLabels` | **Needs chart patch 0003** (§2.6). Agent label keys the NodePool never takes an Agent with: its selector gains `matchExpressions`, the InfraEnvs' `In` requirement then `{key: <key>, operator: DoesNotExist}` for each, beside `matchLabels` when it draws from one InfraEnv. Agent only: Wingman writes none on KubeVirt. Wingman writes it from `DAY1_EXCLUDED_AGENT_LABELS` (ADR-0065) |
+| `excludeAgentLabels` | **Needs chart patch 0002** (§2.6). Agent label keys the NodePool never takes an Agent with: its selector keeps `matchLabels` and gains `matchExpressions`, one `{key: <key>, operator: DoesNotExist}` for each. Agent only: Wingman writes none on KubeVirt. Wingman writes it from `DAY1_EXCLUDED_AGENT_LABELS` (ADR-0065) |
 | `replicas` | 1 when the key is absent; an explicit `0` is honoured |
 | `labels.allowDeletion` | "false". Always write `allowDeletion: false` |
 | `labels.maxReplicas` / `minReplicas` | `replicas` / `replicas-1` |
@@ -244,13 +244,12 @@ Connected-lab example, KubeVirt local, which renders the HostedCluster: `$ECO/he
 
 ### 2.6 Nodepool annotations and excluded Agent labels (chart patches)
 
-Three keys Wingman needs are not on the chart's `main`. The change the chart's owner approved is in this repository as patches on the public GitHub port of the chart, `docs/upgrade/patches/hostedclusters-setup/` (made on its `main`, `1820ce0`, applied in order; how: `docs/upgrade/3.46-to-3.47.md` step 4). The air-gapped chart gets the same change from a separate package. Each leaves every existing cluster file's render byte for byte as it was.
+Two keys Wingman needs are not on the chart's `main`. The change the chart's owner approved is in this repository as patches on the public GitHub port of the chart, `docs/upgrade/patches/hostedclusters-setup/` (made on its `main`, `1820ce0`, applied in order; how: its `README.md`). The air-gapped chart gets the same change from a separate package. Each leaves every existing cluster file's render byte for byte as it was. Until 2026-11-23 there were three: the one for `additionalInfraEnvNames` was dropped when ADR-0064 was parked.
 
 | Patch | Key | Renders |
 |---|---|---|
 | 0001 | `nodepool[].annotations` | The map onto the NodePool's `metadata.annotations`, as written (`toYaml`), after `argocd.argoproj.io/sync-wave: "4"` |
-| 0002 | `nodepool[].additionalInfraEnvNames` | `matchExpressions: [{key: infraenvs.agent-install.openshift.io, operator: In, values: [infraEnvName, ...these]}]` instead of `matchLabels` |
-| 0003 | `nodepool[].excludeAgentLabels` | The same `In` requirement (with `matchLabels` kept when there are no other InfraEnvs), then one `{key: <key>, operator: DoesNotExist}` per key |
+| 0002 | `nodepool[].excludeAgentLabels` | `matchLabels` with the InfraEnv as before, then `matchExpressions` with one `{key: <key>, operator: DoesNotExist}` per key |
 
 ```yaml
 # nodepool:
@@ -260,12 +259,8 @@ Three keys Wingman needs are not on the chart's `main`. The change the chart's o
         matchLabels:
           infraenvs.agent-install.openshift.io: dell-r660-site-a-128c-1024gb-5tb
         matchExpressions:
-        - key: infraenvs.agent-install.openshift.io
-          operator: In
-          values:
-          - "dell-r660-site-a-128c-1024gb-5tb"
-        - key: "example.com/used"
-          operator: DoesNotExist
+          - key: example.com/used
+            operator: DoesNotExist
 ```
 
 - **Why `excludeAgentLabels`.** herzi's collector of used Agents: an uninstall or a scale-down does not return a used Agent to the inventory cleanly, so herzi labels every Agent installed in a cluster as used and deletes a free Agent that carries the label. Every NodePool's `DoesNotExist` on that key keeps a freed used Agent from being bound again before herzi deletes it. The label's name is herzi's to choose and not final (`redbull.io/claimed` is proposed), so the value is a generic list of keys.

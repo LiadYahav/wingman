@@ -64,7 +64,9 @@ need operator steps; each of those has a guide (`<from>-to-<to>.md`), written
 for an agent or a person inside the disconnected environment, with the checks
 before, when to stop, and how to go back. Moving from the legacy services:
 [upgrade/legacy-to-ecosystem.md](upgrade/legacy-to-ecosystem.md). Read the row
-of every release between yours and the target.
+of every release between yours and the target. The hostedclusters-setup chart
+patches Wingman needs, and how to apply and check them:
+[upgrade/patches/hostedclusters-setup/README.md](upgrade/patches/hostedclusters-setup/README.md).
 
 ## ideas/: what could come next
 

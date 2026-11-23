@@ -213,9 +213,9 @@ fake; a router never calls a client. Files and functions stay small
   versions are upgrade-cluster's, and with `DAY1_SCALE_NODEPOOLS` an existing
   NodePool's replicas are update-nodepool's. Wingman never writes them, and
   expects their commits on its MR branches. Without
-  `DAY1_MULTI_INFRAENV_NODEPOOLS` an edit leaves a nodepool's
-  `additionalInfraEnvNames` as it is, and no edit renames a NodePool by its
-  InfraEnvs (ADR-0064); no edit changes an existing Replace NodePool's
+  `DAY1_MULTI_INFRAENV_NODEPOOLS` (parked, kept off: ADR-0064) an edit leaves
+  a nodepool's `additionalInfraEnvNames` as it is, and no edit renames a
+  NodePool by its InfraEnvs; no edit changes an existing Replace NodePool's
   `excludeAgentLabels`, which a create writes from
   `DAY1_EXCLUDED_AGENT_LABELS` (ADR-0065).
 - **Not every change is Wingman's MR.** Some workflows commit to day1
