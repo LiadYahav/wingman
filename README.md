@@ -463,7 +463,7 @@ DAY1_STATUS_POLL_SECONDS=30               # the live status stream (the chart do
 # The workflows orchestrator, required: every create starts provision-cluster there (ADR-0042), and node
 # uninstall (ADR-0038), upgrades, Scale and adding servers start its other workflows. server-scan, optional,
 # adds the nodes' servers and feeds placement (ADR-0050), Inventory Management (ADR-0057) and the Infrastructure sidebar's link
-SERVER_SCAN_URL=                          # e.g. http://server-scan-api.<ns>.svc:8000; empty: nodes without servers, no uninstall, no Inventory Management, no top-bar link
+SERVER_SCAN_URL=                          # e.g. http://server-scan-api.<ns>.svc:8000; empty: nodes without servers, no uninstall, no Inventory Management, no link out in Infrastructure's sidebar
 SERVER_SCAN_UI_URL=                       # server-scan's UI, where node links and the Infrastructure sidebar's link point; default SERVER_SCAN_URL
 SERVER_SCAN_TOKEN=                        # a server-scan viewer token (Bearer), from a Secret, for every read; empty: no header
 SERVER_SCAN_SSL_VERIFY=true               # true, false, or a CA bundle path
@@ -481,7 +481,7 @@ DAY1_MULTI_INFRAENV_NODEPOOLS=false       # a nodepool may draw from several Inf
 DAY1_EXCLUDED_AGENT_LABELS=               # Agent label keys every agent NodePool excludes (ADR-0065), comma-separated: herzi's label for used Agents, redbull.io/ever-installed once herzi accepts it (docs/upgrade/3.54-to-3.55.md step 6); written on new clusters' nodepools (excludeAgentLabels), an existing cluster's through its own MR; empty: no NodePool changes
 
 # segments-manager: the cluster's EPG, checked against the file (ADR-0039), and the Infrastructure sidebar's link; off by default; read only
-SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG, no top-bar link
+SEGMENTS_MANAGER_URL=                     # its API, e.g. http://segments-manager.<ns>.svc:8000; empty: no EPG, no link out in Infrastructure's sidebar
 SEGMENTS_MANAGER_UI_URL=                  # where the cluster page's links and the Infrastructure sidebar's link point (its UI); default SEGMENTS_MANAGER_URL; both empty: no link
 SEGMENTS_MANAGER_SSL_VERIFY=true          # true, false, or a CA bundle path
 SEGMENTS_MANAGER_TIMEOUT_SECONDS=5
