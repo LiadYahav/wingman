@@ -4,6 +4,50 @@ Newest first. Each entry is the "Where to continue right now" section of
 `CLAUDE.md` as it stood when the next unit of work started. Together with
 `git log` and the ADRs each entry names, this is the record of the work.
 
+**2026-11-18 — 3.44.8 to 3.48.0: flavors, Scale, nodepools from several InfraEnvs, Server Scan at v6.6.0.**
+- **Flavors** (3.44.8, 3.45.0): a flavor's Overview stacks Metadata over
+  Cluster inputs, each the page's width; a flavor may carry the cluster's
+  image mirrors, optional (`image_content_sources`, `disable_idms_merge` →
+  `imageContentSources`, `disableIdmsMerge`; ADR-0063). The specs project's
+  `cluster-template.j2` needs the lines in `docs/upgrade/3.44-to-3.45.md`
+  before a flavor may set them.
+- **Scale follows update-nodepool** (3.45.1, 3.46.0; ADR-0062's two
+  2026-11-18 amendments): one NodePool a run, the by-kind mode is gone; a
+  scale-down may pick the servers that leave (`server_names`). The
+  workflows branch is not merged; its inventory follow-ups are in the
+  session log's Scale entry.
+- **A nodepool may draw from several InfraEnvs** (3.47.0, ADR-0064, off:
+  `DAY1_MULTI_INFRAENV_NODEPOOLS`): `infraEnvName` stays first and names
+  the NodePool, the others in `additionalInfraEnvNames`; the chart renders
+  `matchExpressions: In`. Needs the hostedclusters-setup chart change (a
+  patch is drafted, not proposed yet) and the template lines in
+  `docs/upgrade/3.46-to-3.47.md`. herzi skips such a NodePool's demand.
+- **Server Scan at server-scan v6.6.0** (3.48.0, ADR-0048's 2026-11-18
+  amendment, map `synced_at: v6.6.0`): server types, maintenance apart from
+  health, server-scan's own colours on the Servers table, a server's page
+  and the Sites cards; Fetch now behind `DAY1_SERVER_SCAN_REFRESH` (off).
+  Tried once on the sandbox: Wingman's call reached server-scan, which
+  refused it (409) because no vendor manager is connected there.
+
+**Next:**
+- The hostedclusters-setup chart change for `additionalInfraEnvNames`, and
+  a herzi rule for such NodePools; then turn the setting on.
+- When the workflows branch merges: the inventory follow-ups in the session
+  log's Scale entry.
+- Scale's scale-down policy per NodePool (the user): a flavor and
+  create-form choice that `cluster-template.j2` writes as the entry's
+  annotation (the specs project's template needs it too); more in
+  `CLAUDE.local.md`. Then, when the workflow is deployed: turn Scale on and
+  a first live run.
+- cluster-navigator's data on the cluster page and per MCE
+  (`docs/ideas/single-pane.md` workstream 5).
+- Flavors v2's "Left for later": missing add-ons in one MR per team, the
+  cluster-name prefix in the web, a preview of an unsaved flavor.
+- Tuning: a lock per pool.
+- Code organisation, later (the user): 28 files left in the size baseline.
+- The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
+  shared Git store.
+
 **2026-11-18 — 3.48.0: Server Scan at server-scan v6.6.0.**
 - **The sync** (ADR-0048's 2026-11-18 amendment; `scripts/upstream_diff.py
   server-scan v6.6.0`, the map's `synced_at: v6.6.0`): a ticked severity
