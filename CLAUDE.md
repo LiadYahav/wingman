@@ -185,46 +185,42 @@ Then the step no command covers: re-read the docs your change made wrong.
 you finish yours, move this entry to the top of `docs/notes/session-log.md`
 and write yours here.
 
-**2026-11-18 — 3.44.8 to 3.48.0: flavors, Scale, nodepools from several InfraEnvs, Server Scan at v6.6.0.**
-- **Flavors** (3.44.8, 3.45.0): a flavor's Overview stacks Metadata over
-  Cluster inputs, each the page's width; a flavor may carry the cluster's
-  image mirrors, optional (`image_content_sources`, `disable_idms_merge` →
-  `imageContentSources`, `disableIdmsMerge`; ADR-0063). The specs project's
-  `cluster-template.j2` needs the lines in `docs/upgrade/3.44-to-3.45.md`
-  before a flavor may set them.
-- **Scale follows update-nodepool** (3.45.1, 3.46.0; ADR-0062's two
-  2026-11-18 amendments): one NodePool a run, the by-kind mode is gone; a
-  scale-down may pick the servers that leave (`server_names`). The
-  workflows branch is not merged; its inventory follow-ups are in the
-  session log's Scale entry.
-- **A nodepool may draw from several InfraEnvs** (3.47.0, ADR-0064, off:
-  `DAY1_MULTI_INFRAENV_NODEPOOLS`): `infraEnvName` stays first and names
-  the NodePool, the others in `additionalInfraEnvNames`; the chart renders
-  `matchExpressions: In`. Needs the hostedclusters-setup chart change (a
-  patch is drafted, not proposed yet) and the template lines in
-  `docs/upgrade/3.46-to-3.47.md`. herzi skips such a NodePool's demand.
-- **Server Scan at server-scan v6.6.0** (3.48.0, ADR-0048's 2026-11-18
-  amendment, map `synced_at: v6.6.0`): server types, maintenance apart from
-  health, server-scan's own colours on the Servers table, a server's page
-  and the Sites cards; Fetch now behind `DAY1_SERVER_SCAN_REFRESH` (off).
-  Tried once on the sandbox: Wingman's call reached server-scan, which
-  refused it (409) because no vendor manager is connected there.
+**2026-11-23 — 3.48.2 to 3.52.1: chart patches, scale-down policy, excluded Agent labels, viewers without nodes, the areas removed.**
+- **hostedclusters-setup patches** (3.48.2, 3.50.2):
+  `docs/upgrade/patches/hostedclusters-setup/` holds a nodepool's
+  `annotations` (0001) and `excludeAgentLabels` (0002). `additionalInfraEnvNames`
+  was dropped when several InfraEnvs per nodepool was parked.
+- **Scale** (3.48.3, 3.49.0; ADR-0062's amendments): an orchestrator without
+  update-nodepool reads "not deployed yet". A NodePool's scale-down policy
+  (`annotations["redbull.io/scale-down-policy"]`) comes from the create form,
+  a flavor or Edit cluster. A scale-down may choose which servers leave.
+  Scale stays off.
+- **Excluded Agent labels** (3.50.0, 3.50.1; ADR-0065):
+  `DAY1_EXCLUDED_AGENT_LABELS`, empty until herzi marks used Agents.
+- **Team decisions of 2026-11-23:**
+  - No NodePool draws from several InfraEnvs for now (3.50.2, ADR-0064 Parked).
+  - A viewer never reads a cluster's nodes (3.51.0, ADR-0038's amendment).
+  - segments-manager and server-scan stay apart (3.52.0, ADR-0066). The
+    areas were off by default in 3.52.0 and removed in 3.52.1, about 36,000
+    lines. The top bar links to each system's own UI. Wingman still reads
+    both through their ports: the Nodes tab, placement, Inventory Management
+    and the EPG.
 
 **Next:**
-- The hostedclusters-setup chart change for `additionalInfraEnvNames`, and
-  a herzi rule for such NodePools; then turn the setting on.
-- When the workflows branch merges: the inventory follow-ups in the session
-  log's Scale entry.
-- Scale's scale-down policy per NodePool (the user): a flavor and
-  create-form choice that `cluster-template.j2` writes as the entry's
-  annotation (the specs project's template needs it too); more in
-  `CLAUDE.local.md`. Then, when the workflow is deployed: turn Scale on and
-  a first live run.
+- The workflows changed (update-nodepool is merged):
+  - add-server-to-mce's pool draw picks Agents by the InfraEnv's agent
+    labels, not by the InfraEnv name that Inventory Management matches;
+  - an uninstall now ends at a free Agent.
+  Wingman's texts and matching follow once the user decides.
+- When herzi marks used Agents: set `day1.excludedAgentLabels`.
+- Scale: turn it on once update-nodepool is deployed everywhere and the
+  chart and template carry the annotation.
+- Several InfraEnvs per nodepool: parked until the team asks for it again.
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).
 - Flavors v2's "Left for later": missing add-ons in one MR per team, the
   cluster-name prefix in the web, a preview of an unsaved flavor.
 - Tuning: a lock per pool.
-- Code organisation, later (the user): 28 files left in the size baseline.
+- Code organisation, later (the user): 26 files left in the size baseline.
 - The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
   shared Git store.
