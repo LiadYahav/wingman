@@ -2,12 +2,13 @@
  * What the platform has, as day1 reads it: sites and MCEs (read-only in
  * Wingman), an MCE's InfraEnvs and OpenShift versions (ADR-0034), MCE
  * placement for a new cluster (ADR-0050), the machine configs a nodepool can
- * name (ADR-0027), its tuning profiles (ADR-0061) and Quick Links (ADR-0052).
+ * name (ADR-0027), its tuning profiles (ADR-0061), Quick Links (ADR-0052) and
+ * the top bar's systems beside Wingman (ADR-0047 and ADR-0048, 2026-11-23).
  */
 
 import { api } from "@/lib/api-client";
 import type { PlacementQuery } from "@/lib/placement";
-import type { MachineConfigs, Mce, OpenShiftVersions, Placement, QuickLinks, TuningProfiles } from "@/types";
+import type { MachineConfigs, Mce, OpenShiftVersions, Placement, Platforms, QuickLinks, TuningProfiles } from "@/types";
 
 const mcePath = (mce: string) => `/api/day1/mces/${encodeURIComponent(mce)}`;
 
@@ -37,4 +38,6 @@ export const fleetApi = {
   machineConfigs: () => api.get<MachineConfigs>("/api/day1/machine-configs"),
   tuningProfiles: () => api.get<TuningProfiles>("/api/day1/tuning-profiles"),
   quickLinks: () => api.get<QuickLinks>("/api/day1/quick-links"),
+  /** The top bar's systems: each one's own UI, and whether its area is on (admins only). */
+  platforms: () => api.get<Platforms>("/api/day1/platforms"),
 };

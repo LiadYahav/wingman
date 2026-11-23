@@ -56,7 +56,7 @@ export function OverviewSection() {
         <FeatureCard
           icon={Server}
           title="Servers and Segments"
-          description="Inventory Management counts each MCE's free servers, for everyone. Admins also get the Segments and Server Scan areas in the top bar: segments-manager's segments and server-scan's fleet, inside Wingman."
+          description="Inventory Management counts each MCE's free servers, for everyone. Admins also get Segments and Server Scan in the top bar: segments-manager's and server-scan's own UIs, in a new tab, or, where your operator turns the areas on, their pages inside Wingman."
         />
       </div>
 

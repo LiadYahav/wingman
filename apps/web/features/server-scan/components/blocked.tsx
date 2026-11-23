@@ -1,4 +1,4 @@
-import { Lock, Unplug } from "lucide-react";
+import { ExternalLink, Lock, Unplug } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
 import { isApiError } from "@/lib/api-client";
 
@@ -19,11 +19,22 @@ export const needsAuditorToken = (error: unknown): boolean => needsToken(error, 
 /** Jobs' `501`: server-scan is there, its admin token is not. */
 export const needsAdminToken = (error: unknown): boolean => needsToken(error, "SERVER_SCAN_ADMIN_TOKEN");
 
-/** Whether day1's answer means the area cannot be shown at all: not an admin (403), or server-scan not configured (501). */
+/** Whether day1's answer means the area cannot be shown at all: not an admin (403), or the area off or server-scan not configured (501). */
 export const isBlocked = (error: unknown): boolean => isApiError(error, "FORBIDDEN") || isApiError(error, "FEATURE_DISABLED");
 
-/** Why a Server Scan page cannot show anything: not an admin, or server-scan not configured. */
+/** Why a Server Scan page cannot show anything: not an admin, the area off, or server-scan not configured. */
 export function Blocked({ error }: { error: unknown }) {
+  if (isApiError(error, "FEATURE_DISABLED") && error.details.setting === "DAY1_SERVER_SCAN_AREA") {
+    return (
+      <EmptyState
+        icon={ExternalLink}
+        bordered
+        title="Server Scan is in its own UI"
+        description="The team keeps server-scan apart from Wingman for now: open it from Server Scan in the top bar. Your operator can bring this area back (day1.serverScanArea.enabled, DAY1_SERVER_SCAN_AREA)."
+        data-testid="ss-area-off"
+      />
+    );
+  }
   if (isApiError(error, "FORBIDDEN")) {
     return (
       <EmptyState

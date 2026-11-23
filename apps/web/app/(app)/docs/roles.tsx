@@ -75,7 +75,9 @@ export function RolesSection() {
           <strong>Quick Links</strong>, <strong>Segments</strong> and <strong>Server Scan</strong> are for Wingman&apos;s
           admins until Wingman has finer roles. A viewer does not see them in the sidebar or the top bar, a page opened by
           its address says it is for admins, and the Overview shows Free Segments and Server Fleet Health only to those
-          who have the area. Segments and Server Scan also appear only once your operator has set them up.
+          who have the area. Segments and Server Scan also appear only once your operator has set them up, and while
+          their areas are off (the default: the team keeps both systems apart) an admin&apos;s top bar links to each
+          system&apos;s own UI instead.
         </Callout>
         <Callout type="warning" title="Dev login is for local development only">
           A local stack can run without OpenShift: the login page then shows a <strong>Dev mode</strong> banner,

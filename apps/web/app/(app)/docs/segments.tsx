@@ -21,13 +21,19 @@ const PARTS = [
   },
 ] as const;
 
-/** The docs page's "Segments" section, `#segments` (ADR-0047 and its amendment; ADR-0039 for the checks). */
+/** The docs page's "Segments" section, `#segments` (ADR-0047 and its amendments, up to 2026-11-23; ADR-0039 for the checks). */
 export function SegmentsSection() {
   return (
     <section>
       <SectionHeader id="segments" icon={Network} title="Segments" subtitle="segments-manager's network segments, read in Wingman" badge="Admins" />
-      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-        The top bar&apos;s <strong>Segments</strong> opens segments-manager&apos;s segments inside Wingman: every
+      <Callout type="info" title="Apart from Wingman, for now">
+        The team keeps segments-manager apart from Wingman: the top bar&apos;s <strong>Segments</strong> opens
+        segments-manager&apos;s own UI in a new tab, and the page below is off. Your operator can bring it back
+        (<InlineCode>DAY1_SEGMENTS_AREA</InlineCode>, the chart&apos;s <InlineCode>day1.segmentsArea.enabled</InlineCode>);
+        the cluster page&apos;s network card reads segments-manager either way.
+      </Callout>
+      <p className="text-sm text-muted-foreground leading-relaxed my-4">
+        With the area on, the top bar&apos;s <strong>Segments</strong> opens segments-manager&apos;s segments inside Wingman: every
         site&apos;s VLANs and network segments, which the allocate-segment workflow hands to new clusters. Its sidebar
         has the same views as the page (<strong>All</strong>, <strong>Available</strong>, <strong>Allocated</strong>,{" "}
         <strong>Disagrees with Git</strong>) and each site with its allocated and total segments.
@@ -46,7 +52,9 @@ export function SegmentsSection() {
         </Callout>
         <Callout type="tip" title="Who sees it">
           Wingman&apos;s admins, for now, once segments-manager is configured (<InlineCode>SEGMENTS_MANAGER_URL</InlineCode>,
-          the chart&apos;s <InlineCode>segmentsManager.url</InlineCode>). Without it the area is not in the top bar.
+          the chart&apos;s <InlineCode>segmentsManager.url</InlineCode>) and the area is on. Without segments-manager the top bar
+          has no Segments; with the area off it links to segments-manager&apos;s own UI
+          (<InlineCode>SEGMENTS_MANAGER_UI_URL</InlineCode>, else its API&apos;s address). A viewer has neither.
         </Callout>
       </div>
     </section>

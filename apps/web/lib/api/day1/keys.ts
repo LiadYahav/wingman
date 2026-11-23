@@ -91,6 +91,7 @@ const fleet = {
   machineConfigs: ["machine-configs"] as const,
   tuningProfiles: ["tuning-profiles"] as const,
   quickLinks: ["quick-links"] as const,
+  platforms: ["platforms"] as const,
 };
 
 const placement = {
