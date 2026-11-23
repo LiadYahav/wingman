@@ -18,7 +18,6 @@ const cases: [string, readonly unknown[], unknown[]][] = [
   ["clusters.all", day1Keys.clusters.all, ["clusters"]],
   ["clusters.driftSummary", day1Keys.clusters.driftSummary, ["clusters", "drift-summary"]],
   ["clusters.bulkStatus", day1Keys.clusters.bulkStatus(input), ["clusters", "bulk-status", input]],
-  ["clusters.provisioner", day1Keys.clusters.provisioner, ["clusters", "provisioner"]],
   ["clusters.one", day1Keys.clusters.one(name), ["clusters", name]],
   ["clusters.detail", day1Keys.clusters.detail(name), ["clusters", name, "detail"]],
   ["clusters.liveStatus", day1Keys.clusters.liveStatus(name, "mce-prod-1"), ["clusters", name, "live-status", "mce-prod-1"]],

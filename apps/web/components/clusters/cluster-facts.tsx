@@ -131,14 +131,14 @@ export function HostedClusterCard({ cluster, where }: { cluster: ClusterDetail; 
             <Row label="VLAN">
               {vlan !== null && vlan !== undefined && vlan !== ""
                 ? <span data-testid="network-vlan" className="font-mono text-xs">{String(vlan)}</span>
-                : <Pending what="The allocate-segment workflow writes vlanId on the MR branch" />}
+                : <Pending what="The provision-cluster workflow writes vlanId when it pushes the new file" />}
             </Row>
             <Row label="Segment">
               {network?.segment
                 ? <span data-testid="network-segment" className="font-mono text-xs">{network.segment}</span>
                 : network?.dhcp_network
                   ? <span className="font-mono text-xs" title="Not a /24 network address">{network.dhcp_network}</span>
-                  : <Pending what="The allocate-segment workflow writes dhcp_values on the MR branch" />}
+                  : <Pending what="The provision-cluster workflow writes dhcp_values when it pushes the new file" />}
             </Row>
             <Row label="EPG">
               <EpgValue read={net.data} isPending={net.isPending} error={net.error} />

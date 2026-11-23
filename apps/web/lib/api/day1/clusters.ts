@@ -28,7 +28,7 @@ import type {
   SyncRequest,
 } from "@/types";
 
-export const CLUSTERS = "/api/day1/clusters";
+const CLUSTERS = "/api/day1/clusters";
 
 /** `/api/day1/clusters/{name}`, the name encoded. */
 export const clusterPath = (name: string) => `${CLUSTERS}/${encodeURIComponent(name)}`;
@@ -49,8 +49,8 @@ export const clustersApi = {
   nameSuggestion: (params: Record<string, string>) =>
     api.get<NameSuggestion>(`${CLUSTERS}/name-suggestion?${new URLSearchParams(params).toString()}`),
   preview: (request: CreateClusterRequest) => api.post<ClusterPreview>(`${CLUSTERS}/preview`, request),
-  /** The merge request, or the started provision-cluster run in workflow mode (ADR-0042). */
-  create: (request: CreateClusterRequest) => api.post<MRDetail | ProvisionRun>(CLUSTERS, request),
+  /** The provision-cluster run the create started (ADR-0042): the workflow opens the merge request. */
+  create: (request: CreateClusterRequest) => api.post<ProvisionRun>(CLUSTERS, request),
   detail: (name: string, where: string) => api.get<ClusterDetail>(`${clusterPath(name)}${where}`),
   drift: (name: string, where: string) => api.get<ClusterDrift>(`${clusterPath(name)}/drift${where}`),
   /** The file's commits: day1's `CommitOut`, the shape `SpecCommit` mirrors. */

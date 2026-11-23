@@ -610,8 +610,6 @@ export async function mockDashboardApis(page: Page) {
   );
   // Wingman picks the MCE (ADR-0050): ocp4-<env>-mce-<site>-a for every site and env, live reads off
   await mockPlacement(page);
-  // A create opens Wingman's merge request unless a test turns the provision-cluster workflow on (ADR-0042)
-  await page.route("**/api/day1/clusters/provisioner", (route: Route) => json(route, { mode: "merge-request" }));
   // segments-manager is off unless a test says otherwise (mockClusterNetwork): the card shows the file, EPG "—"
   await page.route("**/api/day1/clusters/*/network**", (route: Route) =>
     json(route, { vlan_id: null, segment: null, epg: null, ledger: null, problems: [], ledger_error: null })
