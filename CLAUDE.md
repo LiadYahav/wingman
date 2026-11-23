@@ -61,12 +61,14 @@ Explicit user instructions; violating one is a real mistake, not style.
     (template in `docs/adr/README.md`); a superseded one is marked, never
     deleted.
 12. **Use parallel agents** where work splits into independent pieces.
-13. **Wingman owns day1 until the planned `create-cluster` workflow exists**
-    (user decision 2026-11-07). Keep provisioning behind an adapter so it can
-    switch to starting the workflow. The orchestrator API has no auth; that is
-    accepted. Since 3.7.0 (ADR-0042) the adapter exists:
-    `DAY1_PROVISIONER=workflow` starts the platform's `provision-cluster`
-    workflow; the default stays Wingman's own MR until the team switches.
+13. **Every create starts the platform's `provision-cluster` workflow**
+    (the user, 2026-11-23: "it's production"; ADR-0042's amendment). The team
+    has switched: Wingman opens no create MR of its own, and the workflows
+    orchestrator is a required dependency (`WORKFLOWS_API_URL`; the chart's
+    `workflows.url`). Production refuses to start without it; development
+    and tests run on the in-memory `FakeProvisionWorkflow`. Wingman still owns
+    every other day1 change by its own MR (edit, delete, sync, import,
+    rollouts). The orchestrator API has no auth; that is accepted.
 14. **Site and MCE are read-only in Wingman** (user decision 2026-11-07).
     Wingman never creates them; MCE onboarding happens elsewhere.
 15. **Don't add network policies** — they cause connectivity issues.
@@ -90,9 +92,11 @@ yet, in order:** (1) the architect's answers (`docs/ideas/architecture-fit.md`);
   placeholder (`.gitkeep`) or sidecar there.
 - **The cluster file is a values file** for the hostedclusters-setup chart:
   `owner`, `mastertag`, `nodepool[]` (`infraEnvName`, `replicas`, `labels`,
-  `configs`). `vlanId` and `dhcp_values` are written by the allocate-segment
-  workflow on the MR branch; `mcFiles`/`mcConfigMap` by CI. Wingman writes
-  none of them, and must expect those commits on its MR branches.
+  `configs`). `vlanId` and `dhcp_values` are written by the provision-cluster
+  workflow, in the commit that pushes a new file on its branch
+  `provision-cluster/<stem>` (allocate-segment writes no file since workflows
+  `ff1aba7`); `mcFiles`/`mcConfigMap`/`tuningConfigmap` by CI. Wingman writes
+  none of them, and must expect CI's commits on its MR branches.
 - **`clusterName` differs**: production's ApplicationSet strips `ocp4-` from
   the file name (HostedCluster `ocp4-prod-x-site1` in `hcp-prod-x-site1`); the
   GitHub sandbox keeps it. Day1 follows `DAY1_CLUSTER_NAME_STRIP_PREFIX`
@@ -222,12 +226,17 @@ and write yours here.
   Inventory and as day2 destinations, retiring ADR-0064; and the
   convention's items nothing deployed needs yet.
 - The air-gap: `docs/upgrade/3.52-to-3.53.md`, then 3.53-to-3.54 and
-  3.54-to-3.55's checks.
+  3.54-to-3.55's checks, then `docs/upgrade/3.55-to-3.56.md` (3.56.0: every
+  create starts provision-cluster, the orchestrator is required, Wingman's
+  create MR and `DAY1_PROVISIONER` are gone; ADR-0042's 2026-11-23
+  amendment). Its checks stop the upgrade where `day1.provisioner` is not
+  `workflow` yet.
 - cluster-navigator's data on the cluster page and per MCE
   (`docs/ideas/single-pane.md` workstream 5).
 - Flavors v2's "Left for later": missing add-ons in one MR per team, the
   cluster-name prefix in the web, a preview of an unsaved flavor.
 - Tuning: a lock per pool.
-- Code organisation, later (the user): 25 files left in the size baseline.
-- The team's questions: herzi, provision-cluster's 24 characters, RBAC, a
-  shared Git store.
+- Code organisation, later (the user): 23 files left in the size baseline.
+- The team's questions: herzi, provision-cluster's 24 characters (now on
+  every create: Wingman allows 26, so a 25- or 26-character name gets the
+  orchestrator's 422), RBAC, a shared Git store.
