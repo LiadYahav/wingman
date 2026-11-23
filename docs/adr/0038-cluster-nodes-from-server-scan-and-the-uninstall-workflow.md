@@ -1,7 +1,7 @@
 # ADR-0038: Cluster nodes come from the MCE by NodePool, joined to server-scan; uninstall starts the platform's workflow
 
 Date: 2026-11-11
-Status: Accepted; superseded in part by ADR-0041 (live status reads the hub through the nodes view's cache); amended 2026-11-23 (a cluster's nodes are for admins only); amended 2026-11-23 (3.54.0: an uninstall ends at a free Agent, with no lock)
+Status: Accepted; superseded in part by ADR-0041 (live status reads the hub through the nodes view's cache); amended 2026-11-23 (a cluster's nodes are for admins only); amended 2026-11-23 (3.54.0: an uninstall ends at a free Agent, with no lock); amended by ADR-0067 (a viewer never knows of a KV cluster, a seed or an MCE)
 
 ## Context
 
@@ -272,3 +272,24 @@ Verification: `tests/unit/infrastructure/test_fake_fleet.py` (no lock, the
 server in its MCE's inventory at the end) and `test_fake_mce.py` (the freed
 Agent, the backfill waiting for it); `apps/web/e2e/tests/cluster-nodes.spec.ts`
 (the confirmation's sentences).
+
+## Amendment (2026-11-23, by ADR-0067): what else a viewer never sees
+
+The user (2026-11-23): "KV cluster and MCE seed and MCEs they are for admins
+only no viewer should know." The first amendment kept a cluster's nodes from
+a viewer; ADR-0067 keeps the platform's own clusters too, with the same
+rule: day1 and day2 say it, the web follows.
+
+- **A KV cluster is a missing cluster for a viewer.** Every read that names
+  one, its file, status, runs, drift, network and history, answers `404
+  NOT_FOUND` with a missing cluster's words, before anything is read; every
+  list leaves it out (the clusters, drift, bulk status, the fleet's upgrades,
+  a flavor's clusters and rollout, the approvals and the audit's merge
+  requests). day2's destinations leave out every MCE and KV cluster.
+- **The MCE lists are an admin's.** The sites, the MCEs and seeds, an MCE's
+  releases and InfraEnvs, placement and Inventory Management take
+  `AdminUser`: a viewer's `403`. "Kept as they are" above no longer holds for
+  placement and Inventory Management.
+- A tenant's cluster still says its site and MCE.
+
+Verification: ADR-0067's.

@@ -36,20 +36,22 @@ async def hook(client: httpx.AsyncClient, project_id: int, event: str) -> None:
 async def test_read_views_list_the_fixture_repo(
     client: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
-    headers = auth(support.VIEWER)
-    assert (await client.get("/api/day1/sites", headers=headers)).json() == ["site1", "site2"]
-    mces = (await client.get("/api/day1/sites/site1/mces", headers=headers)).json()
+    headers, admin = auth(support.VIEWER), auth(support.ALICE)
+    assert (await client.get("/api/day1/sites", headers=admin)).json() == ["site1", "site2"]
+    mces = (await client.get("/api/day1/sites/site1/mces", headers=admin)).json()
     assert mces == [
         "ocp4-mce-workflow-test",
         "ocp4-prep-mce-site1-a",
         "ocp4-prod-mce-site1-a",
         "ocp4-prod-mce-site1-b",
         "ocp4-prod-mce-site1-c",
+        "ocp4-prod-seed-site1-az1-a",
     ]
 
     clusters = (await client.get("/api/day1/clusters", headers=headers)).json()
     by_name = {c["name"]: c for c in clusters}
-    assert len(clusters) == 14
+    assert len(clusters) == 14  # a viewer's: the two KV clusters are left out (ADR-0067)
+    assert {c["kind"] for c in clusters} == {"tenant"}
     lark = by_name["ocp4-prod-lark-site1"]
     assert lark["owner"] == {"merkaz": "1234", "anaf": "56", "mador": "7"}
     demo = by_name["ocp4-upgrade-demo"]
@@ -61,6 +63,7 @@ async def test_read_views_list_the_fixture_repo(
         "env": "prod",
         "short_name": "herzi",
         "sequence": None,
+        "zone": None,
         "problems": [],
     }
     assert herzi["hosted_cluster"] == {
@@ -70,13 +73,14 @@ async def test_read_views_list_the_fixture_repo(
     }
     assert by_name["ocp4-prep-amit-site2-a"]["naming"]["sequence"] == "a"
 
-    details = (await client.get("/api/day1/mces", headers=headers)).json()
+    details = (await client.get("/api/day1/mces", headers=admin)).json()
     prod = next(m for m in details if m["name"] == "ocp4-prod-mce-site1-a")
     assert prod["default_mastertag"] == "4.16.27-x86_64"
     assert prod["hub_version"] == "4.16.27-x86_64"
     assert prod["env"] == "prod"
     lab = next(m for m in details if m["name"] == "ocp4-mce-workflow-test")
     assert lab["follows_convention"] is False
+    assert {m["kind"] for m in details if m["name"] != "ocp4-prod-seed-site1-az1-a"} == {"mce"}
 
 
 async def test_create_merge_edit_delete(

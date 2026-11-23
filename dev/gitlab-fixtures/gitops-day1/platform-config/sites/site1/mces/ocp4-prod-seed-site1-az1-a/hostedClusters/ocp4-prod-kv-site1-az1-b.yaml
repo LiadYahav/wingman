@@ -1,0 +1,19 @@
+# Placeholder data for Wingman's tests: zone az1's second KV cluster (ADR-0067),
+# on the same seed as ocp4-prod-kv-site1-az1-a.
+owner:
+  merkaz: "1000"
+  anaf: "10"
+  mador: "1"
+
+mastertag: 4.17.58-x86_64
+
+nodepool:
+- infraEnvName: r760-mtl-az1
+  replicas: 3
+  labels:
+    allowDeletion: false
+  configs:
+  - name: workers-chrony-configuration
+  - name: kubevirt-worker-tuning
+  nodeLabels:
+    topology.kubernetes.io/zone: az1

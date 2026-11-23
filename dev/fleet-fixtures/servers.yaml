@@ -431,6 +431,54 @@ items:
     bmc_host: 192.0.2.124
     macs: ["02:00:00:00:02:07", "02:00:00:00:02:08"]
 
+  # ── ocp4-prod-kv-site1-az1-a (the az1 seed): two hypervisors (ADR-0067) ─────
+  - id: srv_00000000000000000000000000000901
+    name: ocp-dell-r760-site1-64c-512gb-DLFAKE0901
+    vendor: dell
+    server_type: physical
+    model: PowerEdge R760
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-kv-site1-az1-a
+    mce_name: ocp4-prod-seed-site1-az1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R760-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0901
+    bmc_host: 192.0.2.191
+    macs: ["02:00:00:00:09:01", "02:00:00:00:09:02"]
+  - id: srv_00000000000000000000000000000902
+    name: ocp-dell-r760-site1-64c-512gb-DLFAKE0902
+    vendor: dell
+    server_type: physical
+    model: PowerEdge R760
+    site_id: site1
+    source_provider: OPENMANAGE
+    installation_type: HOSTED_CLUSTER
+    health: HEALTHY
+    maintenance: *no-maintenance
+    reservation: *free
+    openshift_state: INSTALLED
+    cluster_name: ocp4-prod-kv-site1-az1-a
+    mce_name: ocp4-prod-seed-site1-az1-a
+    openshift_reported_name: null
+    contested_with: null
+    profile_template_name: R760-Standard
+    last_seen_at: "2026-11-11T08:00:03Z"
+    stale: false
+    reachable: true
+    serial: DLFAKE0902
+    bmc_host: 192.0.2.192
+    macs: ["02:00:00:00:09:03", "02:00:00:00:09:04"]
+
   # ── ocp4-prod-hawk-site1: two nodes, one unreachable ─────────────────────────
   - id: srv_00000000000000000000000000000301
     name: ocp-cisco-m6-site1-128c-512gb-CSFAKE0301

@@ -1,7 +1,10 @@
 """Sites and MCEs (read-only, ADR-0018), the releases an MCE offers, its hub's InfraEnvs.
 
 ``POST /api/day1/sites`` and ``POST /api/day1/sites/{site}/mces`` are gone:
-Wingman no longer creates sites or MCEs (they answer 405).
+Wingman no longer creates sites or MCEs (they answer 405). Every read here is
+an admin's (``AdminUser``, ADR-0067): a viewer never receives a list of sites,
+MCEs or seeds, so a viewer's ``403`` comes before anything is read. Each MCE
+says its kind: a Customer MCE or a seed.
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
-from wingman_core.web.auth import CurrentUser
+from wingman_core.web.auth import AdminUser
 from wingman_day1.api.deps import Context, Status
 from wingman_day1.api.v1.sites_schemas import MceOut, OpenShiftVersionsOut
 
@@ -21,13 +24,13 @@ Name = Annotated[str, Path(min_length=1, max_length=63)]
 
 
 @sites_router.get("")
-async def list_sites(context: Context, user: CurrentUser) -> list[str]:
+async def list_sites(context: Context, user: AdminUser) -> list[str]:
     """Site folders of the day1 repo."""
     return await context.sites.sites()
 
 
 @sites_router.get("/{site}/mces")
-async def list_site_mces(site: Name, context: Context, user: CurrentUser) -> list[str]:
+async def list_site_mces(site: Name, context: Context, user: AdminUser) -> list[str]:
     """MCE folder names under a site."""
     return await context.sites.mce_names(site)
 
@@ -35,16 +38,16 @@ async def list_site_mces(site: Name, context: Context, user: CurrentUser) -> lis
 @mces_router.get("")
 async def list_mces(
     context: Context,
-    user: CurrentUser,
+    user: AdminUser,
     site: Annotated[str | None, Query(max_length=63)] = None,
 ) -> list[MceOut]:
-    """Every MCE (or one site's), with its default mastertag, hub version and naming."""
+    """Every MCE and seed (or one site's): its kind, default mastertag, hub version and naming."""
     return [MceOut.of(view) for view in await context.sites.mces(site)]
 
 
 @mces_router.get("/{mce}/openshift-versions")
 async def list_openshift_versions(
-    mce: Name, context: Context, user: CurrentUser
+    mce: Name, context: Context, user: AdminUser
 ) -> OpenShiftVersionsOut:
     """Releases a new cluster on the MCE may use, from the day1 repo's ``upgrade/`` folder.
 
@@ -55,6 +58,6 @@ async def list_openshift_versions(
 
 
 @mces_router.get("/{mce}/infraenvs")
-async def list_infraenvs(mce: Name, user: CurrentUser, status: Status) -> list[str]:
+async def list_infraenvs(mce: Name, user: AdminUser, status: Status) -> list[str]:
     """InfraEnv names on the MCE hub (501 when live status is off)."""
     return await status.infra_envs(mce)

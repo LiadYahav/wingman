@@ -122,9 +122,13 @@ orchestrator and segments-manager with fakes seeded from `dev/fleet-fixtures/`
 5. The web keeps it in a cookie and sends it as `Authorization: Bearer` on
    every call. Routes take `CurrentUser` (reads) or `AdminUser` (writes) from
    `wingman_core.web.auth`; a few reads are for admins only (Quick Links, the
-   top bar's platform links), and so is a cluster's nodes, the servers it runs
-   on: a viewer's scale and upgrade runs leave them out too (ADR-0038). Nobody
-   approves their own change (`403 SELF_APPROVAL`).
+   platform links), and so is a cluster's nodes, the servers it runs on: a
+   viewer's scale and upgrade runs leave them out too (ADR-0038). A viewer
+   never knows of a seed, a KV cluster or an MCE (ADR-0067): the sites and
+   MCEs, placement and Inventory Management are admins' reads, a KV cluster
+   is a missing cluster for a viewer and every list leaves it out, in day1
+   and day2 alike (`domain/visibility.py` in each). Nobody approves their own
+   change (`403 SELF_APPROVAL`).
 
 Locally, `DEV_AUTH_ENABLED` with a `DEV_AUTH_SECRET` of 32 or more characters
 replaces OpenShift (`POST /api/auth/dev-login`); settings refuse a weak secret.

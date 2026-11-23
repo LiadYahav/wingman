@@ -3,7 +3,8 @@
 Each MCE's available Agents by InfraEnv pool, as server-scan counts them; a
 pool's servers for a named install; the add-server runs, herzi's included;
 and adding servers through the platform's add-server-to-mce workflow.
-Everyone signed in reads (``CurrentUser``); only admins add (``AdminUser``).
+Admins only (``AdminUser``), reads too since ADR-0067: herzi fills the
+customers' demand, so a viewer never reads the inventory (a ``403``).
 The API is ``docs/notes/2026-11-13-inventory-management-api.md``.
 """
 
@@ -13,7 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path
 
-from wingman_core.web.auth import AdminUser, CurrentUser
+from wingman_core.web.auth import AdminUser
 from wingman_day1.api.deps import Inventory
 from wingman_day1.api.v1.inventory_schemas import (
     AddServersIn,
@@ -38,20 +39,20 @@ InfraEnv = Annotated[
 
 
 @router.get("")
-async def inventory(user: CurrentUser, service: Inventory) -> InventoryOut:
+async def inventory(user: AdminUser, service: Inventory) -> InventoryOut:
     """Every MCE's servers and pools, as server-scan counts them, and what is offered here."""
     return InventoryOut.of(await service.overview())
 
 
 @router.get("/runs")
-async def add_server_runs(user: CurrentUser, service: Inventory) -> InventoryRunsOut:
+async def add_server_runs(user: AdminUser, service: Inventory) -> InventoryRunsOut:
     """The newest add-server runs, herzi's and people's; 501 without the orchestrator."""
     return InventoryRunsOut(runs=[InventoryRunOut.of(run) for run in await service.runs()])
 
 
 @router.get("/mces/{mce}/infra-envs/{infra_env}/candidates")
 async def candidates(
-    mce: Mce, infra_env: InfraEnv, user: CurrentUser, service: Inventory
+    mce: Mce, infra_env: InfraEnv, user: AdminUser, service: Inventory
 ) -> CandidatesOut:
     """The servers a named install into this pool may pick, and why a server is not offered.
 

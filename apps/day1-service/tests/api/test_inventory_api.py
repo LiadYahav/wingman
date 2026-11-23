@@ -367,13 +367,15 @@ async def test_the_orchestrators_answers_become_problems(
 # ── Who, and when it is off ──────────────────────────────────────────────────
 
 
-async def test_everyone_signed_in_reads_and_only_admins_add(
+async def test_only_admins_read_and_add(
     fleet: httpx.AsyncClient, auth: Auth, support: Any, workflow: FakeAddServerWorkflow
 ) -> None:
+    """herzi fills the customers' demand: a viewer never reads the inventory (ADR-0067)."""
     viewer = auth(support.VIEWER)
     for path in ("/api/day1/inventory", "/api/day1/inventory/runs", f"{POOL}/candidates"):
+        assert (await fleet.get(path, headers=auth(support.ALICE))).status_code == 200, path
         response = await fleet.get(path, headers=viewer)
-        assert response.status_code == 200, path
+        assert (response.status_code, response.json()["code"]) == (403, "FORBIDDEN"), path
         assert (await fleet.get(path)).status_code == 401, f"{path} needs a session"
     response = await fleet.post(f"{POOL}/add-servers", json={"count": 1}, headers=viewer)
     assert (response.status_code, response.json()["code"]) == (403, "FORBIDDEN")

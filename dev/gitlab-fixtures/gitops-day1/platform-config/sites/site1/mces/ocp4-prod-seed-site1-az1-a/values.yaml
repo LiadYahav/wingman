@@ -1,0 +1,4 @@
+# ocp4-prod-seed-site1-az1-a: a seed (ADR-0067), named by the platform's naming
+# convention, ocp4-<lc>-seed-<site>-<zone>-<id>. It hosts zone az1's KV clusters,
+# whose bare-metal workers run the tenants' VM workers; never a tenant's cluster.
+mastertag: 4.18.22-x86_64

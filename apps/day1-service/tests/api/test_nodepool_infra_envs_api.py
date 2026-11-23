@@ -276,7 +276,7 @@ async def test_placement_takes_a_need_of_several_infraenvs_as_one_node_type(
     response = await client.get(
         "/api/day1/placement",
         params={"site": "site1", "env": "prod", "need": [f"{HP},{DELL}:3", f"{DELL}:1"]},
-        headers=auth(support.VIEWER),
+        headers=auth(support.ALICE),
     )
     assert response.status_code == 200, response.text
     assert response.json()["needs"] == [
@@ -286,6 +286,6 @@ async def test_placement_takes_a_need_of_several_infraenvs_as_one_node_type(
     bad = await client.get(
         "/api/day1/placement",
         params={"site": "site1", "env": "prod", "need": f"{DELL},:3"},
-        headers=auth(support.VIEWER),
+        headers=auth(support.ALICE),
     )
     assert bad.status_code == 422

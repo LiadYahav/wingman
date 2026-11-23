@@ -37,6 +37,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from wingman_core.domain.cluster_kinds import MceKind, mce_kind
 from wingman_core.domain.errors import GitError, NotFoundError
 from wingman_core.domain.git import FileDiff
 from wingman_core.domain.merge_request import MergeRequest
@@ -256,7 +257,10 @@ class PlacementService:
         if needs is None:
             needs = await self._flavor_needs(flavor)
         names = await self._sites.mce_names(site)
-        candidates = [m for m in names if describe_mce(m, site=site).env is env]
+        # A seed hosts KV clusters only: never a candidate, by its kind (ADR-0067)
+        candidates = [
+            m for m in names if mce_kind(m) is MceKind.MCE and describe_mce(m, site=site).env is env
+        ]
         inputs = PlacementInputs(
             site=site,
             env=env,
@@ -293,6 +297,10 @@ class PlacementService:
         form's pick is no longer the pick.
         """
         values = load_values(content)
+        if mce_kind(ref.mce) is MceKind.SEED:
+            raise InvalidInputError(
+                f"{ref.mce!r} is a seed: it hosts KV clusters, never a tenant's cluster (ADR-0067)"
+            )
         env = describe_mce(ref.mce, site=ref.site).env
         if env is None:
             raise InvalidInputError(

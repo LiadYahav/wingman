@@ -156,7 +156,7 @@ async def test_a_pools_servers_are_listed_without_live_status(
     no_live_status: httpx.AsyncClient, auth: Auth, support: Any
 ) -> None:
     response = await no_live_status.get(
-        f"{pool(SITE1_A, R650)}/candidates", headers=auth(support.VIEWER)
+        f"{pool(SITE1_A, R650)}/candidates", headers=auth(support.ALICE)
     )
     assert response.status_code == 200
     body = response.json()

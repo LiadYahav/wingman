@@ -114,7 +114,10 @@ hubs, server-scan, the workflows orchestrator and segments-manager with fakes se
   half done (one node rebooting), a pool short a node (no free Agent: two bound, one not
   approved) and a server only server-scan places there. `ocp4-prod-herzi-site1` has a Replace
   rollout (one node draining, its replacement writing its image to disk);
-  `ocp4-prod-hawk-site1` and `ocp4-prep-amit-site2-a` are simply ready;
+  `ocp4-prod-hawk-site1` and `ocp4-prep-amit-site2-a` are simply ready. The seed
+  `ocp4-prod-seed-site1-az1-a` (ADR-0067) is a hub with room, never placement's pick, and
+  its KV cluster `ocp4-prod-kv-site1-az1-a` runs on two hypervisors, so its Nodes tab,
+  Scale and uninstall show locally (sign in as an admin: a viewer never sees it);
 - `segments.yaml` is a made-up segments-manager ledger in its own `by-segment` shape: the
   segments the fixture clusters' files hold, with their EPGs, and two free ones. It agrees with
   the files except for `ocp4-prod-herzi-site1`, whose VLAN differs on purpose (1418 against the

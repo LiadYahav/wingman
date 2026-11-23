@@ -170,6 +170,9 @@ Changes since the legacy services:
 ### Day1 Service (Port 8001)
 
 `site` and `mce` query parameters are optional on a cluster's routes: cluster names are unique.
+A viewer never knows of a seed, a KV cluster or an MCE (ADR-0067): a KV cluster is answered
+as a missing cluster (`404`), every list a viewer reads leaves it out, and the sites, MCEs,
+placement and Inventory Management are admins' reads (`403`). The same holds in day2.
 
 #### Login and build
 
@@ -185,16 +188,16 @@ Changes since the legacy services:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day1/clusters` | Every cluster file; off-convention and unparsable ones are flagged, not hidden |
+| `GET` | `/api/day1/clusters` | Every cluster file, each with its `kind` (`tenant` or `kv`, a KV cluster on a seed; ADR-0067); off-convention and unparsable ones are flagged, not hidden. A viewer's has no KV cluster |
 | `POST` | `/api/day1/clusters` | Create a cluster from a spec: starts the platform's `provision-cluster` workflow with the new file and answers its run (`202`, ADR-0042); the workflow opens the merge request |
 | `GET` | `/api/day1/clusters/{name}/provision-run` | The new cluster's provision-cluster run: the workflow's status, phase, merge request and error (404 none) |
 | `POST` | `/api/day1/clusters/preview` | Exactly the file a create would hand the workflow, after every check a create runs (with placement on, the MCE against the placement rule: an override of Wingman's pick needs `placement.reason`) |
 | `GET` | `/api/day1/clusters/drift-summary` | Drift of every cluster |
 | `GET` | `/api/day1/clusters/name-suggestion` | A free name for a new cluster from a flavor (`?site=&mce=&flavor=`, ADR-0040) |
 | `POST` | `/api/day1/clusters/bulk-status` | Live status of many clusters |
-| `GET` | `/api/day1/clusters/{name}` | The cluster's file, values and naming |
+| `GET` | `/api/day1/clusters/{name}` | The cluster's file, values, `kind` and naming (`naming.zone`: a KV cluster's zone); a KV cluster is a `404` for a viewer |
 | `PATCH` | `/api/day1/clusters/{name}` | Modify the cluster (opens the MR that replaces its file) |
-| `DELETE` | `/api/day1/clusters/{name}` | Delete the cluster (opens the MR that removes its file) |
+| `DELETE` | `/api/day1/clusters/{name}` | Delete the cluster (opens the MR that removes its file). A KV cluster's needs its name, `?confirm=<name>` (`422` otherwise), and its MR says the tenants' VM workers it hosts go with it (ADR-0067) |
 | `GET` | `/api/day1/clusters/{name}/delete-workflow` | The newest delete-cluster workflow run (501 until the workflow exists, ADR-0033) |
 | `POST` | `/api/day1/clusters/{name}/delete-workflow` | Start the delete-cluster workflow, with `{"confirm": true}` (admin; 501 until it exists) |
 | `GET` | `/api/day1/clusters/{name}/network` | The cluster's VLAN and segment from its file, the EPG segments-manager records for that segment, and where segments-manager disagrees with the file (`ledger` is `null` when segments-manager is off; `ledger_error` when it failed, never a failed read; ADR-0039) |
@@ -219,13 +222,13 @@ Changes since the legacy services:
 | `GET` | `/api/day1/clusters/{name}/status` | The HostedCluster and NodePools on the MCE hub (`?mce=`; 501 when live status is off) |
 | `GET` | `/api/day1/clusters/{name}/status/stream` | The same as server-sent events, every `DAY1_STATUS_POLL_SECONDS` |
 
-#### Sites and MCEs (read-only, ADR-0018)
+#### Sites and MCEs (read-only, ADR-0018; admins only, ADR-0067)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/day1/sites` | Site folders of the day1 repo |
 | `GET` | `/api/day1/sites/{site}/mces` | MCE folder names under a site |
-| `GET` | `/api/day1/mces` | Every MCE (or one site's, `?site=`), with its default mastertag, hub version and naming |
+| `GET` | `/api/day1/mces` | Every MCE-level folder (or one site's, `?site=`): its `kind` (`mce`, a Customer MCE, or `seed`, with its `zone`), default mastertag, hub version, naming and cluster count |
 | `GET` | `/api/day1/mces/{mce}/openshift-versions` | The releases a new cluster on the MCE may use (`upgrade/` in the day1 repo), newest first, with `problems` when its files are missing or broken |
 | `GET` | `/api/day1/mces/{mce}/infraenvs` | InfraEnv names on the MCE hub (501 when live status is off) |
 | `GET` | `/api/day1/placement` | Where a new hosted cluster goes (`?site=&env=&version=&owner=&flavor=&need=<infra_env>:<replicas>`, repeated; `need=a,b:n` for a nodepool that draws from several InfraEnvs, ADR-0050, ADR-0064): every candidate MCE with its checks, clusters, this owner's clusters, spare servers and free pods, and Wingman's pick with why (with live status off, the checks that read the MCE are `not_checked`); a free Agent carrying the used-Agent label is no free server (`node_types[].used`, since 3.55.0) |
@@ -281,7 +284,7 @@ An MR is `(repo, iid)`: `?repo=day1` (the default) or `?repo=specs` (ADR-0007).
 |--------|----------|-------------|
 | `GET` | `/api/day1/platforms` | The top bar's systems: `{"platforms": [{"id", "name", "url"}]}`, segments-manager (`segments`, "Segments Manager") then server-scan (`server-scan`, "Server Scan"), each only when day1 is configured for it; `url` is its own UI (`SEGMENTS_MANAGER_UI_URL` or `SERVER_SCAN_UI_URL`, else its API's URL), which the top bar opens in a new tab. Read from the settings: nothing is called |
 
-#### Inventory Management (everyone reads, admins add; ADR-0057)
+#### Inventory Management (admins only, ADR-0057 and ADR-0067)
 
 Each MCE's available Agents by InfraEnv pool, as server-scan counts them, the add-server runs, and installing servers through the platform's `add-server-to-mce` workflow. `501 FEATURE_DISABLED` while `SERVER_SCAN_URL` is empty (the runs: `WORKFLOWS_API_URL`; installing: `DAY1_ADD_SERVERS`). Live status is not needed: without it, an MCE's pools are the InfraEnvs its cluster files name, and any InfraEnv may be typed (ADR-0057's amendment) ([API note](docs/notes/2026-11-13-inventory-management-api.md)).
 
@@ -347,7 +350,7 @@ confirmed by id (`confirm_changes`) with the preview's `digest`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/day2/clusters` | Every destination from day1 and the team repos (`?kind=&site=&env=`) |
+| `GET` | `/api/day2/clusters` | Every destination from day1 and the team repos (`?kind=&site=&env=`); a viewer's has no MCE (seeds included) and no KV cluster, and naming one is a `404` (ADR-0067) |
 | `GET` | `/api/day2/clusters/{cluster}` | One destination |
 | `GET` | `/api/day2/clusters/{cluster}/addons` | The charts on it: its own folders and fleet defaults |
 | `GET` | `/api/day2/clusters/{cluster}/addons/{team}/{addon}` | The chart's merged values, layer by layer, with provenance |

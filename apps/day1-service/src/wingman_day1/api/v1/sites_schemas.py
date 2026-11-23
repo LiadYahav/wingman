@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 from wingman_day1.application.sites import MceView
@@ -9,17 +11,22 @@ from wingman_day1.domain.openshift_versions import OpenShiftVersions
 
 
 class MceOut(BaseModel):
-    """An MCE folder (read-only) and what its files say."""
+    """An MCE-level folder (read-only): a Customer MCE or a seed, and what its files say."""
 
     name: str
     site: str
+    kind: Literal["mce", "seed"]
+    """A Customer MCE hosts tenants' clusters; a seed, one zone's KV clusters (ADR-0067)."""
     env: str | None
     letter: str | None
+    zone: str | None
+    """A seed's availability zone; ``None`` for a Customer MCE."""
     follows_convention: bool
     naming_problems: list[str]
     default_mastertag: str | None
     hub_version: str | None
     cluster_count: int
+    """The cluster files in its ``hostedClusters/``: a seed's are its KV clusters."""
     stray_files: list[str]
     problems: list[str]
 
@@ -29,8 +36,10 @@ class MceOut(BaseModel):
         return cls(
             name=view.name,
             site=view.site,
+            kind=view.kind.value,
             env=view.naming.env.value if view.naming.env else None,
             letter=view.naming.letter,
+            zone=view.naming.zone,
             follows_convention=view.naming.follows_convention,
             naming_problems=list(view.naming.problems),
             default_mastertag=view.default_mastertag,

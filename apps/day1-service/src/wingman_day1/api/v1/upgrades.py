@@ -25,8 +25,9 @@ from wingman_day1.api.v1.upgrade_schemas import (
     UpgradeRunOut,
     UpgradeTargetsOut,
 )
-from wingman_day1.domain.paths import ClusterRef
+from wingman_day1.api.v1.visible import cluster_ref
 from wingman_day1.domain.upgrades import UpgradeDecision
+from wingman_day1.domain.visibility import sees_cluster
 
 router = APIRouter(prefix="/api/day1", tags=["upgrades"])
 
@@ -38,14 +39,18 @@ ActionId = Annotated[
 ]
 
 
-async def _ref(context: Context, name: str, site: str | None, mce: str | None) -> ClusterRef:
-    return await context.clusters.locate(name, site=site, mce=mce)
-
-
 @router.get("/upgrades")
 async def fleet_upgrades(user: CurrentUser, upgrades: Upgrades) -> FleetUpgradesOut:
-    """Every cluster's newest upgrade run, open ones first, from the orchestrator's run list."""
-    return FleetUpgradesOut(runs=[FleetUpgradeOut.of(row) for row in await upgrades.fleet()])
+    """Every cluster's newest upgrade run, open ones first, from the orchestrator's run list.
+
+    A viewer's list has no KV cluster's run (ADR-0067).
+    """
+    rows = [
+        row
+        for row in await upgrades.fleet()
+        if sees_cluster(user, row.row.cluster, mce=row.ref.mce if row.ref else "")
+    ]
+    return FleetUpgradesOut(runs=[FleetUpgradeOut.of(row) for row in rows])
 
 
 @router.get("/clusters/{name}/upgrade-targets")
@@ -58,7 +63,7 @@ async def upgrade_targets(
     mce: Mce = None,
 ) -> UpgradeTargetsOut:
     """What the workflow offers to upgrade the cluster to; it may take up to a minute."""
-    ref = await _ref(context, name, site, mce)
+    ref = await cluster_ref(context, user, name, site, mce)
     return UpgradeTargetsOut.of(await upgrades.targets(ref))
 
 
@@ -73,7 +78,7 @@ async def start_upgrade(
     mce: Mce = None,
 ) -> UpgradeRunOut:
     """Start the upgrade-cluster workflow: it plans, checks, and waits for approval."""
-    ref = await _ref(context, name, site, mce)
+    ref = await cluster_ref(context, user, name, site, mce)
     return UpgradeRunOut.of(await upgrades.start(ref, body.choice(), user=user))
 
 
@@ -90,7 +95,7 @@ async def upgrade_run(
 
     For a viewer, ``pending_actions`` is empty: a proposal may act on one of the cluster's nodes.
     """
-    run = await upgrades.run(await _ref(context, name, site, mce))
+    run = await upgrades.run(await cluster_ref(context, user, name, site, mce))
     return UpgradeRunOut.of(run if user.is_admin else run.without_proposals())
 
 
@@ -106,7 +111,7 @@ async def decide_action(
     mce: Mce = None,
 ) -> UpgradeDecisionOut:
     """Approve or reject one of the upgrade agent's proposals."""
-    ref = await _ref(context, name, site, mce)
+    ref = await cluster_ref(context, user, name, site, mce)
     decided = await upgrades.decide_action(ref, action_id, approve=verdict == "approve", user=user)
     return UpgradeDecisionOut.of(decided)
 
@@ -123,7 +128,7 @@ async def decide(
     mce: Mce = None,
 ) -> UpgradeDecisionOut:
     """Send one decision; the run's validator judges it, and a refusal is a 409 in its words."""
-    ref = await _ref(context, name, site, mce)
+    ref = await cluster_ref(context, user, name, site, mce)
     sent = body or UpgradeDecisionIn()
     decided = await upgrades.decide(
         ref, decision, user=user, reason=sent.reason, nodepool=sent.nodepool

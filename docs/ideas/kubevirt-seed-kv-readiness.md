@@ -9,6 +9,13 @@ each item below becomes work when it is decided. Paths are relative to
 template" is the fixtures' `cluster-template.j2`, in the `wingman/` specs project under
 `dev/gitlab-fixtures/`.
 
+**Since 3.55.0 (ADR-0067):** item 1 is done (seeds and KV clusters are kinds of their own, by
+the convention's reserved words and the deployed workflows' shapes, and no longer flagged), item
+11 in part (a seed with two KV clusters in the fixtures and the fake fleet), and item 2 is
+decided otherwise: the user manages a KV cluster as any hosted cluster, and only its Delete asks
+for its name and says the tenants' VMs go with it. A viewer never knows of a seed, a KV cluster
+or an MCE.
+
 Another branch, `roiblum/naming-convention` (not pushed when this was written), is bringing
 Wingman's names to the convention and Inventory Management to add-server-to-mce's label-based
 pool draw. The items it covers are marked **(naming branch)**.

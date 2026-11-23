@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from wingman_core.web.auth import AdminUser, CurrentUser
 from wingman_day1.api.deps import AgentLabels, Context
 from wingman_day1.api.v1.schemas import MRDetailOut, change_out
+from wingman_day1.api.v1.visible import cluster_ref
 from wingman_day1.application.agent_labels import AgentLabelsPlan
 from wingman_day1.application.approvals import RepoKey
 from wingman_day1.domain.excluded_agent_labels import PoolPlan
@@ -98,7 +99,7 @@ async def agent_labels_plan(
     mce: Mce = None,
 ) -> AgentLabelsPlanOut:
     """Each nodepool, what it excludes now, and whether the merge request changes it."""
-    ref = await context.clusters.locate(name, site=site, mce=mce)
+    ref = await cluster_ref(context, user, name, site, mce)
     return AgentLabelsPlanOut.of(await labels.plan(ref))
 
 
@@ -116,6 +117,6 @@ async def open_agent_labels(
 
     409 while an open merge request already does (the plan's ``open_merge_request``).
     """
-    ref = await context.clusters.locate(name, site=site, mce=mce)
+    ref = await cluster_ref(context, user, name, site, mce)
     result = await labels.apply(ref, user=user, last_commit_id=body.last_commit_id)
     return change_out(RepoKey.DAY1, result.merge_request)

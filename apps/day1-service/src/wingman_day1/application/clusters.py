@@ -38,6 +38,7 @@ from wingman_day1.application.specs import SpecCatalog
 from wingman_day1.application.tree import read_tree
 from wingman_day1.domain import rendered_file
 from wingman_day1.domain.changes import ClusterAction, ClusterChange, ProvisionResult
+from wingman_day1.domain.cluster_delete import delete_confirm_problems, delete_summary
 from wingman_day1.domain.cluster_file import (
     NO_WORKFLOW_KEYS,
     ClusterValues,
@@ -57,6 +58,7 @@ from wingman_day1.domain.errors import (
     StaleError,
 )
 from wingman_day1.domain.image_mirrors import mirror_problems
+from wingman_day1.domain.kind_names import describe_cluster_file
 from wingman_day1.domain.locks import apply_locks, lock_conflicts
 from wingman_day1.domain.machine_configs import (
     MachineConfigCatalog,
@@ -69,7 +71,6 @@ from wingman_day1.domain.names import (
     HostedClusterNaming,
     HostedClusterRef,
     NameSuggestion,
-    describe_cluster,
     new_cluster_problems,
     suggest_cluster_name,
 )
@@ -368,9 +369,11 @@ class ClusterService:
         )
 
     async def delete(
-        self, ref: ClusterRef, *, user: User, last_commit_id: str | None = None
+        self, ref: ClusterRef, *, user: User, last_commit_id: str | None = None, confirm: str = ""
     ) -> ProvisionResult:
-        """Propose removing the cluster's file (its Application, and so the cluster, goes)."""
+        """Propose removing the file (its Application goes); a KV cluster's needs ``confirm``."""
+        if problems := delete_confirm_problems(ref, confirm):
+            raise InvalidInputError("the delete is not confirmed", problems)
         current = await self._read(ref)
         expected = await self._expect(ref, current, last_commit_id)
         return await self._provisioner.apply(
@@ -378,11 +381,7 @@ class ClusterService:
                 action=ClusterAction.DELETE,
                 cluster=ref,
                 requested_by=user,
-                summary=(
-                    f"Deleting hosted cluster **{ref.name}** (site `{ref.site}`, MCE "
-                    f"`{ref.mce}`). Merging removes its Argo Application. Its VLAN segment is "
-                    "released only where the chart's PostDelete hook exists."
-                ),
+                summary=delete_summary(ref),
                 last_commit_id=expected,
             )
         )
@@ -489,7 +488,7 @@ class ClusterService:
             ref=ref,
             content=file.content,
             last_commit_id=file.last_commit_id,
-            naming=describe_cluster(ref.name, site=ref.site),
+            naming=describe_cluster_file(ref),
             hosted_cluster=self._naming.for_file(ref.name, explicit=explicit),
             provenance=parsed.provenance,
             values=values,
