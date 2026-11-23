@@ -174,7 +174,7 @@ test.describe("Installing a server that needs a fix", () => {
   test("a run that waived checks says so, and which", async ({ page }) => {
     const waived = {
       workflow_id: `add-server-to-mce-${SITE1_A}_${SICK.toLowerCase()}`, status: "running", started_at: "2026-11-13T12:00:00+00:00",
-      closed_at: null, mce: SITE1_A, infra_env: null, slot: null, server_name: SICK, server_id: null, origin: "named" as const,
+      closed_at: null, mce: SITE1_A, infra_env: null, slot: null, server_name: SICK, origin: "named" as const,
       phase: "waiting-for-agent", error: null, health_checks_waived: ["server-scan-health: overall CRITICAL", "bmc-reachable: server-scan cannot reach its BMC"],
     };
     await setUpInventory(page, { runs: { runs: [waived] }, overview: OVERVIEW });

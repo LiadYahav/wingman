@@ -254,12 +254,12 @@ test.describe("Inventory Management names a server", () => {
     runs: [
       {
         workflow_id: `add-server-to-mce-${SITE1_A}_${FREE.toLowerCase()}`, status: "running", started_at: "2026-11-13T12:00:00+00:00", closed_at: null,
-        mce: SITE1_A, infra_env: null, slot: null, server_name: FREE, server_id: "srv_0811", origin: "named" as const, phase: "waiting-for-agent", error: null,
+        mce: SITE1_A, infra_env: null, slot: null, server_name: FREE, origin: "named" as const, phase: "waiting-for-agent", error: null,
         health_checks_waived: [],
       },
       {
         workflow_id: `add-server-to-mce-${SITE1_A}_${R650}_1`, status: "running", started_at: "2026-11-13T12:00:00+00:00", closed_at: null,
-        mce: SITE1_A, infra_env: R650, slot: 1, server_name: null, server_id: null, origin: "pool" as const, phase: "acquiring-server", error: null,
+        mce: SITE1_A, infra_env: R650, slot: 1, server_name: null, origin: "pool" as const, phase: "acquiring-server", error: null,
         health_checks_waived: [],
       },
     ],

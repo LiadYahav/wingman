@@ -32,9 +32,10 @@ linked from an admin's top bar (`GET /api/day1/platforms`).
 ## The version Wingman matches
 
 [server-scan.yaml](server-scan.yaml) holds it: `synced_at: v6.6.0`
-(`635e08a`), set in 3.48.0 (ADR-0048's 2026-11-18 amendment). A row's
-`server_type` (v6.3.0) is left empty when an older server-scan does not
-send it.
+(`635e08a`), set in 3.48.0 (ADR-0048's 2026-11-18 amendment). day1 reads
+only the row fields Wingman's features use (its identity, state, health,
+site, cluster and MCE, maintenance, reservation, claims and MACs); a field
+server-scan adds is ignored until a feature needs it.
 
 ## Where its code lives
 

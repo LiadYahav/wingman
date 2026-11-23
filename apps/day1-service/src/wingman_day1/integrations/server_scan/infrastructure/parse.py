@@ -2,8 +2,9 @@
 
 The shapes are server-scan's ``ServerRowsResponse`` and ``ServerDetail``
 (``backend/app/api/v1/schemas.py`` in team-redbull/server-scan).
-A row is read whole; ``server_type`` (v6.3.0) is ``None`` when an older
-server-scan does not send it. Read strictly:
+A row is read for what Wingman's features use: its identity, state and
+health, where it is, its maintenance, reservation and claims, its MACs. Read
+strictly:
 a missing required field or a value of the wrong type raises
 Type/Key/ValueError, which the adapter turns into "unavailable", never into a
 blank. ``server_row`` is also how the fake fleet reads its fixture, so the
@@ -45,14 +46,11 @@ def server_row(raw: JSON) -> ServerRow:
         health=required_text(raw, "health"),
         serial=optional_text(raw, "serial"),
         vendor=optional_text(raw, "vendor"),
-        server_type=optional_text(raw, "server_type"),
         model=optional_text(raw, "model"),
         site=optional_text(raw, "site_id"),
         cluster_name=optional_text(raw, "cluster_name"),
         mce=optional_text(raw, "mce_name"),
         maintenance=_flag(maintenance, "enabled", default=False),
-        maintenance_reason=optional_text(maintenance, "reason"),
-        maintenance_by=optional_text(maintenance, "created_by"),
         reachable=_flag(raw, "reachable"),
         stale=_flag(raw, "stale"),
         contested_with=optional_text(raw, "contested_with"),
@@ -62,11 +60,6 @@ def server_row(raw: JSON) -> ServerRow:
         reserved_for_infra_env=optional_text(reservation, "infra_env") if held else None,
         reserved_until=timestamp(reservation, "expires_at") if held else None,
         macs=_macs(raw),
-        installation_type=optional_text(raw, "installation_type"),
-        source_provider=optional_text(raw, "source_provider"),
-        reported_name=optional_text(raw, "openshift_reported_name"),
-        profile_template=optional_text(raw, "profile_template_name"),
-        bmc_host=optional_text(raw, "bmc_host"),
     )
 
 

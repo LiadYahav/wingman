@@ -1,7 +1,8 @@
-"""server-scan's rows read whole: every field, in server-scan's order (ADR-0038).
+"""server-scan's rows: every field Wingman uses, in server-scan's order (ADR-0038).
 
-server-scan's ``GET /api/v1/servers/rows``, ``server_type`` since v6.3.0 and
-absent from an older server-scan; a row that does not fit is "unavailable".
+server-scan's ``GET /api/v1/servers/rows``, every field set; the fields only
+the removed Server Scan area showed are left unread, and a row that does not
+fit is "unavailable".
 """
 
 from __future__ import annotations
@@ -53,64 +54,45 @@ ROW: dict[str, Any] = {
 }
 
 
-def test_every_field_of_a_row_is_read() -> None:
+def test_every_field_wingman_uses_is_read() -> None:
     row = server_row(ROW)
-    assert (row.source_provider, row.profile_template, row.bmc_host) == (
-        "INTERSIGHT",
-        "UCS-X-Standard",
-        "192.0.2.118",
+    assert (row.id, row.name, row.state, row.health) == (
+        ROW["id"],
+        ROW["name"],
+        "INSTALLED",
+        "MAJOR",
     )
-    assert (row.maintenance, row.maintenance_reason, row.maintenance_by) == (
-        True,
-        "donor: parts for R2",
-        "api-token-admin",
+    assert (row.serial, row.vendor, row.model, row.site) == (
+        "CIS0000630",
+        "cisco",
+        "UCS C220 M6",
+        "bat-yam",
     )
-    assert (row.reported_name, row.contested_with, row.contested) == (
-        "worker-7.hc-bat-yam-03",
+    assert (row.cluster_name, row.mce, row.maintenance) == ("hc-bat-yam-03", "mce-bat-yam", True)
+    assert (row.contested_with, row.contested, row.stale, row.reachable) == (
         "hc-bat-yam-02",
         True,
+        True,
+        False,
     )
     assert (row.reserved_by, row.reserved_for_mce, row.reserved_for_infra_env) == (
         "add-server-to-mce",
         "mce-bat-yam",
         "cisco-m6-bat-yam-128c-128gb",
     )
-    assert (row.stale, row.reachable, row.health, row.state) == (True, False, "MAJOR", "INSTALLED")
-
-
-@pytest.mark.parametrize("sent", ["vm", "physical", None])
-def test_a_rows_server_type_is_server_scans_and_none_from_an_older_one(sent: str | None) -> None:
-    raw = dict(ROW)
-    if sent is None:
-        del raw["server_type"]
-    else:
-        raw["server_type"] = sent
-    assert server_row(raw).server_type == sent
+    assert row.macs == ("02:00:00:00:00:01", "02:00:00:00:00:02")
 
 
 def test_an_uncontested_row_with_nothing_optional_reads_as_blanks() -> None:
     bare = {
         **ROW,
-        **dict.fromkeys(
-            ("source_provider", "openshift_reported_name", "contested_with", "bmc_host"), None
-        ),
-        "profile_template_name": None,
+        **dict.fromkeys(("serial", "vendor", "model", "contested_with", "last_seen_at"), None),
         "maintenance": None,
         "reservation": None,
     }
     row = server_row(bare)
-    assert (row.source_provider, row.reported_name, row.profile_template, row.bmc_host) == (
-        None,
-        None,
-        None,
-        None,
-    )
-    assert (row.contested, row.maintenance, row.maintenance_reason, row.reserved_by) == (
-        False,
-        False,
-        None,
-        None,
-    )
+    assert (row.serial, row.vendor, row.model, row.last_seen_at) == (None, None, None, None)
+    assert (row.contested, row.maintenance, row.reserved_by) == (False, False, None)
 
 
 def test_the_fleet_keeps_server_scans_order() -> None:
@@ -123,8 +105,8 @@ def test_the_fleet_keeps_server_scans_order() -> None:
 @pytest.mark.parametrize(
     "body",
     [
-        {"items": [{**ROW, "bmc_host": 7}]},
-        {"items": [{**ROW, "maintenance": {"enabled": True, "reason": 3}}]},
+        {"items": [{**ROW, "serial": 7}]},
+        {"items": [{**ROW, "maintenance": {"enabled": "yes"}}]},
         {"items": [{**ROW, "contested_with": ["two"]}]},
     ],
 )

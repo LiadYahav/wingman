@@ -39,8 +39,6 @@ class ServerRow:
     """The overall verdict; ``UNKNOWN`` is not a verdict."""
     serial: str | None = None
     vendor: str | None = None
-    server_type: str | None = None
-    """``physical`` or ``vm``, as server-scan v6.3.0 sends it; ``None`` from an older one."""
     model: str | None = None
     site: str | None = None
     cluster_name: str | None = None
@@ -61,18 +59,6 @@ class ServerRow:
     """While held: when the reservation expires; ``None`` for no expiry."""
     macs: tuple[str, ...] = ()
     """Its NICs' MAC addresses, lowercase."""
-    installation_type: str | None = None
-    """What the server was named to be: ``HOSTED_CLUSTER``, ``MCE``, ``UPI`` or ``UNCLASSIFIED``."""
-    source_provider: str | None = None
-    """The collector that reads it (``OPENMANAGE``, ``UCS_CENTRAL``, …)."""
-    reported_name: str | None = None
-    """``openshift_reported_name``: set only when OpenShift reports another hostname."""
-    profile_template: str | None = None
-    """``profile_template_name``: its server profile template (SPT)."""
-    bmc_host: str | None = None
-    maintenance_reason: str | None = None
-    maintenance_by: str | None = None
-    """Who put it into maintenance, as server-scan records it (an actor id)."""
 
     @property
     def contested(self) -> bool:

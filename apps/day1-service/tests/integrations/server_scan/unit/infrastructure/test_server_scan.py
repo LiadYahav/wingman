@@ -72,10 +72,6 @@ PARSED = ServerRow(
     last_seen_at=datetime(2026, 11, 10, 22, 0, 3, 530203, tzinfo=UTC),
     reserved_by=None,
     macs=("02:00:00:00:00:01", "02:00:00:00:00:02"),
-    installation_type="HOSTED_CLUSTER",
-    source_provider="INTERSIGHT",
-    profile_template="UCS-X-Standard",
-    bmc_host="192.0.2.118",
 )
 DETAIL: dict[str, Any] = {
     "id": SERVER_ID,
