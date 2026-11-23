@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Check, Copy, ExternalLink, Network } from "lucide-react";
-import { useSegmentsArea } from "@/features/segments/api/segments";
-import { clusterSegmentsLink } from "@/features/segments/lib/links";
+import { Check, Copy, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SegmentsManagerLinks } from "@/types";
 
@@ -45,15 +42,18 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 /**
- * segments-manager's UI opens no single cluster, so this link opens the UI and
- * names what to search for there: the file stem, its `cluster_name`. Day1
- * builds both URLs (`segments_manager`); the page only shows them.
+ * The HostedCluster card's link to the cluster's segments, in segments-manager's
+ * own UI (the team keeps it apart from Wingman, ADR-0066); nothing when segments-manager is not configured. Its UI opens
+ * no single cluster, so this opens the UI and names what to search for there:
+ * the file stem, its `cluster_name`. Day1 builds both URLs
+ * (`segments_manager`); the page only shows them.
  */
-function SegmentsManagerLink({ name, url, searchUrl }: { name: string; url: string; searchUrl: string }) {
+export function ClusterSegmentsLink({ name, external }: { name: string; external: SegmentsManagerLinks | null }) {
+  if (!external) return null;
   return (
     <div data-testid="segments-manager" className="pt-2 border-t border-border/50 space-y-1">
       <a
-        href={url}
+        href={external.url}
         target="_blank"
         rel="noopener noreferrer"
         className="group inline-flex items-center gap-1 font-medium hover:text-primary transition-colors"
@@ -66,7 +66,7 @@ function SegmentsManagerLink({ name, url, searchUrl }: { name: string; url: stri
         <CopyButton text={name} label={`Copy ${name}`} />
       </p>
       <a
-        href={searchUrl}
+        href={external.search_url}
         target="_blank"
         rel="noopener noreferrer"
         className="group inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
@@ -74,26 +74,6 @@ function SegmentsManagerLink({ name, url, searchUrl }: { name: string; url: stri
         this cluster&apos;s segment (JSON)
         <ExternalLink className="h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100" aria-hidden />
       </a>
-    </div>
-  );
-}
-
-/**
- * The HostedCluster card's link to the cluster's segments, chosen by the one
- * helper (`features/segments/lib/links.ts`): Wingman's Segments area
- * filtered to the cluster for an admin who has it, segments-manager's UI for
- * anyone else, nothing when segments-manager is not configured.
- */
-export function ClusterSegmentsLink({ name, external }: { name: string; external: SegmentsManagerLinks | null }) {
-  const link = clusterSegmentsLink(name, { area: useSegmentsArea(), external });
-  if (!link) return null;
-  if (link.kind === "external") return <SegmentsManagerLink name={name} url={link.url} searchUrl={link.searchUrl} />;
-  return (
-    <div data-testid="cluster-segments" className="pt-2 border-t border-border/50">
-      <Link href={link.href} className="group inline-flex items-center gap-1.5 font-medium transition-colors hover:text-primary">
-        <Network aria-hidden className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
-        This cluster&apos;s segments
-      </Link>
     </div>
   );
 }

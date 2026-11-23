@@ -2,7 +2,8 @@
 
 Date: 2026-11-07
 Status: Accepted; amended 2026-11-17 (an external system's day1 code is a package under
-`wingman_day1/integrations/`, with these layers inside it)
+`wingman_day1/integrations/`, with these layers inside it), and 2026-11-23 (the two
+integrations keep the layers they still have, without their areas)
 
 ## Context
 
@@ -163,3 +164,16 @@ were one system's, or that the Nodes tab's code was not.
   directly and through `infrastructure/http.py`.
 - The moved tests pass unchanged in `tests/integrations/server_scan/` and
   `tests/integrations/segments_manager/`.
+
+## Amendment (2026-11-23): the integrations without their areas
+
+The Segments and Server Scan areas were removed (ADR-0066). `server_scan/`
+and `segments_manager/` stay packages under `wingman_day1/integrations/`,
+with the layers they still have: segments-manager's `domain/` (its links),
+both `ports.py`, `infrastructure/` and `compose.py`; neither has an
+`application/` or an `api/` any more. The routes' context names no
+integration's use case, so the independence contract ignores one chain
+only, Wingman's use cases reading an integration's port. The contracts for
+an integration's use cases and routes stay, for the next one that has them.
+The web's `features/` folder went with the areas (ADR-0056's amendment of
+the same day).

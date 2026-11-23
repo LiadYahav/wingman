@@ -54,27 +54,6 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.serverScan.tokenSecret.name | quote }}
                   key: {{ .Values.serverScan.tokenSecret.key | default "token" | quote }}
-            {{- if .Values.serverScan.tokenSecret.adminKey }}
-            # server-scan's admin token, for the maintenance toggle only; a Secret
-            # without the key still starts day1, with the toggle off (ADR-0048)
-            - name: SERVER_SCAN_ADMIN_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.serverScan.tokenSecret.name | quote }}
-                  key: {{ .Values.serverScan.tokenSecret.adminKey | quote }}
-                  optional: true
-            {{- end }}
-            {{- if .Values.serverScan.tokenSecret.auditorKey }}
-            # server-scan's auditor token, for the audit trail only (History,
-            # Events); a Secret without the key still starts day1, with both off
-            # (ADR-0048)
-            - name: SERVER_SCAN_AUDITOR_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.serverScan.tokenSecret.name | quote }}
-                  key: {{ .Values.serverScan.tokenSecret.auditorKey | quote }}
-                  optional: true
-            {{- end }}
           {{- end }}
           volumeMounts:
             # Quick Links' links file, as a directory so edits reach a running pod (ADR-0052)

@@ -18,8 +18,6 @@ import { OverviewSection } from "./overview";
 import { QuickLinksSection } from "./quick-links";
 import { RefusalsSection } from "./refusals";
 import { RolesSection } from "./roles";
-import { SegmentsSection } from "./segments";
-import { ServerScanSection } from "./server-scan";
 import { SpecialFeaturesSection } from "./special-features";
 import { TroubleshootingSection } from "./troubleshooting";
 
@@ -56,8 +54,6 @@ const NAV_SECTIONS = [
   { id: "approvals", label: "Approvals" },
   { id: "audit", label: "Audit Log" },
   { id: "quick-links", label: "Quick Links" },
-  { id: "segments", label: "Segments" },
-  { id: "server-scan", label: "Server Scan" },
   { id: "errors", label: "When a Change Is Refused" },
   { id: "special-features", label: "Special Features" },
   { id: "filelocations", label: "File Locations" },
@@ -147,8 +143,6 @@ export default function DocsPage() {
         <ApprovalsSection />
         <AuditSection />
         <QuickLinksSection />
-        <SegmentsSection />
-        <ServerScanSection />
         <RefusalsSection />
         <SpecialFeaturesSection />
         <FileLocationsSection />

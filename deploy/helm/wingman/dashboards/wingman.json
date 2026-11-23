@@ -377,7 +377,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 5,
         "x": 0,
         "y": 6
       },
@@ -441,8 +441,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 4,
+        "w": 5,
+        "x": 5,
         "y": 6
       },
       "targets": [
@@ -505,8 +505,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 8,
+        "w": 5,
+        "x": 10,
         "y": 6
       },
       "targets": [
@@ -569,78 +569,14 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 12,
+        "w": 5,
+        "x": 15,
         "y": 6
       },
       "targets": [
         {
           "refId": "A",
           "expr": "round(sum(increase(wingman_dependency_requests_total{job=~\"$job\",dependency=\"workflows\",operation=~\"start_.*\",outcome=\"ok\"}[$__range]))) or vector(0)",
-          "legendFormat": "",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 0,
-          "noValue": "0",
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "auto",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "wideLayout": true
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Server-scan writes",
-      "id": 20,
-      "description": "Admin writes server-scan accepted over the range: maintenance on and off, and Run job. The first call of a kind after a restart may not count.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 6
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "round(sum(increase(wingman_dependency_requests_total{job=~\"$job\",dependency=\"server_scan\",operation=~\"enable_maintenance|disable_maintenance|run_job|refresh_server\",outcome=\"ok\"}[$__range]))) or vector(0)",
           "legendFormat": "",
           "datasource": {
             "type": "prometheus",

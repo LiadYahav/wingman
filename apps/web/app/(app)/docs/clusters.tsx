@@ -218,10 +218,8 @@ function ClusterPageDocs() {
         <strong>unknown</strong>, with why in its tooltip, when segments-manager did not answer.
       </p>
       <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-        Under the card, an admin with the Segments area gets <strong>This cluster&apos;s segments</strong>, the{" "}
-        <a href="#segments" className="text-primary hover:underline">Segments</a> page filtered to this cluster. Anyone
-        else gets a link to segments-manager&apos;s own UI (<InlineCode>SEGMENTS_MANAGER_UI_URL</InlineCode>), which opens
-        no single cluster: the card names the cluster to search for, with a copy button, and{" "}
+        Under the card, a link to segments-manager&apos;s own UI (<InlineCode>SEGMENTS_MANAGER_UI_URL</InlineCode>), which
+        opens no single cluster: the card names the cluster to search for, with a copy button, and{" "}
         <strong>this cluster&apos;s segment (JSON)</strong>.
       </p>
 
@@ -233,10 +231,8 @@ function ClusterPageDocs() {
         version it last finished updating to, whether an update reboots its nodes in place (<strong>InPlace</strong>)
         or replaces them (<strong>Replace</strong>), and which Agents it takes. Under it is one row per Machine: the
         server behind it, with its serial, hardware, Machine, Agent, state and health, and flags for a server in
-        maintenance, stale, unreachable or contested (claimed by two clusters). The server&apos;s name opens its page:
-        with the Server Scan area, its page in <a href="#server-scan" className="text-primary hover:underline">Server Scan</a>,
-        here in Wingman; without it, its page in server-scan&apos;s own UI, in a new tab. On the Overview, each
-        nodepool opens to the same nodes.
+        maintenance, stale, unreachable or contested (claimed by two clusters). The server&apos;s name opens its page in
+        server-scan&apos;s own UI, in a new tab. On the Overview, each nodepool opens to the same nodes.
         Health server-scan could not determine shows as <strong>Unknown</strong>, never as healthy. Ready, healthy
         rows stay quiet, so what needs a look stands out.
       </p>

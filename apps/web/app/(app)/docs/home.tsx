@@ -15,17 +15,9 @@ const CARDS = [
     title: "Free Servers",
     desc: "Each MCE's free Agents by InfraEnv pool, as server-scan counts them: Inventory Management's numbers, for everyone. Each MCE opens Inventory Management.",
   },
-  {
-    title: "Free Segments",
-    desc: "Each site's segments that are Available in segments-manager, out of all its segments. Shown only to people with the Segments area; each site opens its Available segments.",
-  },
-  {
-    title: "Server Fleet Health",
-    desc: "server-scan's servers per site by health (critical, major, warning, unknown) and those in maintenance. Shown only to people with the Server Scan area; each count opens the Servers page filtered to it.",
-  },
 ] as const;
 
-/** The docs page's "The Overview Page" section, `#home`: Wingman's home page (ADR-0047, ADR-0048, ADR-0057). */
+/** The docs page's "The Overview Page" section, `#home`: Wingman's home page (ADR-0057). */
 export function HomeSection() {
   return (
     <section>
@@ -47,7 +39,8 @@ export function HomeSection() {
         Every card reads its own source, so one that fails or loads slowly leaves the others alone. A source this
         deployment does not have says so in one quiet line (Free Servers needs{" "}
         <InlineCode>SERVER_SCAN_URL</InlineCode>; with live status off, Ready and Cluster Health say{" "}
-        <strong>Live status is off</strong>), or its card is not shown at all.
+        <strong>Live status is off</strong>). Free segments and the server fleet&apos;s health live in
+        segments-manager&apos;s and server-scan&apos;s own UIs, apart from Wingman: an admin&apos;s top bar links to each.
       </Callout>
     </section>
   );

@@ -206,24 +206,7 @@ async def test_the_runs_say_who_may_have_started_them(
     )
 
 
-async def test_a_runs_server_carries_its_server_scan_id_for_the_link(
-    fleet: httpx.AsyncClient, auth: Auth, support: Any, inventory: FakeServerInventory
-) -> None:
-    """docs/notes/2026-11-13-inventory-management-api.md §4: the id of the one server named so."""
-    await fleet.post(f"{POOL}/add-servers", json={"count": 1}, headers=auth(support.ALICE))
-    await fleet.post(
-        f"{POOL}/add-servers", json={"server_names": [FREE]}, headers=auth(support.ALICE)
-    )
-    named, pool = (await fleet.get("/api/day1/inventory/runs", headers=auth(support.ALICE))).json()[
-        "runs"
-    ]
-    free = inventory.by_name(FREE)
-    assert free is not None
-    assert named["server_id"] == free.id
-    assert (pool["server_name"], pool["server_id"]) == (None, None), "a pool draw names none yet"
-
-
-async def test_runs_are_listed_without_ids_when_server_scan_fails(
+async def test_runs_are_listed_from_the_orchestrator_alone(
     support: Any,
     gitlab: InMemoryGitLab,
     clock: Any,
@@ -232,6 +215,8 @@ async def test_runs_are_listed_without_ids_when_server_scan_fails(
     workflow: FakeAddServerWorkflow,
     auth: Auth,
 ) -> None:
+    """A run names its server as the workflow does; server-scan down changes nothing here."""
+
     def fresh() -> FastAPI:  # a new day1, so nothing of server-scan is cached
         return app_of(
             support, gitlab, clock, hub=mce, inventory=inventory, workflow=workflow,
@@ -247,7 +232,8 @@ async def test_runs_are_listed_without_ids_when_server_scan_fails(
         response = await client.get("/api/day1/inventory/runs", headers=auth(support.ALICE))
     assert response.status_code == 200
     ((run),) = response.json()["runs"]
-    assert (run["server_name"], run["server_id"]) == (FREE, None)
+    assert run["server_name"] == FREE
+    assert "server_id" not in run
 
 
 # ── Starting ─────────────────────────────────────────────────────────────────

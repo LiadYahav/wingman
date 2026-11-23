@@ -92,9 +92,6 @@ the names are explained in the root README's [Environment Variables](../../../RE
 | `day1.scaleNodepools.enabled` | `DAY1_SCALE_NODEPOOLS` | `false` | Scale on the cluster page's Nodes tab (ADR-0062): admins start the platform's `update-nodepool` workflow for one NodePool at a time; it commits the replicas to day1 `main` and syncs Argo CD itself. While on, no Wingman merge request changes an existing NodePool's replicas. Needs `workflows.url`; the workflow must read the same day1 repo as Wingman; live status is not needed. May be on before the orchestrator has update-nodepool: a start then says it is not deployed and starts nothing, and no existing NodePool's replicas change from Wingman until it is (`docs/upgrade/3.39-to-3.40.md` step 3.1) |
 | `day1.multiInfraEnvNodepools.enabled` | `DAY1_MULTI_INFRAENV_NODEPOOLS` | `false` | A nodepool may draw Agents from several InfraEnvs (ADR-0064): the create form and the flavor editor offer more InfraEnvs beside a nodepool's own, written as `nodepool[].additionalInfraEnvNames`. **Parked, leave it off** (ADR-0064's 2026-11-23 amendment): the team runs no such NodePool for now, so the hostedclusters-setup chart (which without the change silently selects the first InfraEnv alone) and the specs-project template don't carry the key ([upgrade guide](../../../docs/upgrade/3.46-to-3.47.md)). Off, Wingman never writes the key, and an edit leaves it as it is |
 | `day1.excludedAgentLabels` | `DAY1_EXCLUDED_AGENT_LABELS` | `[]` | Agent label keys every agent NodePool excludes, each a `DoesNotExist` in its selector (ADR-0065): herzi's label for used Agents, so a freed used Agent is never bound again before herzi deletes it. Written on each new cluster's nodepools (`excludeAgentLabels`); an existing cluster takes them through its own merge request (`POST /api/day1/clusters/{name}/excluded-agent-labels`). Needs the hostedclusters-setup chart patch 0002 (`docs/upgrade/patches/hostedclusters-setup/`), the specs-project template lines and a herzi release that accepts the exclusion ([upgrade guide](../../../docs/upgrade/3.48-to-3.49.md)). Empty: nothing changes |
-| `day1.serverScanRefresh.enabled` | `DAY1_SERVER_SCAN_REFRESH` | `false` | Fetch now in the Server Scan area (ADR-0048's 2026-11-18 amendment): an admin reads one server from its vendor manager now, on its page and on every Servers row. Needs `serverScan.url`, server-scan v6.5.0 or later and its admin token (`serverScan.tokenSecret.adminKey`, as maintenance); off, no button is shown and the route answers 501 |
-| `day1.segmentsArea.enabled` | `DAY1_SEGMENTS_AREA` | `false` | The **Segments** area inside Wingman, for admins (ADR-0047's 2026-11-23 amendment). Off, the team keeps segments-manager apart: an admin's top bar links to its own UI in a new tab (`segmentsManager.uiUrl`, else `url`), `/segments` and its Overview card are not offered, and the area's routes answer 501. The cluster page's network card reads segments-manager either way. Needs `segmentsManager.url` |
-| `day1.serverScanArea.enabled` | `DAY1_SERVER_SCAN_AREA` | `false` | The **Server Scan** area inside Wingman, for admins (ADR-0048's 2026-11-23 amendment). Off, the team keeps server-scan apart: an admin's top bar links to its own UI in a new tab (`serverScan.uiUrl`, else `url`), `/server-scan`, its sidebar and its Overview card are not offered, a node's server opens its page in server-scan, and the area's routes answer 501. The Nodes tab, placement and Inventory Management read server-scan either way. Needs `serverScan.url` |
 | `day2.cacheTtlSeconds` | `DAY2_CACHE_TTL_SECONDS` | `15` | Per replica, at most 60 (ADR-0011) |
 | `auth.openshiftOAuthHost` | `OPENSHIFT_OAUTH_HOST` | | The OAuth server's host ([Login](#login-openshift-oauth)) |
 | `auth.openshiftApiHost` | `OPENSHIFT_API_HOST` | | The API server, `host:port` |
@@ -112,19 +109,17 @@ the names are explained in the root README's [Environment Variables](../../../RE
 | `clusterStatus.mceDomain` | `MCE_API_DOMAIN` | `""` | A hub is `https://api.{mce}.{mceDomain}:6443`, unless the tokens Secret gives it its own `url` (ADR-0045) |
 | `clusterStatus.sslVerify` | `MCE_SSL_VERIFY` | `"false"` | `"true"`, `"false"` or a CA bundle path |
 | `clusterStatus.tokensSecretName` | | `mce-sa-tokens` | The Secret whose key `tokens` (a YAML map of MCE name to token, or to `{token, url}`) is mounted as `MCE_TOKENS_FILE` |
-| `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. The nodes' servers, Inventory Management, the top bar's link for admins, and the **Server Scan** area with `day1.serverScanArea.enabled` ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)). Empty: nodes are listed without their servers, no Inventory Management, no link, no Server Scan area |
-| `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the top bar's link and the node links point; the Server Scan area's Claude page writes it into the skill's zip, its MCP command and its token link, and day1 reads the Architecture page's diagrams there. Empty: `serverScan.url` |
+| `serverScan.url` | `SERVER_SCAN_URL` | `""` | server-scan's API, e.g. `http://server-scan-api.<ns>.svc:8000`. The nodes' servers, placement's spare servers, Inventory Management, and the top bar's link for admins ([Cluster nodes](#cluster-nodes-server-scan-and-the-workflows-orchestrator)). Empty: nodes are listed without their servers, no Inventory Management, no link |
+| `serverScan.uiUrl` | `SERVER_SCAN_UI_URL` | `""` | server-scan's UI, where the top bar's link and the node links point. Empty: `serverScan.url` |
 | `serverScan.sslVerify` | `SERVER_SCAN_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `serverScan.timeoutSeconds` | `SERVER_SCAN_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
-| `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token (every read, the Server Scan area's Sites included). Empty: no token, for a server-scan with auth off |
+| `serverScan.tokenSecret.name` | `SERVER_SCAN_TOKEN` (day1 only) | `""` | An existing Secret with a server-scan viewer token, for every read. Empty: no token, for a server-scan with auth off |
 | `serverScan.tokenSecret.key` | `SERVER_SCAN_TOKEN` (day1 only) | `token` | The token's key in that Secret |
-| `serverScan.tokenSecret.adminKey` | `SERVER_SCAN_ADMIN_TOKEN` (day1 only) | `admin-token` | An optional key of the same Secret with server-scan's **admin** token, sent only when an admin turns a server's maintenance on or off (the Server Scan area's Servers page; a server's own page shows it read only) and on the area's Jobs page, which server-scan keeps for its admins, reads included. A Secret without the key still starts day1: the toggle is greyed out with why, and Jobs says it is not set up. Empty: never read. With no Secret at all (auth off) both work without it |
-| `serverScan.tokenSecret.auditorKey` | `SERVER_SCAN_AUDITOR_TOKEN` (day1 only) | `auditor-token` | An optional key of the same Secret with server-scan's **auditor** token, sent only on the audit trail's reads: a server's History and the Events page in the Server Scan area. A Secret without the key still starts day1: History and Events say they are not set up. Empty: never read. With no Secret at all (auth off) both work without it |
 | `workflows.url` | `WORKFLOWS_API_URL` | `""` | The workflows orchestrator, e.g. `http://workflows-orchestrator-api.<ns>.svc:8080`. Empty: no node uninstall. Needs `serverScan.url` |
 | `workflows.sslVerify` | `WORKFLOWS_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `workflows.timeoutSeconds` | `WORKFLOWS_TIMEOUT_SECONDS` | `10` | Per request, at most 60 |
 | `workflows.targetsTimeoutSeconds` | `WORKFLOWS_TARGETS_TIMEOUT_SECONDS` | `65` | An upgrade's targets read, at most 120: the orchestrator waits up to 60 s for it. nginx gives that one path 130 s |
-| `segmentsManager.url` | `SEGMENTS_MANAGER_URL` | `""` | segments-manager's API, e.g. `http://segments-manager.<ns>.svc:8000`. The cluster page shows its EPG for the cluster's segment and where it disagrees with the file, and admins get the top bar's link to it, or the **Segments** area with `day1.segmentsArea.enabled` ([segments-manager](#segments-manager)). Empty: no EPG, no link, no Segments area |
+| `segmentsManager.url` | `SEGMENTS_MANAGER_URL` | `""` | segments-manager's API, e.g. `http://segments-manager.<ns>.svc:8000`. The cluster page shows its EPG for the cluster's segment and where it disagrees with the file, and admins get the top bar's link to it ([segments-manager](#segments-manager)). Empty: no EPG, no link |
 | `segmentsManager.uiUrl` | `SEGMENTS_MANAGER_UI_URL` | `""` | segments-manager's UI. The top bar links to it for admins, and the cluster page to it and to its search for the cluster's segment. Empty: `segmentsManager.url`; both empty: no link |
 | `segmentsManager.sslVerify` | `SEGMENTS_MANAGER_SSL_VERIFY` | `"true"` | `"true"`, `"false"` or a CA bundle path |
 | `segmentsManager.timeoutSeconds` | `SEGMENTS_MANAGER_TIMEOUT_SECONDS` | `5` | Per request, at most 60 |
@@ -232,7 +227,9 @@ chart renders no NetworkPolicy (network restrictions are the site's; CLAUDE.md c
 
 Keys an older release documented and then dropped are accepted and ignored, marked deprecated
 in the schema: `quickLinks.status`, `quickLinks.sslVerify`, `quickLinks.argocdTokensSecret` and a
-link's `ping` and `argocd` (3.13.1), and the legacy chart's `cache`, `paths`,
+link's `ping` and `argocd` (3.13.1), `day1.serverScanRefresh`, `day1.segmentsArea`,
+`day1.serverScanArea` and `serverScan.tokenSecret.adminKey` and `auditorKey` (the Segments
+and Server Scan areas, removed in 3.52.1), and the legacy chart's `cache`, `paths`,
 `gitlab.defaultBranch`, `gitlab.sslVerify` and `clusterStatus.clusterNamePrefix`. Delete them
 when convenient.
 
@@ -396,7 +393,7 @@ oc create secret generic server-scan-viewer -n wingman --from-literal=token=<tok
 ```yaml
 serverScan:
   url: http://server-scan-api.<ns>.svc:8000
-  uiUrl: https://server-scan.example      # its UI: node links, the Claude page's commands, the diagrams
+  uiUrl: https://server-scan.example      # its UI: node links and the top bar's link
   tokenSecret: { name: server-scan-viewer }
 workflows:
   url: http://workflows-orchestrator-api.<ns>.svc:8080
@@ -406,68 +403,13 @@ day1 reads the token at start: restart it (`oc rollout restart deploy/wingman-da
 replacing the Secret.
 
 The same `serverScan.url` puts **Server Scan** in the top bar's platform switch for
-Wingman's admins: a link to server-scan's own UI (`uiUrl`, else `url`), in a new tab.
-The team keeps server-scan apart from Wingman for now (ADR-0048's 2026-11-23 amendment),
-so the **Server Scan** area is off unless `day1.serverScanArea.enabled` is `true`; then the
-switch opens it instead (`/server-scan`): server-scan's UI rebuilt in Wingman, one page at
-a time. What follows describes the area with it on. Its first page, **Sites**, reads server-scan's own per-site
-counts with the same viewer token (no new Secret or key), kept 10 seconds per day1 replica.
-Its second, **Servers**, reads the fleet's rows from the cache the Nodes tab already keeps
-(`DAY1_CACHE_TTL_SECONDS`), revalidated against server-scan's `ETag`, however many pages
-poll. day1 makes the calls; the browser never calls server-scan. Viewers have no
-Server Scan area, for now.
-
-The Servers page's **maintenance toggle** is the area's one write, for Wingman's admins
-only and logged with the person's name (server-scan records only its token). It needs
-server-scan's admin token as a second key of the same Secret
-(`serverScan.tokenSecret.adminKey`, default `admin-token`), then a restart of day1:
-
-```bash
-oc -n <ns> set data secret/server-scan-viewer admin-token=<server-scan admin token>
-oc -n <ns> rollout restart deploy/wingman-day1
-```
-
-Without the key the toggle is greyed out and says so; against a server-scan with auth off
-(no Secret at all) it works without one. A server's own page shows its maintenance read
-only, with a link to switch it on Servers, as server-scan does.
-
-The **Jobs** page (`/server-scan/jobs`) lists server-scan's collector and prune CronJobs,
-their runs and logs, and its **Run job** starts one now: the area's second write, a real
-Job, for Wingman's admins only and logged with the person's name. server-scan serves Jobs to
-its admins only, reads included, so day1 reads and starts them with the same admin key;
-without it beside a viewer token the page says Jobs is not set up and names the key. Nothing else to set: server-scan's own chart decides which CronJobs it may start
-(`jobTrigger.enabled`).
-
-Its third page, a **server's page** (`/server-scan/servers/<id>`, opened from a server's
-name on Servers or in Inventory Management), reads the server whole and, for a VM, its
-host with the viewer token, neither cached by day1. Its **History** tab reads the server's
-audit trail with server-scan's **auditor** token, a third key of the same Secret
-(`serverScan.tokenSecret.auditorKey`, default `auditor-token`), sent on that read only:
-
-```bash
-oc -n <ns> set data secret/server-scan-viewer auditor-token=<server-scan auditor token>
-oc -n <ns> rollout restart deploy/wingman-day1
-```
-
-Without the key History says it is not set up; against a server-scan with auth off it
-works without one (`docs/notes/2026-11-13-server-scan-area-api.md` §8, §9).
-
-Its **Events** page (`/server-scan/events`) is the same audit trail for the whole fleet,
-filtered and paged as server-scan's page: the same auditor token, read on those reads only,
-nothing new to set. Without the key it says it is not set up, as History does (§14).
-
-Its **Claude** page (`/server-scan/claude`) reads server-scan's Claude Code skill and its
-zip with the viewer token (nothing new). The zip, the MCP command and the link to server-scan's
-own token page name `uiUrl` (else `url`): set `uiUrl` to server-scan's browser address when
-`url` is its in-cluster API Service, or they name an address a laptop cannot reach (§12).
-
-Its **Architecture** page shows server-scan's diagrams. They are static pages of server-scan's
-**UI**, not its API, so day1 reads them from `uiUrl` (or `url` when `uiUrl` is empty) with no
-token, keeps each 5 minutes, and the browser shows them in a sandboxed frame. When `url` is the
-in-cluster API Service, set `uiUrl` to server-scan's UI (node links already use it), reachable
-from day1; for its Route's certificate set `sslVerify` to a CA bundle path that trusts it.
-Without that the page answers that server-scan's UI serves no diagram, naming `SERVER_SCAN_UI_URL`
-(§11 of the note).
+Wingman's admins: a link to server-scan's own UI (`uiUrl`, else `url`), in a new tab. The
+team keeps server-scan apart from Wingman (ADR-0048's 2026-11-23 amendment): its in-app
+Server Scan area was removed in 3.52.1, with `day1.serverScanRefresh` and
+`day1.serverScanArea` and the Secret's `adminKey` and `auditorKey`, which a values file may
+still set: they are accepted and ignored ([upgrade guide](../../../docs/upgrade/3.52.0-to-3.52.1.md)).
+Set `uiUrl` to server-scan's browser address when `url` is its in-cluster API Service, or the
+links name an address a laptop cannot reach.
 
 ### segments-manager
 
@@ -481,12 +423,9 @@ hides the EPG.
 
 The same setting puts **Segments** in the top bar's platform switch for Wingman's admins: a
 link to segments-manager's own UI (`uiUrl`, else `url`), in a new tab. The team keeps
-segments-manager apart from Wingman for now (ADR-0047's 2026-11-23 amendment), so the
-**Segments** area is off unless `day1.segmentsArea.enabled` is `true`; then the switch opens
-it instead (`/segments`): segments-manager's page rebuilt in Wingman, read only, from its
-open reads of the sites, the per-site statistics and the segments (and a fresh read for
-Refresh, at most once per 5 seconds per replica). day1 makes the calls, so only day1 needs to
-reach `url`; the browser never calls segments-manager. Viewers have no Segments area, for now.
+segments-manager apart from Wingman (ADR-0047's 2026-11-23 amendment): its in-app Segments
+area was removed in 3.52.1, with `day1.segmentsArea`, which a values file may still set:
+it is accepted and ignored. Viewers have no link.
 
 The card also links to segments-manager's UI, names the cluster to search for there (its UI
 opens no single cluster), and links to its open search API for the cluster's segment as JSON.
@@ -550,7 +489,7 @@ both services' `/metrics`, the alert rules (`files/alerts.rules.yaml`, with
 `docs/ops/runbook.md`) and the Grafana dashboard (`dashboards/wingman.json`)
 as a ConfigMap for Grafana's sidecar. The dashboard has five rows: Overview
 (targets, builds, the alerts' counts, and over the dashboard's range the MRs
-opened, merged and approved, workflow runs started, server-scan writes and
+opened, merged and approved, workflow runs started and
 the external systems failing now), Activity (MRs, workflow starts, flavor
 rollouts and MCE placement over time), API (load, errors, latency, the
 slowest routes and the routes answering 5xx), External systems (calls,

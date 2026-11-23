@@ -1,7 +1,7 @@
 # ADR-0047: The Segments area is Wingman's own read-only page over segments-manager's open reads, for admins, built as an alpha
 
 Date: 2026-11-13
-Status: Accepted; amended 2026-11-13 (each area has its own sidebar and brand), 2026-11-13 for 3.21.0 (full parity), and 2026-11-23 (off by default: the top bar links to segments-manager's own UI)
+Status: Superseded by ADR-0066 (2026-11-23: the area was removed; it last shipped in v3.52.0, off by default). Before that: accepted; amended 2026-11-13 (each area has its own sidebar and brand), 2026-11-13 for 3.21.0 (full parity), and 2026-11-23 (off by default: the top bar links to segments-manager's own UI)
 
 ## Context
 
@@ -252,3 +252,16 @@ or `/server-scan` offered, a viewer's top bar).
   and the CSV.
 - `apps/web/e2e/tests/segments.spec.ts`: the page, the switch, the URL, the
   CSV, and the cluster page's link.
+
+**2026-11-23, later the same day: the area is removed (ADR-0066).** The
+team keeps segments-manager apart from Wingman for good, so the area that
+3.52.0 put behind `DAY1_SEGMENTS_AREA` is gone, with no setting left to bring
+it back: `/segments`, its sidebar and brand, the Overview's Free Segments
+card, `/api/day1/segments`, `/sites` and `/stats` (404 now), `SegmentsService`,
+the ledger's `sites`, `stats` and `segments` reads, their parser, cache keys
+and metric operations, and the in-app docs section. The chart's
+`day1.segmentsArea` is accepted and ignored. What stays is ADR-0039's: a
+cluster's EPG read from `GET /api/segments/by-segment`, and the cluster
+card's links to segments-manager's own UI, which the top bar links to as
+well. The area last shipped in v3.52.0, off by default; git history has it,
+and this record says what it did.

@@ -29,7 +29,6 @@ DEFAULT_FIXTURE = CHART / "ci/default-values.yaml"
 OBJECTS = [
     "",
     *("image", "image.day1", "image.nginx", "gitlab", "day1", "day1.upgrades", "day1.addServers"),
-    "day1.serverScanRefresh",
     *("day2", "auth", "devAuth", "route", "openshiftRoute", "openshiftRoute.tls", "ingress", "tls"),
     *("serviceAccount", "resources", "resources.web", "resources.web.limits", "replicaCount"),
     *("clusterStatus", "serverScan", "serverScan.tokenSecret", "workflows", "segmentsManager"),
@@ -90,6 +89,12 @@ DEPRECATED_VALUES: dict[str, Any] = {
     },
     "gitlab": {"defaultBranch": "main", "sslVerify": "true"},
     "clusterStatus": {"clusterNamePrefix": "ocp4-"},
+    "day1": {
+        "serverScanRefresh": {"enabled": True},
+        "segmentsArea": {"enabled": True},
+        "serverScanArea": {"enabled": True},
+    },
+    "serverScan": {"tokenSecret": {"adminKey": "admin-token", "auditorKey": "auditor-token"}},
 }
 DEPRECATED_PATHS = {
     "quickLinks.status",
@@ -102,6 +107,11 @@ DEPRECATED_PATHS = {
     "clusterStatus.clusterNamePrefix",
     "definitions.quickLink.ping",
     "definitions.quickLink.argocd",
+    "day1.serverScanRefresh",
+    "day1.segmentsArea",
+    "day1.serverScanArea",
+    "serverScan.tokenSecret.adminKey",
+    "serverScan.tokenSecret.auditorKey",
 }
 
 

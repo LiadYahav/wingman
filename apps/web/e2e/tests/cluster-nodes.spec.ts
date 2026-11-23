@@ -16,7 +16,6 @@ import {
   BOARD, fulfillProblem, go, injectAdminAuth, injectViewerAuth, json, mockClusterNodes, mockDashboardApis, mockNodePool, mockNodes,
   mockNodesBoard, mockPoolNode, mockServer, mockUninstallNode,
 } from "../fixtures/api-handlers";
-import { mockSites } from "../fixtures/server-scan";
 import type { ClusterDetail, ClusterNodes, DestinationCharts, ServerRecord, WorkflowRun } from "../../types";
 
 const SITE = "site1";
@@ -55,18 +54,16 @@ const CHARTS: DestinationCharts = {
 
 /**
  * Sign in (as a viewer if asked) and open the cluster page with `nodes` as the
- * nodes read, on `?tab=` when given. `serverScan`: server-scan is set up, so
- * an admin has the Server Scan area (it is off otherwise).
+ * nodes read, on `?tab=` when given.
  */
 async function openCluster(
   page: Page,
   nodes: ClusterNodes | ((route: Route) => Promise<void> | void),
-  { viewer = false, serverScan = false, tab }: { viewer?: boolean; serverScan?: boolean; tab?: string } = {}
+  { viewer = false, tab }: { viewer?: boolean; tab?: string } = {}
 ) {
   await injectAdminAuth(page);
   if (viewer) await injectViewerAuth(page);
   await mockDashboardApis(page);
-  if (serverScan) await page.route("**/api/day1/server-scan/sites", (r) => json(r, mockSites()));
   await page.route("**/api/day1/clusters/bulk-status", (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
   await page.route(/\/api\/day1\/clusters\/[^/]+\/status\?/, (r) => fulfillProblem(r, 501, "FEATURE_DISABLED", "Live cluster status is disabled."));
   await page.route(`**/api/day1/clusters/${LARK}?**`, (r) => json(r, DETAIL));
@@ -84,12 +81,8 @@ async function openCluster(
 }
 
 /** The cluster page as an admin, on its Nodes tab. */
-async function openNodesTab(
-  page: Page,
-  nodes: ClusterNodes | ((route: Route) => Promise<void> | void),
-  options: { serverScan?: boolean } = {}
-) {
-  await openCluster(page, nodes, options);
+async function openNodesTab(page: Page, nodes: ClusterNodes | ((route: Route) => Promise<void> | void)) {
+  await openCluster(page, nodes);
   await page.getByRole("tab", { name: "Nodes" }).click();
   return page.getByTestId("cluster-nodes");
 }
@@ -430,7 +423,7 @@ test.describe("A viewer never sees the cluster's nodes (ADR-0038, amended 2026-1
   test("no Nodes tab, no nodes on the NodePool cards, and no nodes read", async ({ page }) => {
     const reads = nodeReads(page);
     const board = mockNodesBoard();
-    await openCluster(page, board, { viewer: true, serverScan: true });
+    await openCluster(page, board, { viewer: true });
 
     await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tab", { name: "Nodes" })).toHaveCount(0);
@@ -562,25 +555,22 @@ test.describe("The Overview's nodepools open to their nodes", () => {
   });
 });
 
-test.describe("A node's server opens its one view (ADR-0048's 3.26.0 amendment)", () => {
-  test("an admin with the Server Scan area gets the server's page in Wingman, in this tab", async ({ page }) => {
+test.describe("A node's server opens server-scan's own page (ADR-0066)", () => {
+  test("every server on the Nodes tab and the Overview links to server-scan, in a new tab", async ({ page }) => {
     const board = mockNodesBoard();
-    await openNodesTab(page, board, { serverScan: true });
+    await openNodesTab(page, board);
 
     for (const server of linked(board)) {
-      const link = row(page, server.name).getByRole("link", { name: `${server.name}, its server page`, exact: true });
-      await expect(link).toHaveAttribute("href", `/server-scan/servers/${server.id}`);
-      await expect(link).not.toHaveAttribute("target", "_blank");
-      await expect(link.locator("svg")).toHaveCount(0);
+      const link = row(page, server.name).getByRole("link", { name: `${server.name}, its server-scan page (opens in a new tab)`, exact: true });
+      await expect(link).toHaveAttribute("href", server.url);
+      await expect(link).toHaveAttribute("target", "_blank");
     }
-    // The Overview's quick look links the same way, and the link stays in this tab
+    await expect(page.locator('a[href^="/server-scan"]')).toHaveCount(0);
+    // The Overview's quick look links the same way
     await page.getByRole("tab", { name: "Overview" }).click();
     await page.getByRole("button", { name: `Show the nodes of ${R660}` }).click();
-    const inline = page.getByTestId("pool-nodes-inline").getByRole("link", { name: `${BOARD.readyA.name}, its server page`, exact: true });
-    await expect(inline).toHaveAttribute("href", `/server-scan/servers/${BOARD.readyA.id}`);
-    await expect(inline).not.toHaveAttribute("target", "_blank");
-    await inline.click();
-    await expect(page).toHaveURL(new RegExp(`/server-scan/servers/${BOARD.readyA.id}$`));
-    expect(page.context().pages()).toHaveLength(1);
+    const inline = page.getByTestId("pool-nodes-inline").getByRole("link", { name: `${BOARD.readyA.name}, its server-scan page (opens in a new tab)`, exact: true });
+    await expect(inline).toHaveAttribute("href", BOARD.readyA.url);
+    await expect(page.locator('a[href^="/server-scan"]')).toHaveCount(0);
   });
 });

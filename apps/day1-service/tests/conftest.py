@@ -71,16 +71,6 @@ ROOMY = (
 )
 """A hub with room for a control plane: 500 allocatable pods on its two workers."""
 PROD_SITE = "site1"
-SEGMENTS_AREA: dict[str, object] = {
-    "day1_segments_area": True,
-    "segments_manager_url": "http://segments-manager.example",
-}
-"""The Segments area on (ADR-0047's 2026-11-23 amendment): its switch and the URL it needs."""
-SERVER_SCAN_AREA: dict[str, object] = {
-    "day1_server_scan_area": True,
-    "server_scan_url": "http://server-scan.example",
-}
-"""The Server Scan area on (ADR-0048's 2026-11-23 amendment); the URL is the fake's UI too."""
 
 
 class StepClock:
@@ -356,8 +346,6 @@ class Support:
     VIEWER = VIEWER
     PROD_MCE = PROD_MCE
     PROD_SITE = PROD_SITE
-    SEGMENTS_AREA = SEGMENTS_AREA
-    SERVER_SCAN_AREA = SERVER_SCAN_AREA
 
     create_body = staticmethod(create_body)
     nodepools = staticmethod(nodepools)

@@ -3,7 +3,7 @@ import { ApiError } from "@/lib/api-client";
 import type { ErrorCode } from "@/types";
 import type { InventoryRun, MceInventory } from "@/types/inventory";
 import { bySite, hardwareLabel, totalAvailable } from "./pools";
-import { originLabel, readablePhase, runSubject, runTone, runningCount } from "./runs";
+import { originLabel, readablePhase, runSubject, runTone, runningCount, startedAgo } from "./runs";
 import { MAX_SERVERS, addRequest, isSettled, refusalTitle, startSummary, toggled } from "./start";
 
 const mce = (name: string, site: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
@@ -14,7 +14,7 @@ const mce = (name: string, site: string, overrides: Partial<MceInventory> = {}):
 const run = (overrides: Partial<InventoryRun> = {}): InventoryRun => ({
   workflow_id: "add-server-to-mce-ocp4-prod-mce-site1-a_pool_1", status: "running",
   started_at: null, closed_at: null, mce: "ocp4-prod-mce-site1-a", infra_env: "pool", slot: 1,
-  server_name: null, server_id: null, origin: "pool", phase: null, error: null, health_checks_waived: [], ...overrides,
+  server_name: null, origin: "pool", phase: null, error: null, health_checks_waived: [], ...overrides,
 });
 
 const problem = (status: number, code: ErrorCode) =>
@@ -60,6 +60,15 @@ describe("a run", () => {
     expect(readablePhase("completed", "completed")).toBeNull();
     expect(["RUNNING", "completed", "TIMED_OUT", "paused"].map(runTone)).toEqual(["running", "completed", "failed", "other"]);
     expect(runningCount([run(), run({ status: "failed" })])).toBe(1);
+  });
+
+  it("says when it started in seconds, minutes or hours", () => {
+    const now = 1_000_000_000;
+    expect(startedAgo(now - 2_000, now)).toBe("just now");
+    expect(startedAgo(now - 12_400, now)).toBe("12 s ago");
+    expect(startedAgo(now - 3 * 60_000, now)).toBe("3 min ago");
+    expect(startedAgo(now - 2 * 3_600_000, now)).toBe("2 h ago");
+    expect(startedAgo(now + 5_000, now)).toBe("just now");
   });
 });
 

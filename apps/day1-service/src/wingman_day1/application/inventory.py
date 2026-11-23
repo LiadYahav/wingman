@@ -23,7 +23,6 @@ start that carries it is logged as one with health checks waived.
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -46,7 +45,6 @@ from wingman_day1.domain.errors import (
     HubError,
     InvalidInputError,
     ResourceNotFoundError,
-    ServerScanUnavailableError,
     WorkflowsNotConfiguredError,
 )
 from wingman_day1.domain.inventory import (
@@ -101,8 +99,6 @@ class ShownRun:
     listed: ListedRun
     target: RunTarget | None
     detail: AddServerRun | None
-    server_id: str | None = None
-    """server-scan's id for ``server_name``, for the link to the server's page (ADR-0048)."""
 
     @property
     def server_name(self) -> str | None:
@@ -192,31 +188,10 @@ class InventoryService:
         newest = list(dict.fromkeys(r.workflow_id for r in listed))[:READ_RUNS]
         details = await asyncio.gather(*(workflows.run(workflow_id) for workflow_id in newest))
         read: dict[str, AddServerRun | None] = dict(zip(newest, details, strict=True))
-        shown = [
+        return [
             ShownRun(run, run_target(run.workflow_id), read.pop(run.workflow_id, None))
             for run in listed
         ]
-        ids = await self._server_ids({run.server_name for run in shown} - {None})
-        return [dataclasses.replace(run, server_id=ids.get(_key(run.server_name))) for run in shown]
-
-    async def _server_ids(self, names: set[str | None]) -> dict[str, str]:
-        """server-scan's id for each name exactly one server has (ignoring case), for the links.
-
-        Only a link depends on it, so server-scan unreadable leaves the runs
-        without ids rather than failing them; the page's pools say it failed.
-        """
-        if not names:
-            return {}
-        try:
-            rows = await self._inventory.rows()
-        except ServerScanUnavailableError as exc:
-            logger.warning("add-server runs listed without server ids: %s", exc)
-            return {}
-        ids: dict[str, list[str]] = {}
-        for row in rows:
-            ids.setdefault(row.name.lower(), []).append(row.id)
-        wanted = {_key(name) for name in names}
-        return {name: found[0] for name, found in ids.items() if name in wanted and len(found) == 1}
 
     async def add_servers(
         self,
@@ -326,8 +301,3 @@ class InventoryService:
 
 def _fields(event: Mapping[str, str]) -> str:
     return " ".join(f"{key}={value}" for key, value in event.items() if value)
-
-
-def _key(name: str | None) -> str:
-    """A server name as the runs' ids carry it: lowercased."""
-    return (name or "").lower()

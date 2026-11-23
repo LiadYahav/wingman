@@ -19,7 +19,6 @@ from wingman_day1.domain.errors import (
     AddServerAlreadyRunningError,
     AddServerRefusedError,
     AmbiguousDecisionError,
-    AmbiguousServerScanWriteError,
     AmbiguousStartError,
     Day2UnavailableError,
     HubDeniedError,
@@ -36,12 +35,6 @@ from wingman_day1.domain.errors import (
     SegmentsManagerUnavailableError,
     ServerNotFoundError,
     ServerScanDeniedError,
-    ServerScanDiagramNotFoundError,
-    ServerScanJobNotFoundError,
-    ServerScanJobRunningError,
-    ServerScanRefreshRefusedError,
-    ServerScanRefusedError,
-    ServerScanSkillMissingError,
     ServerScanUnavailableError,
     UninstallAlreadyRunningError,
     UpgradeAlreadyRunningError,
@@ -93,53 +86,12 @@ class ServerScanOperation(StrEnum):
     LIST_SERVER_ROWS = "list_server_rows"
     GET_SERVER = "get_server"
     """``GET /api/v1/servers/{id}``, its name and cluster only: the uninstall's fresh check."""
-    LIST_SITES = "list_sites"
-    """``GET /api/v1/sites``: the Server Scan area's Sites page (ADR-0048)."""
-    ENABLE_MAINTENANCE = "enable_maintenance"
-    """``PUT /api/v1/servers/{id}/maintenance``: the Servers page's toggle (admin token)."""
-    DISABLE_MAINTENANCE = "disable_maintenance"
-    """``DELETE /api/v1/servers/{id}/maintenance``."""
-    LIST_CLASSIFICATION_RULES = "list_classification_rules"
-    """``GET /api/v1/classification-rules``: the Server Scan area's Rules & Policies page."""
-    LIST_HEALTH_POLICIES = "list_health_policies"
-    """``GET /api/v1/health-policies``: the same page's health policies."""
-    GET_SERVER_RECORD = "get_server_record"
-    """``GET /api/v1/servers/{id}`` read whole: the Server Scan area's server page."""
-    GET_VM_HOST = "get_vm_host"
-    """``GET /api/v1/servers/{id}/vm-host``: the host a KubeVirt VM runs on."""
-    LIST_SERVER_EVENTS = "list_server_events"
-    """``GET /api/v1/servers/{id}/events``: a server's History (the auditor token)."""
-    LIST_EVENTS = "list_events"
-    """``GET /api/v1/events``: the Events page, the fleet's audit trail (the auditor token)."""
-    LIST_EVENT_ACTORS = "list_event_actors"
-    """``GET /api/v1/events/actors``: the Events page's User filter (the auditor token)."""
-    GET_SKILL = "get_skill"
-    """``GET /api/v1/skill``: the Claude page's skill (ADR-0048's 3.27.0 amendment)."""
-    DOWNLOAD_SKILL = "download_skill"
-    """``GET /api/v1/skill/download``: the skill's zip, for the Claude page's download."""
-    GET_ARCHITECTURE_DIAGRAM = "get_architecture_diagram"
-    """``GET <ui>/architecture/<slug>.html``: a diagram from server-scan's UI (no token)."""
-    LIST_CONFS = "list_confs"
-    """``GET /api/v1/confs``: the Server Scan area's Confs page, the hardware catalog."""
-    LIST_JOBS = "list_jobs"
-    """``GET /api/v1/jobs``: the Jobs page's CronJobs and their runs (the admin token, 3.32.0)."""
-    GET_JOB_LOGS = "get_job_logs"
-    """``GET /api/v1/jobs/{cronjob}/runs/{job}/pods/{pod}/logs``: one pod's log."""
-    RUN_JOB = "run_job"
-    """``POST /api/v1/jobs/{cronjob}/run``: the Jobs page's Run job, a real Job (admin token)."""
-    REFRESH_SERVER = "refresh_server"
-    """``POST /api/v1/servers/{id}/refresh``: Fetch now, one server read from its manager."""
 
 
 class SegmentsManagerOperation(StrEnum):
     """Calls to segments-manager (``dependency="segments_manager"``)."""
 
     GET_SEGMENT = "get_segment"
-    LIST_SITES = "list_sites"
-    GET_STATS = "get_stats"
-    LIST_SEGMENTS = "list_segments"
-    REFRESH_SEGMENTS = "refresh_segments"
-    """``GET /api/segments?fresh=true``: its database, not its cache (the Refresh button)."""
 
 
 class WorkflowsOperation(StrEnum):
@@ -169,15 +121,8 @@ _OUTCOME_OF: tuple[tuple[type[Exception], Outcome], ...] = (
     (IdentityUnavailableError, Outcome.UNAVAILABLE),
     (IdentityError, Outcome.DENIED),
     (ServerNotFoundError, Outcome.NOT_FOUND),
-    (ServerScanSkillMissingError, Outcome.NOT_FOUND),
-    (ServerScanDiagramNotFoundError, Outcome.NOT_FOUND),
-    (ServerScanJobNotFoundError, Outcome.NOT_FOUND),
-    (ServerScanJobRunningError, Outcome.CONFLICT),
-    (ServerScanRefreshRefusedError, Outcome.REJECTED),
     (ServerScanDeniedError, Outcome.DENIED),
     (ServerScanUnavailableError, Outcome.UNAVAILABLE),
-    (ServerScanRefusedError, Outcome.REJECTED),
-    (AmbiguousServerScanWriteError, Outcome.AMBIGUOUS),
     (UninstallAlreadyRunningError, Outcome.CONFLICT),
     (ProvisionAlreadyRunningError, Outcome.CONFLICT),
     (ProvisionRefusedError, Outcome.REJECTED),

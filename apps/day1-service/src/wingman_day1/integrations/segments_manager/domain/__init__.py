@@ -1,1 +1,1 @@
-"""segments-manager's answers, typed in its shapes, and the Segments area's rules (no I/O)."""
+"""segments-manager's links for a cluster (no I/O)."""

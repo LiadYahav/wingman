@@ -149,31 +149,13 @@
           "additionalProperties": false
         },
         "serverScanRefresh": {
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false
+          "description": "Deprecated: removed in 3.52.1 and ignored; delete it (docs/upgrade/3.52.0-to-3.52.1.md): Fetch now, in the removed Server Scan area"
         },
         "segmentsArea": {
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false
+          "description": "Deprecated: removed in 3.52.1 and ignored; delete it (docs/upgrade/3.52.0-to-3.52.1.md): the removed Segments area"
         },
         "serverScanArea": {
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false
+          "description": "Deprecated: removed in 3.52.1 and ignored; delete it (docs/upgrade/3.52.0-to-3.52.1.md): the removed Server Scan area"
         },
         "excludedAgentLabels": {
           "type": "array",
@@ -420,10 +402,10 @@
               "$ref": "#/definitions/secretKey"
             },
             "adminKey": {
-              "$ref": "#/definitions/secretKey"
+              "description": "Deprecated: removed in 3.52.1 and ignored; delete it (docs/upgrade/3.52.0-to-3.52.1.md): server-scan's admin token, for the removed Server Scan area's writes and Jobs"
             },
             "auditorKey": {
-              "$ref": "#/definitions/secretKey"
+              "description": "Deprecated: removed in 3.52.1 and ignored; delete it (docs/upgrade/3.52.0-to-3.52.1.md): server-scan's auditor token, for the removed Server Scan area's History and Events"
             }
           },
           "additionalProperties": false

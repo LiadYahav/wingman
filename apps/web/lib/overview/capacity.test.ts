@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MceInventory, PoolCount } from "@/types/inventory";
-import type { SiteSegmentStats } from "@/features/segments/types/segments";
-import { segmentCapacity, serverCapacity } from "./capacity";
+import { serverCapacity } from "./capacity";
 
 const pool = (infra_env: string | null, available: number): PoolCount => ({
   infra_env, available, usable: available, hardware: [], ready: infra_env ? 0 : null, needs_fix: infra_env ? 0 : null,
@@ -11,10 +10,6 @@ const pool = (infra_env: string | null, available: number): PoolCount => ({
 const mce = (name: string, overrides: Partial<MceInventory> = {}): MceInventory => ({
   site: "site1", mce: name, known: true, servers: 10, in_clusters: 6, available: 4, usable: 4,
   pools: [], infra_envs: [], infra_envs_error: null, infra_envs_from: "mce", ready: 0, needs_fix: 0, total: 0, ...overrides,
-});
-
-const site = (name: string, total_segments: number, allocated: number): SiteSegmentStats => ({
-  site: name, total_segments, allocated, by_type: [],
 });
 
 describe("the free servers", () => {
@@ -37,22 +32,5 @@ describe("the free servers", () => {
 
   it("are none before server-scan names a server", () => {
     expect(serverCapacity([])).toEqual({ mces: [], free: 0, unknown: [] });
-  });
-});
-
-describe("the free segments", () => {
-  it("are each site's unallocated ones, in segments-manager's order", () => {
-    expect(segmentCapacity([site("site2", 4, 1), site("site1", 5, 5), site("site3", 0, 0)])).toEqual({
-      sites: [
-        { site: "site2", free: 3, total: 4, usedPercent: 25, full: false },
-        { site: "site1", free: 0, total: 5, usedPercent: 100, full: true },
-        { site: "site3", free: 0, total: 0, usedPercent: 0, full: false },
-      ],
-      free: 3,
-    });
-  });
-
-  it("never count below zero when segments-manager's numbers disagree", () => {
-    expect(segmentCapacity([site("site1", 2, 3)]).sites[0]).toMatchObject({ free: 0, usedPercent: 100, full: true });
   });
 });

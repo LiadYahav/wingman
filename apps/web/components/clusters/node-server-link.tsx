@@ -1,44 +1,43 @@
-"use client";
-
 import type { ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
-import { IntentLink } from "@/components/common/intent-link";
-import { useServerScanArea } from "@/features/server-scan/api/server-scan";
-import { nodeServerLink, type NodeServerLink } from "@/features/server-scan/lib/server-page";
 import type { ServerRecord } from "@/types";
 
 /**
- * A node's server, linked as `nodeServerLink` decides: Wingman's server page
- * in this tab (prefetched on intent, as links down a list are), or
- * server-scan's own page in a new tab.
+ * A node's server, linked to its page in server-scan's own UI (`url`, built
+ * by day1), in a new tab: the team keeps server-scan apart from Wingman
+ * (ADR-0066).
  */
-export function NodeServerAnchor({ link, className, children }: { link: NodeServerLink; className: string; children: ReactNode }) {
-  if (link.inApp) {
-    return (
-      <IntentLink href={link.href} aria-label={link.label} className={className}>
-        {children}
-      </IntentLink>
-    );
-  }
+export function NodeServerAnchor({
+  server,
+  className,
+  children,
+}: {
+  server: Pick<ServerRecord, "name" | "url">;
+  className: string;
+  children: ReactNode;
+}) {
   return (
-    <a href={link.href} target="_blank" rel="noopener noreferrer" aria-label={link.label} className={className}>
+    <a
+      href={server.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${server.name}, its server-scan page (opens in a new tab)`}
+      className={className}
+    >
       {children}
     </a>
   );
 }
 
-/** A server's name on the Nodes tab, linked; marked as leaving Wingman when it opens server-scan. */
+/** A server's name on the Nodes tab, linked to server-scan and marked as leaving Wingman. */
 export function NodeServerName({ server }: { server: ServerRecord }) {
-  const link = nodeServerLink(server, useServerScanArea());
   return (
     <NodeServerAnchor
-      link={link}
+      server={server}
       className="group inline-flex items-center gap-1 whitespace-nowrap rounded-sm font-mono text-xs font-medium text-foreground underline-offset-4 outline-none hover:text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       {server.name}
-      {!link.inApp && (
-        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden />
-      )}
+      <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden />
     </NodeServerAnchor>
   );
 }

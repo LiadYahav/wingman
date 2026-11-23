@@ -1,5 +1,13 @@
 # The Server Scan area: the API the web reads (2026-11-13)
 
+> **2026-11-23: removed.** The Server Scan area and every route in this note
+> (`/api/day1/server-scan/*`), its writes and its admin and auditor tokens
+> were removed after 3.52.0
+> ([ADR-0066](../adr/0066-segments-manager-and-server-scan-stay-apart.md), superseding
+> [ADR-0048](../adr/0048-the-server-scan-area-page-by-page.md)): the team keeps server-scan apart, and an admin's top bar links
+> to its own UI. This note is kept as history; git has the code. What Wingman
+> still reads is in [integrations/server-scan.md](../integrations/server-scan.md).
+
 The **Server Scan** area (`/server-scan`) is server-scan's UI rebuilt in
 Wingman, one page at a time (workstream 4 of `docs/ideas/single-pane.md`,
 decision 22, ADR-0048). This note covers the area, its first page,

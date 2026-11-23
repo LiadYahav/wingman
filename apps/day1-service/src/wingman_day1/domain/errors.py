@@ -122,11 +122,7 @@ class ServerScanUnavailableError(ServerScanError):
 
 
 class ServerScanDeniedError(ServerScanUnavailableError):
-    """server-scan refused Wingman's token (401 or 403): a deployment problem.
-
-    The viewer token on a read, the auditor token on the audit trail (a
-    server's History, the Events page), the admin token on a maintenance write.
-    """
+    """server-scan refused Wingman's viewer token (401 or 403): a deployment problem."""
 
 
 class ServerScanNotConfiguredError(ServerScanError):
@@ -134,58 +130,7 @@ class ServerScanNotConfiguredError(ServerScanError):
 
 
 class ServerNotFoundError(ServerScanError):
-    """server-scan has no server with this id (or, asked for a VM's host, it is not a VM)."""
-
-
-class ServerScanDiagramNotFoundError(ServerScanError):
-    """server-scan's UI serves no architecture diagram by this name (ADR-0048, 3.28.0)."""
-
-
-class ServerScanWritesOffError(ServerScanError):
-    """What server-scan keeps for its admins is off here: a viewer token without its admin token.
-
-    The maintenance writes, the Jobs page, its reads too (ADR-0048, 3.32.0), and Fetch now.
-    """
-
-
-class ServerScanJobNotFoundError(ServerScanError):
-    """server-scan has no such triggerable CronJob, Job or pod, or has its Jobs feature off."""
-
-
-class ServerScanAuditOffError(ServerScanError):
-    """server-scan's audit trail is off here: a viewer token without its auditor token."""
-
-
-class ServerScanJobRunningError(ServerScanError):
-    """server-scan refused to start a CronJob that has an unfinished Job (its 409); none started."""
-
-
-class ServerScanSkillMissingError(ServerScanError):
-    """server-scan carries no Claude Code skill (its ``/api/v1/skill`` answers 404)."""
-
-
-class ServerScanRefusedError(InvalidInputError):
-    """server-scan refused what was sent: a maintenance body (its 422), an events cursor (400)."""
-
-
-class AmbiguousServerScanWriteError(ServerScanError):
-    """A write (maintenance, a Job's start, Fetch now) was sent but its outcome is unknown.
-
-    Never retried.
-    """
-
-
-class ServerScanRefreshOffError(ServerScanError):
-    """Fetch now is off in this deployment (``DAY1_SERVER_SCAN_REFRESH``); nothing is sent."""
-
-
-class ServerScanRefreshRefusedError(ServerScanError):
-    """server-scan cannot read the server from its vendor manager now (its 409); nothing changed.
-
-    It is not connected to the manager that collects the server
-    (``SERVER_REFRESH_UNSUPPORTED``: a standalone Redfish server, a VM on the
-    hub), or the manager no longer reports it (``SERVER_NOT_AT_MANAGER``).
-    """
+    """server-scan has no server with this id."""
 
 
 class NodeNotInClusterError(Day1Error):

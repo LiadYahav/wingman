@@ -13,7 +13,7 @@ export interface SidebarRail {
 }
 
 /**
- * Every area's sidebar reads this (one state for all of them). The desktop
+ * The sidebar reads this. The desktop
  * copy gets `useSidebarRailState`'s value; the mobile sheet keeps the default,
  * so it is never a rail.
  */

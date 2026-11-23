@@ -63,8 +63,8 @@ flowchart LR
 ```
 
 Only day1 talks to anything but GitLab. Each system it calls has a port, an
-adapter and a fake (ADR-0001). server-scan and segments-manager, which each
-have an area of their own, are a package each under
+adapter and a fake (ADR-0001). server-scan and segments-manager are a package
+each under
 `apps/day1-service/src/wingman_day1/integrations/` (ADR-0001's 2026-11-17
 amendment); the other adapters are in `wingman_day1/infrastructure/`. All are
 built in the composition root (`main.py`, `platform_adapters.py`,
@@ -78,8 +78,8 @@ OpenShift OAuth.
 | Argo CD | none | none | Nothing: Argo CD reads the merged files and applies them. Each MCE's ApplicationSet makes one Application per cluster file in `hostedClusters/`, rendered by the hostedclusters-setup chart; day2's ApplicationSets find the team repos' folders. Quick Links only links to each Argo CD (ADR-0052). |
 | MCE hubs (Kubernetes API) | `hub_api.py` (ADR-0019), a token per hub from `MCE_TOKENS_FILE`, an address by `MCE_API_DOMAIN` or per hub (ADR-0045) | `CLUSTER_STATUS_ENABLED` | Read only: HostedClusters, NodePools and InfraEnvs (live status), each cluster's Machines and Agents (the Nodes tab, ADR-0038), the hub's nodes and pods (MCE placement, ADR-0050). |
 | OpenShift OAuth | `openshift_oauth.py` | the OpenShift OAuth settings, or dev login | Login only (below). |
-| server-scan | `integrations/server_scan/` (`HttpServerInventory` in `infrastructure/adapter.py`) | `SERVER_SCAN_URL`, with `SERVER_SCAN_TOKEN`, `SERVER_SCAN_ADMIN_TOKEN`, `SERVER_SCAN_AUDITOR_TOKEN` | Its servers on the Nodes tab (ADR-0038), placement's spare servers (ADR-0050), Inventory Management's pools (ADR-0057) and, with `DAY1_SERVER_SCAN_AREA` (off by default: the top bar links to server-scan's own UI), the Server Scan area for admins (ADR-0048). Three writes, from that area, with the admin token: a server's maintenance, Run job and Fetch now (one server read from its vendor manager now; off by default, `DAY1_SERVER_SCAN_REFRESH`). Never `/servers/available` or a reservation: those are the workflows'. The version Wingman matches and how to sync: [integrations/server-scan.md](integrations/server-scan.md). |
-| segments-manager | `integrations/segments_manager/` (`HttpSegmentLedger` in `infrastructure/adapter.py`) | `SEGMENTS_MANAGER_URL` | Read only, its open GETs: a cluster's EPG checked against its file (ADR-0039) and, with `DAY1_SEGMENTS_AREA` (off by default: the top bar links to segments-manager's own UI), the Segments area for admins (ADR-0047). The commit Wingman matches and how to sync: [integrations/segments-manager.md](integrations/segments-manager.md). |
+| server-scan | `integrations/server_scan/` (`HttpServerInventory` in `infrastructure/adapter.py`) | `SERVER_SCAN_URL`, with `SERVER_SCAN_TOKEN` | Read only, with the viewer token: its servers on the Nodes tab (ADR-0038), placement's spare servers (ADR-0050) and Inventory Management's pools (ADR-0057); a node's server links to its page in server-scan's own UI, and an admin's top bar to that UI. Never `/servers/available` or a reservation: those are the workflows'. The version Wingman matches and how to sync: [integrations/server-scan.md](integrations/server-scan.md). |
+| segments-manager | `integrations/segments_manager/` (`HttpSegmentLedger` in `infrastructure/adapter.py`) | `SEGMENTS_MANAGER_URL` | Read only, one open GET: a cluster's EPG checked against its file (ADR-0039); the cluster page and an admin's top bar link to its own UI. The commit Wingman matches and how to sync: [integrations/segments-manager.md](integrations/segments-manager.md). |
 | workflows orchestrator | one adapter per workflow: `workflows_api.py`, `provision_workflow.py`, `upgrade_workflow.py`, `add_server_workflow.py`, `scale_workflow.py` | `WORKFLOWS_API_URL`, plus each workflow's own switch (next table) | Starts a run and shows it in the workflow's words; never re-implements its procedure, checks or phases. The orchestrator has no auth (accepted); day1 lets only admins start a run and logs who did. |
 | cluster-navigator | none | none | Not wired. Its data on the cluster page is planned (`docs/ideas/single-pane.md`, workstream 5). |
 | herzi | none | none | No adapter: its add-server runs are in the orchestrator's run list, which Inventory Management shows (ADR-0057). |
@@ -119,8 +119,8 @@ orchestrator and segments-manager with fakes seeded from `dev/fleet-fixtures/`
    each other.
 5. The web keeps it in a cookie and sends it as `Authorization: Bearer` on
    every call. Routes take `CurrentUser` (reads) or `AdminUser` (writes) from
-   `wingman_core.web.auth`; a few areas are for admins even to read (Segments,
-   Server Scan, Quick Links), and so is a cluster's nodes, the servers it runs
+   `wingman_core.web.auth`; a few reads are for admins only (Quick Links, the
+   top bar's platform links), and so is a cluster's nodes, the servers it runs
    on: a viewer's scale and upgrade runs leave them out too (ADR-0038). Nobody
    approves their own change (`403 SELF_APPROVAL`).
 
@@ -140,17 +140,18 @@ Every package has the same layers, and each may import only the ones before it
 | infrastructure, observability | the GitLab adapter and fake, `TtlCache`, `RepoSnapshots`, session tokens; metrics, logs | `infrastructure/`: adapters, their fakes, the cached repositories | the application, the API; FastAPI |
 | web | `web/`: the app factory, auth, RFC 9457 errors (ADR-0004) | `api/`: the FastAPI routers and their dependencies | an adapter or httpx: the API gets them from the composition root |
 
-day1's external systems with an area of their own are packages under
+day1's external systems that Wingman ported code from are packages under
 `wingman_day1/integrations/` (`server_scan/`, `segments_manager/`), each with
-the same layers inside: `domain/`, `ports.py`, `application/`,
-`infrastructure/` (the adapter, its parser and cache, the fakes), `api/` (the
-area's routers and schemas) and `compose.py`; their tests are in
+the same layers inside, as far as it has them: `domain/`, `ports.py`,
+`application/`, `infrastructure/` (the adapter, its parser and cache, the
+fakes), `api/` and `compose.py`; their tests are in
 `tests/integrations/<system>/` (ADR-0001's 2026-11-17 amendment). Wingman's
 own features that use their data (the Nodes tab, placement, Inventory
 Management, a cluster's network check, the Overview) stay in day1's layers and
-import an integration's `domain` and `ports` only. The web's counterpart is
-`apps/web/features/<area>/` (`api/`, `types/`, `lib/`, `components/`), with
-the page routes in `app/` (ADR-0056's 2026-11-17 amendment).
+import an integration's `domain` and `ports` only. The web has no
+counterpart since its Segments and Server Scan areas were removed (ADR-0056's
+2026-11-23 amendment): what it shows of those systems' data is a Wingman
+feature in `components/<area>/` and `lib/`.
 
 `uv run lint-imports` enforces this with the contracts in `pyproject.toml`
 (`[tool.importlinter]`): forbidden contracts for each layer, of day1's and of
@@ -207,8 +208,8 @@ fake; a router never calls a client. Files and functions stay small
   and is refused if the branch moved.
 - **Writes are never retried** (ADR-0006). One refused before it was sent is
   `503 GIT_UNAVAILABLE`; one sent and unanswered may have landed and is
-  `504 AMBIGUOUS_WRITE`: re-read, do not resend. Workflow starts and
-  server-scan's writes follow the same rule.
+  `504 AMBIGUOUS_WRITE`: re-read, do not resend. Workflow starts follow the
+  same rule.
 - **People and automation own different keys** of a cluster file (ADR-0012):
   `vlanId` and `dhcp_values` are the allocate-segment workflow's, `mcFiles`,
   `mcConfigMap` and `tuningConfigmap` the day1 CI's. With `DAY1_UPGRADES` the
@@ -222,8 +223,7 @@ fake; a router never calls a client. Files and functions stay small
   `DAY1_EXCLUDED_AGENT_LABELS` (ADR-0065).
 - **Not every change is Wingman's MR.** Some workflows commit to day1
   themselves (upgrade-cluster and update-nodepool to `main`, allocate-segment
-  to an MR's branch); server-scan's maintenance and Run job are server-scan's
-  own writes (ADR-0048); segments-manager is never written.
+  to an MR's branch); server-scan and segments-manager are never written.
 
 ## Three requests, end to end
 
@@ -267,23 +267,24 @@ A create is the same with `POST /api/day1/clusters`, unless
 provision-cluster, which reserves the segment and opens the MR itself
 (ADR-0042).
 
-### A Server Scan page
+### A cluster's servers: the Nodes tab
 
-The Servers page (`/server-scan/servers`, admins) shows server-scan's fleet
-table.
+An admin's cluster page shows each NodePool's nodes and the servers behind them.
 
-1. The browser reads `GET /api/day1/server-scan/servers` every 30 seconds.
-2. day1's router checks the admin, and the use case reads the fleet through
-   `CachedServerInventory`: one entry per replica for day1's TTL, shared with
-   the Nodes tab and Inventory Management, so many open pages are one read.
+1. The browser reads `GET /api/day1/clusters/{name}/nodes` (admins only; a
+   viewer has no Nodes tab, ADR-0038).
+2. day1 reads the cluster's Machines, AgentMachines and Agents from its MCE,
+   and server-scan's fleet through `CachedServerInventory`: one entry per
+   replica for day1's TTL, shared with placement and Inventory Management, so
+   many open pages are one read.
 3. On a miss, `HttpServerInventory` reads the whole fleet from server-scan in
    one call (its `servers/rows`) with the viewer token, sending back
    server-scan's ETag so an unchanged fleet costs a `304`.
-4. day1 answers the rows in server-scan's shape with its own weak ETag, and a
-   bodiless `304` for a current `If-None-Match`. The page filters, sorts and
-   pages them in the browser with server-scan's rules, every filter in the URL.
-5. With `SERVER_SCAN_URL` empty the route is `501 FEATURE_DISABLED`; when
-   server-scan fails it is `502 DEPENDENCY_UNAVAILABLE`.
+4. Each node is joined to its server: health, hardware and a link to its page
+   in server-scan's own UI (`SERVER_SCAN_UI_URL`).
+5. With `SERVER_SCAN_URL` empty the nodes are listed without their servers;
+   when server-scan fails the answer says why (`server_scan_error`), and the
+   nodes stay.
 
 ### A workflow run: upgrade-cluster
 

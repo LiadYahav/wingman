@@ -37,16 +37,16 @@ template for a new one.
 
 Read it before changing day1 or day2, or before calling a platform system.
 
-## integrations/: the systems Wingman mirrors
+## integrations/: the systems whose APIs Wingman follows
 
 | File | What it holds |
 |---|---|
-| [integrations/server-scan.md](integrations/server-scan.md) | The Server Scan area: what Wingman mirrors and never does, the server-scan version it matches, where its code lives, the checklist for a new release, known gaps |
-| [integrations/segments-manager.md](integrations/segments-manager.md) | The same for the Segments area and segments-manager |
+| [integrations/server-scan.md](integrations/server-scan.md) | What Wingman reads from server-scan (the fleet rows and one server) and never does, the version it matches, where that code lives, the checklist for a new release, known gaps |
+| [integrations/segments-manager.md](integrations/segments-manager.md) | The same for segments-manager (one segment, and links to its UI) |
 | `integrations/<system>.yaml` | The map: each Wingman file and the upstream files it follows, the version Wingman matches (`synced_at`), what to watch and what is not followed. `scripts/upstream_diff.py <system>` reads it to list what changed upstream since |
 
 Read it before bringing Wingman to a new release of either system, or before
-porting more of one.
+reading more of one.
 
 ## ops/: operating a deployment
 

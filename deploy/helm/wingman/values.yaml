@@ -140,25 +140,11 @@ day1:
   # Off, Wingman never writes the key; a file that has it is read and kept as it is.
   multiInfraEnvNodepools:
     enabled: false
-  # Fetch now in the Server Scan area (ADR-0048's 2026-11-18 amendment): an
-  # admin reads one server from its vendor manager now, on its page and on
-  # every Servers row. Needs server-scan v6.5.0 or later (its POST
-  # /servers/{id}/refresh) and its admin token (serverScan.tokenSecret.adminKey,
-  # as maintenance), and serverScan.url. Off, no button is shown and day1's
-  # route answers 501.
-  serverScanRefresh:
-    enabled: false
-  # The Segments and Server Scan areas (ADR-0047, ADR-0048; 2026-11-23): off,
-  # the team keeps segments-manager and server-scan apart from Wingman, so an
-  # admin's top bar links to each one's own UI in a new tab (segmentsManager.uiUrl
-  # and serverScan.uiUrl, else their url) and Wingman's /segments and
-  # /server-scan pages are not offered. On: the area inside Wingman, for
-  # admins, as before. Each needs its system's url. The cluster page's
-  # network and Nodes tab, placement and Inventory Management read them either way.
-  segmentsArea:
-    enabled: false
-  serverScanArea:
-    enabled: false
+  # serverScanRefresh, segmentsArea and serverScanArea went with the Segments
+  # and Server Scan areas, removed in 3.52.1 (ADR-0066): the team
+  # keeps both systems apart, and an admin's top bar links to each one's own UI
+  # (segmentsManager.uiUrl and serverScan.uiUrl, else their url). A values file
+  # that still sets them is accepted and ignored (docs/upgrade/3.52.0-to-3.52.1.md).
   # Agent label keys every agent NodePool excludes (ADR-0065): herzi's label for
   # used Agents, once herzi names it. Each new cluster's nodepools get
   # excludeAgentLabels (a DoesNotExist each); an existing cluster takes them
@@ -321,35 +307,24 @@ clusterStatus:
 
 # ── Cluster nodes from server-scan (ADR-0038) ─────────────────────────────────
 # Off by default. With a url, day1 lists the servers under each hosted cluster
-# from server-scan's API (the node links point at its UI), Inventory
-# Management counts its servers (ADR-0057), and admins get the Server Scan area
-# (ADR-0048), all with the one viewer token below.
+# from server-scan's API (the node links point at its UI), placement counts
+# its spare servers (ADR-0050), Inventory Management its pools (ADR-0057), and
+# an admin's top bar links to its UI, all with the one viewer token below.
 serverScan:
   url: ""                 # the API, e.g. "http://server-scan-api.<ns>.svc:8000"; empty: off
-  uiUrl: ""               # the UI, e.g. "https://server-scan.example" (node links, the Claude page); empty: url
+  uiUrl: ""               # the UI, e.g. "https://server-scan.example" (node links, the top bar); empty: url
   sslVerify: "true"       # "true", "false" (or true, false) or a CA bundle path
   timeoutSeconds: 10      # per request, at most 60
   # A viewer token (sent as "Authorization: Bearer"), from an existing Secret:
   #   oc create secret generic server-scan-viewer -n <ns> --from-literal=token=<token>
   # Empty name: no token, for a server-scan with auth off. Never put the token
   # itself in values. day1 reads it at start: restart day1 after rotating it.
-  # adminKey: an optional second key of the same Secret, server-scan's admin
-  # token, sent only when an admin turns a server's maintenance on or off on
-  # the Server Scan area's Servers page, and on its Jobs page, whose reads
-  # server-scan keeps for its admins too (ADR-0048). Without it, the toggle is
-  # greyed out and Jobs says it is not set up (with no Secret at all,
-  # server-scan runs with auth off and both work):
-  #   oc -n <ns> set data secret/server-scan-viewer admin-token=<admin token>
-  # auditorKey: an optional third key, server-scan's auditor token, sent only
-  # on the audit trail's reads: a server's History and the Events page in the
-  # Server Scan area (ADR-0048). Without it, both say they are not set up (with
-  # no Secret at all, they work):
-  #   oc -n <ns> set data secret/server-scan-viewer auditor-token=<auditor token>
+  # adminKey and auditorKey (server-scan's admin and auditor tokens) went with
+  # the Server Scan area, removed in 3.52.1: accepted and ignored, and the
+  # Secret's keys are no longer read.
   tokenSecret:
     name: ""
     key: "token"
-    adminKey: "admin-token"
-    auditorKey: "auditor-token"
 
 # ── Node uninstall through the workflows orchestrator (ADR-0038) ──────────────
 # Off by default. With a url, day1 starts the platform's uninstall-server-from-hc

@@ -1,8 +1,7 @@
 """Every router of the day1 API, in the order ``main`` mounts them.
 
-A new area adds its router here, not to the composition root; the server-scan
-area and the nodepool catalogues are one entry each (``integrations/server_scan/api/routers.py``,
-``nodepool_catalogs``).
+A new area adds its router here, not to the composition root; the nodepool
+catalogues are one entry (``nodepool_catalogs``).
 """
 
 from __future__ import annotations
@@ -26,8 +25,6 @@ from wingman_day1.api.v1 import specs as specs_api
 from wingman_day1.api.v1 import upgrades as upgrades_api
 from wingman_day1.api.v1 import webhooks as webhooks_api
 from wingman_day1.api.v1.nodepool_catalogs import ROUTERS as NODEPOOL_CATALOG_ROUTERS
-from wingman_day1.integrations.segments_manager.api import segments as segments_api
-from wingman_day1.integrations.server_scan.api.routers import ROUTERS as SERVER_SCAN_ROUTERS
 
 ROUTERS: Final[tuple[APIRouter, ...]] = (
     auth_api.router,
@@ -40,8 +37,6 @@ ROUTERS: Final[tuple[APIRouter, ...]] = (
     quick_links_api.router,
     platforms_api.router,
     inventory_api.router,
-    segments_api.router,
-    *SERVER_SCAN_ROUTERS,
     upgrades_api.router,
     scale_api.router,
     agent_labels_api.router,

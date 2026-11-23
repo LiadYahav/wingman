@@ -1,10 +1,10 @@
-"""server-scan's server answers, read into the domain (ADR-0038, ADR-0048).
+"""server-scan's server answers, read into the domain (ADR-0038).
 
 The shapes are server-scan's ``ServerRowsResponse`` and ``ServerDetail``
 (``backend/app/api/v1/schemas.py`` in team-redbull/server-scan).
-A row is read whole, all 23 fields the Servers page shows, searches or
-exports (docs/notes/2026-11-13-server-scan-area-api.md §8.3); ``server_type``
-(v6.3.0) is ``None`` when an older server-scan does not send it. Read strictly:
+A row is read for what Wingman's features use: its identity, state and
+health, where it is, its maintenance, reservation and claims, its MACs. Read
+strictly:
 a missing required field or a value of the wrong type raises
 Type/Key/ValueError, which the adapter turns into "unavailable", never into a
 blank. ``server_row`` is also how the fake fleet reads its fixture, so the
@@ -20,20 +20,16 @@ from datetime import datetime
 
 from wingman_day1.domain.servers import ServerDetail, ServerRow
 from wingman_day1.infrastructure.http import JSON, optional_text, required_text
-from wingman_day1.integrations.server_scan.domain.servers import FleetRows
 
 
-def fleet_rows(raw: JSON) -> FleetRows:
-    """``GET /api/v1/servers/rows``: every row, in server-scan's order, and ``generated_at``."""
+def fleet_rows(raw: JSON) -> tuple[ServerRow, ...]:
+    """``GET /api/v1/servers/rows``: every row, in server-scan's order."""
     if not isinstance(raw, dict):
         raise TypeError("the response is not an object")
     items = raw["items"]
     if not isinstance(items, list):
         raise TypeError("items is not a list")
-    return FleetRows(
-        rows=tuple(server_row(item) for item in items),
-        generated_at=timestamp(raw, "generated_at"),
-    )
+    return tuple(server_row(item) for item in items)
 
 
 def server_row(raw: JSON) -> ServerRow:
@@ -50,14 +46,11 @@ def server_row(raw: JSON) -> ServerRow:
         health=required_text(raw, "health"),
         serial=optional_text(raw, "serial"),
         vendor=optional_text(raw, "vendor"),
-        server_type=optional_text(raw, "server_type"),
         model=optional_text(raw, "model"),
         site=optional_text(raw, "site_id"),
         cluster_name=optional_text(raw, "cluster_name"),
         mce=optional_text(raw, "mce_name"),
         maintenance=_flag(maintenance, "enabled", default=False),
-        maintenance_reason=optional_text(maintenance, "reason"),
-        maintenance_by=optional_text(maintenance, "created_by"),
         reachable=_flag(raw, "reachable"),
         stale=_flag(raw, "stale"),
         contested_with=optional_text(raw, "contested_with"),
@@ -67,11 +60,6 @@ def server_row(raw: JSON) -> ServerRow:
         reserved_for_infra_env=optional_text(reservation, "infra_env") if held else None,
         reserved_until=timestamp(reservation, "expires_at") if held else None,
         macs=_macs(raw),
-        installation_type=optional_text(raw, "installation_type"),
-        source_provider=optional_text(raw, "source_provider"),
-        reported_name=optional_text(raw, "openshift_reported_name"),
-        profile_template=optional_text(raw, "profile_template_name"),
-        bmc_host=optional_text(raw, "bmc_host"),
     )
 
 

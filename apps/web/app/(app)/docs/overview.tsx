@@ -24,8 +24,8 @@ export function OverviewSection() {
         Wingman covers <strong>Day1</strong>, creating, editing and deleting a hosted cluster, and{" "}
         <strong>Day2</strong>, installing and configuring teams&apos; charts on the hub, the MCEs and the
         clusters. There is no application database: all state lives in Git repositories on GitLab. Around them it
-        shows the platform (each MCE&apos;s server pools and, for admins, segments-manager&apos;s segments and
-        server-scan&apos;s fleet) and starts the platform&apos;s workflows for what a merge request does not do.
+        shows the platform (each MCE&apos;s server pools, each cluster&apos;s servers and segment) and starts the
+        platform&apos;s workflows for what a merge request does not do.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <FeatureCard
@@ -56,7 +56,7 @@ export function OverviewSection() {
         <FeatureCard
           icon={Server}
           title="Servers and Segments"
-          description="Inventory Management counts each MCE's free servers, for everyone. Admins also get Segments and Server Scan in the top bar: segments-manager's and server-scan's own UIs, in a new tab, or, where your operator turns the areas on, their pages inside Wingman."
+          description="Inventory Management counts each MCE's free servers, for everyone. segments-manager and server-scan live in their own UIs, apart from Wingman: an admin's top bar links to each, in a new tab."
         />
       </div>
 

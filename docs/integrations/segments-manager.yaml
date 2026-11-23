@@ -3,129 +3,51 @@
 # the guide is docs/integrations/segments-manager.md. A path that ends in /
 # is a folder. tests/repo/test_integrations_map.py keeps it true: every
 # wingman path exists, and a file is listed here exactly when it names this map.
+#
+# Wingman's Segments area was removed in 3.52.1 (ADR-0066). What is left reads one segment (by-segment, ADR-0039) and
+# links to segments-manager's UI and its search.
 
 upstream: team-redbull/segments-manager
 # a4edc12 (2026-10-11) is main's head since that day, the commit
 # docs/ecosystem/notes/segments-manager.md read, and the build released as
 # image v0.1.15 (team-redbull/redbull-platform's segments-manager/v0.1.15).
-# The Segments area (ADR-0047, 3.15.0 to 3.21.0) was built after it and
-# follows its last two changes: a UPI segment's list of clusters, and the
-# site cards' types above zero (32cc7b9).
 synced_at: a4edc12
 # segments-manager's own tags stopped at v1.0.23 (2026-06-10), an ancestor
 # of a4edc12; its releases are tagged in redbull-platform. So the target is
 # its main branch, not its newest tag.
 default_target: main
 
-# What Wingman reads or rebuilds: its open GETs, their shapes, the counts and
-# filters behind them, and its page.
+# What Wingman reads: by-segment and search, the record's shape, its status
+# and type values, and the cache in front of them. Every path here is
+# followed below or matters on its own (constants.py: the "Allocated" the
+# network check compares with), so nothing is listed as not followed; the
+# writes, the logs, the exports and the UI are not watched.
 watch:
-  - src/api/
-  - src/models/
+  - src/api/routes.py
+  - src/models/schemas.py
   - src/config/constants.py
-  - src/config/settings.py
-  - src/services/
-  - src/utils/database/
+  - src/services/segment_service.py
   - src/database/cache.py
-  - static/
-
-# Under watch, and deliberately not followed.
-not_followed:
-  - upstream:
-      - src/services/allocation_service.py
-      - src/utils/database/allocation_utils.py
-      - src/utils/database/segment_crud.py
-    why: >-
-      allocation, release and edits are the workflows' (allocate-segment and its
-      release); Wingman never writes to segments-manager
-  - upstream:
-      - src/services/logs_service.py
-    why: its raw application log (the logs routes); Wingman never shows it (ADR-0047)
-  - upstream:
-      - src/api/__init__.py
-      - src/services/__init__.py
-      - src/utils/database/__init__.py
-    why: package files, no behaviour Wingman reads
 
 files:
-  # ── day1: segments-manager's answers, typed (it publishes no schema) ─────
-  - wingman: apps/day1-service/src/wingman_day1/integrations/segments_manager/domain/segments.py
-    upstream:
-      - src/models/schemas.py
-      - src/config/constants.py
   - wingman: apps/day1-service/src/wingman_day1/integrations/segments_manager/domain/links.py
     upstream:
       - src/api/routes.py
       - static/js/app.js
+    note: the search route, and a UI that reads no URL parameters
   - wingman: apps/day1-service/src/wingman_day1/integrations/segments_manager/infrastructure/adapter.py
-    upstream:
-      - src/api/routes.py
-      - src/database/cache.py
+    upstream: [src/api/routes.py]
+    note: GET /api/segments/by-segment and its 404
   - wingman: apps/day1-service/src/wingman_day1/integrations/segments_manager/infrastructure/parse.py
     upstream:
       - src/models/schemas.py
       - src/api/routes.py
       - src/services/segment_service.py
-      - src/services/stats_service.py
   - wingman: apps/day1-service/src/wingman_day1/integrations/segments_manager/infrastructure/fake.py
-    upstream:
-      - src/config/settings.py
-      - src/services/segment_service.py
-      - src/services/stats_service.py
-      - src/utils/database/segment_queries.py
-      - src/utils/database/statistics_utils.py
+    upstream: [src/api/routes.py]
+    note: by-segment's answer, one record or none
   - wingman: apps/day1-service/src/wingman_day1/integrations/segments_manager/infrastructure/cached.py
     upstream: [src/database/cache.py]
-    note: the Refresh button's fresh=true
-  - wingman: apps/day1-service/src/wingman_day1/integrations/segments_manager/api/segments_schemas.py
-    upstream: [src/models/schemas.py]
-  - wingman: apps/day1-service/tests/integrations/segments_manager/unit/infrastructure/test_segments_manager_reads.py
-    upstream:
-      - src/api/routes.py
-      - src/models/schemas.py
+    note: segments-manager's own cache, under Wingman's TTL
   - wingman: dev/fleet-fixtures/segments.yaml
     upstream: [src/models/schemas.py]
-
-  # ── web: segments-manager's page, rebuilt (static/) ─────────────────────
-  - wingman: apps/web/features/segments/types/segments.ts
-    upstream:
-      - src/models/schemas.py
-      - src/config/constants.py
-  - wingman: apps/web/features/segments/lib/columns.ts
-    upstream:
-      - static/js/app.js
-      - static/html/index.html
-  - wingman: apps/web/features/segments/lib/filter.ts
-    upstream: [static/js/app.js]
-  - wingman: apps/web/features/segments/lib/view.ts
-    upstream:
-      - static/js/app.js
-      - static/html/index.html
-  - wingman: apps/web/features/segments/lib/sites.ts
-    upstream: [static/js/app.js]
-  - wingman: apps/web/features/segments/lib/csv.ts
-    upstream:
-      - static/js/app.js
-      - src/services/export_service.py
-  - wingman: apps/web/features/segments/lib/connection.ts
-    upstream: [static/js/app.js]
-  - wingman: apps/web/features/segments/lib/links.ts
-    upstream: [static/js/app.js]
-  - wingman: apps/web/features/segments/components/segments-page.tsx
-    upstream:
-      - static/html/index.html
-      - static/js/app.js
-  - wingman: apps/web/features/segments/components/segments-toolbar.tsx
-    upstream:
-      - static/html/index.html
-      - static/js/app.js
-  - wingman: apps/web/features/segments/components/segments-header.tsx
-    upstream: [static/js/app.js]
-  - wingman: apps/web/features/segments/components/site-cards.tsx
-    upstream:
-      - static/js/app.js
-      - static/css/styles.css
-  - wingman: apps/web/features/segments/components/segment-columns.tsx
-    upstream:
-      - static/js/app.js
-      - static/css/styles.css
